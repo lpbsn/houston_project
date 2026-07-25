@@ -25,6 +25,7 @@ from houston.establishments.selectors import (
     get_establishment_business_unit_tree,
     serialize_business_unit_tree_item,
 )
+from houston.signals.models import Signal
 from houston.testing.auth import auth_headers, login
 from houston.testing.taxonomy import (
     create_activity_subject,
@@ -71,6 +72,7 @@ def test_signal_detail_exposes_responsible_affected_activity_subject_ids(
         responsible_business_unit=maintenance_business_unit,
         activity_subject=subject,
         title="Taxonomy ids signal",
+        routing_status=Signal.RoutingStatus.RESOLVED,
     )
     token = login(api_client, user=owner_membership.user)
     response = api_client.get(
@@ -126,6 +128,7 @@ def test_linked_create_pilot_matches_responsible_uuid_not_catalog_key(
         responsible_business_unit=food_court,
         activity_subject=subject,
         title="Food Court signal",
+        routing_status=Signal.RoutingStatus.RESOLVED,
     )
 
     plan, execution = create_action_plan_with_execution(
@@ -177,6 +180,7 @@ def test_linked_create_distinguishes_sibling_instances_same_catalog(
         responsible_business_unit=rooftop,
         activity_subject=subject,
         title="Rooftop responsible",
+        routing_status=Signal.RoutingStatus.RESOLVED,
     )
 
     plan, execution = create_action_plan_with_execution(
@@ -212,6 +216,7 @@ def test_linked_create_copies_signal_taxonomy_onto_action_plan_and_initial_execu
         responsible_business_unit=maintenance_business_unit,
         activity_subject=subject,
         title="Copy taxonomy",
+        routing_status=Signal.RoutingStatus.RESOLVED,
     )
 
     plan, execution = create_action_plan_with_execution(
@@ -322,6 +327,7 @@ def test_signal_summary_activity_subject_label_matches_lot5_nested_ref(
         responsible_business_unit=maintenance_business_unit,
         activity_subject=subject,
         title="Label drift signal",
+        routing_status=Signal.RoutingStatus.RESOLVED,
     )
     _plan, execution = create_action_plan_with_execution(
         establishment_id=owner_membership.establishment_id,

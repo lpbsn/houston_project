@@ -1,0 +1,1090 @@
+{
+  "schema_version": "pipeline_v6_acceptance_corpus_v1",
+  "source": "cadrage fonctionnel pipeline IA V6 révisé §15 + plan Lot 0 (D1)",
+  "cases": [
+    {
+      "id": "S15-01",
+      "title": "Établissement introuvable",
+      "observation_text": "Fuite d'eau dans le couloir.",
+      "context": {
+        "establishment": "missing",
+        "active_business_units": [],
+        "routing_taxonomy": [],
+        "author_scope_keys": [],
+        "action_plan": null,
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": [],
+      "metrics": ["A", "J"],
+      "lots": ["lot0", "lot2", "lot10"],
+      "observed_v5": {
+        "executable": true,
+        "pipeline_started": false,
+        "error_code": "no_snapshot_ready_business_units",
+        "outcome": null,
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "V5 gate snapshot-ready : établissement sans BU snapshot-ready → skip ; pas de code precondition_* dédié."
+      },
+      "expected_v6": {
+        "pipeline_started": false,
+        "error_code": "precondition_invalid_establishment",
+        "outcome": null,
+        "routing_status": null,
+        "candidates": [],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-02",
+      "title": "Établissement sans pôle actif",
+      "observation_text": "Fuite d'eau dans le couloir.",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [],
+        "routing_taxonomy": [],
+        "author_scope_keys": [],
+        "action_plan": null,
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": [],
+      "metrics": ["A", "J"],
+      "lots": ["lot0", "lot2", "lot10"],
+      "observed_v5": {
+        "executable": true,
+        "pipeline_started": false,
+        "error_code": "no_snapshot_ready_business_units",
+        "outcome": null,
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "Zéro BU actif/snapshot-ready → skip V5."
+      },
+      "expected_v6": {
+        "pipeline_started": false,
+        "error_code": "precondition_no_active_business_unit",
+        "outcome": null,
+        "routing_status": null,
+        "candidates": [],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-03",
+      "title": "Contexte insuffisant → unassigned",
+      "observation_text": "Ça fuit encore",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [
+          { "key": "hotel", "label": "Hôtel", "routable": true }
+        ],
+        "routing_taxonomy": [
+          { "business_unit_key": "hotel", "activity_subjects": [] }
+        ],
+        "author_scope_keys": [],
+        "action_plan": null,
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": [],
+      "metrics": ["B", "C", "G", "J", "I"],
+      "lots": ["lot0", "lot5", "lot1", "lot8", "lot9"],
+      "observed_v5": {
+        "executable": false,
+        "reason": "V5 n'a pas de routing_status=unassigned ; fake/apply force un triplet complet ou rejette.",
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": null,
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "Comportement V5 : pas de Signal partiel ; pas de unassigned."
+      },
+      "expected_v6": {
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": "unassigned",
+        "candidates": [
+          {
+            "signal_kind": "actionable",
+            "expected_action": null,
+            "canonical_object": "fuite",
+            "routing_status": "unassigned",
+            "affected_key": null,
+            "responsible_key": null,
+            "subject_key": null
+          }
+        ],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-04",
+      "title": "Pôle affecté identifiable, aucun sujet",
+      "observation_text": "Ça fuit encore",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [
+          { "key": "hotel", "label": "Hôtel", "routable": true }
+        ],
+        "routing_taxonomy": [
+          { "business_unit_key": "hotel", "activity_subjects": [] }
+        ],
+        "author_scope_keys": [],
+        "action_plan": null,
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": [],
+      "metrics": ["A", "D", "E", "G"],
+      "lots": ["lot0", "lot2", "lot5", "lot1"],
+      "observed_v5": {
+        "executable": true,
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": null,
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "V5 : BU snapshot-ready sans sujets → précondition OK (can_run=true) ; apply sans sujet valide échoue/rejette le candidat (pas de partial)."
+      },
+      "expected_v6": {
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": "unassigned",
+        "candidates": [
+          {
+            "signal_kind": "actionable",
+            "expected_action": null,
+            "canonical_object": "fuite",
+            "routing_status": "unassigned",
+            "affected_key": "hotel",
+            "responsible_key": null,
+            "subject_key": null
+          }
+        ],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-05",
+      "title": "Verre cassé devant l'ascenseur",
+      "observation_text": "Verre cassé devant l'ascenseur",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [
+          { "key": "hotel", "label": "Hôtel", "routable": true },
+          { "key": "maintenance", "label": "Maintenance", "routable": true }
+        ],
+        "routing_taxonomy": [
+          {
+            "business_unit_key": "hotel",
+            "activity_subjects": [{ "key": "menage", "label": "Ménage" }]
+          },
+          {
+            "business_unit_key": "maintenance",
+            "activity_subjects": [
+              { "key": "equipements_d_exploitation", "label": "Équipements d'exploitation" }
+            ]
+          }
+        ],
+        "author_scope_keys": [],
+        "action_plan": null,
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": ["G05"],
+      "metrics": ["B", "C", "D", "E"],
+      "lots": ["lot0", "lot4", "lot5", "lot10"],
+      "observed_v5": {
+        "executable": true,
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "Baseline apply G05 : ménage/hôtel, ascenseur = lieu ; pas de expected_action ni signal_kind V5."
+      },
+      "expected_v6": {
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": "resolved",
+        "candidates": [
+          {
+            "signal_kind": "actionable",
+            "expected_action": "clean_secure",
+            "canonical_object": "verre",
+            "routing_status": "resolved",
+            "affected_key": "hotel",
+            "responsible_key": "hotel",
+            "subject_key": "menage",
+            "location_text": "ascenseur"
+          }
+        ],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-06",
+      "title": "Vitre du hall fendue",
+      "observation_text": "Vitre du hall fendue",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [
+          { "key": "hotel", "label": "Hôtel", "routable": true },
+          { "key": "maintenance", "label": "Maintenance", "routable": true }
+        ],
+        "routing_taxonomy": [
+          {
+            "business_unit_key": "maintenance",
+            "activity_subjects": [
+              { "key": "batiment", "label": "Bâtiment" }
+            ]
+          }
+        ],
+        "author_scope_keys": [],
+        "action_plan": null,
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": [],
+      "metrics": ["C", "E"],
+      "lots": ["lot0", "lot4", "lot5"],
+      "observed_v5": {
+        "executable": false,
+        "reason": "Pas de golden V5 exact pour vitre/repair ; V5 n'expose pas expected_action.",
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "V5 créerait un Signal actionable sans enum expected_action."
+      },
+      "expected_v6": {
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": "resolved",
+        "candidates": [
+          {
+            "signal_kind": "actionable",
+            "expected_action": "repair",
+            "canonical_object": "vitre",
+            "routing_status": "resolved",
+            "affected_key": "hotel",
+            "responsible_key": "maintenance",
+            "subject_key": "batiment",
+            "location_text": "hall"
+          }
+        ],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-07",
+      "title": "Planning étages disponible (informatif)",
+      "observation_text": "Planning étages disponible",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [
+          { "key": "hotel", "label": "Hôtel", "routable": true }
+        ],
+        "routing_taxonomy": [
+          {
+            "business_unit_key": "hotel",
+            "activity_subjects": [{ "key": "organisation", "label": "Organisation" }]
+          }
+        ],
+        "author_scope_keys": [],
+        "action_plan": null,
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": [],
+      "metrics": ["B", "C"],
+      "lots": ["lot0", "lot4", "lot5"],
+      "observed_v5": {
+        "executable": false,
+        "reason": "V5 n'a pas signal_kind=informational ; contrat v5 ne distingue pas l'informatif.",
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": null,
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "Comportement V5 indéterminé / non contractuel pour informatif."
+      },
+      "expected_v6": {
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": "resolved",
+        "candidates": [
+          {
+            "signal_kind": "informational",
+            "expected_action": "inform",
+            "canonical_object": "planning étages",
+            "routing_status": "resolved",
+            "affected_key": "hotel",
+            "responsible_key": "hotel",
+            "subject_key": "organisation"
+          }
+        ],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-08",
+      "title": "Plus de citrons au Rooftop (deux restaurants)",
+      "observation_text": "Plus de citrons au Rooftop",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [
+          { "key": "rooftop", "label": "Rooftop", "routable": true },
+          { "key": "food_court", "label": "Food Court", "routable": true }
+        ],
+        "routing_taxonomy": [
+          {
+            "business_unit_key": "rooftop",
+            "activity_subjects": [{ "key": "stock", "label": "Stock" }]
+          },
+          {
+            "business_unit_key": "food_court",
+            "activity_subjects": [{ "key": "stock", "label": "Stock" }]
+          }
+        ],
+        "author_scope_keys": [],
+        "action_plan": null,
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": [],
+      "metrics": ["D", "E"],
+      "lots": ["lot0", "lot3", "lot5"],
+      "observed_v5": {
+        "executable": false,
+        "reason": "Pas de golden corpus pour Rooftop/Food Court ; résolution instance couverte ailleurs en tests unitaires.",
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "V5 peut résoudre via routing_key distincts si présents dans le snapshot."
+      },
+      "expected_v6": {
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": "resolved",
+        "candidates": [
+          {
+            "signal_kind": "actionable",
+            "expected_action": "replenish",
+            "canonical_object": "citrons",
+            "routing_status": "resolved",
+            "affected_key": "rooftop",
+            "responsible_key": "rooftop",
+            "subject_key": "stock"
+          }
+        ],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-09",
+      "title": "Auteur mono-rattachement Rooftop",
+      "observation_text": "Plus de citrons au bar",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [
+          { "key": "rooftop", "label": "Rooftop", "routable": true },
+          { "key": "food_court", "label": "Food Court", "routable": true }
+        ],
+        "routing_taxonomy": [
+          {
+            "business_unit_key": "rooftop",
+            "activity_subjects": [{ "key": "bar", "label": "Bar" }]
+          }
+        ],
+        "author_scope_keys": ["rooftop"],
+        "action_plan": null,
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": [],
+      "metrics": ["D", "E"],
+      "lots": ["lot0", "lot3", "lot5"],
+      "observed_v5": {
+        "executable": false,
+        "reason": "V5 n'envoie pas author_scope_business_unit_routing_keys au LLM.",
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": null,
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "Contexte auteur absent du contrat V5."
+      },
+      "expected_v6": {
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": "resolved",
+        "candidates": [
+          {
+            "signal_kind": "actionable",
+            "expected_action": "replenish",
+            "canonical_object": "citrons",
+            "routing_status": "resolved",
+            "affected_key": "rooftop",
+            "responsible_key": "rooftop",
+            "subject_key": "bar"
+          }
+        ],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-10",
+      "title": "Auteur multi-rattachements ambigus",
+      "observation_text": "Plus de citrons au bar",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [
+          { "key": "rooftop", "label": "Rooftop", "routable": true },
+          { "key": "food_court", "label": "Food Court", "routable": true }
+        ],
+        "routing_taxonomy": [
+          {
+            "business_unit_key": "rooftop",
+            "activity_subjects": [{ "key": "bar", "label": "Bar" }]
+          },
+          {
+            "business_unit_key": "food_court",
+            "activity_subjects": [{ "key": "bar", "label": "Bar" }]
+          }
+        ],
+        "author_scope_keys": ["rooftop", "food_court"],
+        "action_plan": null,
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": [],
+      "metrics": ["D", "G"],
+      "lots": ["lot0", "lot3", "lot5"],
+      "observed_v5": {
+        "executable": false,
+        "reason": "V5 n'utilise pas le scope auteur multi pour désambiguïser / unassign.",
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": null,
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "Risque V5 : routing forcé arbitraire vers une instance."
+      },
+      "expected_v6": {
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": "unassigned",
+        "candidates": [
+          {
+            "signal_kind": "actionable",
+            "expected_action": "replenish",
+            "canonical_object": "citrons",
+            "routing_status": "unassigned",
+            "affected_key": null,
+            "responsible_key": null,
+            "subject_key": null
+          }
+        ],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-11",
+      "title": "Deux faits indépendants (segmentation)",
+      "observation_text": "Frigo chaud et sol trempé",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [
+          { "key": "restaurant", "label": "Restaurant", "routable": true }
+        ],
+        "routing_taxonomy": [
+          {
+            "business_unit_key": "restaurant",
+            "activity_subjects": [
+              { "key": "froid", "label": "Froid" },
+              { "key": "proprete", "label": "Propreté" }
+            ]
+          }
+        ],
+        "author_scope_keys": [],
+        "action_plan": null,
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": ["G01"],
+      "metrics": ["B"],
+      "lots": ["lot0", "lot4", "lot5", "lot10"],
+      "observed_v5": {
+        "executable": true,
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "Baseline segmentation via golden G01 (2 candidats / 2 Signals) — texte golden différent mais même invariant apply-side."
+      },
+      "expected_v6": {
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": "resolved",
+        "candidates": [
+          {
+            "signal_kind": "actionable",
+            "expected_action": "inspect",
+            "canonical_object": "frigo",
+            "routing_status": "resolved",
+            "affected_key": "restaurant",
+            "responsible_key": "restaurant",
+            "subject_key": "froid"
+          },
+          {
+            "signal_kind": "actionable",
+            "expected_action": "clean_secure",
+            "canonical_object": "sol",
+            "routing_status": "resolved",
+            "affected_key": "restaurant",
+            "responsible_key": "restaurant",
+            "subject_key": "proprete"
+          }
+        ],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-12",
+      "title": "Négation / fausse alerte",
+      "observation_text": "Fausse alerte, pas de fuite",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [
+          { "key": "hotel", "label": "Hôtel", "routable": true }
+        ],
+        "routing_taxonomy": [
+          {
+            "business_unit_key": "hotel",
+            "activity_subjects": [{ "key": "plomberie", "label": "Plomberie" }]
+          }
+        ],
+        "author_scope_keys": [],
+        "action_plan": null,
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": [],
+      "metrics": ["B", "J"],
+      "lots": ["lot0", "lot4", "lot5", "lot10"],
+      "observed_v5": {
+        "executable": true,
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "no_signal_created",
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "Apply-side V5 : candidates=[] → no_signal_created (déterministe, hors LLM)."
+      },
+      "expected_v6": {
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "no_signal_created",
+        "routing_status": null,
+        "candidates": [],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-13",
+      "title": "Situation passée rétablie (informatif)",
+      "observation_text": "Hier ça coupait mais c'est revenu",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [
+          { "key": "hotel", "label": "Hôtel", "routable": true }
+        ],
+        "routing_taxonomy": [
+          {
+            "business_unit_key": "hotel",
+            "activity_subjects": [{ "key": "electricite", "label": "Électricité" }]
+          }
+        ],
+        "author_scope_keys": [],
+        "action_plan": null,
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": [],
+      "metrics": ["B", "C"],
+      "lots": ["lot0", "lot4"],
+      "observed_v5": {
+        "executable": false,
+        "reason": "V5 n'a pas signal_kind informational ni temporalité contractuelle.",
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": null,
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "Comportement V5 non figé pour ce cas."
+      },
+      "expected_v6": {
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": "resolved",
+        "candidates": [
+          {
+            "signal_kind": "informational",
+            "expected_action": "monitor",
+            "canonical_object": "coupure",
+            "routing_status": "resolved",
+            "affected_key": "hotel",
+            "responsible_key": "hotel",
+            "subject_key": "electricite"
+          }
+        ],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-14",
+      "title": "Texte sans signal",
+      "observation_text": "Bon courage à tous",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [
+          { "key": "hotel", "label": "Hôtel", "routable": true }
+        ],
+        "routing_taxonomy": [
+          {
+            "business_unit_key": "hotel",
+            "activity_subjects": [{ "key": "menage", "label": "Ménage" }]
+          }
+        ],
+        "author_scope_keys": [],
+        "action_plan": null,
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": [],
+      "metrics": ["B", "J"],
+      "lots": ["lot0", "lot4", "lot5", "lot10"],
+      "observed_v5": {
+        "executable": true,
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "no_signal_created",
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "Apply-side V5 : candidates=[] → no_signal_created."
+      },
+      "expected_v6": {
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "no_signal_created",
+        "routing_status": null,
+        "candidates": [],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-15",
+      "title": "Plan d'action contradictoire (sol glissant vs tâche fuite)",
+      "observation_text": "Le sol est glissant",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [
+          { "key": "hotel", "label": "Hôtel", "routable": true },
+          { "key": "maintenance", "label": "Maintenance", "routable": true }
+        ],
+        "routing_taxonomy": [
+          {
+            "business_unit_key": "hotel",
+            "activity_subjects": [{ "key": "menage", "label": "Ménage" }]
+          },
+          {
+            "business_unit_key": "maintenance",
+            "activity_subjects": [{ "key": "plomberie", "label": "Plomberie" }]
+          }
+        ],
+        "author_scope_keys": [],
+        "action_plan": {
+          "task_business_unit_key": "maintenance",
+          "pilot_business_unit_key": "maintenance",
+          "task_topic": "fuite"
+        },
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": [],
+      "metrics": ["C", "E"],
+      "lots": ["lot0", "lot3", "lot4", "lot5"],
+      "observed_v5": {
+        "executable": false,
+        "reason": "V5 action_plan_context = pilot seulement ; pas de pôle tâche ni expected_action.",
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": null,
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "V5 peut biaiser vers le pilote Maintenance."
+      },
+      "expected_v6": {
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": "resolved",
+        "candidates": [
+          {
+            "signal_kind": "actionable",
+            "expected_action": "clean_secure",
+            "canonical_object": "sol",
+            "routing_status": "resolved",
+            "affected_key": "hotel",
+            "responsible_key": "hotel",
+            "subject_key": "menage"
+          }
+        ],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-16",
+      "title": "Contexte tâche Maintenance compatible",
+      "observation_text": "Toujours en panne",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [
+          { "key": "maintenance", "label": "Maintenance", "routable": true }
+        ],
+        "routing_taxonomy": [
+          {
+            "business_unit_key": "maintenance",
+            "activity_subjects": [
+              { "key": "equipements_d_exploitation", "label": "Équipements d'exploitation" }
+            ]
+          }
+        ],
+        "author_scope_keys": [],
+        "action_plan": {
+          "task_business_unit_key": "maintenance",
+          "pilot_business_unit_key": "maintenance",
+          "context_business_unit_source": "task"
+        },
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": [],
+      "metrics": ["E", "C"],
+      "lots": ["lot0", "lot3", "lot5"],
+      "observed_v5": {
+        "executable": false,
+        "reason": "V5 n'expose pas context_business_unit_source=task.",
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": null,
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "V5 : pilot seulement."
+      },
+      "expected_v6": {
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": "resolved",
+        "candidates": [
+          {
+            "signal_kind": "actionable",
+            "expected_action": "repair",
+            "canonical_object": "panne",
+            "routing_status": "resolved",
+            "affected_key": "maintenance",
+            "responsible_key": "maintenance",
+            "subject_key": "equipements_d_exploitation"
+          }
+        ],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-17",
+      "title": "Pôle tâche inexploitable, pilote valide",
+      "observation_text": "Toujours en panne",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [
+          { "key": "hotel", "label": "Hôtel", "routable": false },
+          { "key": "maintenance", "label": "Maintenance", "routable": true }
+        ],
+        "routing_taxonomy": [
+          {
+            "business_unit_key": "maintenance",
+            "activity_subjects": [
+              { "key": "equipements_d_exploitation", "label": "Équipements d'exploitation" }
+            ]
+          }
+        ],
+        "author_scope_keys": [],
+        "action_plan": {
+          "task_business_unit_key": "hotel",
+          "pilot_business_unit_key": "maintenance",
+          "context_business_unit_source": "pilot"
+        },
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": [],
+      "metrics": ["E", "D"],
+      "lots": ["lot0", "lot3", "lot5"],
+      "observed_v5": {
+        "executable": false,
+        "reason": "V5 n'a pas la bascule task→pilot ni dual active_business_units/routing_taxonomy.",
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": null,
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "V5 : pilot seul si snapshot-ready."
+      },
+      "expected_v6": {
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": "resolved",
+        "candidates": [
+          {
+            "signal_kind": "actionable",
+            "expected_action": "repair",
+            "canonical_object": "panne",
+            "routing_status": "resolved",
+            "affected_key": null,
+            "responsible_key": "maintenance",
+            "subject_key": "equipements_d_exploitation"
+          }
+        ],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-18",
+      "title": "Wifi — deux sujets compatibles sous pôles différents",
+      "observation_text": "Le wifi saute au troisième",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [
+          { "key": "hotel", "label": "Hôtel", "routable": true },
+          { "key": "maintenance", "label": "Maintenance", "routable": true }
+        ],
+        "routing_taxonomy": [
+          {
+            "business_unit_key": "hotel",
+            "activity_subjects": [{ "key": "wifi", "label": "Wifi" }]
+          },
+          {
+            "business_unit_key": "maintenance",
+            "activity_subjects": [{ "key": "reseau", "label": "Réseau" }]
+          }
+        ],
+        "author_scope_keys": [],
+        "action_plan": null,
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": [],
+      "metrics": ["E", "F", "G"],
+      "lots": ["lot0", "lot5", "lot1"],
+      "observed_v5": {
+        "executable": false,
+        "reason": "V5 force un routing complet ou rejette ; pas de unassigned partiel.",
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": null,
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "Risque V5 : routing arbitraire ou drop."
+      },
+      "expected_v6": {
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": "unassigned",
+        "candidates": [
+          {
+            "signal_kind": "actionable",
+            "expected_action": "inspect",
+            "canonical_object": "wifi",
+            "routing_status": "unassigned",
+            "affected_key": "hotel",
+            "responsible_key": null,
+            "subject_key": null,
+            "location_text": "troisième"
+          }
+        ],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-19",
+      "title": "Sujet Hôtel + responsible Maintenance incohérent",
+      "observation_text": "Problème ménage hall",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [
+          { "key": "hotel", "label": "Hôtel", "routable": true },
+          { "key": "maintenance", "label": "Maintenance", "routable": true }
+        ],
+        "routing_taxonomy": [
+          {
+            "business_unit_key": "hotel",
+            "activity_subjects": [{ "key": "menage", "label": "Ménage" }]
+          },
+          {
+            "business_unit_key": "maintenance",
+            "activity_subjects": [
+              { "key": "equipements_d_exploitation", "label": "Équipements d'exploitation" }
+            ]
+          }
+        ],
+        "author_scope_keys": [],
+        "action_plan": null,
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": [],
+      "metrics": ["F", "E", "G", "I"],
+      "lots": ["lot0", "lot5", "lot7", "lot9"],
+      "observed_v5": {
+        "executable": true,
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "no_signal_created",
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "V5 : subject hors responsible → rejet candidat entier (drop). Baseline déterministe via apply avec candidat incohérent."
+      },
+      "expected_v6": {
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": "resolved",
+        "candidates": [
+          {
+            "signal_kind": "actionable",
+            "expected_action": "clean_secure",
+            "canonical_object": "menage",
+            "routing_status": "resolved",
+            "affected_key": "hotel",
+            "responsible_key": "hotel",
+            "subject_key": "menage",
+            "resolution_note": "responsible corrigé depuis subject ; audit"
+          }
+        ],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-20",
+      "title": "Sujet personnalisé sans capacités catalogue",
+      "observation_text": "Machine à café en panne au bar",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [
+          { "key": "bar", "label": "Bar", "routable": true }
+        ],
+        "routing_taxonomy": [
+          {
+            "business_unit_key": "bar",
+            "activity_subjects": [
+              {
+                "key": "machine_a_cafe",
+                "label": "Machine à café",
+                "source": "free",
+                "capabilities": []
+              }
+            ]
+          }
+        ],
+        "author_scope_keys": [],
+        "action_plan": null,
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": [],
+      "metrics": ["E", "F"],
+      "lots": ["lot0", "lot3", "lot5"],
+      "observed_v5": {
+        "executable": false,
+        "reason": "V5 n'a pas de capacités catalogue ni promesse custom-subject V6.",
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "Sujet free peut exister en snapshot V5 s'il a un routing_key."
+      },
+      "expected_v6": {
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": "resolved",
+        "candidates": [
+          {
+            "signal_kind": "actionable",
+            "expected_action": "repair",
+            "canonical_object": "machine à café",
+            "routing_status": "resolved",
+            "affected_key": "bar",
+            "responsible_key": "bar",
+            "subject_key": "machine_a_cafe",
+            "capabilities_auto_complete": false
+          }
+        ],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-D1",
+      "title": "Pôles actifs non routables vs routing_taxonomy partielle",
+      "observation_text": "Problème au spa",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [
+          { "key": "spa", "label": "Spa", "routable": false },
+          { "key": "hotel", "label": "Hôtel", "routable": true }
+        ],
+        "routing_taxonomy": [
+          {
+            "business_unit_key": "hotel",
+            "activity_subjects": [{ "key": "menage", "label": "Ménage" }]
+          }
+        ],
+        "author_scope_keys": [],
+        "action_plan": null,
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": [],
+      "metrics": ["A", "D", "G", "J"],
+      "lots": ["lot0", "lot2", "lot3", "lot5", "lot10"],
+      "observed_v5": {
+        "executable": true,
+        "pipeline_started": false,
+        "error_code": "no_snapshot_ready_business_units",
+        "outcome": null,
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "V5 : gate snapshot-ready uniquement. Un pôle « actif non routable » n'est pas représentable distinctement (routing_key vide interdit en DB) → baseline runtime = BU inactive / hors gate → skip. V6 démarrerait avec pôles actifs même non routables."
+      },
+      "expected_v6": {
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": "unassigned",
+        "candidates": [
+          {
+            "signal_kind": "actionable",
+            "expected_action": null,
+            "canonical_object": "spa",
+            "routing_status": "unassigned",
+            "affected_key": null,
+            "responsible_key": null,
+            "subject_key": null,
+            "active_business_units_includes": ["spa", "hotel"],
+            "routing_taxonomy_excludes": ["spa"]
+          }
+        ],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    }
+  ]
+}

@@ -1,0 +1,442 @@
+{
+  "schema_version": "pipeline_v6_truth_tables_v1",
+  "source": "plan Lot 0 — tables de vérité hors LLM",
+  "sections": {
+    "precondition": [
+      {
+        "id": "PRE-01",
+        "owning_lot": "lot2",
+        "description": "Établissement missing / introuvable",
+        "input": {
+          "establishment": "missing",
+          "active_business_unit_count": 0
+        },
+        "observed_v5": {
+          "executable": true,
+          "allows_pipeline": false,
+          "error_code": "no_snapshot_ready_business_units"
+        },
+        "expected_v6": {
+          "allows_pipeline": false,
+          "error_code": "precondition_invalid_establishment",
+          "creates_signal": false,
+          "routing_status": null
+        }
+      },
+      {
+        "id": "PRE-02",
+        "owning_lot": "lot2",
+        "description": "Zéro pôle actif",
+        "input": {
+          "establishment": "valid",
+          "active_business_unit_count": 0
+        },
+        "observed_v5": {
+          "executable": true,
+          "allows_pipeline": false,
+          "error_code": "no_snapshot_ready_business_units"
+        },
+        "expected_v6": {
+          "allows_pipeline": false,
+          "error_code": "precondition_no_active_business_unit",
+          "creates_signal": false,
+          "routing_status": null
+        }
+      },
+      {
+        "id": "PRE-03",
+        "owning_lot": "lot2",
+        "description": "≥1 pôle actif sans sujets",
+        "input": {
+          "establishment": "valid",
+          "active_business_unit_count": 1,
+          "activity_subject_count": 0,
+          "snapshot_ready": true
+        },
+        "observed_v5": {
+          "executable": true,
+          "allows_pipeline": true,
+          "error_code": null
+        },
+        "expected_v6": {
+          "allows_pipeline": true,
+          "error_code": null,
+          "creates_signal": true,
+          "routing_status": "unassigned"
+        }
+      },
+      {
+        "id": "PRE-04",
+        "owning_lot": "lot2",
+        "description": "Pôle actif non snapshot-ready / sans routing_key",
+        "input": {
+          "establishment": "valid",
+          "active_business_unit_count": 1,
+          "routable": false,
+          "snapshot_ready": false
+        },
+        "observed_v5": {
+          "executable": true,
+          "allows_pipeline": false,
+          "error_code": "no_snapshot_ready_business_units"
+        },
+        "expected_v6": {
+          "allows_pipeline": true,
+          "error_code": null,
+          "creates_signal": true,
+          "routing_status": "unassigned"
+        }
+      }
+    ],
+    "resolver": [
+      {
+        "id": "RES-01",
+        "owning_lot": "lot5",
+        "description": "Clé hors routing_taxonomy → dimension null, candidat conservé",
+        "input": {
+          "proposed_affected_key": "unknown_pole",
+          "proposed_responsible_key": "hotel",
+          "proposed_subject_key": "menage"
+        },
+        "observed_v5": {
+          "executable": false,
+          "reason": "V5 rejette le candidat entier sur clé invalide",
+          "candidate_kept": false,
+          "rejection": "full_candidate"
+        },
+        "expected_v6": {
+          "affected_key": null,
+          "responsible_key": "hotel",
+          "subject_key": "menage",
+          "routing_status": "unassigned",
+          "candidate_kept": true
+        }
+      },
+      {
+        "id": "RES-02",
+        "owning_lot": "lot5",
+        "description": "Subject valide + responsible LLM faux pôle → correction",
+        "input": {
+          "proposed_affected_key": "hotel",
+          "proposed_responsible_key": "maintenance",
+          "proposed_subject_key": "menage",
+          "subject_business_unit_key": "hotel"
+        },
+        "observed_v5": {
+          "executable": true,
+          "candidate_kept": false,
+          "rejection": "full_candidate",
+          "reason": "validate_signal_classification / subject∉responsible"
+        },
+        "expected_v6": {
+          "affected_key": "hotel",
+          "responsible_key": "hotel",
+          "subject_key": "menage",
+          "routing_status": "resolved",
+          "candidate_kept": true,
+          "responsible_corrected": true
+        }
+      },
+      {
+        "id": "RES-03",
+        "owning_lot": "lot5",
+        "description": "Responsible seul → subject null + unassigned",
+        "input": {
+          "proposed_affected_key": null,
+          "proposed_responsible_key": "maintenance",
+          "proposed_subject_key": null
+        },
+        "observed_v5": {
+          "executable": false,
+          "reason": "V5 exige un triplet non null",
+          "candidate_kept": false
+        },
+        "expected_v6": {
+          "affected_key": null,
+          "responsible_key": "maintenance",
+          "subject_key": null,
+          "routing_status": "unassigned",
+          "candidate_kept": true
+        }
+      },
+      {
+        "id": "RES-04",
+        "owning_lot": "lot5",
+        "description": "Capacité unique → subject puis responsible dérivé",
+        "input": {
+          "capability": "glass_cleanup",
+          "matching_subjects": 1,
+          "subject_business_unit_key": "hotel"
+        },
+        "observed_v5": {
+          "executable": false,
+          "reason": "Capacités catalogue absentes en V5"
+        },
+        "expected_v6": {
+          "subject_key": "menage",
+          "responsible_key": "hotel",
+          "routing_status": "resolved",
+          "derivation_order": ["subject", "responsible"]
+        }
+      },
+      {
+        "id": "RES-05",
+        "owning_lot": "lot5",
+        "description": "Custom subject explicite sans auto-complétion capacités",
+        "input": {
+          "proposed_subject_key": "machine_a_cafe",
+          "subject_source": "free",
+          "capabilities": []
+        },
+        "observed_v5": {
+          "executable": false,
+          "reason": "Pas de politique capacités V5"
+        },
+        "expected_v6": {
+          "subject_key": "machine_a_cafe",
+          "routing_status": "resolved",
+          "capabilities_auto_complete": false,
+          "candidate_kept": true
+        }
+      }
+    ],
+    "persistence": [
+      {
+        "id": "PERS-01",
+        "owning_lot": "lot1",
+        "description": "Triplet cohérent → routing_status=resolved",
+        "input": {
+          "affected_key": "hotel",
+          "responsible_key": "hotel",
+          "subject_key": "menage"
+        },
+        "observed_v5": {
+          "executable": false,
+          "reason": "Champ routing_status absent en V5",
+          "routing_status": null,
+          "signal_created": true
+        },
+        "expected_v6": {
+          "routing_status": "resolved",
+          "signal_created": true,
+          "subject_business_unit_matches_responsible": true
+        }
+      },
+      {
+        "id": "PERS-02",
+        "owning_lot": "lot1",
+        "description": "Routing partiel → unassigned",
+        "input": {
+          "affected_key": "hotel",
+          "responsible_key": null,
+          "subject_key": null
+        },
+        "observed_v5": {
+          "executable": false,
+          "reason": "V5 ne persiste pas de Signal partiel",
+          "routing_status": null,
+          "signal_created": false
+        },
+        "expected_v6": {
+          "routing_status": "unassigned",
+          "signal_created": true
+        }
+      },
+      {
+        "id": "PERS-03",
+        "owning_lot": "lot2",
+        "description": "Erreur technique ne doit pas devenir unassigned",
+        "input": {
+          "technical_error": "provider_timeout"
+        },
+        "observed_v5": {
+          "executable": false,
+          "reason": "V5 utilise last_error_code sur ObservationProcessing ; pas de routing_status",
+          "routing_status": null,
+          "processing_failed": true
+        },
+        "expected_v6": {
+          "routing_status": null,
+          "signal_created": false,
+          "processing_failed": true,
+          "error_code": "provider_timeout"
+        }
+      },
+      {
+        "id": "PERS-04",
+        "owning_lot": "lot1",
+        "description": "Deux unassigned coexistent (pas de collision UniqueConstraint)",
+        "input": {
+          "routing_status": "unassigned",
+          "signal_count": 2,
+          "same_null_aggregation_key": true
+        },
+        "observed_v5": {
+          "executable": false,
+          "reason": "UniqueConstraint active nulls_distinct=False — collision latente V5"
+        },
+        "expected_v6": {
+          "signal_count": 2,
+          "routing_status": "unassigned",
+          "unique_constraint_applies": false
+        }
+      }
+    ],
+    "aggregation": [
+      {
+        "id": "AGG-01",
+        "owning_lot": "lot6",
+        "description": "Deux unassigned → deux Signals (pas d'agrégation)",
+        "input": {
+          "existing_routing_status": "unassigned",
+          "candidate_routing_status": "unassigned",
+          "same_issue_focus": true
+        },
+        "observed_v5": {
+          "executable": false,
+          "reason": "Pas de routing_status en V5 ; agrégation sur quadruplet+issue_focus seulement"
+        },
+        "expected_v6": {
+          "should_aggregate": false,
+          "aggregate_into_ref": null,
+          "signal_count": 2
+        }
+      },
+      {
+        "id": "AGG-02",
+        "owning_lot": "lot6",
+        "description": "Resolved exact match → agrégation",
+        "input": {
+          "existing_routing_status": "resolved",
+          "candidate_routing_status": "resolved",
+          "same_normalized_issue_focus": true
+        },
+        "observed_v5": {
+          "executable": true,
+          "should_aggregate": true,
+          "notes": "Comportement proche G07 sans routing_status"
+        },
+        "expected_v6": {
+          "should_aggregate": true,
+          "aggregate_into_ref": "existing_resolved",
+          "signal_count": 1
+        }
+      },
+      {
+        "id": "AGG-03",
+        "owning_lot": "lot6",
+        "description": "D3 : Signal.expected_action non null non écrasé",
+        "input": {
+          "signal_expected_action": "inspect",
+          "candidate_expected_action": "repair",
+          "same_aggregation_key": true
+        },
+        "observed_v5": {
+          "executable": false,
+          "reason": "Champ expected_action absent en V5"
+        },
+        "expected_v6": {
+          "should_aggregate": true,
+          "signal_expected_action": "inspect",
+          "candidate_expected_action": "repair",
+          "audit_divergence": true
+        }
+      },
+      {
+        "id": "AGG-04",
+        "owning_lot": "lot6",
+        "description": "D3 : Signal.expected_action null adopte candidat",
+        "input": {
+          "signal_expected_action": null,
+          "candidate_expected_action": "repair",
+          "same_aggregation_key": true
+        },
+        "observed_v5": {
+          "executable": false,
+          "reason": "Champ expected_action absent en V5"
+        },
+        "expected_v6": {
+          "should_aggregate": true,
+          "signal_expected_action": "repair",
+          "audit_source": "aggregation_initial_expected_action"
+        }
+      }
+    ],
+    "errors": [
+      {
+        "id": "ERR-01",
+        "owning_lot": "lot2",
+        "description": "Erreur précondition ≠ unassigned",
+        "input": {
+          "failure_kind": "precondition_no_active_business_unit"
+        },
+        "observed_v5": {
+          "executable": true,
+          "error_code": "no_snapshot_ready_business_units",
+          "routing_status": null,
+          "signal_created": false
+        },
+        "expected_v6": {
+          "error_code": "precondition_no_active_business_unit",
+          "routing_status": null,
+          "signal_created": false
+        }
+      },
+      {
+        "id": "ERR-02",
+        "owning_lot": "lot4",
+        "description": "provider_timeout reste technique",
+        "input": {
+          "failure_kind": "provider_timeout"
+        },
+        "observed_v5": {
+          "executable": false,
+          "reason": "Couvert par tests provider existants ; pas de routing_status",
+          "error_code": "provider_timeout",
+          "routing_status": null
+        },
+        "expected_v6": {
+          "error_code": "provider_timeout",
+          "routing_status": null,
+          "signal_created": false
+        }
+      },
+      {
+        "id": "ERR-03",
+        "owning_lot": "lot4",
+        "description": "invalid_structured_output reste technique",
+        "input": {
+          "failure_kind": "invalid_structured_output"
+        },
+        "observed_v5": {
+          "executable": false,
+          "reason": "Couvert par tests schema existants",
+          "error_code": "invalid_structured_output",
+          "routing_status": null
+        },
+        "expected_v6": {
+          "error_code": "invalid_structured_output",
+          "routing_status": null,
+          "signal_created": false
+        }
+      },
+      {
+        "id": "ERR-04",
+        "owning_lot": "lot5",
+        "description": "routing_status interdit comme canal d'erreur",
+        "input": {
+          "failure_kind": "any_technical"
+        },
+        "observed_v5": {
+          "executable": false,
+          "reason": "routing_status absent",
+          "routing_status": null
+        },
+        "expected_v6": {
+          "routing_status_allowed_values": ["resolved", "unassigned"],
+          "routing_status_as_error_channel": false
+        }
+      }
+    ]
+  }
+}

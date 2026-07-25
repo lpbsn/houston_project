@@ -265,7 +265,7 @@ def test_g6_subject_hors_responsible_rejected():
     assert CandidateSignal.objects.filter(outcome=CandidateSignal.Outcome.REJECTED).count() == 1
 
 
-def test_g7_non_transversal_responsible_rejected():
+def test_g7_dedicated_different_from_affected_accepted():
     membership = build_membership()
     establishment = membership.establishment
     hotel = create_business_unit(establishment=establishment, key="hotel", label="Hôtel")
@@ -290,8 +290,12 @@ def test_g7_non_transversal_responsible_rejected():
         ),
     ).outcome
 
-    assert outcome == ObservationProcessing.Outcome.NO_SIGNAL_CREATED
-    assert Signal.objects.count() == 0
+    assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
+    signal = Signal.objects.get()
+    assert signal.affected_business_unit_id == hotel.id
+    assert signal.responsible_business_unit_id == restaurant.id
+    assert signal.activity_subject_id == subject.id
+    assert signal.routing_status == Signal.RoutingStatus.RESOLVED
 
 
 def test_g8_business_unit_description_in_pipeline_input():

@@ -349,6 +349,7 @@ def test_signal_truly_unassigned_notifies_admins_unassigned_global():
         structured_summary="Sensitive observation summary",
         issue_focus="unassigned focus",
         status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.UNASSIGNED,
         last_activity_at=timezone.now(),
     )
 

@@ -37,6 +37,7 @@ def legacy_signal(*, establishment, bar, subject, title="Rupture sirop mojito"):
         title=title,
         structured_summary="Sirop mojito manquant au bar.",
         issue_focus="",
+        routing_status=Signal.RoutingStatus.RESOLVED,
         last_activity_at=timezone.now(),
     )
 

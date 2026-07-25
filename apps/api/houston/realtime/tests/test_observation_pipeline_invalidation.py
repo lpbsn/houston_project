@@ -106,6 +106,7 @@ def test_apply_pipeline_output_aggregate_emits_signal_updated():
         title="Rupture sirop mojito",
         structured_summary="Sirop mojito manquant.",
         issue_focus="sirop mojito",
+        routing_status=Signal.RoutingStatus.RESOLVED,
         last_activity_at=timezone.now(),
     )
     observation = create_observation(membership=membership)

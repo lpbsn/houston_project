@@ -274,6 +274,7 @@ def test_apply_pipeline_persists_aggregate_hint_signal_id():
         title="Signal actif",
         structured_summary="Situation en cours.",
         issue_focus="maintenance",
+        routing_status=Signal.RoutingStatus.RESOLVED,
         last_activity_at=timezone.now(),
     )
 
@@ -331,6 +332,7 @@ def test_apply_pipeline_rejects_hint_when_issue_focus_mismatch():
         title="Rupture sirop mojito",
         structured_summary="Sirop mojito manquant.",
         issue_focus="sirop mojito",
+        routing_status=Signal.RoutingStatus.RESOLVED,
         last_activity_at=timezone.now(),
     )
 
@@ -375,6 +377,7 @@ def test_apply_pipeline_logs_candidate_applied_audit(caplog):
         title="Signal actif",
         structured_summary="Situation en cours.",
         issue_focus="maintenance",
+        routing_status=Signal.RoutingStatus.RESOLVED,
         last_activity_at=timezone.now(),
     )
 
@@ -426,6 +429,7 @@ def test_apply_pipeline_logs_hint_rejected_on_issue_focus_mismatch(caplog):
         title="Rupture sirop mojito",
         structured_summary="Sirop mojito manquant.",
         issue_focus="sirop mojito",
+        routing_status=Signal.RoutingStatus.RESOLVED,
         last_activity_at=timezone.now(),
     )
 

@@ -266,6 +266,7 @@ def create_v3_signal(
     affected_business_unit: BusinessUnit,
     responsible_business_unit: BusinessUnit,
     activity_subject: ActivitySubject,
+    routing_status: str,
     title: str = "Signal title",
     structured_summary: str = "Structured summary safe.",
     status: str = Signal.Status.OPEN,
@@ -288,6 +289,7 @@ def create_v3_signal(
         location_text=location_text,
         issue_focus=stored_issue_focus,
         status=status,
+        routing_status=routing_status,
         last_activity_at=now,
     )
 
@@ -297,6 +299,7 @@ def create_minimal_v3_signal(
     *,
     title: str = "Signal title",
     status: str = Signal.Status.OPEN,
+    routing_status: str = Signal.RoutingStatus.RESOLVED,
 ) -> Signal:
     taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
     assert taxonomy.maintenance is not None
@@ -308,6 +311,7 @@ def create_minimal_v3_signal(
         activity_subject=taxonomy.lighting_subject,
         title=title,
         status=status,
+        routing_status=routing_status,
     )
 
 
@@ -321,6 +325,7 @@ def create_signal_v3_for_membership(
     title: str = "Signal title",
     location_text: str = "chambre 102",
     issue_focus: str | None = None,
+    routing_status: str = Signal.RoutingStatus.RESOLVED,
 ) -> Signal:
     return create_v3_signal(
         membership.establishment,
@@ -331,4 +336,5 @@ def create_signal_v3_for_membership(
         location_text=location_text,
         issue_focus=issue_focus,
         status=status,
+        routing_status=routing_status,
     )

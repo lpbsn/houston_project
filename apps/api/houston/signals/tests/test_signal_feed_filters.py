@@ -55,6 +55,7 @@ def _create_v3_signal(
         activity_subject=activity_subject,
         title=title,
         status=status,
+        routing_status=Signal.RoutingStatus.RESOLVED,
     )
 
 

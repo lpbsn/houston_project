@@ -132,6 +132,7 @@ def test_aggregation_match_mode_exact_on_same_focus(caplog):
         title="Rupture sirop mojito",
         structured_summary="Sirop mojito manquant.",
         issue_focus="sirop mojito",
+        routing_status=Signal.RoutingStatus.RESOLVED,
         last_activity_at=timezone.now(),
     )
     observation = create_observation(membership=membership)
@@ -168,6 +169,7 @@ def test_different_issue_focus_does_not_aggregate():
         title="Rupture sirop mojito",
         structured_summary="Sirop mojito manquant.",
         issue_focus="sirop mojito",
+        routing_status=Signal.RoutingStatus.RESOLVED,
         last_activity_at=timezone.now(),
     )
     observation = create_observation(membership=membership)
@@ -208,6 +210,7 @@ def test_same_issue_focus_still_aggregates():
         title="Rupture sirop mojito",
         structured_summary="Sirop mojito manquant.",
         issue_focus="sirop mojito",
+        routing_status=Signal.RoutingStatus.RESOLVED,
         last_activity_at=timezone.now(),
     )
     observation = create_observation(membership=membership)

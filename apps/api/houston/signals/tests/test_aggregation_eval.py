@@ -42,6 +42,7 @@ def test_find_active_taxonomy_duplicate_groups_detects_distinct_issue_focus():
         title="Rupture pain",
         structured_summary="Plus de pain.",
         issue_focus="pain",
+        routing_status=Signal.RoutingStatus.RESOLVED,
     )
     create_v3_signal(
         establishment,
@@ -51,6 +52,7 @@ def test_find_active_taxonomy_duplicate_groups_detects_distinct_issue_focus():
         title="Rupture mojito",
         structured_summary="Plus de sirop mojito.",
         issue_focus="sirop mojito",
+        routing_status=Signal.RoutingStatus.RESOLVED,
     )
 
     groups = find_active_taxonomy_duplicate_groups(establishment_id=establishment.id)
@@ -78,6 +80,7 @@ def test_count_active_taxonomy_peers_with_different_focus_excludes_same_focus():
         title="Rupture pain",
         structured_summary="Plus de pain.",
         issue_focus="pain",
+        routing_status=Signal.RoutingStatus.RESOLVED,
     )
 
     peer_count = count_active_taxonomy_peers_with_different_focus(
@@ -109,6 +112,7 @@ def test_compute_issue_focus_eval_metrics_counts_hint_issue_focus_mismatch():
         title="Rupture mojito",
         structured_summary="Plus de sirop mojito.",
         issue_focus="sirop mojito",
+        routing_status=Signal.RoutingStatus.RESOLVED,
     )
     observation = create_observation(membership=membership)
 
