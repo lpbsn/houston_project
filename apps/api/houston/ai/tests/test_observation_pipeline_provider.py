@@ -76,12 +76,15 @@ def _single_candidate_openai_payload(
                     "intervention maintenance requise."
                 ),
                 "issue_focus": "lumière entrée restaurant",
+        "canonical_object": "object",
+        "signal_kind": "actionable",
+        "expected_action": "inspect",
+        "information_type": None,
                 "affected_business_unit_routing_key": affected_key,
                 "responsible_business_unit_routing_key": responsible_key,
                 "activity_subject_routing_key": subject_key,
                 "operational_unit_key": None,
                 "location_text": None,
-                "aggregate_into_signal_id": None,
             }
         ],
     }
@@ -190,7 +193,11 @@ def test_openai_provider_sends_json_schema_strict_response_format(mock_openai_cl
     provider.propose(
         input_payload={
             "observation_id": "00000000-0000-0000-0000-000000000001",
-            "establishment_taxonomy": {"business_units": [], "operational_units": []},
+            "routing_taxonomy": {
+                "capabilities_version": "catalog_capabilities_v1",
+                "business_units": [],
+                "operational_units": [],
+            },
             "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
             "prompt_version": AI_OBSERVATION_PIPELINE_PROMPT_VERSION,
         }
@@ -222,7 +229,11 @@ def test_openai_provider_parses_valid_mocked_response(mock_openai_client):
     response = provider.propose(
         input_payload={
             "observation_id": "00000000-0000-0000-0000-000000000001",
-            "establishment_taxonomy": {"business_units": [], "operational_units": []},
+            "routing_taxonomy": {
+                "capabilities_version": "catalog_capabilities_v1",
+                "business_units": [],
+                "operational_units": [],
+            },
         }
     )
 

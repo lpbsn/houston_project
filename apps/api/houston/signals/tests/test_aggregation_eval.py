@@ -95,7 +95,7 @@ def test_count_active_taxonomy_peers_with_different_focus_excludes_same_focus():
     assert peer_count == 1
 
 
-def test_compute_issue_focus_eval_metrics_counts_hint_issue_focus_mismatch():
+def test_compute_issue_focus_eval_metrics_without_llm_aggregate_hint():
     membership = build_membership()
     establishment = membership.establishment
     bar = create_business_unit(establishment=establishment, key="bar", label="Bar")
@@ -104,7 +104,7 @@ def test_compute_issue_focus_eval_metrics_counts_hint_issue_focus_mismatch():
         business_unit=bar,
         label="Stock",
     )
-    mojito_signal = create_v3_signal(
+    create_v3_signal(
         establishment,
         affected_business_unit=bar,
         responsible_business_unit=bar,
@@ -125,12 +125,15 @@ def test_compute_issue_focus_eval_metrics_counts_hint_issue_focus_mismatch():
                     title="Rupture pain",
                     structured_summary="Plus de pain.",
                     issue_focus="pain",
+                    canonical_object="pain",
+                    signal_kind="actionable",
+                    expected_action="replenish",
+                    information_type=None,
                     affected_business_unit_routing_key=bar.routing_key,
                     responsible_business_unit_routing_key=bar.routing_key,
                     activity_subject_routing_key=stock.routing_key,
                     operational_unit_key=None,
                     location_text="Bar",
-                    aggregate_into_signal_id=str(mojito_signal.id),
                 )
             ],
         ),
@@ -138,9 +141,10 @@ def test_compute_issue_focus_eval_metrics_counts_hint_issue_focus_mismatch():
 
     metrics = compute_issue_focus_eval_metrics(establishment_id=establishment.id)
 
-    assert metrics.hint_provided_candidate_count == 1
-    assert metrics.hint_rejected_created_count == 1
-    assert metrics.hint_issue_focus_mismatch_count == 1
+    # V6: no LLM aggregate hint — distinct issue_focus creates a new Signal.
+    assert metrics.hint_provided_candidate_count == 0
+    assert metrics.hint_rejected_created_count == 0
+    assert metrics.hint_issue_focus_mismatch_count == 0
     assert Signal.objects.filter(establishment=establishment).count() == 2
     assert CandidateSignal.objects.filter(
         outcome=CandidateSignal.Outcome.CREATED_SIGNAL,

@@ -69,12 +69,15 @@ def _fake_provider_payload(
                 "title": "Clim en panne",
                 "structured_summary": "La climatisation ne fonctionne plus.",
                 "issue_focus": issue_focus,
+        "canonical_object": "object",
+        "signal_kind": "actionable",
+        "expected_action": "inspect",
+        "information_type": None,
                 "affected_business_unit_routing_key": hotel.routing_key,
                 "responsible_business_unit_routing_key": hotel.routing_key,
                 "activity_subject_routing_key": subject.routing_key,
                 "operational_unit_key": None,
                 "location_text": None,
-                "aggregate_into_signal_id": None,
             }
         ],
     }

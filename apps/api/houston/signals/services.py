@@ -555,27 +555,9 @@ def _try_resolve_hint_signal(
     normalized_issue_focus: str,
     for_update: bool = False,
 ) -> tuple[Signal | None, str | None]:
-    if not candidate.aggregate_into_signal_id:
-        return None, None
-
-    try:
-        hint_id = uuid.UUID(str(candidate.aggregate_into_signal_id))
-    except (TypeError, ValueError):
-        return None, "invalid_hint_id"
-
-    queryset = Signal.objects.filter(id=hint_id, establishment_id=establishment_id)
-    if for_update:
-        queryset = queryset.select_for_update()
-    signal = queryset.first()
-    if signal is None:
-        return None, "hint_signal_not_found"
-    if signal.status not in ACTIVE_SIGNAL_STATUSES:
-        return None, "hint_signal_not_active"
-    if not _signal_taxonomy_matches(signal=signal, resolved=resolved):
-        return None, "hint_taxonomy_mismatch"
-    if normalize_issue_focus(signal.issue_focus) != normalized_issue_focus:
-        return None, "hint_issue_focus_mismatch"
-    return signal, None
+    # V6: LLM aggregation hints removed from the provider contract.
+    # Exact-match aggregation below remains the only automatic path until Lot 6.
+    return None, None
 
 
 def _persist_pending_candidate(
@@ -584,13 +566,6 @@ def _persist_pending_candidate(
     candidate: PipelineCandidateOutput,
     resolved: ResolvedTaxonomy | None,
 ) -> CandidateSignal:
-    hint_id = None
-    if candidate.aggregate_into_signal_id:
-        try:
-            hint_id = uuid.UUID(str(candidate.aggregate_into_signal_id))
-        except (TypeError, ValueError):
-            hint_id = None
-
     return CandidateSignal.objects.create(
         observation=observation,
         establishment=observation.establishment,
@@ -603,7 +578,7 @@ def _persist_pending_candidate(
         structured_summary=candidate.structured_summary.strip(),
         issue_focus=require_normalized_issue_focus(candidate.issue_focus),
         schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-        ai_aggregate_hint_signal_id=hint_id,
+        ai_aggregate_hint_signal_id=None,
         outcome=CandidateSignal.Outcome.PENDING,
     )
 

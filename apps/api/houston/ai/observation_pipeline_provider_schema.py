@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 from houston.signals.constants import (
+    AI_CANONICAL_OBJECT_MAX_LENGTH,
+    AI_EXPECTED_ACTION_VALUES,
+    AI_INFORMATION_TYPE_MAX_LENGTH,
     AI_ISSUE_FOCUS_MAX_LENGTH,
     AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+    AI_SIGNAL_KIND_VALUES,
     MAX_CANDIDATES_PER_OBSERVATION,
 )
 
 AI_OBSERVATION_PIPELINE_PROVIDER_SCHEMA_NAME = "houston_observation_pipeline_output"
+
+_NULLABLE_STRING = {"type": ["string", "null"]}
+_NULLABLE_ROUTING_KEY = {"type": ["string", "null"], "maxLength": 180}
+_NULLABLE_SUBJECT_KEY = {"type": ["string", "null"], "maxLength": 150}
 
 _OPENAI_STRICT_OBSERVATION_PIPELINE_SCHEMA: dict = {
     "type": "object",
@@ -35,12 +43,15 @@ _OPENAI_STRICT_OBSERVATION_PIPELINE_SCHEMA: dict = {
                 "title",
                 "structured_summary",
                 "issue_focus",
+                "canonical_object",
+                "signal_kind",
+                "expected_action",
+                "information_type",
                 "affected_business_unit_routing_key",
                 "responsible_business_unit_routing_key",
                 "activity_subject_routing_key",
                 "operational_unit_key",
                 "location_text",
-                "aggregate_into_signal_id",
             ],
             "properties": {
                 "title": {
@@ -56,36 +67,57 @@ _OPENAI_STRICT_OBSERVATION_PIPELINE_SCHEMA: dict = {
                     "minLength": 1,
                     "maxLength": AI_ISSUE_FOCUS_MAX_LENGTH,
                     "description": (
-                        "Stable operational focus: product, object, equipment, or situation "
-                        "(include discriminant location when needed, e.g. clim chambre 104)."
+                        "Stable operational problem focus for aggregation "
+                        "(include discriminant location when needed)."
+                    ),
+                },
+                "canonical_object": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": AI_CANONICAL_OBJECT_MAX_LENGTH,
+                    "description": "Canonical object/product/equipment identifier.",
+                },
+                "signal_kind": {
+                    "type": "string",
+                    "enum": list(AI_SIGNAL_KIND_VALUES),
+                    "description": "actionable or informational.",
+                },
+                "expected_action": {
+                    "type": ["string", "null"],
+                    "enum": [*AI_EXPECTED_ACTION_VALUES, None],
+                    "description": "Expected operational action, or null when unknown.",
+                },
+                "information_type": {
+                    "type": ["string", "null"],
+                    "maxLength": AI_INFORMATION_TYPE_MAX_LENGTH,
+                    "description": (
+                        "Null when signal_kind=actionable; non-empty free string when "
+                        "signal_kind=informational (no closed enum)."
                     ),
                 },
                 "affected_business_unit_routing_key": {
-                    "type": "string",
-                    "maxLength": 180,
+                    **_NULLABLE_ROUTING_KEY,
                     "description": (
                         "Business unit routing_key where the issue is observed "
-                        "(from establishment_taxonomy)."
+                        "(from routing_taxonomy only); null if unknown."
                     ),
                 },
                 "responsible_business_unit_routing_key": {
-                    "type": "string",
-                    "maxLength": 180,
+                    **_NULLABLE_ROUTING_KEY,
                     "description": (
                         "Business unit routing_key responsible for treatment "
-                        "(transversal when different from affected)."
+                        "(from routing_taxonomy only); null if unknown."
                     ),
                 },
                 "activity_subject_routing_key": {
-                    "type": "string",
-                    "maxLength": 150,
+                    **_NULLABLE_SUBJECT_KEY,
                     "description": (
-                        "Activity subject routing_key under responsible_business_unit "
-                        "(from establishment_taxonomy)."
+                        "Activity subject routing_key under responsible "
+                        "(from routing_taxonomy only); null if unknown."
                     ),
                 },
                 "operational_unit_key": {
-                    "type": ["string", "null"],
+                    **_NULLABLE_STRING,
                     "description": (
                         "Operational unit key when a known unit applies; otherwise null."
                     ),
@@ -93,13 +125,9 @@ _OPENAI_STRICT_OBSERVATION_PIPELINE_SCHEMA: dict = {
                 "location_text": {
                     "type": ["string", "null"],
                     "description": (
-                        "Short free-text location for display when no structured unit applies "
-                        "(e.g. entrance, bar, room 104); never the full observation text."
+                        "Short free-text location for display when no structured unit applies; "
+                        "never the full observation text."
                     ),
-                },
-                "aggregate_into_signal_id": {
-                    "type": ["string", "null"],
-                    "description": ("Optional UUID hint for aggregation only; otherwise null."),
                 },
             },
         },

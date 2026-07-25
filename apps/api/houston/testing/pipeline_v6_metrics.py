@@ -69,6 +69,7 @@ SECTION_DEFAULT_METRICS: dict[str, tuple[str, ...]] = {
     "persistence": ("G",),
     "aggregation": ("H",),
     "errors": ("J",),
+    "context": ("C", "D", "E"),
 }
 
 LOT_IDS: tuple[str, ...] = tuple(f"lot{i}" for i in range(0, 11))
@@ -112,13 +113,24 @@ LOT_ACCEPTANCE: dict[str, dict[str, Any]] = {
             "author_and_action_plan_context",
         ],
         "case_ids": ["S15-08", "S15-09", "S15-10", "S15-15", "S15-16", "S15-17", "S15-D1"],
-        "truth_row_ids": [],
+        "truth_row_ids": [
+            "CTX-01",
+            "CTX-02",
+            "CTX-03",
+            "CTX-04",
+            "CTX-05",
+            "CTX-06",
+            "CTX-07",
+            "CTX-08",
+        ],
     },
     "lot4": {
         "criteria": [
             "provider_contract_v6_fake_ci",
             "nullable_routing_keys",
             "no_backend_only_fields_in_llm_schema",
+            "truth_table_provider_errors_green",
+            "no_aggregate_into_signal_id_in_contract",
         ],
         "case_ids": ["S15-05", "S15-06", "S15-07", "S15-11", "S15-12", "S15-14"],
         "truth_row_ids": ["ERR-02", "ERR-03"],

@@ -2,8 +2,7 @@
 
 Requires HOUSTON_RUN_OPENAI_OBSERVATION_SMOKE_TEST=1 and OPENAI_API_KEY.
 Runs 6 golden corpus cases (G01, G03–G07) through the real provider and checks
-structural alignment with expected routing keys, issue_focus presence, and
-active_signals_context issue_focus when setup includes active signals.
+structural alignment with expected routing keys and issue_focus presence.
 """
 
 from __future__ import annotations
@@ -115,16 +114,8 @@ def test_live_openai_v4_corpus_case(case_id: str):
     )
 
     input_payload = build_pipeline_input(observation=observation)
-    for setup in case.get("active_signals_setup", []):
-        matching = [
-            entry
-            for entry in input_payload["active_signals_context"]
-            if entry["title"] == setup["title"]
-        ]
-        assert matching, f"{case_id}: expected active signal {setup['title']!r} in context"
-        assert matching[0]["issue_focus"] == setup["issue_focus"], (
-            f"{case_id}: active_signals_context issue_focus mismatch for {setup['title']!r}"
-        )
+    assert "routing_taxonomy" in input_payload
+    assert "active_signals_context" not in input_payload
 
     output = call_observation_pipeline(
         observation=observation,

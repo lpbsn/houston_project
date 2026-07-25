@@ -8,14 +8,18 @@ import uuid
 import pytest
 
 from houston.ai.observation_pipeline import (
+    PRECONDITION_INVALID_ESTABLISHMENT,
+    PRECONDITION_NO_ACTIVE_BUSINESS_UNIT,
     ObservationPipelineSkippedError,
     call_observation_pipeline,
     establishment_can_run_observation_pipeline,
+    evaluate_observation_pipeline_precondition,
 )
 from houston.ai.observation_pipeline_schema import (
     ObservationPipelineOutput,
     PipelineCandidateOutput,
 )
+from houston.establishments.models import Establishment
 from houston.observations.models import ObservationProcessing
 from houston.signals.constants import AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
 from houston.signals.models import CandidateSignal, Signal
@@ -88,6 +92,7 @@ def test_pipeline_v6_truth_tables_loadable():
         "persistence",
         "aggregation",
         "errors",
+        "context",
     }
 
 
@@ -152,14 +157,24 @@ def test_v5_baseline_runtime_executable_case_ids_are_documented():
         assert case["observed_v5"]["executable"] is True
 
 
-def test_v5_baseline_runtime_s15_01_missing_establishment_skips():
+def test_v6_runtime_lot2_s15_01_invalid_establishment_skips():
     case = get_pipeline_v6_acceptance_case("S15-01")
     missing_id = uuid.uuid4()
-    assert establishment_can_run_observation_pipeline(establishment_id=missing_id) is False
-    assert case["observed_v5"]["pipeline_started"] is False
-    assert case["observed_v5"]["error_code"] == "no_snapshot_ready_business_units"
-    # Runtime path: établissement sans contexte routable → même error_code V5.
+    with pytest.raises(ObservationPipelineSkippedError) as missing_exc:
+        evaluate_observation_pipeline_precondition(establishment_id=missing_id)
+    assert missing_exc.value.error_code == case["expected_v6"]["error_code"]
+    assert missing_exc.value.error_code == PRECONDITION_INVALID_ESTABLISHMENT
+    assert case["expected_v6"]["pipeline_started"] is False
+
     membership = build_membership()
+    create_business_unit(
+        establishment=membership.establishment,
+        key="hotel",
+        label="Hôtel",
+    )
+    establishment = membership.establishment
+    establishment.status = Establishment.Status.DEACTIVATED
+    establishment.save(update_fields=["status", "updated_at"])
     observation = create_observation(membership=membership, text=case["observation_text"])
     assert (
         establishment_can_run_observation_pipeline(
@@ -169,10 +184,10 @@ def test_v5_baseline_runtime_s15_01_missing_establishment_skips():
     )
     with pytest.raises(ObservationPipelineSkippedError) as exc_info:
         call_observation_pipeline(observation=observation)
-    assert exc_info.value.error_code == case["observed_v5"]["error_code"]
+    assert exc_info.value.error_code == case["expected_v6"]["error_code"]
 
 
-def test_v5_baseline_runtime_s15_02_no_active_business_unit_skips():
+def test_v6_runtime_lot2_s15_02_no_active_business_unit_skips():
     case = get_pipeline_v6_acceptance_case("S15-02")
     membership = build_membership()
     observation = create_observation(membership=membership, text=case["observation_text"])
@@ -184,11 +199,12 @@ def test_v5_baseline_runtime_s15_02_no_active_business_unit_skips():
     )
     with pytest.raises(ObservationPipelineSkippedError) as exc_info:
         call_observation_pipeline(observation=observation)
-    assert exc_info.value.error_code == case["observed_v5"]["error_code"]
-    assert case["observed_v5"]["pipeline_started"] is False
+    assert exc_info.value.error_code == case["expected_v6"]["error_code"]
+    assert exc_info.value.error_code == PRECONDITION_NO_ACTIVE_BUSINESS_UNIT
+    assert case["expected_v6"]["pipeline_started"] is False
 
 
-def test_v5_baseline_runtime_s15_04_active_bu_without_subjects_allows_pipeline():
+def test_v6_runtime_lot2_s15_04_active_bu_without_subjects_allows_pipeline():
     case = get_pipeline_v6_acceptance_case("S15-04")
     membership = build_membership()
     create_business_unit(
@@ -202,8 +218,8 @@ def test_v5_baseline_runtime_s15_04_active_bu_without_subjects_allows_pipeline()
         )
         is True
     )
-    assert case["observed_v5"]["pipeline_started"] is True
-    assert case["observed_v5"]["error_code"] is None
+    assert case["expected_v6"]["pipeline_started"] is True
+    assert case["expected_v6"]["error_code"] is None
 
 
 def test_v5_baseline_runtime_s15_05_golden_g05_apply():
@@ -253,9 +269,12 @@ def test_v5_baseline_runtime_s15_19_incoherent_subject_responsible_drops_candida
                     title="Problème ménage",
                     structured_summary="Hall à nettoyer.",
                     issue_focus="menage hall",
+                canonical_object="object",
+                signal_kind="actionable",
+                expected_action="inspect",
+                information_type=None,
                     operational_unit_key=None,
                     location_text="hall",
-                    aggregate_into_signal_id=None,
                     affected_business_unit_routing_key=hotel.routing_key,
                     responsible_business_unit_routing_key=maintenance.routing_key,
                     activity_subject_routing_key=menage.routing_key,
@@ -275,28 +294,27 @@ def test_v5_baseline_runtime_s15_19_incoherent_subject_responsible_drops_candida
     assert Signal.objects.filter(establishment=establishment).count() == 0
 
 
-def test_v5_baseline_runtime_s15_d1_non_snapshot_ready_bu_skips():
+def test_v6_runtime_lot2_s15_d1_active_non_snapshot_ready_allows_pipeline():
     case = get_pipeline_v6_acceptance_case("S15-D1")
     membership = build_membership()
-    # V5 DB forbids empty routing_key; non-snapshot-ready ≈ inactive / absent from gate.
-    spa = create_business_unit(
+    create_business_unit(
         establishment=membership.establishment,
         key="spa",
         label="Spa",
     )
-    spa.active = False
-    spa.save(update_fields=["active", "updated_at"])
+    create_business_unit(
+        establishment=membership.establishment,
+        key="hotel",
+        label="Hôtel",
+    )
     assert (
         establishment_can_run_observation_pipeline(
             establishment_id=membership.establishment_id,
         )
-        is False
+        is True
     )
-    observation = create_observation(membership=membership, text=case["observation_text"])
-    with pytest.raises(ObservationPipelineSkippedError) as exc_info:
-        call_observation_pipeline(observation=observation)
-    assert exc_info.value.error_code == case["observed_v5"]["error_code"]
-    assert case["observed_v5"]["pipeline_started"] is False
+    assert case["expected_v6"]["pipeline_started"] is True
+    assert case["expected_v6"]["error_code"] is None
 
 
 def _assert_v5_baseline_runtime_golden_apply(case_id: str) -> None:

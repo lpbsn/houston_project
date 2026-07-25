@@ -22,21 +22,31 @@ from houston.signals.tests.conftest import create_observation
 from houston.testing.factories import build_membership
 
 
-def test_prompt_version_constant_is_v5():
-    assert AI_OBSERVATION_PIPELINE_PROMPT_VERSION == "ai_observation_pipeline_v5"
+def test_prompt_version_constant_is_v6():
+    assert AI_OBSERVATION_PIPELINE_PROMPT_VERSION == "ai_observation_pipeline_v6"
+    assert AI_OBSERVATION_PIPELINE_SCHEMA_VERSION == "ai_observation_pipeline_v6"
 
 
-def test_system_prompt_is_french_and_covers_v4_rules():
+def test_system_prompt_is_french_and_covers_dual_context():
     prompt = _system_prompt()
     assert prompt == _OBSERVATION_PIPELINE_SYSTEM_PROMPT
     assert "Tu es un analyste qualité opérationnel" in prompt
     assert "validated_text" in prompt
-    assert "establishment_taxonomy" in prompt
+    assert "establishment_context" in prompt
+    assert "routing_taxonomy" in prompt
+    assert "active_business_units" in prompt
+    assert "contexte structurel" in prompt
+    assert "seules clés runtime valides" in prompt
+    assert "author_scope_business_unit_routing_keys" in prompt
     assert f"max {MAX_CANDIDATES_PER_OBSERVATION}" in prompt
     assert "MÉTHODE — ANALYSE PROBLÈME PAR PROBLÈME" in prompt
     assert "ISSUE_FOCUS" in prompt
-    assert "DÉSAMBIGUÏSATION" in prompt
-    assert "Anti-biais active_signals_context" in prompt
+    assert "canonical_object" in prompt
+    assert "signal_kind" in prompt
+    assert "information_type" in prompt
+    assert "aggregate_into_signal_id" not in prompt
+    assert "active_signals_context" not in prompt
+    assert "establishment_taxonomy" not in prompt
     assert "PRIORITÉ TRANSVERSALE" in prompt
     assert "issue_focus" in prompt
     assert "affected_business_unit_routing_key" in prompt
@@ -50,6 +60,7 @@ def test_system_prompt_is_french_and_covers_v4_rules():
     assert "business_unit_key" not in prompt
     assert "normalized_name" not in prompt
     assert "location_text" in prompt
+    assert "routing_status" in prompt  # listed as hors périmètre
     assert AI_OBSERVATION_PIPELINE_SCHEMA_VERSION in prompt
 
 
@@ -74,21 +85,26 @@ def test_build_pipeline_input_includes_prompt_version_not_system_text():
     assert payload["prompt_version"] == AI_OBSERVATION_PIPELINE_PROMPT_VERSION
     assert payload["schema_version"] == AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
     assert payload["validated_text"] == observation.raw_text
-    assert "establishment_taxonomy" in payload
+    assert "establishment_context" in payload
+    assert "routing_taxonomy" in payload
+    assert "submission_context" in payload
     assert set(payload.keys()) == {
         "observation_id",
         "establishment_id",
         "validated_text",
         "submitted_at",
         "media_count",
-        "establishment_taxonomy",
-        "active_signals_context",
+        "establishment_context",
+        "routing_taxonomy",
+        "submission_context",
         "schema_version",
         "prompt_version",
     }
     assert "action_plan_context" not in payload
-    assert payload["active_signals_context"] == []
-    assert payload["establishment_taxonomy"]["business_units"][0][
+    assert "active_signals_context" not in payload
+    assert "establishment_taxonomy" not in payload
+    assert payload["media_count"] == 0
+    assert payload["establishment_context"]["active_business_units"][0][
         "instance_description"
     ] == ("Chambres et couloirs.")
 
@@ -97,7 +113,7 @@ def test_build_pipeline_input_includes_prompt_version_not_system_text():
 
 
 @pytest.mark.django_db
-def test_build_pipeline_input_includes_active_signals_context_with_issue_focus():
+def test_build_pipeline_input_omits_active_signals_context():
     membership = build_membership()
     hotel = create_business_unit(
         establishment=membership.establishment,
@@ -115,7 +131,7 @@ def test_build_pipeline_input_includes_active_signals_context_with_issue_focus()
 
     from houston.signals.models import Signal
 
-    signal = Signal.objects.create(
+    Signal.objects.create(
         establishment=membership.establishment,
         affected_business_unit=hotel,
         responsible_business_unit=hotel,
@@ -129,13 +145,5 @@ def test_build_pipeline_input_includes_active_signals_context_with_issue_focus()
 
     payload = build_pipeline_input(observation=observation)
 
-    assert len(payload["active_signals_context"]) == 1
-    entry = payload["active_signals_context"][0]
-    assert entry["signal_id"] == str(signal.id)
-    assert entry["status"] == Signal.Status.OPEN
-    assert entry["title"] == "Fuite existante"
-    assert entry["affected_business_unit_routing_key"] == hotel.routing_key
-    assert entry["responsible_business_unit_routing_key"] == hotel.routing_key
-    assert entry["activity_subject_routing_key"] == subject.routing_key
-    assert entry["operational_unit_key"] is None
-    assert entry["issue_focus"] == "fuite couloir nord"
+    assert "active_signals_context" not in payload
+    assert "routing_taxonomy" in payload

@@ -14,7 +14,7 @@ from houston.establishments.catalog_source_normalization import (
     load_normalized_business_unit_rows,
 )
 from houston.establishments.models import CatalogActivitySubject, CatalogBusinessUnit
-from houston.establishments.taxonomy_snapshot import build_establishment_taxonomy_snapshot
+from houston.establishments.taxonomy_snapshot import build_routing_taxonomy
 from houston.establishments.tests.taxonomy_helpers import (
     create_activity_subject,
     create_business_unit,
@@ -99,11 +99,11 @@ def test_taxonomy_snapshot_includes_imported_catalog_descriptions():
         description=catalog_menage.description,
     )
 
-    snapshot = build_establishment_taxonomy_snapshot(establishment_id=establishment.id)
+    taxonomy = build_routing_taxonomy(establishment_id=establishment.id)
 
-    assert snapshot["business_units"][0]["generic_description"] == catalog_hotel.description
-    assert snapshot["business_units"][0]["instance_description"] == catalog_hotel.description
-    assert snapshot["business_units"][0]["activity_subjects"][0]["description"] == (
+    assert taxonomy["business_units"][0]["generic_description"] == catalog_hotel.description
+    assert taxonomy["business_units"][0]["instance_description"] == catalog_hotel.description
+    assert taxonomy["business_units"][0]["activity_subjects"][0]["description"] == (
         catalog_menage.description
     )
 
@@ -129,7 +129,7 @@ def test_pipeline_input_includes_runtime_descriptions_from_catalog():
     observation = create_observation(membership=membership, text="Fuite d'eau dans le couloir.")
 
     payload = build_pipeline_input(observation=observation)
-    subjects = payload["establishment_taxonomy"]["business_units"][0]["activity_subjects"]
+    subjects = payload["routing_taxonomy"]["business_units"][0]["activity_subjects"]
 
     assert subjects[0]["description"] == catalog_plomberie.description
     assert "Exclut" in subjects[0]["description"]

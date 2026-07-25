@@ -34,12 +34,15 @@ def golden_two_candidate_pipeline_output(
                     "intervention maintenance requise."
                 ),
                 issue_focus="lumière entrée restaurant",
+                canonical_object="lumière",
+                signal_kind="actionable",
+                expected_action="repair",
+                information_type=None,
                 affected_business_unit_routing_key=taxonomy.restaurant.routing_key,
                 responsible_business_unit_routing_key=taxonomy.maintenance.routing_key,
                 activity_subject_routing_key=taxonomy.lighting_subject.routing_key,
                 operational_unit_key=None,
                 location_text="Entrée restaurant",
-                aggregate_into_signal_id=None,
             ),
             PipelineCandidateOutput(
                 title="Rupture de sirop mojito au bar",
@@ -47,12 +50,15 @@ def golden_two_candidate_pipeline_output(
                     "Plus de sirop mojito disponible au bar, réassort stock nécessaire."
                 ),
                 issue_focus="sirop mojito",
+                canonical_object="sirop mojito",
+                signal_kind="actionable",
+                expected_action="replenish",
+                information_type=None,
                 affected_business_unit_routing_key=taxonomy.bar.routing_key,
                 responsible_business_unit_routing_key=taxonomy.bar.routing_key,
                 activity_subject_routing_key=taxonomy.stock_subject.routing_key,
                 operational_unit_key=None,
                 location_text="Bar",
-                aggregate_into_signal_id=None,
             ),
         ],
     )

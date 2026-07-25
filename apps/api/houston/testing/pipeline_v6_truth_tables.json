@@ -437,6 +437,151 @@
           "routing_status_as_error_channel": false
         }
       }
+    ],
+    "context": [
+      {
+        "id": "CTX-01",
+        "owning_lot": "lot3",
+        "description": "Pôle actif non routable ∈ active_business_units, ∉ routing_taxonomy",
+        "input": {
+          "active_business_unit_keys": ["spa", "hotel"],
+          "routable_business_unit_keys": ["hotel"],
+          "hotel_has_subject": true
+        },
+        "observed_v5": {
+          "executable": false,
+          "reason": "V5 n'a pas de dual active_business_units / routing_taxonomy"
+        },
+        "expected_v6": {
+          "active_includes": ["hotel", "spa"],
+          "routing_excludes": ["spa"],
+          "routing_includes": ["hotel"]
+        }
+      },
+      {
+        "id": "CTX-02",
+        "owning_lot": "lot3",
+        "description": "Aucun pôle actif omis du contexte général",
+        "input": {
+          "active_business_unit_keys": ["spa", "hotel", "bar"]
+        },
+        "observed_v5": {
+          "executable": false,
+          "reason": "V5 snapshot-ready only"
+        },
+        "expected_v6": {
+          "active_count": 3,
+          "active_omitted": false
+        }
+      },
+      {
+        "id": "CTX-03",
+        "owning_lot": "lot3",
+        "description": "Scopes auteur 0/1/2+ dédupliqués et triés, taxonomy-only",
+        "input": {
+          "author_scope_catalog_keys": ["rooftop", "food_court", "rooftop"],
+          "routable_all": true
+        },
+        "observed_v5": {
+          "executable": false,
+          "reason": "V5 n'envoie pas author_scope_business_unit_routing_keys"
+        },
+        "expected_v6": {
+          "author_scope_count": 2,
+          "author_scopes_sorted": true,
+          "author_scopes_deduped": true
+        }
+      },
+      {
+        "id": "CTX-04",
+        "owning_lot": "lot3",
+        "description": "Action plan : tâche routable prioritaire",
+        "input": {
+          "task_routable": true,
+          "pilot_routable": true
+        },
+        "observed_v5": {
+          "executable": false,
+          "reason": "V5 pilot seulement"
+        },
+        "expected_v6": {
+          "context_business_unit_source": "task",
+          "business_unit_routing_key_null": false
+        }
+      },
+      {
+        "id": "CTX-05",
+        "owning_lot": "lot3",
+        "description": "Action plan : tâche non routable + pilote routable → pilote entier",
+        "input": {
+          "task_routable": false,
+          "pilot_routable": true
+        },
+        "observed_v5": {
+          "executable": false,
+          "reason": "V5 pas de bascule task→pilot"
+        },
+        "expected_v6": {
+          "context_business_unit_source": "pilot",
+          "business_unit_routing_key_null": false,
+          "uses_pilot_name": true
+        }
+      },
+      {
+        "id": "CTX-06",
+        "owning_lot": "lot3",
+        "description": "Action plan : BU présentes non routables → key null, name+source conservés",
+        "input": {
+          "task_routable": false,
+          "pilot_routable": false,
+          "task_present": true
+        },
+        "observed_v5": {
+          "executable": false,
+          "reason": "V5 pas de contexte descriptif sans clé"
+        },
+        "expected_v6": {
+          "business_unit_routing_key_null": true,
+          "business_unit_specific_name_null": false,
+          "context_business_unit_source": "task"
+        }
+      },
+      {
+        "id": "CTX-07",
+        "owning_lot": "lot3",
+        "description": "Action plan : aucune BU tâche ni pilote → key/name/source null",
+        "input": {
+          "task_present": false,
+          "pilot_present": false
+        },
+        "observed_v5": {
+          "executable": false,
+          "reason": "V5 exige pilot snapshot-ready"
+        },
+        "expected_v6": {
+          "business_unit_routing_key_null": true,
+          "business_unit_specific_name_null": true,
+          "context_business_unit_source": null
+        }
+      },
+      {
+        "id": "CTX-08",
+        "owning_lot": "lot3",
+        "description": "Capacités : catalog connu / inconnu / free + capabilities_version",
+        "input": {
+          "subjects": ["catalog_known", "catalog_unknown", "free"]
+        },
+        "observed_v5": {
+          "executable": false,
+          "reason": "V5 sans capabilities"
+        },
+        "expected_v6": {
+          "capabilities_version_present": true,
+          "known_capabilities_non_empty": true,
+          "unknown_capabilities_empty": true,
+          "free_capabilities_empty": true
+        }
+      }
     ]
   }
 }
