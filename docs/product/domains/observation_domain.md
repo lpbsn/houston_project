@@ -115,7 +115,7 @@ The processing pipeline may use AI, but Observation does not own AI contracts or
   - `signal_aggregated`
   - `no_signal_created`
 
-- **MVP:** empty pipeline, validation rejection, or no actionable candidate after validation → outcome **`no_signal_created`** only. `not_actionable` is **not** a distinct product outcome.
+- **MVP:** empty pipeline (`candidates: []`), validation rejection, or no applied candidate → outcome **`no_signal_created`** only. Informational candidates are first-class and create Signals; `not_actionable` is **not** a distinct product outcome.
 
 See [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md) for CandidateSignal shape and segmentation rules.
 

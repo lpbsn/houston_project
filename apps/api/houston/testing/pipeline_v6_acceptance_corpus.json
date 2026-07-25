@@ -297,7 +297,7 @@
       },
       "legacy_golden_ids": [],
       "metrics": ["B", "C"],
-      "lots": ["lot0", "lot4", "lot5"],
+      "lots": ["lot0", "lot4", "lot4b", "lot5", "lot10"],
       "observed_v5": {
         "executable": false,
         "reason": "V5 n'a pas signal_kind=informational ; contrat v5 ne distingue pas l'informatif.",
@@ -574,7 +574,7 @@
       },
       "legacy_golden_ids": [],
       "metrics": ["B", "J"],
-      "lots": ["lot0", "lot4", "lot5", "lot10"],
+      "lots": ["lot0", "lot4", "lot4b", "lot5", "lot10"],
       "observed_v5": {
         "executable": true,
         "pipeline_started": true,
@@ -665,7 +665,7 @@
       },
       "legacy_golden_ids": [],
       "metrics": ["B", "J"],
-      "lots": ["lot0", "lot4", "lot5", "lot10"],
+      "lots": ["lot0", "lot4", "lot4b", "lot5", "lot10"],
       "observed_v5": {
         "executable": true,
         "pipeline_started": true,
@@ -1028,6 +1028,171 @@
             "responsible_key": "bar",
             "subject_key": "machine_a_cafe",
             "capabilities_auto_complete": false
+          }
+        ],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-21",
+      "title": "Plannings disponibles avec invitation (informatif, anti-sur-segmentation)",
+      "observation_text": "Les plannings sont disponibles, venez les demander",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [
+          { "key": "hotel", "label": "Hôtel", "routable": true }
+        ],
+        "routing_taxonomy": [
+          {
+            "business_unit_key": "hotel",
+            "activity_subjects": [{ "key": "organisation", "label": "Organisation" }]
+          }
+        ],
+        "author_scope_keys": [],
+        "action_plan": null,
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": [],
+      "metrics": ["B", "C"],
+      "lots": ["lot0", "lot4b", "lot10"],
+      "observed_v5": {
+        "executable": false,
+        "reason": "V5 n'a pas signal_kind=informational ; contrat v5 ne distingue pas l'informatif.",
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": null,
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "Correctif Lot4b prompt v6.1 : exactement 1 informational ; invitation non séparée."
+      },
+      "expected_v6": {
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": "resolved",
+        "candidates": [
+          {
+            "signal_kind": "informational",
+            "expected_action": "inform",
+            "canonical_object": "planning",
+            "routing_status": "resolved",
+            "affected_key": "hotel",
+            "responsible_key": "hotel",
+            "subject_key": "organisation"
+          }
+        ],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-22",
+      "title": "Changement d'horaire / consigne (informatif)",
+      "observation_text": "Nouveau brief service à 17h au lieu de 16h",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [
+          { "key": "hotel", "label": "Hôtel", "routable": true }
+        ],
+        "routing_taxonomy": [
+          {
+            "business_unit_key": "hotel",
+            "activity_subjects": [{ "key": "organisation", "label": "Organisation" }]
+          }
+        ],
+        "author_scope_keys": [],
+        "action_plan": null,
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": [],
+      "metrics": ["B", "C"],
+      "lots": ["lot0", "lot4b", "lot10"],
+      "observed_v5": {
+        "executable": false,
+        "reason": "V5 n'a pas signal_kind=informational.",
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": null,
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "Lot4b : consigne / changement d'horaire → 1 informational."
+      },
+      "expected_v6": {
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": "resolved",
+        "candidates": [
+          {
+            "signal_kind": "informational",
+            "expected_action": "inform",
+            "canonical_object": "brief service",
+            "routing_status": "resolved",
+            "affected_key": "hotel",
+            "responsible_key": "hotel",
+            "subject_key": "organisation"
+          }
+        ],
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }
+      }
+    },
+    {
+      "id": "S15-23",
+      "title": "Mélange actionable + informational",
+      "observation_text": "Fuite couloir nord et planning étages disponible",
+      "context": {
+        "establishment": "valid",
+        "active_business_units": [
+          { "key": "hotel", "label": "Hôtel", "routable": true }
+        ],
+        "routing_taxonomy": [
+          {
+            "business_unit_key": "hotel",
+            "activity_subjects": [
+              { "key": "plomberie", "label": "Plomberie" },
+              { "key": "organisation", "label": "Organisation" }
+            ]
+          }
+        ],
+        "author_scope_keys": [],
+        "action_plan": null,
+        "active_signals_setup": []
+      },
+      "legacy_golden_ids": [],
+      "metrics": ["B", "C"],
+      "lots": ["lot0", "lot4b", "lot10"],
+      "observed_v5": {
+        "executable": false,
+        "reason": "V5 n'a pas signal_kind informational ni segmentation mixte contractuelle.",
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": null,
+        "routing_status": null,
+        "aggregation": { "should_aggregate": false, "aggregate_into_ref": null },
+        "notes": "Lot4b : 1 actionable + 1 informational."
+      },
+      "expected_v6": {
+        "pipeline_started": true,
+        "error_code": null,
+        "outcome": "signals_created",
+        "routing_status": "resolved",
+        "candidates": [
+          {
+            "signal_kind": "actionable",
+            "expected_action": "repair",
+            "canonical_object": "fuite",
+            "routing_status": "resolved",
+            "affected_key": "hotel",
+            "responsible_key": "hotel",
+            "subject_key": "plomberie"
+          },
+          {
+            "signal_kind": "informational",
+            "expected_action": "inform",
+            "canonical_object": "planning",
+            "routing_status": "resolved",
+            "affected_key": "hotel",
+            "responsible_key": "hotel",
+            "subject_key": "organisation"
           }
         ],
         "aggregation": { "should_aggregate": false, "aggregate_into_ref": null }

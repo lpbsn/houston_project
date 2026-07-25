@@ -60,11 +60,13 @@ def test_pipeline_v6_acceptance_artefacts_are_valid():
 def test_pipeline_v6_acceptance_corpus_has_required_case_ids():
     case_ids = list_pipeline_v6_acceptance_case_ids()
     assert case_ids == list(REQUIRED_CASE_IDS)
-    assert len(case_ids) == 21
+    assert len(case_ids) == 24
 
 
-def test_pipeline_v6_lot_acceptance_covers_lot0_to_lot10():
+def test_pipeline_v6_lot_acceptance_covers_lot0_to_lot10_and_lot4b():
     assert tuple(sorted(LOT_ACCEPTANCE)) == tuple(sorted(LOT_IDS))
+    assert "lot4b" in LOT_IDS
+    assert "lot4b" in LOT_ACCEPTANCE
     for lot_id in LOT_IDS:
         entry = LOT_ACCEPTANCE[lot_id]
         assert entry["criteria"], f"{lot_id} must list acceptance criteria"

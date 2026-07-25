@@ -72,7 +72,7 @@ SECTION_DEFAULT_METRICS: dict[str, tuple[str, ...]] = {
     "context": ("C", "D", "E"),
 }
 
-LOT_IDS: tuple[str, ...] = tuple(f"lot{i}" for i in range(0, 11))
+LOT_IDS: tuple[str, ...] = tuple(f"lot{i}" for i in range(0, 11)) + ("lot4b",)
 
 LOT_ACCEPTANCE: dict[str, dict[str, Any]] = {
     "lot0": {
@@ -134,6 +134,19 @@ LOT_ACCEPTANCE: dict[str, dict[str, Any]] = {
         ],
         "case_ids": ["S15-05", "S15-06", "S15-07", "S15-11", "S15-12", "S15-14"],
         "truth_row_ids": ["ERR-02", "ERR-03"],
+    },
+    "lot4b": {
+        "criteria": [
+            "prompt_v6_1_faits_operationnels",
+            "informational_fields_and_anti_over_segmentation",
+            "targeted_live_prompt_smoke_opt_in",
+        ],
+        "case_ids": ["S15-07", "S15-12", "S15-14", "S15-21", "S15-22", "S15-23"],
+        "truth_row_ids": [],
+        "notes": (
+            "Correctif prompt v6.1 (post lot4 contrat) ; smoke live ciblé opt-in hors CI ; "
+            "ne rouvre pas lot4."
+        ),
     },
     "lot5": {
         "criteria": [
@@ -205,13 +218,20 @@ LOT_ACCEPTANCE: dict[str, dict[str, Any]] = {
             "S15-01",
             "S15-02",
             "S15-05",
+            "S15-07",
             "S15-11",
             "S15-12",
             "S15-14",
+            "S15-21",
+            "S15-22",
+            "S15-23",
             "S15-D1",
         ],
         "truth_row_ids": [],
-        "notes": "Cutover ; smoke métier hors CI.",
+        "notes": (
+            "Cutover ; smoke métier complet final hors CI "
+            "(inclut informatifs S15-07/21–23 + régressions)."
+        ),
     },
 }
 
