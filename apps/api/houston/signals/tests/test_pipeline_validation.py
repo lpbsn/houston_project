@@ -499,7 +499,7 @@ def test_apply_pipeline_logs_candidate_applied_audit(caplog):
     hotel = _setup_hotel_taxonomy(membership.establishment)
     subject = hotel.activity_subjects.get()
     observation = create_observation(membership=membership)
-    existing = Signal.objects.create(
+    Signal.objects.create(
         establishment=membership.establishment,
         affected_business_unit=hotel,
         responsible_business_unit=hotel,
