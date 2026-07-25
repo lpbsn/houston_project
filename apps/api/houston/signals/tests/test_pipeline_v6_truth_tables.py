@@ -1,4 +1,4 @@
-"""V6 truth-table runners — Lot 1–5."""
+"""V6 truth-table runners — Lot 1–6."""
 
 from __future__ import annotations
 
@@ -83,12 +83,14 @@ LOT4_IMPLEMENTED_TRUTH_ROWS = frozenset({"ERR-02", "ERR-03"})
 LOT5_IMPLEMENTED_TRUTH_ROWS = frozenset(
     {"RES-01", "RES-02", "RES-03", "RES-04", "RES-05", "ERR-04"}
 )
+LOT6_IMPLEMENTED_TRUTH_ROWS = frozenset({"AGG-01", "AGG-02", "AGG-03", "AGG-04"})
 IMPLEMENTED_TRUTH_ROWS = (
     LOT1_IMPLEMENTED_TRUTH_ROWS
     | LOT2_IMPLEMENTED_TRUTH_ROWS
     | LOT3_IMPLEMENTED_TRUTH_ROWS
     | LOT4_IMPLEMENTED_TRUTH_ROWS
     | LOT5_IMPLEMENTED_TRUTH_ROWS
+    | LOT6_IMPLEMENTED_TRUTH_ROWS
 )
 
 # Lot 2 owns precondition start; Signal unassigned creation is Lot 5.
@@ -946,6 +948,184 @@ def _run_err_04(row: dict) -> dict:
     }
 
 
+def _run_agg_01(row: dict) -> dict:
+    membership = build_membership()
+    create_business_unit(
+        establishment=membership.establishment, key="hotel", label="Hôtel"
+    )
+    observation = create_observation(membership=membership)
+    candidate = _pipeline_candidate(
+        affected_key=None,
+        responsible_key=None,
+        subject_key=None,
+        title="Unassigned same focus",
+    )
+    apply_pipeline_output(
+        observation=observation,
+        output=ObservationPipelineOutput(
+            schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+            candidates=[candidate, candidate.model_copy()],
+        ),
+    )
+    signals = Signal.objects.filter(establishment=membership.establishment)
+    assert signals.count() == 2
+    assert all(s.routing_status == Signal.RoutingStatus.UNASSIGNED for s in signals)
+    return {
+        "should_aggregate": False,
+        "aggregate_into_ref": None,
+        "signal_count": signals.count(),
+    }
+
+
+def _run_agg_02(row: dict) -> dict:
+    membership = build_membership()
+    hotel = create_business_unit(
+        establishment=membership.establishment, key="hotel", label="Hôtel"
+    )
+    subject = create_activity_subject(
+        establishment=membership.establishment,
+        business_unit=hotel,
+        label="Maintenance",
+    )
+    existing = Signal.objects.create(
+        establishment=membership.establishment,
+        affected_business_unit=hotel,
+        responsible_business_unit=hotel,
+        activity_subject=subject,
+        title="Existing resolved",
+        structured_summary="Existing resolved.",
+        issue_focus="truth-focus",
+        routing_status=Signal.RoutingStatus.RESOLVED,
+        expected_action="inspect",
+        last_activity_at=timezone.now(),
+    )
+    observation = create_observation(membership=membership)
+    apply_pipeline_output(
+        observation=observation,
+        output=ObservationPipelineOutput(
+            schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+            candidates=[
+                _pipeline_candidate(
+                    affected_key=hotel.routing_key,
+                    responsible_key=hotel.routing_key,
+                    subject_key=subject.routing_key,
+                )
+            ],
+        ),
+    )
+    signals = Signal.objects.filter(establishment=membership.establishment)
+    row_candidate = CandidateSignal.objects.get(observation=observation)
+    assert row_candidate.outcome == CandidateSignal.Outcome.AGGREGATED_SIGNAL
+    assert row_candidate.result_signal_id == existing.id
+    return {
+        "should_aggregate": True,
+        "aggregate_into_ref": "existing_resolved",
+        "signal_count": signals.count(),
+    }
+
+
+def _run_agg_03(row: dict) -> dict:
+    membership = build_membership()
+    hotel = create_business_unit(
+        establishment=membership.establishment, key="hotel", label="Hôtel"
+    )
+    subject = create_activity_subject(
+        establishment=membership.establishment,
+        business_unit=hotel,
+        label="Maintenance",
+    )
+    Signal.objects.create(
+        establishment=membership.establishment,
+        affected_business_unit=hotel,
+        responsible_business_unit=hotel,
+        activity_subject=subject,
+        title="Existing inspect",
+        structured_summary="Existing inspect.",
+        issue_focus="truth-focus",
+        routing_status=Signal.RoutingStatus.RESOLVED,
+        expected_action="inspect",
+        last_activity_at=timezone.now(),
+    )
+    observation = create_observation(membership=membership)
+    candidate = _pipeline_candidate(
+        affected_key=hotel.routing_key,
+        responsible_key=hotel.routing_key,
+        subject_key=subject.routing_key,
+    )
+    candidate = candidate.model_copy(update={"expected_action": "repair"})
+    apply_pipeline_output(
+        observation=observation,
+        output=ObservationPipelineOutput(
+            schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+            candidates=[candidate],
+        ),
+    )
+    signal = Signal.objects.get(establishment=membership.establishment)
+    row_candidate = CandidateSignal.objects.get(observation=observation)
+    row_candidate.refresh_from_db()
+    signal.refresh_from_db()
+    audit = row_candidate.resolution_audit or {}
+    return {
+        "should_aggregate": True,
+        "signal_expected_action": signal.expected_action,
+        "candidate_expected_action": row_candidate.expected_action,
+        "audit_divergence": (
+            (audit.get("expected_action") or {}).get("source")
+            == "aggregation_expected_action_divergence"
+        ),
+    }
+
+
+def _run_agg_04(row: dict) -> dict:
+    membership = build_membership()
+    hotel = create_business_unit(
+        establishment=membership.establishment, key="hotel", label="Hôtel"
+    )
+    subject = create_activity_subject(
+        establishment=membership.establishment,
+        business_unit=hotel,
+        label="Maintenance",
+    )
+    Signal.objects.create(
+        establishment=membership.establishment,
+        affected_business_unit=hotel,
+        responsible_business_unit=hotel,
+        activity_subject=subject,
+        title="Existing null action",
+        structured_summary="Existing null action.",
+        issue_focus="truth-focus",
+        routing_status=Signal.RoutingStatus.RESOLVED,
+        expected_action=None,
+        last_activity_at=timezone.now(),
+    )
+    observation = create_observation(membership=membership)
+    candidate = _pipeline_candidate(
+        affected_key=hotel.routing_key,
+        responsible_key=hotel.routing_key,
+        subject_key=subject.routing_key,
+    )
+    candidate = candidate.model_copy(update={"expected_action": "repair"})
+    apply_pipeline_output(
+        observation=observation,
+        output=ObservationPipelineOutput(
+            schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+            candidates=[candidate],
+        ),
+    )
+    signal = Signal.objects.get(establishment=membership.establishment)
+    row_candidate = CandidateSignal.objects.get(observation=observation)
+    row_candidate.refresh_from_db()
+    signal.refresh_from_db()
+    audit_source = (row_candidate.resolution_audit or {}).get("expected_action", {}).get(
+        "source"
+    )
+    return {
+        "should_aggregate": True,
+        "signal_expected_action": signal.expected_action,
+        "audit_source": audit_source,
+    }
+
+
 def _run_v6_truth_row(row: dict) -> dict:
     row_id = row["id"]
     runners = {
@@ -974,6 +1154,10 @@ def _run_v6_truth_row(row: dict) -> dict:
         "CTX-06": _run_ctx_06,
         "CTX-07": _run_ctx_07,
         "CTX-08": _run_ctx_08,
+        "AGG-01": _run_agg_01,
+        "AGG-02": _run_agg_02,
+        "AGG-03": _run_agg_03,
+        "AGG-04": _run_agg_04,
     }
     runner = runners.get(row_id)
     if runner is None:
@@ -1075,3 +1259,14 @@ def test_no_lot5_truth_row_remains_unimplemented_xfail():
     assert lot5_ids
     assert lot5_ids <= LOT5_IMPLEMENTED_TRUTH_ROWS
     assert lot5_ids == LOT5_IMPLEMENTED_TRUTH_ROWS
+
+
+def test_no_lot6_truth_row_remains_unimplemented_xfail():
+    lot6_ids = {
+        row["id"]
+        for _, row in iter_truth_table_rows()
+        if row.get("owning_lot") == "lot6"
+    }
+    assert lot6_ids
+    assert lot6_ids <= LOT6_IMPLEMENTED_TRUTH_ROWS
+    assert lot6_ids == LOT6_IMPLEMENTED_TRUTH_ROWS

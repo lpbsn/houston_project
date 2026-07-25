@@ -46,8 +46,8 @@ METRIC_SPECS: dict[str, dict[str, str]] = {
         "name": "agregation_backend",
         "layer": "aggregation",
         "measures": (
-            "agrégation resolved-only ; pas de fausse agrégation ; "
-            "politique expected_action"
+            "agrégation resolved-only exacte ; pas de legacy_fallback ; "
+            "pas de fausse agrégation ; politique expected_action D3"
         ),
     },
     "I": {
@@ -159,6 +159,7 @@ LOT_ACCEPTANCE: dict[str, dict[str, Any]] = {
         "criteria": [
             "no_auto_aggregate_unassigned",
             "resolved_exact_aggregate",
+            "no_legacy_fallback",
             "expected_action_policy_d3",
             "truth_table_aggregation_green",
         ],
