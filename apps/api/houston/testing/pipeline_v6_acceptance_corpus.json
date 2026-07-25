@@ -16,7 +16,7 @@
       },
       "legacy_golden_ids": [],
       "metrics": ["A", "J"],
-      "lots": ["lot0", "lot2"],
+      "lots": ["lot0", "lot2", "lot10"],
       "observed_v5": {
         "executable": true,
         "pipeline_started": false,
@@ -49,7 +49,7 @@
       },
       "legacy_golden_ids": [],
       "metrics": ["A", "J"],
-      "lots": ["lot0", "lot2"],
+      "lots": ["lot0", "lot2", "lot10"],
       "observed_v5": {
         "executable": true,
         "pipeline_started": false,
@@ -86,7 +86,7 @@
       },
       "legacy_golden_ids": [],
       "metrics": ["B", "C", "G", "J", "I"],
-      "lots": ["lot0", "lot5", "lot1", "lot8"],
+      "lots": ["lot0", "lot5", "lot1", "lot8", "lot9"],
       "observed_v5": {
         "executable": false,
         "reason": "V5 n'a pas de routing_status=unassigned ; fake/apply force un triplet complet ou rejette.",
@@ -191,7 +191,7 @@
       },
       "legacy_golden_ids": ["G05"],
       "metrics": ["B", "C", "D", "E"],
-      "lots": ["lot0", "lot4", "lot5"],
+      "lots": ["lot0", "lot4", "lot5", "lot10"],
       "observed_v5": {
         "executable": true,
         "pipeline_started": true,
@@ -515,7 +515,7 @@
       },
       "legacy_golden_ids": ["G01"],
       "metrics": ["B"],
-      "lots": ["lot0", "lot4", "lot5"],
+      "lots": ["lot0", "lot4", "lot5", "lot10"],
       "observed_v5": {
         "executable": true,
         "pipeline_started": true,
@@ -574,7 +574,7 @@
       },
       "legacy_golden_ids": [],
       "metrics": ["B", "J"],
-      "lots": ["lot0", "lot4", "lot5"],
+      "lots": ["lot0", "lot4", "lot5", "lot10"],
       "observed_v5": {
         "executable": true,
         "pipeline_started": true,
@@ -665,7 +665,7 @@
       },
       "legacy_golden_ids": [],
       "metrics": ["B", "J"],
-      "lots": ["lot0", "lot4", "lot5"],
+      "lots": ["lot0", "lot4", "lot5", "lot10"],
       "observed_v5": {
         "executable": true,
         "pipeline_started": true,
@@ -944,7 +944,7 @@
       },
       "legacy_golden_ids": [],
       "metrics": ["F", "E", "G", "I"],
-      "lots": ["lot0", "lot5", "lot7"],
+      "lots": ["lot0", "lot5", "lot7", "lot9"],
       "observed_v5": {
         "executable": true,
         "pipeline_started": true,
@@ -1055,7 +1055,7 @@
       },
       "legacy_golden_ids": [],
       "metrics": ["A", "D", "G", "J"],
-      "lots": ["lot0", "lot2", "lot3", "lot5"],
+      "lots": ["lot0", "lot2", "lot3", "lot5", "lot10"],
       "observed_v5": {
         "executable": true,
         "pipeline_started": false,

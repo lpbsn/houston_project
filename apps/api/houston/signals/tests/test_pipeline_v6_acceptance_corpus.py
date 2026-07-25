@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import uuid
 
 import pytest
@@ -31,11 +32,14 @@ from houston.testing.pipeline_v6_acceptance import (
     REQUIRED_CASE_IDS,
     assert_pipeline_v6_acceptance_artefacts_valid,
     get_pipeline_v6_acceptance_case,
+    iter_truth_table_rows,
     list_executable_v5_baseline_case_ids,
     list_pipeline_v6_acceptance_case_ids,
     load_pipeline_v6_acceptance_corpus,
     load_pipeline_v6_truth_tables,
     validate_all_pipeline_v6_acceptance_artefacts,
+    validate_pipeline_v6_lot_acceptance,
+    validate_pipeline_v6_orphan_coverage,
 )
 from houston.testing.pipeline_v6_metrics import LOT_ACCEPTANCE, LOT_IDS, METRIC_IDS
 from houston.testing.taxonomy import create_activity_subject, create_business_unit
@@ -92,6 +96,45 @@ def test_every_corpus_case_has_observed_v5_and_expected_v6():
         assert "observed_v5" in case
         assert "expected_v6" in case
         assert isinstance(case["observed_v5"]["executable"], bool)
+
+
+def test_lot_acceptance_rejects_case_missing_lot_in_lots():
+    corpus = copy.deepcopy(load_pipeline_v6_acceptance_corpus())
+    case_id = LOT_ACCEPTANCE["lot9"]["case_ids"][0]
+    case = next(c for c in corpus["cases"] if c["id"] == case_id)
+    case["lots"] = [lot for lot in case["lots"] if lot != "lot9"]
+    errors = validate_pipeline_v6_lot_acceptance(corpus=corpus)
+    assert any(
+        f"LOT_ACCEPTANCE[lot9] case {case_id} missing lot9 in lots" in err for err in errors
+    ), errors
+
+
+def test_orphan_coverage_rejects_lot_only_present_in_lot_acceptance():
+    corpus = copy.deepcopy(load_pipeline_v6_acceptance_corpus())
+    tables = copy.deepcopy(load_pipeline_v6_truth_tables())
+    for case in corpus["cases"]:
+        case["lots"] = [lot for lot in case.get("lots", []) if lot != "lot9"]
+    assert "lot9" in LOT_ACCEPTANCE
+    assert all(row.get("owning_lot") != "lot9" for _, row in iter_truth_table_rows(tables))
+    errors = validate_pipeline_v6_orphan_coverage(corpus=corpus, truth_tables=tables)
+    assert any("lot lot9 has no coverage reference" in err for err in errors), errors
+
+
+def test_lot_acceptance_rejects_truth_row_owning_lot_mismatch():
+    tables = copy.deepcopy(load_pipeline_v6_truth_tables())
+    lot_id = "lot1"
+    row_id = LOT_ACCEPTANCE[lot_id]["truth_row_ids"][0]
+    for _, row in iter_truth_table_rows(tables):
+        if row["id"] == row_id:
+            row["owning_lot"] = "lot2"
+            break
+    else:
+        raise AssertionError(f"truth row {row_id} not found")
+    errors = validate_pipeline_v6_lot_acceptance(truth_tables=tables)
+    assert any(
+        f"LOT_ACCEPTANCE[{lot_id}] truth row {row_id} owning_lot 'lot2' != {lot_id}" in err
+        for err in errors
+    ), errors
 
 
 # ---------------------------------------------------------------------------

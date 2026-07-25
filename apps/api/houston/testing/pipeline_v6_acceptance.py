@@ -316,6 +316,13 @@ def validate_pipeline_v6_lot_acceptance(
     case_ids = {case["id"] for case in cases if isinstance(case.get("id"), str)}
     truth_ids = {row["id"] for _, row in iter_truth_table_rows(tables)}
 
+    cases_by_id = {
+        case["id"]: case for case in cases if isinstance(case.get("id"), str)
+    }
+    truth_rows_by_id = {
+        row["id"]: row for _, row in iter_truth_table_rows(tables) if isinstance(row.get("id"), str)
+    }
+
     for lot_id in LOT_IDS:
         _require(lot_id in LOT_ACCEPTANCE, f"LOT_ACCEPTANCE missing {lot_id}", errors)
         entry = LOT_ACCEPTANCE.get(lot_id, {})
@@ -327,12 +334,27 @@ def validate_pipeline_v6_lot_acceptance(
         )
         for case_id in entry.get("case_ids", []):
             _require(case_id in case_ids, f"LOT_ACCEPTANCE[{lot_id}] unknown case {case_id}", errors)
+            case = cases_by_id.get(case_id)
+            if case is not None:
+                _require(
+                    lot_id in (case.get("lots") or []),
+                    f"LOT_ACCEPTANCE[{lot_id}] case {case_id} missing {lot_id} in lots",
+                    errors,
+                )
         for row_id in entry.get("truth_row_ids", []):
             _require(
                 row_id in truth_ids,
                 f"LOT_ACCEPTANCE[{lot_id}] unknown truth row {row_id}",
                 errors,
             )
+            row = truth_rows_by_id.get(row_id)
+            if row is not None:
+                _require(
+                    row.get("owning_lot") == lot_id,
+                    f"LOT_ACCEPTANCE[{lot_id}] truth row {row_id} owning_lot "
+                    f"{row.get('owning_lot')!r} != {lot_id}",
+                    errors,
+                )
 
     for extra in set(LOT_ACCEPTANCE) - set(LOT_IDS):
         errors.append(f"LOT_ACCEPTANCE has unexpected key: {extra}")
@@ -366,8 +388,7 @@ def validate_pipeline_v6_orphan_coverage(
     lots_from_truth = {
         row.get("owning_lot") for _, row in iter_truth_table_rows(tables) if row.get("owning_lot")
     }
-    lots_from_acceptance = set(LOT_ACCEPTANCE)
-    covered_lots = lots_from_cases | lots_from_truth | lots_from_acceptance
+    covered_lots = lots_from_cases | lots_from_truth
     for lot_id in LOT_IDS:
         _require(lot_id in covered_lots, f"lot {lot_id} has no coverage reference", errors)
 
