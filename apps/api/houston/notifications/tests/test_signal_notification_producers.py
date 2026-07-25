@@ -132,6 +132,7 @@ def test_signal_created_notifies_responsible_pole_scope_only():
         resolved=resolved,
         title=candidate.title,
         structured_summary=candidate.structured_summary,
+        routing_status=Signal.RoutingStatus.RESOLVED,
     )
 
     notifications = _notifications_for_signal(signal_id=signal.id)

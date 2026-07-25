@@ -56,6 +56,12 @@ def test_g1_clim_hs_chambre_104_transversal_maintenance():
         label="Hôtel",
         description="Chambres, couloirs et expérience hébergement.",
     )
+    # Keep hotel routable under V6 routing_taxonomy (requires ≥1 subject).
+    create_activity_subject(
+        establishment=establishment,
+        business_unit=hotel,
+        label="Accueil",
+    )
     maintenance = create_business_unit(
         establishment=establishment,
         key="maintenance",
@@ -90,6 +96,7 @@ def test_g1_clim_hs_chambre_104_transversal_maintenance():
     assert signal.responsible_business_unit_id == maintenance.id
     assert signal.activity_subject.normalized_name == "climatisation"
     assert signal.location_text == "chambre 104"
+    assert signal.routing_status == Signal.RoutingStatus.RESOLVED
 
 
 def test_g2_lumiere_hs_restaurant_maintenance_transversal():
@@ -99,6 +106,11 @@ def test_g2_lumiere_hs_restaurant_maintenance_transversal():
         establishment=establishment,
         key="restaurant",
         label="Restaurant",
+    )
+    create_activity_subject(
+        establishment=establishment,
+        business_unit=restaurant,
+        label="Service",
     )
     maintenance = create_business_unit(
         establishment=establishment,
@@ -129,6 +141,7 @@ def test_g2_lumiere_hs_restaurant_maintenance_transversal():
     signal = Signal.objects.get()
     assert signal.affected_business_unit_id == restaurant.id
     assert signal.responsible_business_unit_id == maintenance.id
+    assert signal.routing_status == Signal.RoutingStatus.RESOLVED
 
 
 def test_g3_lumiere_hs_restaurant_local_maintenance_subject():
@@ -263,15 +276,25 @@ def test_g6_subject_hors_responsible_rejected():
         ),
     ).outcome
 
-    assert outcome == ObservationProcessing.Outcome.NO_SIGNAL_CREATED
-    assert Signal.objects.count() == 0
-    assert CandidateSignal.objects.filter(outcome=CandidateSignal.Outcome.REJECTED).count() == 1
+    assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
+    signal = Signal.objects.get()
+    assert signal.routing_status == Signal.RoutingStatus.RESOLVED
+    assert signal.responsible_business_unit_id == hotel.id
+    assert signal.activity_subject_id == hotel_subject.id
+    candidate = CandidateSignal.objects.get()
+    assert candidate.outcome == CandidateSignal.Outcome.CREATED_SIGNAL
+    assert candidate.resolution_audit["responsible"]["source"] == "responsible_corrected"
 
 
 def test_g7_dedicated_different_from_affected_accepted():
     membership = build_membership()
     establishment = membership.establishment
     hotel = create_business_unit(establishment=establishment, key="hotel", label="Hôtel")
+    create_activity_subject(
+        establishment=establishment,
+        business_unit=hotel,
+        label="Accueil",
+    )
     restaurant = create_business_unit(
         establishment=establishment,
         key="restaurant",

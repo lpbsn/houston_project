@@ -46,8 +46,8 @@ METRIC_SPECS: dict[str, dict[str, str]] = {
         "name": "agregation_backend",
         "layer": "aggregation",
         "measures": (
-            "agrégation resolved-only ; pas de fausse agrégation ; "
-            "politique expected_action"
+            "agrégation resolved-only exacte ; pas de legacy_fallback ; "
+            "pas de fausse agrégation ; politique expected_action D3"
         ),
     },
     "I": {
@@ -72,7 +72,7 @@ SECTION_DEFAULT_METRICS: dict[str, tuple[str, ...]] = {
     "context": ("C", "D", "E"),
 }
 
-LOT_IDS: tuple[str, ...] = tuple(f"lot{i}" for i in range(0, 11))
+LOT_IDS: tuple[str, ...] = tuple(f"lot{i}" for i in range(0, 11)) + ("lot4b",)
 
 LOT_ACCEPTANCE: dict[str, dict[str, Any]] = {
     "lot0": {
@@ -135,11 +135,25 @@ LOT_ACCEPTANCE: dict[str, dict[str, Any]] = {
         "case_ids": ["S15-05", "S15-06", "S15-07", "S15-11", "S15-12", "S15-14"],
         "truth_row_ids": ["ERR-02", "ERR-03"],
     },
+    "lot4b": {
+        "criteria": [
+            "prompt_v6_1_faits_operationnels",
+            "informational_fields_and_anti_over_segmentation",
+            "targeted_live_prompt_smoke_opt_in",
+        ],
+        "case_ids": ["S15-07", "S15-12", "S15-14", "S15-21", "S15-22", "S15-23"],
+        "truth_row_ids": [],
+        "notes": (
+            "Correctif prompt v6.1 (post lot4 contrat) ; smoke live ciblé opt-in hors CI ; "
+            "ne rouvre pas lot4."
+        ),
+    },
     "lot5": {
         "criteria": [
             "partial_routing",
             "subject_imposes_responsible",
             "invalid_key_does_not_drop_candidate",
+            "explicit_keys_only_no_capability_auto_resolve",
             "truth_table_resolver_green",
         ],
         "case_ids": [
@@ -158,6 +172,7 @@ LOT_ACCEPTANCE: dict[str, dict[str, Any]] = {
         "criteria": [
             "no_auto_aggregate_unassigned",
             "resolved_exact_aggregate",
+            "no_legacy_fallback",
             "expected_action_policy_d3",
             "truth_table_aggregation_green",
         ],
@@ -203,13 +218,20 @@ LOT_ACCEPTANCE: dict[str, dict[str, Any]] = {
             "S15-01",
             "S15-02",
             "S15-05",
+            "S15-07",
             "S15-11",
             "S15-12",
             "S15-14",
+            "S15-21",
+            "S15-22",
+            "S15-23",
             "S15-D1",
         ],
         "truth_row_ids": [],
-        "notes": "Cutover ; smoke métier hors CI.",
+        "notes": (
+            "Cutover ; smoke métier complet final hors CI "
+            "(inclut informatifs S15-07/21–23 + régressions)."
+        ),
     },
 }
 

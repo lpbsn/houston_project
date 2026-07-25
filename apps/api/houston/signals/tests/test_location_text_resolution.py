@@ -7,6 +7,7 @@ from houston.ai.observation_pipeline_schema import (
     PipelineCandidateOutput,
 )
 from houston.establishments.models import OperationalUnit
+from houston.establishments.taxonomy_snapshot import build_routing_taxonomy
 from houston.establishments.tests.taxonomy_helpers import (
     create_activity_subject,
     create_business_unit,
@@ -16,11 +17,15 @@ from houston.signals.constants import (
     AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
 )
 from houston.signals.models import Signal
+from houston.signals.routing_resolver import (
+    resolve_candidate_routing,
+    routing_proposal_from_pipeline_candidate,
+)
 from houston.signals.services import (
+    ResolvedTaxonomy,
     apply_pipeline_output,
     normalize_location_text,
     resolve_signal_location_text,
-    resolve_taxonomy_from_candidate,
 )
 from houston.signals.tests.conftest import create_observation
 from houston.testing.factories import build_membership
@@ -57,6 +62,21 @@ def _candidate(hotel, subject, **overrides) -> PipelineCandidateOutput:
     return PipelineCandidateOutput(**base)
 
 
+def _resolve_taxonomy(*, establishment_id, candidate: PipelineCandidateOutput) -> ResolvedTaxonomy:
+    taxonomy = build_routing_taxonomy(establishment_id=establishment_id)
+    resolution = resolve_candidate_routing(
+        establishment_id=establishment_id,
+        proposal=routing_proposal_from_pipeline_candidate(candidate),
+        routing_taxonomy=taxonomy,
+    )
+    return ResolvedTaxonomy(
+        operational_unit=resolution.operational_unit,
+        affected_business_unit=resolution.affected_business_unit,
+        responsible_business_unit=resolution.responsible_business_unit,
+        activity_subject=resolution.activity_subject,
+    )
+
+
 def test_normalize_location_text_strips_and_truncates():
     assert normalize_location_text(None) == ""
     assert normalize_location_text("  bar  ") == "bar"
@@ -80,7 +100,7 @@ def test_resolve_signal_location_text_uses_unit_label_when_unit_present():
         operational_unit_key=unit.key,
         location_text="chambre 312",
     )
-    resolved = resolve_taxonomy_from_candidate(
+    resolved = _resolve_taxonomy(
         establishment_id=membership.establishment_id,
         candidate=candidate,
     )
@@ -99,7 +119,7 @@ def test_resolve_signal_location_text_uses_candidate_when_no_unit():
     hotel, subject = _setup_hotel(membership.establishment)
     observation = create_observation(membership=membership, text="Problème à l'entrée.")
     candidate = _candidate(hotel, subject, location_text="Entrée")
-    resolved = resolve_taxonomy_from_candidate(
+    resolved = _resolve_taxonomy(
         establishment_id=membership.establishment_id,
         candidate=candidate,
     )
@@ -119,7 +139,7 @@ def test_resolve_signal_location_text_clears_when_equals_raw_observation():
     raw = "Problème à l'entrée du restaurant."
     observation = create_observation(membership=membership, text=raw)
     candidate = _candidate(hotel, subject, location_text=raw)
-    resolved = resolve_taxonomy_from_candidate(
+    resolved = _resolve_taxonomy(
         establishment_id=membership.establishment_id,
         candidate=candidate,
     )

@@ -625,34 +625,73 @@ CONTEXTE
 - Les descriptions des pôles aident à distinguer périmètres et responsabilités.
 - Les images ne sont pas fournies ; "media_count" est informatif uniquement.
 
-MÉTHODE — ANALYSE PROBLÈME PAR PROBLÈME
-1. Lire validated_text et lister mentalement chaque problème opérationnel DISTINCT
-   (objet, produit, équipement ou situation séparée).
-2. Pour chaque problème, appliquer la grille mentale avant de produire le JSON :
-   - symptôme observé (ce que la personne voit ou constate),
-   - nature / cause probable (salissure, panne, rupture stock, fuite, casse…),
-   - action attendue (éponger, réparer, réapprovisionner, sécuriser…),
+MÉTHODE — ANALYSE FAIT PAR FAIT
+1. Lire validated_text et lister mentalement chaque FAIT opérationnel DISTINCT
+   (anomalie corrective OU information utile à l'équipe : disponibilité, planning,
+   horaires, consigne, changement d'organisation, statut rétabli / à surveiller).
+2. Pour chaque fait, appliquer la grille mentale avant de produire le JSON :
+   - symptôme / fait constaté,
+   - nature / cause probable si pertinente (sinon N/A pour l'informatif),
+   - action attendue si corrective ; sinon inform / monitor,
    - lieu pertinent (inclus dans issue_focus si discriminant),
    - pôle responsable (transversal ou dedicated selon règles ci-dessous).
-3. Produire un candidat JSON par problème distinct (max {MAX_CANDIDATES_PER_OBSERVATION}).
-   Ne fusionne jamais plusieurs problèmes différents en un seul candidat.
+3. Produire un candidat JSON par fait distinct (max {MAX_CANDIDATES_PER_OBSERVATION}).
+   Ne fusionne jamais plusieurs faits indépendants en un seul candidat.
+
+QUAND ÉMETTRE 0 / 1 / N CANDIDATS
+- Émettre 1+ candidats s'il existe au moins un fait opérationnel actionable OU informational,
+  même sans verbe d'action, même avec une invitation du type « venez demander ».
+- Émettre plusieurs candidats si faits indépendants (objets, lieux discriminants,
+  responsables, natures différentes), y compris mélange actionable + informational.
+- Retourner "candidates": [] SEULEMENT si : pure politesse / encouragement sans fait ;
+  négation / fausse alerte sans fait résiduel ; bavardage hors ops ; aucun fait identifiable.
+- Ne PAS utiliser [] parce que le routing est ambigu (mettre les clés à null), faute
+  d'action corrective immédiate (utiliser informational), formulation courte, ou présence
+  d'une invitation accessoire.
+
+ANTI-SUR-SEGMENTATION
+- Une modalité d'accès, un conseil ou une invitation liée à l'information principale
+  ne crée PAS un candidat séparé et ne doit PAS devenir une anomalie actionable.
+- Ex. « Les plannings sont disponibles, venez les demander » → exactement 1 candidat
+  informational (l'invitation est absorbée).
 
 CANONICAL_OBJECT (obligatoire)
-- Identifie l'objet / produit / équipement concerné (ex. clim, sirop mojito, vitre).
+- Actionable : objet / produit / équipement concerné (ex. clim, sirop mojito, vitre).
+- Informational : objet / thème opérationnel (ex. planning, horaires, consigne).
 
 ISSUE_FOCUS (obligatoire, 1–80 caractères)
-- Identifie le problème précis (en complément de canonical_object).
-- Inclure le lieu dans issue_focus UNIQUEMENT quand il discrimine des problèmes distincts
+- Actionable : problème précis (en complément de canonical_object).
+- Informational : état, disponibilité ou changement annoncé, court et stable
+  (ex. planning étages disponible).
+- Inclure le lieu dans issue_focus UNIQUEMENT quand il discrimine des faits distincts
   (ex. clim chambre 104 vs clim chambre 312).
 - Formulation courte, minuscules préférées, sans ponctuation superflue.
 - Sert côté backend à la clé d'agrégation — pas de synonymes inventés pour le même focus.
 
 SIGNAL_KIND / EXPECTED_ACTION / INFORMATION_TYPE
-- signal_kind : "actionable" ou "informational".
+- signal_kind "actionable" : intervention / correction / réappro / sécurisation / inspection
+  attendue.
+- signal_kind "informational" : fait à connaître, diffuser ou surveiller sans correction
+  immédiate (planning, horaires, consignes, org, statut rétabli).
 - expected_action : une valeur parmi clean_secure, repair, replenish, inspect, coordinate,
   assist, inform, monitor, safety_response — ou null si inconnue.
+  Pour informational : préférer inform ou monitor.
 - information_type : null exact si signal_kind=actionable ; string non vide (max 64) si
-  informational ; pas d'enum fermée ; ne pas inventer de valeur pour actionable.
+  informational ; pas d'enum fermée ; valeurs recommandées (non exclusives) :
+  schedule_update, availability, org_change, policy_update, status_update.
+
+EXEMPLES
+- « Planning étages disponible » → 1 informational ; canonical_object≈planning ;
+  issue_focus≈planning étages disponible ; expected_action=inform ;
+  information_type≈schedule_update.
+- « Les plannings sont disponibles, venez les demander » → exactement 1 informational
+  (pas [] ; pas 2 candidats ; pas actionable).
+- « Nouveau brief service à 17h » → 1 informational.
+- « Hier ça coupait mais c'est revenu » → 1 informational ; expected_action=monitor.
+- « Fuite couloir nord » → 1 actionable.
+- « Frigo chaud et sol trempé » → 2 actionable.
+- « Fuite couloir et planning étages dispo » → 1 actionable + 1 informational.
+- « Bon courage à tous » / « Fausse alerte, pas de fuite » / remerciement sans fait → [].
 
 DÉSAMBIGUÏSATION (contexte grammatical, pas de liste mots-clé)
 - Distingue symptôme, cause et action via le sens de la phrase, pas via des mots isolés.
@@ -662,45 +701,43 @@ DÉSAMBIGUÏSATION (contexte grammatical, pas de liste mots-clé)
   Ex. "verre cassé près des ascenseurs" → propreté/sécurisation ;
   "ascenseur en panne" → maintenance équipements.
 - Ne route pas vers un pôle dedicated uniquement parce que son nom apparaît dans le texte
-  si la nature du problème relève d'un pôle transversal de routing_taxonomy.
+  si la nature du fait relève d'un pôle transversal de routing_taxonomy.
 
-ROUTAGE — LIEU VS NATURE DU PROBLÈME
+ROUTAGE — LIEU VS NATURE DU FAIT
 - Clés nullables : si incertitude ou clé absente de routing_taxonomy → null.
-- affected_business_unit_routing_key : où le problème est observé.
-- responsible_business_unit_routing_key : qui doit traiter.
+- affected_business_unit_routing_key : où le fait est observé.
+- responsible_business_unit_routing_key : qui doit traiter ou être informé.
 - activity_subject_routing_key : sujet sous responsible.
 - location_text : contexte libre ou localisation précise pour l'affichage (chambre 104, bar).
   Ne remplace pas issue_focus ; n'entre jamais dans une clé d'agrégation backend.
 
 PRIORITÉ TRANSVERSALE
 - Si un BusinessUnit unit_type=transversal possède un activity_subject correspondant
-  au problème, responsible = ce transversal (même si le lieu mentionne un dedicated).
+  au fait, responsible = ce transversal (même si le lieu mentionne un dedicated).
 - Exemple : "Lumière HS au restaurant" → affected=restaurant, responsible=maintenance
   (transversal) si maintenance possède électricité/éclairage dans routing_taxonomy.
 
 FALLBACK DEDICATED
-- Si aucun pôle transversal pertinent n'existe pour la nature du problème,
+- Si aucun pôle transversal pertinent n'existe pour la nature du fait,
   responsible = affected et activity_subject sous affected.
 
 SEGMENTATION
-- Séparer si lieux impactés, responsables, sujets, problèmes ou issue_focus diffèrent.
+- Séparer si lieux impactés, responsables, sujets, faits ou issue_focus diffèrent.
 - Règle négative : produits ou objets différents → candidats différents
   même si même activity_subject (ex. pain et sirop mojito sous stock/bar → 2 candidats).
 - Ne pas fusionner deux ruptures de stock distinctes en un seul candidat "stock bar".
+- Respecter ANTI-SUR-SEGMENTATION pour invitations / accès liés à une info principale.
 
 TEXTE DE SORTIE
-- title : titre court orienté action (≤ 80 caractères).
+- title : ≤ 80 caractères ; orienté action si actionable ; factuel si informational.
 - structured_summary : 1–3 phrases factuelles ; inclure lieu précis si mentionné ;
-  porter symptôme et action attendue (grille mentale), sans recopier validated_text.
+  porter le fait et l'action attendue quand pertinente, sans recopier validated_text.
 - location_text : lieu court libre (≤ 120 caractères), null si aucun lieu distinct ;
   jamais le texte complet de validated_text.
 
 HORS PÉRIMÈTRE (ne jamais émettre)
 - routing_status, resolution_audit, rejection_code, agrégation, scores, priorité
 - urgence, detected_domains[], clés operational_module/domain/subject (legacy)
-
-SI RIEN N'EST ACTIONNABLE NI INFORMATIF
-- Retourner "candidates": [].
 
 FORMAT DE RÉPONSE
 Un seul objet JSON strict :

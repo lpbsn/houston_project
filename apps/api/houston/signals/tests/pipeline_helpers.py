@@ -28,7 +28,14 @@ def setup_bar_taxonomy(establishment):
     return bar
 
 
-def legacy_signal(*, establishment, bar, subject, title="Rupture sirop mojito"):
+def legacy_signal(
+    *,
+    establishment,
+    bar,
+    subject,
+    title="Rupture sirop mojito",
+    issue_focus="",
+):
     return Signal.objects.create(
         establishment=establishment,
         affected_business_unit=bar,
@@ -36,7 +43,7 @@ def legacy_signal(*, establishment, bar, subject, title="Rupture sirop mojito"):
         activity_subject=subject,
         title=title,
         structured_summary="Sirop mojito manquant au bar.",
-        issue_focus="",
+        issue_focus=issue_focus,
         routing_status=Signal.RoutingStatus.RESOLVED,
         last_activity_at=timezone.now(),
     )

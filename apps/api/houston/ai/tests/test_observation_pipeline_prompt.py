@@ -22,9 +22,10 @@ from houston.signals.tests.conftest import create_observation
 from houston.testing.factories import build_membership
 
 
-def test_prompt_version_constant_is_v6():
-    assert AI_OBSERVATION_PIPELINE_PROMPT_VERSION == "ai_observation_pipeline_v6"
+def test_prompt_version_is_v6_1_schema_remains_v6():
+    assert AI_OBSERVATION_PIPELINE_PROMPT_VERSION == "ai_observation_pipeline_v6_1"
     assert AI_OBSERVATION_PIPELINE_SCHEMA_VERSION == "ai_observation_pipeline_v6"
+    assert AI_OBSERVATION_PIPELINE_PROMPT_VERSION != AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
 
 
 def test_system_prompt_is_french_and_covers_dual_context():
@@ -39,11 +40,17 @@ def test_system_prompt_is_french_and_covers_dual_context():
     assert "seules clés runtime valides" in prompt
     assert "author_scope_business_unit_routing_keys" in prompt
     assert f"max {MAX_CANDIDATES_PER_OBSERVATION}" in prompt
-    assert "MÉTHODE — ANALYSE PROBLÈME PAR PROBLÈME" in prompt
+    assert "MÉTHODE — ANALYSE FAIT PAR FAIT" in prompt
+    assert "QUAND ÉMETTRE 0 / 1 / N CANDIDATS" in prompt
+    assert "ANTI-SUR-SEGMENTATION" in prompt
     assert "ISSUE_FOCUS" in prompt
     assert "canonical_object" in prompt
     assert "signal_kind" in prompt
+    assert "informational" in prompt
     assert "information_type" in prompt
+    assert "schedule_update" in prompt
+    assert "Les plannings sont disponibles, venez les demander" in prompt
+    assert "exactement 1" in prompt
     assert "aggregate_into_signal_id" not in prompt
     assert "active_signals_context" not in prompt
     assert "establishment_taxonomy" not in prompt
@@ -83,6 +90,7 @@ def test_build_pipeline_input_includes_prompt_version_not_system_text():
     payload = build_pipeline_input(observation=observation)
 
     assert payload["prompt_version"] == AI_OBSERVATION_PIPELINE_PROMPT_VERSION
+    assert payload["prompt_version"] == "ai_observation_pipeline_v6_1"
     assert payload["schema_version"] == AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
     assert payload["validated_text"] == observation.raw_text
     assert "establishment_context" in payload

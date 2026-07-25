@@ -5,12 +5,16 @@ import pytest
 from houston.ai.observation_pipeline_schema import PipelineCandidateOutput
 from houston.establishments.business_unit_domain_service import _create_business_unit_core
 from houston.establishments.models import CatalogBusinessUnit
+from houston.establishments.taxonomy_snapshot import build_routing_taxonomy
 from houston.establishments.tests.taxonomy_helpers import (
     create_activity_subject,
     create_business_unit,
 )
-from houston.signals.exceptions import SignalValidationError
-from houston.signals.services import resolve_taxonomy_from_candidate
+from houston.signals.models import Signal
+from houston.signals.routing_resolver import (
+    resolve_candidate_routing,
+    routing_proposal_from_pipeline_candidate,
+)
 from houston.testing.factories import build_membership
 
 pytestmark = pytest.mark.django_db
@@ -30,6 +34,15 @@ def _candidate(**kwargs) -> PipelineCandidateOutput:
     }
     base.update(kwargs)
     return PipelineCandidateOutput(**base)
+
+
+def _resolve(*, establishment_id, candidate: PipelineCandidateOutput):
+    taxonomy = build_routing_taxonomy(establishment_id=establishment_id)
+    return resolve_candidate_routing(
+        establishment_id=establishment_id,
+        proposal=routing_proposal_from_pipeline_candidate(candidate),
+        routing_taxonomy=taxonomy,
+    )
 
 
 def _restaurant_catalog() -> CatalogBusinessUnit:
@@ -73,7 +86,7 @@ def test_ai_can_distinguish_food_court_and_rooftop_routing_keys():
 
     assert food_court.routing_key != rooftop.routing_key
 
-    resolved_food = resolve_taxonomy_from_candidate(
+    resolved_food = _resolve(
         establishment_id=establishment.id,
         candidate=_candidate(
             affected_business_unit_routing_key=food_court.routing_key,
@@ -81,7 +94,7 @@ def test_ai_can_distinguish_food_court_and_rooftop_routing_keys():
             activity_subject_routing_key=food_subject.routing_key,
         ),
     )
-    resolved_rooftop = resolve_taxonomy_from_candidate(
+    resolved_rooftop = _resolve(
         establishment_id=establishment.id,
         candidate=_candidate(
             affected_business_unit_routing_key=rooftop.routing_key,
@@ -92,9 +105,11 @@ def test_ai_can_distinguish_food_court_and_rooftop_routing_keys():
 
     assert resolved_food.affected_business_unit.id == food_court.id
     assert resolved_rooftop.affected_business_unit.id == rooftop.id
+    assert resolved_food.routing_status == Signal.RoutingStatus.RESOLVED
+    assert resolved_rooftop.routing_status == Signal.RoutingStatus.RESOLVED
 
 
-def test_activity_subject_from_sibling_business_unit_is_rejected():
+def test_activity_subject_from_sibling_business_unit_derives_responsible():
     membership = build_membership()
     establishment = membership.establishment
     restaurant = _restaurant_catalog()
@@ -119,20 +134,26 @@ def test_activity_subject_from_sibling_business_unit_is_rejected():
         label="Service",
     )
 
-    with pytest.raises(SignalValidationError) as exc_info:
-        resolve_taxonomy_from_candidate(
-            establishment_id=establishment.id,
-            candidate=_candidate(
-                affected_business_unit_routing_key=rooftop.routing_key,
-                responsible_business_unit_routing_key=rooftop.routing_key,
-                activity_subject_routing_key=food_subject.routing_key,
-            ),
-        )
+    resolution = _resolve(
+        establishment_id=establishment.id,
+        candidate=_candidate(
+            affected_business_unit_routing_key=rooftop.routing_key,
+            responsible_business_unit_routing_key=rooftop.routing_key,
+            activity_subject_routing_key=food_subject.routing_key,
+        ),
+    )
 
-    assert exc_info.value.code == "activity_subject_under_other_business_unit"
+    assert resolution.activity_subject is not None
+    assert resolution.activity_subject.id == food_subject.id
+    assert resolution.responsible_business_unit is not None
+    assert resolution.responsible_business_unit.id == food_court.id
+    assert resolution.affected_business_unit is not None
+    assert resolution.affected_business_unit.id == rooftop.id
+    assert resolution.routing_status == Signal.RoutingStatus.RESOLVED
+    assert resolution.resolution_audit["responsible"]["source"] == "responsible_corrected"
 
 
-def test_unknown_activity_subject_routing_key_is_rejected():
+def test_unknown_activity_subject_routing_key_keeps_partial():
     membership = build_membership()
     establishment = membership.establishment
     hotel = create_business_unit(establishment=establishment, key="hotel", label="Hotel")
@@ -142,23 +163,33 @@ def test_unknown_activity_subject_routing_key_is_rejected():
         label="Maintenance",
     )
 
-    with pytest.raises(SignalValidationError) as exc_info:
-        resolve_taxonomy_from_candidate(
-            establishment_id=establishment.id,
-            candidate=_candidate(
-                affected_business_unit_routing_key=hotel.routing_key,
-                responsible_business_unit_routing_key=hotel.routing_key,
-                activity_subject_routing_key="custom--missing--0123456789abcdef",
-            ),
-        )
+    resolution = _resolve(
+        establishment_id=establishment.id,
+        candidate=_candidate(
+            affected_business_unit_routing_key=hotel.routing_key,
+            responsible_business_unit_routing_key=hotel.routing_key,
+            activity_subject_routing_key="custom--missing--0123456789abcdef",
+        ),
+    )
 
-    assert exc_info.value.code == "unknown_activity_subject_routing_key"
+    assert resolution.affected_business_unit is not None
+    assert resolution.affected_business_unit.id == hotel.id
+    assert resolution.responsible_business_unit is not None
+    assert resolution.responsible_business_unit.id == hotel.id
+    assert resolution.activity_subject is None
+    assert resolution.routing_status == Signal.RoutingStatus.UNASSIGNED
+    assert resolution.resolution_audit["subject"]["source"] == "invalid_key"
 
 
-def test_inactive_responsible_business_unit_rejects_candidate():
+def test_inactive_responsible_business_unit_nulls_dimension():
     membership = build_membership()
     establishment = membership.establishment
     hotel = create_business_unit(establishment=establishment, key="hotel", label="Hotel")
+    create_activity_subject(
+        establishment=establishment,
+        business_unit=hotel,
+        label="Housekeeping",
+    )
     maintenance = create_business_unit(
         establishment=establishment,
         key="maintenance",
@@ -173,23 +204,31 @@ def test_inactive_responsible_business_unit_rejects_candidate():
     maintenance.active = False
     maintenance.save(update_fields=["active", "updated_at"])
 
-    with pytest.raises(SignalValidationError) as exc_info:
-        resolve_taxonomy_from_candidate(
-            establishment_id=establishment.id,
-            candidate=_candidate(
-                affected_business_unit_routing_key=hotel.routing_key,
-                responsible_business_unit_routing_key=maintenance.routing_key,
-                activity_subject_routing_key=subject.routing_key,
-            ),
-        )
+    resolution = _resolve(
+        establishment_id=establishment.id,
+        candidate=_candidate(
+            affected_business_unit_routing_key=hotel.routing_key,
+            responsible_business_unit_routing_key=maintenance.routing_key,
+            activity_subject_routing_key=subject.routing_key,
+        ),
+    )
 
-    assert exc_info.value.code == "unknown_responsible_business_unit_routing_key"
+    assert resolution.affected_business_unit is not None
+    assert resolution.affected_business_unit.id == hotel.id
+    assert resolution.activity_subject is None
+    assert resolution.responsible_business_unit is None
+    assert resolution.routing_status == Signal.RoutingStatus.UNASSIGNED
 
 
-def test_inactive_activity_subject_rejects_candidate():
+def test_inactive_activity_subject_nulls_subject_dimension():
     membership = build_membership()
     establishment = membership.establishment
     hotel = create_business_unit(establishment=establishment, key="hotel", label="Hotel")
+    create_activity_subject(
+        establishment=establishment,
+        business_unit=hotel,
+        label="Other",
+    )
     subject = create_activity_subject(
         establishment=establishment,
         business_unit=hotel,
@@ -198,17 +237,22 @@ def test_inactive_activity_subject_rejects_candidate():
     subject.active = False
     subject.save(update_fields=["active", "updated_at"])
 
-    with pytest.raises(SignalValidationError) as exc_info:
-        resolve_taxonomy_from_candidate(
-            establishment_id=establishment.id,
-            candidate=_candidate(
-                affected_business_unit_routing_key=hotel.routing_key,
-                responsible_business_unit_routing_key=hotel.routing_key,
-                activity_subject_routing_key=subject.routing_key,
-            ),
-        )
+    resolution = _resolve(
+        establishment_id=establishment.id,
+        candidate=_candidate(
+            affected_business_unit_routing_key=hotel.routing_key,
+            responsible_business_unit_routing_key=hotel.routing_key,
+            activity_subject_routing_key=subject.routing_key,
+        ),
+    )
 
-    assert exc_info.value.code == "unknown_activity_subject_routing_key"
+    assert resolution.affected_business_unit is not None
+    assert resolution.affected_business_unit.id == hotel.id
+    assert resolution.responsible_business_unit is not None
+    assert resolution.responsible_business_unit.id == hotel.id
+    assert resolution.activity_subject is None
+    assert resolution.routing_status == Signal.RoutingStatus.UNASSIGNED
+    assert resolution.resolution_audit["subject"]["source"] == "invalid_key"
 
 
 def test_activity_subject_resolution_does_not_raise_multiple_objects_returned():
@@ -237,7 +281,7 @@ def test_activity_subject_resolution_does_not_raise_multiple_objects_returned():
     )
     assert food_subject.normalized_name == rooftop_subject.normalized_name
 
-    resolved = resolve_taxonomy_from_candidate(
+    resolution = _resolve(
         establishment_id=establishment.id,
         candidate=_candidate(
             affected_business_unit_routing_key=food_court.routing_key,
@@ -245,4 +289,4 @@ def test_activity_subject_resolution_does_not_raise_multiple_objects_returned():
             activity_subject_routing_key=food_subject.routing_key,
         ),
     )
-    assert resolved.activity_subject.id == food_subject.id
+    assert resolution.activity_subject.id == food_subject.id

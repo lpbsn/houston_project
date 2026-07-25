@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from unittest.mock import patch
 
 import pytest
 from django.db import IntegrityError, transaction
@@ -30,7 +29,8 @@ from houston.testing.factories import build_membership
 pytestmark = pytest.mark.django_db
 
 
-def test_legacy_empty_issue_focus_aggregates_v4_candidate():
+def test_legacy_empty_issue_focus_does_not_aggregate_v4_candidate():
+    """Lot 6: empty focus is no longer an aggregation key match (no legacy_fallback)."""
     membership = build_membership()
     bar = _setup_bar_taxonomy(membership.establishment)
     subject = bar.activity_subjects.get()
@@ -49,14 +49,16 @@ def test_legacy_empty_issue_focus_aggregates_v4_candidate():
         ),
     ).outcome
 
-    assert outcome == ObservationProcessing.Outcome.SIGNAL_AGGREGATED
-    assert Signal.objects.filter(establishment=membership.establishment).count() == 1
+    assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
+    assert Signal.objects.filter(establishment=membership.establishment).count() == 2
     row = CandidateSignal.objects.get(observation=observation)
-    assert row.outcome == CandidateSignal.Outcome.AGGREGATED_SIGNAL
-    assert row.result_signal_id == legacy.id
+    assert row.outcome == CandidateSignal.Outcome.CREATED_SIGNAL
+    assert row.result_signal_id != legacy.id
+    legacy.refresh_from_db()
+    assert legacy.issue_focus == ""
 
 
-def test_legacy_aggregate_enriches_signal_issue_focus():
+def test_legacy_empty_issue_focus_does_not_enrich_via_aggregation():
     membership = build_membership()
     bar = _setup_bar_taxonomy(membership.establishment)
     subject = bar.activity_subjects.get()
@@ -76,14 +78,14 @@ def test_legacy_aggregate_enriches_signal_issue_focus():
     )
 
     legacy.refresh_from_db()
-    assert legacy.issue_focus == "sirop mojito"
+    assert legacy.issue_focus == ""
 
 
-def test_legacy_empty_issue_focus_hint_mismatch_still_aggregates_via_fallback(caplog):
+def test_legacy_empty_issue_focus_creates_new_signal_exact_mode(caplog):
     membership = build_membership()
     bar = _setup_bar_taxonomy(membership.establishment)
     subject = bar.activity_subjects.get()
-    legacy = _legacy_signal(
+    _legacy_signal(
         establishment=membership.establishment,
         bar=bar,
         subject=subject,
@@ -104,10 +106,9 @@ def test_legacy_empty_issue_focus_hint_mismatch_still_aggregates_via_fallback(ca
             ),
         )
 
-    assert Signal.objects.filter(establishment=membership.establishment).count() == 1
+    assert Signal.objects.filter(establishment=membership.establishment).count() == 2
     row = CandidateSignal.objects.get(observation=observation)
-    assert row.outcome == CandidateSignal.Outcome.AGGREGATED_SIGNAL
-    assert row.result_signal_id == legacy.id
+    assert row.outcome == CandidateSignal.Outcome.CREATED_SIGNAL
 
     records = [
         r
@@ -115,8 +116,7 @@ def test_legacy_empty_issue_focus_hint_mismatch_still_aggregates_via_fallback(ca
         if getattr(r, "event", None) == "observation_pipeline_candidate_applied"
     ]
     assert len(records) == 1
-    assert getattr(records[0], "hint_rejected_reason", "") == ""
-    assert records[0].aggregation_match_mode == "legacy_fallback"
+    assert getattr(records[0], "aggregation_match_mode", "") == ""
 
 
 def test_aggregation_match_mode_exact_on_same_focus(caplog):
@@ -132,6 +132,7 @@ def test_aggregation_match_mode_exact_on_same_focus(caplog):
         structured_summary="Sirop mojito manquant.",
         issue_focus="sirop mojito",
         routing_status=Signal.RoutingStatus.RESOLVED,
+        expected_action="replenish",
         last_activity_at=timezone.now(),
     )
     observation = create_observation(membership=membership)
@@ -182,10 +183,10 @@ def test_different_issue_focus_does_not_aggregate():
                     title="Rupture de pain",
                     structured_summary="Plus de pain disponible.",
                     issue_focus="pain",
-                canonical_object="object",
-                signal_kind="actionable",
-                expected_action="inspect",
-                information_type=None,
+                    canonical_object="object",
+                    signal_kind="actionable",
+                    expected_action="inspect",
+                    information_type=None,
                     affected_business_unit_routing_key=bar.routing_key,
                     responsible_business_unit_routing_key=bar.routing_key,
                     activity_subject_routing_key=subject.routing_key,
@@ -231,7 +232,7 @@ def test_same_issue_focus_still_aggregates():
     assert row.result_signal_id == existing.id
 
 
-def test_multiple_legacy_signals_same_taxonomy_creates_new():
+def test_multiple_legacy_signals_same_taxonomy_constraint_still_enforced():
     membership = build_membership()
     bar = _setup_bar_taxonomy(membership.establishment)
     subject = bar.activity_subjects.get()
@@ -251,17 +252,13 @@ def test_multiple_legacy_signals_same_taxonomy_creates_new():
             )
 
     observation = create_observation(membership=membership)
-    with patch(
-        "houston.signals.services.find_active_legacy_signal_for_aggregation",
-        return_value=None,
-    ):
-        outcome = apply_pipeline_output(
-            observation=observation,
-            output=ObservationPipelineOutput(
-                schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-                candidates=[_mojito_candidate(bar=bar, subject=subject)],
-            ),
-        ).outcome
+    outcome = apply_pipeline_output(
+        observation=observation,
+        output=ObservationPipelineOutput(
+            schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+            candidates=[_mojito_candidate(bar=bar, subject=subject)],
+        ),
+    ).outcome
 
     assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
     assert Signal.objects.filter(establishment=membership.establishment).count() == 2
@@ -270,15 +267,20 @@ def test_multiple_legacy_signals_same_taxonomy_creates_new():
     assert row.result_signal_id != legacy_a.id
 
 
-def test_legacy_enriched_then_different_focus_creates_new():
+def test_exact_focus_then_different_focus_creates_new():
     membership = build_membership()
     bar = _setup_bar_taxonomy(membership.establishment)
     subject = bar.activity_subjects.get()
-    legacy = _legacy_signal(
+    existing = Signal.objects.create(
         establishment=membership.establishment,
-        bar=bar,
-        subject=subject,
+        affected_business_unit=bar,
+        responsible_business_unit=bar,
+        activity_subject=subject,
         title="Rupture de pain",
+        structured_summary="Plus de pain disponible.",
+        issue_focus="pain",
+        routing_status=Signal.RoutingStatus.RESOLVED,
+        last_activity_at=timezone.now(),
     )
     first_observation = create_observation(membership=membership)
     apply_pipeline_output(
@@ -290,10 +292,10 @@ def test_legacy_enriched_then_different_focus_creates_new():
                     title="Rupture de pain",
                     structured_summary="Plus de pain disponible.",
                     issue_focus="pain",
-                canonical_object="object",
-                signal_kind="actionable",
-                expected_action="inspect",
-                information_type=None,
+                    canonical_object="object",
+                    signal_kind="actionable",
+                    expected_action="inspect",
+                    information_type=None,
                     affected_business_unit_routing_key=bar.routing_key,
                     responsible_business_unit_routing_key=bar.routing_key,
                     activity_subject_routing_key=subject.routing_key,
@@ -303,8 +305,9 @@ def test_legacy_enriched_then_different_focus_creates_new():
             ],
         ),
     )
-    legacy.refresh_from_db()
-    assert legacy.issue_focus == "pain"
+    existing.refresh_from_db()
+    assert existing.issue_focus == "pain"
+    assert Signal.objects.filter(establishment=membership.establishment).count() == 1
 
     second_observation = create_observation(membership=membership)
     outcome = apply_pipeline_output(
@@ -316,10 +319,10 @@ def test_legacy_enriched_then_different_focus_creates_new():
                     title="Rupture de pain blanc",
                     structured_summary="Le pain blanc est en rupture.",
                     issue_focus="pain blanc",
-                canonical_object="object",
-                signal_kind="actionable",
-                expected_action="inspect",
-                information_type=None,
+                    canonical_object="object",
+                    signal_kind="actionable",
+                    expected_action="inspect",
+                    information_type=None,
                     affected_business_unit_routing_key=bar.routing_key,
                     responsible_business_unit_routing_key=bar.routing_key,
                     activity_subject_routing_key=subject.routing_key,
@@ -338,11 +341,6 @@ def test_candidate_signal_persists_issue_focus():
     membership = build_membership()
     bar = _setup_bar_taxonomy(membership.establishment)
     subject = bar.activity_subjects.get()
-    _legacy_signal(
-        establishment=membership.establishment,
-        bar=bar,
-        subject=subject,
-    )
     observation = create_observation(membership=membership)
 
     apply_pipeline_output(
@@ -355,4 +353,4 @@ def test_candidate_signal_persists_issue_focus():
 
     row = CandidateSignal.objects.get(observation=observation)
     assert row.issue_focus == "sirop mojito"
-    assert row.outcome == CandidateSignal.Outcome.AGGREGATED_SIGNAL
+    assert row.outcome == CandidateSignal.Outcome.CREATED_SIGNAL

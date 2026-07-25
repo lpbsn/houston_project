@@ -162,21 +162,26 @@
       {
         "id": "RES-04",
         "owning_lot": "lot5",
-        "description": "Capacité unique → subject puis responsible dérivé",
+        "description": "Sujet catalogue explicitement proposé → responsible dérivé (capacités ignorées)",
         "input": {
-          "capability": "glass_cleanup",
-          "matching_subjects": 1,
-          "subject_business_unit_key": "hotel"
+          "proposed_affected_key": "hotel",
+          "proposed_responsible_key": "maintenance",
+          "proposed_subject_key": "menage",
+          "subject_source": "catalog",
+          "subject_has_capabilities": true
         },
         "observed_v5": {
           "executable": false,
           "reason": "Capacités catalogue absentes en V5"
         },
         "expected_v6": {
+          "affected_key": "hotel",
           "subject_key": "menage",
           "responsible_key": "hotel",
           "routing_status": "resolved",
-          "derivation_order": ["subject", "responsible"]
+          "derivation_order": ["subject", "responsible"],
+          "capabilities_auto_complete": false,
+          "responsible_corrected": true
         }
       },
       {

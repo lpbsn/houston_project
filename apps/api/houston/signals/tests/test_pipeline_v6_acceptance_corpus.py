@@ -60,11 +60,13 @@ def test_pipeline_v6_acceptance_artefacts_are_valid():
 def test_pipeline_v6_acceptance_corpus_has_required_case_ids():
     case_ids = list_pipeline_v6_acceptance_case_ids()
     assert case_ids == list(REQUIRED_CASE_IDS)
-    assert len(case_ids) == 21
+    assert len(case_ids) == 24
 
 
-def test_pipeline_v6_lot_acceptance_covers_lot0_to_lot10():
+def test_pipeline_v6_lot_acceptance_covers_lot0_to_lot10_and_lot4b():
     assert tuple(sorted(LOT_ACCEPTANCE)) == tuple(sorted(LOT_IDS))
+    assert "lot4b" in LOT_IDS
+    assert "lot4b" in LOT_ACCEPTANCE
     for lot_id in LOT_IDS:
         entry = LOT_ACCEPTANCE[lot_id]
         assert entry["criteria"], f"{lot_id} must list acceptance criteria"
@@ -238,7 +240,7 @@ def test_v5_baseline_runtime_s15_14_empty_candidates_no_signal():
     _assert_v5_baseline_runtime_empty_candidates("S15-14")
 
 
-def test_v5_baseline_runtime_s15_19_incoherent_subject_responsible_drops_candidate():
+def test_v6_runtime_s15_19_incoherent_responsible_corrected_and_signal_kept():
     case = get_pipeline_v6_acceptance_case("S15-19")
     membership = build_membership()
     establishment = membership.establishment
@@ -269,10 +271,10 @@ def test_v5_baseline_runtime_s15_19_incoherent_subject_responsible_drops_candida
                     title="Problème ménage",
                     structured_summary="Hall à nettoyer.",
                     issue_focus="menage hall",
-                canonical_object="object",
-                signal_kind="actionable",
-                expected_action="inspect",
-                information_type=None,
+                    canonical_object="object",
+                    signal_kind="actionable",
+                    expected_action="inspect",
+                    information_type=None,
                     operational_unit_key=None,
                     location_text="hall",
                     affected_business_unit_routing_key=hotel.routing_key,
@@ -282,16 +284,17 @@ def test_v5_baseline_runtime_s15_19_incoherent_subject_responsible_drops_candida
             ],
         ),
     )
-    assert result.outcome == ObservationProcessing.Outcome.NO_SIGNAL_CREATED
+    # Historical V5 baseline remains recorded on the corpus case.
     assert case["observed_v5"]["outcome"] == "no_signal_created"
-    assert (
-        CandidateSignal.objects.filter(
-            observation=observation,
-            outcome=CandidateSignal.Outcome.REJECTED,
-        ).count()
-        == 1
-    )
-    assert Signal.objects.filter(establishment=establishment).count() == 0
+    assert result.outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
+    assert case["expected_v6"]["routing_status"] == "resolved"
+    signal = Signal.objects.get(establishment=establishment)
+    assert signal.routing_status == Signal.RoutingStatus.RESOLVED
+    assert signal.responsible_business_unit_id == hotel.id
+    assert signal.activity_subject_id == menage.id
+    candidate = CandidateSignal.objects.get(observation=observation)
+    assert candidate.outcome == CandidateSignal.Outcome.CREATED_SIGNAL
+    assert candidate.resolution_audit["responsible"]["source"] == "responsible_corrected"
 
 
 def test_v6_runtime_lot2_s15_d1_active_non_snapshot_ready_allows_pipeline():

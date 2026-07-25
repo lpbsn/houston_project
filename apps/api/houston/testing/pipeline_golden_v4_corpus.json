@@ -679,6 +679,11 @@
         ],
         "activity_subjects": [
           {
+            "business_unit_key": "hotel",
+            "label": "Accueil",
+            "description": "Sujet routable pour garder Hôtel dans routing_taxonomy."
+          },
+          {
             "business_unit_key": "maintenance",
             "label": "CVC",
             "description": "Climatisation, chauffage, ventilation en panne."

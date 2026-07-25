@@ -22,7 +22,7 @@ TRUTH_TABLES_PATH = Path(__file__).with_name("pipeline_v6_truth_tables.json")
 CORPUS_SCHEMA_VERSION = "pipeline_v6_acceptance_corpus_v1"
 TRUTH_TABLES_SCHEMA_VERSION = "pipeline_v6_truth_tables_v1"
 
-REQUIRED_CASE_IDS: tuple[str, ...] = tuple(f"S15-{i:02d}" for i in range(1, 21)) + ("S15-D1",)
+REQUIRED_CASE_IDS: tuple[str, ...] = tuple(f"S15-{i:02d}" for i in range(1, 24)) + ("S15-D1",)
 
 TRUTH_SECTIONS: tuple[str, ...] = (
     "precondition",
@@ -237,7 +237,11 @@ def validate_pipeline_v6_acceptance_corpus(
         _require(isinstance(lots, list) and bool(lots), f"{label}: lots required", errors)
         if isinstance(lots, list):
             for lot in lots:
-                _require(lot in LOT_IDS, f"{label}: lot {lot!r} not in lot0–lot10", errors)
+                _require(
+                    lot in LOT_IDS,
+                    f"{label}: lot {lot!r} not in LOT_IDS (lot0–lot10 + lot4b)",
+                    errors,
+                )
 
         legacy = case.get("legacy_golden_ids", [])
         _require(isinstance(legacy, list), f"{label}: legacy_golden_ids must be a list", errors)

@@ -283,7 +283,10 @@ def test_personal_feed_staff_salle_maintenance_sees_lighting_only(api_client):
     from houston.establishments.models import EstablishmentMembership
 
     membership = build_api_membership(role=EstablishmentMembership.Role.STAFF)
-    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
+    taxonomy = create_restaurant_v3_taxonomy(
+        membership.establishment,
+        include_restaurant_subject=True,
+    )
     _apply_golden_pipeline(membership=membership, taxonomy=taxonomy)
     create_membership_with_business_unit_scope(
         membership=membership,
@@ -329,7 +332,10 @@ def test_staff_restaurant_scope_sees_but_cannot_act_on_maintenance_responsible_s
     from houston.establishments.models import EstablishmentMembership
 
     membership = build_api_membership(role=EstablishmentMembership.Role.STAFF)
-    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
+    taxonomy = create_restaurant_v3_taxonomy(
+        membership.establishment,
+        include_restaurant_subject=True,
+    )
     _apply_golden_pipeline(membership=membership, taxonomy=taxonomy)
     create_membership_with_business_unit_scope(
         membership=membership,
