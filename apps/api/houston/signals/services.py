@@ -223,6 +223,7 @@ def create_signal_from_candidate(
         responsible_business_unit=resolved.responsible_business_unit,
         activity_subject=resolved.activity_subject,
         status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.RESOLVED,
         title=title.strip(),
         structured_summary=structured_summary.strip(),
         location_text=location_text,

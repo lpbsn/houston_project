@@ -10,6 +10,7 @@ from houston.establishments.tests.taxonomy_helpers import (
     create_activity_subject,
     create_business_unit,
 )
+from houston.signals.models import Signal
 from houston.testing.factories import build_membership
 from houston.testing.taxonomy import create_v3_signal
 
@@ -33,6 +34,7 @@ def test_report_issue_focus_aggregation_eval_json_output():
         title="Rupture pain",
         structured_summary="Plus de pain.",
         issue_focus="pain",
+        routing_status=Signal.RoutingStatus.RESOLVED,
     )
     create_v3_signal(
         establishment,
@@ -42,6 +44,7 @@ def test_report_issue_focus_aggregation_eval_json_output():
         title="Rupture mojito",
         structured_summary="Plus de sirop mojito.",
         issue_focus="sirop mojito",
+        routing_status=Signal.RoutingStatus.RESOLVED,
     )
 
     buffer = StringIO()

@@ -13,6 +13,18 @@ from houston.signals.constants import (
 )
 
 
+class ExpectedAction(models.TextChoices):
+    CLEAN_SECURE = "clean_secure", "Clean / secure"
+    REPAIR = "repair", "Repair"
+    REPLENISH = "replenish", "Replenish"
+    INSPECT = "inspect", "Inspect"
+    COORDINATE = "coordinate", "Coordinate"
+    ASSIST = "assist", "Assist"
+    INFORM = "inform", "Inform"
+    MONITOR = "monitor", "Monitor"
+    SAFETY_RESPONSE = "safety_response", "Safety response"
+
+
 class Signal(BaseModel):
     class Status(models.TextChoices):
         OPEN = "open", "Open"
@@ -20,6 +32,10 @@ class Signal(BaseModel):
         RESOLVED = "resolved", "Resolved"
         CANCELED = "canceled", "Canceled"
         ARCHIVED = "archived", "Archived"
+
+    class RoutingStatus(models.TextChoices):
+        RESOLVED = "resolved", "Resolved"
+        UNASSIGNED = "unassigned", "Unassigned"
 
     establishment = models.ForeignKey(
         "establishments.Establishment",
@@ -58,6 +74,17 @@ class Signal(BaseModel):
         max_length=20,
         choices=Status.choices,
         default=Status.OPEN,
+    )
+    # No model/DB default: every create path must set routing_status explicitly.
+    routing_status = models.CharField(
+        max_length=20,
+        choices=RoutingStatus.choices,
+    )
+    expected_action = models.CharField(
+        max_length=32,
+        choices=ExpectedAction.choices,
+        null=True,
+        blank=True,
     )
     is_pinned = models.BooleanField(default=False)
     pinned_at = models.DateTimeField(null=True, blank=True)
@@ -116,7 +143,8 @@ class Signal(BaseModel):
                     "operational_unit",
                     "issue_focus",
                 ],
-                condition=Q(status__in=ACTIVE_SIGNAL_STATUSES),
+                condition=Q(status__in=ACTIVE_SIGNAL_STATUSES)
+                & Q(routing_status="resolved"),
                 name="signal_unique_active_aggregation_key",
                 nulls_distinct=False,
             ),
@@ -133,6 +161,10 @@ class CandidateSignal(BaseModel):
         AGGREGATED_SIGNAL = "aggregated_signal", "Aggregated signal"
         REJECTED = "rejected", "Rejected"
         NO_SIGNAL_CREATED = "no_signal_created", "No signal created"
+
+    class SignalKind(models.TextChoices):
+        ACTIONABLE = "actionable", "Actionable"
+        INFORMATIONAL = "informational", "Informational"
 
     observation = models.ForeignKey(
         "observations.Observation",
@@ -190,6 +222,43 @@ class CandidateSignal(BaseModel):
     )
     schema_version = models.CharField(max_length=80, blank=True, default="")
     ai_aggregate_hint_signal_id = models.UUIDField(null=True, blank=True)
+    signal_kind = models.CharField(
+        max_length=32,
+        choices=SignalKind.choices,
+        null=True,
+        blank=True,
+    )
+    information_type = models.CharField(max_length=64, blank=True, default="")
+    canonical_object = models.CharField(max_length=255, blank=True, default="")
+    expected_action = models.CharField(
+        max_length=32,
+        choices=ExpectedAction.choices,
+        null=True,
+        blank=True,
+    )
+    proposed_affected_business_unit_routing_key = models.CharField(
+        max_length=180,
+        blank=True,
+        default="",
+    )
+    proposed_responsible_business_unit_routing_key = models.CharField(
+        max_length=180,
+        blank=True,
+        default="",
+    )
+    proposed_activity_subject_routing_key = models.CharField(
+        max_length=150,
+        blank=True,
+        default="",
+    )
+    routing_status = models.CharField(
+        max_length=20,
+        choices=Signal.RoutingStatus.choices,
+        null=True,
+        blank=True,
+    )
+    resolution_audit = models.JSONField(default=dict, blank=True)
+    rejection_code = models.CharField(max_length=80, blank=True, default="")
     outcome = models.CharField(
         max_length=32,
         choices=Outcome.choices,

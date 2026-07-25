@@ -59,6 +59,7 @@ def _create_signal(
         responsible_business_unit=responsible_business_unit,
         activity_subject=activity_subject,
         title=title,
+        routing_status=Signal.RoutingStatus.RESOLVED,
     )
 
 

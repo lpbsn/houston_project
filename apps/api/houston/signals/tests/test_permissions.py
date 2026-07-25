@@ -34,6 +34,7 @@ def _build_signal(*, membership, business_unit=None) -> Signal:
         title="Lighting issue",
         structured_summary="Lighting issue in bar.",
         status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.UNASSIGNED,
         affected_business_unit=business_unit,
         responsible_business_unit=business_unit,
         last_activity_at=timezone.now(),

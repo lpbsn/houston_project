@@ -91,7 +91,7 @@ LOT_ACCEPTANCE: dict[str, dict[str, Any]] = {
             "no_permanent_default_on_routing_status",
         ],
         "case_ids": ["S15-03", "S15-04", "S15-18"],
-        "truth_row_ids": ["PERS-01", "PERS-02", "PERS-03", "PERS-04"],
+        "truth_row_ids": ["PERS-01", "PERS-02", "PERS-04"],
     },
     "lot2": {
         "criteria": [
@@ -100,7 +100,7 @@ LOT_ACCEPTANCE: dict[str, dict[str, Any]] = {
             "technical_codes_stable",
         ],
         "case_ids": ["S15-01", "S15-02", "S15-04", "S15-D1"],
-        "truth_row_ids": ["PRE-01", "PRE-02", "PRE-03", "PRE-04", "ERR-01"],
+        "truth_row_ids": ["PRE-01", "PRE-02", "PRE-03", "PRE-04", "ERR-01", "PERS-03"],
     },
     "lot3": {
         "criteria": [

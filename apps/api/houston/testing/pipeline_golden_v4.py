@@ -88,6 +88,7 @@ def setup_active_signals_from_fixture(
             location_text=signal_spec.get("location_text", ""),
             issue_focus=normalize_issue_focus(signal_spec.get("issue_focus", "")),
             status=signal_spec.get("status", Signal.Status.OPEN),
+            routing_status=Signal.RoutingStatus.RESOLVED,
         )
     return signals
 

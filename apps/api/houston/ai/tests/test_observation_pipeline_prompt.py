@@ -123,6 +123,7 @@ def test_build_pipeline_input_includes_active_signals_context_with_issue_focus()
         title="Fuite existante",
         structured_summary="Fuite déjà signalée au couloir nord.",
         issue_focus="fuite couloir nord",
+        routing_status=Signal.RoutingStatus.RESOLVED,
         last_activity_at=timezone.now(),
     )
 

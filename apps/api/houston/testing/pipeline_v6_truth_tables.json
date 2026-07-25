@@ -244,7 +244,7 @@
       },
       {
         "id": "PERS-03",
-        "owning_lot": "lot1",
+        "owning_lot": "lot2",
         "description": "Erreur technique ne doit pas devenir unassigned",
         "input": {
           "technical_error": "provider_timeout"

@@ -106,6 +106,7 @@ def test_processing_status_does_not_return_unrelated_signal():
         establishment=membership.establishment,
         title="Other observation signal",
         structured_summary="Linked only to observation B.",
+        routing_status=Signal.RoutingStatus.UNASSIGNED,
         last_activity_at=now,
     )
     CandidateSignal.objects.create(
