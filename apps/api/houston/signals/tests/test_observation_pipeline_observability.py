@@ -12,6 +12,7 @@ from houston.ai.observation_pipeline import (
     FakeObservationPipelineProvider,
     ObservationPipelineInvalidOutputError,
 )
+from houston.establishments.taxonomy_snapshot import build_active_business_units
 from houston.establishments.tests.taxonomy_helpers import (
     create_activity_subject,
     create_business_unit,
@@ -142,3 +143,23 @@ def test_successful_pipeline_logs_safe_timing_fields(caplog):
     assert completed.attempt_count == 1
     assert "Sensitive operational detail" not in caplog.text
     assert observation.raw_text not in caplog.text
+
+
+def test_input_built_logs_business_unit_count_without_active_signal_context(caplog):
+    membership = build_membership()
+    _setup_hotel_taxonomy(membership.establishment)
+    observation = create_observation(membership=membership)
+    expected_business_unit_count = len(
+        build_active_business_units(establishment_id=membership.establishment_id)
+    )
+
+    with caplog.at_level(logging.INFO, logger="houston.ai.observation_pipeline"):
+        run_observation_pipeline(observation.id, provider=FakeObservationPipelineProvider())
+
+    input_built = next(
+        record
+        for record in caplog.records
+        if record.getMessage() == "observation_pipeline_input_built"
+    )
+    assert input_built.business_unit_count == expected_business_unit_count
+    assert not hasattr(input_built, "active_signal_context_count")

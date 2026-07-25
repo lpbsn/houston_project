@@ -115,9 +115,15 @@ def test_signal_created_notifies_responsible_pole_scope_only():
         title="Sensitive signal title",
         structured_summary="Sensitive observation summary",
         issue_focus="fuite eau",
+        canonical_object="canalisation",
+        signal_kind="actionable",
+        expected_action="repair",
+        information_type=None,
         affected_business_unit_routing_key=hotel.routing_key,
         responsible_business_unit_routing_key=maintenance.routing_key,
         activity_subject_routing_key=electricite.routing_key,
+        operational_unit_key=None,
+        location_text=None,
     )
 
     signal = create_signal_from_candidate(

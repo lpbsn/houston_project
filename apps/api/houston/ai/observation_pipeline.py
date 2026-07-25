@@ -422,9 +422,7 @@ def call_observation_pipeline(
     input_payload = build_pipeline_input(observation=observation)
     input_duration_ms = _elapsed_ms(input_started_at)
     establishment_context = input_payload.get("establishment_context") or {}
-    routing_taxonomy = input_payload.get("routing_taxonomy") or {}
     business_unit_count = len(establishment_context.get("active_business_units") or [])
-    routing_taxonomy_business_unit_count = len(routing_taxonomy.get("business_units") or [])
     input_payload_bytes = len(
         json.dumps(input_payload, ensure_ascii=False).encode("utf-8"),
     )
@@ -436,7 +434,6 @@ def call_observation_pipeline(
             event="observation_pipeline_input_built",
             duration_ms=input_duration_ms,
             business_unit_count=business_unit_count,
-            active_signal_context_count=routing_taxonomy_business_unit_count,
             input_payload_bytes=input_payload_bytes,
             provider=provider_name,
             model=provider_model,
