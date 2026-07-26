@@ -13,12 +13,17 @@ from houston.establishments.permissions import HasActiveMembership
 from houston.signals.api.serializers import (
     SignalDetailSerializer,
     SignalFeedResponseSerializer,
+    SignalQualifyRoutingRequestSerializer,
+    SignalQualifyRoutingResponseSerializer,
     serialize_signal_detail,
     serialize_signal_feed_item,
 )
 from houston.signals.exceptions import (
+    SignalAlreadyMergedError,
     SignalBusinessConflictError,
+    SignalPermissionError,
     SignalStateError,
+    SignalValidationError,
 )
 from houston.signals.feed_cursor import (
     SignalFeedCursorError,
@@ -32,15 +37,21 @@ from houston.signals.feed_filters import (
     parse_signal_feed_filters,
 )
 from houston.signals.permissions import (
+    can_access_qualify_routing_endpoint,
     can_cancel_signal,
     can_pin_signal,
     can_resolve_signal,
     can_view_signal_feed,
 )
-from houston.signals.selectors import get_signal_for_detail, signal_feed_queryset
+from houston.signals.selectors import (
+    get_signal_for_detail,
+    get_signal_for_qualify_routing,
+    signal_feed_queryset,
+)
 from houston.signals.services import (
     cancel_signal,
     pin_signal,
+    qualify_signal_routing,
     resolve_signal,
     unpin_signal,
 )
@@ -326,6 +337,88 @@ class SignalResolveView(EstablishmentScopedSignalMixin, APIView):
             signal_id=signal_id,
             action="resolve",
         )
+
+
+class SignalQualifyRoutingView(EstablishmentScopedSignalMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanViewSignalFeed,
+    ]
+
+    @extend_schema(
+        tags=["signals"],
+        request=SignalQualifyRoutingRequestSerializer,
+        responses={
+            200: SignalQualifyRoutingResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+            409: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def post(self, request, establishment_id, signal_id):
+        membership = resolve_observation_actor_membership(
+            request,
+            establishment_id=self.establishment_id,
+        )
+        if membership is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        signal = get_signal_for_qualify_routing(
+            membership=membership,
+            signal_id=uuid.UUID(str(signal_id)),
+        )
+        if signal is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not can_access_qualify_routing_endpoint(membership, signal):
+            return Response(
+                {"code": "permission_denied", "detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        request_serializer = SignalQualifyRoutingRequestSerializer(data=request.data)
+        request_serializer.is_valid(raise_exception=True)
+        patch = dict(request_serializer.validated_data)
+
+        try:
+            result = qualify_signal_routing(
+                signal=signal,
+                membership=membership,
+                patch=patch,
+            )
+        except SignalPermissionError:
+            return Response(
+                {"code": "permission_denied", "detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        except SignalAlreadyMergedError as exc:
+            return Response(
+                {"code": exc.error_code, "detail": "Signal already merged."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        except SignalStateError as exc:
+            return Response(
+                {"code": exc.error_code, "detail": "Invalid signal state."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except SignalValidationError as exc:
+            return Response(
+                {"code": exc.code, "detail": str(exc) or "Invalid qualification payload."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payload = serialize_signal_detail(
+            signal=result.signal,
+            membership=membership,
+            request=request,
+        )
+        payload["qualification_outcome"] = result.qualification_outcome
+        payload["surviving_signal_id"] = result.surviving_signal_id
+        payload["merged_signal_id"] = result.merged_signal_id
+        return Response(SignalQualifyRoutingResponseSerializer(payload).data)
 
 
 def _signal_lifecycle_command_response(

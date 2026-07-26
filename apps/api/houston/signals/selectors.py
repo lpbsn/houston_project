@@ -143,6 +143,32 @@ def signal_feed_queryset(
     return apply_feed_sorting(queryset)
 
 
+def get_signal_for_qualify_routing(
+    *,
+    membership: EstablishmentMembership,
+    signal_id: uuid.UUID,
+) -> Signal | None:
+    """Load a signal for qualify, including archived already-merged sources."""
+    return (
+        Signal.objects.filter(
+            establishment_id=membership.establishment_id,
+            id=signal_id,
+        )
+        .select_related(
+            "pinned_by_membership__user",
+            "merged_into",
+            *_SIGNAL_LIST_SELECT_RELATED,
+            "merged_into__affected_business_unit",
+            "merged_into__responsible_business_unit",
+            "merged_into__activity_subject",
+            "merged_into__operational_unit",
+        )
+        .prefetch_related(*_SIGNAL_LIST_PREFETCH)
+        .annotate(**_SIGNAL_AGGREGATION_COUNT_ANNOTATION)
+        .first()
+    )
+
+
 def get_signal_for_detail(
     *,
     membership: EstablishmentMembership,

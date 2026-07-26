@@ -5190,6 +5190,68 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/signals/{signal_id}/qualify-routing/:
+    post:
+      operationId: v1_establishments_signals_qualify_routing_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: signal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - signals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignalQualifyRoutingRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SignalQualifyRoutingRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SignalQualifyRoutingRequest'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalQualifyRoutingResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/signals/{signal_id}/resolve/:
     post:
       operationId: v1_establishments_signals_resolve_create
@@ -10470,10 +10532,13 @@ components:
           type: boolean
         can_create_linked_action_plan:
           type: boolean
+        can_qualify_routing:
+          type: boolean
       required:
       - can_cancel
       - can_create_linked_action_plan
       - can_pin
+      - can_qualify_routing
       - can_resolve
     PriorityEnum:
       enum:
@@ -10583,6 +10648,14 @@ components:
           type: string
       required:
       - code
+    QualificationOutcomeEnum:
+      enum:
+      - updated
+      - merged
+      type: string
+      description: |-
+        * `updated` - updated
+        * `merged` - merged
     RealtimeWsTicketResponse:
       type: object
       properties:
@@ -11024,6 +11097,138 @@ components:
       - pilot_business_unit
       - requires_validation
       - status
+      - title
+    SignalQualifyRoutingRequest:
+      type: object
+      properties:
+        affected_business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
+        responsible_business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
+        activity_subject_id:
+          type: string
+          format: uuid
+          nullable: true
+        operational_unit_id:
+          type: string
+          format: uuid
+          nullable: true
+        issue_focus:
+          type: string
+          nullable: true
+          maxLength: 80
+        expected_action:
+          type: string
+          nullable: true
+          maxLength: 32
+    SignalQualifyRoutingResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        structured_summary_short:
+          type: string
+        status:
+          type: string
+        is_pinned:
+          type: boolean
+        affected_business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
+        affected_business_unit_key:
+          type: string
+          nullable: true
+        affected_business_unit_label:
+          type: string
+          nullable: true
+        responsible_business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
+        responsible_business_unit_key:
+          type: string
+          nullable: true
+        responsible_business_unit_label:
+          type: string
+          nullable: true
+        activity_subject_id:
+          type: string
+          format: uuid
+          nullable: true
+        activity_subject_normalized_name:
+          type: string
+          nullable: true
+        activity_subject_label:
+          type: string
+          nullable: true
+        operational_unit_key:
+          type: string
+          nullable: true
+        location_text:
+          type: string
+        media_count:
+          type: integer
+        last_activity_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        reporter_display_name:
+          type: string
+          nullable: true
+        aggregation_count:
+          type: integer
+        permission_hints:
+          $ref: '#/components/schemas/PermissionHints'
+        structured_summary:
+          type: string
+        source_context:
+          $ref: '#/components/schemas/SourceContext'
+        media_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignalDetailMediaItem'
+        linked_action_plan_executions:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignalLinkedActionPlanExecution'
+        qualification_outcome:
+          $ref: '#/components/schemas/QualificationOutcomeEnum'
+        surviving_signal_id:
+          type: string
+          format: uuid
+        merged_signal_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - aggregation_count
+      - created_at
+      - id
+      - is_pinned
+      - last_activity_at
+      - linked_action_plan_executions
+      - location_text
+      - media_count
+      - media_items
+      - merged_signal_id
+      - operational_unit_key
+      - permission_hints
+      - qualification_outcome
+      - source_context
+      - status
+      - structured_summary
+      - structured_summary_short
+      - surviving_signal_id
       - title
     SourceContext:
       type: object
