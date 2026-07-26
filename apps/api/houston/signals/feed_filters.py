@@ -7,7 +7,8 @@ from typing import Any
 from django.db.models import Q
 
 from houston.establishments.models import ActivitySubject, BusinessUnit
-from houston.signals.constants import FEED_SIGNAL_STATUSES
+from houston.signals.constants import ACTIVE_SIGNAL_STATUSES, FEED_SIGNAL_STATUSES
+from houston.signals.models import Signal
 
 FEED_FILTERABLE_STATUSES = frozenset(FEED_SIGNAL_STATUSES)
 
@@ -25,9 +26,15 @@ class SignalFeedFilters:
     statuses: tuple[str, ...] = ()
     business_unit_ids: tuple[uuid.UUID, ...] = ()
     activity_subject_ids: tuple[uuid.UUID, ...] = ()
+    needs_qualification: bool = False
 
     def has_any(self) -> bool:
-        return bool(self.statuses or self.business_unit_ids or self.activity_subject_ids)
+        return bool(
+            self.statuses
+            or self.business_unit_ids
+            or self.activity_subject_ids
+            or self.needs_qualification
+        )
 
 
 class SignalFeedFilterValidationError(Exception):
@@ -51,6 +58,9 @@ def parse_signal_feed_filters(
     activity_subject_ids = _parse_activity_subject_ids(
         raw=query_params.get("activity_subject_ids"),
     )
+    needs_qualification = _parse_needs_qualification(
+        query_params.get("needs_qualification"),
+    )
 
     _validate_business_unit_ids_exist(
         establishment_id=establishment_id,
@@ -65,6 +75,7 @@ def parse_signal_feed_filters(
         statuses=statuses,
         business_unit_ids=business_unit_ids,
         activity_subject_ids=activity_subject_ids,
+        needs_qualification=needs_qualification,
     )
 
 
@@ -78,11 +89,13 @@ def build_applied_filters_payload(
         payload["statuses"] = []
         payload["business_unit_ids"] = []
         payload["activity_subject_ids"] = []
+        payload["needs_qualification"] = False
         return payload
 
     payload["statuses"] = list(filters.statuses)
     payload["business_unit_ids"] = [str(value) for value in filters.business_unit_ids]
     payload["activity_subject_ids"] = [str(value) for value in filters.activity_subject_ids]
+    payload["needs_qualification"] = filters.needs_qualification
     return payload
 
 
@@ -102,7 +115,30 @@ def apply_feed_filters(queryset, *, filters: SignalFeedFilters | None):
     if filters.activity_subject_ids:
         queryset = queryset.filter(activity_subject_id__in=filters.activity_subject_ids)
 
+    if filters.needs_qualification:
+        # "À qualifier": unassigned routing among still-active lifecycle signals.
+        # H6 leaves routing_status unchanged on resolve/cancel/archive.
+        queryset = queryset.filter(
+            routing_status=Signal.RoutingStatus.UNASSIGNED,
+            status__in=ACTIVE_SIGNAL_STATUSES,
+        )
+
     return queryset
+
+
+def _parse_needs_qualification(raw: Any) -> bool:
+    if raw is None or raw == "":
+        return False
+    if isinstance(raw, bool):
+        return raw
+    value = str(raw).strip().lower()
+    if value in {"true", "1", "yes"}:
+        return True
+    if value in {"false", "0", "no"}:
+        return False
+    raise SignalFeedFilterValidationError(
+        "needs_qualification must be true or false.",
+    )
 
 
 def _parse_csv_values(*, raw: str | None) -> list[str]:

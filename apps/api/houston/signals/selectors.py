@@ -62,6 +62,13 @@ _SIGNAL_AGGREGATION_COUNT_ANNOTATION = {
     ),
 }
 
+_TOTAL_UNCLASSIFIED_Q = Q(
+    affected_business_unit__isnull=True,
+    responsible_business_unit__isnull=True,
+    activity_subject__isnull=True,
+)
+_UNASSIGNED_ROUTING_Q = Q(routing_status=Signal.RoutingStatus.UNASSIGNED)
+
 
 def active_signals_for_establishment(*, establishment_id: uuid.UUID) -> QuerySet[Signal]:
     return (
@@ -86,6 +93,16 @@ def feed_signals_for_establishment(*, establishment_id: uuid.UUID) -> QuerySet[S
     )
 
 
+def _apply_staff_total_unclassified_exclusion(
+    queryset: QuerySet[Signal],
+    *,
+    membership: EstablishmentMembership,
+) -> QuerySet[Signal]:
+    if membership.role != EstablishmentMembership.Role.STAFF:
+        return queryset
+    return queryset.exclude(_TOTAL_UNCLASSIFIED_Q)
+
+
 def _apply_canceled_feed_visibility_for_non_admin(
     queryset: QuerySet[Signal],
     *,
@@ -95,6 +112,13 @@ def _apply_canceled_feed_visibility_for_non_admin(
         return queryset
 
     scope_q = build_signal_feed_scope_q_v2(membership=membership)
+    # Managers may always see canceled unassigned (establishment triage).
+    if membership.role == EstablishmentMembership.Role.MANAGER:
+        canceled_visible = _UNASSIGNED_ROUTING_Q
+        if scope_q is not None:
+            canceled_visible = canceled_visible | scope_q
+        return queryset.filter(~Q(status=Signal.Status.CANCELED) | canceled_visible)
+
     if scope_q is None:
         return queryset.exclude(status=Signal.Status.CANCELED)
     return queryset.filter(~Q(status=Signal.Status.CANCELED) | scope_q)
@@ -119,6 +143,7 @@ def signal_feed_queryset(
     filters: SignalFeedFilters | None = None,
 ) -> QuerySet[Signal]:
     queryset = feed_signals_for_establishment(establishment_id=membership.establishment_id)
+    queryset = _apply_staff_total_unclassified_exclusion(queryset, membership=membership)
 
     if view_mode == "general":
         queryset = _apply_canceled_feed_visibility_for_non_admin(
@@ -135,12 +160,48 @@ def signal_feed_queryset(
         queryset = apply_feed_filters(queryset, filters=filters)
         return apply_feed_sorting(queryset)
 
+    if membership.role == EstablishmentMembership.Role.MANAGER:
+        scope_q = build_signal_feed_scope_q_v2(membership=membership)
+        if scope_q is None:
+            queryset = queryset.filter(_UNASSIGNED_ROUTING_Q)
+        else:
+            queryset = queryset.filter(scope_q | _UNASSIGNED_ROUTING_Q)
+        queryset = apply_feed_filters(queryset, filters=filters)
+        return apply_feed_sorting(queryset)
+
+    # Staff: Ma vue = BU scope only (total unclassified already excluded).
     scope_q = build_signal_feed_scope_q_v2(membership=membership)
     if scope_q is None:
         return apply_feed_sorting(queryset.none())
     queryset = queryset.filter(scope_q)
     queryset = apply_feed_filters(queryset, filters=filters)
     return apply_feed_sorting(queryset)
+
+
+def get_signal_for_qualify_routing(
+    *,
+    membership: EstablishmentMembership,
+    signal_id: uuid.UUID,
+) -> Signal | None:
+    """Load a signal for qualify, including archived already-merged sources."""
+    return (
+        Signal.objects.filter(
+            establishment_id=membership.establishment_id,
+            id=signal_id,
+        )
+        .select_related(
+            "pinned_by_membership__user",
+            "merged_into",
+            *_SIGNAL_LIST_SELECT_RELATED,
+            "merged_into__affected_business_unit",
+            "merged_into__responsible_business_unit",
+            "merged_into__activity_subject",
+            "merged_into__operational_unit",
+        )
+        .prefetch_related(*_SIGNAL_LIST_PREFETCH)
+        .annotate(**_SIGNAL_AGGREGATION_COUNT_ANNOTATION)
+        .first()
+    )
 
 
 def get_signal_for_detail(

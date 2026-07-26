@@ -31,6 +31,7 @@ class PermissionHintsSerializer(serializers.Serializer):
     can_cancel = serializers.BooleanField()
     can_resolve = serializers.BooleanField()
     can_create_linked_action_plan = serializers.BooleanField()
+    can_qualify_routing = serializers.BooleanField()
 
 
 class SignalFeedItemSerializer(serializers.Serializer):
@@ -97,11 +98,37 @@ class SignalDetailSerializer(SignalFeedItemSerializer):
     linked_action_plan_executions = SignalLinkedActionPlanExecutionSerializer(many=True)
 
 
+class SignalQualifyRoutingRequestSerializer(serializers.Serializer):
+    affected_business_unit_id = serializers.UUIDField(required=False, allow_null=True)
+    responsible_business_unit_id = serializers.UUIDField(required=False, allow_null=True)
+    activity_subject_id = serializers.UUIDField(required=False, allow_null=True)
+    operational_unit_id = serializers.UUIDField(required=False, allow_null=True)
+    issue_focus = serializers.CharField(
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        max_length=80,
+    )
+    expected_action = serializers.CharField(
+        required=False,
+        allow_null=True,
+        allow_blank=False,
+        max_length=32,
+    )
+
+
+class SignalQualifyRoutingResponseSerializer(SignalDetailSerializer):
+    qualification_outcome = serializers.ChoiceField(choices=["updated", "merged"])
+    surviving_signal_id = serializers.UUIDField()
+    merged_signal_id = serializers.UUIDField(allow_null=True)
+
+
 def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
     from houston.action_plans.permissions import can_create_linked_action_plan
     from houston.signals.permissions import (
         can_cancel_signal,
         can_pin_signal,
+        can_qualify_routing,
         can_resolve_signal,
     )
 
@@ -156,6 +183,13 @@ def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
             "can_create_linked_action_plan": can_create_linked_action_plan(
                 membership,
                 signal=signal,
+            ),
+            "can_qualify_routing": can_qualify_routing(
+                membership,
+                signal,
+                proposed_affected_business_unit=signal.affected_business_unit,
+                proposed_responsible_business_unit=signal.responsible_business_unit,
+                proposed_activity_subject=signal.activity_subject,
             ),
         },
     }

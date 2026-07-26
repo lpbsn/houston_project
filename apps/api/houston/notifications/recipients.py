@@ -10,7 +10,6 @@ from houston.chat.permissions import can_access_chat
 from houston.chat.selectors import active_participant_queryset
 from houston.comments.models import Comment
 from houston.establishments.models import EstablishmentMembership
-from houston.establishments.role_constants import ADMIN_ROLES
 from houston.signals.models import Signal
 from houston.signals.reporter_display import created_from_source_observation_link
 
@@ -238,16 +237,49 @@ def resolve_signal_pole_recipients(*, signal: Signal) -> list[EstablishmentMembe
     )
 
 
-def resolve_signal_unassigned_global_recipients(
+def resolve_signal_triage_recipients(
     *,
     signal: Signal,
 ) -> list[EstablishmentMembership]:
+    """Owner, Director, and Manager — establishment-wide triage (Lot 8 E1–E3)."""
     return _dedupe_memberships(
         list(
             EstablishmentMembership.objects.filter(
                 establishment_id=signal.establishment_id,
                 status=EstablishmentMembership.Status.ACTIVE,
-                role__in=ADMIN_ROLES,
+                role__in={
+                    EstablishmentMembership.Role.OWNER,
+                    EstablishmentMembership.Role.DIRECTOR,
+                    EstablishmentMembership.Role.MANAGER,
+                },
             ).select_related("user")
         )
     )
+
+
+def resolve_signal_unassigned_global_recipients(
+    *,
+    signal: Signal,
+) -> list[EstablishmentMembership]:
+    """Backward-compatible alias for triage recipients (admins + managers)."""
+    return resolve_signal_triage_recipients(signal=signal)
+
+
+def resolve_signal_attention_recipients(
+    *,
+    signal: Signal,
+) -> list[EstablishmentMembership]:
+    """Recipients for create / post-qualify attention based on current routing."""
+    has_pole = (
+        signal.affected_business_unit_id is not None
+        or signal.responsible_business_unit_id is not None
+    )
+    triage = resolve_signal_triage_recipients(signal=signal)
+    if not has_pole:
+        return triage
+    pole = resolve_signal_pole_recipients(signal=signal)
+    # Lot 8 E2: any unassigned with identifiable poles → triage ∪ pole (deduped).
+    # Resolved routing keeps pole-or-triage fallback (assigned create path).
+    if signal.routing_status == Signal.RoutingStatus.UNASSIGNED:
+        return _dedupe_memberships([*triage, *pole])
+    return pole or triage

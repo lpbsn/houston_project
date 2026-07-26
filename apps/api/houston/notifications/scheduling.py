@@ -29,8 +29,9 @@ from houston.notifications.recipients import (
     resolve_comment_mention_recipients,
     resolve_comment_reply_created_recipients,
     resolve_comment_signal_created_recipients,
+    resolve_signal_attention_recipients,
     resolve_signal_pole_recipients,
-    resolve_signal_unassigned_global_recipients,
+    resolve_signal_triage_recipients,
 )
 from houston.notifications.services import (
     create_in_app_notification,
@@ -713,11 +714,8 @@ def schedule_signal_created_notification(*, signal_id: uuid.UUID) -> None:
         if signal is None:
             return
         assigned_pole = _resolve_signal_assigned_pole(signal=signal)
-        if assigned_pole is not None and signal.activity_subject_id is not None:
-            pole_recipients = resolve_signal_pole_recipients(signal=signal)
-            recipients = pole_recipients or resolve_signal_unassigned_global_recipients(
-                signal=signal
-            )
+        recipients = resolve_signal_attention_recipients(signal=signal)
+        if assigned_pole is not None:
             _deliver_signal_notifications(
                 signal=signal,
                 event_key=Notification.EventKey.SIGNAL_CREATED,
@@ -732,7 +730,7 @@ def schedule_signal_created_notification(*, signal_id: uuid.UUID) -> None:
             signal=signal,
             event_key=Notification.EventKey.SIGNAL_CREATED_UNASSIGNED_GLOBAL,
             priority=Notification.Priority.ACTION_REQUIRED,
-            recipients=resolve_signal_unassigned_global_recipients(signal=signal),
+            recipients=recipients,
             actor_membership=None,
             exclude_actor_if_recipient=False,
         )
@@ -745,6 +743,13 @@ def schedule_signal_created_notification(*, signal_id: uuid.UUID) -> None:
     )
 
 
+def _lifecycle_signal_recipients(*, signal: Signal) -> list[EstablishmentMembership]:
+    pole_recipients = resolve_signal_pole_recipients(signal=signal)
+    if pole_recipients:
+        return pole_recipients
+    return resolve_signal_triage_recipients(signal=signal)
+
+
 def schedule_signal_pinned_notification(
     *,
     signal_id: uuid.UUID,
@@ -754,7 +759,7 @@ def schedule_signal_pinned_notification(
         signal = _load_signal(signal_id=signal_id)
         if signal is None:
             return
-        recipients = resolve_signal_pole_recipients(signal=signal)
+        recipients = _lifecycle_signal_recipients(signal=signal)
         _deliver_signal_notifications(
             signal=signal,
             event_key=Notification.EventKey.SIGNAL_PINNED,
@@ -783,7 +788,7 @@ def schedule_signal_resolved_notification(
         signal = _load_signal(signal_id=signal_id)
         if signal is None:
             return
-        recipients = resolve_signal_pole_recipients(signal=signal)
+        recipients = _lifecycle_signal_recipients(signal=signal)
         _deliver_signal_notifications(
             signal=signal,
             event_key=Notification.EventKey.SIGNAL_RESOLVED,
@@ -813,7 +818,7 @@ def schedule_signal_canceled_notification(
         signal = _load_signal(signal_id=signal_id)
         if signal is None:
             return
-        recipients = resolve_signal_pole_recipients(signal=signal)
+        recipients = _lifecycle_signal_recipients(signal=signal)
         _deliver_signal_notifications(
             signal=signal,
             event_key=Notification.EventKey.SIGNAL_CANCELED,
@@ -829,6 +834,58 @@ def schedule_signal_canceled_notification(
     _run_notification_after_commit(
         deliver=deliver,
         event_key=Notification.EventKey.SIGNAL_CANCELED,
+        subject_type=Notification.SubjectType.SIGNAL,
+        subject_id=signal_id,
+    )
+
+
+def schedule_signal_qualified_notification(
+    *,
+    signal_id: uuid.UUID,
+    actor_membership_id: uuid.UUID,
+    previous_recipient_ids: frozenset[uuid.UUID],
+) -> None:
+    """Notify recipients newly in scope after qualification (Lot 8 E4)."""
+
+    def deliver() -> None:
+        signal = _load_signal(signal_id=signal_id)
+        if signal is None:
+            return
+        assigned_pole = _resolve_signal_assigned_pole(signal=signal)
+        recipients = [
+            membership
+            for membership in resolve_signal_attention_recipients(signal=signal)
+            if membership.id not in previous_recipient_ids
+        ]
+        if not recipients:
+            return
+        if assigned_pole is not None:
+            _deliver_signal_notifications(
+                signal=signal,
+                event_key=Notification.EventKey.SIGNAL_CREATED,
+                priority=Notification.Priority.ACTION_REQUIRED,
+                recipients=recipients,
+                actor_membership=_load_actor(
+                    establishment_id=signal.establishment_id,
+                    actor_membership_id=actor_membership_id,
+                ),
+                pole_name=_business_unit_display_name(business_unit=assigned_pole),
+            )
+            return
+        _deliver_signal_notifications(
+            signal=signal,
+            event_key=Notification.EventKey.SIGNAL_CREATED_UNASSIGNED_GLOBAL,
+            priority=Notification.Priority.ACTION_REQUIRED,
+            recipients=recipients,
+            actor_membership=_load_actor(
+                establishment_id=signal.establishment_id,
+                actor_membership_id=actor_membership_id,
+            ),
+        )
+
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.SIGNAL_CREATED,
         subject_type=Notification.SubjectType.SIGNAL,
         subject_id=signal_id,
     )

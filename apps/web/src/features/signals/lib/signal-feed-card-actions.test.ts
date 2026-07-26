@@ -13,6 +13,7 @@ function hints(overrides: Partial<PermissionHints> = {}): PermissionHints {
     can_cancel: false,
     can_resolve: false,
     can_create_linked_action_plan: false,
+    can_qualify_routing: false,
     ...overrides,
   }
 }

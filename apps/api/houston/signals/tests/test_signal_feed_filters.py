@@ -72,6 +72,7 @@ def test_feed_without_filters_unchanged(api_client):
     assert body["applied_filters"]["view_mode"] == "general"
     assert body["applied_filters"]["statuses"] == []
     assert body["applied_filters"]["business_unit_ids"] == []
+    assert body["applied_filters"]["needs_qualification"] is False
 
 
 def test_feed_filters_by_single_status(api_client):

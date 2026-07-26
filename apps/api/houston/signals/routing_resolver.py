@@ -1,7 +1,7 @@
 """Deterministic routing resolver for the observation pipeline (Lot 5).
 
 Pure key matching against ``routing_taxonomy``; ORM materialization at the
-frontier only. Reusable by the future qualification service (Lot 7).
+frontier only. Also exposes a materialized-object entry for qualification (Lot 7).
 """
 
 from __future__ import annotations
@@ -491,4 +491,132 @@ def resolve_candidate_routing(
         operational_unit=materialized.operational_unit,
         routing_status=routing_status,
         resolution_audit=audit,
+    )
+
+
+def apply_subject_responsible_invariant_on_objects(
+    *,
+    proposed_responsible: BusinessUnit | None,
+    proposed_subject: ActivitySubject | None,
+) -> tuple[BusinessUnit | None, ActivitySubject | None, dict[str, Any], dict[str, Any]]:
+    """Apply subject→responsible invariant on already-loaded ORM objects (Lot 7)."""
+    proposed_responsible_key = (
+        proposed_responsible.routing_key if proposed_responsible is not None else None
+    )
+    proposed_subject_key = (
+        proposed_subject.routing_key if proposed_subject is not None else None
+    )
+
+    if proposed_subject is None:
+        subject_audit = build_dimension_audit(
+            source="unresolved",
+            proposed_key=proposed_subject_key,
+            resolved_key=None,
+        )
+        if proposed_responsible is None:
+            responsible_audit = build_dimension_audit(
+                source="unresolved",
+                proposed_key=proposed_responsible_key,
+                resolved_key=None,
+            )
+            return None, None, responsible_audit, subject_audit
+        responsible_audit = build_dimension_audit(
+            source="llm_validated",
+            proposed_key=proposed_responsible_key,
+            resolved_key=proposed_responsible_key,
+        )
+        return proposed_responsible, None, responsible_audit, subject_audit
+
+    derived_responsible = proposed_subject.business_unit
+    derived_key = derived_responsible.routing_key
+    subject_audit = build_dimension_audit(
+        source="llm_validated",
+        proposed_key=proposed_subject_key,
+        resolved_key=proposed_subject_key,
+    )
+    if (
+        proposed_responsible is not None
+        and proposed_responsible.id != derived_responsible.id
+    ):
+        responsible_audit = build_dimension_audit(
+            source="responsible_corrected",
+            proposed_key=proposed_responsible_key,
+            resolved_key=derived_key,
+        )
+    else:
+        responsible_audit = build_dimension_audit(
+            source="subject_derived",
+            proposed_key=proposed_responsible_key,
+            resolved_key=derived_key,
+        )
+    return derived_responsible, proposed_subject, responsible_audit, subject_audit
+
+
+def resolve_materialized_routing(
+    *,
+    establishment: Establishment,
+    affected_business_unit: BusinessUnit | None,
+    responsible_business_unit: BusinessUnit | None,
+    activity_subject: ActivitySubject | None,
+    operational_unit: OperationalUnit | None,
+) -> RoutingResolution:
+    """Lot 7 entry: resolve from materialized ORM objects using Lot 5 invariants."""
+    (
+        responsible,
+        subject,
+        responsible_audit,
+        subject_audit,
+    ) = apply_subject_responsible_invariant_on_objects(
+        proposed_responsible=responsible_business_unit,
+        proposed_subject=activity_subject,
+    )
+
+    affected_key = (
+        affected_business_unit.routing_key if affected_business_unit is not None else None
+    )
+    if affected_business_unit is None:
+        affected_audit = build_dimension_audit(
+            source="unresolved",
+            proposed_key=None,
+            resolved_key=None,
+        )
+    else:
+        affected_audit = build_dimension_audit(
+            source="llm_validated",
+            proposed_key=affected_key,
+            resolved_key=affected_key,
+        )
+
+    operational_key = operational_unit.key if operational_unit is not None else None
+    if operational_unit is None:
+        operational_audit = build_dimension_audit(
+            source="unresolved",
+            proposed_key=None,
+            resolved_key=None,
+        )
+    else:
+        operational_audit = build_dimension_audit(
+            source="llm_validated",
+            proposed_key=operational_key,
+            resolved_key=operational_key,
+        )
+
+    routing_status = routing_status_for_classification(
+        establishment=establishment,
+        affected_business_unit=affected_business_unit,
+        responsible_business_unit=responsible,
+        activity_subject=subject,
+    )
+    return RoutingResolution(
+        affected_business_unit=affected_business_unit,
+        responsible_business_unit=responsible,
+        activity_subject=subject,
+        operational_unit=operational_unit,
+        routing_status=routing_status,
+        resolution_audit={
+            "affected": affected_audit,
+            "responsible": responsible_audit,
+            "subject": subject_audit,
+            "operational_unit": operational_audit,
+        },
     )

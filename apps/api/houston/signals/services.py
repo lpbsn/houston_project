@@ -50,14 +50,17 @@ from houston.signals.constants import (
     STRUCTURED_SUMMARY_SHORT_MAX_LENGTH,
 )
 from houston.signals.exceptions import (
+    SignalAlreadyMergedError,
+    SignalPermissionError,
     SignalPipelineCandidateError,
     SignalStateError,
     SignalValidationError,
 )
-from houston.signals.models import CandidateSignal, Signal, SignalSourceObservation
+from houston.signals.models import CandidateSignal, ExpectedAction, Signal, SignalSourceObservation
 from houston.signals.routing_resolver import (
     RoutingResolution,
     resolve_candidate_routing,
+    resolve_materialized_routing,
     routing_proposal_from_pipeline_candidate,
 )
 from houston.signals.signal_classification import (
@@ -322,43 +325,69 @@ def aggregate_candidate_into_signal(
     return signal
 
 
-def _apply_expected_action_on_aggregation(
+def _d3_expected_action_decision(
     *,
-    signal: Signal,
-    candidate_row: CandidateSignal,
-) -> bool:
-    """Apply D3 expected_action policy. Returns True if resolution_audit was enriched."""
-    signal_action = signal.expected_action or None
-    candidate_action = candidate_row.expected_action or None
-    audit_block: dict[str, str | None] | None = None
-
+    signal_expected_action: str | None,
+    candidate_expected_action: str | None,
+) -> tuple[str | None, dict[str, str | None] | None]:
+    """Single D3 decision: (effective_signal_expected_action, optional audit_block)."""
+    signal_action = signal_expected_action or None
+    candidate_action = candidate_expected_action or None
     if signal_action is None and candidate_action is not None:
-        signal.expected_action = candidate_action
-        signal.save(update_fields=["expected_action", "updated_at"])
-        audit_block = {
+        return candidate_action, {
             "source": "aggregation_initial_expected_action",
             "signal_expected_action": None,
             "candidate_expected_action": candidate_action,
             "adopted": candidate_action,
         }
-    elif (
+    if (
         signal_action is not None
         and candidate_action is not None
         and signal_action != candidate_action
     ):
-        audit_block = {
+        return signal_action, {
             "source": "aggregation_expected_action_divergence",
             "signal_expected_action": signal_action,
             "candidate_expected_action": candidate_action,
         }
+    return signal_action, None
+
+
+def apply_expected_action_on_aggregation(
+    *,
+    signal: Signal,
+    candidate_expected_action: str | None,
+    candidate_row: CandidateSignal | None = None,
+) -> bool:
+    """Apply D3 expected_action policy. Returns True if resolution_audit was enriched."""
+    effective, audit_block = _d3_expected_action_decision(
+        signal_expected_action=signal.expected_action or None,
+        candidate_expected_action=candidate_expected_action,
+    )
+    if effective != (signal.expected_action or None):
+        signal.expected_action = effective
+        signal.save(update_fields=["expected_action", "updated_at"])
 
     if audit_block is None:
         return False
 
-    resolution_audit = {**(candidate_row.resolution_audit or {})}
-    resolution_audit["expected_action"] = audit_block
-    candidate_row.resolution_audit = resolution_audit
+    if candidate_row is not None:
+        resolution_audit = {**(candidate_row.resolution_audit or {})}
+        resolution_audit["expected_action"] = audit_block
+        candidate_row.resolution_audit = resolution_audit
     return True
+
+
+def _apply_expected_action_on_aggregation(
+    *,
+    signal: Signal,
+    candidate_row: CandidateSignal,
+) -> bool:
+    return apply_expected_action_on_aggregation(
+        signal=signal,
+        candidate_expected_action=candidate_row.expected_action or None,
+        candidate_row=candidate_row,
+    )
 
 
 def _finalize_aggregated_candidate(
@@ -1370,4 +1399,653 @@ def _schedule_signal_invalidation(*, signal: Signal, reason: str) -> None:
         subject_type="signal",
         reason=reason,
         entity_id=signal.id,
+    )
+
+
+QUALIFY_ROUTING_PATCH_FIELDS = frozenset(
+    {
+        "affected_business_unit_id",
+        "responsible_business_unit_id",
+        "activity_subject_id",
+        "operational_unit_id",
+        "issue_focus",
+        "expected_action",
+    }
+)
+
+
+@dataclass(frozen=True)
+class QualifySignalRoutingResult:
+    signal: Signal
+    qualification_outcome: str
+    surviving_signal_id: uuid.UUID
+    merged_signal_id: uuid.UUID | None
+
+
+def _load_active_business_unit(
+    *,
+    establishment_id: uuid.UUID,
+    business_unit_id: uuid.UUID,
+) -> BusinessUnit:
+    business_unit = BusinessUnit.objects.filter(id=business_unit_id).first()
+    if business_unit is None:
+        raise SignalValidationError(
+            "Unknown business unit.",
+            code="invalid_business_unit",
+        )
+    if business_unit.establishment_id != establishment_id:
+        raise SignalValidationError(
+            "Business unit belongs to another establishment.",
+            code="invalid_business_unit",
+        )
+    if not business_unit.active:
+        raise SignalValidationError(
+            "Business unit is inactive.",
+            code="inactive_business_unit",
+        )
+    return business_unit
+
+
+def _load_active_activity_subject(
+    *,
+    establishment_id: uuid.UUID,
+    activity_subject_id: uuid.UUID,
+) -> ActivitySubject:
+    subject = (
+        ActivitySubject.objects.filter(id=activity_subject_id)
+        .select_related("business_unit")
+        .first()
+    )
+    if subject is None:
+        raise SignalValidationError(
+            "Unknown activity subject.",
+            code="invalid_activity_subject",
+        )
+    if subject.establishment_id != establishment_id:
+        raise SignalValidationError(
+            "Activity subject belongs to another establishment.",
+            code="invalid_activity_subject",
+        )
+    if not subject.active or not subject.business_unit.active:
+        raise SignalValidationError(
+            "Activity subject is inactive.",
+            code="inactive_activity_subject",
+        )
+    return subject
+
+
+def _load_active_operational_unit(
+    *,
+    establishment_id: uuid.UUID,
+    operational_unit_id: uuid.UUID,
+) -> OperationalUnit:
+    unit = OperationalUnit.objects.filter(id=operational_unit_id).first()
+    if unit is None:
+        raise SignalValidationError(
+            "Unknown operational unit.",
+            code="invalid_operational_unit",
+        )
+    if unit.establishment_id != establishment_id:
+        raise SignalValidationError(
+            "Operational unit belongs to another establishment.",
+            code="invalid_operational_unit",
+        )
+    if not unit.active:
+        raise SignalValidationError(
+            "Operational unit is inactive.",
+            code="inactive_operational_unit",
+        )
+    return unit
+
+
+def _validate_expected_action_value(value: str | None) -> str | None:
+    if value is None:
+        return None
+    valid = {choice.value for choice in ExpectedAction}
+    if value not in valid:
+        raise SignalValidationError(
+            "Invalid expected_action.",
+            code="invalid_expected_action",
+        )
+    return value
+
+
+def _resolve_patch_entity(
+    *,
+    establishment_id: uuid.UUID,
+    field_name: str,
+    value: uuid.UUID | None,
+) -> BusinessUnit | ActivitySubject | OperationalUnit | None:
+    if value is None:
+        return None
+    if field_name in {"affected_business_unit_id", "responsible_business_unit_id"}:
+        return _load_active_business_unit(
+            establishment_id=establishment_id,
+            business_unit_id=value,
+        )
+    if field_name == "activity_subject_id":
+        return _load_active_activity_subject(
+            establishment_id=establishment_id,
+            activity_subject_id=value,
+        )
+    if field_name == "operational_unit_id":
+        return _load_active_operational_unit(
+            establishment_id=establishment_id,
+            operational_unit_id=value,
+        )
+    raise SignalValidationError(f"Unknown patch field: {field_name}")
+
+
+def _apply_routing_patch_to_base(
+    *,
+    establishment_id: uuid.UUID,
+    base_affected: BusinessUnit | None,
+    base_responsible: BusinessUnit | None,
+    base_subject: ActivitySubject | None,
+    base_operational_unit: OperationalUnit | None,
+    base_issue_focus: str,
+    base_expected_action: str | None,
+    patch: dict[str, uuid.UUID | str | None],
+) -> tuple[
+    BusinessUnit | None,
+    BusinessUnit | None,
+    ActivitySubject | None,
+    OperationalUnit | None,
+    str,
+    str | None,
+]:
+    affected = base_affected
+    responsible = base_responsible
+    subject = base_subject
+    operational_unit = base_operational_unit
+    issue_focus = base_issue_focus
+    expected_action = base_expected_action
+
+    if "affected_business_unit_id" in patch:
+        affected = _resolve_patch_entity(
+            establishment_id=establishment_id,
+            field_name="affected_business_unit_id",
+            value=patch["affected_business_unit_id"],  # type: ignore[arg-type]
+        )  # type: ignore[assignment]
+    if "responsible_business_unit_id" in patch:
+        responsible = _resolve_patch_entity(
+            establishment_id=establishment_id,
+            field_name="responsible_business_unit_id",
+            value=patch["responsible_business_unit_id"],  # type: ignore[arg-type]
+        )  # type: ignore[assignment]
+    if "activity_subject_id" in patch:
+        subject = _resolve_patch_entity(
+            establishment_id=establishment_id,
+            field_name="activity_subject_id",
+            value=patch["activity_subject_id"],  # type: ignore[arg-type]
+        )  # type: ignore[assignment]
+    if "operational_unit_id" in patch:
+        operational_unit = _resolve_patch_entity(
+            establishment_id=establishment_id,
+            field_name="operational_unit_id",
+            value=patch["operational_unit_id"],  # type: ignore[arg-type]
+        )  # type: ignore[assignment]
+    if "issue_focus" in patch:
+        raw = patch["issue_focus"]
+        if raw is None:
+            issue_focus = ""
+        else:
+            issue_focus = normalize_issue_focus(str(raw))
+    if "expected_action" in patch:
+        expected_action = _validate_expected_action_value(
+            None if patch["expected_action"] is None else str(patch["expected_action"])
+        )
+
+    return affected, responsible, subject, operational_unit, issue_focus, expected_action
+
+
+def _qualification_payload_compatible_with_survivor(
+    *,
+    survivor: Signal,
+    patch: dict[str, uuid.UUID | str | None],
+) -> bool:
+    (
+        affected,
+        responsible,
+        subject,
+        operational_unit,
+        issue_focus,
+        requested_expected_action,
+    ) = _apply_routing_patch_to_base(
+        establishment_id=survivor.establishment_id,
+        base_affected=survivor.affected_business_unit,
+        base_responsible=survivor.responsible_business_unit,
+        base_subject=survivor.activity_subject,
+        base_operational_unit=survivor.operational_unit,
+        base_issue_focus=survivor.issue_focus or "",
+        base_expected_action=survivor.expected_action or None,
+        patch=patch,
+    )
+    if (affected.id if affected else None) != survivor.affected_business_unit_id:
+        return False
+    if (responsible.id if responsible else None) != survivor.responsible_business_unit_id:
+        return False
+    if (subject.id if subject else None) != survivor.activity_subject_id:
+        return False
+    if (operational_unit.id if operational_unit else None) != survivor.operational_unit_id:
+        return False
+    if normalize_issue_focus(issue_focus) != normalize_issue_focus(survivor.issue_focus):
+        return False
+    effective_expected, _ = _d3_expected_action_decision(
+        signal_expected_action=survivor.expected_action or None,
+        candidate_expected_action=requested_expected_action,
+    )
+    return effective_expected == (survivor.expected_action or None)
+
+
+def _append_qualification_audit(
+    *,
+    signal: Signal,
+    audit_envelope: dict,
+) -> None:
+    for row in CandidateSignal.objects.filter(result_signal=signal):
+        resolution_audit = {**(row.resolution_audit or {})}
+        events = list(resolution_audit.get("qualification_events") or [])
+        events.append(audit_envelope)
+        resolution_audit["qualification_events"] = events
+        row.resolution_audit = resolution_audit
+        row.save(update_fields=["resolution_audit", "updated_at"])
+
+
+def _qualification_previous_attention_recipient_ids(
+    *,
+    source: Signal,
+    survivor: Signal | None,
+) -> frozenset[uuid.UUID]:
+    """Lot 8 E4 baseline under locks: attention(source) [∪ attention(survivor)]."""
+    from houston.notifications.recipients import resolve_signal_attention_recipients
+
+    ids = {item.id for item in resolve_signal_attention_recipients(signal=source)}
+    if survivor is not None:
+        ids.update(item.id for item in resolve_signal_attention_recipients(signal=survivor))
+    return frozenset(ids)
+
+
+def _lock_signals_by_uuid_order(*signals: Signal) -> list[Signal]:
+    ordered_ids = sorted({signal.id for signal in signals})
+    # of=("self",): avoid FOR UPDATE on nullable outer joins (merged_into).
+    locked = list(
+        Signal.objects.select_for_update(of=("self",))
+        .select_related(
+            "affected_business_unit",
+            "responsible_business_unit",
+            "activity_subject",
+            "operational_unit",
+            "establishment",
+        )
+        .filter(id__in=ordered_ids)
+        .order_by("id")
+    )
+    by_id = {signal.id: signal for signal in locked}
+    return [by_id[signal_id] for signal_id in ordered_ids]
+
+
+def merge_signal_into_resolved(
+    *,
+    source: Signal,
+    target: Signal,
+    resolution_audit: dict,
+    candidate_expected_action: str | None,
+) -> Signal:
+    """Merge source into target. Caller must hold locks on both in UUID order."""
+    if source.id == target.id:
+        return target
+    if source.merged_into_id == target.id:
+        return target
+
+    apply_expected_action_on_aggregation(
+        signal=target,
+        candidate_expected_action=candidate_expected_action,
+        candidate_row=None,
+    )
+
+    for link in SignalSourceObservation.objects.filter(signal=source):
+        record_source_observation_link(
+            signal=target,
+            observation=link.observation,
+            link_type=SignalSourceObservation.LinkType.MERGED_FROM,
+        )
+
+    audit_envelope = {
+        "source": "manual_qualification_merged",
+        "merged_signal_id": str(source.id),
+        "surviving_signal_id": str(target.id),
+        "resolution_audit": resolution_audit,
+    }
+    candidate_ids = list(
+        CandidateSignal.objects.filter(result_signal__in=[source, target]).values_list(
+            "id",
+            flat=True,
+        )
+    )
+    for row in CandidateSignal.objects.filter(id__in=candidate_ids):
+        resolution_audit_payload = {**(row.resolution_audit or {})}
+        events = list(resolution_audit_payload.get("qualification_events") or [])
+        events.append(audit_envelope)
+        resolution_audit_payload["qualification_events"] = events
+        row.resolution_audit = resolution_audit_payload
+        row.save(update_fields=["resolution_audit", "updated_at"])
+    CandidateSignal.objects.filter(result_signal=source).update(result_signal=target)
+
+    source.status = Signal.Status.ARCHIVED
+    source.merged_into = target
+    source.is_pinned = False
+    source.pinned_at = None
+    source.pinned_by_membership = None
+    touch_signal_activity(signal=source)
+    source.save(
+        update_fields=[
+            "status",
+            "merged_into",
+            "is_pinned",
+            "pinned_at",
+            "pinned_by_membership",
+            "last_activity_at",
+            "updated_at",
+        ]
+    )
+    touch_signal_activity(signal=target)
+    target.save(update_fields=["last_activity_at", "updated_at"])
+    _schedule_signal_invalidation(signal=source, reason="signal.updated")
+    _schedule_signal_invalidation(signal=target, reason="signal.updated")
+    return target
+
+
+@transaction.atomic
+def qualify_signal_routing(
+    *,
+    signal: Signal,
+    membership: EstablishmentMembership,
+    patch: dict[str, uuid.UUID | str | None],
+) -> QualifySignalRoutingResult:
+    from houston.signals.permissions import can_qualify_routing
+
+    unknown = set(patch) - QUALIFY_ROUTING_PATCH_FIELDS
+    if unknown:
+        raise SignalValidationError(
+            f"Unsupported qualify fields: {sorted(unknown)}",
+            code="invalid_qualify_fields",
+        )
+
+    source = (
+        Signal.objects.select_related(
+            "affected_business_unit",
+            "responsible_business_unit",
+            "activity_subject",
+            "operational_unit",
+            "merged_into",
+            "establishment",
+            "merged_into__affected_business_unit",
+            "merged_into__responsible_business_unit",
+            "merged_into__activity_subject",
+            "merged_into__operational_unit",
+        )
+        .filter(id=signal.id, establishment_id=membership.establishment_id)
+        .first()
+    )
+    if source is None:
+        raise SignalValidationError("Signal not found.", code="signal_not_found")
+
+    # 1–2: idempotence before lifecycle when already merged
+    if source.merged_into_id is not None:
+        if membership.role == EstablishmentMembership.Role.STAFF:
+            raise SignalPermissionError("Permission denied.")
+        from houston.establishments.role_constants import ADMIN_ROLES
+        from houston.signals.permissions import signal_visible_in_membership_scope
+        from houston.signals.selectors import get_signal_for_detail
+
+        survivor = get_signal_for_detail(
+            membership=membership,
+            signal_id=source.merged_into_id,
+        )
+        if survivor is None:
+            raise SignalPermissionError("Permission denied.")
+        # Detail allows general open reads; qualify idempotence still requires BU scope.
+        if membership.role not in ADMIN_ROLES and not signal_visible_in_membership_scope(
+            membership,
+            survivor,
+        ):
+            raise SignalPermissionError("Permission denied.")
+        if _qualification_payload_compatible_with_survivor(survivor=survivor, patch=patch):
+            return QualifySignalRoutingResult(
+                signal=survivor,
+                qualification_outcome="merged",
+                surviving_signal_id=survivor.id,
+                merged_signal_id=source.id,
+            )
+        raise SignalAlreadyMergedError("Signal already merged into another signal.")
+
+    # 3: lifecycle active only when not already merged
+    if source.status not in ACTIVE_SIGNAL_STATUSES:
+        raise SignalStateError("Only active signals can be qualified.")
+
+    (
+        affected,
+        responsible,
+        subject,
+        operational_unit,
+        issue_focus,
+        expected_action,
+    ) = _apply_routing_patch_to_base(
+        establishment_id=source.establishment_id,
+        base_affected=source.affected_business_unit,
+        base_responsible=source.responsible_business_unit,
+        base_subject=source.activity_subject,
+        base_operational_unit=source.operational_unit,
+        base_issue_focus=source.issue_focus or "",
+        base_expected_action=source.expected_action or None,
+        patch=patch,
+    )
+
+    # 4: live RBAC with proposed dimensions
+    if not can_qualify_routing(
+        membership,
+        source,
+        proposed_affected_business_unit=affected,
+        proposed_responsible_business_unit=responsible,
+        proposed_activity_subject=subject,
+    ):
+        raise SignalPermissionError("Permission denied.")
+
+    try:
+        resolution = resolve_materialized_routing(
+            establishment=source.establishment,
+            affected_business_unit=affected,
+            responsible_business_unit=responsible,
+            activity_subject=subject,
+            operational_unit=operational_unit,
+        )
+    except InvalidSignalClassificationError as exc:
+        raise SignalValidationError(str(exc), code="invalid_routing") from exc
+
+    normalized_issue_focus = normalize_issue_focus(issue_focus)
+    if resolution.routing_status == Signal.RoutingStatus.RESOLVED:
+        normalized_issue_focus = require_normalized_issue_focus(normalized_issue_focus)
+
+    resolved_taxonomy = _resolved_taxonomy_from_resolution(resolution)
+    collision: Signal | None = None
+    if resolution.routing_status == Signal.RoutingStatus.RESOLVED:
+        collision = find_active_signal_for_aggregation(
+            establishment_id=source.establishment_id,
+            resolved=resolved_taxonomy,
+            issue_focus=normalized_issue_focus,
+            for_update=False,
+        )
+        if collision is not None and collision.id == source.id:
+            collision = None
+
+    if collision is not None:
+        locked = _lock_signals_by_uuid_order(source, collision)
+        source = next(item for item in locked if item.id == source.id)
+        collision = next(item for item in locked if item.id == collision.id)
+        if source.merged_into_id is not None:
+            survivor = source.merged_into
+            assert survivor is not None
+            if _qualification_payload_compatible_with_survivor(survivor=survivor, patch=patch):
+                return QualifySignalRoutingResult(
+                    signal=survivor,
+                    qualification_outcome="merged",
+                    surviving_signal_id=survivor.id,
+                    merged_signal_id=source.id,
+                )
+            raise SignalAlreadyMergedError("Signal already merged into another signal.")
+        if source.status not in ACTIVE_SIGNAL_STATUSES:
+            raise SignalStateError("Only active signals can be qualified.")
+        collision = find_active_signal_for_aggregation(
+            establishment_id=source.establishment_id,
+            resolved=resolved_taxonomy,
+            issue_focus=normalized_issue_focus,
+            for_update=True,
+        )
+        if collision is None or collision.id == source.id:
+            collision = None
+        else:
+            locked = _lock_signals_by_uuid_order(source, collision)
+            source = next(item for item in locked if item.id == source.id)
+            collision = next(item for item in locked if item.id == collision.id)
+
+    if collision is not None:
+        # Lot 8 E4: under source+survivor locks, baseline = attention(source) ∪ attention(survivor).
+        previous_attention_recipient_ids = _qualification_previous_attention_recipient_ids(
+            source=source,
+            survivor=collision,
+        )
+        survivor = merge_signal_into_resolved(
+            source=source,
+            target=collision,
+            resolution_audit={
+                **resolution.resolution_audit,
+                "event": "manual_qualification_merged",
+            },
+            candidate_expected_action=expected_action,
+        )
+        from houston.notifications.scheduling import schedule_signal_qualified_notification
+
+        schedule_signal_qualified_notification(
+            signal_id=survivor.id,
+            actor_membership_id=membership.id,
+            previous_recipient_ids=previous_attention_recipient_ids,
+        )
+        return QualifySignalRoutingResult(
+            signal=survivor,
+            qualification_outcome="merged",
+            surviving_signal_id=survivor.id,
+            merged_signal_id=source.id,
+        )
+
+    # Update in place (lock source alone)
+    locked_source = _lock_signals_by_uuid_order(source)[0]
+    if locked_source.merged_into_id is not None:
+        survivor = locked_source.merged_into
+        assert survivor is not None
+        if _qualification_payload_compatible_with_survivor(survivor=survivor, patch=patch):
+            return QualifySignalRoutingResult(
+                signal=survivor,
+                qualification_outcome="merged",
+                surviving_signal_id=survivor.id,
+                merged_signal_id=locked_source.id,
+            )
+        raise SignalAlreadyMergedError("Signal already merged into another signal.")
+    if locked_source.status not in ACTIVE_SIGNAL_STATUSES:
+        raise SignalStateError("Only active signals can be qualified.")
+
+    previous_attention_recipient_ids = _qualification_previous_attention_recipient_ids(
+        source=locked_source,
+        survivor=None,
+    )
+
+    locked_source.affected_business_unit = resolution.affected_business_unit
+    locked_source.responsible_business_unit = resolution.responsible_business_unit
+    locked_source.activity_subject = resolution.activity_subject
+    locked_source.operational_unit = resolution.operational_unit
+    locked_source.routing_status = resolution.routing_status
+    locked_source.issue_focus = normalized_issue_focus
+    try:
+        with transaction.atomic():
+            touch_signal_activity(signal=locked_source)
+            locked_source.save(
+                update_fields=[
+                    "affected_business_unit",
+                    "responsible_business_unit",
+                    "activity_subject",
+                    "operational_unit",
+                    "routing_status",
+                    "issue_focus",
+                    "last_activity_at",
+                    "updated_at",
+                ]
+            )
+    except IntegrityError as exc:
+        if not _is_active_aggregation_unique_violation(exc):
+            raise
+        collision = find_active_signal_for_aggregation(
+            establishment_id=locked_source.establishment_id,
+            resolved=resolved_taxonomy,
+            issue_focus=normalized_issue_focus,
+            for_update=True,
+        )
+        if collision is None or collision.id == locked_source.id:
+            raise
+        locked = _lock_signals_by_uuid_order(locked_source, collision)
+        locked_source = next(item for item in locked if item.id == locked_source.id)
+        collision = next(item for item in locked if item.id == collision.id)
+        previous_attention_recipient_ids = _qualification_previous_attention_recipient_ids(
+            source=locked_source,
+            survivor=collision,
+        )
+        survivor = merge_signal_into_resolved(
+            source=locked_source,
+            target=collision,
+            resolution_audit={
+                **resolution.resolution_audit,
+                "event": "manual_qualification_merged",
+            },
+            candidate_expected_action=expected_action,
+        )
+        from houston.notifications.scheduling import schedule_signal_qualified_notification
+
+        schedule_signal_qualified_notification(
+            signal_id=survivor.id,
+            actor_membership_id=membership.id,
+            previous_recipient_ids=previous_attention_recipient_ids,
+        )
+        return QualifySignalRoutingResult(
+            signal=survivor,
+            qualification_outcome="merged",
+            surviving_signal_id=survivor.id,
+            merged_signal_id=locked_source.id,
+        )
+
+    apply_expected_action_on_aggregation(
+        signal=locked_source,
+        candidate_expected_action=expected_action,
+        candidate_row=None,
+    )
+    _append_qualification_audit(
+        signal=locked_source,
+        audit_envelope={
+            "source": "manual_qualification",
+            "signal_id": str(locked_source.id),
+            "resolution_audit": resolution.resolution_audit,
+        },
+    )
+    _schedule_signal_invalidation(signal=locked_source, reason="signal.updated")
+    from houston.notifications.scheduling import schedule_signal_qualified_notification
+
+    schedule_signal_qualified_notification(
+        signal_id=locked_source.id,
+        actor_membership_id=membership.id,
+        previous_recipient_ids=previous_attention_recipient_ids,
+    )
+    locked_source.refresh_from_db()
+    return QualifySignalRoutingResult(
+        signal=locked_source,
+        qualification_outcome="updated",
+        surviving_signal_id=locked_source.id,
+        merged_signal_id=None,
     )

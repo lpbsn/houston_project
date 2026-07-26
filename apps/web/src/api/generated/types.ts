@@ -1481,6 +1481,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/signals/{signal_id}/qualify-routing/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_signals_qualify_routing_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/signals/{signal_id}/resolve/": {
         parameters: {
             query?: never;
@@ -3505,6 +3521,7 @@ export interface components {
             can_cancel: boolean;
             can_resolve: boolean;
             can_create_linked_action_plan: boolean;
+            can_qualify_routing: boolean;
         };
         /**
          * @description * `info` - Info
@@ -3555,6 +3572,12 @@ export interface components {
             field?: string;
             key?: string;
         };
+        /**
+         * @description * `updated` - updated
+         *     * `merged` - merged
+         * @enum {string}
+         */
+        QualificationOutcomeEnum: "updated" | "merged";
         RealtimeWsTicketResponse: {
             ticket: string;
             expires_in: number;
@@ -3726,6 +3749,57 @@ export interface components {
             last_activity_at: string;
             /** Format: date-time */
             created_at: string;
+        };
+        SignalQualifyRoutingRequest: {
+            /** Format: uuid */
+            affected_business_unit_id?: string | null;
+            /** Format: uuid */
+            responsible_business_unit_id?: string | null;
+            /** Format: uuid */
+            activity_subject_id?: string | null;
+            /** Format: uuid */
+            operational_unit_id?: string | null;
+            issue_focus?: string | null;
+            expected_action?: string | null;
+        };
+        SignalQualifyRoutingResponse: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            structured_summary_short: string;
+            status: string;
+            is_pinned: boolean;
+            /** Format: uuid */
+            affected_business_unit_id?: string | null;
+            affected_business_unit_key?: string | null;
+            affected_business_unit_label?: string | null;
+            /** Format: uuid */
+            responsible_business_unit_id?: string | null;
+            responsible_business_unit_key?: string | null;
+            responsible_business_unit_label?: string | null;
+            /** Format: uuid */
+            activity_subject_id?: string | null;
+            activity_subject_normalized_name?: string | null;
+            activity_subject_label?: string | null;
+            operational_unit_key: string | null;
+            location_text: string;
+            media_count: number;
+            /** Format: date-time */
+            last_activity_at: string;
+            /** Format: date-time */
+            created_at: string;
+            reporter_display_name?: string | null;
+            aggregation_count: number;
+            permission_hints: components["schemas"]["PermissionHints"];
+            structured_summary: string;
+            source_context: components["schemas"]["SourceContext"];
+            media_items: components["schemas"]["SignalDetailMediaItem"][];
+            linked_action_plan_executions: components["schemas"]["SignalLinkedActionPlanExecution"][];
+            qualification_outcome: components["schemas"]["QualificationOutcomeEnum"];
+            /** Format: uuid */
+            surviving_signal_id: string;
+            /** Format: uuid */
+            merged_signal_id: string | null;
         };
         SourceContext: {
             /** Format: date-time */
@@ -8696,6 +8770,8 @@ export interface operations {
                 business_unit_ids?: string;
                 /** @description Opaque pagination cursor from a previous response next_cursor. */
                 cursor?: string;
+                /** @description When true, restrict to routing_status=unassigned among visible signals. Owner/Director/Manager only; Staff receives 403. */
+                needs_qualification?: boolean;
                 page_size?: number;
                 /** @description Comma-separated feed statuses: open, in_progress, resolved (max 3). */
                 statuses?: string;
@@ -8962,6 +9038,66 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_signals_qualify_routing_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                signal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SignalQualifyRoutingRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SignalQualifyRoutingRequest"];
+                "multipart/form-data": components["schemas"]["SignalQualifyRoutingRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalQualifyRoutingResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

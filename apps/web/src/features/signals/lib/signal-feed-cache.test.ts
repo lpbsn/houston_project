@@ -41,6 +41,7 @@ function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem 
       can_cancel: false,
       can_resolve: false,
       can_create_linked_action_plan: false,
+      can_qualify_routing: false,
     },
     ...overrides,
   }
@@ -72,6 +73,7 @@ function buildDetail(overrides: Partial<SignalDetail> = {}): SignalDetail {
       can_cancel: false,
       can_resolve: false,
       can_create_linked_action_plan: false,
+      can_qualify_routing: false,
     },
     source_context: { type: 'observation', observation_id: 'obs-1' },
     media_items: [],

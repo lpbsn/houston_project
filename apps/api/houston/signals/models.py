@@ -107,6 +107,13 @@ class Signal(BaseModel):
         blank=True,
         default="",
     )
+    merged_into = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        related_name="merged_sources",
+        null=True,
+        blank=True,
+    )
     last_activity_at = models.DateTimeField()
 
     class Meta:
@@ -288,6 +295,7 @@ class SignalSourceObservation(BaseModel):
     class LinkType(models.TextChoices):
         CREATED_FROM = "created_from", "Created from"
         AGGREGATED_FROM = "aggregated_from", "Aggregated from"
+        MERGED_FROM = "merged_from", "Merged from"
 
     signal = models.ForeignKey(
         Signal,
