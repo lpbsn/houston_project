@@ -63,9 +63,7 @@ export function SignalFeedPage({ onOpenSignal, onNavigate }: SignalFeedPageProps
     establishmentId,
     viewMode,
     filters: normalizedFilters,
-    onQualifyRequest: (signalId) => {
-      void qualifySheet.openForSignal(signalId)
-    },
+    onQualifyRequest: (signalId) => qualifySheet.openForSignal(signalId),
   })
 
   const feedItems =

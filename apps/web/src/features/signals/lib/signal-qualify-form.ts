@@ -331,3 +331,30 @@ export function buildQualifyRoutingPatch(
 export function hasQualifyRoutingPatch(patch: SignalQualifyRoutingRequest): boolean {
   return Object.keys(patch).length > 0
 }
+
+/** Effective draft mirrors post-PATCH routing: resolved iff all three dims set. */
+export function draftResolvesRouting(draft: SignalQualifyFormState): boolean {
+  return (
+    draft.affectedBusinessUnitId !== null &&
+    draft.responsibleBusinessUnitId !== null &&
+    draft.activitySubjectId !== null
+  )
+}
+
+/**
+ * UX gate mirroring backend post-PATCH rules:
+ * non-empty patch required; issue_focus required only when effective routing is resolved.
+ */
+export function canSubmitQualifyRoutingForm(
+  baseline: SignalQualifyBaseline,
+  draft: SignalQualifyFormState,
+): boolean {
+  const patch = buildQualifyRoutingPatch(baseline, draft)
+  if (!hasQualifyRoutingPatch(patch)) {
+    return false
+  }
+  if (draftResolvesRouting(draft) && normalizeFocus(draft.issueFocus).length === 0) {
+    return false
+  }
+  return true
+}

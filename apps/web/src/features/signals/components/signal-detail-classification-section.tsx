@@ -15,6 +15,7 @@ type SignalDetailClassificationSectionProps = {
   }
   onQualify?: () => void
   showQualifyAction?: boolean
+  qualifyErrorMessage?: string | null
 }
 
 function ClassificationField({ label, value }: { label: string; value: string }) {
@@ -32,6 +33,7 @@ export function SignalDetailClassificationSection({
   signal,
   onQualify,
   showQualifyAction = false,
+  qualifyErrorMessage = null,
 }: SignalDetailClassificationSectionProps) {
   const classification = formatSignalClassification(signal)
   const location = signal.location_text?.trim()
@@ -78,6 +80,11 @@ export function SignalDetailClassificationSection({
           </button>
         ) : null}
       </div>
+      {showQualifyAction && qualifyErrorMessage ? (
+        <p className="mt-2 text-sm text-destructive" role="alert">
+          {qualifyErrorMessage}
+        </p>
+      ) : null}
       <div className="mt-3 space-y-3">
         {responsibleValue ? (
           <ClassificationField label="Pôle responsable" value={responsibleValue} />

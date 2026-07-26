@@ -12,8 +12,8 @@ import {
   applyResponsibleSelection,
   applySubjectSelection,
   buildQualifyRoutingPatch,
+  canSubmitQualifyRoutingForm,
   createQualifyFormState,
-  hasQualifyRoutingPatch,
   listAffectedBusinessUnitOptions,
   listAllRoutableSubjectOptions,
   listResponsibleBusinessUnitOptions,
@@ -147,7 +147,8 @@ export function SignalQualifyRoutingSheet({
   }, [allSubjects, subjectOptions])
 
   const patch = buildQualifyRoutingPatch(baseline, draft)
-  const canSubmit = hasQualifyRoutingPatch(patch) && !isPending && !optionsQuery.isLoading
+  const canSubmit =
+    canSubmitQualifyRoutingForm(baseline, draft) && !isPending && !optionsQuery.isLoading
 
   function handleSubjectChange(subjectId: string | null) {
     const subject = subjectsForDerivation.find((item) => item.id === subjectId) ?? null

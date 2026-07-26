@@ -30,4 +30,13 @@ describe('mapSignalQualifyError', () => {
       }).message,
     ).toBe('Subject outside responsible.')
   })
+
+  it('maps invalid_issue_focus as validation', () => {
+    expect(
+      mapSignalQualifyError({
+        code: 'invalid_issue_focus',
+        detail: 'issue_focus is required when routing is resolved.',
+      }).message,
+    ).toBe('issue_focus is required when routing is resolved.')
+  })
 })

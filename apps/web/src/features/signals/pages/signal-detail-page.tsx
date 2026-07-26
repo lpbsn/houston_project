@@ -129,6 +129,9 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
           <SignalDetailClassificationSection
             signal={signal}
             showQualifyAction={canQualify}
+            qualifyErrorMessage={
+              !qualifySheet.open ? qualifySheet.errorMessage : null
+            }
             onQualify={() => void qualifySheet.openForSignal(signalId)}
           />
 

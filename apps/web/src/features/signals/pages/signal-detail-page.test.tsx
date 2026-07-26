@@ -86,16 +86,21 @@ vi.mock('../hooks', () => ({
   useSignalDetailQuery: () => detailQueryMock(),
 }))
 
-const openForSignalMock = vi.fn()
+const { openForSignalMock, qualifySheetState } = vi.hoisted(() => ({
+  openForSignalMock: vi.fn(),
+  qualifySheetState: {
+    open: false,
+    opening: false,
+    signalId: null as string | null,
+    signal: null,
+    isPending: false,
+    errorMessage: null as string | null,
+  },
+}))
 
 vi.mock('../hooks/use-signal-qualify-sheet', () => ({
   useSignalQualifySheet: () => ({
-    open: false,
-    opening: false,
-    signalId: null,
-    signal: null,
-    isPending: false,
-    errorMessage: null,
+    ...qualifySheetState,
     openForSignal: openForSignalMock,
     close: vi.fn(),
     submit: vi.fn(),
@@ -124,6 +129,12 @@ function getCommentsTab() {
 }
 
 beforeEach(() => {
+  qualifySheetState.open = false
+  qualifySheetState.opening = false
+  qualifySheetState.signalId = null
+  qualifySheetState.signal = null
+  qualifySheetState.isPending = false
+  qualifySheetState.errorMessage = null
   detailQueryMock.mockReturnValue({
     isLoading: false,
     isError: false,
@@ -270,6 +281,32 @@ describe('SignalDetailPage tabs', () => {
     expect(screen.getByText('À qualifier')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Qualifier' }))
     expect(openForSignalMock).toHaveBeenCalledWith('signal-1')
+  })
+
+  it('shows qualify open error near CTA when sheet is closed', () => {
+    qualifySheetState.errorMessage = 'Vous n’avez pas le droit de qualifier cette observation.'
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({
+        routing_status: 'unassigned',
+        permission_hints: {
+          can_pin: false,
+          can_cancel: false,
+          can_resolve: false,
+          can_create_linked_action_plan: false,
+          can_qualify_routing: true,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    expect(screen.getByRole('alert')).toBeTruthy()
+    expect(
+      screen.getByText('Vous n’avez pas le droit de qualifier cette observation.'),
+    ).toBeTruthy()
   })
 })
 

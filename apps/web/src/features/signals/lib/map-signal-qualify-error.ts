@@ -50,6 +50,7 @@ export function mapSignalQualifyError(options: {
     code === 'inactive_operational_unit' ||
     code === 'invalid_expected_action' ||
     code === 'invalid_qualify_fields' ||
+    code === 'invalid_issue_focus' ||
     code === 'signal_validation_error'
   ) {
     return {

@@ -231,6 +231,112 @@ def test_subject_corrects_responsible(api_client):
     assert signal.routing_status == Signal.RoutingStatus.RESOLVED
 
 
+def test_resolved_requires_effective_issue_focus(api_client):
+    """Lot 9: resolved final without effective focus → 400 invalid_issue_focus, no writes."""
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
+    assert taxonomy.maintenance is not None
+    assert taxonomy.lighting_subject is not None
+    signal = _unassigned_signal(membership)
+    updated_at_before = signal.updated_at
+    token = login(api_client, user=membership.user)
+    dims = {
+        "affected_business_unit_id": str(taxonomy.restaurant.id),
+        "responsible_business_unit_id": str(taxonomy.maintenance.id),
+        "activity_subject_id": str(taxonomy.lighting_subject.id),
+    }
+
+    omitted = api_client.post(
+        _qualify_url(membership.establishment_id, signal.id),
+        data=dims,
+        format="json",
+        **auth_headers(token),
+    )
+    assert omitted.status_code == 400
+    assert omitted.json()["code"] == "invalid_issue_focus"
+    signal.refresh_from_db()
+    assert signal.routing_status == Signal.RoutingStatus.UNASSIGNED
+    assert signal.affected_business_unit_id is None
+    assert signal.issue_focus == ""
+    assert signal.updated_at == updated_at_before
+    assert SignalSourceObservation.objects.filter(signal=signal).count() == 0
+    assert (
+        SignalSourceObservation.objects.filter(
+            link_type=SignalSourceObservation.LinkType.MERGED_FROM
+        ).count()
+        == 0
+    )
+
+    for clear_value in (None, "", "   "):
+        cleared = api_client.post(
+            _qualify_url(membership.establishment_id, signal.id),
+            data={**dims, "issue_focus": clear_value},
+            format="json",
+            **auth_headers(token),
+        )
+        assert cleared.status_code == 400
+        assert cleared.json()["code"] == "invalid_issue_focus"
+        signal.refresh_from_db()
+        assert signal.routing_status == Signal.RoutingStatus.UNASSIGNED
+        assert signal.affected_business_unit_id is None
+
+
+def test_unassigned_allows_empty_issue_focus(api_client):
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
+    signal = _unassigned_signal(membership)
+    token = login(api_client, user=membership.user)
+
+    omitted = api_client.post(
+        _qualify_url(membership.establishment_id, signal.id),
+        data={"affected_business_unit_id": str(taxonomy.restaurant.id)},
+        format="json",
+        **auth_headers(token),
+    )
+    assert omitted.status_code == 200
+    signal.refresh_from_db()
+    assert signal.routing_status == Signal.RoutingStatus.UNASSIGNED
+    assert signal.issue_focus == ""
+
+    cleared = api_client.post(
+        _qualify_url(membership.establishment_id, signal.id),
+        data={"issue_focus": None},
+        format="json",
+        **auth_headers(token),
+    )
+    assert cleared.status_code == 200
+    signal.refresh_from_db()
+    assert signal.routing_status == Signal.RoutingStatus.UNASSIGNED
+    assert signal.issue_focus == ""
+
+
+def test_resolved_omitted_issue_focus_keeps_baseline(api_client):
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
+    assert taxonomy.maintenance is not None
+    assert taxonomy.lighting_subject is not None
+    focus = normalize_issue_focus("baseline focus")
+    signal = _unassigned_signal(membership)
+    signal.issue_focus = focus
+    signal.save(update_fields=["issue_focus", "updated_at"])
+    token = login(api_client, user=membership.user)
+
+    response = api_client.post(
+        _qualify_url(membership.establishment_id, signal.id),
+        data={
+            "affected_business_unit_id": str(taxonomy.restaurant.id),
+            "responsible_business_unit_id": str(taxonomy.maintenance.id),
+            "activity_subject_id": str(taxonomy.lighting_subject.id),
+        },
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    signal.refresh_from_db()
+    assert signal.routing_status == Signal.RoutingStatus.RESOLVED
+    assert signal.issue_focus == focus
+
+
 def test_manager_can_qualify_unassigned_outside_bu_scope(api_client):
     """Lot 8 H5: Manager triage is establishment-wide for unassigned signals."""
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)

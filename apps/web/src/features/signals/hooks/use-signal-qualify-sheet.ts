@@ -13,6 +13,10 @@ import {
 import { mapSignalQualifyError } from '../lib/map-signal-qualify-error'
 import type { SignalQualifyRoutingRequest } from '../types'
 
+export type OpenSignalQualifySheetResult =
+  | { ok: true }
+  | { ok: false; message: string }
+
 type UseSignalQualifySheetOptions = {
   establishmentId: string | null
   onNavigate: (pathname: string, options?: { replace?: boolean }) => void
@@ -31,16 +35,18 @@ export function useSignalQualifySheet({
   const detailQuery = useSignalDetailQuery(establishmentId, signalId)
   const mutation = useQualifySignalRoutingMutation(establishmentId)
 
-  async function openForSignal(nextSignalId: string) {
+  async function openForSignal(nextSignalId: string): Promise<OpenSignalQualifySheetResult> {
     if (!establishmentId) {
-      return
+      return { ok: false, message: 'La qualification a échoué.' }
     }
     setErrorMessage(null)
     setSignalId(nextSignalId)
     setOpening(true)
     try {
       await prefetchSignalDetail(queryClient, establishmentId, nextSignalId)
+      setErrorMessage(null)
       setOpen(true)
+      return { ok: true }
     } catch (error) {
       const mapped = mapSignalQualifyError({
         code: error instanceof SignalsApiError ? error.code : null,
@@ -49,6 +55,7 @@ export function useSignalQualifySheet({
       })
       setErrorMessage(mapped.message)
       setOpen(false)
+      return { ok: false, message: mapped.message }
     } finally {
       setOpening(false)
     }
@@ -86,12 +93,14 @@ export function useSignalQualifySheet({
       if (result.qualification_outcome === 'merged') {
         const sourceId = signalId
         setOpen(false)
+        setErrorMessage(null)
         setSignalId(null)
         handleMergedNavigation(sourceId, result.surviving_signal_id)
         return
       }
       notifySuccess({ message: 'Routage mis à jour.', kind: 'updated' })
       setOpen(false)
+      setErrorMessage(null)
       setSignalId(null)
     } catch (error) {
       if (error instanceof SignalsApiError) {
@@ -103,6 +112,7 @@ export function useSignalQualifySheet({
         if (error.code === 'already_merged' && mapped.survivingSignalId) {
           const sourceId = signalId
           setOpen(false)
+          setErrorMessage(null)
           setSignalId(null)
           handleMergedNavigation(sourceId, mapped.survivingSignalId)
           return

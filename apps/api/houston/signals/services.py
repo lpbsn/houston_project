@@ -1865,7 +1865,13 @@ def qualify_signal_routing(
 
     normalized_issue_focus = normalize_issue_focus(issue_focus)
     if resolution.routing_status == Signal.RoutingStatus.RESOLVED:
-        normalized_issue_focus = require_normalized_issue_focus(normalized_issue_focus)
+        try:
+            normalized_issue_focus = require_normalized_issue_focus(normalized_issue_focus)
+        except SignalPipelineCandidateError as exc:
+            raise SignalValidationError(
+                "issue_focus is required when routing is resolved.",
+                code="invalid_issue_focus",
+            ) from exc
 
     resolved_taxonomy = _resolved_taxonomy_from_resolution(resolution)
     collision: Signal | None = None

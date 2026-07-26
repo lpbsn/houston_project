@@ -4,7 +4,9 @@ import {
   applyResponsibleSelection,
   applySubjectSelection,
   buildQualifyRoutingPatch,
+  canSubmitQualifyRoutingForm,
   createQualifyFormState,
+  draftResolvesRouting,
   hasQualifyRoutingPatch,
   listAffectedBusinessUnitOptions,
   listResponsibleBusinessUnitOptions,
@@ -224,5 +226,42 @@ describe('buildQualifyRoutingPatch Lot 7', () => {
       responsible_business_unit_id: 'bu-kitchen',
       activity_subject_id: 'as-stock',
     })
+  })
+})
+
+describe('canSubmitQualifyRoutingForm effective focus', () => {
+  it('blocks resolved draft without issue focus', () => {
+    const baseline = createQualifyFormState({})
+    const draft = createQualifyFormState({
+      affected_business_unit_id: 'bu-kitchen',
+      responsible_business_unit_id: 'bu-maint',
+      activity_subject_id: 'as-light',
+      issue_focus: '',
+    })
+    expect(draftResolvesRouting(draft)).toBe(true)
+    expect(canSubmitQualifyRoutingForm(baseline, draft)).toBe(false)
+  })
+
+  it('allows unassigned draft with empty focus when patch non-empty', () => {
+    const baseline = createQualifyFormState({})
+    const draft = createQualifyFormState({
+      affected_business_unit_id: 'bu-kitchen',
+      issue_focus: '',
+    })
+    expect(draftResolvesRouting(draft)).toBe(false)
+    expect(canSubmitQualifyRoutingForm(baseline, draft)).toBe(true)
+  })
+
+  it('allows resolved draft when baseline focus is kept (omitted)', () => {
+    const baseline = createQualifyFormState({
+      issue_focus: 'lampe',
+    })
+    const draft = createQualifyFormState({
+      affected_business_unit_id: 'bu-kitchen',
+      responsible_business_unit_id: 'bu-maint',
+      activity_subject_id: 'as-light',
+      issue_focus: 'lampe',
+    })
+    expect(canSubmitQualifyRoutingForm(baseline, draft)).toBe(true)
   })
 })
