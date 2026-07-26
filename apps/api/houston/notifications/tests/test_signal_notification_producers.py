@@ -264,7 +264,8 @@ def test_signal_out_of_scope_notifies_admins_with_assigned_pole_title():
     _assert_mutual_exclusivity(notifications)
 
 
-def test_signal_assigned_admin_fallback_manager_without_scope_not_notified():
+def test_signal_assigned_admin_fallback_includes_managers_in_triage():
+    """When no pole-scoped staff exist, fallback triage includes Managers (Lot 8)."""
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     director = build_api_membership_on_establishment(
         owner,
@@ -282,8 +283,7 @@ def test_signal_assigned_admin_fallback_manager_without_scope_not_notified():
     schedule_signal_created_notification(signal_id=signal.id)
 
     notifications = _notifications_for_signal(signal_id=signal.id)
-    assert _recipient_ids(notifications) == {owner.id, director.id}
-    assert manager.id not in _recipient_ids(notifications)
+    assert _recipient_ids(notifications) == {owner.id, director.id, manager.id}
     assert all(item.event_key == Notification.EventKey.SIGNAL_CREATED for item in notifications)
 
 
@@ -341,11 +341,20 @@ def test_signal_assigned_admin_fallback_inactive_director_excluded():
     assert notifications[0].event_key == Notification.EventKey.SIGNAL_CREATED
 
 
-def test_signal_truly_unassigned_notifies_admins_unassigned_global():
+def test_signal_truly_unassigned_notifies_triage_roles_unassigned_global():
+    """Lot 8 E1: total unassigned notifies Owner, Director, and Managers."""
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     director = build_api_membership_on_establishment(
         owner,
         role=EstablishmentMembership.Role.DIRECTOR,
+    )
+    manager = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    staff = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
     )
     signal = Signal.objects.create(
         establishment=owner.establishment,
@@ -365,8 +374,9 @@ def test_signal_truly_unassigned_notifies_admins_unassigned_global():
     schedule_signal_created_notification(signal_id=signal.id)
 
     notifications = _notifications_for_signal(signal_id=signal.id)
-    assert len(notifications) == 2
-    assert _recipient_ids(notifications) == {owner.id, director.id}
+    assert len(notifications) == 3
+    assert _recipient_ids(notifications) == {owner.id, director.id, manager.id}
+    assert staff.id not in _recipient_ids(notifications)
     assert all(
         item.event_key == Notification.EventKey.SIGNAL_CREATED_UNASSIGNED_GLOBAL
         for item in notifications
@@ -659,3 +669,264 @@ def test_signal_notification_invalidate_payload_allowlist():
         }
         assert forbidden.isdisjoint(mock_notify.call_args.kwargs.keys())
         assert forbidden.isdisjoint(payload.keys())
+
+
+def test_partial_unassigned_create_notifies_triage_and_pole_staff():
+    """Lot 8 E2: partial unassigned → Owner/Director/Managers + scoped pole members."""
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    director = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.DIRECTOR,
+    )
+    manager = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
+    assign_business_unit_scope(staff, taxonomy.restaurant)
+    signal = Signal.objects.create(
+        establishment=owner.establishment,
+        affected_business_unit=taxonomy.restaurant,
+        responsible_business_unit=None,
+        activity_subject=None,
+        title="Sensitive signal title",
+        structured_summary="Sensitive observation summary",
+        issue_focus="partial focus",
+        status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.UNASSIGNED,
+        last_activity_at=timezone.now(),
+    )
+
+    from houston.notifications.scheduling import schedule_signal_created_notification
+
+    schedule_signal_created_notification(signal_id=signal.id)
+
+    notifications = _notifications_for_signal(signal_id=signal.id)
+    assert _recipient_ids(notifications) == {owner.id, director.id, manager.id, staff.id}
+    assert all(item.event_key == Notification.EventKey.SIGNAL_CREATED for item in notifications)
+
+
+def test_pin_total_unassigned_notifies_triage_excluding_actor():
+    """Lot 8 E3: pin without BU → triage roles, actor excluded."""
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    director = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.DIRECTOR,
+    )
+    manager = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    signal = Signal.objects.create(
+        establishment=owner.establishment,
+        affected_business_unit=None,
+        responsible_business_unit=None,
+        activity_subject=None,
+        title="Sensitive signal title",
+        structured_summary="Sensitive observation summary",
+        issue_focus="unassigned focus",
+        status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.UNASSIGNED,
+        last_activity_at=timezone.now(),
+    )
+    Notification.objects.filter(subject_id=signal.id).delete()
+
+    pin_signal(signal=signal, membership=manager)
+
+    notifications = _notifications_for_signal(signal_id=signal.id)
+    assert _recipient_ids(notifications) == {owner.id, director.id}
+    assert all(item.event_key == Notification.EventKey.SIGNAL_PINNED for item in notifications)
+
+
+def test_partial_unassigned_with_subject_notifies_triage_and_pole():
+    """Lot 8 E2: unassigned subject+responsible without affected → triage ∪ pole."""
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    director = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.DIRECTOR,
+    )
+    manager = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
+    assert taxonomy.maintenance is not None
+    assert taxonomy.lighting_subject is not None
+    assign_business_unit_scope(staff, taxonomy.maintenance)
+    signal = Signal.objects.create(
+        establishment=owner.establishment,
+        affected_business_unit=None,
+        responsible_business_unit=taxonomy.maintenance,
+        activity_subject=taxonomy.lighting_subject,
+        title="Sensitive signal title",
+        structured_summary="Sensitive observation summary",
+        issue_focus="partial subject focus",
+        status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.UNASSIGNED,
+        last_activity_at=timezone.now(),
+    )
+
+    from houston.notifications.scheduling import schedule_signal_created_notification
+
+    schedule_signal_created_notification(signal_id=signal.id)
+
+    notifications = _notifications_for_signal(signal_id=signal.id)
+    assert _recipient_ids(notifications) == {owner.id, director.id, manager.id, staff.id}
+    assert all(item.event_key == Notification.EventKey.SIGNAL_CREATED for item in notifications)
+
+
+def test_resolved_attention_keeps_pole_or_triage_fallback():
+    """Lot 8 E2: resolved routing keeps pole-or-triage (no forced triage∪pole)."""
+    from houston.notifications.recipients import resolve_signal_attention_recipients
+
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    director = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.DIRECTOR,
+    )
+    manager = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
+    assert taxonomy.maintenance is not None
+    assign_business_unit_scope(staff, taxonomy.maintenance)
+    signal = _open_signal(owner)
+
+    with_pole = resolve_signal_attention_recipients(signal=signal)
+    assert {item.id for item in with_pole} == {staff.id}
+
+    # Empty pole → triage fallback including Managers.
+    staff.status = EstablishmentMembership.Status.DEACTIVATED
+    staff.save(update_fields=["status", "updated_at"])
+    fallback = resolve_signal_attention_recipients(signal=signal)
+    assert {item.id for item in fallback} == {owner.id, director.id, manager.id}
+
+
+def test_qualify_inplace_notifies_new_pole_excludes_prior_triage_and_actor():
+    """Lot 8 E4 in-place: new pole staff notified; create triage + actor excluded."""
+    from houston.signals.models import ExpectedAction
+    from houston.signals.services import normalize_issue_focus, qualify_signal_routing
+
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    director = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.DIRECTOR,
+    )
+    manager = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
+    assert taxonomy.maintenance is not None
+    assert taxonomy.lighting_subject is not None
+    assign_business_unit_scope(staff, taxonomy.maintenance)
+    signal = Signal.objects.create(
+        establishment=owner.establishment,
+        affected_business_unit=None,
+        responsible_business_unit=None,
+        activity_subject=None,
+        title="Sensitive signal title",
+        structured_summary="Sensitive observation summary",
+        issue_focus="",
+        status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.UNASSIGNED,
+        last_activity_at=timezone.now(),
+    )
+    Notification.objects.filter(subject_id=signal.id).delete()
+
+    focus = normalize_issue_focus("qualify inplace focus")
+    qualify_signal_routing(
+        signal=signal,
+        membership=manager,
+        patch={
+            "affected_business_unit_id": taxonomy.restaurant.id,
+            "responsible_business_unit_id": taxonomy.maintenance.id,
+            "activity_subject_id": taxonomy.lighting_subject.id,
+            "issue_focus": focus,
+            "expected_action": ExpectedAction.REPAIR,
+        },
+    )
+
+    notifications = _notifications_for_signal(signal_id=signal.id)
+    assert _recipient_ids(notifications) == {staff.id}
+    assert manager.id not in _recipient_ids(notifications)
+    assert owner.id not in _recipient_ids(notifications)
+    assert director.id not in _recipient_ids(notifications)
+    assert all(item.event_key == Notification.EventKey.SIGNAL_CREATED for item in notifications)
+
+
+def test_qualify_merge_does_not_renotify_source_survivor_or_actor():
+    """Lot 8 E4 merge: previous = source ∪ survivor; notify only truly new on survivor id."""
+    from houston.signals.models import ExpectedAction
+    from houston.signals.services import normalize_issue_focus, qualify_signal_routing
+
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    director = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.DIRECTOR,
+    )
+    manager = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
+    assert taxonomy.maintenance is not None
+    assert taxonomy.lighting_subject is not None
+    assign_business_unit_scope(staff, taxonomy.maintenance)
+    focus = normalize_issue_focus("qualify merge focus")
+    survivor = create_signal_v3_for_membership(
+        owner,
+        affected_business_unit=taxonomy.restaurant,
+        responsible_business_unit=taxonomy.maintenance,
+        activity_subject=taxonomy.lighting_subject,
+        title="Survivor",
+        issue_focus=focus,
+    )
+    source = Signal.objects.create(
+        establishment=owner.establishment,
+        affected_business_unit=None,
+        responsible_business_unit=None,
+        activity_subject=None,
+        title="Source unassigned",
+        structured_summary="Sensitive observation summary",
+        issue_focus="",
+        status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.UNASSIGNED,
+        last_activity_at=timezone.now(),
+    )
+    Notification.objects.filter(subject_id__in=[source.id, survivor.id]).delete()
+
+    result = qualify_signal_routing(
+        signal=source,
+        membership=manager,
+        patch={
+            "affected_business_unit_id": taxonomy.restaurant.id,
+            "responsible_business_unit_id": taxonomy.maintenance.id,
+            "activity_subject_id": taxonomy.lighting_subject.id,
+            "issue_focus": focus,
+            "expected_action": ExpectedAction.REPAIR,
+        },
+    )
+    assert result.qualification_outcome == "merged"
+    assert result.surviving_signal_id == survivor.id
+
+    # No new attention on survivor: triage (source) ∪ pole (survivor) covered previous.
+    survivor_notifications = _notifications_for_signal(signal_id=survivor.id)
+    assert survivor_notifications == []
+    assert not Notification.objects.filter(
+        subject_type=Notification.SubjectType.SIGNAL,
+        subject_id=source.id,
+        event_key__in=SIGNAL_CREATED_EVENT_KEYS,
+    ).exists()
+    assert {
+        owner.id,
+        director.id,
+        manager.id,
+        staff.id,
+    }.isdisjoint(_recipient_ids(survivor_notifications))

@@ -1652,6 +1652,20 @@ def _append_qualification_audit(
         row.save(update_fields=["resolution_audit", "updated_at"])
 
 
+def _qualification_previous_attention_recipient_ids(
+    *,
+    source: Signal,
+    survivor: Signal | None,
+) -> frozenset[uuid.UUID]:
+    """Lot 8 E4 baseline under locks: attention(source) [∪ attention(survivor)]."""
+    from houston.notifications.recipients import resolve_signal_attention_recipients
+
+    ids = {item.id for item in resolve_signal_attention_recipients(signal=source)}
+    if survivor is not None:
+        ids.update(item.id for item in resolve_signal_attention_recipients(signal=survivor))
+    return frozenset(ids)
+
+
 def _lock_signals_by_uuid_order(*signals: Signal) -> list[Signal]:
     ordered_ids = sorted({signal.id for signal in signals})
     # of=("self",): avoid FOR UPDATE on nullable outer joins (merged_into).
@@ -1779,9 +1793,23 @@ def qualify_signal_routing(
 
     # 1–2: idempotence before lifecycle when already merged
     if source.merged_into_id is not None:
-        survivor = source.merged_into
-        assert survivor is not None
         if membership.role == EstablishmentMembership.Role.STAFF:
+            raise SignalPermissionError("Permission denied.")
+        from houston.establishments.role_constants import ADMIN_ROLES
+        from houston.signals.permissions import signal_visible_in_membership_scope
+        from houston.signals.selectors import get_signal_for_detail
+
+        survivor = get_signal_for_detail(
+            membership=membership,
+            signal_id=source.merged_into_id,
+        )
+        if survivor is None:
+            raise SignalPermissionError("Permission denied.")
+        # Detail allows general open reads; qualify idempotence still requires BU scope.
+        if membership.role not in ADMIN_ROLES and not signal_visible_in_membership_scope(
+            membership,
+            survivor,
+        ):
             raise SignalPermissionError("Permission denied.")
         if _qualification_payload_compatible_with_survivor(survivor=survivor, patch=patch):
             return QualifySignalRoutingResult(
@@ -1882,6 +1910,11 @@ def qualify_signal_routing(
             collision = next(item for item in locked if item.id == collision.id)
 
     if collision is not None:
+        # Lot 8 E4: under source+survivor locks, baseline = attention(source) ∪ attention(survivor).
+        previous_attention_recipient_ids = _qualification_previous_attention_recipient_ids(
+            source=source,
+            survivor=collision,
+        )
         survivor = merge_signal_into_resolved(
             source=source,
             target=collision,
@@ -1890,6 +1923,13 @@ def qualify_signal_routing(
                 "event": "manual_qualification_merged",
             },
             candidate_expected_action=expected_action,
+        )
+        from houston.notifications.scheduling import schedule_signal_qualified_notification
+
+        schedule_signal_qualified_notification(
+            signal_id=survivor.id,
+            actor_membership_id=membership.id,
+            previous_recipient_ids=previous_attention_recipient_ids,
         )
         return QualifySignalRoutingResult(
             signal=survivor,
@@ -1913,6 +1953,11 @@ def qualify_signal_routing(
         raise SignalAlreadyMergedError("Signal already merged into another signal.")
     if locked_source.status not in ACTIVE_SIGNAL_STATUSES:
         raise SignalStateError("Only active signals can be qualified.")
+
+    previous_attention_recipient_ids = _qualification_previous_attention_recipient_ids(
+        source=locked_source,
+        survivor=None,
+    )
 
     locked_source.affected_business_unit = resolution.affected_business_unit
     locked_source.responsible_business_unit = resolution.responsible_business_unit
@@ -1949,6 +1994,10 @@ def qualify_signal_routing(
         locked = _lock_signals_by_uuid_order(locked_source, collision)
         locked_source = next(item for item in locked if item.id == locked_source.id)
         collision = next(item for item in locked if item.id == collision.id)
+        previous_attention_recipient_ids = _qualification_previous_attention_recipient_ids(
+            source=locked_source,
+            survivor=collision,
+        )
         survivor = merge_signal_into_resolved(
             source=locked_source,
             target=collision,
@@ -1957,6 +2006,13 @@ def qualify_signal_routing(
                 "event": "manual_qualification_merged",
             },
             candidate_expected_action=expected_action,
+        )
+        from houston.notifications.scheduling import schedule_signal_qualified_notification
+
+        schedule_signal_qualified_notification(
+            signal_id=survivor.id,
+            actor_membership_id=membership.id,
+            previous_recipient_ids=previous_attention_recipient_ids,
         )
         return QualifySignalRoutingResult(
             signal=survivor,
@@ -1979,6 +2035,13 @@ def qualify_signal_routing(
         },
     )
     _schedule_signal_invalidation(signal=locked_source, reason="signal.updated")
+    from houston.notifications.scheduling import schedule_signal_qualified_notification
+
+    schedule_signal_qualified_notification(
+        signal_id=locked_source.id,
+        actor_membership_id=membership.id,
+        previous_recipient_ids=previous_attention_recipient_ids,
+    )
     locked_source.refresh_from_db()
     return QualifySignalRoutingResult(
         signal=locked_source,

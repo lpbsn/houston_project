@@ -231,7 +231,8 @@ def test_subject_corrects_responsible(api_client):
     assert signal.routing_status == Signal.RoutingStatus.RESOLVED
 
 
-def test_manager_in_scope_can_qualify_out_of_scope_denied(api_client):
+def test_manager_can_qualify_unassigned_outside_bu_scope(api_client):
+    """Lot 8 H5: Manager triage is establishment-wide for unassigned signals."""
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
     assert taxonomy.maintenance is not None
@@ -266,16 +267,19 @@ def test_manager_in_scope_can_qualify_out_of_scope_denied(api_client):
     )
     assert ok.status_code == 200
 
-    denied = api_client.post(
+    reassign = api_client.post(
         _qualify_url(manager.establishment_id, signal.id),
         data={"affected_business_unit_id": str(taxonomy.bar.id)},
         format="json",
         **auth_headers(token),
     )
-    assert denied.status_code == 403
+    assert reassign.status_code == 200
+    signal.refresh_from_db()
+    assert signal.affected_business_unit_id == taxonomy.bar.id
+    assert signal.routing_status == Signal.RoutingStatus.UNASSIGNED
 
 
-def test_manager_out_of_source_scope_denied(api_client):
+def test_manager_out_of_source_scope_can_qualify_unassigned(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
     manager_user = User.objects.create_user(
@@ -305,7 +309,9 @@ def test_manager_out_of_source_scope_denied(api_client):
         format="json",
         **auth_headers(token),
     )
-    assert response.status_code == 403
+    assert response.status_code == 200
+    signal.refresh_from_db()
+    assert signal.affected_business_unit_id == taxonomy.bar.id
 
 
 def test_collision_merges_without_third_signal_or_duplicate_links(api_client):
@@ -455,6 +461,140 @@ def test_idempotent_compatible_on_archived_merged_source(api_client):
     )
     assert incompatible.status_code == 409
     assert incompatible.json()["code"] == "already_merged"
+
+
+def _manager_with_bu_scope(*, establishment, business_unit, username_prefix: str):
+    manager_user = User.objects.create_user(
+        username=f"{username_prefix}_{uuid.uuid4().hex[:6]}",
+        email=f"{username_prefix}_{uuid.uuid4().hex[:6]}@example.com",
+        password=TEST_PASSWORD,
+        status=User.Status.ACTIVE,
+    )
+    manager = EstablishmentMembership.objects.create(
+        user=manager_user,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    create_membership_with_business_unit_scope(
+        membership=manager,
+        business_unit=business_unit,
+    )
+    return manager
+
+
+def _archived_merged_source_with_survivor(owner, taxonomy, *, focus: str):
+    assert taxonomy.maintenance is not None
+    assert taxonomy.lighting_subject is not None
+    survivor = create_v3_signal(
+        owner.establishment,
+        affected_business_unit=taxonomy.restaurant,
+        responsible_business_unit=taxonomy.maintenance,
+        activity_subject=taxonomy.lighting_subject,
+        routing_status=Signal.RoutingStatus.RESOLVED,
+        issue_focus=focus,
+    )
+    survivor.expected_action = ExpectedAction.REPAIR
+    survivor.save(update_fields=["expected_action", "updated_at"])
+    source = _unassigned_signal(owner)
+    source.status = Signal.Status.ARCHIVED
+    source.merged_into = survivor
+    source.save(update_fields=["status", "merged_into", "updated_at"])
+    return source, survivor
+
+
+def test_merged_idempotent_out_of_survivor_scope_compatible_denied(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
+    focus = normalize_issue_focus("scope deny compat")
+    source, _survivor = _archived_merged_source_with_survivor(
+        owner, taxonomy, focus=focus
+    )
+    manager = _manager_with_bu_scope(
+        establishment=owner.establishment,
+        business_unit=taxonomy.bar,
+        username_prefix="mgr_oos_c",
+    )
+    token = login(api_client, user=manager.user)
+
+    response = api_client.post(
+        _qualify_url(manager.establishment_id, source.id),
+        data={},
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 403
+    assert response.json()["code"] == "permission_denied"
+
+
+def test_merged_idempotent_out_of_survivor_scope_incompatible_denied(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
+    focus = normalize_issue_focus("scope deny incompat")
+    source, _survivor = _archived_merged_source_with_survivor(
+        owner, taxonomy, focus=focus
+    )
+    manager = _manager_with_bu_scope(
+        establishment=owner.establishment,
+        business_unit=taxonomy.bar,
+        username_prefix="mgr_oos_i",
+    )
+    token = login(api_client, user=manager.user)
+
+    response = api_client.post(
+        _qualify_url(manager.establishment_id, source.id),
+        data={"issue_focus": "other focus"},
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 403
+    assert response.json()["code"] == "permission_denied"
+
+
+def test_merged_idempotent_in_survivor_scope_incompatible_conflict(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
+    focus = normalize_issue_focus("scope ok incompat")
+    source, _survivor = _archived_merged_source_with_survivor(
+        owner, taxonomy, focus=focus
+    )
+    manager = _manager_with_bu_scope(
+        establishment=owner.establishment,
+        business_unit=taxonomy.restaurant,
+        username_prefix="mgr_in_i",
+    )
+    token = login(api_client, user=manager.user)
+
+    response = api_client.post(
+        _qualify_url(manager.establishment_id, source.id),
+        data={"issue_focus": "other focus"},
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 409
+    assert response.json()["code"] == "already_merged"
+
+
+def test_qualify_response_includes_real_aggregation_count(api_client):
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
+    signal = _unassigned_signal(membership)
+    observation = create_observation(membership=membership, text="A" * 20)
+    SignalSourceObservation.objects.create(
+        signal=signal,
+        observation=observation,
+        link_type=SignalSourceObservation.LinkType.AGGREGATED_FROM,
+    )
+    token = login(api_client, user=membership.user)
+
+    response = api_client.post(
+        _qualify_url(membership.establishment_id, signal.id),
+        data={"affected_business_unit_id": str(taxonomy.restaurant.id)},
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    assert response.json()["aggregation_count"] == 1
 
 
 def test_qualify_uses_resolve_materialized_routing(api_client):

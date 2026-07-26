@@ -8770,6 +8770,8 @@ export interface operations {
                 business_unit_ids?: string;
                 /** @description Opaque pagination cursor from a previous response next_cursor. */
                 cursor?: string;
+                /** @description When true, restrict to routing_status=unassigned among visible signals. Owner/Director/Manager only; Staff receives 403. */
+                needs_qualification?: boolean;
                 page_size?: number;
                 /** @description Comma-separated feed statuses: open, in_progress, resolved (max 3). */
                 statuses?: string;

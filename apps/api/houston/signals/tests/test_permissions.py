@@ -124,19 +124,31 @@ def test_can_view_signal_detail_canceled_delegates_to_pole_visibility():
     assert not can_view_signal_detail(staff, out_of_scope_signal)
 
 
-def test_manager_scope_limits_signal_visibility():
+def test_manager_scope_limits_resolved_signal_visibility():
+    """Resolved routing stays BU-scoped; unassigned is establishment-wide (Lot 8)."""
     membership = build_membership(role=EstablishmentMembership.Role.MANAGER)
     in_scope_bu = create_business_unit(establishment=membership.establishment, key="bar")
     out_of_scope_bu = create_business_unit(establishment=membership.establishment, key="kitchen")
     create_membership_with_business_unit_scope(membership=membership, business_unit=in_scope_bu)
 
     in_scope_signal = _build_signal(membership=membership, business_unit=in_scope_bu)
+    in_scope_signal.routing_status = Signal.RoutingStatus.RESOLVED
+    in_scope_signal.save(update_fields=["routing_status", "updated_at"])
     out_of_scope_signal = _build_signal(membership=membership, business_unit=out_of_scope_bu)
+    out_of_scope_signal.routing_status = Signal.RoutingStatus.RESOLVED
+    out_of_scope_signal.save(update_fields=["routing_status", "updated_at"])
 
     assert signal_visible_in_membership_scope(membership, in_scope_signal)
     assert not signal_visible_in_membership_scope(membership, out_of_scope_signal)
     assert signal_actionable_by_membership(membership, in_scope_signal)
     assert not signal_actionable_by_membership(membership, out_of_scope_signal)
+
+    unassigned_out_of_scope = _build_signal(membership=membership, business_unit=out_of_scope_bu)
+    assert unassigned_out_of_scope.routing_status == Signal.RoutingStatus.UNASSIGNED
+    # Visibility triage for Manager unassigned stays on signal_visible_in_membership_scope.
+    # Actionable remains responsible-scoped so linked AP is not opened by Lot 8 triage.
+    assert signal_visible_in_membership_scope(membership, unassigned_out_of_scope)
+    assert not signal_actionable_by_membership(membership, unassigned_out_of_scope)
 
 
 def test_staff_cannot_cancel_or_resolve_signal():

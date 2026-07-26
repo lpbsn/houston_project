@@ -41,6 +41,7 @@ from houston.signals.permissions import (
     can_cancel_signal,
     can_pin_signal,
     can_resolve_signal,
+    can_use_needs_qualification_filter,
     can_view_signal_feed,
 )
 from houston.signals.selectors import (
@@ -122,6 +123,15 @@ class SignalFeedView(EstablishmentScopedSignalMixin, APIView):
                 type=str,
                 description="Comma-separated ActivitySubject UUIDs (max 50).",
             ),
+            OpenApiParameter(
+                name="needs_qualification",
+                required=False,
+                type=bool,
+                description=(
+                    "When true, restrict to routing_status=unassigned among visible "
+                    "signals. Owner/Director/Manager only; Staff receives 403."
+                ),
+            ),
         ],
         responses={
             200: SignalFeedResponseSerializer,
@@ -168,6 +178,17 @@ class SignalFeedView(EstablishmentScopedSignalMixin, APIView):
             return Response(
                 {"code": "validation_error", "detail": exc.detail},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if feed_filters.needs_qualification and not can_use_needs_qualification_filter(
+            membership
+        ):
+            return Response(
+                {
+                    "code": "permission_denied",
+                    "detail": "needs_qualification is not available for this role.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         queryset = signal_feed_queryset(
@@ -410,8 +431,18 @@ class SignalQualifyRoutingView(EstablishmentScopedSignalMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        detail_signal = get_signal_for_detail(
+            membership=membership,
+            signal_id=result.surviving_signal_id,
+        )
+        if detail_signal is None:
+            return Response(
+                {"code": "permission_denied", "detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         payload = serialize_signal_detail(
-            signal=result.signal,
+            signal=detail_signal,
             membership=membership,
             request=request,
         )
