@@ -34,6 +34,7 @@ function buildFeedItem(
       can_cancel: true,
       can_resolve: true,
       can_create_linked_action_plan: false,
+      can_qualify_routing: false,
     },
     ...overrides,
   }

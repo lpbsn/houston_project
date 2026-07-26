@@ -34,6 +34,7 @@ function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem 
       can_cancel: false,
       can_resolve: false,
       can_create_linked_action_plan: false,
+      can_qualify_routing: false,
     },
     ...overrides,
   }
@@ -58,6 +59,7 @@ describe('SignalCard feed variant', () => {
             can_cancel: false,
             can_resolve: false,
             can_create_linked_action_plan: false,
+            can_qualify_routing: false,
           },
         })}
         onSelect={onSelect}
@@ -213,6 +215,7 @@ describe('SignalCard actions menu', () => {
             can_cancel: false,
             can_resolve: false,
             can_create_linked_action_plan: false,
+            can_qualify_routing: false,
           },
         })}
         onSelect={onSelect}
@@ -232,6 +235,7 @@ describe('SignalCard actions menu', () => {
             can_cancel: false,
             can_resolve: false,
             can_create_linked_action_plan: false,
+            can_qualify_routing: false,
           },
         })}
         onSelect={onSelect}
@@ -252,6 +256,7 @@ describe('SignalCard actions menu', () => {
             can_cancel: false,
             can_resolve: true,
             can_create_linked_action_plan: false,
+            can_qualify_routing: false,
           },
         })}
         onSelect={onSelect}
@@ -272,6 +277,7 @@ describe('SignalCard actions menu', () => {
             can_cancel: true,
             can_resolve: false,
             can_create_linked_action_plan: false,
+            can_qualify_routing: false,
           },
         })}
         onSelect={onSelect}
@@ -290,6 +296,7 @@ describe('SignalCard actions menu', () => {
         can_cancel: false,
         can_resolve: false,
         can_create_linked_action_plan: false,
+        can_qualify_routing: false,
       },
     })
 
