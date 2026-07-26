@@ -1,3 +1,5 @@
+import { getFailedAnalysisLabel } from '../processing-status-labels'
+
 import type { TerminalStatusSnapshot } from './observation-processing-tracker-types'
 
 function pluralizeObservation(count: number, singular: string, plural: string): string {
@@ -6,7 +8,7 @@ function pluralizeObservation(count: number, singular: string, plural: string): 
 
 export function formatTerminalBannerLabel(terminal: TerminalStatusSnapshot): string {
   if (terminal.status === 'failed') {
-    return 'Observation enregistrée, mais son analyse a échoué'
+    return getFailedAnalysisLabel(terminal.lastErrorCode)
   }
 
   const created = terminal.createdCount

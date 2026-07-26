@@ -37,6 +37,8 @@ function buildSignal(overrides: Partial<SignalDetail> = {}): SignalDetail {
     structured_summary_short: 'Short',
     structured_summary: 'Description du signal.',
     status: 'open',
+    routing_status: 'resolved',
+    issue_focus: '',
     is_pinned: false,
     affected_business_unit_key: null,
     affected_business_unit_label: null,
@@ -82,6 +84,22 @@ vi.mock('@/app/auth-provider', () => ({
 
 vi.mock('../hooks', () => ({
   useSignalDetailQuery: () => detailQueryMock(),
+}))
+
+const openForSignalMock = vi.fn()
+
+vi.mock('../hooks/use-signal-qualify-sheet', () => ({
+  useSignalQualifySheet: () => ({
+    open: false,
+    opening: false,
+    signalId: null,
+    signal: null,
+    isPending: false,
+    errorMessage: null,
+    openForSignal: openForSignalMock,
+    close: vi.fn(),
+    submit: vi.fn(),
+  }),
 }))
 
 vi.mock('@/features/comments/components/comment-section', () => ({
@@ -227,6 +245,31 @@ describe('SignalDetailPage tabs', () => {
     fireEvent.click(getCommentsTab())
 
     expect(screen.queryByRole('button', { name: "+ Plan d'action" })).toBeNull()
+  })
+
+  it('shows qualify action when can_qualify_routing is true', () => {
+    openForSignalMock.mockClear()
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({
+        routing_status: 'unassigned',
+        permission_hints: {
+          can_pin: false,
+          can_cancel: false,
+          can_resolve: false,
+          can_create_linked_action_plan: false,
+          can_qualify_routing: true,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    expect(screen.getByText('À qualifier')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Qualifier' }))
+    expect(openForSignalMock).toHaveBeenCalledWith('signal-1')
   })
 })
 

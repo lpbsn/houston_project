@@ -16,16 +16,20 @@ import {
 } from '../components/signal-detail-tabs'
 import { SignalLinkedActionPlansSection } from '../components/signal-linked-action-plans-section'
 import { SignalStatusBadge } from '../components/signal-status-badge'
+import { SignalNeedsQualificationBadge } from '../components/signal-needs-qualification-badge'
 import { SignalDetailClassificationSection } from '../components/signal-detail-classification-section'
 import { SignalDetailLabel } from '../components/signal-detail-label'
+import { SignalQualifyRoutingSheet } from '../components/signal-qualify-routing-sheet'
 import { useSignalDetailQuery } from '../hooks'
+import { useSignalQualifySheet } from '../hooks/use-signal-qualify-sheet'
 import { SignalsApiError } from '../api'
 import { shouldShowSignalCreateActionPlan } from '../lib/signal-create-action'
+import { shouldShowSignalQualifyRouting } from '../lib/signal-qualify-routing'
 import { formatSignalRelativeTime, formatSignalAggregationLabel } from '../lib/signal-display'
 
 type SignalDetailPageProps = {
   signalId: string
-  onNavigate: (pathname: string) => void
+  onNavigate: (pathname: string, options?: { replace?: boolean }) => void
 }
 
 function formatDescriptionContent(structuredSummary: string): string {
@@ -45,6 +49,10 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
   const highlightCommentId = initialDeepLink.commentId
 
   const detailQuery = useSignalDetailQuery(establishmentId, signalId)
+  const qualifySheet = useSignalQualifySheet({
+    establishmentId,
+    onNavigate,
+  })
 
   const handleTabChange = (tab: SignalDetailTab) => {
     if (tab === 'comments') {
@@ -74,6 +82,7 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
   const signal = detailQuery.data
   const reporterName = signal.source_context.reporter_display_name?.trim()
   const showStickyCreateActionFooter = shouldShowSignalCreateActionPlan(signal.permission_hints)
+  const canQualify = shouldShowSignalQualifyRouting(signal.permission_hints)
   const showStickyFooter = activeTab === 'details' && showStickyCreateActionFooter
 
   return (
@@ -97,6 +106,7 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
           <TerrainCard>
             <h2 className="text-[17px] font-semibold leading-snug text-[#1a1a1a]">{signal.title}</h2>
             <div className="mt-2 flex flex-wrap gap-1.5">
+              <SignalNeedsQualificationBadge signal={signal} variant="detail" />
               <SignalStatusBadge status={signal.status} variant="detail" />
             </div>
             <p className="mt-2 text-[11px] text-[#aaa]">
@@ -116,7 +126,11 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
             ) : null}
           </TerrainCard>
 
-          <SignalDetailClassificationSection signal={signal} />
+          <SignalDetailClassificationSection
+            signal={signal}
+            showQualifyAction={canQualify}
+            onQualify={() => void qualifySheet.openForSignal(signalId)}
+          />
 
           <TerrainCard>
             <SignalDetailLabel>Description</SignalDetailLabel>
@@ -153,6 +167,19 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
       {showStickyFooter ? (
         <SignalDetailStickyFooter
           onCreateActionPlan={() => onNavigate(`/signals/${signalId}/plan`)}
+        />
+      ) : null}
+
+      {establishmentId && qualifySheet.open && qualifySheet.signal ? (
+        <SignalQualifyRoutingSheet
+          key={qualifySheet.signal.id}
+          open={qualifySheet.open}
+          establishmentId={establishmentId}
+          signal={qualifySheet.signal}
+          isPending={qualifySheet.isPending}
+          errorMessage={qualifySheet.errorMessage}
+          onClose={qualifySheet.close}
+          onSubmit={(patch) => void qualifySheet.submit(patch)}
         />
       ) : null}
     </div>

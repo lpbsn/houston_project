@@ -10,6 +10,8 @@ export type TerminalStatusSnapshot = {
   createdCount: number
   updatedCount: number
   signalIds: string[]
+  /** Pipeline last_error_code when failed (precondition vs provider). */
+  lastErrorCode?: string | null
 }
 
 export type TrackedObservation = {

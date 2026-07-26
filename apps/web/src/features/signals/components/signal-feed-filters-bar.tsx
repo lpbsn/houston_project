@@ -14,6 +14,7 @@ import {
   normalizeSignalFeedFilters,
   type SignalFeedFilters,
 } from '../lib/signal-feed-filters'
+import { canUseNeedsQualificationFeedFilter } from '../lib/signal-qualify-routing'
 import { SignalFeedClassificationFilterSheet } from './signal-feed-classification-filter-sheet'
 import { SignalFeedStatusFilterSheet } from './signal-feed-status-filter-sheet'
 
@@ -21,12 +22,14 @@ type SignalFeedFiltersBarProps = {
   establishmentId: string
   filters: SignalFeedFilters
   onFiltersChange: (filters: SignalFeedFilters) => void
+  membershipRole?: string | null
 }
 
 export function SignalFeedFiltersBar({
   establishmentId,
   filters,
   onFiltersChange,
+  membershipRole = null,
 }: SignalFeedFiltersBarProps) {
   const [statusSheetOpen, setStatusSheetOpen] = useState(false)
   const [classificationSheetOpen, setClassificationSheetOpen] = useState(false)
@@ -45,32 +48,54 @@ export function SignalFeedFiltersBar({
     return buildClassificationLabelsFromTree(businessUnits)
   }, [treeQuery.data])
 
+  const showNeedsQualification = canUseNeedsQualificationFeedFilter(membershipRole)
+
   return (
     <>
       <div
-        className="flex shrink-0 gap-2 border-t border-[#E8E6DF] bg-white px-3 py-2 pb-3"
+        className="flex shrink-0 flex-col gap-2 border-t border-[#E8E6DF] bg-white px-3 py-2 pb-3"
         aria-label="Filtres des observations"
       >
-        <div className="flex flex-1" data-filter-kind="status">
-          <TerrainFilterSlot
-            label="Statut"
-            value={formatStatusFilterSummary(normalizedFilters)}
-            disabled={false}
-            onClick={() => setStatusSheetOpen(true)}
-          />
+        <div className="flex gap-2">
+          <div className="flex flex-1" data-filter-kind="status">
+            <TerrainFilterSlot
+              label="Statut"
+              value={formatStatusFilterSummary(normalizedFilters)}
+              disabled={false}
+              onClick={() => setStatusSheetOpen(true)}
+            />
+          </div>
+          <div className="flex flex-1" data-filter-kind="classification">
+            <TerrainFilterSlot
+              label="Pôle / Sujet"
+              value={formatClassificationFilterSummary(
+                normalizedFilters,
+                classificationLabels.labelByBusinessUnitId,
+                classificationLabels.labelByActivitySubjectId,
+              )}
+              disabled={false}
+              onClick={() => setClassificationSheetOpen(true)}
+            />
+          </div>
         </div>
-        <div className="flex flex-1" data-filter-kind="classification">
-          <TerrainFilterSlot
-            label="Pôle / Sujet"
-            value={formatClassificationFilterSummary(
-              normalizedFilters,
-              classificationLabels.labelByBusinessUnitId,
-              classificationLabels.labelByActivitySubjectId,
-            )}
-            disabled={false}
-            onClick={() => setClassificationSheetOpen(true)}
-          />
-        </div>
+        {showNeedsQualification ? (
+          <label className="flex min-h-10 items-center gap-2 text-[13px] text-[#1a1a1a]">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-[#E8E6DF]"
+              checked={normalizedFilters.needsQualification}
+              onChange={(event) =>
+                onFiltersChange(
+                  normalizeSignalFeedFilters({
+                    ...normalizedFilters,
+                    needsQualification: event.target.checked,
+                  }),
+                )
+              }
+            />
+            À qualifier
+          </label>
+        ) : null}
       </div>
 
       {statusSheetOpen ? (

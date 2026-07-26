@@ -374,7 +374,12 @@ function App() {
     }
 
     if (route.path === '/signals') {
-      return <LazySignalFeedPage onOpenSignal={(id) => navigate(`/signals/${id}`)} />
+      return (
+        <LazySignalFeedPage
+          onOpenSignal={(id) => navigate(`/signals/${id}`)}
+          onNavigate={navigate}
+        />
+      )
     }
 
     if (route.path === '/execution') {

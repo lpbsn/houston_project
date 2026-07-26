@@ -5342,6 +5342,42 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/signals/qualify-routing-options/:
+    get:
+      operationId: v1_establishments_signals_qualify_routing_options_retrieve
+      description: Returns the establishment-wide active BusinessUnit / ActivitySubject
+        tree for signal routing qualification pickers. Owner/Director/Manager only;
+        not filtered by membership scope. Staff receives 403.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - signals
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessUnitTreeResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/temporary-uploads/:
     post:
       operationId: v1_establishments_temporary_uploads_create
@@ -10767,6 +10803,14 @@ components:
       - pending_onboarding_memberships
       - permission_hints
       - user
+    RoutingStatusEnum:
+      enum:
+      - resolved
+      - unassigned
+      type: string
+      description: |-
+        * `resolved` - resolved
+        * `unassigned` - unassigned
     RuntimeActivitySubjectCreateRequest:
       type: object
       properties:
@@ -10873,6 +10917,8 @@ components:
           type: string
         status:
           type: string
+        routing_status:
+          $ref: '#/components/schemas/RoutingStatusEnum'
         is_pinned:
           type: boolean
         affected_business_unit_id:
@@ -10927,6 +10973,8 @@ components:
           $ref: '#/components/schemas/PermissionHints'
         structured_summary:
           type: string
+        issue_focus:
+          type: string
         source_context:
           $ref: '#/components/schemas/SourceContext'
         media_items:
@@ -10942,6 +10990,7 @@ components:
       - created_at
       - id
       - is_pinned
+      - issue_focus
       - last_activity_at
       - linked_action_plan_executions
       - location_text
@@ -10949,6 +10998,7 @@ components:
       - media_items
       - operational_unit_key
       - permission_hints
+      - routing_status
       - source_context
       - status
       - structured_summary
@@ -10991,6 +11041,8 @@ components:
           type: string
         status:
           type: string
+        routing_status:
+          $ref: '#/components/schemas/RoutingStatusEnum'
         is_pinned:
           type: boolean
         affected_business_unit_id:
@@ -11053,6 +11105,7 @@ components:
       - media_count
       - operational_unit_key
       - permission_hints
+      - routing_status
       - status
       - structured_summary_short
       - title
@@ -11143,6 +11196,8 @@ components:
           type: string
         status:
           type: string
+        routing_status:
+          $ref: '#/components/schemas/RoutingStatusEnum'
         is_pinned:
           type: boolean
         affected_business_unit_id:
@@ -11197,6 +11252,8 @@ components:
           $ref: '#/components/schemas/PermissionHints'
         structured_summary:
           type: string
+        issue_focus:
+          type: string
         source_context:
           $ref: '#/components/schemas/SourceContext'
         media_items:
@@ -11221,6 +11278,7 @@ components:
       - created_at
       - id
       - is_pinned
+      - issue_focus
       - last_activity_at
       - linked_action_plan_executions
       - location_text
@@ -11230,6 +11288,7 @@ components:
       - operational_unit_key
       - permission_hints
       - qualification_outcome
+      - routing_status
       - source_context
       - status
       - structured_summary

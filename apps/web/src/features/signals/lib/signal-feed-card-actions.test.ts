@@ -44,6 +44,10 @@ describe('canOpenSignalFeedCardActions', () => {
   it('returns true when can_cancel is true', () => {
     expect(canOpenSignalFeedCardActions(hints({ can_cancel: true }))).toBe(true)
   })
+
+  it('returns true when can_qualify_routing is true', () => {
+    expect(canOpenSignalFeedCardActions(hints({ can_qualify_routing: true }))).toBe(true)
+  })
 })
 
 describe('getSignalFeedCardActionOptions', () => {
@@ -68,6 +72,14 @@ describe('getSignalFeedCardActionOptions', () => {
         }),
       ),
     ).toEqual([{ id: 'pin', label: 'Désépingler', tone: 'neutral' }])
+  })
+
+  it('returns qualify action when can_qualify_routing', () => {
+    expect(
+      getSignalFeedCardActionOptions(
+        feedItem({ permission_hints: hints({ can_qualify_routing: true }) }),
+      ),
+    ).toEqual([{ id: 'qualify', label: 'Qualifier le routage', tone: 'neutral' }])
   })
 
   it('returns resolve action when can_resolve', () => {

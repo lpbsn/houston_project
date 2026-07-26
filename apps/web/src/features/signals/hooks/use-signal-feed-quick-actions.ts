@@ -21,12 +21,14 @@ type UseSignalFeedQuickActionsOptions = {
   establishmentId: string | null
   viewMode: SignalViewMode
   filters: SignalFeedFilters
+  onQualifyRequest?: (signalId: string) => void
 }
 
 export function useSignalFeedQuickActions({
   establishmentId,
   viewMode,
   filters,
+  onQualifyRequest,
 }: UseSignalFeedQuickActionsOptions) {
   const cacheContext = { viewMode, filters }
   const [activeItem, setActiveItem] = useState<SignalFeedItem | null>(null)
@@ -128,6 +130,9 @@ export function useSignalFeedQuickActions({
     const signalId = activeItem.id
 
     switch (actionId) {
+      case 'qualify':
+        onQualifyRequest?.(signalId)
+        return 'close'
       case 'pin':
         if (activeItem.is_pinned) {
           void unpinMutation.mutate(signalId)

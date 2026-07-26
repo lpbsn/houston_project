@@ -66,7 +66,33 @@ describe('observation processing banner outcomes', () => {
         updatedCount: 0,
         signalIds: [],
       }),
-    ).toBe('Observation enregistrée, mais son analyse a échoué')
+    ).toBe('Analyse temporairement indisponible')
+
+    expect(
+      formatTerminalBannerLabel({
+        status: 'failed',
+        uxStatus: 'analysis_failed',
+        processedAt: null,
+        sortAt: 'a',
+        createdCount: 0,
+        updatedCount: 0,
+        signalIds: [],
+        lastErrorCode: 'precondition_invalid_establishment',
+      }),
+    ).toContain('établissement')
+
+    expect(
+      formatTerminalBannerLabel({
+        status: 'failed',
+        uxStatus: 'analysis_failed',
+        processedAt: null,
+        sortAt: 'a',
+        createdCount: 0,
+        updatedCount: 0,
+        signalIds: [],
+        lastErrorCode: 'provider_timeout',
+      }),
+    ).toContain('service d’analyse')
   })
 
   it('resolves navigation targets', () => {

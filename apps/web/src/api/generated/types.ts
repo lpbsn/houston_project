@@ -1529,6 +1529,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/signals/qualify-routing-options/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns the establishment-wide active BusinessUnit / ActivitySubject tree for signal routing qualification pickers. Owner/Director/Manager only; not filtered by membership scope. Staff receives 403. */
+        get: operations["v1_establishments_signals_qualify_routing_options_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/temporary-uploads/": {
         parameters: {
             query?: never;
@@ -3617,6 +3634,12 @@ export interface components {
             /** Format: uuid */
             onboarding_session_id: string;
         };
+        /**
+         * @description * `resolved` - resolved
+         *     * `unassigned` - unassigned
+         * @enum {string}
+         */
+        RoutingStatusEnum: "resolved" | "unassigned";
         RuntimeActivitySubjectCreateRequest: {
             label?: string | null;
             /** @default  */
@@ -3661,6 +3684,7 @@ export interface components {
             title: string;
             structured_summary_short: string;
             status: string;
+            routing_status: components["schemas"]["RoutingStatusEnum"];
             is_pinned: boolean;
             /** Format: uuid */
             affected_business_unit_id?: string | null;
@@ -3685,6 +3709,7 @@ export interface components {
             aggregation_count: number;
             permission_hints: components["schemas"]["PermissionHints"];
             structured_summary: string;
+            issue_focus: string;
             source_context: components["schemas"]["SourceContext"];
             media_items: components["schemas"]["SignalDetailMediaItem"][];
             linked_action_plan_executions: components["schemas"]["SignalLinkedActionPlanExecution"][];
@@ -3706,6 +3731,7 @@ export interface components {
             title: string;
             structured_summary_short: string;
             status: string;
+            routing_status: components["schemas"]["RoutingStatusEnum"];
             is_pinned: boolean;
             /** Format: uuid */
             affected_business_unit_id?: string | null;
@@ -3768,6 +3794,7 @@ export interface components {
             title: string;
             structured_summary_short: string;
             status: string;
+            routing_status: components["schemas"]["RoutingStatusEnum"];
             is_pinned: boolean;
             /** Format: uuid */
             affected_business_unit_id?: string | null;
@@ -3792,6 +3819,7 @@ export interface components {
             aggregation_count: number;
             permission_hints: components["schemas"]["PermissionHints"];
             structured_summary: string;
+            issue_focus: string;
             source_context: components["schemas"]["SourceContext"];
             media_items: components["schemas"]["SignalDetailMediaItem"][];
             linked_action_plan_executions: components["schemas"]["SignalLinkedActionPlanExecution"][];
@@ -9182,6 +9210,43 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_signals_qualify_routing_options_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessUnitTreeResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

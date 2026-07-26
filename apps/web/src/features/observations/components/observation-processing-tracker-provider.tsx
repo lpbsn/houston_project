@@ -77,6 +77,7 @@ function useObservationProcessingPollers(enabled: boolean, isOnline: boolean) {
             createdCount: data.created_count,
             updatedCount: data.updated_count,
             signalIds: data.signal_ids,
+            lastErrorCode: data.last_error_code,
           })
           if (result.shouldInvalidateFeed) {
             const invalidationKey = `${establishmentId}:${observationId}:${data.status}:${data.ux_status}`

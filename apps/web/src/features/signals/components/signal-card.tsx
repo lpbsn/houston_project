@@ -21,6 +21,7 @@ import {
 import { canOpenSignalFeedCardActions } from '../lib/signal-feed-card-actions'
 import type { SignalFeedItem } from '../types'
 import { SignalStatusBadge } from './signal-status-badge'
+import { SignalNeedsQualificationBadge } from './signal-needs-qualification-badge'
 import { SignalClassificationBadges } from './signal-classification-badges'
 
 type SignalCardProps = {
@@ -149,7 +150,10 @@ function FeedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
             <span className="truncate text-[11px] text-[#888]">{reporterName}</span>
           ) : null}
         </div>
-        <SignalStatusBadge status={item.status} variant="feed" />
+        <div className="flex shrink-0 items-center gap-1">
+          <SignalNeedsQualificationBadge signal={item} variant="feed" />
+          <SignalStatusBadge status={item.status} variant="feed" />
+        </div>
       </div>
     </article>
   )

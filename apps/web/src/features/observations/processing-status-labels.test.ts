@@ -23,6 +23,12 @@ describe('processing-status-labels', () => {
       'Observation enregistrée, aucune observation actionnable détectée',
     )
     expect(getProcessingUxLabel('analysis_failed')).toBe('Analyse temporairement indisponible')
+    expect(getProcessingUxLabel('analysis_failed', 'precondition_no_active_business_unit')).toBe(
+      'Analyse impossible : établissement ou configuration des pôles invalide',
+    )
+    expect(getProcessingUxLabel('analysis_failed', 'provider_timeout')).toBe(
+      'Analyse temporairement indisponible (service d’analyse)',
+    )
   })
 
   it('detects terminal processing statuses', () => {

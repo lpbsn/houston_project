@@ -16,6 +16,7 @@ export type PipelineStatusUpdate = {
   createdCount: number
   updatedCount: number
   signalIds: string[]
+  lastErrorCode?: string | null
 }
 
 export type BannerViewModel =
@@ -88,6 +89,7 @@ export function buildTerminalSnapshot(
     createdCount: update.createdCount,
     updatedCount: update.updatedCount,
     signalIds: update.signalIds,
+    lastErrorCode: update.lastErrorCode ?? null,
   }
 }
 

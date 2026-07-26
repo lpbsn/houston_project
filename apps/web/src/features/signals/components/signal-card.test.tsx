@@ -15,6 +15,7 @@ function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem 
     title: 'Fuite d eau',
     structured_summary_short: 'Short',
     status: 'open',
+    routing_status: 'resolved',
     is_pinned: false,
     affected_business_unit_key: null,
     affected_business_unit_label: null,

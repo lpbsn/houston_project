@@ -1,9 +1,18 @@
+import type { components } from '@/api/generated/types'
 import { apiClient, withAuthRetry } from '@/api/client'
-
 import { parseStandardApiError } from '@/lib/api-errors'
 
 import { normalizeSignalFeedFilters } from './lib/signal-feed-filters'
-import type { SignalDetail, SignalFeedFilters, SignalFeedResponse, SignalViewMode } from './types'
+import type {
+  SignalDetail,
+  SignalFeedFilters,
+  SignalFeedResponse,
+  SignalQualifyRoutingRequest,
+  SignalQualifyRoutingResponse,
+  SignalViewMode,
+} from './types'
+
+export type BusinessUnitTreeResponse = components['schemas']['BusinessUnitTreeResponse']
 
 export type { SignalFeedFilters } from './lib/signal-feed-filters'
 
@@ -13,19 +22,28 @@ export const signalsQueryKeys = {
     ['signals', 'feed', establishmentId, viewMode, normalizeSignalFeedFilters(filters)] as const,
   detail: (establishmentId: string, signalId: string) =>
     ['signals', 'detail', establishmentId, signalId] as const,
+  qualifyRoutingOptions: (establishmentId: string) =>
+    ['signals', 'qualify-routing-options', establishmentId] as const,
 }
 
 export class SignalsApiError extends Error {
   status: number
   detail: string
   code: string | null
+  payload: unknown
 
-  constructor(options: { status: number; detail: string; code?: string | null }) {
+  constructor(options: {
+    status: number
+    detail: string
+    code?: string | null
+    payload?: unknown
+  }) {
     super(options.detail)
     this.name = 'SignalsApiError'
     this.status = options.status
     this.detail = options.detail
     this.code = options.code ?? null
+    this.payload = options.payload
   }
 }
 
@@ -39,7 +57,7 @@ function getAuthHeaders(accessToken: string | null) {
 
 function parseError(response: Response, payload: unknown): SignalsApiError {
   const { status, detail, code } = parseStandardApiError(response, payload)
-  return new SignalsApiError({ status, detail, code })
+  return new SignalsApiError({ status, detail, code, payload })
 }
 
 function assertSignalData<T>(result: {
@@ -70,6 +88,7 @@ function buildSignalFeedQuery(
     ...(normalized.activitySubjectIds.length > 0
       ? { activity_subject_ids: normalized.activitySubjectIds.join(',') }
       : {}),
+    ...(normalized.needsQualification ? { needs_qualification: true } : {}),
     ...(options.cursor ? { cursor: options.cursor } : {}),
     ...(options.pageSize ? { page_size: options.pageSize } : {}),
   }
@@ -180,4 +199,43 @@ export async function resolveSignal(
   )
 
   return assertSignalData<SignalDetail>(result)
+}
+
+export async function qualifySignalRouting(
+  establishmentId: string,
+  signalId: string,
+  body: SignalQualifyRoutingRequest,
+): Promise<SignalQualifyRoutingResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/signals/{signal_id}/qualify-routing/',
+        {
+          params: signalPathParams(establishmentId, signalId),
+          headers: getAuthHeaders(accessToken),
+          body,
+        },
+      ),
+    { refreshable: true },
+  )
+
+  return assertSignalData<SignalQualifyRoutingResponse>(result)
+}
+
+export async function fetchQualifyRoutingOptions(
+  establishmentId: string,
+): Promise<BusinessUnitTreeResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET(
+        '/api/v1/establishments/{establishment_id}/signals/qualify-routing-options/',
+        {
+          params: { path: { establishment_id: establishmentId } },
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  return assertSignalData<BusinessUnitTreeResponse>(result)
 }
