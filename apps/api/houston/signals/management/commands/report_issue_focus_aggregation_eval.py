@@ -14,7 +14,7 @@ from houston.signals.aggregation_eval import (
 class Command(BaseCommand):
     help = (
         "Report issue_focus aggregation evaluation metrics for Lot 5 "
-        "(taxonomy duplicate groups, hint mismatches, reformulation proxies)."
+        "(taxonomy duplicate groups, reformulation proxies)."
     )
 
     def add_arguments(self, parser):
@@ -67,15 +67,6 @@ class Command(BaseCommand):
             "Taxonomy duplicate groups (same quadruplet, multiple issue_focus): "
             f"{payload['taxonomy_duplicate_group_count']} "
             f"({payload['taxonomy_duplicate_signal_count']} signals)"
-        )
-        self.stdout.write(
-            f"Candidates with aggregate hint: {payload['hint_provided_candidate_count']}"
-        )
-        self.stdout.write(
-            f"Hint rejected (created new signal): {payload['hint_rejected_created_count']}"
-        )
-        self.stdout.write(
-            f"Hint issue_focus mismatches: {payload['hint_issue_focus_mismatch_count']}"
         )
         self.stdout.write("")
         self.stdout.write("Lot 4bis trigger indicators:")

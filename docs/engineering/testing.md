@@ -121,7 +121,7 @@ Dedicated throttle tests (`test_auth_throttling_api.py`, invitation accept over-
 
 - Auth / bootstrap / CSRF / refresh rotation
 - RBAC and cross-establishment isolation
-- Signal lifecycle (pipeline golden G01–G11 + V6 acceptance corpus S15 / truth tables + schema/prompt `ai_observation_pipeline_v6` / `v6_2` + cancel/resolve)
+- Signal lifecycle (pipeline golden G01–G11 apply-side against runtime schema/prompt `ai_observation_pipeline_v6` / `v6_2` + V6 acceptance corpus S15 / truth tables + cancel/resolve)
 - Action lifecycle (service + API transitions + permissions)
 - Checklist permissions and materialization
 - Chat WS ticket auth and message delivery
@@ -219,7 +219,7 @@ Use `--durations=50` and `.artifacts/vitest-results.json` for ongoing profiling 
 | **6** | Replace TTL `sleep(1.1)` with deterministic time control; reintegrate former `slow` modules into PR; keep live OpenAI smoke manual-only; preserve reserved `openai_smoke` / `openai_transcription_smoke` markers |
 | **7** | Backend observation→signal feed journey; auth-provider cache purge tests; Playwright limited to 3 scenarios — infra proposal only, not PR gate |
 
-Protected areas (do not weaken): auth/CSRF/throttle, tenant isolation, pipeline v4 golden, legacy issue-focus aggregation, fake OpenAI guards, notification producers, query invalidation parity.
+Protected areas (do not weaken): auth/CSRF/throttle, tenant isolation, pipeline v4 golden (apply-side G01–G11 vs current V6 runtime — not an alternate AI pipeline), legacy issue-focus aggregation, fake OpenAI guards, notification producers, query invalidation parity.
 
 ## Issue focus aggregation eval
 

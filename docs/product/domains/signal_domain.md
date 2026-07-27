@@ -98,6 +98,7 @@ This domain describes the validated MVP target behavior. Current code and `apps/
   - Match key (pipeline v6): `(affected_bu, responsible_bu, activity_subject, operational_unit | null, normalize(issue_focus))` — **only** when `routing_status=resolved`.
   - No LLM aggregate hint (`aggregate_into_signal_id` removed). `unassigned` Signals are never auto-aggregated.
   - UI filter / badge **« Non classifié »** = `responsible_business_unit_id IS NULL` (distinct from affected / subject).
+  - Display dedup Concerné / responsable is **ID-only** (`affected_business_unit_id` vs `responsible_business_unit_id`): same UUID hides the secondary Concerné line; same label with different UUIDs still shows Concerné.
 
 - `LinkedObservationContext`
   - Safe reference to source Observation context.
@@ -191,7 +192,7 @@ Candidate events only:
 Current API truth is `apps/api/schema.yml`.
 
 Implemented in `apps/api/schema.yml` (establishment-scoped under `/api/v1/establishments/{establishment_id}/`):
-- `GET signal-feed/` — feed-visible Signals (`view_mode=personal|general`); optional filters `statuses` (open, in_progress, resolved), `business_unit_ids` (UUID, comma-separated), `activity_subject_ids` (comma-separated); response includes `applied_filters`. Legacy query param `business_unit_keys` is rejected.
+- `GET signal-feed/` — feed-visible Signals (`view_mode=personal|general`); optional filters `statuses` (open, in_progress, resolved), `business_unit_ids` (UUID, comma-separated), `activity_subject_ids` (comma-separated), `needs_qualification` (true → active Signals with `responsible_business_unit_id IS NULL`); response includes `applied_filters`. Legacy query param `business_unit_keys` is rejected.
 - `GET signals/{signal_id}/` — active Signal detail
 - `POST signals/{signal_id}/pin/`
 - `POST signals/{signal_id}/unpin/`
