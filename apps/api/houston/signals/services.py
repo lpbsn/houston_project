@@ -41,6 +41,7 @@ from houston.signals.aggregation_eval import (
     count_active_taxonomy_peers_with_different_focus,
     format_taxonomy_bucket_key,
 )
+from houston.signals.author_affected_fallback import apply_author_affected_fallback
 from houston.signals.constants import (
     ACTIVE_SIGNAL_STATUSES,
     AI_ISSUE_FOCUS_MAX_LENGTH,
@@ -57,7 +58,6 @@ from houston.signals.exceptions import (
     SignalValidationError,
 )
 from houston.signals.models import CandidateSignal, ExpectedAction, Signal, SignalSourceObservation
-from houston.signals.author_affected_fallback import apply_author_affected_fallback
 from houston.signals.responsible_text_anchoring import (
     sanitize_unanchored_responsible_without_subject,
 )

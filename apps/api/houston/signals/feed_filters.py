@@ -8,7 +8,6 @@ from django.db.models import Q
 
 from houston.establishments.models import ActivitySubject, BusinessUnit
 from houston.signals.constants import ACTIVE_SIGNAL_STATUSES, FEED_SIGNAL_STATUSES
-from houston.signals.models import Signal
 
 FEED_FILTERABLE_STATUSES = frozenset(FEED_SIGNAL_STATUSES)
 

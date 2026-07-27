@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from houston.ai.observation_pipeline_schema import ObservationPipelineOutput, PipelineCandidateOutput
+from houston.ai.observation_pipeline_schema import (
+    ObservationPipelineOutput,
+    PipelineCandidateOutput,
+)
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.taxonomy_snapshot import build_routing_taxonomy
 from houston.establishments.tests.taxonomy_helpers import (
