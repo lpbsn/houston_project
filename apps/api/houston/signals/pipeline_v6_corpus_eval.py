@@ -89,13 +89,20 @@ def get_fake_provider_fixture(case_id: str) -> dict[str, Any]:
 def list_v6_eval_case_ids(*, lot: str | None = "lot10") -> list[str]:
     if lot is None:
         return list_pipeline_v6_acceptance_case_ids()
+    if lot not in LOT_ACCEPTANCE:
+        known = ", ".join(sorted(LOT_ACCEPTANCE))
+        raise ValueError(f"Unknown V6 eval lot: {lot!r}. Known: {known}")
     if lot == "lot10":
-        return list(LOT_ACCEPTANCE["lot10"]["case_ids"])
-    return [
-        case["id"]
-        for case in load_pipeline_v6_acceptance_corpus()["cases"]
-        if lot in case.get("lots", [])
-    ]
+        case_ids = list(LOT_ACCEPTANCE["lot10"]["case_ids"])
+    else:
+        case_ids = [
+            case["id"]
+            for case in load_pipeline_v6_acceptance_corpus()["cases"]
+            if lot in case.get("lots", [])
+        ]
+    if not case_ids:
+        raise ValueError(f"V6 eval lot '{lot}' contains no executable corpus cases")
+    return case_ids
 
 
 def _assert_fixture_independent_of_expected_v6(case_id: str, fixture: dict[str, Any]) -> None:
@@ -501,7 +508,11 @@ def evaluate_v6_corpus_cases(
     provider_name: str = "fake",
     archive: bool = True,
 ) -> V6CorpusEvalReport:
-    selected = case_ids or list_v6_eval_case_ids(lot="lot10")
+    selected = (
+        list_v6_eval_case_ids(lot="lot10") if case_ids is None else list(case_ids)
+    )
+    if not selected:
+        raise ValueError("No V6 eval cases selected")
     normalized = provider_name.strip().lower()
     if normalized == "openai":
         assert_openai_eval_opt_in()

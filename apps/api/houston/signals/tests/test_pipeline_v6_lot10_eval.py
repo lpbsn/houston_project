@@ -80,3 +80,40 @@ def test_evaluate_observation_pipeline_v6_command_rejects_unknown_case():
             "S15-NOPE",
             "--no-archive",
         )
+
+
+def test_evaluate_v6_corpus_cases_rejects_empty_case_ids():
+    with pytest.raises(ValueError, match="No V6 eval cases selected"):
+        evaluate_v6_corpus_cases(case_ids=[], provider_name="fake", archive=False)
+
+
+def test_list_v6_eval_case_ids_rejects_unknown_lot():
+    with pytest.raises(ValueError, match="Unknown V6 eval lot"):
+        list_v6_eval_case_ids(lot="lot99")
+
+
+def test_list_v6_eval_case_ids_rejects_known_lot_with_no_cases():
+    with pytest.raises(ValueError, match="contains no executable corpus cases"):
+        list_v6_eval_case_ids(lot="lot6")
+
+
+def test_evaluate_observation_pipeline_v6_command_rejects_unknown_lot():
+    with pytest.raises(CommandError, match="Unknown V6 eval lot"):
+        call_command(
+            "evaluate_observation_pipeline_v6",
+            "--lot",
+            "lot99",
+            "--no-archive",
+        )
+
+
+def test_evaluate_v6_corpus_cases_none_defaults_to_lot10():
+    report = evaluate_v6_corpus_cases(
+        case_ids=None,
+        provider_name="fake",
+        archive=False,
+    )
+    expected = list_v6_eval_case_ids(lot="lot10")
+    assert [r.case_id for r in report.case_results] == expected
+    assert report.errors == ()
+    assert all(result.passed for result in report.case_results)

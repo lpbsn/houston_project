@@ -59,23 +59,23 @@ class Command(BaseCommand):
         raw_case_ids = options["case_ids"] or []
         if isinstance(raw_case_ids, str):
             raw_case_ids = [raw_case_ids]
-        if raw_case_ids:
-            known = set(list_pipeline_v6_acceptance_case_ids())
-            unknown = [case_id for case_id in raw_case_ids if case_id not in known]
-            if unknown:
-                raise CommandError(
-                    f"Unknown S15 case id(s): {', '.join(unknown)}. "
-                    f"Known: {', '.join(list_pipeline_v6_acceptance_case_ids())}"
-                )
-            case_ids = raw_case_ids
-        else:
-            lot = options["lot"]
-            if lot == "all":
-                case_ids = list_v6_eval_case_ids(lot=None)
-            else:
-                case_ids = list_v6_eval_case_ids(lot=lot)
-
         try:
+            if raw_case_ids:
+                known = set(list_pipeline_v6_acceptance_case_ids())
+                unknown = [case_id for case_id in raw_case_ids if case_id not in known]
+                if unknown:
+                    raise CommandError(
+                        f"Unknown S15 case id(s): {', '.join(unknown)}. "
+                        f"Known: {', '.join(list_pipeline_v6_acceptance_case_ids())}"
+                    )
+                case_ids = raw_case_ids
+            else:
+                lot = options["lot"]
+                if lot == "all":
+                    case_ids = list_v6_eval_case_ids(lot=None)
+                else:
+                    case_ids = list_v6_eval_case_ids(lot=lot)
+
             report = evaluate_v6_corpus_cases(
                 case_ids=case_ids,
                 provider_name=options["provider"],
