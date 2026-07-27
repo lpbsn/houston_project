@@ -12,6 +12,7 @@ from houston.establishments.membership_scope import (
     membership_scope_rows_for_membership,
 )
 from houston.establishments.models import (
+    ACTIVITY_DESCRIPTION_MAX_LENGTH,
     ACTIVITY_DESCRIPTION_MIN_LENGTH,
     BusinessUnit,
     EstablishmentMembership,
@@ -426,6 +427,7 @@ class ActivityDescriptionRequestSerializer(serializers.Serializer):
     description = serializers.CharField(
         trim_whitespace=True,
         min_length=ACTIVITY_DESCRIPTION_MIN_LENGTH,
+        max_length=ACTIVITY_DESCRIPTION_MAX_LENGTH,
     )
 
 
@@ -660,3 +662,41 @@ class OnboardingProposalErrorResponseSerializer(serializers.Serializer):
     code = serializers.CharField()
     detail = serializers.CharField()
     errors = ProposalValidationErrorItemSerializer(many=True, required=False)
+
+
+class OnboardingDraftValidationErrorItemSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    section = serializers.CharField(required=False)
+    field = serializers.CharField(required=False, allow_null=True)
+    key = serializers.CharField(required=False, allow_null=True)
+
+
+class OnboardingDraftValidationSerializer(serializers.Serializer):
+    mode = serializers.CharField()
+    is_ready_for_complete = serializers.BooleanField()
+    errors = OnboardingDraftValidationErrorItemSerializer(many=True)
+
+
+class OnboardingDraftResponseSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    onboarding_session_id = serializers.UUIDField()
+    updated_at = serializers.DateTimeField()
+    payload = serializers.JSONField()
+    validation = OnboardingDraftValidationSerializer()
+
+
+class OnboardingDraftUpdateRequestSerializer(serializers.Serializer):
+    payload = serializers.JSONField()
+
+
+class OnboardingCompleteResponseSerializer(serializers.Serializer):
+    session = OnboardingSessionResponseSerializer()
+    activation_summary = serializers.DictField()
+    activated = serializers.BooleanField()
+    idempotent = serializers.BooleanField()
+
+
+class OnboardingDraftErrorResponseSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    detail = serializers.CharField()
+    errors = OnboardingDraftValidationErrorItemSerializer(many=True, required=False)

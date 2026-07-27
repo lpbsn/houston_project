@@ -2,15 +2,19 @@ from __future__ import annotations
 
 import uuid
 
+from django.utils import timezone
+
 from houston.accounts.models import User
 from houston.establishments.models import (
     Establishment,
+    EstablishmentActivityDescription,
     EstablishmentMembership,
     OnboardingSession,
 )
 from houston.establishments.services import (
     apply_onboarding_proposal,
     create_manual_onboarding_proposal,
+    ensure_onboarding_draft_for_session,
     submit_manual_onboarding_proposal,
 )
 from houston.organizations.models import Organization
@@ -93,6 +97,7 @@ def create_onboarding_session(
         role=role,
         status=membership_status,
     )
+    ensure_onboarding_draft_for_session(session=session, actor=actor)
     return session
 
 
@@ -116,6 +121,15 @@ def apply_validated_manual_v2_proposal(session, owner, payload=None):
 
 def create_ready_runtime(session, owner):
     establishment = session.establishment
+    EstablishmentActivityDescription.objects.update_or_create(
+        establishment=establishment,
+        defaults={
+            "description": "A" * 50,
+            "source": EstablishmentActivityDescription.Source.MANUAL,
+            "submitted_by": owner,
+            "validated_at": timezone.now(),
+        },
+    )
     business_unit = create_business_unit(
         establishment=establishment,
         key="coworking",

@@ -1701,6 +1701,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/onboarding-sessions/{session_id}/complete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Validates the onboarding draft, materializes runtime structure and team, activates the establishment, and deletes the draft. Idempotent when already activated. */
+        post: operations["v1_onboarding_sessions_complete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/onboarding-sessions/{session_id}/description/": {
         parameters: {
             query?: never;
@@ -1729,6 +1746,24 @@ export interface paths {
         put?: never;
         /** @description Invites a Director to the draft establishment for an onboarding session. Creates or reuses a pending user and an invited director membership. An invitation email is sent asynchronously when enabled. */
         post: operations["v1_onboarding_sessions_director_invitations_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/onboarding-sessions/{session_id}/draft/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns the onboarding draft for a session. Read-only: does not create a draft. */
+        get: operations["v1_onboarding_sessions_draft_retrieve"];
+        /** @description Full-replace autosave for the onboarding draft. Incomplete payloads are accepted after soft validation. */
+        put: operations["v1_onboarding_sessions_draft_update"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3158,6 +3193,43 @@ export interface components {
         };
         OnboardingAccessResponse: {
             can_activate: boolean;
+        };
+        OnboardingCompleteResponse: {
+            session: components["schemas"]["OnboardingSessionResponse"];
+            activation_summary: {
+                [key: string]: unknown;
+            };
+            activated: boolean;
+            idempotent: boolean;
+        };
+        OnboardingDraftErrorResponse: {
+            code: string;
+            detail: string;
+            errors?: components["schemas"]["OnboardingDraftValidationErrorItem"][];
+        };
+        OnboardingDraftResponse: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            onboarding_session_id: string;
+            /** Format: date-time */
+            updated_at: string;
+            payload: unknown;
+            validation: components["schemas"]["OnboardingDraftValidation"];
+        };
+        OnboardingDraftUpdateRequest: {
+            payload: unknown;
+        };
+        OnboardingDraftValidation: {
+            mode: string;
+            is_ready_for_complete: boolean;
+            errors: components["schemas"]["OnboardingDraftValidationErrorItem"][];
+        };
+        OnboardingDraftValidationErrorItem: {
+            code: string;
+            section?: string;
+            field?: string | null;
+            key?: string | null;
         };
         OnboardingErrorResponse: {
             code: string;
@@ -9594,6 +9666,67 @@ export interface operations {
             };
         };
     };
+    v1_onboarding_sessions_complete_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingCompleteResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingDraftErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingErrorResponse"];
+                };
+            };
+        };
+    };
     v1_onboarding_sessions_description_partial_update: {
         parameters: {
             query?: never;
@@ -9692,6 +9825,126 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DirectorInvitationErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_onboarding_sessions_draft_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingDraftResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_onboarding_sessions_draft_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingDraftUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OnboardingDraftUpdateRequest"];
+                "multipart/form-data": components["schemas"]["OnboardingDraftUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingDraftResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingDraftErrorResponse"];
                 };
             };
             401: {

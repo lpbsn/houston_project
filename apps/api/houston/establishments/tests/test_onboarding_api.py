@@ -439,6 +439,7 @@ def test_activation_summary_returns_readiness_blockers_and_access_flags(api_clie
     assert body["effective_can_activate"] is False
     assert "active_business_units" in body
     assert {blocker["code"] for blocker in body["blockers"]} == {
+        "missing_or_invalid_activity_description",
         "missing_active_business_unit",
         "missing_active_or_invited_director",
     }

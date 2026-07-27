@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 
 from houston.accounts.api.serializers import ApiErrorResponseSerializer, DetailResponseSerializer
 from houston.accounts.authentication import BearerAccessTokenAuthentication
+from houston.core.exceptions import DomainConflictError, DomainValidationError
 from houston.establishments.access import (
     get_api_access_context,
     get_onboarding_access_context,
@@ -32,6 +33,10 @@ from houston.establishments.api.serializers import (
     MembershipInvitationRequestSerializer,
     MembershipReinviteResponseSerializer,
     MembershipUpdateRequestSerializer,
+    OnboardingCompleteResponseSerializer,
+    OnboardingDraftErrorResponseSerializer,
+    OnboardingDraftResponseSerializer,
+    OnboardingDraftUpdateRequestSerializer,
     OnboardingErrorResponseSerializer,
     OnboardingProposalCreateRequestSerializer,
     OnboardingProposalErrorResponseSerializer,
@@ -60,6 +65,7 @@ from houston.establishments.models import (
     OnboardingProposal,
     OnboardingSession,
 )
+from houston.establishments.onboarding_draft import OnboardingDraftValidationError
 from houston.establishments.permissions import (
     CanCreateEstablishment,
     CanManageRuntimeContext,
@@ -92,6 +98,7 @@ from houston.establishments.services import (
     DirectorInvitationDuplicateError,
     DirectorInvitationOwnerNotAllowedError,
     DuplicateEstablishmentNameError,
+    EstablishmentAlreadyActiveError,
     EstablishmentCreationForbiddenError,
     InvalidActivityDescriptionError,
     InvalidDirectorInvitationInputError,
@@ -110,9 +117,11 @@ from houston.establishments.services import (
     MembershipRoleChangeForbiddenError,
     MembershipUpdateInput,
     OnboardingAccessDeniedError,
+    OnboardingDraftNotFoundError,
     OnboardingProposalStateError,
     OnboardingProposalValidationError,
     OnboardingReadinessError,
+    OnboardingRuntimeAlreadyMaterializedError,
     OnboardingSessionTerminalError,
     OrganizationalOwnerInvariantConflictError,
     RuntimeConfigConflictError,
@@ -122,12 +131,14 @@ from houston.establishments.services import (
     activate_onboarding_session,
     apply_onboarding_proposal,
     build_activation_summary,
+    complete_onboarding_session,
     create_manual_onboarding_proposal,
     create_runtime_activity_subject,
     create_runtime_business_unit,
     deactivate_membership_for_management,
     deactivate_runtime_activity_subject,
     deactivate_runtime_business_unit,
+    get_onboarding_draft,
     invite_director_during_onboarding,
     invite_membership_for_establishment,
     mark_onboarding_ready_for_activation,
@@ -136,12 +147,14 @@ from houston.establishments.services import (
     reactivate_runtime_business_unit,
     reinvite_membership_for_establishment,
     reject_onboarding_proposal,
+    serialize_onboarding_draft,
     start_onboarding_session,
     submit_activity_description,
     submit_manual_onboarding_proposal,
     update_membership_for_management,
     update_onboarding_proposal_payload,
     update_runtime_business_unit,
+    upsert_onboarding_draft,
 )
 from houston.organizations.models import Organization
 
@@ -1493,6 +1506,246 @@ class OnboardingSessionActivationSummaryView(APIView):
             return _not_found_response()
 
         return Response(_build_activation_summary_payload(session=session, actor=request.user))
+
+
+class OnboardingSessionDraftView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["onboarding"],
+        responses={
+            200: OnboardingDraftResponseSerializer,
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=OnboardingErrorResponseSerializer),
+        },
+        description=(
+            "Returns the onboarding draft for a session. Read-only: does not create "
+            "a draft."
+        ),
+    )
+    def get(self, request, session_id):
+        session_response = _get_onboarding_command_session(
+            actor=request.user,
+            session_id=session_id,
+            capability=_ONBOARDING_CAPABILITY_CONFIGURE_RUNTIME,
+        )
+        if isinstance(session_response, Response):
+            return session_response
+
+        try:
+            draft = get_onboarding_draft(session=session_response)
+        except OnboardingDraftNotFoundError:
+            return Response(
+                {"detail": "Onboarding draft not found.", "code": "draft_not_found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except OnboardingSessionTerminalError:
+            return _terminal_session_response()
+        except InvalidOnboardingActivationStateError as exc:
+            return Response(
+                {"code": "invalid_onboarding_state", "detail": str(exc)},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        payload = serialize_onboarding_draft(draft=draft)
+        return Response(OnboardingDraftResponseSerializer(payload).data)
+
+    @extend_schema(
+        tags=["onboarding"],
+        request=OnboardingDraftUpdateRequestSerializer,
+        responses={
+            200: OnboardingDraftResponseSerializer,
+            400: OpenApiResponse(response=OnboardingDraftErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=OnboardingErrorResponseSerializer),
+        },
+        description=(
+            "Full-replace autosave for the onboarding draft. Incomplete payloads are "
+            "accepted after soft validation."
+        ),
+    )
+    def put(self, request, session_id):
+        session_response = _get_onboarding_command_session(
+            actor=request.user,
+            session_id=session_id,
+            capability=_ONBOARDING_CAPABILITY_CONFIGURE_RUNTIME,
+        )
+        if isinstance(session_response, Response):
+            return session_response
+
+        request_serializer = OnboardingDraftUpdateRequestSerializer(data=request.data)
+        request_serializer.is_valid(raise_exception=True)
+
+        try:
+            payload = upsert_onboarding_draft(
+                session=session_response,
+                actor=request.user,
+                payload=request_serializer.validated_data["payload"],
+            )
+        except OnboardingAccessDeniedError:
+            return _forbidden_response()
+        except OnboardingDraftNotFoundError:
+            return Response(
+                {"detail": "Onboarding draft not found.", "code": "draft_not_found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except OnboardingDraftValidationError as exc:
+            return Response(
+                {
+                    "code": "onboarding_draft_invalid",
+                    "detail": "Onboarding draft payload is invalid.",
+                    "errors": exc.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except OnboardingSessionTerminalError:
+            return _terminal_session_response()
+        except InvalidOnboardingActivationStateError as exc:
+            return Response(
+                {"code": "invalid_onboarding_state", "detail": str(exc)},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        return Response(OnboardingDraftResponseSerializer(payload).data)
+
+
+class OnboardingSessionCompleteView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["onboarding"],
+        request=None,
+        responses={
+            200: OnboardingCompleteResponseSerializer,
+            400: OpenApiResponse(response=OnboardingDraftErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=OnboardingErrorResponseSerializer),
+        },
+        description=(
+            "Validates the onboarding draft, materializes runtime structure and team, "
+            "activates the establishment, and deletes the draft. Idempotent when "
+            "already activated."
+        ),
+    )
+    def post(self, request, session_id):
+        session_response = _get_onboarding_command_session(
+            actor=request.user,
+            session_id=session_id,
+            capability=_ONBOARDING_CAPABILITY_ACTIVATE,
+        )
+        if isinstance(session_response, Response):
+            return session_response
+
+        try:
+            result = complete_onboarding_session(
+                session=session_response,
+                actor=request.user,
+            )
+        except OnboardingAccessDeniedError:
+            return _forbidden_response()
+        except OnboardingDraftNotFoundError:
+            return Response(
+                {"detail": "Onboarding draft not found.", "code": "draft_not_found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except OnboardingDraftValidationError as exc:
+            return Response(
+                {
+                    "code": "onboarding_draft_invalid",
+                    "detail": "Onboarding draft payload is invalid.",
+                    "errors": exc.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except OnboardingRuntimeAlreadyMaterializedError:
+            return Response(
+                {
+                    "code": "runtime_already_materialized",
+                    "detail": (
+                        "Business units already exist for this establishment; "
+                        "complete will not materialize or recreate runtime."
+                    ),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        except EstablishmentAlreadyActiveError:
+            return Response(
+                {
+                    "code": "establishment_already_active",
+                    "detail": "Establishment is already active.",
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        except OnboardingReadinessError as exc:
+            return Response(
+                {
+                    "code": "activation_readiness_failed",
+                    "detail": "Onboarding session is not ready for activation.",
+                    "blockers": exc.readiness["blockers"],
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except InvalidOnboardingActivationStateError as exc:
+            return Response(
+                {"code": "invalid_onboarding_activation_state", "detail": str(exc)},
+                status=status.HTTP_409_CONFLICT,
+            )
+        except DirectorInvitationAlreadyExistsError:
+            return Response(
+                {
+                    "code": "director_invitation_already_exists",
+                    "detail": (
+                        "This establishment already has an invited or active Director."
+                    ),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        except (
+            DirectorInvitationDuplicateError,
+            DirectorInvitationOwnerNotAllowedError,
+            MembershipInvitationUserExistsError,
+            InvalidDirectorInvitationInputError,
+            InvalidMembershipInvitationInputError,
+        ) as exc:
+            return Response(
+                {
+                    "code": "onboarding_team_invite_failed",
+                    "detail": str(exc) or "Team invitation failed during complete.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except DomainValidationError as exc:
+            return Response(
+                {"code": exc.code, "detail": exc.message},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except DomainConflictError as exc:
+            return Response(
+                {"code": exc.code, "detail": exc.message},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        session = result["session"]
+        response_serializer = OnboardingCompleteResponseSerializer(
+            {
+                "session": session,
+                "activation_summary": _build_activation_summary_payload(
+                    session=session,
+                    actor=request.user,
+                ),
+                "activated": result["activated"],
+                "idempotent": result["idempotent"],
+            }
+        )
+        return Response(response_serializer.data)
 
 
 class OnboardingSessionDirectorInvitationView(APIView):

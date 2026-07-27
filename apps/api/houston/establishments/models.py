@@ -17,7 +17,8 @@ ESTABLISHMENT_ORG_NAME_CI_UNIQ = "establishment_org_name_ci_uniq"
 DEFAULT_ESTABLISHMENT_TIMEZONE = "Europe/Paris"
 ESTABLISHMENT_TIMEZONE_MAX_LENGTH = 63
 
-ACTIVITY_DESCRIPTION_MIN_LENGTH = 50
+ACTIVITY_DESCRIPTION_MIN_LENGTH = 10
+ACTIVITY_DESCRIPTION_MAX_LENGTH = 5000
 ONBOARDING_TERMINAL_STATUSES = (
     "activated",
     "failed",
@@ -313,6 +314,31 @@ class OnboardingProposal(BaseModel):
         return f"{self.establishment} proposal [{self.status}]"
 
 
+class OnboardingDraft(BaseModel):
+    onboarding_session = models.OneToOneField(
+        OnboardingSession,
+        on_delete=models.CASCADE,
+        related_name="draft",
+    )
+    payload = models.JSONField(default=dict, blank=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="updated_onboarding_drafts",
+        null=True,
+        blank=True,
+        db_index=False,
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["updated_by"], name="onbrd_draft_updated_by_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.onboarding_session_id} draft"
+
+
 class EstablishmentMembership(BaseModel):
     class Role(models.TextChoices):
         OWNER = "owner", "Owner"
@@ -467,12 +493,22 @@ class EstablishmentActivityDescription(BaseModel):
 
     def clean(self) -> None:
         super().clean()
-        if len((self.description or "").strip()) < ACTIVITY_DESCRIPTION_MIN_LENGTH:
+        normalized = (self.description or "").strip()
+        if len(normalized) < ACTIVITY_DESCRIPTION_MIN_LENGTH:
             raise ValidationError(
                 {
                     "description": (
                         "Activity description must be at least "
                         f"{ACTIVITY_DESCRIPTION_MIN_LENGTH} characters."
+                    )
+                }
+            )
+        if len(normalized) > ACTIVITY_DESCRIPTION_MAX_LENGTH:
+            raise ValidationError(
+                {
+                    "description": (
+                        "Activity description must be at most "
+                        f"{ACTIVITY_DESCRIPTION_MAX_LENGTH} characters."
                     )
                 }
             )

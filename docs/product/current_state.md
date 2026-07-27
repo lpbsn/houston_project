@@ -27,7 +27,7 @@ API contract: [`apps/api/schema.yml`](../../apps/api/schema.yml).
 | Area | Status | Notes |
 |------|--------|-------|
 | Identity / memberships / RBAC | Live | Bootstrap, establishment scoping |
-| Runtime config / onboarding | Live | `onboarding_proposal_v4` only; BU/AS instances |
+| Runtime config / onboarding | Live | Lot 1: `OnboardingDraft` + `…/draft/` + `…/complete/` additive; legacy `onboarding_proposal_v4` until Lot 3; description 10–5000 in readiness |
 | BusinessUnit / ActivitySubject taxonomy | Live | Identity: `specific_name` + internal `routing_key`; catalog FK required (`PROTECT`); public API Lot 5 (no `routing_key`); legacy instance columns removed |
 | Observations + media + transcription | Live | Celery pipeline |
 | AI observation → Signal | Live | Pipeline **v6** (schema `ai_observation_pipeline_v6`, prompt `ai_observation_pipeline_v6_2`); Fake (CI) / OpenAI (opt-in smoke) |
