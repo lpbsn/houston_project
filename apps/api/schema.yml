@@ -4913,8 +4913,9 @@ paths:
         name: needs_qualification
         schema:
           type: boolean
-        description: When true, restrict to routing_status=unassigned among visible
-          signals. Owner/Director/Manager only; Staff receives 403.
+        description: When true, restrict to signals with no responsible business unit
+          (affected and activity_subject ignored) among active lifecycle statuses.
+          Owner/Director/Manager only; Staff receives 403.
       - in: query
         name: page_size
         schema:
@@ -7019,6 +7020,13 @@ components:
           type: string
           format: uuid
           nullable: true
+        issue_focus:
+          type: string
+          nullable: true
+          description: Optional. Required when linked create assigns a responsible
+            pole that completes routing to resolved and the signal has no issue_focus
+            yet.
+          maxLength: 80
         use_shared_chronology:
           type: boolean
           default: false

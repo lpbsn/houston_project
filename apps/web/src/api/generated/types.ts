@@ -2111,6 +2111,8 @@ export interface components {
             assignees?: components["schemas"]["ActionPlanAssigneeInput"][];
             /** Format: uuid */
             source_signal_id?: string | null;
+            /** @description Optional. Required when linked create assigns a responsible pole that completes routing to resolved and the signal has no issue_focus yet. */
+            issue_focus?: string | null;
             /** @default false */
             use_shared_chronology: boolean;
             /** Format: date-time */
@@ -8798,7 +8800,7 @@ export interface operations {
                 business_unit_ids?: string;
                 /** @description Opaque pagination cursor from a previous response next_cursor. */
                 cursor?: string;
-                /** @description When true, restrict to routing_status=unassigned among visible signals. Owner/Director/Manager only; Staff receives 403. */
+                /** @description When true, restrict to signals with no responsible business unit (affected and activity_subject ignored) among active lifecycle statuses. Owner/Director/Manager only; Staff receives 403. */
                 needs_qualification?: boolean;
                 page_size?: number;
                 /** @description Comma-separated feed statuses: open, in_progress, resolved (max 3). */
