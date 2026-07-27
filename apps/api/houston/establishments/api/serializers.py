@@ -529,22 +529,6 @@ class ProposalValidationErrorItemSerializer(serializers.Serializer):
     key = serializers.CharField(required=False)
 
 
-class ProposalBusinessUnitItemV3Serializer(serializers.Serializer):
-    client_key = serializers.CharField()
-    label = serializers.CharField()
-    description = serializers.CharField(required=False, allow_blank=True, default="")
-    unit_type = serializers.CharField(required=False, allow_null=True, allow_blank=True)
-    catalog_key = serializers.CharField(required=False, allow_null=True)
-
-
-class ProposalActivitySubjectItemV3Serializer(serializers.Serializer):
-    client_key = serializers.CharField()
-    label = serializers.CharField()
-    description = serializers.CharField(required=False, allow_blank=True, default="")
-    business_unit_client_key = serializers.CharField()
-    catalog_key = serializers.CharField(required=False, allow_null=True)
-
-
 class ProposalBusinessUnitItemV4Serializer(serializers.Serializer):
     client_key = serializers.CharField()
     catalog_key = serializers.CharField()
@@ -562,32 +546,6 @@ class ProposalActivitySubjectItemV4Serializer(serializers.Serializer):
     catalog_key = serializers.CharField(required=False, allow_null=True)
     label = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     description = serializers.CharField(required=False, allow_blank=True, default="")
-
-
-@extend_schema_serializer(component_name="OnboardingProposalPayloadV3")
-class OnboardingProposalPayloadV3Serializer(serializers.Serializer):
-    schema_version = serializers.CharField()
-    business_units = ProposalBusinessUnitItemV3Serializer(many=True, required=False)
-    activity_subjects = ProposalActivitySubjectItemV3Serializer(many=True, required=False)
-    excluded_catalog_subject_keys = serializers.DictField(
-        child=serializers.ListField(child=serializers.CharField()),
-        required=False,
-    )
-
-    def validate(self, attrs):
-        if attrs.get("schema_version") != PROPOSAL_SCHEMA_VERSION_V3:
-            raise serializers.ValidationError(
-                {"schema_version": ["Must be onboarding_proposal_v3."]}
-            )
-        result = {
-            "schema_version": PROPOSAL_SCHEMA_VERSION_V3,
-            "business_units": attrs.get("business_units", []),
-            "activity_subjects": attrs.get("activity_subjects", []),
-        }
-        excluded = attrs.get("excluded_catalog_subject_keys")
-        if excluded:
-            result["excluded_catalog_subject_keys"] = excluded
-        return result
 
 
 @extend_schema_serializer(component_name="OnboardingProposalPayloadV4")
@@ -611,7 +569,6 @@ class OnboardingProposalPayloadV4Serializer(serializers.Serializer):
 ONBOARDING_PROPOSAL_PAYLOAD_OPENAPI = PolymorphicProxySerializer(
     component_name="OnboardingProposalPayload",
     serializers={
-        PROPOSAL_SCHEMA_VERSION_V3: OnboardingProposalPayloadV3Serializer,
         PROPOSAL_SCHEMA_VERSION_V4: OnboardingProposalPayloadV4Serializer,
     },
     resource_type_field_name="schema_version",
@@ -640,17 +597,12 @@ class OnboardingProposalPayloadField(serializers.Field):
     def to_representation(self, value):
         if not isinstance(value, dict):
             return value
-        schema_version = value.get("schema_version")
-        if schema_version == PROPOSAL_SCHEMA_VERSION_V4:
+        if value.get("schema_version") == PROPOSAL_SCHEMA_VERSION_V4:
             return OnboardingProposalPayloadV4Serializer(value).data
-        if schema_version == PROPOSAL_SCHEMA_VERSION_V3:
-            # Historical terminal payloads only (applied/rejected).
-            return OnboardingProposalPayloadV3Serializer(value).data
         return value
 
 
 # Backward-compatible aliases for imports that still reference old names.
-OnboardingProposalPayloadSerializer = OnboardingProposalPayloadField
 ProposalBusinessUnitItemSerializer = ProposalBusinessUnitItemV4Serializer
 ProposalActivitySubjectItemSerializer = ProposalActivitySubjectItemV4Serializer
 

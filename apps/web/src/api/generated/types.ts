@@ -603,38 +603,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/schedule/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["v1_establishments_action_plans_schedule_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/use/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["v1_establishments_action_plans_use_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/establishments/{establishment_id}/activity-subjects/{activity_subject_id}/deactivate/": {
         parameters: {
             query?: never;
@@ -1267,22 +1235,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/establishments/{establishment_id}/notifications/{notification_id}/archive/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["v1_establishments_notifications_archive_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/establishments/{establishment_id}/notifications/{notification_id}/mark-read/": {
         parameters: {
             query?: never;
@@ -1681,23 +1633,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/me/web-push-subscriptions/{subscription_id}/touch/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Updates last_seen_at for an active Web Push subscription. */
-        post: operations["v1_me_web_push_subscriptions_touch_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/onboarding-sessions/": {
         parameters: {
             query?: never;
@@ -1842,8 +1777,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Returns one onboarding proposal scoped to its onboarding session. */
-        get: operations["v1_onboarding_sessions_proposals_retrieve"];
+        get?: never;
         put?: never;
         post?: never;
         delete?: never;
@@ -2485,19 +2419,6 @@ export interface components {
             assigned_display_name: string | null;
             position: number;
             business_unit: components["schemas"]["ActionPlanBusinessUnit"];
-        };
-        ActionPlanUseRequest: {
-            assignees?: components["schemas"]["ActionPlanAssigneeInput"][];
-            /** @default false */
-            use_shared_chronology: boolean;
-            /** Format: date-time */
-            start_at?: string | null;
-            /** Format: date-time */
-            end_at?: string | null;
-            /** Format: date-time */
-            visible_from?: string | null;
-            /** Format: date */
-            occurrence_date?: string | null;
         };
         ActionSignalSummary: {
             /** Format: uuid */
@@ -3263,19 +3184,7 @@ export interface components {
             detail: string;
             errors?: components["schemas"]["ProposalValidationErrorItem"][];
         };
-        OnboardingProposalPayload: components["schemas"]["OnboardingProposalPayloadV3"] | components["schemas"]["OnboardingProposalPayloadV4"];
-        OnboardingProposalPayloadV3: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            schema_version: "onboarding_proposal_v3";
-            business_units?: components["schemas"]["ProposalBusinessUnitItemV3"][];
-            activity_subjects?: components["schemas"]["ProposalActivitySubjectItemV3"][];
-            excluded_catalog_subject_keys?: {
-                [key: string]: string[];
-            };
-        };
+        OnboardingProposalPayload: components["schemas"]["OnboardingProposalPayloadV4"];
         OnboardingProposalPayloadV4: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -3550,14 +3459,6 @@ export interface components {
          * @enum {string}
          */
         PriorityEnum: "info" | "action_required" | "urgent" | "system";
-        ProposalActivitySubjectItemV3: {
-            client_key: string;
-            label: string;
-            /** @default  */
-            description: string;
-            business_unit_client_key: string;
-            catalog_key?: string | null;
-        };
         ProposalActivitySubjectItemV4: {
             client_key: string;
             business_unit_client_key: string;
@@ -3565,14 +3466,6 @@ export interface components {
             label?: string | null;
             /** @default  */
             description: string;
-        };
-        ProposalBusinessUnitItemV3: {
-            client_key: string;
-            label: string;
-            /** @default  */
-            description: string;
-            unit_type?: string | null;
-            catalog_key?: string | null;
         };
         ProposalBusinessUnitItemV4: {
             client_key: string;
@@ -5910,126 +5803,6 @@ export interface operations {
                 };
             };
             409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    v1_establishments_action_plans_schedule_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                action_plan_id: string;
-                establishment_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ActionPlanScheduleCreateRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["ActionPlanScheduleCreateRequest"];
-                "multipart/form-data": components["schemas"]["ActionPlanScheduleCreateRequest"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ActionPlanScheduleDetail"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    v1_establishments_action_plans_use_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                action_plan_id: string;
-                establishment_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["ActionPlanUseRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["ActionPlanUseRequest"];
-                "multipart/form-data": components["schemas"]["ActionPlanUseRequest"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ActionPlanExecutionDetail"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8410,44 +8183,6 @@ export interface operations {
             };
         };
     };
-    v1_establishments_notifications_archive_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                establishment_id: string;
-                notification_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NotificationItem"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-        };
-    };
     v1_establishments_notifications_mark_read_create: {
         parameters: {
             query?: never;
@@ -9659,43 +9394,6 @@ export interface operations {
             };
         };
     };
-    v1_me_web_push_subscriptions_touch_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                subscription_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WebPushSubscriptionResponse"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-        };
-    };
     v1_onboarding_sessions_create: {
         parameters: {
             query?: never;
@@ -10199,52 +9897,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OnboardingProposalErrorResponse"];
-                };
-            };
-        };
-    };
-    v1_onboarding_sessions_proposals_retrieve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                proposal_id: string;
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingProposalResponse"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
                 };
             };
         };

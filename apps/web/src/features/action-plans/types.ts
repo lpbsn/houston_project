@@ -14,7 +14,15 @@ export type ActionPlanCreate201Response = components['schemas']['ActionPlanCreat
 export type PatchedActionPlanUpdateRequest = components['schemas']['PatchedActionPlanUpdateRequest']
 export type PatchedActionPlanExecutionUpdateRequest =
   components['schemas']['PatchedActionPlanExecutionUpdateRequest']
-export type ActionPlanUseRequest = components['schemas']['ActionPlanUseRequest']
+/** Local draft shape for catalog one-shot planning builders (HTTP /use/ removed). */
+export type ActionPlanUseRequest = {
+  assignees?: ActionPlanCreateRequest['assignees']
+  use_shared_chronology?: boolean
+  start_at?: string | null
+  end_at?: string | null
+  visible_from?: string | null
+  occurrence_date?: string | null
+}
 export type ActionPlanPlanningSubmitRequest =
   components['schemas']['ActionPlanPlanningSubmitRequest']
 export type ActionPlanPlanningSubmitResponse =

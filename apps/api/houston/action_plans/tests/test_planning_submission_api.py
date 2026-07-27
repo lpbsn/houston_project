@@ -17,8 +17,6 @@ from houston.action_plans.models import (
 from houston.action_plans.planning_services import submit_action_plan_planning
 from houston.action_plans.tests.helpers import (
     action_plan_planning_submit_url,
-    action_plan_url,
-    api_assignee_payload,
     api_planning_submit_payload,
     create_catalog_action_plan,
     recurrence_days_for_visible_today,
@@ -267,40 +265,3 @@ def test_concurrent_planning_submit_same_hash_replays_without_false_conflict(
         == 1
     )
     assert ActionPlanExecution.objects.filter(action_plan=catalog).count() >= 1
-
-
-@pytest.mark.django_db
-def test_use_rejects_individual_multi_assignee(
-    api_client,
-    owner_membership,
-    staff_membership,
-    business_unit,
-    establishment,
-):
-    catalog = create_catalog_action_plan(
-        owner_membership=owner_membership,
-        business_unit=business_unit,
-    )
-    staff_b = create_membership(
-        establishment=establishment,
-        role=EstablishmentMembership.Role.STAFF,
-    )
-    create_membership_with_business_unit_scope(
-        membership=staff_b,
-        business_unit=business_unit,
-    )
-    token = login(api_client, user=owner_membership.user)
-    response = api_client.post(
-        action_plan_url(owner_membership.establishment_id, catalog.id, "use/"),
-        {
-            "use_shared_chronology": False,
-            "assignees": [
-                api_assignee_payload(membership=staff_membership, business_unit=business_unit),
-                api_assignee_payload(membership=staff_b, business_unit=business_unit),
-            ],
-        },
-        format="json",
-        **auth_headers(token),
-    )
-    assert response.status_code == 400
-    assert "planning-submit" in response.json()["detail"]

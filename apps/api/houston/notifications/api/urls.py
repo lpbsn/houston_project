@@ -1,14 +1,12 @@
 from django.urls import path
 
 from houston.notifications.api.views import (
-    NotificationArchiveView,
     NotificationMarkReadView,
     NotificationPreferencesView,
     NotificationsListView,
     NotificationsMarkAllReadView,
     VapidPublicKeyView,
     WebPushSubscriptionRevokeView,
-    WebPushSubscriptionTouchView,
     WebPushSubscriptionUpsertView,
 )
 
@@ -18,11 +16,6 @@ urlpatterns = [
         "me/web-push-subscriptions/",
         WebPushSubscriptionUpsertView.as_view(),
         name="web-push-subscriptions-upsert",
-    ),
-    path(
-        "me/web-push-subscriptions/<uuid:subscription_id>/touch/",
-        WebPushSubscriptionTouchView.as_view(),
-        name="web-push-subscriptions-touch",
     ),
     path(
         "me/web-push-subscriptions/<uuid:subscription_id>/",
@@ -48,10 +41,5 @@ urlpatterns = [
         ("establishments/<uuid:establishment_id>/notifications/<uuid:notification_id>/mark-read/"),
         NotificationMarkReadView.as_view(),
         name="notification-mark-read",
-    ),
-    path(
-        ("establishments/<uuid:establishment_id>/notifications/<uuid:notification_id>/archive/"),
-        NotificationArchiveView.as_view(),
-        name="notification-archive",
     ),
 ]

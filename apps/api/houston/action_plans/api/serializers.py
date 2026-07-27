@@ -336,15 +336,6 @@ class ActionPlanUpdateRequestSerializer(serializers.Serializer):
     tasks = ActionPlanTaskInputSerializer(many=True, required=False)
 
 
-class ActionPlanUseRequestSerializer(serializers.Serializer):
-    assignees = ActionPlanAssigneeInputSerializer(many=True, required=False, default=list)
-    use_shared_chronology = serializers.BooleanField(required=False, default=False)
-    start_at = serializers.DateTimeField(required=False, allow_null=True)
-    end_at = serializers.DateTimeField(required=False, allow_null=True)
-    visible_from = serializers.DateTimeField(required=False, allow_null=True)
-    occurrence_date = serializers.DateField(required=False, allow_null=True)
-
-
 class ActionPlanPlanningSubmitRequestSerializer(serializers.Serializer):
     submission_id = serializers.UUIDField()
     use_shared_chronology = serializers.BooleanField(required=False, default=False)

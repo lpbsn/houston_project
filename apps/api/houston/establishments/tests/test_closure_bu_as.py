@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
-
 import pytest
 
 from houston.core.exceptions import DomainConflictError
@@ -11,17 +9,14 @@ from houston.establishments.business_unit_domain_service import (
     update_business_unit_specific_name,
 )
 from houston.establishments.business_unit_identity import business_unit_public_key
-from houston.establishments.models import OnboardingProposal
 from houston.establishments.onboarding_proposal_v3_migration import (
     PROPOSAL_SCHEMA_VERSION_V3,
-    process_non_terminal_v3_proposals,
 )
 from houston.establishments.services import (
     OnboardingProposalValidationError,
     validate_onboarding_proposal_payload,
 )
-from houston.testing.factories import create_establishment, create_user
-from houston.testing.onboarding import create_onboarding_session
+from houston.testing.factories import create_establishment
 from houston.testing.taxonomy import create_business_unit
 
 pytestmark = pytest.mark.django_db
@@ -40,92 +35,6 @@ def test_validate_rejects_onboarding_proposal_v3_payload():
     assert any(
         error.get("code") == "unsupported_schema_version" for error in exc_info.value.errors
     )
-
-
-def test_process_non_terminal_v3_proposals_converts_convertible_rows(imported_catalog):
-    owner = create_user(username=f"closure_v3_convert_{uuid.uuid4().hex[:8]}")
-    session = create_onboarding_session(actor=owner)
-    proposal = OnboardingProposal.objects.create(
-        onboarding_session=session,
-        establishment=session.establishment,
-        created_by=owner,
-        status=OnboardingProposal.Status.DRAFT,
-        payload={
-            "schema_version": PROPOSAL_SCHEMA_VERSION_V3,
-            "business_units": [
-                {
-                    "client_key": "bu-coworking",
-                    "catalog_key": "coworking",
-                    "label": "Coworking",
-                    "description": "Open space",
-                }
-            ],
-            "activity_subjects": [
-                {
-                    "client_key": "subject-proprete",
-                    "business_unit_client_key": "bu-coworking",
-                    "catalog_key": "coworking__proprete",
-                    "label": "Propreté",
-                    "description": "Catalog desc ignored",
-                },
-                {
-                    "client_key": "subject-free",
-                    "business_unit_client_key": "bu-coworking",
-                    "label": "Salle libre",
-                    "description": "Espace dédié",
-                },
-            ],
-        },
-    )
-
-    counts = process_non_terminal_v3_proposals(dry_run=False)
-
-    proposal.refresh_from_db()
-    assert counts["converted"] == 1
-    assert proposal.payload["schema_version"] == "onboarding_proposal_v4"
-    assert proposal.payload["business_units"][0]["specific_name"] == "Coworking"
-    assert proposal.status == OnboardingProposal.Status.DRAFT
-
-    catalog_subject = proposal.payload["activity_subjects"][0]
-    assert catalog_subject["catalog_key"] == "coworking__proprete"
-    assert "label" not in catalog_subject
-    assert "description" not in catalog_subject
-
-    free_subject = proposal.payload["activity_subjects"][1]
-    assert free_subject["catalog_key"] is None
-    assert free_subject["label"] == "Salle libre"
-    assert free_subject["description"] == "Espace dédié"
-
-    validate_onboarding_proposal_payload(proposal.payload)
-
-
-def test_process_non_terminal_v3_proposals_rejects_unconvertible_rows():
-    owner = create_user(username=f"closure_v3_reject_{uuid.uuid4().hex[:8]}")
-    session = create_onboarding_session(actor=owner)
-    proposal = OnboardingProposal.objects.create(
-        onboarding_session=session,
-        establishment=session.establishment,
-        created_by=owner,
-        status=OnboardingProposal.Status.DRAFT,
-        payload={
-            "schema_version": PROPOSAL_SCHEMA_VERSION_V3,
-            "business_units": [
-                {
-                    "client_key": "bu-free",
-                    "label": "Free pole",
-                    "description": "",
-                }
-            ],
-            "activity_subjects": [],
-        },
-    )
-
-    counts = process_non_terminal_v3_proposals(dry_run=False)
-
-    proposal.refresh_from_db()
-    assert counts["rejected"] == 1
-    assert proposal.status == OnboardingProposal.Status.REJECTED
-    assert proposal.last_error_code == "unsupported_schema_version_v3"
 
 
 def test_specific_name_accepts_255_char_boundary(imported_catalog):

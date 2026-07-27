@@ -21,7 +21,6 @@ from houston.accounts.services import (
     refresh_session,
     revoke_session,
     switch_selected_establishment,
-    validate_refresh_token,
 )
 from houston.testing.factories import create_establishment, create_membership, create_user
 
@@ -77,7 +76,8 @@ def test_issue_refresh_token_retries_on_digest_collision(monkeypatch, user, requ
     assert SessionRefreshToken.objects.filter(session=session).count() == 2
 
 
-def test_validate_refresh_token_uses_timestamp_expiration(user, request_factory):
+def test_refresh_session_rejects_timestamp_expired_token(user, request_factory):
+    """Expired refresh tokens must not rotate; status write is rolled back with the atomic block."""
     request = request_factory.get("/api/v1/auth/login/")
     session = create_user_session(request=request, user=user)
     issued_token = issue_refresh_token(session=session, family_id=session.refresh_token_family_id)
@@ -86,10 +86,7 @@ def test_validate_refresh_token_uses_timestamp_expiration(user, request_factory)
     refresh_token.save(update_fields=["expires_at", "updated_at"])
 
     with pytest.raises(InvalidRefreshTokenError):
-        validate_refresh_token(raw_refresh_token=issued_token.raw_token)
-
-    refresh_token.refresh_from_db()
-    assert refresh_token.status == SessionRefreshToken.Status.EXPIRED
+        refresh_session(raw_refresh_token=issued_token.raw_token)
 
 
 def test_refresh_session_marks_rotated_token_used(user, request_factory):

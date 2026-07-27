@@ -188,7 +188,7 @@ describe('hydrateDraftFromProposalPayload', () => {
     })
   })
 
-  it('still hydrates legacy v3 payloads', () => {
+  it('ignores non-v4 payloads', () => {
     const hydrated = hydrateDraftFromProposalPayload({
       schema_version: 'onboarding_proposal_v3',
       business_units: [
@@ -203,12 +203,8 @@ describe('hydrateDraftFromProposalPayload', () => {
       activity_subjects: [],
     })
 
-    expect(hydrated.businessUnits[0]).toMatchObject({
-      label: 'Coworking',
-      description: 'Espace',
-      unit_type: 'dedicated',
-      catalog_key: 'coworking',
-    })
+    expect(hydrated.businessUnits).toEqual([])
+    expect(hydrated.activitySubjects).toEqual([])
   })
 })
 

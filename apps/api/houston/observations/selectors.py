@@ -156,15 +156,6 @@ def _signal_summaries_for_ids(
     return summaries
 
 
-def signal_summaries_for_observation(
-    *,
-    observation_id: uuid.UUID,
-) -> list[ObservationProcessingSignalSummary]:
-    return _signal_summaries_for_ids(
-        signal_ids=signal_ids_for_observation(observation_id=observation_id)
-    )
-
-
 def _terminal_signal_projection(
     *,
     observation_id: uuid.UUID,

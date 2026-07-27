@@ -11,9 +11,7 @@ import {
   flattenActionPlanAssignees,
   formatActionPlanCreatedAtLabel,
   formatActionPlanTaskAssigneePoleLine,
-  formatActionPlanTaskDetailMetaLine,
   formatActionPlanTaskEditorMetaLine,
-  formatActionPlanTaskMetaLine,
   groupActionPlansByPilotBusinessUnit,
 } from '@/features/action-plans/lib/action-plan-display'
 import type { ActionPlanExecutionDetail, ActionPlanListItem } from '@/features/action-plans/types'
@@ -92,48 +90,6 @@ describe('formatActionPlanTaskEditorMetaLine', () => {
     })
 
     expect(label).not.toContain('Restaurant')
-    expect(label).toContain('Nami')
-    expect(label).toContain('·')
-  })
-})
-
-describe('formatActionPlanTaskDetailMetaLine', () => {
-  it('includes pole only when requested', () => {
-    const withPole = formatActionPlanTaskDetailMetaLine({
-      includePole: true,
-      poleLabel: 'Restaurant',
-      assigneeDisplayName: 'Nami',
-    })
-    const withoutPole = formatActionPlanTaskDetailMetaLine({
-      includePole: false,
-      poleLabel: 'Restaurant',
-      assigneeDisplayName: 'Nami',
-    })
-
-    expect(withPole).toContain('Restaurant')
-    expect(withoutPole).not.toContain('Restaurant')
-    expect(withoutPole).toContain('Nami')
-  })
-
-  it('returns null when no parts are present', () => {
-    expect(
-      formatActionPlanTaskDetailMetaLine({
-        includePole: true,
-        poleLabel: null,
-      }),
-    ).toBeNull()
-  })
-})
-
-describe('formatActionPlanTaskMetaLine', () => {
-  it('joins pole, assignee, and deadline labels', () => {
-    const label = formatActionPlanTaskMetaLine({
-      poleLabel: 'Restaurant',
-      assigneeDisplayName: 'Nami',
-      deadlineAt: '2026-07-07T14:30:00.000Z',
-    })
-
-    expect(label).toContain('Restaurant')
     expect(label).toContain('Nami')
     expect(label).toContain('·')
   })

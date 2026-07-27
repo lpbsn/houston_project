@@ -1812,29 +1812,6 @@ class OnboardingSessionProposalDetailView(APIView):
 
     @extend_schema(
         tags=["onboarding"],
-        responses={
-            200: OnboardingProposalResponseSerializer,
-            401: OpenApiResponse(response=DetailResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
-            404: OpenApiResponse(response=DetailResponseSerializer),
-        },
-        description="Returns one onboarding proposal scoped to its onboarding session.",
-    )
-    def get(self, request, session_id, proposal_id):
-        proposal_response = _get_onboarding_command_proposal(
-            actor=request.user,
-            session_id=session_id,
-            proposal_id=proposal_id,
-            capability=_ONBOARDING_CAPABILITY_CONFIGURE_RUNTIME,
-        )
-        if isinstance(proposal_response, Response):
-            return proposal_response
-
-        serializer = OnboardingProposalResponseSerializer(proposal_response)
-        return Response(serializer.data)
-
-    @extend_schema(
-        tags=["onboarding"],
         request=OnboardingProposalUpdateRequestSerializer,
         responses={
             200: ProposalCommandResponseSerializer,

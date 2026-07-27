@@ -47,7 +47,7 @@ Read first:
 - fragile copy/CSS/class assertions
 - redundant cross-layer duplication (RBAC matrix)
 - over-mocked frontend pages
-- obsolete behavior or scaffolding tests (e.g. EventEnvelope without product plan)
+- obsolete behavior or scaffolding tests (removed EventEnvelope / dead domains without product plan)
 - fixture bloat (`imported_catalog` scope changes need measurement)
 - missing critical lifecycle / journey / cache-purge coverage
 

@@ -2,7 +2,7 @@
 
 Status: authoritative
 Last reviewed: 2026-07-16
-Implementation status: **implemented** — Manual onboarding with **`onboarding_proposal_v4` only** (v3 rejected at runtime after preflight convert/REJECTED). Legacy Module→Domain→Subject / `onboarding_proposal_v2` rejected. AI onboarding is permanently removed from Houston product scope (Lot 6).
+Implementation status: **implemented** — Manual onboarding with **`onboarding_proposal_v4` only**. Legacy Module→Domain→Subject / `onboarding_proposal_v2` / non-terminal `onboarding_proposal_v3` are not accepted at runtime. AI onboarding is permanently removed from Houston product scope (Lot 6).
 
 ## 1. Purpose
 
@@ -21,7 +21,7 @@ Domain boundaries:
 - Capture an **optional but recommended** free-text `EstablishmentActivityDescription` to enrich runtime and AI context when provided.
 - Define the initial establishment runtime structure using **BusinessUnit → ActivitySubject** (manual wizard).
 - Product activation accepts **`onboarding_proposal_v4` only**.
-- Legacy proposals (`onboarding_proposal_v3`, `onboarding_proposal_v2`) are rejected at validation/apply (terminal v3 history may remain in DB).
+- Legacy proposals (`onboarding_proposal_v3`, `onboarding_proposal_v2`) are not accepted at validation/apply (terminal v3 history may remain in DB).
 - Require human validation before backend activation of runtime context.
 - Allow high-level post-activation runtime edits, subject to RBAC and human validation.
 
@@ -101,7 +101,7 @@ Proposal parent/child coherence follows BU/AS hierarchy rules in [`business_unit
 - `OnboardingProposal`
   - Candidate runtime structure proposed manually before activation.
   - Preferred payload: `schema_version: onboarding_proposal_v4` with BusinessUnit sections (`catalog_key`, `specific_name`, `instance_description?`) and retained activity subjects per BU.
-  - `onboarding_proposal_v3` is rejected at validation/apply. Non-terminal v3 rows are converted to v4 or `REJECTED` (`unsupported_schema_version_v3`) via preflight/migration; terminal applied/rejected history may remain.
+  - Only `onboarding_proposal_v4` is accepted at validation/apply. Historical terminal v3 applied/rejected rows may remain in DB; non-terminal v3 was converted or `REJECTED` by migration `establishments.0024`.
 
 - `OnboardingProposalItemMutation` (implemented API)
   - Proposal create/update/apply via `/api/v1/onboarding-sessions/{session_id}/proposals/` — add/remove BusinessUnit and ActivitySubject entries with parent/child coherence per [`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md).

@@ -25,7 +25,6 @@ from houston.action_plans.api.serializers import (
     ActionPlanListItemSerializer,
     ActionPlanPlanningSubmitRequestSerializer,
     ActionPlanPlanningSubmitResponseSerializer,
-    ActionPlanScheduleCreateRequestSerializer,
     ActionPlanScheduleDetailSerializer,
     ActionPlanScheduleUpdateRequestSerializer,
     ActionPlanStaleExecutionConflictSerializer,
@@ -34,7 +33,6 @@ from houston.action_plans.api.serializers import (
     ActionPlanTaskExecutionSerializer,
     ActionPlanTaskSkipRequestSerializer,
     ActionPlanUpdateRequestSerializer,
-    ActionPlanUseRequestSerializer,
     serialize_action_plan_detail,
     serialize_action_plan_list_item,
     serialize_execution_detail,
@@ -74,7 +72,6 @@ from houston.action_plans.planning_services import (
     submit_action_plan_planning,
 )
 from houston.action_plans.schedule_services import (
-    create_action_plan_schedule,
     deactivate_action_plan_schedule,
     update_action_plan_schedule,
 )
@@ -92,7 +89,6 @@ from houston.action_plans.services import (
     create_action_plan,
     create_action_plan_with_execution,
     create_action_plan_with_optional_schedule,
-    create_execution_from_action_plan,
     create_observation_from_execution_task,
     deactivate_action_plan,
     mark_action_plan_execution_done,
@@ -107,7 +103,6 @@ from houston.action_plans.template_deletion_services import delete_reusable_acti
 from houston.action_plans.upcoming_feed import build_action_plan_execution_upcoming_page
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.permissions import HasActiveMembership
-from houston.establishments.timezone_utils import establishment_local_date
 from houston.observations.models import ObservationProcessing
 from houston.uploads.access import resolve_observation_actor_membership
 from houston.uploads.api.views import EstablishmentScopedObservationMixin
@@ -796,62 +791,6 @@ class ActionPlanDeactivateView(EstablishmentScopedActionPlanMixin, APIView):
         )
 
 
-class ActionPlanUseView(EstablishmentScopedActionPlanMixin, APIView):
-    authentication_classes = [BearerAccessTokenAuthentication]
-    permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
-
-    @extend_schema(
-        tags=["action-plans"],
-        request=ActionPlanUseRequestSerializer,
-        responses={
-            201: ActionPlanExecutionDetailSerializer,
-            400: OpenApiResponse(response=ApiErrorResponseSerializer),
-            401: OpenApiResponse(response=ApiErrorResponseSerializer),
-            403: OpenApiResponse(response=ApiErrorResponseSerializer),
-            404: OpenApiResponse(response=ApiErrorResponseSerializer),
-        },
-    )
-    def post(self, request, establishment_id, action_plan_id):
-        membership = _resolve_membership(request, self.establishment_id)
-        if isinstance(membership, Response):
-            return membership
-
-        action_plan = get_action_plan_for_detail(
-            membership=membership,
-            action_plan_id=uuid.UUID(str(action_plan_id)),
-        )
-        if action_plan is None:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        body = ActionPlanUseRequestSerializer(data=request.data)
-        body.is_valid(raise_exception=True)
-        data = body.validated_data
-
-        try:
-            execution = create_execution_from_action_plan(
-                action_plan_id=action_plan.id,
-                actor=membership,
-                assignees=_assignee_payloads(data.get("assignees") or []),
-                use_shared_chronology=data.get("use_shared_chronology", False),
-                start_at=data.get("start_at"),
-                end_at=data.get("end_at"),
-                visible_from=data.get("visible_from"),
-                occurrence_date=data.get("occurrence_date"),
-            )
-        except (ActionPlanPermissionError, ActionPlanValidationError) as exc:
-            return _action_plan_error_response(exc)
-
-        execution = get_action_plan_execution_for_detail(
-            membership=membership,
-            execution_id=execution.id,
-        )
-        payload = serialize_execution_detail(execution, membership=membership)
-        return Response(
-            ActionPlanExecutionDetailSerializer(payload).data,
-            status=status.HTTP_201_CREATED,
-        )
-
-
 class ActionPlanPlanningSubmitView(EstablishmentScopedActionPlanMixin, APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
@@ -1382,64 +1321,6 @@ class ActionPlanExecutionTaskCreateObservationView(EstablishmentScopedActionPlan
         }
         return Response(
             ActionPlanTaskCreateObservationResponseSerializer(payload).data,
-            status=status.HTTP_201_CREATED,
-        )
-
-
-class ActionPlanScheduleCreateView(EstablishmentScopedActionPlanMixin, APIView):
-    authentication_classes = [BearerAccessTokenAuthentication]
-    permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
-
-    @extend_schema(
-        tags=["action-plans"],
-        request=ActionPlanScheduleCreateRequestSerializer,
-        responses={
-            201: ActionPlanScheduleDetailSerializer,
-            400: OpenApiResponse(response=ApiErrorResponseSerializer),
-            401: OpenApiResponse(response=ApiErrorResponseSerializer),
-            403: OpenApiResponse(response=ApiErrorResponseSerializer),
-            404: OpenApiResponse(response=ApiErrorResponseSerializer),
-        },
-    )
-    def post(self, request, establishment_id, action_plan_id):
-        membership = _resolve_membership(request, self.establishment_id)
-        if isinstance(membership, Response):
-            return membership
-
-        action_plan = get_action_plan_for_detail(
-            membership=membership,
-            action_plan_id=uuid.UUID(str(action_plan_id)),
-        )
-        if action_plan is None:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        body = ActionPlanScheduleCreateRequestSerializer(data=request.data)
-        body.is_valid(raise_exception=True)
-        data = body.validated_data
-
-        try:
-            schedule = create_action_plan_schedule(
-                action_plan=action_plan,
-                actor=membership,
-                start_date=data.get("start_date")
-                or establishment_local_date(establishment=action_plan.establishment),
-                end_date=data["end_date"],
-                start_at=data["start_at"],
-                end_at=data["end_at"],
-                recurrence_days=data["recurrence_days"],
-                assignees=_schedule_assignee_payloads(data.get("assignees") or []),
-                use_shared_chronology=data.get("use_shared_chronology", False),
-            )
-        except (ActionPlanPermissionError, ActionPlanValidationError) as exc:
-            return _action_plan_error_response(exc)
-
-        schedule = get_action_plan_schedule_for_detail(
-            membership=membership,
-            schedule_id=schedule.id,
-        )
-        payload = serialize_schedule_detail(schedule, membership=membership)
-        return Response(
-            ActionPlanScheduleDetailSerializer(payload).data,
             status=status.HTTP_201_CREATED,
         )
 

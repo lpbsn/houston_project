@@ -54,7 +54,7 @@ For significant state changes:
 
 Events are traces and triggers, not business source of truth.
 
-**Runtime side effects today:** post-commit hubs in `houston/realtime/broadcast.py` and `houston/notifications/scheduling.py`. The `houston.events` app and `EventEnvelope` in `houston/core/events.py` are non-runtime scaffolding (tests only) — do not treat them as the live event bus.
+**Runtime side effects today:** post-commit hubs in `houston/realtime/broadcast.py` and `houston/notifications/scheduling.py` only — do not invent a separate event bus.
 
 ## Transactions
 

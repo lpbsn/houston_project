@@ -1,7 +1,7 @@
 # Product Principles
 
 Status: authoritative
-Last reviewed: 2026-05-27
+Last reviewed: 2026-07-27
 
 ## 1. Product Identity
 
@@ -14,7 +14,7 @@ Houston is a structured operational workflow system for field teams. It turns fi
 Houston follows this operational loop:
 
 ```txt
-Observation → AI Pipeline → Signal → Action → Execution → Validation → Feed/Notification update
+Observation → AI Pipeline → Signal → Action Plan → Execution → Validation → Feed/Notification update
 ```
 
 The product is built to make this loop reliable, visible, and usable in real field conditions.
@@ -26,7 +26,7 @@ The product is built to make this loop reliable, visible, and usable in real fie
 - PostgreSQL stores business truth.
 - OpenAPI is the API contract.
 - AI proposes, backend validates, humans control authority.
-- Observation, Signal, Action, Checklist, Chat, Comment, and Notification are distinct concepts.
+- Observation, Signal, Action Plan, Chat, Comment, and Notification are distinct concepts.
 - Chat must not replace structured operational workflows.
 - Realtime coordinates refetch and lightweight updates; it does not own business truth.
 - Permissions are backend-enforced.
@@ -38,15 +38,15 @@ The product is built to make this loop reliable, visible, and usable in real fie
 - AI never mutates the database directly.
 - AI output must be backend-validated.
 - AI does not decide permissions.
-- AI does not create Actions in MVP.
+- AI does not create Action Plans in MVP.
 - AI does not analyze Chat in MVP.
 
 ## 5. Communication Principles
 
-- Operational work belongs in Observations, Signals, Actions, and Checklists.
+- Operational work belongs in Observations, Signals, and Action Plans.
 - Free-form exchange belongs in Chat V1 (DM and free groups).
 - Chat is independent from the operational workflow in MVP.
-- Comments are contextual (Signal/Action) ; Chat is establishment-scoped messaging, not a single general room.
+- Comments are contextual (Signal / Action Plan execution) ; Chat is establishment-scoped messaging, not a single general room.
 
 ## 6. MVP Discipline
 

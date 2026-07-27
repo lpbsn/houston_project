@@ -27,30 +27,6 @@ def api_client():
     return APIClient(enforce_csrf_checks=True)
 
 
-def test_proposal_endpoints_require_authentication(api_client):
-    session_id = uuid.uuid4()
-    proposal_id = uuid.uuid4()
-    responses = [
-        api_client.get(f"/api/v1/onboarding-sessions/{session_id}/proposals/"),
-        api_client.get(
-            f"/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/",
-        ),
-        api_client.post(
-            f"/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/submit/",
-            format="json",
-        ),
-        api_client.post(
-            f"/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/reject/",
-            format="json",
-        ),
-        api_client.post(
-            f"/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/apply/",
-            format="json",
-        ),
-    ]
-    assert {response.status_code for response in responses} == {401}
-
-
 def _valid_manual_v4_payload() -> dict:
     return {
         "schema_version": "onboarding_proposal_v4",
@@ -72,7 +48,33 @@ def _valid_manual_v4_payload() -> dict:
     }
 
 
-def test_owner_can_list_and_retrieve_v4_proposals(api_client):
+def test_proposal_endpoints_require_authentication(api_client):
+    session_id = uuid.uuid4()
+    proposal_id = uuid.uuid4()
+    responses = [
+        api_client.get(f"/api/v1/onboarding-sessions/{session_id}/proposals/"),
+        api_client.patch(
+            f"/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/",
+            {"payload": _valid_manual_v4_payload()},
+            format="json",
+        ),
+        api_client.post(
+            f"/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/submit/",
+            format="json",
+        ),
+        api_client.post(
+            f"/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/reject/",
+            format="json",
+        ),
+        api_client.post(
+            f"/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/apply/",
+            format="json",
+        ),
+    ]
+    assert {response.status_code for response in responses} == {401}
+
+
+def test_owner_can_list_v4_proposals(api_client):
     owner = create_user(username="proposal_api_owner")
     session = create_onboarding_session(actor=owner)
     proposal = create_manual_onboarding_proposal(
@@ -86,21 +88,15 @@ def test_owner_can_list_and_retrieve_v4_proposals(api_client):
         f"/api/v1/onboarding-sessions/{session.id}/proposals/",
         **auth_headers(access_token),
     )
-    detail_response = api_client.get(
-        f"/api/v1/onboarding-sessions/{session.id}/proposals/{proposal.id}/",
-        **auth_headers(access_token),
-    )
 
     assert list_response.status_code == 200
     assert [item["id"] for item in list_response.json()] == [str(proposal.id)]
-    assert detail_response.status_code == 200
-    body = detail_response.json()
-    assert body["id"] == str(proposal.id)
+    body = list_response.json()[0]
     assert body["source"] == OnboardingProposal.Source.MANUAL
     assert body["payload"]["schema_version"] == "onboarding_proposal_v4"
 
 
-def test_owner_can_create_and_retrieve_v4_proposals(api_client):
+def test_owner_can_create_v4_proposals(api_client):
     owner = create_user(username="proposal_api_v4_owner")
     session = create_onboarding_session(actor=owner)
     payload = _valid_manual_v4_payload()
@@ -118,12 +114,12 @@ def test_owner_can_create_and_retrieve_v4_proposals(api_client):
     assert proposal["payload"]["business_units"][0]["specific_name"] == "Coworking"
     assert "excluded_catalog_subject_keys" not in proposal["payload"]
 
-    detail_response = api_client.get(
-        f"/api/v1/onboarding-sessions/{session.id}/proposals/{proposal['id']}/",
+    list_response = api_client.get(
+        f"/api/v1/onboarding-sessions/{session.id}/proposals/",
         **auth_headers(access_token),
     )
-    assert detail_response.status_code == 200
-    assert detail_response.json()["payload"]["schema_version"] == "onboarding_proposal_v4"
+    assert list_response.status_code == 200
+    assert list_response.json()[0]["payload"]["schema_version"] == "onboarding_proposal_v4"
 
 
 def test_v4_payload_rejects_v3_business_unit_shape(api_client):
@@ -241,8 +237,10 @@ def test_foreign_session_and_mismatched_proposal_are_denied(api_client):
         f"/api/v1/onboarding-sessions/{foreign_session.id}/proposals/",
         **auth_headers(access_token),
     )
-    mismatched_response = api_client.get(
+    mismatched_response = api_client.patch(
         f"/api/v1/onboarding-sessions/{actor_session.id}/proposals/{foreign_proposal.id}/",
+        {"payload": _valid_manual_v4_payload()},
+        format="json",
         **auth_headers(access_token),
     )
     assert foreign_response.status_code == 404

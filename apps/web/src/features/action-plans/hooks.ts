@@ -11,7 +11,6 @@ import {
   type ActionPlanExecutionFeedViewMode,
   cancelActionPlanExecution,
   createActionPlan,
-  createActionPlanSchedule,
   createObservationFromActionPlanTask,
   deactivateActionPlan,
   deleteActionPlan,
@@ -20,7 +19,6 @@ import {
   fetchActionPlanExecutionDetail,
   fetchActionPlanExecutionFeed,
   fetchActionPlanExecutionUpcoming,
-  launchActionPlanExecution,
   markActionPlanExecutionDone,
   markActionPlanTaskDone,
   markActionPlanTaskPending,
@@ -36,11 +34,9 @@ import {
 import type {
   ActionPlanCatalogListFilters,
   ActionPlanCreateRequest,
-  ActionPlanScheduleCreateRequest,
   ActionPlanPlanningSubmitRequest,
   ActionPlanTaskCreateObservationRequest,
   ActionPlanTaskSkipRequest,
-  ActionPlanUseRequest,
   PatchedActionPlanExecutionUpdateRequest,
   PatchedActionPlanUpdateRequest,
 } from './types'
@@ -248,71 +244,6 @@ export function useDeleteActionPlanMutation(establishmentId: string, actionPlanI
     mutationFn: () => deleteActionPlan(establishmentId, actionPlanId),
     onSuccess: () => {
       invalidateCatalogSurfaces(queryClient, establishmentId, actionPlanId)
-    },
-  })
-}
-
-export function useUseActionPlanMutation(establishmentId: string, actionPlanId: string) {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (body: ActionPlanUseRequest = { use_shared_chronology: false, assignees: [] }) =>
-      launchActionPlanExecution(establishmentId, actionPlanId, body),
-    onSuccess: (data) => {
-      invalidateCatalogSurfaces(queryClient, establishmentId, actionPlanId)
-      invalidateActionPlanExecutionSurfaces(queryClient, establishmentId, data.id)
-    },
-  })
-}
-
-export function useUseActionPlanFromCatalogMutation(establishmentId: string) {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: ({
-      actionPlanId,
-      body = { use_shared_chronology: false, assignees: [] },
-    }: {
-      actionPlanId: string
-      body?: ActionPlanUseRequest
-    }) => launchActionPlanExecution(establishmentId, actionPlanId, body),
-    onSuccess: (data, variables) => {
-      invalidateCatalogSurfaces(queryClient, establishmentId, variables.actionPlanId)
-      invalidateActionPlanExecutionSurfaces(queryClient, establishmentId, data.id)
-    },
-  })
-}
-
-export function useCreateActionPlanScheduleMutation(
-  establishmentId: string,
-  actionPlanId: string,
-) {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (body: ActionPlanScheduleCreateRequest) =>
-      createActionPlanSchedule(establishmentId, actionPlanId, body),
-    onSuccess: () => {
-      invalidateCatalogSurfaces(queryClient, establishmentId, actionPlanId)
-      void queryClient.invalidateQueries({
-        queryKey: ['action-plans', 'action-plan-execution-feed', establishmentId],
-      })
-    },
-  })
-}
-
-export function useScheduleActionPlanFromCatalogMutation(establishmentId: string) {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: ({
-      actionPlanId,
-      body,
-    }: {
-      actionPlanId: string
-      body: ActionPlanScheduleCreateRequest
-    }) => createActionPlanSchedule(establishmentId, actionPlanId, body),
-    onSuccess: (_data, variables) => {
-      invalidateCatalogSurfaces(queryClient, establishmentId, variables.actionPlanId)
-      void queryClient.invalidateQueries({
-        queryKey: ['action-plans', 'action-plan-execution-feed', establishmentId],
-      })
     },
   })
 }

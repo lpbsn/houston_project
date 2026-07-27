@@ -138,15 +138,23 @@ def test_foreign_onboarding_proposal_mutations_return_404(
     assert response.status_code == 404
 
 
-def test_foreign_onboarding_proposal_detail_returns_404(
+def test_foreign_onboarding_proposal_patch_returns_404(
     api_client,
     foreign_access,
     actor_token,
 ):
     session = foreign_access["foreign_session"]
     proposal = foreign_access["foreign_proposal"]
-    response = api_client.get(
+    response = api_client.patch(
         _session_url(session.id, f"proposals/{proposal.id}/"),
+        {
+            "payload": {
+                "schema_version": "onboarding_proposal_v4",
+                "business_units": [],
+                "activity_subjects": [],
+            }
+        },
+        format="json",
         **auth_headers(actor_token),
     )
     assert response.status_code == 404
@@ -180,8 +188,16 @@ def test_mismatched_proposal_id_on_actor_session_returns_404(
 ):
     actor_session = create_onboarding_session(actor=foreign_access["actor"])
     foreign_proposal = foreign_access["foreign_proposal"]
-    response = api_client.get(
+    response = api_client.patch(
         _session_url(actor_session.id, f"proposals/{foreign_proposal.id}/"),
+        {
+            "payload": {
+                "schema_version": "onboarding_proposal_v4",
+                "business_units": [],
+                "activity_subjects": [],
+            }
+        },
+        format="json",
         **auth_headers(actor_token),
     )
     assert response.status_code == 404

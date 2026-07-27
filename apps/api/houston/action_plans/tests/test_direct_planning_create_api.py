@@ -15,10 +15,8 @@ from houston.action_plans.models import (
 )
 from houston.action_plans.tests.helpers import (
     action_plan_planning_submit_url,
-    action_plan_schedule_url,
     action_plans_url,
     api_planning_submit_payload,
-    api_recurring_schedule_payload,
     api_task_payload,
     create_catalog_action_plan,
 )
@@ -243,40 +241,6 @@ def test_planning_submit_rejects_non_reusable_plan(
         **auth_headers(token),
     )
     assert denied.status_code == 403
-
-
-@pytest.mark.django_db
-def test_schedule_endpoint_rejects_non_reusable_plan(
-    api_client,
-    owner_membership,
-    staff_membership,
-    business_unit,
-):
-    payload = _direct_planning_create_payload(
-        business_unit=business_unit,
-        recurring_membership=staff_membership,
-        one_shot_membership=staff_membership,
-    )
-    token = login(api_client, user=owner_membership.user)
-    create = api_client.post(
-        action_plans_url(owner_membership.establishment_id),
-        payload,
-        format="json",
-        **auth_headers(token),
-    )
-    assert create.status_code == 201, create.content
-    plan_id = create.json()["action_plan_id"]
-
-    denied = api_client.post(
-        action_plan_schedule_url(owner_membership.establishment_id, plan_id),
-        api_recurring_schedule_payload(
-            staff_membership=staff_membership,
-            business_unit=business_unit,
-        ),
-        format="json",
-        **auth_headers(token),
-    )
-    assert denied.status_code in {400, 403}
 
 
 @pytest.mark.django_db

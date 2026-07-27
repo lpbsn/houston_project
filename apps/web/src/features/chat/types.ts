@@ -60,9 +60,6 @@ export type ChatWsConversationUpdatedEvent = {
   conversation_id: string
 }
 
-/** @deprecated Use ChatWsConversationAccessRevokedEvent */
-export type ChatWsAccessRevokedEvent = ChatWsConversationAccessRevokedEvent
-
 export type ChatWsServerEvent =
   | ChatWsMessageCreatedEvent
   | ChatWsMessageRejectedEvent

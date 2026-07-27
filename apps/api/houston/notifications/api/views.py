@@ -34,12 +34,10 @@ from houston.notifications.push.exceptions import WebPushSubscriptionValidationE
 from houston.notifications.push.services import (
     get_web_push_subscription_for_user,
     revoke_subscription,
-    touch_subscription_last_seen,
     upsert_web_push_subscription,
 )
 from houston.notifications.selectors import build_notifications_page, count_unread_notifications
 from houston.notifications.services import (
-    archive_notification,
     get_notification_preferences,
     mark_all_notifications_read,
     mark_notification_read,
@@ -176,37 +174,6 @@ class NotificationMarkReadView(EstablishmentScopedObservationMixin, APIView):
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
         notification = mark_notification_read(
-            membership=membership,
-            notification_id=uuid.UUID(str(notification_id)),
-        )
-        if notification is None:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        return Response(NotificationItemSerializer(serialize_notification(notification)).data)
-
-
-class NotificationArchiveView(EstablishmentScopedObservationMixin, APIView):
-    authentication_classes = [BearerAccessTokenAuthentication]
-    permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
-
-    @extend_schema(
-        tags=["notifications"],
-        request=None,
-        responses={
-            200: NotificationItemSerializer,
-            401: OpenApiResponse(response=ApiErrorResponseSerializer),
-            404: OpenApiResponse(response=DetailResponseSerializer),
-        },
-    )
-    def post(self, request, establishment_id, notification_id):
-        membership = resolve_observation_actor_membership(
-            request,
-            establishment_id=self.establishment_id,
-        )
-        if membership is None:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        notification = archive_notification(
             membership=membership,
             notification_id=uuid.UUID(str(notification_id)),
         )
@@ -370,36 +337,6 @@ class WebPushSubscriptionUpsertView(APIView):
             )
 
         payload = _serialize_web_push_subscription(subscription)
-        return Response(WebPushSubscriptionResponseSerializer(payload).data)
-
-
-class WebPushSubscriptionTouchView(APIView):
-    authentication_classes = [BearerAccessTokenAuthentication]
-    permission_classes = [permissions.IsAuthenticated]
-
-    @extend_schema(
-        tags=["push"],
-        request=None,
-        responses={
-            200: WebPushSubscriptionResponseSerializer,
-            401: OpenApiResponse(response=ApiErrorResponseSerializer),
-            404: OpenApiResponse(response=DetailResponseSerializer),
-        },
-        description="Updates last_seen_at for an active Web Push subscription.",
-    )
-    def post(self, request, subscription_id):
-        subscription = get_web_push_subscription_for_user(
-            subscription_id=uuid.UUID(str(subscription_id)),
-            user=request.user,
-        )
-        if subscription is None:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        updated = touch_subscription_last_seen(subscription=subscription, user=request.user)
-        if updated is None:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        payload = _serialize_web_push_subscription(updated)
         return Response(WebPushSubscriptionResponseSerializer(payload).data)
 
 

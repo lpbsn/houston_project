@@ -22,7 +22,7 @@ It does not own:
 - direct database mutation
 - permissions or RBAC decisions
 - Observation submission validity
-- Signal lifecycle or Action lifecycle
+- Signal lifecycle or Action Plan lifecycle
 - Upload / Media lifecycle
 - Chat behavior
 - full provider implementation details
@@ -136,9 +136,7 @@ Not validated as implemented yet. Candidate lifecycles only:
 
 ## 8. Events
 
-No AI event contract is validated as implemented today.
-
-Current code only proves that the generic `EventEnvelope` category set includes `ai`; it does not validate an AI event catalog.
+No AI event contract is validated as implemented today. `EventEnvelope` scaffolding was removed; runtime side effects use post-commit hubs in `houston/realtime/broadcast.py` and `houston/notifications/scheduling.py`.
 
 Candidate events only (**not implemented** — no emitters in `ai/` or `signals/` today):
 - `AIRequestStarted`

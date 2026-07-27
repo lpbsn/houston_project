@@ -48,11 +48,6 @@ from houston.comments.models import CommentMention
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.role_constants import ADMIN_ROLES
 
-_CONTRIBUTION_PREFETCH = (
-    "assignees__execution_team__business_unit",
-    "task_executions__execution_team__business_unit",
-)
-
 _PLAN_DETAIL_SELECT_RELATED = (
     "pilot_business_unit",
     "pilot_business_unit__catalog_business_unit",
@@ -114,14 +109,6 @@ _EXECUTION_DETAIL_PREFETCH = (
 class InvolvedPoleSnapshot:
     business_unit_id: uuid.UUID
     contribution_status: str | None
-
-
-def execution_with_contribution_context(*, execution_id: uuid.UUID) -> ActionPlanExecution:
-    return (
-        ActionPlanExecution.objects.select_related("pilot_business_unit")
-        .prefetch_related(*_CONTRIBUTION_PREFETCH)
-        .get(id=execution_id)
-    )
 
 
 def catalog_action_plans_for_list(
@@ -277,17 +264,6 @@ def _contribution_status_from_tasks(tasks: list[ActionPlanExecutionTask]) -> str
     if all(task.status in TERMINAL_TASK_STATUSES for task in tasks):
         return CONTRIBUTION_STATUS_DONE
     return CONTRIBUTION_STATUS_IN_PROGRESS
-
-
-def compute_pole_contribution_status(
-    execution: ActionPlanExecution,
-    business_unit_id: uuid.UUID,
-) -> str | None:
-    tasks_by_business_unit = _group_tasks_by_business_unit(execution)
-    tasks = tasks_by_business_unit.get(business_unit_id)
-    if not tasks:
-        return None
-    return _contribution_status_from_tasks(tasks)
 
 
 def get_involved_poles(execution: ActionPlanExecution) -> list[InvolvedPoleSnapshot]:

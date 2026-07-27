@@ -101,7 +101,7 @@ Do not run `cd apps/api && uv run pytest` on the host — use Make targets or `d
 | **Standard suite** (~1 600+ tests) | `FakeObservationPipelineProvider` via autouse `force_fake_observation_pipeline_provider` | Yes |
 | **Provider guard tests** | Fake + mocked OpenAI client (`test_observation_pipeline_provider.py`) | Yes (Lot 6: no longer `slow`) |
 | **Pipeline validation / legacy / golden split** | Fake provider, DB-heavy | Yes (Lot 6: reintegrated into PR) |
-| **Live OpenAI smoke** | Real OpenAI (`test_openai_observation_pipeline_v6_contract_smoke.py` Lot 4 technical; `test_openai_observation_pipeline_v6_business_smoke.py` Lot 10 métier; legacy v4/generic smokes) | No — manual / pre-release only; archives under `.artifacts/pipeline-v6-smoke/` |
+| **Live OpenAI smoke** | Real OpenAI (`test_openai_observation_pipeline_v6_contract_smoke.py` Lot 4 technical; `test_openai_observation_pipeline_v6_business_smoke.py` Lot 10 métier; legacy v4/generic smokes) | No — manual / pre-release only; optional local archives under `.artifacts/pipeline-v6-smoke/` (gitignored, not source of truth) |
 
 PR filter (Makefile + CI): `-m "not openai_observation_smoke and not openai_smoke and not slow"`.
 
@@ -122,8 +122,7 @@ Dedicated throttle tests (`test_auth_throttling_api.py`, invitation accept over-
 - Auth / bootstrap / CSRF / refresh rotation
 - RBAC and cross-establishment isolation
 - Signal lifecycle (pipeline golden G01–G11 apply-side against runtime schema/prompt `ai_observation_pipeline_v6` / `v6_2` + V6 acceptance corpus S15 / truth tables + cancel/resolve)
-- Action lifecycle (service + API transitions + permissions)
-- Checklist permissions and materialization
+- Action Plan lifecycle (catalog, planning-submit, executions, schedules, service + API transitions + permissions)
 - Chat WS ticket auth and message delivery
 - Upload validators
 - Observation → signal feed journey (`observations/tests/test_observation_signal_feed_journey.py`)
@@ -195,9 +194,9 @@ GitHub Actions (`.github/workflows/ci.yml`):
 
 Run `make verify && make web-lint` before merging when the Docker stack is up and you need full confidence. For day-to-day backend work, `make backend-test` or `make backend-lint` is enough.
 
-## Baseline (Lot 1 — diagnostic, not targets)
+## Baseline (Lot 1 — diagnostic, historical)
 
-Recorded 2026-07-15 in `.artifacts/lot1-baseline/` (local Docker vs CI run `29397589248`):
+Lot 1 timing/inventory snapshots were local diagnostic outputs under `.artifacts/lot1-baseline/` (gitignored). They are **not** source of truth — re-measure with `--durations=50` / Vitest JSON reporter when profiling. Illustrative 2026-07-15 figures (local Docker vs CI run `29397589248`):
 
 | Measure | Local PR suite | CI |
 |---------|----------------|-----|
@@ -207,13 +206,13 @@ Recorded 2026-07-15 in `.artifacts/lot1-baseline/` (local Docker vs CI run `2939
 | Cross-imports `test_*.py` | 0 (after Lot 4 helpers extraction) | — |
 | `imported_catalog` marginal cost | ~16 s / 65 tests vs ~64 s / 311 tests | not dominant |
 
-Use `--durations=50` and `.artifacts/vitest-results.json` for ongoing profiling — **no arbitrary duration quotas**; optimize only measured bottlenecks.
+Use `--durations=50` and optional local Vitest JSON under `.artifacts/` for ongoing profiling — **no arbitrary duration quotas**; optimize only measured bottlenecks.
 
 ## Audit decisions (Lots 2–7)
 
 | Lot | Decision |
 |-----|----------|
-| **2** | Remove trivial `_meta` / Django declarative tests; drop shadcn `input`/`textarea` class tests; **EventEnvelope Option A** — keep scaffolding + 3 regression tests (`houston/core/events.py`, non-runtime); v3 golden mapped to v4 — prefer v4 corpus, delete v3 when overlap confirmed |
+| **2** | Remove trivial `_meta` / Django declarative tests; drop shadcn `input`/`textarea` class tests; **EventEnvelope scaffolding removed** (`houston/core/events.py`, `houston.events` app, related tests); v3 golden mapped to v4 — prefer v4 corpus |
 | **3** | CI concurrency, path filters, push-on-`main` only, single `tsc -b` in frontend job |
 | **4** | Extract shared test helpers to `tests/helpers.py`; zero cross-imports from `test_*.py`; parametrize redundant feed/RBAC API cases where matrix proves duplication |
 | **6** | Replace TTL `sleep(1.1)` with deterministic time control; reintegrate former `slow` modules into PR; keep live OpenAI smoke manual-only; preserve reserved `openai_smoke` / `openai_transcription_smoke` markers |

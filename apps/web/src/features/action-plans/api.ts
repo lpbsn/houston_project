@@ -21,13 +21,10 @@ import type {
   ActionPlanListItem,
   ActionPlanPlanningSubmitRequest,
   ActionPlanPlanningSubmitResponse,
-  ActionPlanScheduleCreateRequest,
-  ActionPlanScheduleDetail,
   ActionPlanTaskCreateObservationRequest,
   ActionPlanTaskCreateObservationResponse,
   ActionPlanTaskExecution,
   ActionPlanTaskSkipRequest,
-  ActionPlanUseRequest,
   PatchedActionPlanExecutionUpdateRequest,
   PatchedActionPlanUpdateRequest,
 } from './types'
@@ -331,43 +328,6 @@ export async function deleteActionPlan(
   if (!result.response.ok) {
     throw parseError(result.response, result.error)
   }
-}
-
-export async function launchActionPlanExecution(
-  establishmentId: string,
-  actionPlanId: string,
-  body: ActionPlanUseRequest = { use_shared_chronology: false, assignees: [] },
-): Promise<ActionPlanExecutionDetail> {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST('/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/use/', {
-        params: actionPlanPath(establishmentId, actionPlanId),
-        body,
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-  return assertActionPlanData<ActionPlanExecutionDetail>(result)
-}
-
-export async function createActionPlanSchedule(
-  establishmentId: string,
-  actionPlanId: string,
-  body: ActionPlanScheduleCreateRequest,
-): Promise<ActionPlanScheduleDetail> {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST(
-        '/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/schedule/',
-        {
-          params: actionPlanPath(establishmentId, actionPlanId),
-          body,
-          headers: getAuthHeaders(accessToken),
-        },
-      ),
-    { refreshable: true },
-  )
-  return assertActionPlanData<ActionPlanScheduleDetail>(result)
 }
 
 export async function submitActionPlanPlanning(

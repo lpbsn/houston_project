@@ -121,23 +121,6 @@ def upsert_web_push_subscription(
 
 
 @transaction.atomic
-def touch_subscription_last_seen(
-    *,
-    subscription: WebPushSubscription,
-    user,
-) -> WebPushSubscription | None:
-    if subscription.user_id != user.id:
-        return None
-    if subscription.revoked_at is not None:
-        return None
-
-    now = timezone.now()
-    subscription.last_seen_at = now
-    subscription.save(update_fields=["last_seen_at", "updated_at"])
-    return subscription
-
-
-@transaction.atomic
 def revoke_subscription(
     *,
     subscription: WebPushSubscription,

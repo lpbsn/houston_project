@@ -19,8 +19,6 @@ vi.mock('@/lib/success-toast', async () => {
 
 const navigate = vi.fn()
 const createMutateAsync = vi.fn()
-const scheduleMutateAsync = vi.fn()
-const useMutateAsync = vi.fn()
 const planningMutateAsync = vi.fn()
 const signalDetailQueryMock = vi.fn()
 const detailQueryMock = vi.fn()
@@ -170,14 +168,6 @@ vi.mock('../hooks', () => ({
     isPending: false,
   }),
   useActionPlanDetailQuery: () => detailQueryMock(),
-  useScheduleActionPlanFromCatalogMutation: () => ({
-    mutateAsync: scheduleMutateAsync,
-    isPending: false,
-  }),
-  useUseActionPlanFromCatalogMutation: () => ({
-    mutateAsync: useMutateAsync,
-    isPending: false,
-  }),
 }))
 
 vi.mock('../components/action-plan-event-planning-form', () => ({
@@ -310,8 +300,7 @@ describe('ActionPlanCreatePage', () => {
   beforeEach(() => {
     navigate.mockReset()
     createMutateAsync.mockReset()
-    scheduleMutateAsync.mockReset()
-    useMutateAsync.mockReset()
+    planningMutateAsync.mockReset()
     detailQueryMock.mockReset()
     detailQueryMock.mockReturnValue({
       isLoading: false,
@@ -334,8 +323,6 @@ describe('ActionPlanCreatePage', () => {
       status: 'in_progress',
       action_plan_id: 'plan-1',
     })
-    scheduleMutateAsync.mockResolvedValue({ id: 'schedule-1' })
-    useMutateAsync.mockResolvedValue({ id: 'exec-2' })
 
     mockAuthState.bootstrap.active_membership = {
       id: 'member-manager',
@@ -1050,8 +1037,6 @@ describe('ActionPlanCreatePage', () => {
     await waitFor(() => {
       expect(createMutateAsync).toHaveBeenCalledTimes(1)
       expect(planningMutateAsync).not.toHaveBeenCalled()
-      expect(scheduleMutateAsync).not.toHaveBeenCalled()
-      expect(useMutateAsync).not.toHaveBeenCalled()
       expect(navigate).toHaveBeenCalledWith('/execution')
     })
 
@@ -1081,8 +1066,7 @@ describe('ActionPlanCreatePage', () => {
 
     await waitFor(() => {
       expect(createMutateAsync).not.toHaveBeenCalled()
-      expect(scheduleMutateAsync).not.toHaveBeenCalled()
-      expect(useMutateAsync).not.toHaveBeenCalled()
+      expect(planningMutateAsync).not.toHaveBeenCalled()
     })
   })
 

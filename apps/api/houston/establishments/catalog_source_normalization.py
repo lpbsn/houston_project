@@ -18,12 +18,6 @@ TRANSVERSAL_BUSINESS_UNIT_KEYS = frozenset(
         "communication",
         "rh",
         "evenements_privatisations",
-        # Legacy v1 module keys still used by taxonomy backfill heuristics.
-        "rh_planning",
-        "event",
-        "evenements",
-        "administration",
-        "administration_back_office",
     }
 )
 

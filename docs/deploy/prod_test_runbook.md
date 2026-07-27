@@ -127,7 +127,7 @@ Destructive — use only on prod-test, not production.
 
 Contraction migrations ship as `establishments.0024` (v3 proposal preflight) → `0025` (identity harden + PROTECT) → `0026` (drop BU legacy columns). Domain: [`../product/domains/business_unit_taxonomy_domain.md`](../product/domains/business_unit_taxonomy_domain.md).
 
-**Before deploy on an environment with data:** run `make preflight-onboarding-v3` (or `manage.py preflight_onboarding_v3 --fail-if-present`). Non-terminal v3 proposals must be converted or rejected first.
+**Before deploy on an environment with data:** ensure onboarding proposals are **`onboarding_proposal_v4`**. Legacy v3 non-terminal rows were converted or `REJECTED` by migration `establishments.0024` (preflight command removed). Terminal applied/rejected history may remain.
 
 **If data must be retained:** do **not** reset Postgres. Rely on the backfill in `0025` (fails hard on incomplete/colliding rows). Import catalogue before/after as needed so catalog FKs resolve.
 

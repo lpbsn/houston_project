@@ -9,8 +9,7 @@ from houston.action_plans.constants import (
     CONTRIBUTION_STATUS_IN_PROGRESS,
 )
 from houston.action_plans.selectors import (
-    compute_pole_contribution_status,
-    execution_with_contribution_context,
+    get_action_plan_execution_for_detail,
     get_involved_poles,
 )
 from houston.action_plans.services import (
@@ -58,6 +57,15 @@ def _multi_pole_execution(
     return execution
 
 
+def _load_execution(*, membership, execution_id):
+    loaded = get_action_plan_execution_for_detail(
+        membership=membership,
+        execution_id=execution_id,
+    )
+    assert loaded is not None
+    return loaded
+
+
 def test_partial_contribution_is_in_progress(
     owner_membership,
     business_unit,
@@ -77,7 +85,7 @@ def test_partial_contribution_is_in_progress(
     ).first()
     mark_execution_task_done(task_execution=pilot_task, actor=staff_membership)
 
-    loaded = execution_with_contribution_context(execution_id=execution.id)
+    loaded = _load_execution(membership=owner_membership, execution_id=execution.id)
     poles = {pole.business_unit_id: pole.contribution_status for pole in get_involved_poles(loaded)}
 
     assert poles[business_unit.id] == CONTRIBUTION_STATUS_DONE
@@ -104,7 +112,7 @@ def test_unmark_reverts_pole_contribution_to_in_progress(
     mark_execution_task_done(task_execution=pilot_task, actor=staff_membership)
     mark_execution_task_pending(task_execution=pilot_task, actor=staff_membership)
 
-    loaded = execution_with_contribution_context(execution_id=execution.id)
+    loaded = _load_execution(membership=owner_membership, execution_id=execution.id)
     poles = {pole.business_unit_id: pole.contribution_status for pole in get_involved_poles(loaded)}
 
     assert poles[business_unit.id] == CONTRIBUTION_STATUS_IN_PROGRESS
@@ -130,9 +138,9 @@ def test_mixed_terminal_tasks_are_done(
     ).first()
     skip_execution_task(task_execution=maintenance_task, actor=out_of_scope_staff)
 
-    loaded = execution_with_contribution_context(execution_id=execution.id)
-    status = compute_pole_contribution_status(loaded, maintenance_business_unit.id)
-    assert status == CONTRIBUTION_STATUS_DONE
+    loaded = _load_execution(membership=owner_membership, execution_id=execution.id)
+    poles = {pole.business_unit_id: pole.contribution_status for pole in get_involved_poles(loaded)}
+    assert poles[maintenance_business_unit.id] == CONTRIBUTION_STATUS_DONE
 
 
 def test_pole_with_assignee_but_no_tasks_has_no_contribution_status(
@@ -161,7 +169,7 @@ def test_pole_with_assignee_but_no_tasks_has_no_contribution_status(
         use_shared_chronology=True,
     )
 
-    loaded = execution_with_contribution_context(execution_id=execution.id)
+    loaded = _load_execution(membership=owner_membership, execution_id=execution.id)
     poles = {pole.business_unit_id: pole.contribution_status for pole in get_involved_poles(loaded)}
 
     assert maintenance_business_unit.id in poles
@@ -183,7 +191,7 @@ def test_get_involved_poles_no_extra_queries(
         staff_membership=staff_membership,
         out_of_scope_staff=out_of_scope_staff,
     )
-    loaded = execution_with_contribution_context(execution_id=execution.id)
+    loaded = _load_execution(membership=owner_membership, execution_id=execution.id)
 
     with CaptureQueriesContext(connection) as context:
         poles = get_involved_poles(loaded)

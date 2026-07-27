@@ -68,17 +68,3 @@ def created_from_observation_media_items(signal: Signal):
     if prefetched is not None and "media_items" in prefetched:
         return sorted(prefetched["media_items"], key=lambda item: item.position)
     return list(observation.media_items.order_by("position"))
-
-
-def oldest_source_observation_link(signal: Signal):
-    prefetched = getattr(signal, "source_links_by_observation_chronology", None)
-    if prefetched is not None:
-        return prefetched[0] if prefetched else None
-
-    return (
-        signal.source_observation_links.select_related(
-            "observation__submitted_by_membership__user",
-        )
-        .order_by("observation__created_at", "observation__id")
-        .first()
-    )

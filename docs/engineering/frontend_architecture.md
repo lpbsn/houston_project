@@ -7,7 +7,7 @@ Last reviewed: 2026-07-23
 
 React, TypeScript, Vite, Tailwind, shadcn/ui, TanStack Query, Framer Motion (terrain transitions), PWA via `vite-plugin-pwa`.
 
-Zustand is documented as optional UI state but **not currently used** in `apps/web/src` — prefer TanStack Query for server state and React state for local UI.
+Zustand was removed from the stack — prefer TanStack Query for server state and React state for local UI.
 
 ## Routing
 

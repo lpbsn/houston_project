@@ -24,11 +24,6 @@ def list_active_memberships(user: User) -> list[EstablishmentMembership]:
     return list(_active_membership_queryset(user))
 
 
-def list_bootstrap_memberships(user: User) -> list[dict]:
-    memberships = list_active_memberships(user)
-    return [_serialize_membership(membership) for membership in memberships]
-
-
 def build_bootstrap_payload(
     user: User,
     *,

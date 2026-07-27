@@ -97,9 +97,7 @@ Incident assessment, containment, export, deletion, and anonymization workflows 
 
 ## 8. Events
 
-No Security / RGPD-specific event contract is validated in current code or in `apps/api/schema.yml`.
-
-Current code validates a generic `EventEnvelope` with categories such as `technical`, `ai`, and `audit`, but this does not prove that a security event catalog is implemented.
+No Security / RGPD-specific event contract is validated in current code or in `apps/api/schema.yml`. `EventEnvelope` scaffolding was removed; do not treat a generic envelope as a security event catalog.
 
 Candidate events only:
 

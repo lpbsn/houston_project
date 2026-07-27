@@ -1,5 +1,5 @@
 # Local prod-test stack: same-origin gateway (port 8080) + static SPA + API.
-# Railway integration (single api-web service) is PR5 — see docs/deploy/railway_static_frontend.md
+# Railway integration (single api-web service) is PR5 — see docs/deploy/railway_deploy_contract.md
 #
 # Usage: make up-prod-test
 
