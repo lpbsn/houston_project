@@ -19,9 +19,24 @@ import {
   getSignalCardSurfaceClass,
 } from '../lib/signal-display'
 import { canOpenSignalFeedCardActions } from '../lib/signal-feed-card-actions'
+import { isSignalMissingResponsibleClassification } from '../lib/signal-unclassified'
 import type { SignalFeedItem } from '../types'
 import { SignalStatusBadge } from './signal-status-badge'
+import { SignalUnclassifiedBadge } from './signal-unclassified-badge'
 import { SignalClassificationBadges } from './signal-classification-badges'
+
+function SignalCardClassificationBlock({ item }: { item: SignalFeedItem }) {
+  return (
+    <SignalClassificationBadges
+      signal={item}
+      leading={
+        isSignalMissingResponsibleClassification(item) ? (
+          <SignalUnclassifiedBadge signal={item} variant="feed" />
+        ) : undefined
+      }
+    />
+  )
+}
 
 type SignalCardProps = {
   item: SignalFeedItem
@@ -114,7 +129,7 @@ function FeedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
     >
       <FeedCardMetaRow
         timeLabel={formatSignalRelativeTime(item.last_activity_at)}
-        badges={<SignalClassificationBadges signal={item} />}
+        badges={<SignalCardClassificationBlock item={item} />}
         actions={
           showActions ? (
             <SignalCardActionsButton item={item} onOpenActions={onOpenActions} />
@@ -149,7 +164,9 @@ function FeedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
             <span className="truncate text-[11px] text-[#888]">{reporterName}</span>
           ) : null}
         </div>
-        <SignalStatusBadge status={item.status} variant="feed" />
+        <div className="flex shrink-0 items-center gap-1">
+          <SignalStatusBadge status={item.status} variant="feed" />
+        </div>
       </div>
     </article>
   )
@@ -186,8 +203,8 @@ function PinnedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
 
       <div className={`my-2 ${PINNED_SIGNAL_CARD_SEPARATOR_CLASS}`} />
 
-      <div className="mb-1 flex flex-wrap items-center gap-1">
-        <SignalClassificationBadges signal={item} />
+      <div className="mb-1">
+        <SignalCardClassificationBlock item={item} />
       </div>
 
       <h3 className="line-clamp-2 text-[15px] font-semibold leading-snug text-[#1a1a1a]">

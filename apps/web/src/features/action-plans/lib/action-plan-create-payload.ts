@@ -154,6 +154,8 @@ export function buildActionPlanCreateRequest(
       })
     : undefined
 
+  const trimmedFocus = (values.issueFocus ?? '').trim()
+
   return {
     title: values.title.trim(),
     description: values.description.trim(),
@@ -169,6 +171,7 @@ export function buildActionPlanCreateRequest(
       ? toIsoDateTime(values.sharedVisibleFrom) ?? null
       : null,
     ...(values.sourceSignalId ? { source_signal_id: values.sourceSignalId } : {}),
+    ...(trimmedFocus ? { issue_focus: trimmedFocus } : {}),
     ...(schedule ? { schedule } : {}),
   }
 }

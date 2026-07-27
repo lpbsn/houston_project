@@ -18,6 +18,7 @@ function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem 
     title: 'Fuite',
     structured_summary_short: 'Short',
     status: 'open',
+    routing_status: 'resolved',
     is_pinned: false,
     affected_business_unit_key: null,
     affected_business_unit_label: null,
@@ -86,11 +87,26 @@ vi.mock('@/features/signals/hooks/use-signal-feed-quick-actions', () => ({
   }),
 }))
 
+vi.mock('@/features/signals/hooks/use-signal-qualify-sheet', () => ({
+  useSignalQualifySheet: () => ({
+    open: false,
+    opening: false,
+    signalId: null,
+    signal: null,
+    isPending: false,
+    errorMessage: null,
+    openForSignal: vi.fn(),
+    close: vi.fn(),
+    submit: vi.fn(),
+  }),
+}))
+
 vi.mock('@/features/signals/components/signal-feed-filters-bar', () => ({
   EMPTY_SIGNAL_FEED_FILTERS: {
     statuses: [],
     businessUnitIds: [],
     activitySubjectIds: [],
+    needsQualification: false,
   },
   SignalFeedFiltersBar: () => null,
 }))

@@ -9,7 +9,9 @@ from rest_framework.views import APIView
 
 from houston.accounts.api.serializers import ApiErrorResponseSerializer
 from houston.accounts.authentication import BearerAccessTokenAuthentication
+from houston.establishments.api.serializers import BusinessUnitTreeResponseSerializer
 from houston.establishments.permissions import HasActiveMembership
+from houston.establishments.selectors import get_establishment_business_unit_tree
 from houston.signals.api.serializers import (
     SignalDetailSerializer,
     SignalFeedResponseSerializer,
@@ -43,6 +45,7 @@ from houston.signals.permissions import (
     can_resolve_signal,
     can_use_needs_qualification_filter,
     can_view_signal_feed,
+    is_triage_role,
 )
 from houston.signals.selectors import (
     get_signal_for_detail,
@@ -128,8 +131,9 @@ class SignalFeedView(EstablishmentScopedSignalMixin, APIView):
                 required=False,
                 type=bool,
                 description=(
-                    "When true, restrict to routing_status=unassigned among visible "
-                    "signals. Owner/Director/Manager only; Staff receives 403."
+                    "When true, restrict to signals with no responsible business unit "
+                    "(affected and activity_subject ignored) among active lifecycle "
+                    "statuses. Owner/Director/Manager only; Staff receives 403."
                 ),
             ),
         ],
@@ -358,6 +362,53 @@ class SignalResolveView(EstablishmentScopedSignalMixin, APIView):
             signal_id=signal_id,
             action="resolve",
         )
+
+
+class SignalQualifyRoutingOptionsView(EstablishmentScopedSignalMixin, APIView):
+    """Establishment-wide active BU/AS tree for qualify pickers (triage roles)."""
+
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanViewSignalFeed,
+    ]
+
+    @extend_schema(
+        tags=["signals"],
+        responses={
+            200: BusinessUnitTreeResponseSerializer,
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+        description=(
+            "Returns the establishment-wide active BusinessUnit / ActivitySubject tree "
+            "for signal routing qualification pickers. Owner/Director/Manager only; "
+            "not filtered by membership scope. Staff receives 403."
+        ),
+    )
+    def get(self, request, establishment_id):
+        membership = resolve_observation_actor_membership(
+            request,
+            establishment_id=self.establishment_id,
+        )
+        if membership is None or not is_triage_role(membership):
+            return Response(
+                {"code": "permission_denied", "detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        tree = get_establishment_business_unit_tree(
+            establishment_id=self.establishment_id,
+            active_only=True,
+        )
+        if tree is None:
+            return Response(
+                {"code": "permission_denied", "detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        return Response(BusinessUnitTreeResponseSerializer(tree).data)
 
 
 class SignalQualifyRoutingView(EstablishmentScopedSignalMixin, APIView):

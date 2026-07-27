@@ -1529,6 +1529,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/signals/qualify-routing-options/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns the establishment-wide active BusinessUnit / ActivitySubject tree for signal routing qualification pickers. Owner/Director/Manager only; not filtered by membership scope. Staff receives 403. */
+        get: operations["v1_establishments_signals_qualify_routing_options_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/temporary-uploads/": {
         parameters: {
             query?: never;
@@ -2094,6 +2111,8 @@ export interface components {
             assignees?: components["schemas"]["ActionPlanAssigneeInput"][];
             /** Format: uuid */
             source_signal_id?: string | null;
+            /** @description Optional. Required when linked create assigns a responsible pole that completes routing to resolved and the signal has no issue_focus yet. */
+            issue_focus?: string | null;
             /** @default false */
             use_shared_chronology: boolean;
             /** Format: date-time */
@@ -3617,6 +3636,12 @@ export interface components {
             /** Format: uuid */
             onboarding_session_id: string;
         };
+        /**
+         * @description * `resolved` - resolved
+         *     * `unassigned` - unassigned
+         * @enum {string}
+         */
+        RoutingStatusEnum: "resolved" | "unassigned";
         RuntimeActivitySubjectCreateRequest: {
             label?: string | null;
             /** @default  */
@@ -3661,6 +3686,7 @@ export interface components {
             title: string;
             structured_summary_short: string;
             status: string;
+            routing_status: components["schemas"]["RoutingStatusEnum"];
             is_pinned: boolean;
             /** Format: uuid */
             affected_business_unit_id?: string | null;
@@ -3685,6 +3711,7 @@ export interface components {
             aggregation_count: number;
             permission_hints: components["schemas"]["PermissionHints"];
             structured_summary: string;
+            issue_focus: string;
             source_context: components["schemas"]["SourceContext"];
             media_items: components["schemas"]["SignalDetailMediaItem"][];
             linked_action_plan_executions: components["schemas"]["SignalLinkedActionPlanExecution"][];
@@ -3706,6 +3733,7 @@ export interface components {
             title: string;
             structured_summary_short: string;
             status: string;
+            routing_status: components["schemas"]["RoutingStatusEnum"];
             is_pinned: boolean;
             /** Format: uuid */
             affected_business_unit_id?: string | null;
@@ -3768,6 +3796,7 @@ export interface components {
             title: string;
             structured_summary_short: string;
             status: string;
+            routing_status: components["schemas"]["RoutingStatusEnum"];
             is_pinned: boolean;
             /** Format: uuid */
             affected_business_unit_id?: string | null;
@@ -3792,6 +3821,7 @@ export interface components {
             aggregation_count: number;
             permission_hints: components["schemas"]["PermissionHints"];
             structured_summary: string;
+            issue_focus: string;
             source_context: components["schemas"]["SourceContext"];
             media_items: components["schemas"]["SignalDetailMediaItem"][];
             linked_action_plan_executions: components["schemas"]["SignalLinkedActionPlanExecution"][];
@@ -8770,7 +8800,7 @@ export interface operations {
                 business_unit_ids?: string;
                 /** @description Opaque pagination cursor from a previous response next_cursor. */
                 cursor?: string;
-                /** @description When true, restrict to routing_status=unassigned among visible signals. Owner/Director/Manager only; Staff receives 403. */
+                /** @description When true, restrict to signals with no responsible business unit (affected and activity_subject ignored) among active lifecycle statuses. Owner/Director/Manager only; Staff receives 403. */
                 needs_qualification?: boolean;
                 page_size?: number;
                 /** @description Comma-separated feed statuses: open, in_progress, resolved (max 3). */
@@ -9182,6 +9212,43 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_signals_qualify_routing_options_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessUnitTreeResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

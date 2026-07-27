@@ -118,6 +118,28 @@ describe('resolveActionPlanCreateModeConfig', () => {
     })
   })
 
+  it('unlocks pilot for signal-linked when signal has no responsible pole', () => {
+    expect(
+      resolveActionPlanCreateModeConfig({
+        mode: 'signal-linked',
+        role: 'manager',
+        canCreateActionPlan: true,
+        signalHasResponsibleBusinessUnit: false,
+      }).lockPilotBusinessUnit,
+    ).toBe(false)
+  })
+
+  it('locks pilot for signal-linked when signal has a responsible pole', () => {
+    expect(
+      resolveActionPlanCreateModeConfig({
+        mode: 'signal-linked',
+        role: 'owner',
+        canCreateActionPlan: true,
+        signalHasResponsibleBusinessUnit: true,
+      }).lockPilotBusinessUnit,
+    ).toBe(true)
+  })
+
   it('denies signal-linked access for staff', () => {
     expect(
       resolveActionPlanCreateModeConfig({

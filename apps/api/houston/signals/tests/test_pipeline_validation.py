@@ -224,7 +224,6 @@ def test_precondition_gate_does_not_consult_snapshot_ready_and_calls_provider():
             "business_units": [],
             "operational_units": [],
         },
-        "submission_context": {"author_scope_business_unit_routing_keys": []},
         "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
         "prompt_version": "test",
     }

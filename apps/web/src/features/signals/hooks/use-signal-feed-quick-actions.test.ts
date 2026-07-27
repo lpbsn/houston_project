@@ -44,6 +44,7 @@ function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem 
     title: 'Fuite',
     structured_summary_short: 'Short',
     status: 'open',
+    routing_status: 'resolved',
     is_pinned: false,
     affected_business_unit_key: null,
     affected_business_unit_label: null,
@@ -69,7 +70,13 @@ function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem 
   }
 }
 
-function renderQuickActionsHook() {
+function renderQuickActionsHook(
+  options: {
+    onQualifyRequest?: (signalId: string) => Promise<
+      { ok: true } | { ok: false; message: string }
+    >
+  } = {},
+) {
   const queryClient = createTestQueryClient()
   const hook = renderHook(
     () =>
@@ -77,6 +84,7 @@ function renderQuickActionsHook() {
         establishmentId: 'est-1',
         viewMode: 'personal',
         filters: EMPTY_SIGNAL_FEED_FILTERS,
+        onQualifyRequest: options.onQualifyRequest,
       }),
     {
       wrapper: ({ children }) =>
@@ -348,6 +356,81 @@ describe('useSignalFeedQuickActions', () => {
     expect(result.current.actionsOpen).toBe(true)
     expect(result.current.activeItem).toEqual(item)
 
+    await waitFor(() => {
+      expect(result.current.actionsOpen).toBe(false)
+    })
+  })
+
+  it('keeps actions open and sets actionError from qualify result', async () => {
+    const onQualifyRequest = vi.fn(async () => ({
+      ok: false as const,
+      message: 'Impossible de charger l’observation.',
+    }))
+    const { result } = renderQuickActionsHook({ onQualifyRequest })
+
+    act(() => {
+      result.current.openActions(buildFeedItem())
+    })
+
+    let actionResult: string | undefined
+    act(() => {
+      actionResult = result.current.runAction('qualify')
+    })
+
+    expect(actionResult).toBe('stay-open')
+    await waitFor(() => {
+      expect(onQualifyRequest).toHaveBeenCalledWith('signal-1')
+      expect(result.current.actionError).toBe('Impossible de charger l’observation.')
+    })
+    expect(result.current.actionsOpen).toBe(true)
+  })
+
+  it('closes actions sheet when qualify open succeeds', async () => {
+    const onQualifyRequest = vi.fn(async () => ({ ok: true as const }))
+    const { result } = renderQuickActionsHook({ onQualifyRequest })
+
+    act(() => {
+      result.current.openActions(buildFeedItem())
+    })
+
+    act(() => {
+      result.current.runAction('qualify')
+    })
+
+    await waitFor(() => {
+      expect(result.current.actionsOpen).toBe(false)
+      expect(result.current.activeItem).toBeNull()
+      expect(result.current.actionError).toBeNull()
+    })
+  })
+
+  it('clears actionError before qualify retry', async () => {
+    const onQualifyRequest = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false as const,
+        message: 'Première erreur',
+      })
+      .mockResolvedValueOnce({ ok: true as const })
+    const { result } = renderQuickActionsHook({ onQualifyRequest })
+
+    act(() => {
+      result.current.openActions(buildFeedItem())
+    })
+
+    act(() => {
+      result.current.runAction('qualify')
+    })
+
+    await waitFor(() => {
+      expect(result.current.actionError).toBe('Première erreur')
+    })
+
+    act(() => {
+      result.current.runAction('qualify')
+    })
+
+    expect(result.current.actionError).toBeNull()
     await waitFor(() => {
       expect(result.current.actionsOpen).toBe(false)
     })

@@ -155,6 +155,7 @@ def test_triage_roles_see_total_unclassified_everywhere(api_client, role):
 
     assert can_view_signal_detail(membership, signal) is True
     assert get_signal_for_detail(membership=membership, signal_id=signal.id) is not None
+    # Total unclassified appears in every Manager personal (Ma zone) feed.
     assert str(signal.id) in _feed_ids(api_client, membership, view_mode="personal")
     assert str(signal.id) in _feed_ids(api_client, membership, view_mode="general")
     assert _detail_status(api_client, membership, signal.id) == 200
@@ -195,7 +196,7 @@ def test_staff_sees_partial_when_pole_in_scope(api_client):
     assert str(out_of_scope.id) in _feed_ids(api_client, staff, view_mode="general")
 
 
-def test_manager_sees_all_unassigned_in_personal_feed(api_client):
+def test_manager_personal_feed_is_scope_or_total_unclassified(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     manager = build_api_membership_on_establishment(
         owner,
@@ -207,14 +208,21 @@ def test_manager_sees_all_unassigned_in_personal_feed(api_client):
         business_unit=taxonomy.bar,
     )
     total = _total_unclassified(owner)
-    partial = _partial_affected(owner, affected=taxonomy.restaurant)
+    out_of_scope_affected = _partial_affected(owner, affected=taxonomy.restaurant)
+    in_scope_responsible = _partial_responsible(owner, responsible=taxonomy.bar)
+    in_scope_affected = _partial_affected(owner, affected=taxonomy.bar)
     resolved = _resolved_signal(owner, taxonomy)
 
     personal_ids = _feed_ids(api_client, manager, view_mode="personal")
     assert str(total.id) in personal_ids
-    assert str(partial.id) in personal_ids
-    # Resolved outside Ma vue scope stays out of personal feed.
+    assert str(out_of_scope_affected.id) not in personal_ids
+    assert str(in_scope_responsible.id) in personal_ids
+    assert str(in_scope_affected.id) in personal_ids
     assert str(resolved.id) not in personal_ids
+
+    general_ids = _feed_ids(api_client, manager, view_mode="general")
+    assert str(total.id) in general_ids
+    assert str(out_of_scope_affected.id) in general_ids
 
 
 @pytest.mark.parametrize("role", [
@@ -306,6 +314,20 @@ def test_needs_qualification_filter_for_manager(api_client):
     )
     taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
     unassigned = _total_unclassified(owner)
+    partial_affected = _partial_affected(owner, affected=taxonomy.restaurant)
+    with_subject_no_responsible = Signal.objects.create(
+        establishment=owner.establishment,
+        title="Subject without responsible",
+        structured_summary="Partial.",
+        status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.UNASSIGNED,
+        affected_business_unit=taxonomy.restaurant,
+        responsible_business_unit=None,
+        activity_subject=taxonomy.lighting_subject,
+        issue_focus="",
+        last_activity_at=timezone.now(),
+    )
+    partial_responsible = _partial_responsible(owner, responsible=taxonomy.maintenance)
     resolved_routing = _resolved_signal(owner, taxonomy)
     token = login(api_client, user=manager.user)
 
@@ -318,6 +340,9 @@ def test_needs_qualification_filter_for_manager(api_client):
     body = response.json()
     ids = {item["id"] for item in body["items"]}
     assert str(unassigned.id) in ids
+    assert str(partial_affected.id) in ids
+    assert str(with_subject_no_responsible.id) in ids
+    assert str(partial_responsible.id) not in ids
     assert str(resolved_routing.id) not in ids
     assert body["applied_filters"]["needs_qualification"] is True
 
@@ -427,7 +452,7 @@ def test_permission_hints_on_total_unclassified_for_manager(api_client):
     assert can_pin_signal(manager, signal) is True
     assert can_cancel_signal(manager, signal) is True
     assert can_resolve_signal(manager, signal) is True
-    assert can_create_linked_action_plan(manager, signal=signal) is False
+    assert can_create_linked_action_plan(manager, signal=signal) is True
 
     token = login(api_client, user=manager.user)
     response = api_client.get(
@@ -440,10 +465,10 @@ def test_permission_hints_on_total_unclassified_for_manager(api_client):
     assert hints["can_pin"] is True
     assert hints["can_cancel"] is True
     assert hints["can_resolve"] is True
-    assert hints["can_create_linked_action_plan"] is False
+    assert hints["can_create_linked_action_plan"] is True
 
 
-def test_selector_personal_manager_without_scope_sees_only_unassigned():
+def test_selector_personal_manager_without_scope_sees_total_unclassified_only():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     manager_user = User.objects.create_user(
         username=f"mgr_noscope_{timezone.now().timestamp()}",
@@ -459,6 +484,7 @@ def test_selector_personal_manager_without_scope_sees_only_unassigned():
     )
     taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
     unassigned = _total_unclassified(owner)
+    partial = _partial_affected(owner, affected=taxonomy.restaurant)
     resolved = _resolved_signal(owner, taxonomy)
 
     ids = set(
@@ -468,5 +494,14 @@ def test_selector_personal_manager_without_scope_sees_only_unassigned():
         )
     )
     assert unassigned.id in ids
+    assert partial.id not in ids
     assert resolved.id not in ids
+
+    general_ids = set(
+        signal_feed_queryset(membership=manager, view_mode="general").values_list(
+            "id",
+            flat=True,
+        )
+    )
+    assert unassigned.id in general_ids
 

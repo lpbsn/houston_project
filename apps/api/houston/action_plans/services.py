@@ -243,15 +243,127 @@ def _validate_linked_signal_pilot_consistency(
     *,
     signal: Signal,
     pilot_business_unit: BusinessUnit,
+    actor: EstablishmentMembership,
 ) -> None:
-    if signal.responsible_business_unit_id is None:
-        raise ActionPlanValidationError(
-            "Linked action plan requires a signal with a responsible business unit."
+    """Validate pilot against existing responsible or null-responsible selection rules."""
+    if signal.responsible_business_unit_id is not None:
+        if pilot_business_unit.id != signal.responsible_business_unit_id:
+            raise ActionPlanValidationError(
+                "Pilot business unit must match the signal responsible business unit."
+            )
+        return
+
+    if not pilot_business_unit.active:
+        raise ActionPlanValidationError("Invalid business unit.")
+
+    subject = signal.activity_subject
+    if subject is not None:
+        subject_bu = subject.business_unit
+        if subject_bu is None or subject_bu.id != pilot_business_unit.id:
+            raise ActionPlanValidationError(
+                "Pilot business unit must match the activity subject business unit.",
+                code="invalid_pilot_business_unit",
+            )
+
+    if not can_create_action_plan(
+        actor,
+        establishment_id=signal.establishment_id,
+        pilot_business_unit=pilot_business_unit,
+    ):
+        raise ActionPlanPermissionError("Not allowed to create this action plan.")
+
+
+def _effective_routing_status_for_linked_pilot(
+    *,
+    signal: Signal,
+    pilot_business_unit: BusinessUnit,
+) -> str:
+    from houston.signals.signal_classification import (
+        InvalidSignalClassificationError,
+        routing_status_for_classification,
+    )
+
+    try:
+        return routing_status_for_classification(
+            establishment=signal.establishment,
+            affected_business_unit=signal.affected_business_unit,
+            responsible_business_unit=pilot_business_unit,
+            activity_subject=signal.activity_subject,
         )
-    if pilot_business_unit.id != signal.responsible_business_unit_id:
+    except InvalidSignalClassificationError as exc:
+        raise ActionPlanValidationError(str(exc), code="invalid_routing") from exc
+
+
+def _resolve_effective_issue_focus_for_linked_create(
+    *,
+    signal: Signal,
+    pilot_business_unit: BusinessUnit,
+    requested_issue_focus: str | None,
+) -> str | None:
+    """Return focus to pass to qualify, or None when unassigned (not required)."""
+    from houston.signals.services import normalize_issue_focus
+
+    routing_status = _effective_routing_status_for_linked_pilot(
+        signal=signal,
+        pilot_business_unit=pilot_business_unit,
+    )
+    if routing_status != Signal.RoutingStatus.RESOLVED:
+        return None
+
+    existing = normalize_issue_focus(signal.issue_focus)
+    if existing:
+        return existing
+    provided = normalize_issue_focus(requested_issue_focus)
+    if provided:
+        return provided
+    raise ActionPlanValidationError(
+        "issue_focus is required when routing is resolved.",
+        code="invalid_issue_focus",
+    )
+
+
+def _qualify_linked_signal_for_create(
+    *,
+    signal: Signal,
+    actor: EstablishmentMembership,
+    pilot_business_unit: BusinessUnit,
+    issue_focus: str | None,
+) -> Signal:
+    """Assign responsible via qualify_signal_routing; return surviving signal."""
+    from houston.signals.exceptions import (
+        SignalAlreadyMergedError,
+        SignalPermissionError,
+        SignalStateError,
+        SignalValidationError,
+    )
+    from houston.signals.services import qualify_signal_routing
+
+    patch: dict = {"responsible_business_unit_id": pilot_business_unit.id}
+    if issue_focus is not None:
+        patch["issue_focus"] = issue_focus
+
+    try:
+        result = qualify_signal_routing(
+            signal=signal,
+            membership=actor,
+            patch=patch,
+        )
+    except SignalPermissionError as exc:
+        raise ActionPlanPermissionError(str(exc) or "Permission denied.") from exc
+    except SignalAlreadyMergedError as exc:
+        raise ActionPlanValidationError(str(exc), code="already_merged") from exc
+    except SignalStateError as exc:
+        raise ActionPlanValidationError(str(exc), code="invalid_signal_state") from exc
+    except SignalValidationError as exc:
+        code = getattr(exc, "code", None) or "validation_error"
+        raise ActionPlanValidationError(str(exc), code=code) from exc
+
+    linked = result.signal
+    if linked.responsible_business_unit_id != pilot_business_unit.id:
         raise ActionPlanValidationError(
             "Pilot business unit must match the signal responsible business unit."
         )
+    return linked
 
 
 def _activate_linked_signal_on_execution_create(*, signal: Signal) -> None:
@@ -1139,6 +1251,7 @@ def create_action_plan_with_execution(
     tasks: list[dict] | None = None,
     assignees: list[dict] | None = None,
     source_signal_id: uuid.UUID | None = None,
+    issue_focus: str | None = None,
     is_reusable: bool = False,
     catalog_status: str | None = None,
     use_shared_chronology: bool = False,
@@ -1239,22 +1352,37 @@ def create_action_plan_with_execution(
                 establishment_id=establishment_id,
             )
             .select_related(
+                "establishment",
                 "affected_business_unit",
                 "responsible_business_unit",
                 "activity_subject",
+                "activity_subject__business_unit",
             )
             .first()
         )
         if signal is None:
             raise ActionPlanValidationError("Invalid signal.")
         _validate_linked_signal_active(signal=signal)
+        if not can_create_linked_action_plan(created_by, signal=signal):
+            raise ActionPlanPermissionError("Not allowed to create this action plan.")
         _validate_linked_signal_pilot_consistency(
             signal=signal,
             pilot_business_unit=pilot_business_unit,
+            actor=created_by,
         )
-        if not can_create_linked_action_plan(created_by, signal=signal):
-            raise ActionPlanPermissionError("Not allowed to create this action plan.")
-        if not can_create_action_plan(
+        if signal.responsible_business_unit_id is None:
+            effective_focus = _resolve_effective_issue_focus_for_linked_create(
+                signal=signal,
+                pilot_business_unit=pilot_business_unit,
+                requested_issue_focus=issue_focus,
+            )
+            signal = _qualify_linked_signal_for_create(
+                signal=signal,
+                actor=created_by,
+                pilot_business_unit=pilot_business_unit,
+                issue_focus=effective_focus,
+            )
+        elif not can_create_action_plan(
             created_by,
             establishment_id=establishment_id,
             pilot_business_unit=pilot_business_unit,

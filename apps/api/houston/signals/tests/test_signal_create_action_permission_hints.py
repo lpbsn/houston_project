@@ -140,3 +140,41 @@ def test_manager_with_responsible_scope_can_create_linked_action_plan_hint_true(
     hints = _fetch_hints(api_client, manager, signal)
 
     assert hints["can_create_linked_action_plan"] is True
+
+
+def test_manager_null_responsible_can_create_linked_action_plan_hint_true(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    from django.utils import timezone
+
+    signal = Signal.objects.create(
+        establishment=owner.establishment,
+        title="Unclassified",
+        structured_summary="Needs triage.",
+        status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.UNASSIGNED,
+        issue_focus="",
+        last_activity_at=timezone.now(),
+    )
+    taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
+    assert taxonomy.maintenance is not None
+
+    user = User.objects.create_user(
+        username=f"mgr_{uuid.uuid4().hex[:6]}",
+        email=f"mgr_{uuid.uuid4().hex[:6]}@example.com",
+        password=TEST_PASSWORD,
+        status=User.Status.ACTIVE,
+    )
+    manager = EstablishmentMembership.objects.create(
+        user=user,
+        establishment=owner.establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    create_membership_with_business_unit_scope(
+        membership=manager,
+        business_unit=taxonomy.maintenance,
+    )
+
+    hints = _fetch_hints(api_client, manager, signal)
+
+    assert hints["can_create_linked_action_plan"] is True

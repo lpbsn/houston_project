@@ -20,11 +20,13 @@ describe('normalizeSignalFeedFilters', () => {
       statuses: ['in_progress', 'open', 'open'],
       businessUnitIds: [BU_BAR, BU_RESTAURANT, BU_RESTAURANT],
       activitySubjectIds: [SAMPLE_SUBJECT_ID, SAMPLE_SUBJECT_ID],
+      needsQualification: false,
     })
     const b = normalizeSignalFeedFilters({
       statuses: ['open', 'in_progress'],
       businessUnitIds: [BU_RESTAURANT, BU_BAR],
       activitySubjectIds: [SAMPLE_SUBJECT_ID],
+      needsQualification: false,
     })
 
     expect(a).toEqual(b)
@@ -45,6 +47,7 @@ describe('normalizeSignalFeedFilters', () => {
       statuses: ['canceled', 'open'],
       businessUnitIds: [],
       activitySubjectIds: [],
+      needsQualification: false,
     })
   })
 })
@@ -71,12 +74,14 @@ describe('appendSignalFeedFiltersToSearchParams', () => {
       statuses: ['resolved', 'open'],
       businessUnitIds: [BU_RESTAURANT, BU_BAR],
       activitySubjectIds: [SAMPLE_SUBJECT_ID],
+      needsQualification: true,
     })
 
     expect(params.get('view_mode')).toBe('general')
     expect(params.get('statuses')).toBe('open,resolved')
     expect(params.get('business_unit_ids')).toBe([BU_BAR, BU_RESTAURANT].sort().join(','))
     expect(params.get('activity_subject_ids')).toBe(SAMPLE_SUBJECT_ID)
+    expect(params.get('needs_qualification')).toBe('true')
   })
 
   it('serializes canceled status filter', () => {

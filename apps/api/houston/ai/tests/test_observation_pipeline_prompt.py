@@ -22,8 +22,8 @@ from houston.signals.tests.conftest import create_observation
 from houston.testing.factories import build_membership
 
 
-def test_prompt_version_is_v6_1_schema_remains_v6():
-    assert AI_OBSERVATION_PIPELINE_PROMPT_VERSION == "ai_observation_pipeline_v6_1"
+def test_prompt_version_is_v6_2_schema_remains_v6():
+    assert AI_OBSERVATION_PIPELINE_PROMPT_VERSION == "ai_observation_pipeline_v6_2"
     assert AI_OBSERVATION_PIPELINE_SCHEMA_VERSION == "ai_observation_pipeline_v6"
     assert AI_OBSERVATION_PIPELINE_PROMPT_VERSION != AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
 
@@ -38,7 +38,9 @@ def test_system_prompt_is_french_and_covers_dual_context():
     assert "active_business_units" in prompt
     assert "contexte structurel" in prompt
     assert "seules clés runtime valides" in prompt
-    assert "author_scope_business_unit_routing_keys" in prompt
+    assert "author_scope_business_unit_routing_keys" not in prompt
+    assert "Aucun rattachement auteur" in prompt
+    assert "Ne force jamais responsible = affected" in prompt
     assert f"max {MAX_CANDIDATES_PER_OBSERVATION}" in prompt
     assert "MÉTHODE — ANALYSE FAIT PAR FAIT" in prompt
     assert "QUAND ÉMETTRE 0 / 1 / N CANDIDATS" in prompt
@@ -90,12 +92,13 @@ def test_build_pipeline_input_includes_prompt_version_not_system_text():
     payload = build_pipeline_input(observation=observation)
 
     assert payload["prompt_version"] == AI_OBSERVATION_PIPELINE_PROMPT_VERSION
-    assert payload["prompt_version"] == "ai_observation_pipeline_v6_1"
+    assert payload["prompt_version"] == "ai_observation_pipeline_v6_2"
     assert payload["schema_version"] == AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
     assert payload["validated_text"] == observation.raw_text
     assert "establishment_context" in payload
     assert "routing_taxonomy" in payload
-    assert "submission_context" in payload
+    assert "submission_context" not in payload
+    assert "author_scope_business_unit_routing_keys" not in json.dumps(payload)
     assert set(payload.keys()) == {
         "observation_id",
         "establishment_id",
@@ -104,7 +107,6 @@ def test_build_pipeline_input_includes_prompt_version_not_system_text():
         "media_count",
         "establishment_context",
         "routing_taxonomy",
-        "submission_context",
         "schema_version",
         "prompt_version",
     }

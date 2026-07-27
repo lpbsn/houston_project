@@ -4,12 +4,14 @@ export type SignalFeedFilters = {
   statuses: SignalFeedStatusFilter[]
   businessUnitIds: string[]
   activitySubjectIds: string[]
+  needsQualification: boolean
 }
 
 export const EMPTY_SIGNAL_FEED_FILTERS: SignalFeedFilters = {
   statuses: [],
   businessUnitIds: [],
   activitySubjectIds: [],
+  needsQualification: false,
 }
 
 export const SIGNAL_FEED_STATUS_OPTIONS: ReadonlyArray<{
@@ -41,6 +43,7 @@ export function normalizeSignalFeedFilters(filters: SignalFeedFilters): SignalFe
     activitySubjectIds: dedupeSorted(filters.activitySubjectIds).filter((value) =>
       UUID_PATTERN.test(value),
     ),
+    needsQualification: filters.needsQualification === true,
   }
 }
 
@@ -49,7 +52,8 @@ export function hasActiveSignalFeedFilters(filters: SignalFeedFilters): boolean 
   return (
     normalized.statuses.length > 0 ||
     normalized.businessUnitIds.length > 0 ||
-    normalized.activitySubjectIds.length > 0
+    normalized.activitySubjectIds.length > 0 ||
+    normalized.needsQualification
   )
 }
 
@@ -66,6 +70,9 @@ export function appendSignalFeedFiltersToSearchParams(
   }
   if (normalized.activitySubjectIds.length > 0) {
     params.set('activity_subject_ids', normalized.activitySubjectIds.join(','))
+  }
+  if (normalized.needsQualification) {
+    params.set('needs_qualification', 'true')
   }
 }
 

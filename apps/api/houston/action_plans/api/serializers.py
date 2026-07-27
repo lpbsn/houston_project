@@ -277,6 +277,16 @@ class ActionPlanCreateRequestSerializer(serializers.Serializer):
     )
     assignees = ActionPlanAssigneeInputSerializer(many=True, required=False, default=list)
     source_signal_id = serializers.UUIDField(required=False, allow_null=True)
+    issue_focus = serializers.CharField(
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        max_length=80,
+        help_text=(
+            "Optional. Required when linked create assigns a responsible pole that "
+            "completes routing to resolved and the signal has no issue_focus yet."
+        ),
+    )
     use_shared_chronology = serializers.BooleanField(required=False, default=False)
     start_at = serializers.DateTimeField(required=False, allow_null=True)
     end_at = serializers.DateTimeField(required=False, allow_null=True)

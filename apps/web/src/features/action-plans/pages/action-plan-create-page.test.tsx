@@ -341,7 +341,16 @@ describe('ActionPlanCreatePage', () => {
       id: 'member-manager',
       establishment_id: 'est-1',
       role: 'manager',
-      scopes: [],
+      scopes: [
+        { scope_type: 'business_unit', scope_id: 'bu-1' },
+        { scope_type: 'business_unit', scope_id: 'bu-2' },
+        { scope_type: 'business_unit', scope_id: 'bu-restaurant' },
+        { scope_type: 'business_unit', scope_id: 'bu-maintenance' },
+        { scope_type: 'business_unit', scope_id: 'bu-comm' },
+        { scope_type: 'business_unit', scope_id: 'bu-coworking' },
+        { scope_type: 'business_unit', scope_id: 'bu-food-court' },
+        { scope_type: 'business_unit', scope_id: 'bu-rooftop' },
+      ],
     }
     mockAuthState.bootstrap.user = {
       id: 'user-manager',
@@ -359,7 +368,16 @@ describe('ActionPlanCreatePage', () => {
       id: 'member-manager',
       establishment_id: 'est-1',
       role: 'manager',
-      scopes: [],
+      scopes: [
+        { scope_type: 'business_unit', scope_id: 'bu-1' },
+        { scope_type: 'business_unit', scope_id: 'bu-2' },
+        { scope_type: 'business_unit', scope_id: 'bu-restaurant' },
+        { scope_type: 'business_unit', scope_id: 'bu-maintenance' },
+        { scope_type: 'business_unit', scope_id: 'bu-comm' },
+        { scope_type: 'business_unit', scope_id: 'bu-coworking' },
+        { scope_type: 'business_unit', scope_id: 'bu-food-court' },
+        { scope_type: 'business_unit', scope_id: 'bu-rooftop' },
+      ],
     }
     mockBusinessUnitTree.business_units = [
       {
@@ -700,6 +718,199 @@ describe('ActionPlanCreatePage', () => {
       )
     })
     expect(navigate).toHaveBeenCalledWith('/execution')
+  })
+
+  it('unlocks pilot and omits focus when signal has no responsible and routing stays unassigned', async () => {
+    signalDetailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignalDetail({
+        responsible_business_unit_id: null,
+        responsible_business_unit_key: null,
+        responsible_business_unit_label: null,
+        affected_business_unit_id: null,
+        activity_subject_id: null,
+        issue_focus: '',
+      }),
+      refetch: vi.fn(),
+    })
+    mockBusinessUnitTree.business_units = [
+      {
+        id: 'bu-1',
+        specific_name: 'Rooftop',
+        instance_description: '',
+        active: true,
+        generic: { key: 'rooftop', label: 'Rooftop', description: '', unit_type: 'dedicated' },
+        activity_subjects: [],
+      },
+      {
+        id: 'bu-2',
+        specific_name: 'Maintenance',
+        instance_description: '',
+        active: true,
+        generic: { key: 'maintenance', label: 'Maintenance', description: '', unit_type: 'dedicated' },
+        activity_subjects: [],
+      },
+    ]
+
+    renderPage({
+      mode: 'signal-linked',
+      signalId: 'sig-1',
+      backPath: '/signals/sig-1',
+    })
+
+    expect(screen.queryByText('Focus opérationnel')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: "Pôle d'activité pilote" }))
+    fireEvent.click(screen.getByRole('button', { name: 'Maintenance' }))
+
+    const titleInput = screen.getAllByRole('textbox')[0]
+    fireEvent.change(titleInput, { target: { value: 'Plan non classifié' } })
+    addTask()
+    fireEvent.change(screen.getByLabelText('Titre de la tâche'), { target: { value: 'Tâche' } })
+    selectTaskBusinessUnit(0, 'Maintenance')
+    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan d’action' }))
+
+    await waitFor(() => {
+      expect(createMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source_signal_id: 'sig-1',
+          pilot_business_unit_id: 'bu-2',
+        }),
+      )
+    })
+    const payload = createMutateAsync.mock.calls.at(-1)?.[0] as Record<string, unknown>
+    expect(payload.issue_focus).toBeUndefined()
+  })
+
+  it('requires issue focus when linked create would resolve routing', async () => {
+    signalDetailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignalDetail({
+        responsible_business_unit_id: null,
+        responsible_business_unit_key: null,
+        responsible_business_unit_label: null,
+        affected_business_unit_id: 'bu-1',
+        activity_subject_id: 'as-1',
+        issue_focus: '',
+      }),
+      refetch: vi.fn(),
+    })
+    mockBusinessUnitTree.business_units = [
+      {
+        id: 'bu-1',
+        specific_name: 'Rooftop',
+        instance_description: '',
+        active: true,
+        generic: { key: 'rooftop', label: 'Rooftop', description: '', unit_type: 'dedicated' },
+        activity_subjects: [{ id: 'as-1', label: 'Électricité', description: '', source: 'catalog', active: true, is_generic: true }],
+      },
+    ]
+
+    renderPage({
+      mode: 'signal-linked',
+      signalId: 'sig-1',
+      backPath: '/signals/sig-1',
+    })
+
+    expect(screen.getByText('Focus opérationnel')).toBeTruthy()
+    const titleInput = screen.getAllByRole('textbox')[0]
+    fireEvent.change(titleInput, { target: { value: 'Plan resolved' } })
+    addTask()
+    fireEvent.change(screen.getByLabelText('Titre de la tâche'), { target: { value: 'Tâche' } })
+    selectTaskBusinessUnit(0, 'Rooftop')
+    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan d’action' }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Le focus opérationnel est obligatoire pour finaliser le classement.'),
+      ).toBeTruthy()
+    })
+    expect(createMutateAsync).not.toHaveBeenCalled()
+
+    const focusInput = screen.getByText('Focus opérationnel').parentElement?.querySelector('input')
+    expect(focusInput).toBeTruthy()
+    fireEvent.change(focusInput!, { target: { value: 'lampe hs' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan d’action' }))
+
+    await waitFor(() => {
+      expect(createMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source_signal_id: 'sig-1',
+          issue_focus: 'lampe hs',
+          pilot_business_unit_id: 'bu-1',
+        }),
+      )
+    })
+  })
+
+  it('constrains unlocked pilot options to the activity subject business unit', async () => {
+    signalDetailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignalDetail({
+        responsible_business_unit_id: null,
+        responsible_business_unit_key: null,
+        responsible_business_unit_label: null,
+        affected_business_unit_id: 'bu-1',
+        activity_subject_id: 'as-maint',
+        issue_focus: 'lampe hs',
+      }),
+      refetch: vi.fn(),
+    })
+    mockBusinessUnitTree.business_units = [
+      {
+        id: 'bu-1',
+        specific_name: 'Rooftop',
+        instance_description: '',
+        active: true,
+        generic: { key: 'rooftop', label: 'Rooftop', description: '', unit_type: 'dedicated' },
+        activity_subjects: [],
+      },
+      {
+        id: 'bu-2',
+        specific_name: 'Maintenance',
+        instance_description: '',
+        active: true,
+        generic: { key: 'maintenance', label: 'Maintenance', description: '', unit_type: 'dedicated' },
+        activity_subjects: [
+          {
+            id: 'as-maint',
+            label: 'Électricité',
+            description: '',
+            source: 'catalog',
+            active: true,
+            is_generic: true,
+          },
+        ],
+      },
+    ]
+
+    renderPage({
+      mode: 'signal-linked',
+      signalId: 'sig-1',
+      backPath: '/signals/sig-1',
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: "Pôle d'activité pilote" }))
+    expect(screen.getByRole('button', { name: 'Maintenance' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Rooftop' })).toBeNull()
+
+    const titleInput = screen.getAllByRole('textbox')[0]
+    fireEvent.change(titleInput, { target: { value: 'Plan sujet' } })
+    addTask()
+    fireEvent.change(screen.getByLabelText('Titre de la tâche'), { target: { value: 'Tâche' } })
+    selectTaskBusinessUnit(0, 'Maintenance')
+    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan d’action' }))
+
+    await waitFor(() => {
+      expect(createMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source_signal_id: 'sig-1',
+          pilot_business_unit_id: 'bu-2',
+        }),
+      )
+    })
   })
 
   it('resolves locked pilot from responsible_business_unit_id without matching generic.key', async () => {

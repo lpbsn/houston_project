@@ -10,6 +10,10 @@ class ActionPlanServiceError(Exception):
 class ActionPlanValidationError(ActionPlanServiceError):
     error_code = "validation_error"
 
+    def __init__(self, message: str = "", *, code: str | None = None) -> None:
+        super().__init__(message)
+        self.code = code if code is not None else self.error_code
+
 
 class ActionPlanStateError(ActionPlanServiceError):
     error_code = "invalid_action_plan_state"

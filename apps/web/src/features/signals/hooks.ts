@@ -1,12 +1,20 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query'
 
 import { invalidateEstablishmentSignalQueries } from '@/lib/query-invalidation'
 
 import {
   cancelSignal,
+  fetchQualifyRoutingOptions,
   fetchSignalDetail,
   fetchSignalFeed,
   pinSignal,
+  qualifySignalRouting,
   resolveSignal,
   signalsQueryKeys,
   unpinSignal,
@@ -15,7 +23,13 @@ import {
   applySignalQuickActionSuccess,
   type SignalQuickActionCacheContext,
 } from './lib/signal-feed-cache'
-import type { SignalDetail, SignalFeedFilters, SignalViewMode } from './types'
+import type {
+  SignalDetail,
+  SignalFeedFilters,
+  SignalQualifyRoutingRequest,
+  SignalQualifyRoutingResponse,
+  SignalViewMode,
+} from './types'
 
 export type { SignalQuickActionCacheContext } from './lib/signal-feed-cache'
 
@@ -60,6 +74,25 @@ export function useSignalDetailQuery(establishmentId: string | null, signalId: s
       return fetchSignalDetail(establishmentId, signalId)
     },
     enabled: Boolean(establishmentId && signalId),
+  })
+}
+
+export function useQualifyRoutingOptionsQuery(
+  establishmentId: string | null | undefined,
+  options?: { enabled?: boolean; staleTime?: number },
+) {
+  return useQuery({
+    queryKey: establishmentId
+      ? signalsQueryKeys.qualifyRoutingOptions(establishmentId)
+      : ['signals', 'qualify-routing-options', 'idle'],
+    queryFn: () => {
+      if (!establishmentId) {
+        throw new Error('Établissement non sélectionné.')
+      }
+      return fetchQualifyRoutingOptions(establishmentId)
+    },
+    enabled: Boolean(establishmentId) && (options?.enabled ?? true),
+    staleTime: options?.staleTime,
   })
 }
 
@@ -158,5 +191,79 @@ export function useResolveSignalMutation(establishmentId: string | null) {
         queryClient.setQueryData(signalsQueryKeys.detail(establishmentId, signalId), detail)
       }
     },
+  })
+}
+
+function toSignalDetailFromQualifyResponse(
+  response: SignalQualifyRoutingResponse,
+): SignalDetail {
+  const {
+    qualification_outcome,
+    surviving_signal_id,
+    merged_signal_id,
+    ...detail
+  } = response
+  void qualification_outcome
+  void surviving_signal_id
+  void merged_signal_id
+  return detail
+}
+
+export async function prefetchSignalDetail(
+  queryClient: QueryClient,
+  establishmentId: string,
+  signalId: string,
+): Promise<SignalDetail> {
+  return queryClient.fetchQuery({
+    queryKey: signalsQueryKeys.detail(establishmentId, signalId),
+    queryFn: () => fetchSignalDetail(establishmentId, signalId),
+  })
+}
+
+export function useQualifySignalRoutingMutation(establishmentId: string | null) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      signalId: string
+      body: SignalQualifyRoutingRequest
+    }) => {
+      if (!establishmentId) {
+        throw new Error('Observation introuvable.')
+      }
+      return qualifySignalRouting(establishmentId, input.signalId, input.body)
+    },
+    onSuccess: (response, variables) => {
+      if (!establishmentId) {
+        return
+      }
+      invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+      const survivorId = response.surviving_signal_id
+      const detail = toSignalDetailFromQualifyResponse(response)
+      queryClient.setQueryData(signalsQueryKeys.detail(establishmentId, survivorId), detail)
+      if (
+        response.qualification_outcome === 'updated' &&
+        survivorId === variables.signalId
+      ) {
+        queryClient.setQueryData(
+          signalsQueryKeys.detail(establishmentId, variables.signalId),
+          detail,
+        )
+      }
+    },
+  })
+}
+
+/** After merge navigation: drop archived source detail cache. */
+export function removeQualifiedSourceSignalDetailCache(
+  queryClient: QueryClient,
+  establishmentId: string,
+  sourceSignalId: string,
+  survivingSignalId: string,
+) {
+  if (sourceSignalId === survivingSignalId) {
+    return
+  }
+  queryClient.removeQueries({
+    queryKey: signalsQueryKeys.detail(establishmentId, sourceSignalId),
   })
 }

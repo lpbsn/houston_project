@@ -94,6 +94,8 @@ export type ActionPlanCreateFormValues = {
   assignees: ActionPlanAssigneeDraft[]
   schedule: ActionPlanScheduleDraft
   sourceSignalId?: string | null
+  /** Linked create only: required when effective routing becomes resolved without signal focus. */
+  issueFocus?: string
 }
 
 /** Flat field-error map (includes per-task keys `tasks.<id>.<field>`). */
@@ -165,6 +167,7 @@ export function validateActionPlanCreateForm(
   options: {
     canDefineCrossPoleTasks: boolean
     staffExecutionMode?: { membershipId: string; pilotBusinessUnitId: string }
+    requireIssueFocus?: boolean
   },
 ): ActionPlanCreateFormErrors {
   const errors: ActionPlanCreateFormErrors = {}
@@ -175,6 +178,10 @@ export function validateActionPlanCreateForm(
 
   if (!values.pilotBusinessUnitId) {
     errors.pilotBusinessUnitId = 'Sélectionnez un pôle d’activité pilote.'
+  }
+
+  if (options.requireIssueFocus && !(values.issueFocus ?? '').trim()) {
+    errors.issueFocus = 'Le focus opérationnel est obligatoire pour finaliser le classement.'
   }
 
   const activeTasks = values.tasks.filter(isActionPlanTaskDraftActive)

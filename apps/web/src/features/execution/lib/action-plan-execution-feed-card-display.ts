@@ -13,8 +13,10 @@ type InvolvedPoleLike = {
 }
 
 type SignalSummaryLike = {
+  affected_business_unit_id?: string | null
   affected_business_unit_key?: string | null
   affected_business_unit_label?: string | null
+  responsible_business_unit_id?: string | null
   responsible_business_unit_key?: string | null
   responsible_business_unit_label?: string | null
   activity_subject_normalized_name?: string | null
@@ -35,8 +37,10 @@ export function actionPlanFeedSignalClassificationInput(
   }
   const typed = signal as SignalSummaryLike
   return {
+    affected_business_unit_id: typed.affected_business_unit_id,
     affected_business_unit_key: typed.affected_business_unit_key,
     affected_business_unit_label: typed.affected_business_unit_label,
+    responsible_business_unit_id: typed.responsible_business_unit_id,
     responsible_business_unit_key: typed.responsible_business_unit_key,
     responsible_business_unit_label: typed.responsible_business_unit_label,
     activity_subject_normalized_name: typed.activity_subject_normalized_name,

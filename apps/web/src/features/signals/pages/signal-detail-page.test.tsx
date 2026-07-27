@@ -37,13 +37,18 @@ function buildSignal(overrides: Partial<SignalDetail> = {}): SignalDetail {
     structured_summary_short: 'Short',
     structured_summary: 'Description du signal.',
     status: 'open',
+    routing_status: 'resolved',
+    issue_focus: '',
     is_pinned: false,
-    affected_business_unit_key: null,
-    affected_business_unit_label: null,
-    responsible_business_unit_key: null,
-    responsible_business_unit_label: null,
-    activity_subject_normalized_name: null,
-    activity_subject_label: null,
+    affected_business_unit_id: 'bu-aff',
+    affected_business_unit_key: 'restaurant',
+    affected_business_unit_label: 'Restaurant',
+    responsible_business_unit_id: 'bu-resp',
+    responsible_business_unit_key: 'maintenance',
+    responsible_business_unit_label: 'Maintenance',
+    activity_subject_id: 'sub-1',
+    activity_subject_normalized_name: 'electricite',
+    activity_subject_label: 'Électricité',
     operational_unit_key: null,
     location_text: '',
     media_count: 0,
@@ -227,6 +232,65 @@ describe('SignalDetailPage tabs', () => {
     fireEvent.click(getCommentsTab())
 
     expect(screen.queryByRole('button', { name: "+ Plan d'action" })).toBeNull()
+  })
+
+  it('does not show qualify CTA from detail even when can_qualify_routing is true', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({
+        routing_status: 'unassigned',
+        affected_business_unit_id: null,
+        responsible_business_unit_id: null,
+        activity_subject_id: null,
+        affected_business_unit_key: null,
+        affected_business_unit_label: null,
+        responsible_business_unit_key: null,
+        responsible_business_unit_label: null,
+        activity_subject_normalized_name: null,
+        activity_subject_label: null,
+        permission_hints: {
+          can_pin: false,
+          can_cancel: false,
+          can_resolve: false,
+          can_create_linked_action_plan: false,
+          can_qualify_routing: true,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    expect(screen.queryByRole('button', { name: 'Qualifier' })).toBeNull()
+    expect(screen.queryByText('À qualifier')).toBeNull()
+    expect(screen.getByText('Non classifié')).toBeTruthy()
+  })
+
+  it('shows affected pole and Non classifié when only affected is set', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({
+        routing_status: 'unassigned',
+        affected_business_unit_id: 'bu-aff',
+        affected_business_unit_key: 'communication',
+        affected_business_unit_label: 'Communication',
+        responsible_business_unit_id: null,
+        responsible_business_unit_key: null,
+        responsible_business_unit_label: null,
+        activity_subject_id: null,
+        activity_subject_normalized_name: null,
+        activity_subject_label: null,
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    expect(screen.getByText('Pôle concerné')).toBeTruthy()
+    expect(screen.getByText('Communication')).toBeTruthy()
+    expect(screen.getByText('Non classifié')).toBeTruthy()
   })
 })
 

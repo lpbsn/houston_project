@@ -5,6 +5,7 @@ from houston.signals.api.views import (
     SignalDetailView,
     SignalFeedView,
     SignalPinView,
+    SignalQualifyRoutingOptionsView,
     SignalQualifyRoutingView,
     SignalResolveView,
     SignalUnpinView,
@@ -15,6 +16,11 @@ urlpatterns = [
         "establishments/<uuid:establishment_id>/signal-feed/",
         SignalFeedView.as_view(),
         name="signal-feed",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/signals/qualify-routing-options/",
+        SignalQualifyRoutingOptionsView.as_view(),
+        name="signal-qualify-routing-options",
     ),
     path(
         "establishments/<uuid:establishment_id>/signals/<uuid:signal_id>/",

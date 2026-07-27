@@ -20,6 +20,7 @@ function item(overrides: Partial<SignalFeedItem> & { id: string }): SignalFeedIt
     title: 'Test',
     structured_summary_short: 'Short',
     status: 'open',
+    routing_status: 'resolved',
     is_pinned: false,
     operational_unit_key: null,
     location_text: '',

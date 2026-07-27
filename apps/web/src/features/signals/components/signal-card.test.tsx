@@ -9,12 +9,26 @@ import { SignalCard } from './signal-card'
 const onSelect = vi.fn()
 const onOpenActions = vi.fn()
 
+/** Concerné must sit below the badge row, never beside Non classifié / primary chips. */
+function expectAffectedLineBelowBadgesRow(badgeText: string, affectedText: string) {
+  const badge = screen.getByText(badgeText)
+  const affectedLine = screen.getByText(affectedText)
+  const badgesRow = badge.parentElement
+
+  expect(badgesRow?.className).toContain('items-center')
+  expect(badgesRow?.contains(affectedLine)).toBe(false)
+  expect(affectedLine.parentElement?.contains(badgesRow as Node)).toBe(true)
+
+  return { badge, affectedLine, badgesRow }
+}
+
 function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem {
   return {
     id: 'signal-1',
     title: 'Fuite d eau',
     structured_summary_short: 'Short',
     status: 'open',
+    routing_status: 'resolved',
     is_pinned: false,
     affected_business_unit_key: null,
     affected_business_unit_label: null,
@@ -170,6 +184,103 @@ describe('SignalCard feed variant', () => {
     expect(screen.getByText('Salle — Table 12')).toBeTruthy()
     expect(container.querySelector('.lucide-map-pin')).toBeTruthy()
   })
+
+  it('shows only Non classifié when responsible and affected ids are null', () => {
+    render(
+      <SignalCard
+        item={buildFeedItem({
+          routing_status: 'unassigned',
+          affected_business_unit_id: null,
+          responsible_business_unit_id: null,
+          activity_subject_id: null,
+          affected_business_unit_label: null,
+          responsible_business_unit_label: null,
+          activity_subject_label: null,
+        })}
+        onSelect={onSelect}
+        variant="feed"
+      />,
+    )
+
+    expect(screen.getByText('Non classifié')).toBeTruthy()
+    expect(screen.queryByText(/^Concerné :/)).toBeNull()
+  })
+
+  it('shows Non classifié and Concerné line when only affected is set', () => {
+    render(
+      <SignalCard
+        item={buildFeedItem({
+          routing_status: 'unassigned',
+          affected_business_unit_id: 'bu-aff',
+          responsible_business_unit_id: null,
+          activity_subject_id: null,
+          affected_business_unit_label: 'Communication',
+        })}
+        onSelect={onSelect}
+        variant="feed"
+      />,
+    )
+
+    expectAffectedLineBelowBadgesRow('Non classifié', 'Concerné : Communication')
+    expect(screen.queryByText('Communication')).toBeNull()
+  })
+
+  it('shows responsible chip and Concerné when ids differ', () => {
+    render(
+      <SignalCard
+        item={buildFeedItem({
+          affected_business_unit_id: 'bu-aff',
+          affected_business_unit_label: 'Communication',
+          responsible_business_unit_id: 'bu-resp',
+          responsible_business_unit_label: 'Maintenance',
+          activity_subject_label: null,
+        })}
+        onSelect={onSelect}
+        variant="feed"
+      />,
+    )
+
+    expectAffectedLineBelowBadgesRow('Maintenance', 'Concerné : Communication')
+    expect(screen.queryByText('Non classifié')).toBeNull()
+  })
+
+  it('does not duplicate when affected and responsible share the same id', () => {
+    render(
+      <SignalCard
+        item={buildFeedItem({
+          affected_business_unit_id: 'bu-same',
+          affected_business_unit_label: 'Hôtel',
+          responsible_business_unit_id: 'bu-same',
+          responsible_business_unit_label: 'Hôtel',
+          activity_subject_label: 'Ménage',
+        })}
+        onSelect={onSelect}
+        variant="feed"
+      />,
+    )
+
+    expect(screen.getByText('Hôtel · Ménage')).toBeTruthy()
+    expect(screen.queryByText('Concerné : Hôtel')).toBeNull()
+    expect(screen.queryByText('Non classifié')).toBeNull()
+  })
+
+  it('keeps Concerné when distinct business units share the same label', () => {
+    render(
+      <SignalCard
+        item={buildFeedItem({
+          affected_business_unit_id: 'bu-aff',
+          affected_business_unit_label: 'Cuisine',
+          responsible_business_unit_id: 'bu-resp',
+          responsible_business_unit_label: 'Cuisine',
+          activity_subject_label: 'Plonge',
+        })}
+        onSelect={onSelect}
+        variant="feed"
+      />,
+    )
+
+    expectAffectedLineBelowBadgesRow('Cuisine · Plonge', 'Concerné : Cuisine')
+  })
 })
 
 describe('SignalCard pinned variant', () => {
@@ -189,6 +300,48 @@ describe('SignalCard pinned variant', () => {
     expect(screen.getByText('Voir le détail →')).toBeTruthy()
     expect(screen.getByText('Plonge — Cuisine')).toBeTruthy()
     expect(container.querySelector('.lucide-map-pin')).toBeTruthy()
+  })
+
+  it('shows only Non classifié when responsible and affected ids are null', () => {
+    render(
+      <SignalCard
+        item={buildFeedItem({
+          is_pinned: true,
+          routing_status: 'unassigned',
+          affected_business_unit_id: null,
+          responsible_business_unit_id: null,
+          activity_subject_id: null,
+          affected_business_unit_label: null,
+          responsible_business_unit_label: null,
+          activity_subject_label: null,
+        })}
+        onSelect={onSelect}
+        variant="pinned"
+      />,
+    )
+
+    expect(screen.getByText('Non classifié')).toBeTruthy()
+    expect(screen.queryByText(/^Concerné :/)).toBeNull()
+  })
+
+  it('shows Non classifié and Concerné line when only affected is set', () => {
+    render(
+      <SignalCard
+        item={buildFeedItem({
+          is_pinned: true,
+          routing_status: 'unassigned',
+          affected_business_unit_id: 'bu-aff',
+          responsible_business_unit_id: null,
+          activity_subject_id: null,
+          affected_business_unit_label: 'Communication',
+        })}
+        onSelect={onSelect}
+        variant="pinned"
+      />,
+    )
+
+    expectAffectedLineBelowBadgesRow('Non classifié', 'Concerné : Communication')
+    expect(screen.queryByText('Communication')).toBeNull()
   })
 })
 

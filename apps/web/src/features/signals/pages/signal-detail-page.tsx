@@ -25,7 +25,7 @@ import { formatSignalRelativeTime, formatSignalAggregationLabel } from '../lib/s
 
 type SignalDetailPageProps = {
   signalId: string
-  onNavigate: (pathname: string) => void
+  onNavigate: (pathname: string, options?: { replace?: boolean }) => void
 }
 
 function formatDescriptionContent(structuredSummary: string): string {

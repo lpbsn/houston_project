@@ -39,6 +39,7 @@ class SignalFeedItemSerializer(serializers.Serializer):
     title = serializers.CharField()
     structured_summary_short = serializers.CharField()
     status = serializers.CharField()
+    routing_status = serializers.ChoiceField(choices=["resolved", "unassigned"])
     is_pinned = serializers.BooleanField()
     affected_business_unit_id = serializers.UUIDField(allow_null=True, required=False)
     affected_business_unit_key = serializers.CharField(allow_null=True, required=False)
@@ -93,6 +94,7 @@ class SignalLinkedActionPlanExecutionSerializer(serializers.Serializer):
 
 class SignalDetailSerializer(SignalFeedItemSerializer):
     structured_summary = serializers.CharField()
+    issue_focus = serializers.CharField(allow_blank=True)
     source_context = SourceContextSerializer()
     media_items = SignalDetailMediaItemSerializer(many=True)
     linked_action_plan_executions = SignalLinkedActionPlanExecutionSerializer(many=True)
@@ -137,6 +139,7 @@ def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
         "title": signal.title,
         "structured_summary_short": structured_summary_short(signal.structured_summary),
         "status": signal.status,
+        "routing_status": signal.routing_status,
         "is_pinned": signal.is_pinned,
         "affected_business_unit_id": signal.affected_business_unit_id,
         "affected_business_unit_key": (
@@ -237,6 +240,7 @@ def serialize_signal_detail(*, signal: Signal, membership, request) -> dict:
 
     payload = serialize_signal_feed_item(signal=signal, membership=membership)
     payload["structured_summary"] = signal.structured_summary
+    payload["issue_focus"] = signal.issue_focus or ""
 
     link = created_from_source_observation_link(signal)
     if link is None:

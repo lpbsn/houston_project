@@ -24,8 +24,10 @@ const maintenancePilotBusinessUnit = {
 }
 
 const classificationWithAffectedSummary = {
+  affected_business_unit_id: 'bu-restaurant',
   affected_business_unit_key: 'restaurant',
   affected_business_unit_label: 'Restaurant',
+  responsible_business_unit_id: 'bu-maintenance',
   responsible_business_unit_key: 'maintenance',
   responsible_business_unit_label: 'Maintenance',
   activity_subject_normalized_name: 'equipements',

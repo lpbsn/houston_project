@@ -39,6 +39,7 @@ import {
   type ActionPlanCreateMode,
   resolveActionPlanCreateModeConfig,
 } from '../lib/action-plan-create-mode'
+import { isLinkedCreateIssueFocusRequired } from '../lib/action-plan-linked-create-focus'
 import { canCreateSignalLinkedActionPlanFromSignalHints } from '../lib/action-plan-management-access'
 import {
   actionPlanTaskTemplateToDraft,
@@ -53,7 +54,11 @@ import {
 } from '../lib/action-plan-event-planning-form'
 import { taskIdsNeedingAdvancedExpand } from '../lib/action-plan-field-errors'
 import { guideToFirstActionPlanFieldError } from '../lib/action-plan-form-guidance'
-import { resolveVisibleBusinessUnits } from '../lib/resolve-visible-business-units'
+import {
+  findBusinessUnitIdForActivitySubject,
+  resolveLinkedCreatePilotBusinessUnits,
+  resolveVisibleBusinessUnits,
+} from '../lib/resolve-visible-business-units'
 import { canShowActionPlanUpdate } from '../lib/action-plan-permission-hints'
 
 const SIGNAL_LINKED_PERMISSION_MESSAGE =
@@ -84,6 +89,16 @@ export function ActionPlanCreatePage({
   const isSignalLinked = mode === 'signal-linked'
   const isTemplateEdit = mode === 'template-edit'
 
+  const signalDetailQuery = useSignalDetailQuery(
+    establishmentId,
+    isSignalLinked ? (signalId ?? null) : null,
+  )
+
+  // Lock until signal detail is loaded; unlock only when responsible is confirmed null.
+  const signalHasResponsibleBusinessUnit = signalDetailQuery.data
+    ? Boolean(signalDetailQuery.data.responsible_business_unit_id)
+    : true
+
   const modeConfig = useMemo(
     () =>
       resolveActionPlanCreateModeConfig({
@@ -92,13 +107,19 @@ export function ActionPlanCreatePage({
         canCreateActionPlan,
         canCreateCatalogActionPlan,
         membershipId,
+        ...(isSignalLinked
+          ? { signalHasResponsibleBusinessUnit }
+          : {}),
       }),
-    [mode, role, canCreateActionPlan, canCreateCatalogActionPlan, membershipId],
-  )
-
-  const signalDetailQuery = useSignalDetailQuery(
-    establishmentId,
-    isSignalLinked ? (signalId ?? null) : null,
+    [
+      mode,
+      role,
+      canCreateActionPlan,
+      canCreateCatalogActionPlan,
+      membershipId,
+      isSignalLinked,
+      signalHasResponsibleBusinessUnit,
+    ],
   )
 
   const templateDetailQuery = useActionPlanDetailQuery(
@@ -109,6 +130,7 @@ export function ActionPlanCreatePage({
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [pilotBusinessUnitId, setPilotBusinessUnitId] = useState('')
+  const [issueFocus, setIssueFocus] = useState('')
   const [requiresValidation, setRequiresValidation] = useState(
     modeConfig.defaultRequiresValidation,
   )
@@ -161,6 +183,36 @@ export function ActionPlanCreatePage({
     ],
   )
 
+  const linkedActivitySubjectBusinessUnitId = useMemo(() => {
+    if (!isSignalLinked || signalHasResponsibleBusinessUnit) {
+      return null
+    }
+    return findBusinessUnitIdForActivitySubject(
+      businessUnitQuery.data?.business_units ?? [],
+      signalDetailQuery.data?.activity_subject_id,
+    )
+  }, [
+    businessUnitQuery.data?.business_units,
+    isSignalLinked,
+    signalDetailQuery.data?.activity_subject_id,
+    signalHasResponsibleBusinessUnit,
+  ])
+
+  const linkedPilotBusinessUnits = useMemo(() => {
+    if (!isSignalLinked || modeConfig.lockPilotBusinessUnit) {
+      return visibleBusinessUnits
+    }
+    return resolveLinkedCreatePilotBusinessUnits({
+      visibleBusinessUnits,
+      activitySubjectBusinessUnitId: linkedActivitySubjectBusinessUnitId,
+    })
+  }, [
+    isSignalLinked,
+    linkedActivitySubjectBusinessUnitId,
+    modeConfig.lockPilotBusinessUnit,
+    visibleBusinessUnits,
+  ])
+
   const signalPilotBusinessUnitId = useMemo(() => {
     if (!modeConfig.lockPilotBusinessUnit) {
       return ''
@@ -175,19 +227,26 @@ export function ActionPlanCreatePage({
     if (modeConfig.lockPilotBusinessUnit) {
       return signalPilotBusinessUnitId
     }
-    return pilotBusinessUnitId || visibleBusinessUnits[0]?.id || ''
+    const selectedIsAllowed = linkedPilotBusinessUnits.some(
+      (unit) => unit.id === pilotBusinessUnitId,
+    )
+    return (
+      (selectedIsAllowed ? pilotBusinessUnitId : '') ||
+      linkedPilotBusinessUnits[0]?.id ||
+      ''
+    )
   }, [
     isTemplateEdit,
+    linkedPilotBusinessUnits,
     modeConfig.lockPilotBusinessUnit,
     pilotBusinessUnitId,
     signalPilotBusinessUnitId,
     templateDetailQuery.data,
-    visibleBusinessUnits,
   ])
 
   const pilotBusinessUnitOptions = useMemo(
-    () => visibleBusinessUnits.map((unit) => ({ value: unit.id, label: unit.label })),
-    [visibleBusinessUnits],
+    () => linkedPilotBusinessUnits.map((unit) => ({ value: unit.id, label: unit.label })),
+    [linkedPilotBusinessUnits],
   )
 
   const canCrossPole = modeConfig.canDefineCrossPoleTasks
@@ -222,6 +281,28 @@ export function ActionPlanCreatePage({
     [effectiveAssignees, planningDraft],
   )
 
+  const requireIssueFocus = useMemo(() => {
+    if (!isSignalLinked || !signalDetailQuery.data) {
+      return false
+    }
+    if (signalHasResponsibleBusinessUnit) {
+      return false
+    }
+    return isLinkedCreateIssueFocusRequired({
+      affectedBusinessUnitId: signalDetailQuery.data.affected_business_unit_id,
+      activitySubjectId: signalDetailQuery.data.activity_subject_id,
+      pilotBusinessUnitId: resolvedPilotBusinessUnitId,
+      activitySubjectBusinessUnitId: linkedActivitySubjectBusinessUnitId,
+      signalIssueFocus: signalDetailQuery.data.issue_focus,
+    })
+  }, [
+    isSignalLinked,
+    linkedActivitySubjectBusinessUnitId,
+    resolvedPilotBusinessUnitId,
+    signalDetailQuery.data,
+    signalHasResponsibleBusinessUnit,
+  ])
+
   const formValues = useMemo<ActionPlanCreateFormValues>(
     () => ({
       title,
@@ -237,10 +318,12 @@ export function ActionPlanCreatePage({
       assignees: effectiveAssignees,
       schedule: planningSlice.schedule,
       sourceSignalId: isSignalLinked ? signalId : undefined,
+      issueFocus,
     }),
     [
       effectiveAssignees,
       description,
+      issueFocus,
       resolvedPilotBusinessUnitId,
       requiresValidation,
       saveToLibrary,
@@ -264,6 +347,7 @@ export function ActionPlanCreatePage({
     establishmentId: establishmentId ?? '',
     canDefineCrossPoleTasks: canCrossPole,
     staffExecutionMode,
+    requireIssueFocus,
     onNavigate: navigate,
   })
 
@@ -536,7 +620,11 @@ export function ActionPlanCreatePage({
           <PlanningOptionRow
             rowId="pilot-business-unit"
             label="Pôle d'activité pilote"
-            value={pilotBusinessUnitId}
+            value={
+              modeConfig.lockPilotBusinessUnit
+                ? resolvedPilotBusinessUnitId
+                : pilotBusinessUnitId || resolvedPilotBusinessUnitId
+            }
             displayValue={
               modeConfig.lockPilotBusinessUnit
                 ? (signalDetail?.responsible_business_unit_label ?? '—')
@@ -551,9 +639,41 @@ export function ActionPlanCreatePage({
               handleFieldChange('pilotBusinessUnitId', () => setPilotBusinessUnitId(nextPilot))
               revalidateAfterChange({ ...formValues, pilotBusinessUnitId: nextPilot })
             }}
-            error={resolvedFieldErrors.pilotBusinessUnitId}
+            error={
+              resolvedFieldErrors.pilotBusinessUnitId ??
+              (isSignalLinked &&
+              !modeConfig.lockPilotBusinessUnit &&
+              pilotBusinessUnitOptions.length === 0
+                ? 'Aucun pôle autorisé pour créer un plan d’action.'
+                : undefined)
+            }
             fieldKey="pilotBusinessUnitId"
           />
+          {requireIssueFocus ? (
+            <div data-action-plan-field="issueFocus">
+              <TerrainFieldLabel>Focus opérationnel</TerrainFieldLabel>
+              <Input
+                value={issueFocus}
+                onChange={(event) => {
+                  const nextFocus = event.target.value
+                  handleFieldChange('issueFocus', () => setIssueFocus(nextFocus))
+                  revalidateAfterChange({ ...formValues, issueFocus: nextFocus })
+                }}
+                aria-invalid={resolvedFieldErrors.issueFocus ? true : undefined}
+                className={cn(
+                  'h-11 border-[#E8E6DF]',
+                  resolvedFieldErrors.issueFocus && 'border-destructive',
+                )}
+              />
+              {resolvedFieldErrors.issueFocus ? (
+                <p className="mt-1 text-xs text-destructive">{resolvedFieldErrors.issueFocus}</p>
+              ) : (
+                <p className="mt-1 text-[11px] text-[#888]">
+                  Requis pour classer complètement cette observation.
+                </p>
+              )}
+            </div>
+          ) : null}
         </TerrainCard>
 
         {showToggleSection ? (

@@ -21,7 +21,28 @@ const UX_STATUS_LABELS: Record<ObservationUxStatus, string> = {
 
 const FEED_UPDATED_UX_STATUSES = new Set<ObservationUxStatus>(['signal_created', 'signal_updated'])
 
-export function getProcessingUxLabel(uxStatus: string): string {
+export function getFailedAnalysisLabel(lastErrorCode?: string | null): string {
+  if (typeof lastErrorCode === 'string' && lastErrorCode.startsWith('precondition_')) {
+    return 'Analyse impossible : établissement ou configuration des pôles invalide'
+  }
+  if (
+    typeof lastErrorCode === 'string' &&
+    (lastErrorCode.startsWith('provider_') ||
+      lastErrorCode === 'invalid_structured_output' ||
+      lastErrorCode === 'invalid_response_schema')
+  ) {
+    return 'Analyse temporairement indisponible (service d’analyse)'
+  }
+  return UX_STATUS_LABELS.analysis_failed
+}
+
+export function getProcessingUxLabel(
+  uxStatus: string,
+  lastErrorCode?: string | null,
+): string {
+  if (uxStatus === 'analysis_failed') {
+    return getFailedAnalysisLabel(lastErrorCode)
+  }
   if (uxStatus in UX_STATUS_LABELS) {
     return UX_STATUS_LABELS[uxStatus as ObservationUxStatus]
   }

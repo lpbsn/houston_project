@@ -33,6 +33,7 @@ const TOP_LEVEL_FIELD_MAP: Record<string, string> = {
   description: 'description',
   assignees: 'assignees',
   end_at: 'endAt',
+  issue_focus: 'issueFocus',
 }
 
 const TASK_FIELD_MAP: Record<string, ActionPlanTaskFieldName> = {

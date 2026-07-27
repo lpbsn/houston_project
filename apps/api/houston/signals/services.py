@@ -41,6 +41,7 @@ from houston.signals.aggregation_eval import (
     count_active_taxonomy_peers_with_different_focus,
     format_taxonomy_bucket_key,
 )
+from houston.signals.author_affected_fallback import apply_author_affected_fallback
 from houston.signals.constants import (
     ACTIVE_SIGNAL_STATUSES,
     AI_ISSUE_FOCUS_MAX_LENGTH,
@@ -57,6 +58,9 @@ from houston.signals.exceptions import (
     SignalValidationError,
 )
 from houston.signals.models import CandidateSignal, ExpectedAction, Signal, SignalSourceObservation
+from houston.signals.responsible_text_anchoring import (
+    sanitize_unanchored_responsible_without_subject,
+)
 from houston.signals.routing_resolver import (
     RoutingResolution,
     resolve_candidate_routing,
@@ -689,6 +693,15 @@ def apply_pipeline_output(
         resolution = resolve_candidate_routing(
             establishment_id=observation.establishment_id,
             proposal=proposal,
+            routing_taxonomy=taxonomy,
+        )
+        resolution = sanitize_unanchored_responsible_without_subject(
+            observation=observation,
+            resolution=resolution,
+        )
+        resolution = apply_author_affected_fallback(
+            observation=observation,
+            resolution=resolution,
             routing_taxonomy=taxonomy,
         )
         resolved = _resolved_taxonomy_from_resolution(resolution)
@@ -1865,7 +1878,13 @@ def qualify_signal_routing(
 
     normalized_issue_focus = normalize_issue_focus(issue_focus)
     if resolution.routing_status == Signal.RoutingStatus.RESOLVED:
-        normalized_issue_focus = require_normalized_issue_focus(normalized_issue_focus)
+        try:
+            normalized_issue_focus = require_normalized_issue_focus(normalized_issue_focus)
+        except SignalPipelineCandidateError as exc:
+            raise SignalValidationError(
+                "issue_focus is required when routing is resolved.",
+                code="invalid_issue_focus",
+            ) from exc
 
     resolved_taxonomy = _resolved_taxonomy_from_resolution(resolution)
     collision: Signal | None = None

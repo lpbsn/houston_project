@@ -29,6 +29,9 @@ AUDIT_SOURCES = frozenset(
         "subject_derived",
         "ambiguous_key",
         "materialization_miss",
+        "author_scope_fallback",
+        "responsible_text_anchored",
+        "responsible_unanchored_rejected",
     }
 )
 
