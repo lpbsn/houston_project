@@ -141,7 +141,7 @@ Contraction migrations ship as `establishments.0024` (v3 proposal preflight) →
 6. Deploy this version
 7. Run migrations (`0024`–`0026`)
 8. Import catalogue (`import_business_unit_catalog`)
-9. Smoke tests and golden IA v5
+9. Smoke tests and golden IA v6
 10. Reactivate workers and reopen writes after validation
 
 Local equivalent of a full wipe: `make reset-dev-db` — see [`../engineering/local_development.md`](../engineering/local_development.md).

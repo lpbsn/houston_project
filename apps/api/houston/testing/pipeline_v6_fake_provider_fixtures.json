@@ -1,0 +1,200 @@
+{
+  "schema_version": "pipeline_v6_fake_provider_fixtures_v1",
+  "notes": "LLM-shaped fixtures independent of expected_v6. Logical taxonomy keys are remapped at runtime; fixtures must not include routing_status or other backend-only fields.",
+  "fixtures": {
+    "S15-01": {
+      "mode": "precondition_only"
+    },
+    "S15-02": {
+      "mode": "precondition_only"
+    },
+    "S15-05": {
+      "mode": "apply",
+      "candidates": [
+        {
+          "title": "Verre cassé devant l'ascenseur",
+          "structured_summary": "Débris de verre au sol devant l'ascenseur, nettoyage et sécurisation nécessaires.",
+          "issue_focus": "verre ascenseur",
+          "canonical_object": "verre",
+          "signal_kind": "actionable",
+          "expected_action": "clean_secure",
+          "information_type": null,
+          "affected_business_unit_key": "hotel",
+          "responsible_business_unit_key": "hotel",
+          "activity_subject_key": "menage",
+          "operational_unit_key": null,
+          "location_text": "ascenseur"
+        }
+      ]
+    },
+    "S15-07": {
+      "mode": "apply",
+      "candidates": [
+        {
+          "title": "Planning étages disponible",
+          "structured_summary": "Les plannings d'étages sont disponibles pour consultation.",
+          "issue_focus": "planning étages",
+          "canonical_object": "planning étages",
+          "signal_kind": "informational",
+          "expected_action": "inform",
+          "information_type": "schedule_available",
+          "affected_business_unit_key": "hotel",
+          "responsible_business_unit_key": "hotel",
+          "activity_subject_key": "organisation",
+          "operational_unit_key": null,
+          "location_text": null
+        }
+      ]
+    },
+    "S15-11": {
+      "mode": "apply",
+      "candidates": [
+        {
+          "title": "Frigo trop chaud",
+          "structured_summary": "Le frigo du restaurant est trop chaud.",
+          "issue_focus": "frigo chaud",
+          "canonical_object": "frigo",
+          "signal_kind": "actionable",
+          "expected_action": "inspect",
+          "information_type": null,
+          "affected_business_unit_key": "restaurant",
+          "responsible_business_unit_key": "restaurant",
+          "activity_subject_key": "froid",
+          "operational_unit_key": null,
+          "location_text": null
+        },
+        {
+          "title": "Sol trempé",
+          "structured_summary": "Le sol du restaurant est trempé et doit être nettoyé.",
+          "issue_focus": "sol trempé",
+          "canonical_object": "sol",
+          "signal_kind": "actionable",
+          "expected_action": "clean_secure",
+          "information_type": null,
+          "affected_business_unit_key": "restaurant",
+          "responsible_business_unit_key": "restaurant",
+          "activity_subject_key": "proprete",
+          "operational_unit_key": null,
+          "location_text": null
+        }
+      ]
+    },
+    "S15-12": {
+      "mode": "apply",
+      "candidates": []
+    },
+    "S15-14": {
+      "mode": "apply",
+      "candidates": []
+    },
+    "S15-19": {
+      "mode": "apply",
+      "candidates": [
+        {
+          "title": "Problème ménage",
+          "structured_summary": "Hall à nettoyer.",
+          "issue_focus": "menage hall",
+          "canonical_object": "object",
+          "signal_kind": "actionable",
+          "expected_action": "inspect",
+          "information_type": null,
+          "affected_business_unit_key": "hotel",
+          "responsible_business_unit_key": "maintenance",
+          "activity_subject_key": "menage",
+          "operational_unit_key": null,
+          "location_text": "hall"
+        }
+      ]
+    },
+    "S15-21": {
+      "mode": "apply",
+      "candidates": [
+        {
+          "title": "Plannings disponibles",
+          "structured_summary": "Les plannings sont disponibles ; invitation à venir les demander.",
+          "issue_focus": "plannings disponibles",
+          "canonical_object": "planning",
+          "signal_kind": "informational",
+          "expected_action": "inform",
+          "information_type": "schedule_available",
+          "affected_business_unit_key": "hotel",
+          "responsible_business_unit_key": "hotel",
+          "activity_subject_key": "organisation",
+          "operational_unit_key": null,
+          "location_text": null
+        }
+      ]
+    },
+    "S15-22": {
+      "mode": "apply",
+      "candidates": [
+        {
+          "title": "Nouveau brief service",
+          "structured_summary": "Le brief service passe à 17h au lieu de 16h.",
+          "issue_focus": "brief service horaire",
+          "canonical_object": "brief service",
+          "signal_kind": "informational",
+          "expected_action": "inform",
+          "information_type": "schedule_change",
+          "affected_business_unit_key": "hotel",
+          "responsible_business_unit_key": "hotel",
+          "activity_subject_key": "organisation",
+          "operational_unit_key": null,
+          "location_text": null
+        }
+      ]
+    },
+    "S15-23": {
+      "mode": "apply",
+      "candidates": [
+        {
+          "title": "Fuite couloir nord",
+          "structured_summary": "Fuite d'eau dans le couloir nord.",
+          "issue_focus": "fuite couloir nord",
+          "canonical_object": "fuite",
+          "signal_kind": "actionable",
+          "expected_action": "repair",
+          "information_type": null,
+          "affected_business_unit_key": "hotel",
+          "responsible_business_unit_key": "hotel",
+          "activity_subject_key": "plomberie",
+          "operational_unit_key": null,
+          "location_text": "couloir nord"
+        },
+        {
+          "title": "Planning étages disponible",
+          "structured_summary": "Le planning des étages est disponible.",
+          "issue_focus": "planning étages",
+          "canonical_object": "planning",
+          "signal_kind": "informational",
+          "expected_action": "inform",
+          "information_type": "schedule_available",
+          "affected_business_unit_key": "hotel",
+          "responsible_business_unit_key": "hotel",
+          "activity_subject_key": "organisation",
+          "operational_unit_key": null,
+          "location_text": null
+        }
+      ]
+    },
+    "S15-D1": {
+      "mode": "apply",
+      "candidates": [
+        {
+          "title": "Problème au spa",
+          "structured_summary": "Un problème est signalé au spa sans sujet routable.",
+          "issue_focus": "probleme spa",
+          "canonical_object": "spa",
+          "signal_kind": "actionable",
+          "expected_action": null,
+          "information_type": null,
+          "affected_business_unit_key": null,
+          "responsible_business_unit_key": null,
+          "activity_subject_key": null,
+          "operational_unit_key": null,
+          "location_text": "spa"
+        }
+      ]
+    }
+  }
+}

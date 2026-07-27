@@ -93,14 +93,6 @@ def get_truth_table_row(row_id: str) -> dict[str, Any]:
     raise KeyError(f"Unknown pipeline V6 truth-table row: {row_id}")
 
 
-def list_executable_v5_baseline_case_ids() -> list[str]:
-    return [
-        case["id"]
-        for case in load_pipeline_v6_acceptance_corpus()["cases"]
-        if case.get("observed_v5", {}).get("executable") is True
-    ]
-
-
 def _require(condition: bool, message: str, errors: list[str]) -> None:
     if not condition:
         errors.append(message)

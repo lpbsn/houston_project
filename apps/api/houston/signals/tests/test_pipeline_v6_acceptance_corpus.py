@@ -1,4 +1,4 @@
-"""Lot 0 — corpus validation (green) and temporary V5 runtime baseline guards."""
+"""Lot 0 — corpus validation and V6 runtime acceptance cases."""
 
 from __future__ import annotations
 
@@ -26,18 +26,11 @@ from houston.signals.models import CandidateSignal, Signal
 from houston.signals.services import apply_pipeline_output
 from houston.signals.tests.conftest import create_observation
 from houston.testing.factories import build_membership
-from houston.testing.pipeline_golden_v4 import (
-    get_pipeline_golden_v4_case,
-    remap_expected_candidates_to_routing_keys,
-    setup_active_signals_from_fixture,
-    setup_taxonomy_from_fixture,
-)
 from houston.testing.pipeline_v6_acceptance import (
     REQUIRED_CASE_IDS,
     assert_pipeline_v6_acceptance_artefacts_valid,
     get_pipeline_v6_acceptance_case,
     iter_truth_table_rows,
-    list_executable_v5_baseline_case_ids,
     list_pipeline_v6_acceptance_case_ids,
     load_pipeline_v6_acceptance_corpus,
     load_pipeline_v6_truth_tables,
@@ -145,18 +138,8 @@ def test_lot_acceptance_rejects_truth_row_owning_lot_mismatch():
 
 
 # ---------------------------------------------------------------------------
-# Temporary V5 runtime baseline guards (name prefix for -k selection/exclusion)
-# Select:  -k v5_baseline_runtime
-# Exclude: -k "not v5_baseline_runtime"
+# V6 runtime acceptance (Lot 2+)
 # ---------------------------------------------------------------------------
-
-
-def test_v5_baseline_runtime_executable_case_ids_are_documented():
-    executable_ids = list_executable_v5_baseline_case_ids()
-    assert executable_ids
-    for case_id in executable_ids:
-        case = get_pipeline_v6_acceptance_case(case_id)
-        assert case["observed_v5"]["executable"] is True
 
 
 def test_v6_runtime_lot2_s15_01_invalid_establishment_skips():
@@ -222,22 +205,6 @@ def test_v6_runtime_lot2_s15_04_active_bu_without_subjects_allows_pipeline():
     )
     assert case["expected_v6"]["pipeline_started"] is True
     assert case["expected_v6"]["error_code"] is None
-
-
-def test_v5_baseline_runtime_s15_05_golden_g05_apply():
-    _assert_v5_baseline_runtime_golden_apply("S15-05")
-
-
-def test_v5_baseline_runtime_s15_11_golden_g01_segmentation():
-    _assert_v5_baseline_runtime_golden_apply("S15-11")
-
-
-def test_v5_baseline_runtime_s15_12_empty_candidates_no_signal():
-    _assert_v5_baseline_runtime_empty_candidates("S15-12")
-
-
-def test_v5_baseline_runtime_s15_14_empty_candidates_no_signal():
-    _assert_v5_baseline_runtime_empty_candidates("S15-14")
 
 
 def test_v6_runtime_s15_19_incoherent_responsible_corrected_and_signal_kept():
@@ -318,71 +285,3 @@ def test_v6_runtime_lot2_s15_d1_active_non_snapshot_ready_allows_pipeline():
     )
     assert case["expected_v6"]["pipeline_started"] is True
     assert case["expected_v6"]["error_code"] is None
-
-
-def _assert_v5_baseline_runtime_golden_apply(case_id: str) -> None:
-    case = get_pipeline_v6_acceptance_case(case_id)
-    assert case["observed_v5"]["executable"] is True
-    golden_ids = case["legacy_golden_ids"]
-    assert golden_ids, f"{case_id} must declare legacy_golden_ids for golden apply baseline"
-    golden_id = golden_ids[0]
-    golden = get_pipeline_golden_v4_case(golden_id)
-    membership = build_membership()
-    establishment = membership.establishment
-    business_units, activity_subjects = setup_taxonomy_from_fixture(
-        establishment=establishment,
-        fixture=golden["taxonomy_fixture"],
-    )
-    setup_active_signals_from_fixture(
-        establishment=establishment,
-        setup=golden.get("active_signals_setup", []),
-        business_units=business_units,
-        activity_subjects=activity_subjects,
-    )
-    observation = create_observation(
-        membership=membership,
-        text=golden["observation_text"],
-    )
-    remapped = remap_expected_candidates_to_routing_keys(
-        expected_candidates=golden["expected_candidates"],
-        business_units=business_units,
-        activity_subjects=activity_subjects,
-    )
-    result = apply_pipeline_output(
-        observation=observation,
-        output=ObservationPipelineOutput(
-            schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-            candidates=[PipelineCandidateOutput(**raw) for raw in remapped],
-        ),
-    )
-    assert result.outcome.value == golden["expected_outcome"]
-    assert case["observed_v5"]["outcome"] == golden["expected_outcome"]
-    assert case["observed_v5"]["pipeline_started"] is True
-    expected_apply = golden["expected_apply"]
-    assert result.created_count == expected_apply["created_count"]
-    assert result.aggregated_count == expected_apply["aggregated_count"]
-    assert (
-        Signal.objects.filter(establishment=establishment).count()
-        == expected_apply["signal_count"]
-    )
-
-
-def _assert_v5_baseline_runtime_empty_candidates(case_id: str) -> None:
-    case = get_pipeline_v6_acceptance_case(case_id)
-    membership = build_membership()
-    create_business_unit(
-        establishment=membership.establishment,
-        key="hotel",
-        label="Hôtel",
-    )
-    observation = create_observation(membership=membership, text=case["observation_text"])
-    result = apply_pipeline_output(
-        observation=observation,
-        output=ObservationPipelineOutput(
-            schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-            candidates=[],
-        ),
-    )
-    assert result.outcome == ObservationProcessing.Outcome.NO_SIGNAL_CREATED
-    assert case["observed_v5"]["outcome"] == "no_signal_created"
-    assert case["observed_v5"]["pipeline_started"] is True

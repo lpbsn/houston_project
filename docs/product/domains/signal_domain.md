@@ -1,8 +1,8 @@
 # Signal Domain
 
 Status: authoritative
-Last reviewed: 2026-07-16
-Implementation status: partial (feed, detail, pin, cancel, resolve implemented; Phase 5 core Action side effects implemented; pipeline v5 aggregation on `issue_focus`; archive, timeline not implemented)
+Last reviewed: 2026-07-27
+Implementation status: partial (feed, detail, pin, cancel, resolve implemented; Phase 5 core Action side effects implemented; pipeline **v6** aggregation on normalized `issue_focus` for `routing_status=resolved` only; archive, timeline not implemented)
 
 ## 1. Purpose
 
@@ -95,8 +95,9 @@ This domain describes the validated MVP target behavior. Current code and `apps/
 
 - `SignalAggregation`
   - Backend decision that a candidate Signal belongs to an existing active Signal instead of creating a new one.
-  - Match key (pipeline v5): `(affected_bu, responsible_bu, activity_subject, operational_unit | null, normalize(issue_focus))`.
-  - `aggregate_into_signal_id` LLM hint is accepted only when taxonomy and `issue_focus` align with the target active Signal.
+  - Match key (pipeline v6): `(affected_bu, responsible_bu, activity_subject, operational_unit | null, normalize(issue_focus))` — **only** when `routing_status=resolved`.
+  - No LLM aggregate hint (`aggregate_into_signal_id` removed). `unassigned` Signals are never auto-aggregated.
+  - UI filter / badge **« Non classifié »** = `responsible_business_unit_id IS NULL` (distinct from affected / subject).
 
 - `LinkedObservationContext`
   - Safe reference to source Observation context.
@@ -139,7 +140,7 @@ Validated target transition rules:
 
 Validated in current code:
 - Manual cancel and resolve from `open` or `in_progress` only (active statuses).
-- Linked Action Plan creation from an active Signal (`open` or `in_progress`) transitions `open` → `in_progress` and unpins if pinned; creation is rejected when the Signal is terminal (`resolved`, `canceled`, `archived`). When `source_signal_id` is set, `pilot_business_unit_id` must equal the Signal's `responsible_business_unit_id`.
+- Linked Action Plan creation from an active Signal (`open` or `in_progress`) transitions `open` → `in_progress` and unpins if pinned; creation is rejected when the Signal is terminal (`resolved`, `canceled`, `archived`). When `source_signal_id` is set: if the Signal has a `responsible_business_unit_id`, `pilot_business_unit_id` must equal it; if responsible is null but an `activity_subject` is present, the pilot must equal the subject's owning BusinessUnit.
 - Default Signal Feed includes `open`, `in_progress`, `resolved`, and `canceled`; `archived` is excluded.
 - Feed sorting places all active Signals before `resolved`, then `canceled` (`status_group_rank` before pin).
 - `resolved` and `canceled` Signals are readable on detail (read-only via `permission_hints`); `canceled` detail requires pole visibility for Manager/Staff; `archived` is not exposed on detail by default.
@@ -270,12 +271,10 @@ Aligned with `FEED_SIGNAL_STATUSES` in `apps/api/houston/signals/constants.py`.
 
 | Scenario | Expected behavior |
 | --- | --- |
-| Candidate matches active Signal (same aggregation key incl. `issue_focus`) | Aggregate into existing Signal |
-| Candidate same quadruplet but different `issue_focus` | Create new Signal |
-| Active legacy Signal with empty `issue_focus` and same taxonomy quadruplet (exactly one match) | Aggregate via legacy fallback; enrich Signal `issue_focus` from candidate |
-| Multiple active legacy Signals same quadruplet with empty `issue_focus` | Create new Signal (ambiguous legacy bucket) |
-| Candidate matches resolved Signal | Create new Signal |
+| Candidate `routing_status=resolved` matches active resolved Signal (same aggregation key incl. `issue_focus`) | Aggregate into existing Signal |
+| Candidate same taxonomy but different `issue_focus` | Create new Signal |
+| Candidate `routing_status=unassigned` (even identical keys) | Always create a new Signal (no auto-aggregation) |
+| Candidate matches resolved lifecycle-closed Signal | Create new Signal |
 | Aggregation target closed/archived | Rejected |
-| LLM hint `aggregate_into_signal_id` with mismatched `issue_focus` | Ignore hint, create new Signal |
 
 Tests must use BU/AS runtime taxonomy keys from onboarding, not legacy flat domain keys.
