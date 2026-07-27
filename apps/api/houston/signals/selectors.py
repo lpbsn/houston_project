@@ -24,13 +24,6 @@ _SIGNAL_LIST_SELECT_RELATED = (
     "activity_subject",
     "activity_subject__catalog_activity_subject",
 )
-_SIGNAL_REPORTER_PREFETCH = Prefetch(
-    "source_observation_links",
-    queryset=SignalSourceObservation.objects.select_related(
-        "observation__submitted_by_membership__user",
-    ).order_by("observation__created_at", "observation__id"),
-    to_attr="source_links_by_observation_chronology",
-)
 _SIGNAL_CREATED_FROM_PREFETCH = Prefetch(
     "source_observation_links",
     queryset=(
@@ -48,10 +41,7 @@ _SIGNAL_CREATED_FROM_PREFETCH = Prefetch(
     ),
     to_attr="created_from_source_links",
 )
-_SIGNAL_LIST_PREFETCH = (
-    _SIGNAL_CREATED_FROM_PREFETCH,
-    _SIGNAL_REPORTER_PREFETCH,
-)
+_SIGNAL_LIST_PREFETCH = (_SIGNAL_CREATED_FROM_PREFETCH,)
 _SIGNAL_AGGREGATION_COUNT_ANNOTATION = {
     "aggregation_count": Count(
         "source_observation_links",

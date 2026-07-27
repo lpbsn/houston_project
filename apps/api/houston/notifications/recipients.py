@@ -257,14 +257,6 @@ def resolve_signal_triage_recipients(
     )
 
 
-def resolve_signal_unassigned_global_recipients(
-    *,
-    signal: Signal,
-) -> list[EstablishmentMembership]:
-    """Backward-compatible alias for triage recipients (admins + managers)."""
-    return resolve_signal_triage_recipients(signal=signal)
-
-
 def resolve_signal_attention_recipients(
     *,
     signal: Signal,

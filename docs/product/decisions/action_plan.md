@@ -241,7 +241,7 @@ Source canonique unique = `ActionPlanSchedule.start_at` / `end_at`. Pas d’over
 
 `POST …/planning-submit/` avec `submission_id`, `item_id` par item, hash canonique, snapshot JSON. Unicité `(establishment, created_by, submission_id)`. Outbox créée dans la même transaction atomique ; dispatch après commit.
 
-Restrictions : `/use/` individual ≤ 1 assigné ; `/schedule/` individual exactement 1 assignee. Signal → shared only. Staff → self one-shot only.
+Restrictions (via `planning-submit` only — pas d’HTTP `/use/` ni `/schedule/`) : individual ponctuel ≤ 1 assigné ; individual récurrent exactement 1 assignee. Signal → shared only. Staff → self one-shot only.
 
 **Visible_from (ponctuel)** : fourni → conserver ; null/absent → visibilité immédiate ; pas d’offset −1h (distinct des occurrences récurrentes `occurrence_start − 1h`). `visible_from` pilote uniquement la visibilité (feed preview Planifiées, upcoming, notifs de mise à disposition) — jamais le statut.
 
@@ -443,6 +443,5 @@ Interdit si le schedule a déjà ≥1 exécution matérialisée (`400`).
 
 ### API
 
-- **Récurrent:** `POST /action-plans/{id}/schedule/` (`recurrence_days` non vide requis ; individual = exactement 1 assignee).
-- **Ponctuel:** `POST /action-plans/{id}/use/` (individual ≤ 1 assigné).
-- **Planification unifiée:** `POST /action-plans/{id}/planning-submit/` (`submission_id` + `item_id`, fan-out individuel).
+- **Planification unifiée (seule surface HTTP):** `POST /action-plans/{id}/planning-submit/` (`submission_id` + `item_id`, fan-out individuel ; ponctuel et/ou récurrent dans la même soumission).
+- Pas d’endpoints HTTP `/use/` ni `/schedule/` — la planification passe uniquement par `planning-submit`.

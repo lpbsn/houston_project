@@ -96,7 +96,7 @@ def normalize_recurring_recurrence_days(recurrence_days) -> list[str]:
     if not normalized:
         raise ActionPlanValidationError(
             "recurrence_days is required for recurring schedules. "
-            "Use POST /action-plans/{id}/use/ for one-shot executions.",
+            "Use POST /action-plans/{id}/planning-submit/ for one-shot executions.",
         )
     return normalized
 

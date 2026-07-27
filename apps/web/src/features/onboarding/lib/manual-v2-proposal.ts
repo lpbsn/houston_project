@@ -1,7 +1,6 @@
 import type { components } from '@/api/generated/types'
 
 export const MANUAL_V2_SCHEMA_VERSION = 'onboarding_proposal_v4' as const
-export const MANUAL_V2_SCHEMA_VERSION_V3 = 'onboarding_proposal_v3' as const
 
 export type OnboardingProposalPayload = components['schemas']['OnboardingProposalPayload']
 export type OnboardingProposalPayloadV4 = components['schemas']['OnboardingProposalPayloadV4']
@@ -242,14 +241,6 @@ export function hydrateSeedTrackersFromPayload(
   return trackers
 }
 
-function parseBusinessUnitType(value: unknown): BusinessUnitType | null {
-  if (value === 'dedicated' || value === 'transversal') {
-    return value
-  }
-
-  return null
-}
-
 export function hydrateDraftFromProposalPayload(
   payload: OnboardingProposalPayload | Record<string, unknown>,
 ): {
@@ -258,6 +249,14 @@ export function hydrateDraftFromProposalPayload(
   seedTrackers: SubjectSeedTrackers
 } {
   const schemaVersion = String(payload.schema_version ?? '')
+  if (schemaVersion !== MANUAL_V2_SCHEMA_VERSION) {
+    return {
+      businessUnits: [],
+      activitySubjects: [],
+      seedTrackers: createEmptySubjectSeedTrackers(),
+    }
+  }
+
   const rawBusinessUnits = Array.isArray(payload.business_units) ? payload.business_units : []
   const rawActivitySubjects = Array.isArray(payload.activity_subjects)
     ? payload.activity_subjects
@@ -266,30 +265,14 @@ export function hydrateDraftFromProposalPayload(
   const businessUnits: DraftBusinessUnit[] = rawBusinessUnits
     .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
     .map((item) => {
-      if (schemaVersion === MANUAL_V2_SCHEMA_VERSION) {
-        const specificName = String(item.specific_name ?? item.label ?? '')
-        return {
-          client_key: String(item.client_key ?? createClientKey()),
-          label: specificName,
-          description: String(item.instance_description ?? item.description ?? ''),
-          unit_type: null,
-          unit_type_confirmed: Boolean(item.catalog_key),
-          suggested_unit_type: 'dedicated',
-          catalog_key:
-            item.catalog_key === null || item.catalog_key === undefined
-              ? null
-              : String(item.catalog_key),
-        }
-      }
-
-      const unitType = parseBusinessUnitType(item.unit_type)
+      const specificName = String(item.specific_name ?? item.label ?? '')
       return {
         client_key: String(item.client_key ?? createClientKey()),
-        label: String(item.label ?? item.specific_name ?? ''),
-        description: String(item.description ?? item.instance_description ?? ''),
-        unit_type: unitType,
-        unit_type_confirmed: unitType !== null || Boolean(item.catalog_key),
-        suggested_unit_type: unitType ?? 'dedicated',
+        label: specificName,
+        description: String(item.instance_description ?? item.description ?? ''),
+        unit_type: null,
+        unit_type_confirmed: Boolean(item.catalog_key),
+        suggested_unit_type: 'dedicated' as BusinessUnitType,
         catalog_key:
           item.catalog_key === null || item.catalog_key === undefined
             ? null

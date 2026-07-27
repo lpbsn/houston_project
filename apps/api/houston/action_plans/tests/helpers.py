@@ -44,10 +44,6 @@ def action_plan_task_url(establishment_id, task_execution_id, suffix: str = "") 
     return base + suffix.lstrip("/")
 
 
-def action_plan_schedule_url(establishment_id, action_plan_id) -> str:
-    return f"/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/schedule/"
-
-
 def action_plan_planning_submit_url(establishment_id, action_plan_id) -> str:
     return (
         f"/api/v1/establishments/{establishment_id}/action-plans/"
@@ -265,6 +261,67 @@ def api_planning_submit_payload(
             },
         ],
     }
+
+
+def api_planning_one_shot_payload(
+    *,
+    membership,
+    business_unit,
+    submission_id: uuid.UUID | None = None,
+    use_shared_chronology: bool = False,
+    start_at=None,
+    end_at=None,
+    **item_overrides,
+) -> dict:
+    if start_at is None:
+        start_at = timezone.now() + timezone.timedelta(days=1)
+    if end_at is None:
+        end_at = start_at + timezone.timedelta(hours=2)
+    item = {
+        "item_id": str(uuid.uuid4()),
+        "kind": "execution",
+        "primary_membership_id": str(membership.id),
+        "business_unit_id": str(business_unit.id),
+        "start_at": start_at.isoformat().replace("+00:00", "Z"),
+        "end_at": end_at.isoformat().replace("+00:00", "Z"),
+    }
+    item.update(item_overrides)
+    return api_planning_submit_payload(
+        submission_id=submission_id,
+        use_shared_chronology=use_shared_chronology,
+        items=[item],
+    )
+
+
+def api_planning_schedule_payload(
+    *,
+    membership,
+    business_unit,
+    recurrence_days=None,
+    submission_id: uuid.UUID | None = None,
+    use_shared_chronology: bool = False,
+    **item_overrides,
+) -> dict:
+    window = visible_schedule_window(period_days=14)
+    if recurrence_days is None:
+        recurrence_days = recurrence_days_for_visible_today()
+    item = {
+        "item_id": str(uuid.uuid4()),
+        "kind": "schedule",
+        "primary_membership_id": str(membership.id),
+        "business_unit_id": str(business_unit.id),
+        "start_date": window["start_date"].isoformat(),
+        "end_date": window["end_date"].isoformat(),
+        "start_at": window["start_at"].isoformat(),
+        "end_at": window["end_at"].isoformat(),
+        "recurrence_days": recurrence_days,
+    }
+    item.update(item_overrides)
+    return api_planning_submit_payload(
+        submission_id=submission_id,
+        use_shared_chronology=use_shared_chronology,
+        items=[item],
+    )
 
 
 def api_assignee_payload(*, membership, business_unit) -> dict:

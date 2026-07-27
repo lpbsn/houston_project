@@ -460,29 +460,6 @@ export async function listOnboardingProposals(sessionId: string) {
   return result.data as OnboardingProposalResponse[]
 }
 
-export async function getOnboardingProposal(sessionId: string, proposalId: string) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.GET('/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/', {
-        params: {
-          path: { session_id: sessionId, proposal_id: proposalId },
-        },
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildOnboardingError(
-      result.response,
-      result.error as DetailResponse | undefined,
-      'Onboarding proposal could not be loaded.',
-    )
-  }
-
-  return result.data as OnboardingProposalResponse
-}
-
 export async function rejectOnboardingProposal(sessionId: string, proposalId: string) {
   const result = await withAuthRetry(
     (accessToken) =>

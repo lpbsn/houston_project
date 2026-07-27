@@ -1,7 +1,7 @@
 # Product Operating Model
 
 Status: authoritative
-Last reviewed: 2026-06-09
+Last reviewed: 2026-07-27
 
 ## 1. Operating Model Summary
 
@@ -26,27 +26,25 @@ Detailed permission matrices belong to domain docs, not this document.
 4. The backend validates the proposals against business rules and scope.
 5. A Signal is created or aggregated into an existing Signal.
 6. A Manager supervises the Signal.
-7. A Manager creates an Action.
-8. Staff accepts and executes the Action.
-9. A Manager validates the result.
+7. A Manager creates an Action Plan (catalog) and submits planning (one-shot and/or recurring).
+8. Staff executes Action Plan tasks / executions.
+9. A Manager validates the result when required.
 10. Feeds and notifications update.
 
 ## 4. Supporting Flows
 
-- Onboarding and runtime configuration initialize an establishment with the minimum structure needed for operational use.
+- Onboarding and runtime configuration initialize an establishment with the minimum structure needed for operational use (`onboarding_proposal_v4` only).
 - Media uploads provide optional operational context around Observations and follow backend-controlled access rules.
-- Checklists support recurring or personal operational routines and can produce contextualized Observations.
-- Comments support contextual discussion attached to Signals or Actions.
+- Comments support contextual discussion attached to Signals or Action Plan executions.
 - Notifications route attention when action or awareness is needed.
-- Global realtime invalidation (deferred) will coordinate refetch for operational feeds.
+- Operational realtime invalidation coordinates refetch for Signal / Action Plan / notification surfaces.
 - Chat V1 provides establishment-level DM and free-group messaging, separate from the structured operational workflow.
 
 ## 5. Domain Boundaries
 
 - Observation: raw field input.
-- Signal: structured operational situation linked to as Observation
-- Action: executable task linked to a Signal.
-- Checklist: recurring or personal operational routine.
+- Signal: structured operational situation linked to an Observation.
+- Action Plan: catalog + executions + schedules — the only execution surface.
 - Comment: contextual discussion attached to a workflow object.
 - Notification: attention routing.
 - Chat V1: DM and free-group text messaging (not a single general room).
@@ -61,13 +59,12 @@ The validated MVP phase order is:
 3. Phase 2 — Runtime config / Onboarding minimal
 4. Phase 3 — Observation / Media / Transcription
 5. Phase 4 — AI Pipeline / Signal Feed
-6. Phase 5 — Actions / Execution Feed
+6. Phase 5 — Action Plan / Execution Feed
 7. Phase 6 — Notifications
-8. Phase 7 — Checklists
-9. Phase 8 — Chat V1 ✅ core implemented
-10. Phase 8C — Global realtime invalidation (deferred)
-11. Phase 9 — Hardening
-12. Phase 10 — Pilot readiness
+8. Phase 7 — Chat V1 ✅ core implemented
+9. Phase 8 — Global realtime invalidation ✅ operational invalidation live
+10. Phase 9 — Hardening
+11. Phase 10 — Pilot readiness
 
 Phase 0 is completed. Later phases define the validated MVP target scope; operational endpoints remain candidate unless they are present in `apps/api/schema.yml`.
 

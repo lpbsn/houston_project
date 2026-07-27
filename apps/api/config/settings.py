@@ -50,7 +50,6 @@ INSTALLED_APPS = [
     "houston.realtime",
     "houston.chat",
     "houston.ai",
-    "houston.events",
     "houston.uploads",
 ]
 

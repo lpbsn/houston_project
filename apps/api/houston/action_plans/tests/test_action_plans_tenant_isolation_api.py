@@ -8,9 +8,11 @@ from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.services import create_action_plan_with_execution
 from houston.action_plans.tests.helpers import (
     action_plan_execution_url,
+    action_plan_planning_submit_url,
     action_plan_task_url,
     action_plan_url,
     action_plans_url,
+    api_planning_one_shot_payload,
     build_assignee_payload,
     build_task_payload,
 )
@@ -167,16 +169,21 @@ def test_task_command_cross_establishment_returns_404(
     assert response.status_code == 404
 
 
-def test_use_cross_establishment_returns_404(
+def test_planning_submit_cross_establishment_returns_404(
     api_client,
     owner_membership,
     catalog_action_plan,
+    staff_membership,
+    business_unit,
 ):
     foreign = build_foreign_membership(role=EstablishmentMembership.Role.OWNER)
     token = login(api_client, user=foreign.user)
     response = api_client.post(
-        action_plan_url(foreign.establishment_id, catalog_action_plan.id, "use/"),
-        {},
+        action_plan_planning_submit_url(foreign.establishment_id, catalog_action_plan.id),
+        api_planning_one_shot_payload(
+            membership=staff_membership,
+            business_unit=business_unit,
+        ),
         format="json",
         **auth_headers(token),
     )

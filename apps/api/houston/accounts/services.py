@@ -377,30 +377,6 @@ def issue_refresh_token(*, session: UserSession, family_id: uuid.UUID) -> Issued
     return IssuedRefreshToken(raw_token=raw_token, record=record)
 
 
-def validate_refresh_token(*, raw_refresh_token: str) -> SessionRefreshToken:
-    """Validate a refresh token without row lock (read-only checks and reuse handling).
-
-    On reuse, revokes the token family then raises ``RefreshTokenReuseError``.
-    Do not call this inside a parent ``transaction.atomic()`` block: the exception
-    would roll back the revocation. Use ``refresh_session`` for rotation instead.
-    """
-    refresh_token = (
-        SessionRefreshToken.objects.select_related("session", "session__user")
-        .filter(token_digest=tokens.digest_token(raw_refresh_token))
-        .first()
-    )
-
-    if refresh_token is None:
-        raise InvalidRefreshTokenError
-
-    if _is_reused_refresh_token(refresh_token):
-        _handle_refresh_token_reuse(refresh_token)
-        raise RefreshTokenReuseError
-
-    _ensure_refresh_token_consumable(refresh_token)
-    return refresh_token
-
-
 def revoke_session(*, session: UserSession) -> None:
     now = timezone.now()
 
@@ -423,14 +399,6 @@ def revoke_session(*, session: UserSession) -> None:
         reason="session.revoked",
         establishment_id=session.selected_establishment_id,
         session_id=session.id,
-    )
-
-
-def revoke_refresh_token_family(*, session: UserSession, family_id: uuid.UUID) -> None:
-    revoke_session(session=session)
-    SessionRefreshToken.objects.filter(session=session, family_id=family_id).update(
-        revoked_at=timezone.now(),
-        status=SessionRefreshToken.Status.REVOKED,
     )
 
 

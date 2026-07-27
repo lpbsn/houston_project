@@ -6,7 +6,6 @@ from houston.establishments.models import EstablishmentMembership
 from houston.notifications.models import WebPushSubscription
 from houston.notifications.tests.conftest import (
     web_push_subscription_revoke_url,
-    web_push_subscription_touch_url,
     web_push_subscriptions_url,
 )
 from houston.testing.auth import auth_headers, build_api_membership, login
@@ -98,32 +97,6 @@ def test_upsert_web_push_subscription_rejects_other_user_endpoint(api_client):
     assert second.status_code == 400
 
 
-def test_touch_web_push_subscription_updates_last_seen(api_client):
-    recipient = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    token = login(api_client, user=recipient.user)
-
-    create_response = api_client.post(
-        web_push_subscriptions_url(),
-        SUBSCRIPTION_PAYLOAD,
-        format="json",
-        **auth_headers(token),
-    )
-    subscription_id = create_response.json()["id"]
-    subscription = WebPushSubscription.objects.get(pk=subscription_id)
-    previous_last_seen = subscription.last_seen_at
-
-    touch_response = api_client.post(
-        web_push_subscription_touch_url(subscription_id),
-        format="json",
-        **auth_headers(token),
-    )
-
-    assert touch_response.status_code == 200
-    subscription.refresh_from_db()
-    assert subscription.last_seen_at is not None
-    assert subscription.last_seen_at >= previous_last_seen
-
-
 def test_revoke_web_push_subscription_soft_revokes(api_client):
     recipient = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     token = login(api_client, user=recipient.user)
@@ -153,29 +126,6 @@ def test_subscription_endpoints_require_authentication(api_client):
         format="json",
     )
     assert create_response.status_code == 401
-
-
-def test_user_cannot_touch_other_users_subscription(api_client):
-    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    outsider = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    owner_token = login(api_client, user=owner.user)
-    outsider_token = login(api_client, user=outsider.user)
-
-    create_response = api_client.post(
-        web_push_subscriptions_url(),
-        SUBSCRIPTION_PAYLOAD,
-        format="json",
-        **auth_headers(owner_token),
-    )
-    subscription_id = create_response.json()["id"]
-
-    response = api_client.post(
-        web_push_subscription_touch_url(subscription_id),
-        format="json",
-        **auth_headers(outsider_token),
-    )
-
-    assert response.status_code == 404
 
 
 def test_user_cannot_revoke_other_users_subscription(api_client):

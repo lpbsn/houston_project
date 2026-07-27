@@ -407,41 +407,6 @@ export function formatActionPlanTaskEditorMetaLine(options: {
   return joinActionPlanTaskMetaParts(parts)
 }
 
-/** @deprecated Use formatActionPlanTaskAssigneePoleLine for assignee/pole and formatActionPlanTaskDeadlineLabel for deadline */
-export function formatActionPlanTaskDetailMetaLine(options: {
-  includePole?: boolean
-  poleLabel?: string | null
-  assigneeDisplayName?: string | null
-  deadlineAt?: string | null
-}): string | null {
-  const parts: string[] = []
-  if (options.includePole && options.poleLabel) {
-    parts.push(options.poleLabel)
-  }
-  if (options.assigneeDisplayName) {
-    parts.push(options.assigneeDisplayName)
-  }
-  const deadlineLabel = formatActionPlanTaskDeadlineLabel(options.deadlineAt)
-  if (deadlineLabel) {
-    parts.push(deadlineLabel)
-  }
-  return joinActionPlanTaskMetaParts(parts)
-}
-
-/** @deprecated Use formatActionPlanTaskEditorMetaLine or formatActionPlanTaskDetailMetaLine */
-export function formatActionPlanTaskMetaLine(options: {
-  poleLabel?: string | null
-  assigneeDisplayName?: string | null
-  deadlineAt?: string | null
-}): string | null {
-  return formatActionPlanTaskDetailMetaLine({
-    includePole: true,
-    poleLabel: options.poleLabel,
-    assigneeDisplayName: options.assigneeDisplayName,
-    deadlineAt: options.deadlineAt,
-  })
-}
-
 export function countActionPlanTreatedTasks(tasks: ActionPlanTaskExecution[]): number {
   return tasks.filter((task) => task.status !== 'pending').length
 }

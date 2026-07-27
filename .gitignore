@@ -38,6 +38,9 @@ htmlcov/
 .pytest_cache/
 .ruff_cache/
 
+# Local generated reports (eval/smoke archives, vitest JSON) — not source of truth
+.artifacts/
+
 # Docker
 *.pid
 # Celery Beat local runtime files

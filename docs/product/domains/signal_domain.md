@@ -227,7 +227,7 @@ Do not treat any Signal route as implemented until it exists in `apps/api/schema
 - Inspect `apps/api/schema.yml` before listing any Signal API as current.
 - Inspect `observation_domain.md` before changing raw input or linked Observation assumptions.
 - Inspect `ai_domain.md` before changing candidate Signal or aggregation assumptions.
-- Inspect the Action domain source of truth before changing Action creation or resolution assumptions.
+- Inspect [`decisions/action_plan.md`](../decisions/action_plan.md) before changing Action Plan creation or linked-execution assumptions.
 - Inspect Feed documentation before changing Signal Feed sorting, filtering, pagination, or detail query behavior.
 - Inspect `rbac_permissions_domain.md` before changing visibility or actionability.
 - Inspect `security_rgpd_domain.md` before changing raw-text visibility, logging, notification, or realtime boundaries.

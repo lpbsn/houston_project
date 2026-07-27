@@ -2088,131 +2088,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
-  /api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/schedule/:
-    post:
-      operationId: v1_establishments_action_plans_schedule_create
-      parameters:
-      - in: path
-        name: action_plan_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      - in: path
-        name: establishment_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - action-plans
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ActionPlanScheduleCreateRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ActionPlanScheduleCreateRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ActionPlanScheduleCreateRequest'
-        required: true
-      security:
-      - BearerAccessToken: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ActionPlanScheduleDetail'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-  /api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/use/:
-    post:
-      operationId: v1_establishments_action_plans_use_create
-      parameters:
-      - in: path
-        name: action_plan_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      - in: path
-        name: establishment_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - action-plans
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ActionPlanUseRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ActionPlanUseRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ActionPlanUseRequest'
-      security:
-      - BearerAccessToken: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ActionPlanExecutionDetail'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
   /api/v1/establishments/{establishment_id}/activity-subjects/{activity_subject_id}/deactivate/:
     post:
       operationId: v1_establishments_activity_subjects_deactivate_create
@@ -4512,45 +4387,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
           description: ''
-  /api/v1/establishments/{establishment_id}/notifications/{notification_id}/archive/:
-    post:
-      operationId: v1_establishments_notifications_archive_create
-      parameters:
-      - in: path
-        name: establishment_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      - in: path
-        name: notification_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - notifications
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/NotificationItem'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
   /api/v1/establishments/{establishment_id}/notifications/{notification_id}/mark-read/:
     post:
       operationId: v1_establishments_notifications_mark_read_create
@@ -5753,40 +5589,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
           description: ''
-  /api/v1/me/web-push-subscriptions/{subscription_id}/touch/:
-    post:
-      operationId: v1_me_web_push_subscriptions_touch_create
-      description: Updates last_seen_at for an active Web Push subscription.
-      parameters:
-      - in: path
-        name: subscription_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - push
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WebPushSubscriptionResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
   /api/v1/onboarding-sessions/:
     post:
       operationId: v1_onboarding_sessions_create
@@ -6255,51 +6057,6 @@ paths:
                 $ref: '#/components/schemas/OnboardingProposalErrorResponse'
           description: ''
   /api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/:
-    get:
-      operationId: v1_onboarding_sessions_proposals_retrieve
-      description: Returns one onboarding proposal scoped to its onboarding session.
-      parameters:
-      - in: path
-        name: proposal_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      - in: path
-        name: session_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - onboarding
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingProposalResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
     patch:
       operationId: v1_onboarding_sessions_proposals_partial_update
       description: Updates a draft onboarding proposal payload (onboarding_proposal_v4).
@@ -7973,32 +7730,6 @@ components:
       - id
       - position
       - task
-    ActionPlanUseRequest:
-      type: object
-      properties:
-        assignees:
-          type: array
-          items:
-            $ref: '#/components/schemas/ActionPlanAssigneeInput'
-        use_shared_chronology:
-          type: boolean
-          default: false
-        start_at:
-          type: string
-          format: date-time
-          nullable: true
-        end_at:
-          type: string
-          format: date-time
-          nullable: true
-        visible_from:
-          type: string
-          format: date-time
-          nullable: true
-        occurrence_date:
-          type: string
-          format: date
-          nullable: true
     ActionSignalSummary:
       type: object
       properties:
@@ -9939,34 +9670,11 @@ components:
       - detail
     OnboardingProposalPayload:
       oneOf:
-      - $ref: '#/components/schemas/OnboardingProposalPayloadV3'
       - $ref: '#/components/schemas/OnboardingProposalPayloadV4'
       discriminator:
         propertyName: schema_version
         mapping:
-          onboarding_proposal_v3: '#/components/schemas/OnboardingProposalPayloadV3'
           onboarding_proposal_v4: '#/components/schemas/OnboardingProposalPayloadV4'
-    OnboardingProposalPayloadV3:
-      type: object
-      properties:
-        schema_version:
-          type: string
-        business_units:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProposalBusinessUnitItemV3'
-        activity_subjects:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProposalActivitySubjectItemV3'
-        excluded_catalog_subject_keys:
-          type: object
-          additionalProperties:
-            type: array
-            items:
-              type: string
-      required:
-      - schema_version
     OnboardingProposalPayloadV4:
       type: object
       properties:
@@ -10602,25 +10310,6 @@ components:
         * `action_required` - Action required
         * `urgent` - Urgent
         * `system` - System
-    ProposalActivitySubjectItemV3:
-      type: object
-      properties:
-        client_key:
-          type: string
-        label:
-          type: string
-        description:
-          type: string
-          default: ''
-        business_unit_client_key:
-          type: string
-        catalog_key:
-          type: string
-          nullable: true
-      required:
-      - business_unit_client_key
-      - client_key
-      - label
     ProposalActivitySubjectItemV4:
       type: object
       properties:
@@ -10640,25 +10329,6 @@ components:
       required:
       - business_unit_client_key
       - client_key
-    ProposalBusinessUnitItemV3:
-      type: object
-      properties:
-        client_key:
-          type: string
-        label:
-          type: string
-        description:
-          type: string
-          default: ''
-        unit_type:
-          type: string
-          nullable: true
-        catalog_key:
-          type: string
-          nullable: true
-      required:
-      - client_key
-      - label
     ProposalBusinessUnitItemV4:
       type: object
       properties:

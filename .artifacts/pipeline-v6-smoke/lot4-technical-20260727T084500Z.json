@@ -1,9 +1,0 @@
-{
-  "archived_at": "20260727T084500Z",
-  "candidate_count": 1,
-  "kind": "lot4-technical",
-  "passed": true,
-  "prompt_version": "ai_observation_pipeline_v6_2",
-  "schema_version": "ai_observation_pipeline_v6",
-  "summary": "Lot 4 technical smoke: provider accepted V6 strict nullable schema; ObservationPipelineOutput parsed; no backend-only fields."
-}

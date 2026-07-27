@@ -14,7 +14,6 @@ from houston.establishments.selectors import (
     get_active_onboarding_session_for_establishment,
     get_onboarding_session_for_actor,
     get_runtime_config_for_session,
-    list_onboarding_sessions_for_actor,
 )
 from houston.establishments.services import build_activation_summary
 from houston.organizations.models import Organization
@@ -87,23 +86,6 @@ def test_actor_cannot_retrieve_foreign_onboarding_session(organization, actor):
     result = get_onboarding_session_for_actor(actor=actor, session_id=foreign_session.id)
 
     assert result is None
-
-
-def test_list_onboarding_sessions_returns_only_accessible_sessions(organization, actor):
-    accessible_session = create_session_with_membership(
-        organization=organization,
-        actor=actor,
-    )
-    foreign_user = User.objects.create_user(
-        username="foreign_list_owner",
-        password="secret",
-        status=User.Status.ACTIVE,
-    )
-    create_session_with_membership(organization=organization, actor=foreign_user)
-
-    result = list_onboarding_sessions_for_actor(actor=actor)
-
-    assert result == [accessible_session]
 
 
 def test_active_session_selector_returns_non_terminal_same_establishment_only(

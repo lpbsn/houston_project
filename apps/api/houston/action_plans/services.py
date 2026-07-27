@@ -1929,35 +1929,6 @@ def skip_execution_task(
 
 
 @transaction.atomic
-def record_execution_task_observation_created(
-    *,
-    task_execution: ActionPlanExecutionTask,
-    actor: EstablishmentMembership,
-    observation: Observation,
-) -> ActionPlanExecutionTask:
-    """Internal transition used by Observation handoff."""
-    execution = _lock_execution_for_write(
-        execution_id=task_execution.action_plan_execution_id,
-    )
-    task_execution = _lock_execution_task_after_execution(
-        execution=execution,
-        task_execution_id=task_execution.id,
-    )
-    if not can_execute_action_plan_task(actor, task_execution):
-        raise ActionPlanPermissionError("Not allowed to execute this action plan task.")
-    if execution.status not in ACTIVE_EXECUTION_STATUSES:
-        raise ActionPlanValidationError("Action plan execution is not active.")
-    if task_execution.status != TASK_STATUS_PENDING:
-        raise ActionPlanValidationError("Task cannot create an observation in its current state.")
-
-    return _apply_task_observation_created(
-        task_execution=task_execution,
-        execution=execution,
-        observation=observation,
-    )
-
-
-@transaction.atomic
 def create_observation_from_execution_task(
     *,
     task_execution: ActionPlanExecutionTask,

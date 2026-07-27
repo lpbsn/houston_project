@@ -71,10 +71,6 @@ def notification_mark_read_url(establishment_id, notification_id) -> str:
     return f"/api/v1/establishments/{establishment_id}/notifications/{notification_id}/mark-read/"
 
 
-def notification_archive_url(establishment_id, notification_id) -> str:
-    return f"/api/v1/establishments/{establishment_id}/notifications/{notification_id}/archive/"
-
-
 def notifications_mark_all_read_url(establishment_id) -> str:
     return f"/api/v1/establishments/{establishment_id}/notifications/mark-all-read/"
 
@@ -89,10 +85,6 @@ def vapid_public_key_url() -> str:
 
 def web_push_subscriptions_url() -> str:
     return "/api/v1/me/web-push-subscriptions/"
-
-
-def web_push_subscription_touch_url(subscription_id) -> str:
-    return f"/api/v1/me/web-push-subscriptions/{subscription_id}/touch/"
 
 
 def web_push_subscription_revoke_url(subscription_id) -> str:

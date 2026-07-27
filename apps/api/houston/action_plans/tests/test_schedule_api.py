@@ -3,18 +3,17 @@ from __future__ import annotations
 import pytest
 
 from houston.action_plans.tests.helpers import (
+    action_plan_planning_submit_url,
     action_plan_schedule_deactivate_url,
     action_plan_schedule_detail_url,
-    action_plan_schedule_url,
-    action_plan_url,
-    api_recurring_schedule_payload,
+    api_planning_schedule_payload,
 )
 from houston.testing.auth import auth_headers, login
 
 pytestmark = pytest.mark.django_db
 
 
-def test_schedule_create_rejects_one_shot(
+def test_planning_submit_schedule_rejects_one_shot(
     api_client,
     owner_membership,
     catalog_action_plan,
@@ -22,13 +21,16 @@ def test_schedule_create_rejects_one_shot(
     business_unit,
 ):
     token = login(api_client, user=owner_membership.user)
-    payload = api_recurring_schedule_payload(
-        staff_membership=staff_membership,
+    payload = api_planning_schedule_payload(
+        membership=staff_membership,
         business_unit=business_unit,
         recurrence_days=[],
     )
     response = api_client.post(
-        action_plan_schedule_url(owner_membership.establishment_id, catalog_action_plan.id),
+        action_plan_planning_submit_url(
+            owner_membership.establishment_id,
+            catalog_action_plan.id,
+        ),
         payload,
         format="json",
         **auth_headers(token),
@@ -36,7 +38,7 @@ def test_schedule_create_rejects_one_shot(
     assert response.status_code == 400
 
 
-def test_schedule_create_recurring_returns_201(
+def test_planning_submit_schedule_recurring_returns_201(
     api_client,
     owner_membership,
     catalog_action_plan,
@@ -44,42 +46,28 @@ def test_schedule_create_recurring_returns_201(
     business_unit,
 ):
     token = login(api_client, user=owner_membership.user)
-    payload = api_recurring_schedule_payload(
-        staff_membership=staff_membership,
+    payload = api_planning_schedule_payload(
+        membership=staff_membership,
         business_unit=business_unit,
     )
     response = api_client.post(
-        action_plan_schedule_url(owner_membership.establishment_id, catalog_action_plan.id),
+        action_plan_planning_submit_url(
+            owner_membership.establishment_id,
+            catalog_action_plan.id,
+        ),
         payload,
         format="json",
         **auth_headers(token),
     )
     assert response.status_code == 201
-    assert response.json()["recurrence_days"]
-
-
-def test_use_endpoint_still_one_shot_path(
-    api_client,
-    owner_membership,
-    catalog_action_plan,
-    staff_membership,
-    business_unit,
-):
-    token = login(api_client, user=owner_membership.user)
-    response = api_client.post(
-        action_plan_url(owner_membership.establishment_id, catalog_action_plan.id, "use/"),
-        {
-            "assignees": [
-                {
-                    "membership_id": str(staff_membership.id),
-                    "business_unit_id": str(business_unit.id),
-                }
-            ]
-        },
-        format="json",
+    assert response.json()["summary"]["schedules_created"] == 1
+    schedule_id = response.json()["schedules"][0]["id"]
+    detail = api_client.get(
+        action_plan_schedule_detail_url(owner_membership.establishment_id, schedule_id),
         **auth_headers(token),
     )
-    assert response.status_code == 201
+    assert detail.status_code == 200
+    assert detail.json()["recurrence_days"]
 
 
 def test_schedule_patch_use_shared_chronology_blocked_after_materialization(
@@ -91,15 +79,18 @@ def test_schedule_patch_use_shared_chronology_blocked_after_materialization(
 ):
     token = login(api_client, user=owner_membership.user)
     create_response = api_client.post(
-        action_plan_schedule_url(owner_membership.establishment_id, catalog_action_plan.id),
-        api_recurring_schedule_payload(
-            staff_membership=staff_membership,
+        action_plan_planning_submit_url(
+            owner_membership.establishment_id,
+            catalog_action_plan.id,
+        ),
+        api_planning_schedule_payload(
+            membership=staff_membership,
             business_unit=business_unit,
         ),
         format="json",
         **auth_headers(token),
     )
-    schedule_id = create_response.json()["id"]
+    schedule_id = create_response.json()["schedules"][0]["id"]
 
     patch_response = api_client.patch(
         action_plan_schedule_detail_url(owner_membership.establishment_id, schedule_id),
@@ -110,7 +101,7 @@ def test_schedule_patch_use_shared_chronology_blocked_after_materialization(
     assert patch_response.status_code == 400
 
 
-def test_staff_schedule_create_on_in_scope_catalog_returns_201(
+def test_staff_planning_submit_schedule_on_in_scope_catalog_returns_201(
     api_client,
     staff_membership,
     catalog_action_plan,
@@ -118,20 +109,28 @@ def test_staff_schedule_create_on_in_scope_catalog_returns_201(
 ):
     token = login(api_client, user=staff_membership.user)
     response = api_client.post(
-        action_plan_schedule_url(staff_membership.establishment_id, catalog_action_plan.id),
-        api_recurring_schedule_payload(
-            staff_membership=staff_membership,
+        action_plan_planning_submit_url(
+            staff_membership.establishment_id,
+            catalog_action_plan.id,
+        ),
+        api_planning_schedule_payload(
+            membership=staff_membership,
             business_unit=business_unit,
-            assignees=[],
         ),
         format="json",
         **auth_headers(token),
     )
     assert response.status_code == 201, response.json()
-    assert response.json()["assignees"][0]["membership_id"] == str(staff_membership.id)
+    schedule_id = response.json()["schedules"][0]["id"]
+    detail = api_client.get(
+        action_plan_schedule_detail_url(staff_membership.establishment_id, schedule_id),
+        **auth_headers(token),
+    )
+    assert detail.status_code == 200
+    assert detail.json()["assignees"][0]["membership_id"] == str(staff_membership.id)
 
 
-def test_staff_schedule_create_rejects_third_party_assignee(
+def test_staff_planning_submit_schedule_rejects_third_party_assignee(
     api_client,
     owner_membership,
     staff_membership,
@@ -140,18 +139,23 @@ def test_staff_schedule_create_rejects_third_party_assignee(
 ):
     token = login(api_client, user=staff_membership.user)
     response = api_client.post(
-        action_plan_schedule_url(staff_membership.establishment_id, catalog_action_plan.id),
-        api_recurring_schedule_payload(
-            staff_membership=owner_membership,
+        action_plan_planning_submit_url(
+            staff_membership.establishment_id,
+            catalog_action_plan.id,
+        ),
+        api_planning_schedule_payload(
+            membership=owner_membership,
             business_unit=business_unit,
         ),
         format="json",
         **auth_headers(token),
     )
-    assert response.status_code == 403
+    # planning-submit wraps per-item PermissionError as PlanningSubmissionItemError → 400
+    assert response.status_code == 400
+    assert "Not allowed to assign other members" in response.json()["detail"]
 
 
-def test_staff_schedule_create_rejects_cross_pole_catalog(
+def test_staff_planning_submit_schedule_rejects_cross_pole_catalog(
     api_client,
     staff_membership,
     cross_pole_catalog_action_plan,
@@ -159,14 +163,13 @@ def test_staff_schedule_create_rejects_cross_pole_catalog(
 ):
     token = login(api_client, user=staff_membership.user)
     response = api_client.post(
-        action_plan_schedule_url(
+        action_plan_planning_submit_url(
             staff_membership.establishment_id,
             cross_pole_catalog_action_plan.id,
         ),
-        api_recurring_schedule_payload(
-            staff_membership=staff_membership,
+        api_planning_schedule_payload(
+            membership=staff_membership,
             business_unit=business_unit,
-            assignees=[],
         ),
         format="json",
         **auth_headers(token),
@@ -187,15 +190,18 @@ def test_schedule_deactivate_conflict_returns_409(
 
     token = login(api_client, user=owner_membership.user)
     create_response = api_client.post(
-        action_plan_schedule_url(owner_membership.establishment_id, catalog_action_plan.id),
-        api_recurring_schedule_payload(
-            staff_membership=staff_membership,
+        action_plan_planning_submit_url(
+            owner_membership.establishment_id,
+            catalog_action_plan.id,
+        ),
+        api_planning_schedule_payload(
+            membership=staff_membership,
             business_unit=business_unit,
         ),
         format="json",
         **auth_headers(token),
     )
-    schedule_id = create_response.json()["id"]
+    schedule_id = create_response.json()["schedules"][0]["id"]
     execution = ActionPlanExecution.objects.filter(action_plan_schedule_id=schedule_id).first()
     execution.start_at = timezone.now() - timezone.timedelta(minutes=1)
     execution.end_at = timezone.now() + timezone.timedelta(hours=1)

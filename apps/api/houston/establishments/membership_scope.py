@@ -184,22 +184,6 @@ def build_signal_feed_scope_q_v2(*, membership: EstablishmentMembership) -> Q | 
     return Q(affected_business_unit_id__in=bu_ids) | Q(responsible_business_unit_id__in=bu_ids)
 
 
-def build_action_visibility_scope_q(*, membership: EstablishmentMembership) -> Q | None:
-    """Manager general feed: linked = affected OR responsible; free = responsible only."""
-    bu_ids: set[UUID] = set()
-    for scope in _iter_membership_scopes(membership):
-        bu_id = _scope_business_unit_id(scope)
-        if bu_id is not None:
-            bu_ids.add(bu_id)
-    if not bu_ids:
-        return None
-    linked_q = Q(signal_id__isnull=False) & (
-        Q(affected_business_unit_id__in=bu_ids) | Q(responsible_business_unit_id__in=bu_ids)
-    )
-    free_q = Q(signal_id__isnull=True) & Q(responsible_business_unit_id__in=bu_ids)
-    return linked_q | free_q
-
-
 def _iter_membership_scopes(membership: EstablishmentMembership) -> Iterable[MembershipScope]:
     cache = getattr(membership, "_prefetched_objects_cache", None)
     if cache is not None and "scope_links" in cache:

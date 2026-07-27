@@ -109,7 +109,7 @@ Inactive BU/AS or sibling-BU subjects are rejected or corrected per resolver rul
 
 Functional expectations: [`apps/api/houston/testing/pipeline_v6_acceptance_corpus.json`](../../../apps/api/houston/testing/pipeline_v6_acceptance_corpus.json) (S15-01…S15-23 + S15-D1).
 
-Informational / prompt cases include S15-07, S15-13, S15-21…S15-23. Lot4b owns the prompt correctif + targeted live smoke. Lot 10 cutover: S15 eval command `evaluate_observation_pipeline_v6` (fake fixtures ≠ `expected_v6`), metrics A–J reports under `.artifacts/pipeline-v6-eval/`, business smoke + Lot 4 technical smoke archives under `.artifacts/pipeline-v6-smoke/`.
+Informational / prompt cases include S15-07, S15-13, S15-21…S15-23. Lot4b owns the prompt correctif + targeted live smoke. Lot 10 cutover: S15 eval command `evaluate_observation_pipeline_v6` (fake fixtures ≠ `expected_v6`). Optional local metrics A–J / smoke archives may be written under `.artifacts/pipeline-v6-eval/` and `.artifacts/pipeline-v6-smoke/` (gitignored — not source of truth; re-run the command/smokes to regenerate).
 
 Apply-side golden (non-LLM): [`apps/api/houston/testing/pipeline_golden_v4_corpus.json`](../../../apps/api/houston/testing/pipeline_golden_v4_corpus.json) (G01–G11).
 

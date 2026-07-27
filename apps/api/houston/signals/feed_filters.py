@@ -15,10 +15,6 @@ MAX_FILTER_STATUSES = 4
 MAX_FILTER_BUSINESS_UNIT_IDS = 20
 MAX_FILTER_ACTIVITY_SUBJECT_IDS = 50
 
-LEGACY_BUSINESS_UNIT_KEYS_PARAM_DETAIL = (
-    "business_unit_keys is no longer supported; use business_unit_ids."
-)
-
 
 @dataclass(frozen=True)
 class SignalFeedFilters:
@@ -47,9 +43,6 @@ def parse_signal_feed_filters(
     query_params: Any,
     establishment_id: uuid.UUID,
 ) -> SignalFeedFilters:
-    if "business_unit_keys" in query_params:
-        raise SignalFeedFilterValidationError(LEGACY_BUSINESS_UNIT_KEYS_PARAM_DETAIL)
-
     statuses = _parse_statuses(query_params.get("statuses"))
     business_unit_ids = _parse_business_unit_ids(
         raw=query_params.get("business_unit_ids"),

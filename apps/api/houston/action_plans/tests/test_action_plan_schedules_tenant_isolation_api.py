@@ -5,8 +5,9 @@ from django.utils import timezone
 
 from houston.action_plans.schedule_services import create_action_plan_schedule
 from houston.action_plans.tests.helpers import (
+    action_plan_planning_submit_url,
     action_plan_schedule_detail_url,
-    api_recurring_schedule_payload,
+    api_planning_schedule_payload,
     build_schedule_assignee_payload,
     schedule_window_from_datetime,
 )
@@ -50,7 +51,7 @@ def test_schedule_detail_cross_establishment_returns_404(
     assert response.status_code == 404
 
 
-def test_schedule_create_cross_establishment_returns_404(
+def test_planning_submit_schedule_cross_establishment_returns_404(
     api_client,
     owner_membership,
     catalog_action_plan,
@@ -60,9 +61,9 @@ def test_schedule_create_cross_establishment_returns_404(
     foreign = build_foreign_membership(role=EstablishmentMembership.Role.OWNER)
     token = login(api_client, user=foreign.user)
     response = api_client.post(
-        f"/api/v1/establishments/{foreign.establishment_id}/action-plans/{catalog_action_plan.id}/schedule/",
-        api_recurring_schedule_payload(
-            staff_membership=staff_membership,
+        action_plan_planning_submit_url(foreign.establishment_id, catalog_action_plan.id),
+        api_planning_schedule_payload(
+            membership=staff_membership,
             business_unit=business_unit,
         ),
         format="json",

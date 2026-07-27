@@ -465,19 +465,3 @@ def test_invalid_cursor_returns_400(api_client):
 
     assert response.status_code == 400
     assert response.json()["code"] == "validation_error"
-
-
-def test_legacy_business_unit_keys_param_returns_400(api_client):
-    membership = build_api_membership()
-    _create_signal(membership, title="One")
-
-    response = _feed_get(
-        api_client,
-        membership,
-        "?view_mode=general&business_unit_keys=restaurant",
-    )
-
-    assert response.status_code == 400
-    body = response.json()
-    assert body["code"] == "validation_error"
-    assert "business_unit_ids" in body["detail"]

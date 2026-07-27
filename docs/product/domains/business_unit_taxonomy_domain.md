@@ -151,7 +151,7 @@ Each Signal carries:
 
 `routing_key` is internal only — never in public OpenAPI. Public Signal/Obs/AP summaries may still expose compatibility fields `*_business_unit_key` / `*_label` sourced from `normalized_specific_name` / `specific_name` — **never identifiers** (UUID filters/RBAC remain authoritative).
 
-Onboarding: **`onboarding_proposal_v4` only** at runtime. Non-terminal v3 rows are converted or `REJECTED` (`unsupported_schema_version_v3`) via migration/`make preflight-onboarding-v3`; terminal v3 payloads kept as history.
+Onboarding: **`onboarding_proposal_v4` only** at runtime. Historical terminal v3 payloads may remain; non-terminal v3 was converted or `REJECTED` by migration `establishments.0024` (preflight Make target removed).
 
 Deploy / reset order for environments: [`prod_test_runbook.md`](../../deploy/prod_test_runbook.md) §7b.
 

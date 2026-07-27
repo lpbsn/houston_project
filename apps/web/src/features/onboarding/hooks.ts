@@ -8,7 +8,6 @@ import {
   createManualOnboardingProposal,
   getActivationSummary,
   getOnboardingSession,
-  getOnboardingProposal,
   getRuntimeConfig,
   inviteDirector,
   listOnboardingProposals,
@@ -260,24 +259,6 @@ export function useOnboardingProposals(
       : [...onboardingQueryKeys.sessions(), 'idle', 'proposals'],
     queryFn: () => listOnboardingProposals(sessionId!),
     enabled: isQueryEnabled(sessionId, options),
-    staleTime: options?.staleTime,
-  })
-}
-
-export function useOnboardingProposal(
-  sessionId: string | null | undefined,
-  proposalId: string | null | undefined,
-  options?: OnboardingQueryOptions,
-) {
-  const isEnabled = Boolean(sessionId && proposalId) && (options?.enabled ?? true)
-
-  return useQuery({
-    queryKey:
-      sessionId && proposalId
-        ? onboardingQueryKeys.proposal(sessionId, proposalId)
-        : [...onboardingQueryKeys.sessions(), 'idle', 'proposal'],
-    queryFn: () => getOnboardingProposal(sessionId!, proposalId!),
-    enabled: isEnabled,
     staleTime: options?.staleTime,
   })
 }

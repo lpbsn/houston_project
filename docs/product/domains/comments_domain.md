@@ -1,21 +1,22 @@
-# Comments Domain — Signal & Action Comments
+# Comments Domain — Signal & Action Plan Execution Comments
 
 Status: authoritative
+Last reviewed: 2026-07-27
 
-Implementation status: implemented (REST threads, mentions, realtime invalidation)  
-Scope: MVP / V1  
+Implementation status: implemented (REST threads, mentions, realtime invalidation)
+Scope: MVP / V1
 Related backlog:
 - HOU-BACKLOG-005 — Ajouter les commentaires sur les Signaux
-- HOU-BACKLOG-006 — Ajouter les commentaires sur les Actions
+- HOU-BACKLOG-006 — Ajouter les commentaires sur les exécutions Action Plan
 
 ## 1. Purpose
 
-Houston comments allow field and operational teams to add contextual written notes directly inside a Signal or an Action.
+Houston comments allow field and operational teams to add contextual written notes directly inside a Signal or an Action Plan execution.
 
-A comment is not a chat message.  
+A comment is not a chat message.
 A comment belongs to a business object context:
 - Signal
-- Action
+- Action Plan execution
 
 Comments are used to clarify, document, or coordinate around an operational item without changing its lifecycle, classification, assignment, or validation state.
 
@@ -25,24 +26,20 @@ V1 supports:
 
 - List comments on a Signal.
 - Add a comment on a Signal.
-- List comments on an Action.
-- Add a comment on an Action.
+- List comments on an Action Plan execution.
+- Add a comment on an Action Plan execution.
+- Resolve / unresolve root comments on an Action Plan execution.
 - Display comment author.
 - Display comment creation date/time.
 - Display comments from oldest at the top to newest at the bottom.
 - Mention active users of the same establishment with `@`.
-- Display inherited Signal comments inside linked Actions.
+- Display inherited Signal comments inside linked Action Plan executions.
 - Live refresh of comment lists via operational WebSocket **invalidation** (authorized refetch after `comment.*` messages — no comment body on the socket). See [`realtime_domain.md`](realtime_domain.md) and §9.
 
 V1 does not support:
 
 - Chat behavior.
-- Notifications.
-- Mention notifications.
-- Push notifications.
-- Unread counters.
-- Comment edit.
-- Comment delete.
+- Comment edit / delete.
 - Comment reactions.
 - Comment attachments.
 - Comment moderation.
@@ -57,9 +54,9 @@ A Signal comment is created from the Signal detail page.
 
 A Signal comment is stored once.
 
-If the Signal has linked Actions, the Signal comment is visible inside every linked Action.
+If the Signal has linked Action Plan executions, the Signal comment is visible inside every linked execution detail timeline.
 
-Signal comments are inherited by linked Actions for visibility only. They must not be physically duplicated into each Action.
+Signal comments are inherited by linked Action Plan executions for visibility only. They must not be physically duplicated onto each execution.
 
 A Signal comment never changes:
 - Signal classification.
@@ -67,36 +64,35 @@ A Signal comment never changes:
 - Signal urgency.
 - Signal responsible Business Unit.
 - Signal affected Business Unit.
-- Linked Actions.
+- Linked Action Plan executions.
 
-### 3.2 Action comments
+### 3.2 Action Plan execution comments
 
-An Action comment is created from the Action detail page.
+An execution comment is created from the Action Plan execution detail page.
 
-An Action comment belongs only to that Action.
+An execution comment belongs only to that Action Plan execution.
 
-An Action comment is not visible on the parent Signal.
+An execution comment is not visible on the parent Signal.
 
-An Action comment is not visible on other Actions linked to the same Signal.
+An execution comment is not visible on other executions linked to the same Signal.
 
-An Action comment never changes:
-- Action status.
-- Action assignment.
-- Action due date.
-- Action validation state.
-- Action classification.
+An execution comment never changes:
+- Execution status.
+- Execution assignment.
+- Execution due date / schedule.
+- Execution validation state.
 - Parent Signal.
 
-### 3.3 Action comment timeline
+### 3.3 Execution comment timeline
 
-When an Action is linked to a Signal, the Action comment section displays one combined timeline:
+When an Action Plan execution is linked to a Signal, the execution comment section displays one combined timeline:
 
 - inherited comments from the linked Signal,
-- comments created directly on the Action.
+- comments created directly on the execution.
 
 Each comment item must expose its origin:
 - `signal`
-- `action`
+- `action_plan_execution`
 
 The UI may display this origin as a small badge or contextual label.
 
@@ -125,7 +121,7 @@ There is no filtering by:
 - Business Unit scope,
 - Manager/Staff scope,
 - Signal visibility,
-- Action visibility.
+- Action Plan execution visibility.
 
 Mention validation is server-side.
 
@@ -171,13 +167,13 @@ Signal comment permissions must be enforced by the backend.
 
 Frontend permission checks are UX only.
 
-### 5.2 Action comments
+### 5.2 Action Plan execution comments
 
-A user can list Action comments if they can view the Action detail.
+A user can list execution comments if they can view the Action Plan execution detail (including mention-granted read access).
 
-A user can create an Action comment if they can view the Action detail.
+A user can create an execution comment if they can view the Action Plan execution detail.
 
-Action comment permissions must be enforced by the backend.
+Execution comment permissions must be enforced by the backend.
 
 Frontend permission checks are UX only.
 
@@ -244,17 +240,17 @@ Comment response item:
 
 For Signal comments, `origin` is always `signal`.
 
-For Action comments:
+For Action Plan execution comment lists:
 
 - inherited Signal comments return `origin = signal`,
-- direct Action comments return `origin = action`.
+- direct execution comments return `origin = action_plan_execution`.
 
 ## 8. UX contract
 
 The comments section appears in:
 
 - Signal detail page,
-- Action detail page.
+- Action Plan execution detail page.
 
 Default empty state:
 
@@ -287,17 +283,14 @@ The UI must be mobile-first:
 
 The following are explicitly out of scope:
 
-- notifications,
-- mention notifications,
-- unread state,
-- chat integration,
-- AI analysis,
-- edit/delete,
+- comment edit/delete,
 - attachments,
 - reactions,
 - moderation workflow,
 - audit export,
-- advanced pagination unless needed by implementation constraints.
+- advanced pagination unless needed by implementation constraints,
+- chat integration,
+- AI analysis.
 
 **Operational realtime (in scope — not a non-goal):** comment list refresh via establishment-scoped WebSocket **invalidation** is implemented. Backend emits `comment.*` reasons from `comments/services.py` after sync writes; the frontend refetches authorized comment queries — no comment body over the socket. Authoritative transport contract: [`realtime_domain.md`](realtime_domain.md). Event keys: `houston/notifications/constants.py` and [`contracts/operational-realtime-invalidation.json`](../../../contracts/operational-realtime-invalidation.json).
 
@@ -308,25 +301,25 @@ The following are explicitly out of scope:
 - A user who can view a Signal detail can list its comments.
 - A user who can view a Signal detail can create a comment.
 - A user who cannot view the Signal cannot access its comments.
-- Signal comments are visible inside linked Actions.
-- Signal comments are stored once and not duplicated per Action.
+- Signal comments are visible inside linked Action Plan executions.
+- Signal comments are stored once and not duplicated per execution.
 - Signal comments do not modify Signal classification or lifecycle.
 - Mentions are limited to active memberships of the same establishment.
 - Invalid mentions are rejected.
-- No notification or chat behavior is introduced; comment lists refresh via operational realtime invalidation (see §9).
+- Comment lists refresh via operational realtime invalidation (see §9).
 
-### Action comments
+### Action Plan execution comments
 
-- A user who can view an Action detail can list its comments.
-- A user who can view an Action detail can create a comment.
-- A user who cannot view the Action cannot access its comments.
-- Action comments remain linked only to the Action.
-- Action comments are not visible on the parent Signal.
-- Action detail displays inherited Signal comments and direct Action comments in one chronological timeline.
-- Action comments do not modify Action lifecycle or assignment.
+- A user who can view an Action Plan execution detail can list its comments.
+- A user who can view an Action Plan execution detail can create a comment.
+- A user who cannot view the execution cannot access its comments.
+- Execution comments remain linked only to that execution.
+- Execution comments are not visible on the parent Signal.
+- Execution detail displays inherited Signal comments and direct execution comments in one chronological timeline.
+- Execution comments do not modify Action Plan execution lifecycle or assignment.
 - Mentions are limited to active memberships of the same establishment.
 - Invalid mentions are rejected.
-- No notification or chat behavior is introduced; comment lists refresh via operational realtime invalidation (see §9).
+- Comment lists refresh via operational realtime invalidation (see §9).
 
 ## 11. Implementation guidance
 

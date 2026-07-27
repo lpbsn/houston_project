@@ -2,12 +2,7 @@ from __future__ import annotations
 
 from django.db.models import Q
 
-from houston.establishments.catalog_source_normalization import (
-    TRANSVERSAL_BUSINESS_UNIT_KEYS,
-    default_unit_type_for_business_unit_key,
-)
 from houston.establishments.models import CatalogActivitySubject, CatalogBusinessUnit
-from houston.establishments.taxonomy_normalization import slugify_label
 
 
 def suggest_business_units(
@@ -65,10 +60,3 @@ def suggest_activity_subjects(
             }
         )
     return results
-
-
-def default_unit_type_for_key(key: str) -> str:
-    normalized = slugify_label(key)
-    if normalized in TRANSVERSAL_BUSINESS_UNIT_KEYS:
-        return "transversal"
-    return default_unit_type_for_business_unit_key(normalized)

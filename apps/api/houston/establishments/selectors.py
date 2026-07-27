@@ -218,13 +218,6 @@ def get_onboarding_session_for_actor(
     return _onboarding_session_queryset_for_actor(actor).filter(id=session_id).first()
 
 
-def list_onboarding_sessions_for_actor(*, actor: User) -> list[OnboardingSession]:
-    if actor.status != User.Status.ACTIVE:
-        return []
-
-    return list(_onboarding_session_queryset_for_actor(actor))
-
-
 def get_active_onboarding_session_for_establishment(
     *,
     actor: User,
@@ -287,20 +280,6 @@ def get_membership_for_invitation(
         )
         .select_related("establishment", "establishment__organization")
         .prefetch_related(membership_scope_prefetch())
-        .first()
-    )
-
-
-def get_applied_onboarding_proposal_for_establishment(
-    *,
-    establishment_id,
-) -> OnboardingProposal | None:
-    return (
-        OnboardingProposal.objects.filter(
-            establishment_id=establishment_id,
-            status=OnboardingProposal.Status.APPLIED,
-        )
-        .order_by("-applied_at", "-id")
         .first()
     )
 
@@ -531,38 +510,6 @@ def serialize_activity_subject_tree_item(*, activity_subject: ActivitySubject) -
     if item is None:
         raise ValueError("Activity subject identity is incomplete.")
     return item
-
-
-def get_active_business_unit_for_establishment(
-    *,
-    establishment_id,
-    business_unit_id,
-) -> BusinessUnit | None:
-    return (
-        BusinessUnit.objects.filter(
-            id=business_unit_id,
-            establishment_id=establishment_id,
-            active=True,
-        )
-        .select_related("establishment")
-        .first()
-    )
-
-
-def get_active_activity_subject_for_establishment(
-    *,
-    establishment_id,
-    activity_subject_id,
-) -> ActivitySubject | None:
-    return (
-        ActivitySubject.objects.filter(
-            id=activity_subject_id,
-            establishment_id=establishment_id,
-            active=True,
-        )
-        .select_related("business_unit", "establishment")
-        .first()
-    )
 
 
 def org_establishments_draft_active(*, organization_id):

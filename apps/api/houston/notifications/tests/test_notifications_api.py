@@ -8,7 +8,6 @@ from houston.notifications.selectors import notifications_queryset_for_recipient
 from houston.notifications.tests.conftest import (
     NOTIFICATION_RESPONSE_ALLOWLIST,
     create_test_notification,
-    notification_archive_url,
     notification_mark_read_url,
     notifications_mark_all_read_url,
     notifications_url,
@@ -75,37 +74,6 @@ def test_status_archived_filter(api_client):
     assert len(body["items"]) == 1
     assert body["items"][0]["id"] == str(archived.id)
     assert body["applied_filters"]["status"] == Notification.Status.ARCHIVED
-
-
-def test_archive_unread_decrements_unread_count(api_client):
-    recipient = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    notification = create_test_notification(
-        recipient=recipient,
-        status=Notification.Status.UNREAD,
-    )
-    token = login(api_client, user=recipient.user)
-
-    list_before = api_client.get(
-        notifications_url(recipient.establishment_id),
-        **auth_headers(token),
-    )
-    assert list_before.json()["counts"]["unread"] == 1
-
-    archive_response = api_client.post(
-        notification_archive_url(recipient.establishment_id, notification.id),
-        **auth_headers(token),
-    )
-    assert archive_response.status_code == 200
-    archived_body = archive_response.json()
-    assert archived_body["status"] == Notification.Status.ARCHIVED
-    assert archived_body["read_at"] is not None
-    assert archived_body["archived_at"] is not None
-
-    list_after = api_client.get(
-        notifications_url(recipient.establishment_id),
-        **auth_headers(token),
-    )
-    assert list_after.json()["counts"]["unread"] == 0
 
 
 def test_mark_read_returns_updated_notification(api_client):

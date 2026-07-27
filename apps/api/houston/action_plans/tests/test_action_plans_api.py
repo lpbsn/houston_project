@@ -9,11 +9,14 @@ from houston.action_plans.constants import (
 )
 from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.tests.helpers import (
-    action_plan_schedule_url,
+    action_plan_execution_url,
+    action_plan_planning_submit_url,
+    action_plan_schedule_detail_url,
     action_plan_url,
     action_plans_url,
     api_assignee_payload,
-    api_recurring_schedule_payload,
+    api_planning_one_shot_payload,
+    api_planning_schedule_payload,
     api_task_payload,
 )
 from houston.signals.models import Signal
@@ -355,7 +358,7 @@ def test_manager_creator_cannot_patch_cross_pole_task(
     assert response.status_code == 403
 
 
-def test_use_catalog_plan_snapshots_enriched_task_fields(
+def test_planning_submit_catalog_plan_snapshots_enriched_task_fields(
     api_client,
     owner_membership,
     staff_membership,
@@ -386,14 +389,23 @@ def test_use_catalog_plan_snapshots_enriched_task_fields(
     )
     assert create.status_code == 201, create.json()
     plan_id = create.json()["id"]
-    use = api_client.post(
-        action_plan_url(owner_membership.establishment_id, plan_id, "use/"),
-        {"assignees": []},
+    submit = api_client.post(
+        action_plan_planning_submit_url(owner_membership.establishment_id, plan_id),
+        api_planning_one_shot_payload(
+            membership=staff_membership,
+            business_unit=business_unit,
+        ),
         format="json",
         **auth_headers(token),
     )
-    assert use.status_code == 201, use.json()
-    task_execution = use.json()["task_executions"][0]
+    assert submit.status_code == 201, submit.json()
+    execution_id = submit.json()["executions"][0]["id"]
+    detail = api_client.get(
+        action_plan_execution_url(owner_membership.establishment_id, execution_id),
+        **auth_headers(token),
+    )
+    assert detail.status_code == 200, detail.json()
+    task_execution = detail.json()["task_executions"][0]
     assert task_execution["description"] == "Task description"
     assert task_execution["assigned_membership_id"] == str(staff_membership.id)
     assert task_execution["deadline_at"] is not None
@@ -444,16 +456,16 @@ def test_deactivate_catalog_api_cascades_schedules(
     )
     plan_id = create.json()["id"]
     schedule_create = api_client.post(
-        action_plan_schedule_url(owner_membership.establishment_id, plan_id),
-        api_recurring_schedule_payload(
-            staff_membership=staff_membership,
+        action_plan_planning_submit_url(owner_membership.establishment_id, plan_id),
+        api_planning_schedule_payload(
+            membership=staff_membership,
             business_unit=business_unit,
         ),
         format="json",
         **auth_headers(token),
     )
     assert schedule_create.status_code == 201, schedule_create.json()
-    schedule_id = schedule_create.json()["id"]
+    schedule_id = schedule_create.json()["schedules"][0]["id"]
 
     deactivate = api_client.post(
         action_plan_url(owner_membership.establishment_id, plan_id, "deactivate/"),
@@ -463,14 +475,14 @@ def test_deactivate_catalog_api_cascades_schedules(
     assert deactivate.json()["catalog_status"] == CATALOG_STATUS_INACTIVE
 
     schedule_detail = api_client.get(
-        f"/api/v1/establishments/{owner_membership.establishment_id}/action-plan-schedules/{schedule_id}/",
+        action_plan_schedule_detail_url(owner_membership.establishment_id, schedule_id),
         **auth_headers(token),
     )
     assert schedule_detail.status_code == 200
     assert schedule_detail.json()["status"] == SCHEDULE_STATUS_INACTIVE
 
 
-def test_use_catalog_plan_creates_execution(
+def test_planning_submit_catalog_plan_creates_execution(
     api_client,
     owner_membership,
     staff_membership,
@@ -479,20 +491,23 @@ def test_use_catalog_plan_creates_execution(
 ):
     token = login(api_client, user=owner_membership.user)
     response = api_client.post(
-        action_plan_url(owner_membership.establishment_id, catalog_action_plan.id, "use/"),
-        {
-            "assignees": [
-                api_assignee_payload(membership=staff_membership, business_unit=business_unit)
-            ],
-        },
+        action_plan_planning_submit_url(
+            owner_membership.establishment_id,
+            catalog_action_plan.id,
+        ),
+        api_planning_one_shot_payload(
+            membership=staff_membership,
+            business_unit=business_unit,
+        ),
         format="json",
         **auth_headers(token),
     )
     assert response.status_code == 201, response.json()
     assert response.json()["action_plan_id"] == str(catalog_action_plan.id)
+    assert response.json()["summary"]["executions_created"] == 1
 
 
-def test_manager_cross_pole_use_allowed(
+def test_manager_cross_pole_planning_submit_allowed(
     api_client,
     owner_membership,
     manager_membership,
@@ -502,23 +517,21 @@ def test_manager_cross_pole_use_allowed(
 ):
     token = login(api_client, user=manager_membership.user)
     response = api_client.post(
-        action_plan_url(
+        action_plan_planning_submit_url(
             manager_membership.establishment_id,
             cross_pole_catalog_action_plan.id,
-            "use/",
         ),
-        {
-            "assignees": [
-                api_assignee_payload(membership=staff_membership, business_unit=business_unit)
-            ],
-        },
+        api_planning_one_shot_payload(
+            membership=staff_membership,
+            business_unit=business_unit,
+        ),
         format="json",
         **auth_headers(token),
     )
     assert response.status_code == 201
 
 
-def test_out_of_scope_manager_use_returns_404(
+def test_out_of_scope_manager_planning_submit_returns_404(
     api_client,
     out_of_scope_manager,
     cross_pole_catalog_action_plan,
@@ -527,16 +540,14 @@ def test_out_of_scope_manager_use_returns_404(
 ):
     token = login(api_client, user=out_of_scope_manager.user)
     response = api_client.post(
-        action_plan_url(
+        action_plan_planning_submit_url(
             out_of_scope_manager.establishment_id,
             cross_pole_catalog_action_plan.id,
-            "use/",
         ),
-        {
-            "assignees": [
-                api_assignee_payload(membership=staff_membership, business_unit=business_unit)
-            ],
-        },
+        api_planning_one_shot_payload(
+            membership=staff_membership,
+            business_unit=business_unit,
+        ),
         format="json",
         **auth_headers(token),
     )
@@ -638,7 +649,7 @@ def test_deactivate_non_reusable_plan_returns_400(
     assert deactivate.json()["code"] == "validation_error"
 
 
-def test_staff_use_catalog_self_only_returns_execution(
+def test_staff_planning_submit_catalog_self_only_returns_execution(
     api_client,
     owner_membership,
     staff_membership,
@@ -647,19 +658,31 @@ def test_staff_use_catalog_self_only_returns_execution(
 ):
     token = login(api_client, user=staff_membership.user)
     response = api_client.post(
-        action_plan_url(staff_membership.establishment_id, catalog_action_plan.id, "use/"),
-        {"assignees": []},
+        action_plan_planning_submit_url(
+            staff_membership.establishment_id,
+            catalog_action_plan.id,
+        ),
+        api_planning_one_shot_payload(
+            membership=staff_membership,
+            business_unit=business_unit,
+        ),
         format="json",
         **auth_headers(token),
     )
     assert response.status_code == 201, response.json()
-    body = response.json()
+    execution_id = response.json()["executions"][0]["id"]
+    detail = api_client.get(
+        action_plan_execution_url(staff_membership.establishment_id, execution_id),
+        **auth_headers(token),
+    )
+    assert detail.status_code == 200, detail.json()
+    body = detail.json()
     pole = body["assignees_by_pole"][0]
     assert pole["business_unit"]["id"] == str(business_unit.id)
     assert pole["assignees"][0]["membership_id"] == str(staff_membership.id)
 
 
-def test_staff_use_catalog_rejects_third_party_assignee(
+def test_staff_planning_submit_catalog_rejects_third_party_assignee(
     api_client,
     owner_membership,
     staff_membership,
@@ -668,16 +691,20 @@ def test_staff_use_catalog_rejects_third_party_assignee(
 ):
     token = login(api_client, user=staff_membership.user)
     response = api_client.post(
-        action_plan_url(staff_membership.establishment_id, catalog_action_plan.id, "use/"),
-        {
-            "assignees": [
-                api_assignee_payload(membership=owner_membership, business_unit=business_unit)
-            ]
-        },
+        action_plan_planning_submit_url(
+            staff_membership.establishment_id,
+            catalog_action_plan.id,
+        ),
+        api_planning_one_shot_payload(
+            membership=owner_membership,
+            business_unit=business_unit,
+        ),
         format="json",
         **auth_headers(token),
     )
-    assert response.status_code == 403
+    # planning-submit wraps per-item PermissionError as PlanningSubmissionItemError → 400
+    assert response.status_code == 400
+    assert "Not allowed to assign other members" in response.json()["detail"]
 
 
 def test_staff_cannot_save_feed_plan_to_library(

@@ -16,9 +16,9 @@ Observation → Signal → Action Plan → Execution → Validation → Feed upd
 
 Legacy **Action** and **Checklist** domains were removed (Lot 10). The execution surface is **Action Plan** only.
 
-## Backend apps (14 installed)
+## Backend apps (13 installed)
 
-`core`, `accounts`, `organizations`, `establishments`, `observations`, `signals`, `action_plans`, `comments`, `notifications`, `realtime`, `chat`, `ai`, `events`, `uploads`
+`core`, `accounts`, `organizations`, `establishments`, `observations`, `signals`, `action_plans`, `comments`, `notifications`, `realtime`, `chat`, `ai`, `uploads`
 
 API contract: [`apps/api/schema.yml`](../../apps/api/schema.yml).
 
@@ -27,7 +27,7 @@ API contract: [`apps/api/schema.yml`](../../apps/api/schema.yml).
 | Area | Status | Notes |
 |------|--------|-------|
 | Identity / memberships / RBAC | Live | Bootstrap, establishment scoping |
-| Runtime config / onboarding | Live | `onboarding_proposal_v4` only (v3 rejected at runtime after preflight); BU/AS instances |
+| Runtime config / onboarding | Live | `onboarding_proposal_v4` only; BU/AS instances |
 | BusinessUnit / ActivitySubject taxonomy | Live | Identity: `specific_name` + internal `routing_key`; catalog FK required (`PROTECT`); public API Lot 5 (no `routing_key`); legacy instance columns removed |
 | Observations + media + transcription | Live | Celery pipeline |
 | AI observation → Signal | Live | Pipeline **v6** (schema `ai_observation_pipeline_v6`, prompt `ai_observation_pipeline_v6_2`); Fake (CI) / OpenAI (opt-in smoke) |
@@ -79,7 +79,7 @@ Post-core gaps (non-blocking pilot): some bootstrap hints, no REST message write
 - Organization admin (Owners): `/organization` — establishments, members, owners.
 - Establishment admin (Owners org-wide + Directors on path): `/organization/establishments/{id}` — overview metrics + memberships; entry to operational config.
 - Client router: `apps/web/src/app/app-routes.ts` (not React Router).
-- Server state: TanStack Query only. Zustand is listed in stack docs but **not imported** in `apps/web/src` today.
+- Server state: TanStack Query only (no client global store library).
 - PWA: `vite-plugin-pwa` `injectManifest`, `src/sw.ts`, register on prod build.
 
 Details: [`../engineering/frontend_architecture.md`](../engineering/frontend_architecture.md).
