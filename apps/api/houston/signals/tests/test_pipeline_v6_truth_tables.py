@@ -453,11 +453,11 @@ def _run_ctx_03(row: dict) -> dict:
     )
     observation = create_observation(membership=membership)
     payload = build_pipeline_input(observation=observation)
-    keys = payload["submission_context"]["author_scope_business_unit_routing_keys"]
     return {
-        "author_scope_count": len(keys),
-        "author_scopes_sorted": keys == sorted(keys),
-        "author_scopes_deduped": len(keys) == len(set(keys)),
+        "author_scope_omitted_from_llm": (
+            "submission_context" not in payload
+            and "author_scope_business_unit_routing_keys" not in payload
+        ),
     }
 
 

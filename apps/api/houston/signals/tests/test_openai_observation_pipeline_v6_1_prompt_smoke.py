@@ -1,4 +1,4 @@
-"""Live OpenAI Lot4b prompt v6.1 smoke — opt-in, not CI.
+"""Live OpenAI Lot4b prompt v6.2 smoke — opt-in, not CI.
 
 Validates understanding rules for informational facts, anti-over-segmentation,
 and legitimate empty candidates. Distinct from the V6 technical contract smoke
@@ -44,7 +44,7 @@ def _skip_if_smoke_not_enabled() -> None:
     if not _openai_smoke_enabled():
         pytest.skip(
             "Set HOUSTON_RUN_OPENAI_OBSERVATION_SMOKE_TEST=1 to run the live OpenAI "
-            "observation pipeline v6.1 prompt smoke test."
+            "observation pipeline v6.2 prompt smoke test."
         )
     if not settings.OPENAI_API_KEY:
         pytest.skip("OPENAI_API_KEY is not configured.")

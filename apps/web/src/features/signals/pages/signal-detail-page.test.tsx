@@ -40,12 +40,15 @@ function buildSignal(overrides: Partial<SignalDetail> = {}): SignalDetail {
     routing_status: 'resolved',
     issue_focus: '',
     is_pinned: false,
-    affected_business_unit_key: null,
-    affected_business_unit_label: null,
-    responsible_business_unit_key: null,
-    responsible_business_unit_label: null,
-    activity_subject_normalized_name: null,
-    activity_subject_label: null,
+    affected_business_unit_id: 'bu-aff',
+    affected_business_unit_key: 'restaurant',
+    affected_business_unit_label: 'Restaurant',
+    responsible_business_unit_id: 'bu-resp',
+    responsible_business_unit_key: 'maintenance',
+    responsible_business_unit_label: 'Maintenance',
+    activity_subject_id: 'sub-1',
+    activity_subject_normalized_name: 'electricite',
+    activity_subject_label: 'Électricité',
     operational_unit_key: null,
     location_text: '',
     media_count: 0,
@@ -86,27 +89,6 @@ vi.mock('../hooks', () => ({
   useSignalDetailQuery: () => detailQueryMock(),
 }))
 
-const { openForSignalMock, qualifySheetState } = vi.hoisted(() => ({
-  openForSignalMock: vi.fn(),
-  qualifySheetState: {
-    open: false,
-    opening: false,
-    signalId: null as string | null,
-    signal: null,
-    isPending: false,
-    errorMessage: null as string | null,
-  },
-}))
-
-vi.mock('../hooks/use-signal-qualify-sheet', () => ({
-  useSignalQualifySheet: () => ({
-    ...qualifySheetState,
-    openForSignal: openForSignalMock,
-    close: vi.fn(),
-    submit: vi.fn(),
-  }),
-}))
-
 vi.mock('@/features/comments/components/comment-section', () => ({
   CommentSection: CommentSectionMock,
 }))
@@ -129,12 +111,6 @@ function getCommentsTab() {
 }
 
 beforeEach(() => {
-  qualifySheetState.open = false
-  qualifySheetState.opening = false
-  qualifySheetState.signalId = null
-  qualifySheetState.signal = null
-  qualifySheetState.isPending = false
-  qualifySheetState.errorMessage = null
   detailQueryMock.mockReturnValue({
     isLoading: false,
     isError: false,
@@ -258,13 +234,21 @@ describe('SignalDetailPage tabs', () => {
     expect(screen.queryByRole('button', { name: "+ Plan d'action" })).toBeNull()
   })
 
-  it('shows qualify action when can_qualify_routing is true', () => {
-    openForSignalMock.mockClear()
+  it('does not show qualify CTA from detail even when can_qualify_routing is true', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
       data: buildSignal({
         routing_status: 'unassigned',
+        affected_business_unit_id: null,
+        responsible_business_unit_id: null,
+        activity_subject_id: null,
+        affected_business_unit_key: null,
+        affected_business_unit_label: null,
+        responsible_business_unit_key: null,
+        responsible_business_unit_label: null,
+        activity_subject_normalized_name: null,
+        activity_subject_label: null,
         permission_hints: {
           can_pin: false,
           can_cancel: false,
@@ -278,35 +262,35 @@ describe('SignalDetailPage tabs', () => {
 
     renderPage()
 
-    expect(screen.getByText('À qualifier')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Qualifier' }))
-    expect(openForSignalMock).toHaveBeenCalledWith('signal-1')
+    expect(screen.queryByRole('button', { name: 'Qualifier' })).toBeNull()
+    expect(screen.queryByText('À qualifier')).toBeNull()
+    expect(screen.getByText('Non classifié')).toBeTruthy()
   })
 
-  it('shows qualify open error near CTA when sheet is closed', () => {
-    qualifySheetState.errorMessage = 'Vous n’avez pas le droit de qualifier cette observation.'
+  it('shows affected pole and Non classifié when only affected is set', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
       data: buildSignal({
         routing_status: 'unassigned',
-        permission_hints: {
-          can_pin: false,
-          can_cancel: false,
-          can_resolve: false,
-          can_create_linked_action_plan: false,
-          can_qualify_routing: true,
-        },
+        affected_business_unit_id: 'bu-aff',
+        affected_business_unit_key: 'communication',
+        affected_business_unit_label: 'Communication',
+        responsible_business_unit_id: null,
+        responsible_business_unit_key: null,
+        responsible_business_unit_label: null,
+        activity_subject_id: null,
+        activity_subject_normalized_name: null,
+        activity_subject_label: null,
       }),
       refetch: vi.fn(),
     })
 
     renderPage()
 
-    expect(screen.getByRole('alert')).toBeTruthy()
-    expect(
-      screen.getByText('Vous n’avez pas le droit de qualifier cette observation.'),
-    ).toBeTruthy()
+    expect(screen.getByText('Pôle concerné')).toBeTruthy()
+    expect(screen.getByText('Communication')).toBeTruthy()
+    expect(screen.getByText('Non classifié')).toBeTruthy()
   })
 })
 

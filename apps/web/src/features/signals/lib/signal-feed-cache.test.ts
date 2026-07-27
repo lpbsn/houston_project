@@ -92,6 +92,26 @@ describe('feedItemPatchFromDetail', () => {
     expect(patch.is_pinned).toBe(true)
     expect(patch.last_activity_at).toBe('2026-06-30T11:00:00Z')
   })
+
+  it('preserves taxonomy ids and labels from detail', () => {
+    const detail = buildDetail({
+      affected_business_unit_id: 'bu-aff',
+      affected_business_unit_key: 'communication',
+      affected_business_unit_label: 'Communication',
+      responsible_business_unit_id: null,
+      responsible_business_unit_key: null,
+      responsible_business_unit_label: null,
+      activity_subject_id: null,
+      activity_subject_normalized_name: null,
+      activity_subject_label: null,
+    })
+    const patch = feedItemPatchFromDetail(detail)
+
+    expect(patch.affected_business_unit_id).toBe('bu-aff')
+    expect(patch.affected_business_unit_label).toBe('Communication')
+    expect(patch.responsible_business_unit_id).toBeNull()
+    expect(patch.activity_subject_id).toBeNull()
+  })
 })
 
 describe('patchSignalInActiveFeedCache', () => {

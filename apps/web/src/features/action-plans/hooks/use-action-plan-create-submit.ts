@@ -39,6 +39,7 @@ type UseActionPlanCreateSubmitOptions = {
   establishmentId: string
   canDefineCrossPoleTasks: boolean
   staffExecutionMode?: { membershipId: string; pilotBusinessUnitId: string }
+  requireIssueFocus?: boolean
   onNavigate: (pathname: string) => void
 }
 
@@ -56,6 +57,7 @@ export function useActionPlanCreateSubmit({
   establishmentId,
   canDefineCrossPoleTasks,
   staffExecutionMode,
+  requireIssueFocus = false,
   onNavigate,
 }: UseActionPlanCreateSubmitOptions) {
   const createMutation = useCreateActionPlanMutation(establishmentId)
@@ -70,6 +72,7 @@ export function useActionPlanCreateSubmit({
       const errors = validateActionPlanCreateForm(values, {
         canDefineCrossPoleTasks,
         staffExecutionMode,
+        requireIssueFocus,
       })
       const planningErrors = validateActionPlanCreatePlanningErrors(planningDraft, {
         saveToLibrary: values.saveToLibrary,
@@ -79,7 +82,7 @@ export function useActionPlanCreateSubmit({
       setFrontendFieldErrors(merged)
       return merged
     },
-    [canDefineCrossPoleTasks, staffExecutionMode],
+    [canDefineCrossPoleTasks, requireIssueFocus, staffExecutionMode],
   )
 
   function clearApiFieldError(key: string) {

@@ -50,7 +50,7 @@ def test_dual_context_active_non_routable_spa_and_routable_hotel():
     assert payload["routing_taxonomy"]["capabilities_version"] == CATALOG_CAPABILITIES_VERSION
 
 
-def test_author_scopes_mono_and_multi_deduped_sorted():
+def test_author_scope_omitted_from_llm_pipeline_input():
     membership = build_membership()
     rooftop = create_business_unit(
         establishment=membership.establishment, key="rooftop", label="Rooftop"
@@ -64,28 +64,12 @@ def test_author_scopes_mono_and_multi_deduped_sorted():
     create_activity_subject(
         establishment=membership.establishment, business_unit=food, label="Service"
     )
-
-    empty = create_observation(membership=membership, text="Sans rattachement.")
-    assert (
-        build_pipeline_input(observation=empty)["submission_context"][
-            "author_scope_business_unit_routing_keys"
-        ]
-        == []
-    )
-
     create_membership_with_business_unit_scope(membership=membership, business_unit=rooftop)
-    mono = create_observation(membership=membership, text="Mono rattachement.")
-    mono_keys = build_pipeline_input(observation=mono)["submission_context"][
-        "author_scope_business_unit_routing_keys"
-    ]
-    assert mono_keys == [rooftop.routing_key]
-
     create_membership_with_business_unit_scope(membership=membership, business_unit=food)
-    multi = create_observation(membership=membership, text="Multi rattachements.")
-    multi_keys = build_pipeline_input(observation=multi)["submission_context"][
-        "author_scope_business_unit_routing_keys"
-    ]
-    assert multi_keys == sorted([rooftop.routing_key, food.routing_key])
+    observation = create_observation(membership=membership, text="Multi rattachements.")
+    payload = build_pipeline_input(observation=observation)
+    assert "submission_context" not in payload
+    assert "author_scope_business_unit_routing_keys" not in payload
 
 
 def test_action_plan_task_preferred_when_both_routable():

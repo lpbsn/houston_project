@@ -161,11 +161,13 @@ def signal_feed_queryset(
         return apply_feed_sorting(queryset)
 
     if membership.role == EstablishmentMembership.Role.MANAGER:
+        # Personal = MembershipScope poles OR totally unclassified (three nulls).
+        # Partial unassigned outside scope stays in general, not Ma zone.
         scope_q = build_signal_feed_scope_q_v2(membership=membership)
         if scope_q is None:
-            queryset = queryset.filter(_UNASSIGNED_ROUTING_Q)
+            queryset = queryset.filter(_TOTAL_UNCLASSIFIED_Q)
         else:
-            queryset = queryset.filter(scope_q | _UNASSIGNED_ROUTING_Q)
+            queryset = queryset.filter(scope_q | _TOTAL_UNCLASSIFIED_Q)
         queryset = apply_feed_filters(queryset, filters=filters)
         return apply_feed_sorting(queryset)
 

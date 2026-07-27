@@ -614,6 +614,11 @@ def can_create_linked_action_plan(
         return can_access_signal_for_linked_action(membership, signal)
     if not can_access_signal_for_linked_action(membership, signal):
         return False
+    # Null responsible: Manager may create with pilot selection (triage path).
+    # Responsible set: keep responsible-BU actionability (do not expand
+    # signal_actionable_by_membership for unassigned-with-responsible).
+    if signal.responsible_business_unit_id is None:
+        return True
     return signal_actionable_by_membership(membership, signal)
 
 

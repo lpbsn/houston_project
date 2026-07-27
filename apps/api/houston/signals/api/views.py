@@ -131,8 +131,9 @@ class SignalFeedView(EstablishmentScopedSignalMixin, APIView):
                 required=False,
                 type=bool,
                 description=(
-                    "When true, restrict to routing_status=unassigned among visible "
-                    "signals. Owner/Director/Manager only; Staff receives 403."
+                    "When true, restrict to signals with no responsible business unit "
+                    "(affected and activity_subject ignored) among active lifecycle "
+                    "statuses. Owner/Director/Manager only; Staff receives 403."
                 ),
             ),
         ],

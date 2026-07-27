@@ -93,7 +93,7 @@ export function SignalFeedFiltersBar({
                 )
               }
             />
-            À qualifier
+            Non classifié
           </label>
         ) : null}
       </div>

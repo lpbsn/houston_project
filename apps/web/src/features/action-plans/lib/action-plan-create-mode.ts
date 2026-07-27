@@ -84,12 +84,18 @@ export function resolveActionPlanCreateModeConfig(input: {
   canCreateActionPlan: boolean
   canCreateCatalogActionPlan?: boolean
   membershipId?: string
+  /** When set for signal-linked: lock pilot only if the signal already has a responsible pole. */
+  signalHasResponsibleBusinessUnit?: boolean
 }): ActionPlanCreateModeConfig {
   const { mode, role, canCreateActionPlan } = input
   const isStaff = isStaffRole(role)
   const canCrossPole = canDefineCrossPoleTasks(role)
 
   if (mode === 'signal-linked') {
+    const lockPilot =
+      input.signalHasResponsibleBusinessUnit === undefined
+        ? true
+        : input.signalHasResponsibleBusinessUnit
     return {
       canAccess: canCreateSignalLinkedActionPlan({ role, canCreateActionPlan }),
       showLibraryToggle: false,
@@ -99,7 +105,7 @@ export function resolveActionPlanCreateModeConfig(input: {
       showScheduleSection: false,
       filterBusinessUnitsByScope: shouldFilterBusinessUnitsByScope(role),
       canDefineCrossPoleTasks: canCrossPole,
-      lockPilotBusinessUnit: true,
+      lockPilotBusinessUnit: lockPilot,
       defaultRequiresValidation: true,
       defaultSaveToLibrary: false,
     }

@@ -5,17 +5,19 @@ import {
 } from '@/lib/signal-classification'
 
 import { isSignalNeedsQualification } from '../lib/signal-qualify-routing'
+import { isSignalMissingResponsibleClassification } from '../lib/signal-unclassified'
 import { SignalDetailLabel } from './signal-detail-label'
+import { SignalUnclassifiedBadge } from './signal-unclassified-badge'
 
 type SignalDetailClassificationSectionProps = {
   signal: SignalClassificationInput & {
     location_text?: string | null
     routing_status?: string | null
     status?: string | null
+    affected_business_unit_id?: string | null
+    responsible_business_unit_id?: string | null
+    activity_subject_id?: string | null
   }
-  onQualify?: () => void
-  showQualifyAction?: boolean
-  qualifyErrorMessage?: string | null
 }
 
 function ClassificationField({ label, value }: { label: string; value: string }) {
@@ -31,14 +33,12 @@ const UNDEFINED_LABEL = 'Non défini'
 
 export function SignalDetailClassificationSection({
   signal,
-  onQualify,
-  showQualifyAction = false,
-  qualifyErrorMessage = null,
 }: SignalDetailClassificationSectionProps) {
   const classification = formatSignalClassification(signal)
   const location = signal.location_text?.trim()
   const needsQualification = isSignalNeedsQualification(signal)
   const showPartialPlaceholders = needsQualification
+  const isUnclassified = isSignalMissingResponsibleClassification(signal)
 
   const responsibleValue = classification.responsibleLabel
     ? classification.responsibleLabel
@@ -61,7 +61,7 @@ export function SignalDetailClassificationSection({
     !subjectValue &&
     !affectedValue &&
     !location &&
-    !showQualifyAction
+    !isUnclassified
   ) {
     return null
   }
@@ -70,21 +70,8 @@ export function SignalDetailClassificationSection({
     <TerrainCard>
       <div className="flex items-start justify-between gap-2">
         <SignalDetailLabel>Classification</SignalDetailLabel>
-        {showQualifyAction && onQualify ? (
-          <button
-            type="button"
-            className="shrink-0 text-[13px] font-semibold text-[#1B4FD8]"
-            onClick={onQualify}
-          >
-            Qualifier
-          </button>
-        ) : null}
+        <SignalUnclassifiedBadge signal={signal} variant="detail" />
       </div>
-      {showQualifyAction && qualifyErrorMessage ? (
-        <p className="mt-2 text-sm text-destructive" role="alert">
-          {qualifyErrorMessage}
-        </p>
-      ) : null}
       <div className="mt-3 space-y-3">
         {responsibleValue ? (
           <ClassificationField label="Pôle responsable" value={responsibleValue} />

@@ -2,7 +2,7 @@
 
 Status: authoritative (contract)  
 Last reviewed: 2026-07-25
-Implementation status: **pipeline v6** — schema `ai_observation_pipeline_v6` ; prompt `ai_observation_pipeline_v6_1` ; dual context (`establishment_context` + `routing_taxonomy`) ; nullable routing keys ; `signal_kind` actionable|informational ; backend aggregation on normalized `issue_focus` (no LLM aggregate hint)
+Implementation status: **pipeline v6** — schema `ai_observation_pipeline_v6` ; prompt `ai_observation_pipeline_v6_2` ; dual context (`establishment_context` + `routing_taxonomy`) ; nullable routing keys ; `signal_kind` actionable|informational ; author scope is server-only (not sent to the LLM) ; backend aggregation on normalized `issue_focus` (no LLM aggregate hint)
 
 ## Purpose
 
@@ -17,19 +17,20 @@ Target taxonomy: **BusinessUnit → ActivitySubject** ([`business_unit_taxonomy_
 | Validated Observation **text** | Raw audio, images |
 | `establishment_context` (all active BUs, including non-routable) | Global catalogue as routing truth |
 | `routing_taxonomy` (routable BUs/AS/OU only) | Invented keys outside `routing_taxonomy` |
-| `submission_context.author_scope_business_unit_routing_keys` | Nominative author identity |
-| Optional `action_plan_context` when linked | `active_signals_context` / LLM aggregate hints |
-| Safe technical metadata | Raw Observation text in logs |
+| Optional `action_plan_context` when linked | Author membership / scope keys ; nominative author identity |
+| Safe technical metadata | `active_signals_context` / LLM aggregate hints |
 | Internal `routing_key` values in the LLM payload | Exposing `routing_key` on public REST responses |
+|  | Raw Observation text in logs |
 
 ### User payload (backend → provider)
 
 JSON only. Keys:
 
 - `validated_text`, `establishment_context`, `routing_taxonomy`
-- `submission_context.author_scope_business_unit_routing_keys`
 - `observation_id`, `establishment_id`, `submitted_at`, `media_count`, `schema_version`, `prompt_version`
 - Optional `action_plan_context` when the Observation is linked to an action-plan execution/task
+
+Author membership scope is **not** sent to the LLM. When the candidate remains totally unclassified after resolve + responsible text-anchoring, the backend may set `affected_business_unit` from a unique author pole (`author_scope_fallback`).
 
 `establishment_context.active_business_units` is structural context only. Runtime routing keys must come from `routing_taxonomy`.
 
@@ -38,7 +39,7 @@ JSON only. Keys:
 ### System prompt
 
 - **Language**: French.
-- **`prompt_version`**: `ai_observation_pipeline_v6_1`
+- **`prompt_version`**: `ai_observation_pipeline_v6_2`
 - **`schema_version`**: `ai_observation_pipeline_v6`
 - **MÉTHODE** : analyse **fait par fait** (anomalies **ou** informations opérationnelles).
 - **0 / 1 / N** : émettre un candidat par fait opérationnel ; `[]` seulement pour politesse, fausse alerte sans fait résiduel, ou absence de fait.
@@ -95,7 +96,7 @@ Inactive BU/AS or sibling-BU subjects are rejected or corrected per resolver rul
 | Constant | Value |
 | --- | --- |
 | `AI_OBSERVATION_PIPELINE_SCHEMA_VERSION` | `ai_observation_pipeline_v6` |
-| `AI_OBSERVATION_PIPELINE_PROMPT_VERSION` | `ai_observation_pipeline_v6_1` |
+| `AI_OBSERVATION_PIPELINE_PROMPT_VERSION` | `ai_observation_pipeline_v6_2` |
 | `AI_ISSUE_FOCUS_MAX_LENGTH` | `80` |
 | `AI_INFORMATION_TYPE_MAX_LENGTH` | `64` |
 | `MAX_CANDIDATES_PER_OBSERVATION` | `5` |

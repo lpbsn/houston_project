@@ -18,7 +18,7 @@ from houston.ai.observation_pipeline_diagnostics import (
 from houston.ai.observation_pipeline_provider_schema import openai_strict_response_format
 from houston.ai.observation_pipeline_schema import ObservationPipelineOutput
 from houston.core.observability import build_observation_pipeline_timing_log_context
-from houston.establishments.models import BusinessUnit, MembershipScope
+from houston.establishments.models import BusinessUnit
 from houston.establishments.taxonomy_snapshot import (
     build_establishment_context,
     build_routing_taxonomy,
@@ -95,27 +95,6 @@ class ObservationPipelineProvider(Protocol):
     provider: str
 
     def propose(self, *, input_payload: dict[str, Any]) -> ObservationPipelineProviderResponse: ...
-
-
-def _build_author_scope_routing_keys(
-    *,
-    observation: Observation,
-    routable_keys: set[str],
-) -> list[str]:
-    membership = observation.submitted_by_membership
-    if membership is None:
-        return []
-    keys: set[str] = set()
-    scopes = MembershipScope.objects.filter(membership_id=membership.id).select_related(
-        "business_unit",
-    )
-    for scope in scopes:
-        business_unit = scope.business_unit
-        if business_unit is None or not business_unit.routing_key:
-            continue
-        if business_unit.routing_key in routable_keys:
-            keys.add(business_unit.routing_key)
-    return sorted(keys)
 
 
 def _resolve_action_plan_business_unit_context(
@@ -224,12 +203,6 @@ def build_pipeline_input(*, observation: Observation) -> dict[str, Any]:
         "media_count": media_count,
         "establishment_context": establishment_context,
         "routing_taxonomy": routing_taxonomy,
-        "submission_context": {
-            "author_scope_business_unit_routing_keys": _build_author_scope_routing_keys(
-                observation=observation,
-                routable_keys=routable_keys,
-            ),
-        },
         "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
         "prompt_version": AI_OBSERVATION_PIPELINE_PROMPT_VERSION,
     }
@@ -617,8 +590,8 @@ CONTEXTE
 - Chaque activity_subject a routing_key, label, description, source, catalog_key,
   capabilities[] ; "routing_taxonomy.capabilities_version" versionne le mapping capacités.
 - Les unités de lieu structurées sont dans routing_taxonomy.operational_units (key, label).
-- "submission_context.author_scope_business_unit_routing_keys" liste 0/1/2+ rattachements
-  auteur (clés runtime taxonomy-only, sans identité nominative) pour aider affected.
+- Aucun rattachement auteur / membership n'est fourni : ne déduis jamais un pôle
+  responsable ou concerné depuis l'identité ou le scope de l'auteur.
 - Si "action_plan_context" est présent : utiliser plan_title, task,
   business_unit_routing_key (si non null), context_business_unit_source (task|pilot)
   et business_unit_specific_name pour affiner le routage ; ne pas répéter validated_text.
@@ -717,9 +690,13 @@ PRIORITÉ TRANSVERSALE
 - Exemple : "Lumière HS au restaurant" → affected=restaurant, responsible=maintenance
   (transversal) si maintenance possède électricité/éclairage dans routing_taxonomy.
 
-FALLBACK DEDICATED
-- Si aucun pôle transversal pertinent n'existe pour la nature du fait,
-  responsible = affected et activity_subject sous affected.
+INCERTITUDE DE ROUTAGE
+- Si incertitude sur responsible ou activity_subject → laisser les clés nulles.
+- Ne force jamais responsible = affected.
+- responsible uniquement si le texte de validated_text justifie clairement ce pôle ;
+  sinon null (ne pas inventer depuis la taxonomie seule).
+- Le backend peut dériver affected depuis le pôle auteur unique lorsque les trois
+  dimensions restent nulles ; jamais responsible depuis un membership.
 
 SEGMENTATION
 - Séparer si lieux impactés, responsables, sujets, faits ou issue_focus diffèrent.

@@ -482,7 +482,7 @@
       {
         "id": "CTX-03",
         "owning_lot": "lot3",
-        "description": "Scopes auteur 0/1/2+ dédupliqués et triés, taxonomy-only",
+        "description": "Scope auteur absent du payload LLM (fallback serveur only)",
         "input": {
           "author_scope_catalog_keys": ["rooftop", "food_court", "rooftop"],
           "routable_all": true
@@ -492,9 +492,7 @@
           "reason": "V5 n'envoie pas author_scope_business_unit_routing_keys"
         },
         "expected_v6": {
-          "author_scope_count": 2,
-          "author_scopes_sorted": true,
-          "author_scopes_deduped": true
+          "author_scope_omitted_from_llm": true
         }
       },
       {

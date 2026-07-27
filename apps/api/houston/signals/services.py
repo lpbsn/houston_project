@@ -57,6 +57,10 @@ from houston.signals.exceptions import (
     SignalValidationError,
 )
 from houston.signals.models import CandidateSignal, ExpectedAction, Signal, SignalSourceObservation
+from houston.signals.author_affected_fallback import apply_author_affected_fallback
+from houston.signals.responsible_text_anchoring import (
+    sanitize_unanchored_responsible_without_subject,
+)
 from houston.signals.routing_resolver import (
     RoutingResolution,
     resolve_candidate_routing,
@@ -689,6 +693,15 @@ def apply_pipeline_output(
         resolution = resolve_candidate_routing(
             establishment_id=observation.establishment_id,
             proposal=proposal,
+            routing_taxonomy=taxonomy,
+        )
+        resolution = sanitize_unanchored_responsible_without_subject(
+            observation=observation,
+            resolution=resolution,
+        )
+        resolution = apply_author_affected_fallback(
+            observation=observation,
+            resolution=resolution,
             routing_taxonomy=taxonomy,
         )
         resolved = _resolved_taxonomy_from_resolution(resolution)

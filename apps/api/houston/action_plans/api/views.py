@@ -147,7 +147,10 @@ def _action_plan_error_response(exc: Exception) -> Response:
         )
     if isinstance(exc, ActionPlanValidationError):
         return Response(
-            {"code": "validation_error", "detail": str(exc) or "Validation failed."},
+            {
+                "code": getattr(exc, "code", ActionPlanValidationError.error_code),
+                "detail": str(exc) or "Validation failed.",
+            },
             status=status.HTTP_400_BAD_REQUEST,
         )
     return Response(
@@ -589,6 +592,7 @@ class ActionPlanListCreateView(EstablishmentScopedActionPlanMixin, APIView):
                 tasks=_task_payloads(data.get("tasks") or []),
                 assignees=_assignee_payloads(data.get("assignees") or []),
                 source_signal_id=data.get("source_signal_id"),
+                issue_focus=data.get("issue_focus"),
                 is_reusable=data.get("is_reusable", False),
                 use_shared_chronology=data.get("use_shared_chronology", False),
                 start_at=data.get("start_at"),

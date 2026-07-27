@@ -1,7 +1,9 @@
 /** Compatibility display fields from Signal/Obs summaries — never use *_key as identifiers (UUIDs only). */
 export type SignalClassificationInput = {
+  affected_business_unit_id?: string | null
   affected_business_unit_key?: string | null
   affected_business_unit_label?: string | null
+  responsible_business_unit_id?: string | null
   responsible_business_unit_key?: string | null
   responsible_business_unit_label?: string | null
   activity_subject_key?: string | null
@@ -59,48 +61,62 @@ function resolveAffectedLabel(input: SignalClassificationInput): string | null {
   return null
 }
 
+/** Dedup is ID-only; when either id is missing, poles are treated as distinct. */
+function isSameBusinessUnit(input: SignalClassificationInput): boolean {
+  const affectedId = input.affected_business_unit_id
+  const responsibleId = input.responsible_business_unit_id
+  return (
+    affectedId != null &&
+    responsibleId != null &&
+    affectedId === responsibleId
+  )
+}
+
 export function formatSignalClassification(
   input: SignalClassificationInput,
 ): SignalClassificationDisplay {
   const responsibleLabel = resolveResponsibleLabel(input)
   const subjectLabel = resolveSubjectLabel(input)
   const affectedLabel = resolveAffectedLabel(input)
+  const sameBusinessUnit = isSameBusinessUnit(input)
+  // Affected never becomes primary; secondary line when affected id is set and distinct.
+  const affectedLine =
+    affectedLabel &&
+    input.affected_business_unit_id != null &&
+    !sameBusinessUnit
+      ? `Concerné : ${affectedLabel}`
+      : null
 
   if (responsibleLabel && subjectLabel) {
-    const primaryLine = `${responsibleLabel} · ${subjectLabel}`
-    const affectedLine =
-      affectedLabel && affectedLabel !== responsibleLabel
-        ? `Concerné : ${affectedLabel}`
-        : null
-
     return {
-      primaryLine,
+      primaryLine: `${responsibleLabel} · ${subjectLabel}`,
       affectedLine,
       responsibleLabel,
       subjectLabel,
-      affectedLabel: affectedLine ? affectedLabel : null,
+      affectedLabel,
     }
   }
 
   if (responsibleLabel) {
     return {
       primaryLine: responsibleLabel,
-      affectedLine: null,
+      affectedLine,
       responsibleLabel,
       subjectLabel: null,
-      affectedLabel: null,
+      affectedLabel,
     }
   }
 
   return {
     primaryLine: null,
-    affectedLine: null,
+    affectedLine,
     responsibleLabel: null,
     subjectLabel: null,
-    affectedLabel: null,
+    affectedLabel,
   }
 }
 
 export function hasSignalClassification(input: SignalClassificationInput): boolean {
-  return formatSignalClassification(input).primaryLine !== null
+  const display = formatSignalClassification(input)
+  return display.primaryLine !== null || display.affectedLine !== null
 }

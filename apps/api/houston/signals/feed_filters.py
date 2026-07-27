@@ -116,10 +116,11 @@ def apply_feed_filters(queryset, *, filters: SignalFeedFilters | None):
         queryset = queryset.filter(activity_subject_id__in=filters.activity_subject_ids)
 
     if filters.needs_qualification:
-        # "À qualifier": unassigned routing among still-active lifecycle signals.
-        # H6 leaves routing_status unchanged on resolve/cancel/archive.
+        # "Non classifié": missing responsible among active lifecycle.
+        # Affected and activity_subject are ignored (same predicate as the UI badge).
+        # Distinct from routing_status=unassigned and from visibility "total unclassified".
         queryset = queryset.filter(
-            routing_status=Signal.RoutingStatus.UNASSIGNED,
+            responsible_business_unit__isnull=True,
             status__in=ACTIVE_SIGNAL_STATUSES,
         )
 
