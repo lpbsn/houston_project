@@ -101,7 +101,7 @@ Do not run `cd apps/api && uv run pytest` on the host — use Make targets or `d
 | **Standard suite** (~1 600+ tests) | `FakeObservationPipelineProvider` via autouse `force_fake_observation_pipeline_provider` | Yes |
 | **Provider guard tests** | Fake + mocked OpenAI client (`test_observation_pipeline_provider.py`) | Yes (Lot 6: no longer `slow`) |
 | **Pipeline validation / legacy / golden split** | Fake provider, DB-heavy | Yes (Lot 6: reintegrated into PR) |
-| **Live OpenAI smoke** | Real OpenAI (`test_openai_observation_smoke.py`, `test_openai_observation_pipeline_v4_corpus_smoke.py`) | No — manual / pre-release only |
+| **Live OpenAI smoke** | Real OpenAI (`test_openai_observation_pipeline_v6_contract_smoke.py` Lot 4 technical; `test_openai_observation_pipeline_v6_business_smoke.py` Lot 10 métier; legacy v4/generic smokes) | No — manual / pre-release only; archives under `.artifacts/pipeline-v6-smoke/` |
 
 PR filter (Makefile + CI): `-m "not openai_observation_smoke and not openai_smoke and not slow"`.
 
@@ -121,7 +121,7 @@ Dedicated throttle tests (`test_auth_throttling_api.py`, invitation accept over-
 
 - Auth / bootstrap / CSRF / refresh rotation
 - RBAC and cross-establishment isolation
-- Signal lifecycle (pipeline golden G01–G11 + schema/prompt v5 `routing_key` + cancel/resolve)
+- Signal lifecycle (pipeline golden G01–G11 apply-side against runtime schema/prompt `ai_observation_pipeline_v6` / `v6_2` + V6 acceptance corpus S15 / truth tables + cancel/resolve)
 - Action lifecycle (service + API transitions + permissions)
 - Checklist permissions and materialization
 - Chat WS ticket auth and message delivery
@@ -219,7 +219,7 @@ Use `--durations=50` and `.artifacts/vitest-results.json` for ongoing profiling 
 | **6** | Replace TTL `sleep(1.1)` with deterministic time control; reintegrate former `slow` modules into PR; keep live OpenAI smoke manual-only; preserve reserved `openai_smoke` / `openai_transcription_smoke` markers |
 | **7** | Backend observation→signal feed journey; auth-provider cache purge tests; Playwright limited to 3 scenarios — infra proposal only, not PR gate |
 
-Protected areas (do not weaken): auth/CSRF/throttle, tenant isolation, pipeline v4 golden, legacy issue-focus aggregation, fake OpenAI guards, notification producers, query invalidation parity.
+Protected areas (do not weaken): auth/CSRF/throttle, tenant isolation, pipeline v4 golden (apply-side G01–G11 vs current V6 runtime — not an alternate AI pipeline), legacy issue-focus aggregation, fake OpenAI guards, notification producers, query invalidation parity.
 
 ## Issue focus aggregation eval
 
@@ -232,9 +232,13 @@ docker compose exec api uv run python manage.py evaluate_observation_pipeline --
 # Plumbing check without OpenAI
 docker compose exec api uv run python manage.py evaluate_observation_pipeline --provider fake --case-id G01
 
+# Lot 10 — S15 acceptance vs V6 runtime (fake fixtures independent of expected_v6)
+docker compose exec api uv run python manage.py evaluate_observation_pipeline_v6 --fail-on-diff
+docker compose exec api uv run python manage.py evaluate_observation_pipeline_v6 --json --case-id S15-12
+
 # DB aggregation metrics (pilot monitoring)
 docker compose exec api uv run python manage.py report_issue_focus_aggregation_eval --json
-make backend-test ARGS='houston/signals/tests/test_pipeline_v4_golden.py houston/signals/tests/test_aggregation_eval.py houston/signals/tests/test_evaluate_observation_pipeline.py -q'
+make backend-test ARGS='houston/signals/tests/test_pipeline_v4_golden.py houston/signals/tests/test_pipeline_v6_lot10_eval.py houston/signals/tests/test_aggregation_eval.py houston/signals/tests/test_evaluate_observation_pipeline.py -q'
 ```
 
 Command: `report_issue_focus_aggregation_eval` (see `houston/signals/management/commands/`).

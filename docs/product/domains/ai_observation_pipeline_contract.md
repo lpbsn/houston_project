@@ -1,7 +1,7 @@
 # AI Observation Pipeline Contract
 
 Status: authoritative (contract)  
-Last reviewed: 2026-07-25
+Last reviewed: 2026-07-27
 Implementation status: **pipeline v6** — schema `ai_observation_pipeline_v6` ; prompt `ai_observation_pipeline_v6_2` ; dual context (`establishment_context` + `routing_taxonomy`) ; nullable routing keys ; `signal_kind` actionable|informational ; author scope is server-only (not sent to the LLM) ; backend aggregation on normalized `issue_focus` (no LLM aggregate hint)
 
 ## Purpose
@@ -30,7 +30,11 @@ JSON only. Keys:
 - `observation_id`, `establishment_id`, `submitted_at`, `media_count`, `schema_version`, `prompt_version`
 - Optional `action_plan_context` when the Observation is linked to an action-plan execution/task
 
-Author membership scope is **not** sent to the LLM. When the candidate remains totally unclassified after resolve + responsible text-anchoring, the backend may set `affected_business_unit` from a unique author pole (`author_scope_fallback`).
+Author membership scope is **not** sent to the LLM. Post-resolve apply order:
+
+1. Deterministic routing resolve (keys ∈ `routing_taxonomy` or null).
+2. Responsible-without-subject **text-anchoring** against `validated_text` / observation raw text — keep responsible only when lexically anchored; otherwise clear it.
+3. **Author affected fallback** (`author_scope_fallback`): only when affected, responsible, and subject are all still null **and** the author has exactly one active MembershipScope pole; never runs for zero or multiple poles; never sets responsible from the author.
 
 `establishment_context.active_business_units` is structural context only. Runtime routing keys must come from `routing_taxonomy`.
 
@@ -105,7 +109,7 @@ Inactive BU/AS or sibling-BU subjects are rejected or corrected per resolver rul
 
 Functional expectations: [`apps/api/houston/testing/pipeline_v6_acceptance_corpus.json`](../../../apps/api/houston/testing/pipeline_v6_acceptance_corpus.json) (S15-01…S15-23 + S15-D1).
 
-Informational / prompt v6.1 cases include S15-07, S15-13, S15-21…S15-23. Lot4b owns the prompt correctif + targeted live smoke ; Lot 10 owns full business smoke + docs cutover.
+Informational / prompt cases include S15-07, S15-13, S15-21…S15-23. Lot4b owns the prompt correctif + targeted live smoke. Lot 10 cutover: S15 eval command `evaluate_observation_pipeline_v6` (fake fixtures ≠ `expected_v6`), metrics A–J reports under `.artifacts/pipeline-v6-eval/`, business smoke + Lot 4 technical smoke archives under `.artifacts/pipeline-v6-smoke/`.
 
 Apply-side golden (non-LLM): [`apps/api/houston/testing/pipeline_golden_v4_corpus.json`](../../../apps/api/houston/testing/pipeline_golden_v4_corpus.json) (G01–G11).
 

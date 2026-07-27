@@ -1,7 +1,7 @@
 # Houston — Current product state
 
 Status: authoritative  
-Last reviewed: 2026-07-23
+Last reviewed: 2026-07-27
 
 ## Branding
 
@@ -30,7 +30,7 @@ API contract: [`apps/api/schema.yml`](../../apps/api/schema.yml).
 | Runtime config / onboarding | Live | `onboarding_proposal_v4` only (v3 rejected at runtime after preflight); BU/AS instances |
 | BusinessUnit / ActivitySubject taxonomy | Live | Identity: `specific_name` + internal `routing_key`; catalog FK required (`PROTECT`); public API Lot 5 (no `routing_key`); legacy instance columns removed |
 | Observations + media + transcription | Live | Celery pipeline |
-| AI observation → Signal | Live | Pipeline **v5** (`routing_key` snapshot/resolver); Fake (tests) / OpenAI (manual) |
+| AI observation → Signal | Live | Pipeline **v6** (schema `ai_observation_pipeline_v6`, prompt `ai_observation_pipeline_v6_2`); Fake (CI) / OpenAI (opt-in smoke) |
 | Signal feed + lifecycle | Live | Pin, urgency, resolve, cancel |
 | Action Plan catalog + executions + feed | Live | See [`decisions/action_plan.md`](decisions/action_plan.md) |
 | Comments (signal + execution threads) | Live | REST + mention picker |

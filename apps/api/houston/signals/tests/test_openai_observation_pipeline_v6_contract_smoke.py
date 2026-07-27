@@ -24,6 +24,7 @@ from houston.ai.observation_pipeline import (
 from houston.ai.observation_pipeline_provider_schema import openai_strict_response_format
 from houston.ai.observation_pipeline_schema import ObservationPipelineOutput
 from houston.signals.constants import AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
+from houston.signals.pipeline_v6_smoke_archive import write_smoke_archive
 from houston.signals.tests.conftest import create_observation, create_restaurant_v3_taxonomy
 from houston.testing.factories import build_membership
 
@@ -99,3 +100,18 @@ def test_live_openai_accepts_v6_strict_nullable_schema_and_parses():
         assert "activity_subject_routing_key" in payload
         assert "information_type" in payload
         # Null routing keys are allowed by schema but not required in a live response.
+
+    archive_path = write_smoke_archive(
+        kind="lot4-technical",
+        payload={
+            "passed": True,
+            "candidate_count": len(output.candidates),
+            "schema_version": output.schema_version,
+            "summary": (
+                "Lot 4 technical smoke: provider accepted V6 strict nullable schema; "
+                "ObservationPipelineOutput parsed; no backend-only fields."
+            ),
+        },
+    )
+    assert archive_path.exists()
+

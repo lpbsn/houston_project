@@ -142,10 +142,9 @@ def test_compute_issue_focus_eval_metrics_without_llm_aggregate_hint():
     metrics = compute_issue_focus_eval_metrics(establishment_id=establishment.id)
 
     # V6: no LLM aggregate hint — distinct issue_focus creates a new Signal.
-    assert metrics.hint_provided_candidate_count == 0
-    assert metrics.hint_rejected_created_count == 0
-    assert metrics.hint_issue_focus_mismatch_count == 0
     assert Signal.objects.filter(establishment=establishment).count() == 2
     assert CandidateSignal.objects.filter(
         outcome=CandidateSignal.Outcome.CREATED_SIGNAL,
     ).exists()
+    assert metrics.active_signal_count == 2
+    assert "elevated_hint_issue_focus_mismatch_rate" not in metrics.lot4bis_trigger_indicators

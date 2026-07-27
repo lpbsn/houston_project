@@ -536,7 +536,6 @@ def _persist_pending_candidate(
         structured_summary=candidate.structured_summary.strip(),
         issue_focus=require_normalized_issue_focus(candidate.issue_focus),
         schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-        ai_aggregate_hint_signal_id=None,
         signal_kind=candidate.signal_kind,
         information_type=candidate.information_type or "",
         canonical_object=candidate.canonical_object,

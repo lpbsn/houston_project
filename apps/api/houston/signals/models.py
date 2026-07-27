@@ -228,7 +228,6 @@ class CandidateSignal(BaseModel):
         default="",
     )
     schema_version = models.CharField(max_length=80, blank=True, default="")
-    ai_aggregate_hint_signal_id = models.UUIDField(null=True, blank=True)
     signal_kind = models.CharField(
         max_length=32,
         choices=SignalKind.choices,

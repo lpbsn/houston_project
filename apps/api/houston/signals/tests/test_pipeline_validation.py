@@ -432,7 +432,6 @@ def test_apply_pipeline_aggregates_exact_match_without_llm_hint():
 
     assert outcome == ObservationProcessing.Outcome.SIGNAL_AGGREGATED
     row = CandidateSignal.objects.get(observation=observation)
-    assert row.ai_aggregate_hint_signal_id is None
     assert row.outcome == CandidateSignal.Outcome.AGGREGATED_SIGNAL
     assert row.result_signal_id == existing.id
 

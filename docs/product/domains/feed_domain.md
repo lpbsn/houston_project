@@ -27,6 +27,7 @@ Feed is a read/projection domain. It is not business truth.
 - Backend-authorized `ExecutionFeed` read projection.
 - Safe feed items only; no raw Observation text.
 - Backend-owned filtering and sorting.
+- Optional Signal Feed filter `needs_qualification` (« Non classifié ») = active Signals with `responsible_business_unit_id IS NULL` (distinct from affected / subject).
 - Pagination suitable for changing operational lists.
 - Optional permission hints as UX helpers only.
 - Realtime invalidation/refetch boundary only.

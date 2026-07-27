@@ -32,7 +32,7 @@ CHAT_CONVERSATIONS_MAX_QUERY_DELTA_ONE_TO_THREE = 0
 # GET .../conversations/{id}/messages/ — default page, 1 stored message
 CHAT_MESSAGES_LIST_MAX_QUERIES = 10
 
-# build_pipeline_input — one observation, dual context, author scopes, one BU/AS
+# build_pipeline_input — one observation, dual context, one BU/AS
 OBSERVATION_PIPELINE_INPUT_BUILD_MAX_QUERIES = 12
 
 
