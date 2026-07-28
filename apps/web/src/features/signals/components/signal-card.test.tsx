@@ -45,6 +45,7 @@ function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem 
     created_at: '2026-06-30T08:00:00Z',
     permission_hints: {
       can_pin: false,
+      can_mark_interesting: false,
       can_cancel: false,
       can_resolve: false,
       can_create_linked_action_plan: false,
@@ -70,6 +71,7 @@ describe('SignalCard feed variant', () => {
           responsible_business_unit_label: 'Cuisine',
           permission_hints: {
             can_pin: true,
+            can_mark_interesting: false,
             can_cancel: false,
             can_resolve: false,
             can_create_linked_action_plan: false,
@@ -365,6 +367,7 @@ describe('SignalCard actions menu', () => {
         item={buildFeedItem({
           permission_hints: {
             can_pin: true,
+            can_mark_interesting: false,
             can_cancel: false,
             can_resolve: false,
             can_create_linked_action_plan: false,
@@ -385,6 +388,7 @@ describe('SignalCard actions menu', () => {
         item={buildFeedItem({
           permission_hints: {
             can_pin: true,
+            can_mark_interesting: false,
             can_cancel: false,
             can_resolve: false,
             can_create_linked_action_plan: false,
@@ -406,6 +410,7 @@ describe('SignalCard actions menu', () => {
         item={buildFeedItem({
           permission_hints: {
             can_pin: false,
+            can_mark_interesting: false,
             can_cancel: false,
             can_resolve: true,
             can_create_linked_action_plan: false,
@@ -427,6 +432,7 @@ describe('SignalCard actions menu', () => {
         item={buildFeedItem({
           permission_hints: {
             can_pin: false,
+            can_mark_interesting: false,
             can_cancel: true,
             can_resolve: false,
             can_create_linked_action_plan: false,
@@ -446,6 +452,7 @@ describe('SignalCard actions menu', () => {
     const item = buildFeedItem({
       permission_hints: {
         can_pin: true,
+        can_mark_interesting: false,
         can_cancel: false,
         can_resolve: false,
         can_create_linked_action_plan: false,

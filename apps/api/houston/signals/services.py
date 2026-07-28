@@ -47,6 +47,7 @@ from houston.signals.constants import (
     AI_ISSUE_FOCUS_MAX_LENGTH,
     AI_LOCATION_TEXT_MAX_LENGTH,
     AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+    CANCEL_RESOLVE_SIGNAL_STATUSES,
     MAX_CANDIDATES_PER_OBSERVATION,
     STRUCTURED_SUMMARY_SHORT_MAX_LENGTH,
 )
@@ -1278,6 +1279,29 @@ def pin_signal(*, signal: Signal, membership: EstablishmentMembership) -> Signal
 
 
 @transaction.atomic
+def mark_signal_interesting(*, signal: Signal) -> Signal:
+    if signal.status != Signal.Status.OPEN:
+        raise SignalStateError("Only open signals can be marked interesting.")
+    signal.status = Signal.Status.INTERESTING
+    signal.is_pinned = False
+    signal.pinned_at = None
+    signal.pinned_by_membership = None
+    touch_signal_activity(signal=signal)
+    signal.save(
+        update_fields=[
+            "status",
+            "is_pinned",
+            "pinned_at",
+            "pinned_by_membership",
+            "last_activity_at",
+            "updated_at",
+        ]
+    )
+    _schedule_signal_invalidation(signal=signal, reason="signal.updated")
+    return signal
+
+
+@transaction.atomic
 def unpin_signal(*, signal: Signal) -> Signal:
     signal.is_pinned = False
     signal.pinned_at = None
@@ -1382,7 +1406,7 @@ def _transition_active_signal_to_terminal(
     signal: Signal,
     target_status: str,
 ) -> Signal:
-    if signal.status not in ACTIVE_SIGNAL_STATUSES:
+    if signal.status not in CANCEL_RESOLVE_SIGNAL_STATUSES:
         raise SignalStateError("Only active signals can be canceled or resolved.")
     _delete_created_from_media_for_signal_terminal(signal=signal)
     signal.status = target_status

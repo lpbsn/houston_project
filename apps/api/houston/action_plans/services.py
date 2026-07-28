@@ -134,13 +134,13 @@ def sync_signal_after_execution_change(*, signal: Signal) -> Signal:
         linked.exists()
         and linked.filter(status=EXECUTION_STATUS_CANCELED).count() == linked.count()
     ):
-        from houston.signals.constants import ACTIVE_SIGNAL_STATUSES
+        from houston.signals.constants import CANCEL_RESOLVE_SIGNAL_STATUSES
         from houston.signals.services import (
             _schedule_signal_invalidation,
             touch_signal_activity,
         )
 
-        if signal.status in ACTIVE_SIGNAL_STATUSES:
+        if signal.status in CANCEL_RESOLVE_SIGNAL_STATUSES:
             signal.status = Signal.Status.OPEN
             signal.is_pinned = False
             signal.pinned_at = None
@@ -160,10 +160,10 @@ def sync_signal_after_execution_change(*, signal: Signal) -> Signal:
         return signal
 
     if linked.exists() and linked.filter(status=EXECUTION_STATUS_DONE).exists():
-        from houston.signals.constants import ACTIVE_SIGNAL_STATUSES
+        from houston.signals.constants import CANCEL_RESOLVE_SIGNAL_STATUSES
         from houston.signals.services import resolve_signal
 
-        if signal.status in ACTIVE_SIGNAL_STATUSES:
+        if signal.status in CANCEL_RESOLVE_SIGNAL_STATUSES:
             return resolve_signal(signal=signal, actor_membership=None)
     return signal
 
@@ -372,7 +372,10 @@ def _activate_linked_signal_on_execution_create(*, signal: Signal) -> None:
         touch_signal_activity,
     )
 
-    status_changed = signal.status == Signal.Status.OPEN
+    status_changed = signal.status in {
+        Signal.Status.OPEN,
+        Signal.Status.INTERESTING,
+    }
     unpin_changed = signal.is_pinned
     if not status_changed and not unpin_changed:
         return

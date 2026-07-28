@@ -1417,6 +1417,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/signals/{signal_id}/mark-interesting/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_signals_mark_interesting_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/signals/{signal_id}/pin/": {
         parameters: {
             query?: never;
@@ -3518,6 +3534,7 @@ export interface components {
         };
         PermissionHints: {
             can_pin: boolean;
+            can_mark_interesting: boolean;
             can_cancel: boolean;
             can_resolve: boolean;
             can_create_linked_action_plan: boolean;
@@ -8611,7 +8628,7 @@ export interface operations {
                 /** @description When true, restrict to signals with no responsible business unit (affected and activity_subject ignored) among active lifecycle statuses. Owner/Director/Manager only; Staff receives 403. */
                 needs_qualification?: boolean;
                 page_size?: number;
-                /** @description Comma-separated feed statuses: open, in_progress, resolved (max 3). */
+                /** @description Comma-separated feed statuses: open, in_progress, interesting, resolved, canceled (max 5). */
                 statuses?: string;
                 view_mode: "general" | "personal";
             };
@@ -8843,6 +8860,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_signals_mark_interesting_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                signal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalDetail"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };

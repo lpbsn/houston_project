@@ -30,6 +30,7 @@ function item(overrides: Partial<SignalFeedItem> & { id: string }): SignalFeedIt
     created_at: new Date().toISOString(),
     permission_hints: {
       can_pin: false,
+      can_mark_interesting: false,
       can_cancel: false,
       can_resolve: false,
       can_create_linked_action_plan: false,
@@ -57,6 +58,38 @@ describe('groupFeedItemsByStatus', () => {
     expect(groups).toHaveLength(2)
     expect(groups?.[0].dotVariant).toBe('warning')
     expect(groups?.[1].dotVariant).toBe('teal')
+  })
+
+  it('places interesting before resolved', () => {
+    const groups = groupFeedItemsByStatus([
+      item({ id: '1', status: 'open' }),
+      item({ id: '2', status: 'interesting' }),
+      item({ id: '3', status: 'resolved' }),
+    ])
+    expect(groups).toHaveLength(3)
+    expect(groups?.[0].status).toBe('open')
+    expect(groups?.[1].status).toBe('interesting')
+    expect(groups?.[1].label).toBe('Intéressants')
+    expect(groups?.[1].dotVariant).toBe('primary')
+    expect(groups?.[2].status).toBe('resolved')
+  })
+
+  it('returns sections with interesting before resolved and canceled', () => {
+    const groups = groupFeedItemsByStatus([
+      item({ id: '1', status: 'open' }),
+      item({ id: '2', status: 'in_progress' }),
+      item({ id: '3', status: 'interesting' }),
+      item({ id: '4', status: 'resolved' }),
+      item({ id: '5', status: 'canceled' }),
+    ])
+    expect(groups).toHaveLength(5)
+    expect(groups?.map((group) => group.status)).toEqual([
+      'open',
+      'in_progress',
+      'interesting',
+      'resolved',
+      'canceled',
+    ])
   })
 
   it('returns three sections with resolved before canceled when all statuses are present', () => {

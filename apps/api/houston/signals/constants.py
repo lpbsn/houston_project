@@ -26,8 +26,14 @@ AI_EXPECTED_ACTION_VALUES = (
     "safety_response",
 )
 
-# Must stay aligned with Signal.Status.OPEN and Signal.Status.IN_PROGRESS.
-ACTIVE_SIGNAL_STATUSES = frozenset({"open", "in_progress"})
+# Must stay aligned with Signal.Status.OPEN, IN_PROGRESS, and INTERESTING.
+# Aggregation targets, uniqueness constraint, linked action-plan creation.
+ACTIVE_SIGNAL_STATUSES = frozenset({"open", "in_progress", "interesting"})
+
+# Cancel / resolve commands only (interesting excluded).
+CANCEL_RESOLVE_SIGNAL_STATUSES = frozenset({"open", "in_progress"})
 
 # Default Signal Feed visibility (excludes archived).
-FEED_SIGNAL_STATUSES = frozenset({"open", "in_progress", "resolved", "canceled"})
+FEED_SIGNAL_STATUSES = frozenset(
+    {"open", "in_progress", "interesting", "resolved", "canceled"}
+)

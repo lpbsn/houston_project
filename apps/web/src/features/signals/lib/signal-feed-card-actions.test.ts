@@ -10,6 +10,7 @@ import {
 function hints(overrides: Partial<PermissionHints> = {}): PermissionHints {
   return {
     can_pin: false,
+    can_mark_interesting: false,
     can_cancel: false,
     can_resolve: false,
     can_create_linked_action_plan: false,
@@ -35,6 +36,10 @@ describe('canOpenSignalFeedCardActions', () => {
 
   it('returns true when can_pin is true', () => {
     expect(canOpenSignalFeedCardActions(hints({ can_pin: true }))).toBe(true)
+  })
+
+  it('returns true when can_mark_interesting is true', () => {
+    expect(canOpenSignalFeedCardActions(hints({ can_mark_interesting: true }))).toBe(true)
   })
 
   it('returns true when can_resolve is true', () => {
@@ -74,6 +79,16 @@ describe('getSignalFeedCardActionOptions', () => {
     ).toEqual([{ id: 'pin', label: 'Désépingler', tone: 'neutral' }])
   })
 
+  it('returns mark_interesting action when can_mark_interesting', () => {
+    expect(
+      getSignalFeedCardActionOptions(
+        feedItem({ permission_hints: hints({ can_mark_interesting: true }) }),
+      ),
+    ).toEqual([
+      { id: 'mark_interesting', label: 'Marquer comme intéressant', tone: 'neutral' },
+    ])
+  })
+
   it('returns qualify action when can_qualify_routing', () => {
     expect(
       getSignalFeedCardActionOptions(
@@ -105,6 +120,7 @@ describe('getSignalFeedCardActionOptions', () => {
           is_pinned: true,
           permission_hints: hints({
             can_pin: true,
+            can_mark_interesting: true,
             can_resolve: true,
             can_cancel: true,
           }),
@@ -112,6 +128,7 @@ describe('getSignalFeedCardActionOptions', () => {
       ),
     ).toEqual([
       { id: 'pin', label: 'Désépingler', tone: 'neutral' },
+      { id: 'mark_interesting', label: 'Marquer comme intéressant', tone: 'neutral' },
       { id: 'resolve', label: 'Marquer comme résolue', tone: 'success' },
       { id: 'cancel', label: 'Annuler cette observation', tone: 'danger' },
     ])

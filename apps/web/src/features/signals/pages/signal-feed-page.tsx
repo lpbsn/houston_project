@@ -31,7 +31,7 @@ import {
 } from '../lib/signal-feed-filters'
 import type { SignalFeedItem, SignalViewMode } from '../types'
 
-const SIGNAL_FEED_DEFAULT_COLLAPSED_SECTIONS = ['resolved', 'canceled'] as const
+const SIGNAL_FEED_DEFAULT_COLLAPSED_SECTIONS = ['interesting', 'resolved', 'canceled'] as const
 
 type SignalFeedPageProps = {
   onOpenSignal: (signalId: string) => void

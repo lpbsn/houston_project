@@ -41,6 +41,7 @@ from houston.signals.feed_filters import (
 from houston.signals.permissions import (
     can_access_qualify_routing_endpoint,
     can_cancel_signal,
+    can_mark_signal_interesting,
     can_pin_signal,
     can_resolve_signal,
     can_use_needs_qualification_filter,
@@ -54,6 +55,7 @@ from houston.signals.selectors import (
 )
 from houston.signals.services import (
     cancel_signal,
+    mark_signal_interesting,
     pin_signal,
     qualify_signal_routing,
     resolve_signal,
@@ -109,7 +111,10 @@ class SignalFeedView(EstablishmentScopedSignalMixin, APIView):
                 name="statuses",
                 required=False,
                 type=str,
-                description="Comma-separated feed statuses: open, in_progress, resolved (max 3).",
+                description=(
+                    "Comma-separated feed statuses: open, in_progress, interesting, "
+                    "resolved, canceled (max 5)."
+                ),
             ),
             OpenApiParameter(
                 name="business_unit_ids",
@@ -364,6 +369,33 @@ class SignalResolveView(EstablishmentScopedSignalMixin, APIView):
         )
 
 
+class SignalMarkInterestingView(EstablishmentScopedSignalMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanViewSignalFeed,
+    ]
+
+    @extend_schema(
+        tags=["signals"],
+        request=None,
+        responses={
+            200: SignalDetailSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def post(self, request, establishment_id, signal_id):
+        return _signal_lifecycle_command_response(
+            request=request,
+            establishment_id=self.establishment_id,
+            signal_id=signal_id,
+            action="mark_interesting",
+        )
+
+
 class SignalQualifyRoutingOptionsView(EstablishmentScopedSignalMixin, APIView):
     """Establishment-wide active BU/AS tree for qualify pickers (triage roles)."""
 
@@ -536,14 +568,22 @@ def _signal_lifecycle_command_response(
                 {"code": "permission_denied", "detail": "Permission denied."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+    elif action == "mark_interesting":
+        if not can_mark_signal_interesting(membership, signal):
+            return Response(
+                {"code": "permission_denied", "detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
     else:
         return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
     try:
         if action == "cancel":
             signal = cancel_signal(signal=signal, actor_membership=membership)
-        else:
+        elif action == "resolve":
             signal = resolve_signal(signal=signal, actor_membership=membership)
+        else:
+            signal = mark_signal_interesting(signal=signal)
     except SignalBusinessConflictError as exc:
         return Response(
             {

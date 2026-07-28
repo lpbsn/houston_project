@@ -28,6 +28,7 @@ from houston.signals.services import structured_summary_short
 
 class PermissionHintsSerializer(serializers.Serializer):
     can_pin = serializers.BooleanField()
+    can_mark_interesting = serializers.BooleanField()
     can_cancel = serializers.BooleanField()
     can_resolve = serializers.BooleanField()
     can_create_linked_action_plan = serializers.BooleanField()
@@ -129,6 +130,7 @@ def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
     from houston.action_plans.permissions import can_create_linked_action_plan
     from houston.signals.permissions import (
         can_cancel_signal,
+        can_mark_signal_interesting,
         can_pin_signal,
         can_qualify_routing,
         can_resolve_signal,
@@ -181,6 +183,7 @@ def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
         "aggregation_count": getattr(signal, "aggregation_count", 0) or 0,
         "permission_hints": {
             "can_pin": can_pin_signal(membership, signal),
+            "can_mark_interesting": can_mark_signal_interesting(membership, signal),
             "can_cancel": can_cancel_signal(membership, signal),
             "can_resolve": can_resolve_signal(membership, signal),
             "can_create_linked_action_plan": can_create_linked_action_plan(
