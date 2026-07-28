@@ -1,8 +1,8 @@
 # Runtime Config / Onboarding Domain
 
 Status: authoritative
-Last reviewed: 2026-07-16
-Implementation status: **implemented** — Manual onboarding with **`onboarding_proposal_v4` only**. Legacy Module→Domain→Subject / `onboarding_proposal_v2` / non-terminal `onboarding_proposal_v3` are not accepted at runtime. AI onboarding is permanently removed from Houston product scope (Lot 6).
+Last reviewed: 2026-07-27
+Implementation status: **Lot 1 draft/complete additive** — target path is `OnboardingDraft` + `POST …/complete/`. Legacy `onboarding_proposal_v4` apply → invite → mark-ready → activate remains available until Lot 3. AI onboarding is permanently removed from Houston product scope (Lot 6).
 
 ## 1. Purpose
 
@@ -15,13 +15,23 @@ Domain boundaries:
 - RBAC / Permissions owns who may configure, validate, activate, or later modify runtime context.
 - Runtime Config / Onboarding owns the product workflow and invariants for creating, validating, activating, and evolving initial runtime context.
 
+## Lot sequencing (temporary dual path)
+
+| Lot | Scope |
+|-----|--------|
+| **Lot 1** (done in backend) | Additive `OnboardingDraft`, `GET/PUT …/draft/`, `POST …/complete/`, shared readiness with description 10–5000 |
+| **Lot 2** | Frontend bascule onto draft/complete |
+| **Lot 3** | Remove legacy proposal endpoints/model and FE vestiges |
+
+Until Lot 3, both paths coexist. `complete` refuses if any `BusinessUnit` already exists (active or inactive) so legacy apply and complete cannot double-materialize.
+
 ## 2. MVP Scope
 
 - Initialize the initial `Organization` and `Establishment` context required before operational use, while their core lifecycle remains owned by Identity / Membership.
-- Capture an **optional but recommended** free-text `EstablishmentActivityDescription` to enrich runtime and AI context when provided.
-- Define the initial establishment runtime structure using **BusinessUnit → ActivitySubject** (manual wizard).
-- Product activation accepts **`onboarding_proposal_v4` only**.
-- Legacy proposals (`onboarding_proposal_v3`, `onboarding_proposal_v2`) are not accepted at validation/apply (terminal v3 history may remain in DB).
+- Capture a **required** free-text `EstablishmentActivityDescription` (10–5000 chars) as part of activation readiness.
+- Define the initial establishment runtime structure using **BusinessUnit → ActivitySubject**.
+- **Target path:** persist incomplete wizard state in `OnboardingDraft`; materialize + invite + activate only in `POST …/complete/`.
+- **Legacy path (until Lot 3):** `onboarding_proposal_v4` create/update/submit/apply, director invitations, mark-ready, activate.
 - Require human validation before backend activation of runtime context.
 - Allow high-level post-activation runtime edits, subject to RBAC and human validation.
 
@@ -47,10 +57,10 @@ Domain boundaries:
 - Runtime config is establishment-scoped and must not leak across establishments.
 - Business units are required for activation minimum.
 - **Activity subjects** are required at activation minimum: at least one active subject linked to active business units in the applied proposal.
-- Activity description is **optional** at activation; when submitted via `POST .../description/`, it enriches AI/runtime context but does not gate activation.
-- Legacy runtime vocabulary, runtime tags, and routing hints were removed from implementation (migration `0016_drop_legacy_taxonomy`); proposals are BusinessUnit / ActivitySubject only.
-- **`apply_onboarding_proposal_v4`**: single `transaction.atomic()` for the whole proposal; materializes **exactly** the subjects in the payload via `create_onboarding_business_unit` (no catalog completion); **never** implicitly reactivates inactive instances. Failure rolls back all BU/AS created by that apply.
-- Frontend cannot activate or mutate authoritative runtime state by itself.
+- Activity description is **required** at activation (length 10–5000); `compute_activation_readiness` includes blocker `missing_or_invalid_activity_description` for both legacy mark-ready/activate and `complete`.
+- Legacy runtime vocabulary, runtime tags, and routing hints were removed from implementation (migration `0016_drop_legacy_taxonomy`); proposals/drafts are BusinessUnit / ActivitySubject only.
+- **`complete_onboarding_session`**: single transaction; validates final draft; materializes BU/AS; maps `client_key → BusinessUnit.id`; creates director + optional manager/staff invites/scopes; checks shared readiness; activates establishment; deletes draft. Idempotent when already activated. Refuses if any BusinessUnit exists.
+- **`apply_onboarding_proposal_v4`** (legacy until Lot 3): single `transaction.atomic()` for the whole proposal; materializes **exactly** the subjects in the payload via `create_onboarding_business_unit` (no catalog completion); **never** implicitly reactivates inactive instances. Failure rolls back all BU/AS created by that apply.- Frontend cannot activate or mutate authoritative runtime state by itself.
 - Post-activation destructive runtime changes must be explicit and authorized.
 - Post-activation create uses `create_runtime_business_unit` (core + seed all active catalog subjects). Reactivation is a separate `POST …/business-units/{id}/reactivate/` path (`reactivate_business_unit` — no seed, no scope recreation). See [`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md).
 

@@ -5768,6 +5768,60 @@ paths:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
           description: ''
+  /api/v1/onboarding-sessions/{session_id}/complete/:
+    post:
+      operationId: v1_onboarding_sessions_complete_create
+      description: Validates the onboarding draft, materializes runtime structure
+        and team, activates the establishment, and deletes the draft. Idempotent when
+        already activated.
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - onboarding
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingCompleteResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingDraftErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingErrorResponse'
+          description: ''
   /api/v1/onboarding-sessions/{session_id}/description/:
     patch:
       operationId: v1_onboarding_sessions_description_partial_update
@@ -5872,6 +5926,117 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DirectorInvitationErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingErrorResponse'
+          description: ''
+  /api/v1/onboarding-sessions/{session_id}/draft/:
+    get:
+      operationId: v1_onboarding_sessions_draft_retrieve
+      description: 'Returns the onboarding draft for a session. Read-only: does not
+        create a draft.'
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - onboarding
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingDraftResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingErrorResponse'
+          description: ''
+    put:
+      operationId: v1_onboarding_sessions_draft_update
+      description: Full-replace autosave for the onboarding draft. Incomplete payloads
+        are accepted after soft validation.
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - onboarding
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingDraftUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OnboardingDraftUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OnboardingDraftUpdateRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingDraftResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingDraftErrorResponse'
           description: ''
         '401':
           content:
@@ -9605,6 +9770,94 @@ components:
           type: boolean
       required:
       - can_activate
+    OnboardingCompleteResponse:
+      type: object
+      properties:
+        session:
+          $ref: '#/components/schemas/OnboardingSessionResponse'
+        activation_summary:
+          type: object
+          additionalProperties: {}
+        activated:
+          type: boolean
+        idempotent:
+          type: boolean
+      required:
+      - activated
+      - activation_summary
+      - idempotent
+      - session
+    OnboardingDraftErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        detail:
+          type: string
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/OnboardingDraftValidationErrorItem'
+      required:
+      - code
+      - detail
+    OnboardingDraftResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        onboarding_session_id:
+          type: string
+          format: uuid
+        updated_at:
+          type: string
+          format: date-time
+        payload: {}
+        validation:
+          $ref: '#/components/schemas/OnboardingDraftValidation'
+      required:
+      - id
+      - onboarding_session_id
+      - payload
+      - updated_at
+      - validation
+    OnboardingDraftUpdateRequest:
+      type: object
+      properties:
+        payload: {}
+      required:
+      - payload
+    OnboardingDraftValidation:
+      type: object
+      properties:
+        mode:
+          type: string
+        is_ready_for_complete:
+          type: boolean
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/OnboardingDraftValidationErrorItem'
+      required:
+      - errors
+      - is_ready_for_complete
+      - mode
+    OnboardingDraftValidationErrorItem:
+      type: object
+      properties:
+        code:
+          type: string
+        section:
+          type: string
+        field:
+          type: string
+          nullable: true
+        key:
+          type: string
+          nullable: true
+      required:
+      - code
     OnboardingErrorResponse:
       type: object
       properties:
@@ -10182,7 +10435,8 @@ components:
       properties:
         description:
           type: string
-          minLength: 50
+          maxLength: 5000
+          minLength: 10
     PatchedChatRenameGroupRequest:
       type: object
       properties:
@@ -10429,9 +10683,9 @@ components:
           type: string
         establishment_name:
           type: string
+          default: ''
       required:
       - email
-      - establishment_name
       - first_name
       - invite_code
       - last_name

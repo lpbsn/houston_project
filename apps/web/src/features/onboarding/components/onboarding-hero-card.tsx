@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { displayEstablishmentName } from '@/features/onboarding/lib/display-establishment-name'
 import type {
   ActivationSummaryResponse,
   OnboardingSessionResponse,
@@ -45,7 +46,10 @@ export function OnboardingHeroCard({
 
         <div className="space-y-2">
           <CardTitle className="text-[1.7rem] font-black tracking-[-0.06em]">
-            {session.establishment.name}
+            {displayEstablishmentName({
+              establishmentName: session.establishment.name,
+              organizationName: session.organization.name,
+            })}
           </CardTitle>
           <CardDescription className="text-sm leading-6">
             {session.organization.name} · Étape actuelle : {session.current_step}

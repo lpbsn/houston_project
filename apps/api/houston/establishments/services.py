@@ -53,6 +53,7 @@ from houston.establishments.membership_scope import (
     scopes_not_allowed_for_role,
 )
 from houston.establishments.models import (
+    ACTIVITY_DESCRIPTION_MAX_LENGTH,
     ACTIVITY_DESCRIPTION_MIN_LENGTH,
     ESTABLISHMENT_ORG_NAME_CI_UNIQ,
     ActivitySubject,
@@ -64,8 +65,16 @@ from houston.establishments.models import (
     EstablishmentInvitation,
     EstablishmentMembership,
     MembershipScope,
+    OnboardingDraft,
     OnboardingProposal,
     OnboardingSession,
+)
+from houston.establishments.onboarding_draft import (
+    DRAFT_VALIDATION_MODE_FINAL,
+    DRAFT_VALIDATION_MODE_SOFT,
+    OnboardingDraftValidationError,
+    empty_onboarding_draft_payload,
+    validate_onboarding_draft_payload,
 )
 from houston.establishments.selectors import (
     business_unit_has_active_membership_scopes,
@@ -231,6 +240,18 @@ class OnboardingProposalValidationError(Exception):
 
 
 class OnboardingProposalStateError(Exception):
+    pass
+
+
+class OnboardingDraftNotFoundError(Exception):
+    pass
+
+
+class OnboardingRuntimeAlreadyMaterializedError(Exception):
+    pass
+
+
+class EstablishmentAlreadyActiveError(Exception):
     pass
 
 
@@ -1153,6 +1174,7 @@ def start_onboarding_session(
         .first()
     )
     if existing_session is not None:
+        ensure_onboarding_draft_for_session(session=existing_session, actor=started_by)
         return existing_session
 
     session = OnboardingSession(
@@ -1177,12 +1199,423 @@ def start_onboarding_session(
             .first()
         )
         if existing_session is not None:
+            ensure_onboarding_draft_for_session(
+                session=existing_session,
+                actor=started_by,
+            )
             return existing_session
         raise ActiveOnboardingSessionExistsError(
             "A non-terminal onboarding session already exists for this establishment."
         ) from exc
 
+    ensure_onboarding_draft_for_session(session=session, actor=started_by)
     return session
+
+
+def ensure_onboarding_draft_for_session(
+    *,
+    session: OnboardingSession,
+    actor=None,
+) -> OnboardingDraft | None:
+    """Create a skeleton draft when the session is eligible; otherwise no-op.
+
+    Eligible: non-terminal session, draft establishment, no BusinessUnit rows.
+    """
+    session = _reload_onboarding_session(session)
+    if OnboardingSession.is_terminal_status(session.status):
+        return None
+    if session.establishment.status != Establishment.Status.DRAFT:
+        return None
+    if BusinessUnit.objects.filter(establishment_id=session.establishment_id).exists():
+        return None
+
+    draft, _created = OnboardingDraft.objects.get_or_create(
+        onboarding_session=session,
+        defaults={
+            "payload": empty_onboarding_draft_payload(),
+            "updated_by": actor,
+        },
+    )
+    return draft
+
+
+def _ensure_onboarding_draft_mutable(session: OnboardingSession) -> None:
+    """Shared guard for GET/PUT draft: terminal sessions and non-draft establishments."""
+    _ensure_non_terminal_onboarding_session(session)
+    if session.establishment.status != Establishment.Status.DRAFT:
+        raise InvalidOnboardingActivationStateError(
+            "Drafts are only available for draft establishments."
+        )
+
+
+def get_onboarding_draft(*, session: OnboardingSession) -> OnboardingDraft:
+    _ensure_onboarding_draft_mutable(session)
+    try:
+        return OnboardingDraft.objects.get(onboarding_session_id=session.id)
+    except OnboardingDraft.DoesNotExist as exc:
+        raise OnboardingDraftNotFoundError from exc
+
+
+def serialize_onboarding_draft(
+    *,
+    draft: OnboardingDraft,
+    validation_errors: list[dict] | None = None,
+    mode: str = DRAFT_VALIDATION_MODE_SOFT,
+) -> dict:
+    payload = draft.payload if isinstance(draft.payload, dict) else empty_onboarding_draft_payload()
+    if validation_errors is None:
+        try:
+            _normalized, validation_errors = validate_onboarding_draft_payload(
+                payload,
+                mode=DRAFT_VALIDATION_MODE_SOFT,
+            )
+        except OnboardingDraftValidationError as exc:
+            validation_errors = exc.errors
+    return {
+        "id": draft.id,
+        "onboarding_session_id": draft.onboarding_session_id,
+        "updated_at": draft.updated_at,
+        "payload": payload,
+        "validation": {
+            "mode": mode,
+            "is_ready_for_complete": len(validation_errors) == 0,
+            "errors": validation_errors,
+        },
+    }
+
+
+@transaction.atomic
+def upsert_onboarding_draft(
+    *,
+    session: OnboardingSession,
+    actor,
+    payload: dict,
+) -> dict:
+    session = _lock_onboarding_session(session)
+    _ensure_onboarding_draft_mutable(session)
+
+    access = get_onboarding_access_context(actor=actor, session=session)
+    if not access.can_configure_runtime:
+        raise OnboardingAccessDeniedError
+
+    try:
+        draft = OnboardingDraft.objects.select_for_update().get(
+            onboarding_session_id=session.id
+        )
+    except OnboardingDraft.DoesNotExist as exc:
+        raise OnboardingDraftNotFoundError from exc
+
+    normalized, soft_errors = validate_onboarding_draft_payload(
+        payload,
+        mode=DRAFT_VALIDATION_MODE_SOFT,
+    )
+    draft.payload = normalized
+    draft.updated_by = actor
+    draft.save(update_fields=["payload", "updated_by", "updated_at"])
+    return serialize_onboarding_draft(
+        draft=draft,
+        validation_errors=soft_errors,
+        mode=DRAFT_VALIDATION_MODE_SOFT,
+    )
+
+
+@transaction.atomic
+def complete_onboarding_session(
+    *,
+    session: OnboardingSession,
+    actor,
+) -> dict:
+    session = _lock_onboarding_session(session)
+    establishment = (
+        Establishment.objects.select_for_update()
+        .select_related("organization")
+        .get(id=session.establishment_id)
+    )
+    session.establishment = establishment
+    session.organization = establishment.organization
+
+    access = get_onboarding_access_context(actor=actor, session=session)
+    if not access.can_manage:
+        raise OnboardingAccessDeniedError
+
+    if (
+        session.status == OnboardingSession.Status.ACTIVATED
+        and session.activated_at is not None
+        and establishment.status == Establishment.Status.ACTIVE
+    ):
+        if not access.can_manage:
+            raise OnboardingAccessDeniedError
+        # Hygiene: drop orphan drafts left by legacy activate or partial paths.
+        OnboardingDraft.objects.filter(onboarding_session_id=session.id).delete()
+        readiness = compute_activation_readiness(session=session)
+        return {
+            "session": session,
+            "readiness": readiness,
+            "access": access,
+            "activated": False,
+            "idempotent": True,
+        }
+
+    if establishment.status == Establishment.Status.ACTIVE:
+        raise EstablishmentAlreadyActiveError
+
+    if OnboardingSession.is_terminal_status(session.status):
+        raise InvalidOnboardingActivationStateError(
+            "Terminal onboarding sessions cannot be completed."
+        )
+
+    if not access.can_activate:
+        raise OnboardingAccessDeniedError
+
+    if BusinessUnit.objects.filter(establishment_id=establishment.id).exists():
+        raise OnboardingRuntimeAlreadyMaterializedError
+
+    try:
+        draft = OnboardingDraft.objects.select_for_update().get(
+            onboarding_session_id=session.id
+        )
+    except OnboardingDraft.DoesNotExist as exc:
+        raise OnboardingDraftNotFoundError from exc
+
+    normalized, _errors = validate_onboarding_draft_payload(
+        draft.payload,
+        mode=DRAFT_VALIDATION_MODE_FINAL,
+    )
+
+    director = normalized["team"]["director"]
+    needs_director_invite = _needs_director_invite_from_draft(
+        establishment=establishment,
+        director_email=director["email"],
+    )
+
+    new_name = normalized["establishment"]["name"]
+    if _establishment_name_taken_excluding(
+        organization_id=establishment.organization_id,
+        normalized_name=new_name,
+        excluding_establishment_id=establishment.id,
+    ):
+        raise OnboardingDraftValidationError(
+            [
+                {
+                    "code": "duplicate_establishment_name",
+                    "section": "establishment",
+                    "field": "name",
+                }
+            ]
+        )
+
+    establishment.name = new_name
+    establishment.save(update_fields=["name", "updated_at"])
+
+    description_text = normalized["establishment"]["description"]
+    activity_description, _created = EstablishmentActivityDescription.objects.update_or_create(
+        establishment=establishment,
+        defaults={
+            "description": description_text,
+            "source": EstablishmentActivityDescription.Source.MANUAL,
+            "submitted_by": actor,
+            "validated_at": timezone.now(),
+        },
+    )
+    activity_description.full_clean()
+    activity_description.save(
+        update_fields=[
+            "description",
+            "source",
+            "submitted_by",
+            "validated_at",
+            "updated_at",
+        ]
+    )
+
+    client_key_to_business_unit_id = _materialize_draft_business_units(
+        establishment=establishment,
+        payload=normalized,
+    )
+
+    if needs_director_invite:
+        invite_director_during_onboarding(
+            session=session,
+            actor=actor,
+            email=director["email"],
+            first_name=director["first_name"],
+            last_name=director["last_name"],
+        )
+
+    actor_membership = access.membership
+    assert actor_membership is not None
+    for member in normalized["team"]["members"]:
+        scopes = [
+            MembershipScopeInput(
+                scope_type=MembershipScopeType.BUSINESS_UNIT,
+                scope_id=client_key_to_business_unit_id[client_key],
+            )
+            for client_key in member["business_unit_client_keys"]
+        ]
+        invite_membership_for_establishment(
+            current_membership=actor_membership,
+            establishment_id=establishment.id,
+            email=member["email"],
+            first_name=member["first_name"],
+            last_name=member["last_name"],
+            role=member["role"],
+            scopes=scopes,
+        )
+
+    session = _reload_onboarding_session(session)
+    readiness = compute_activation_readiness(session=session)
+    if not readiness["is_ready"]:
+        raise OnboardingReadinessError(readiness)
+
+    now = timezone.now()
+    establishment.status = Establishment.Status.ACTIVE
+    establishment.chat_enabled = True
+    establishment.save(update_fields=["status", "chat_enabled", "updated_at"])
+
+    session.status = OnboardingSession.Status.ACTIVATED
+    session.activated_at = now
+    session.ready_for_activation_at = session.ready_for_activation_at or now
+    session.save(
+        update_fields=[
+            "status",
+            "activated_at",
+            "ready_for_activation_at",
+            "updated_at",
+        ]
+    )
+
+    # Delete only after successful activation writes (same atomic transaction).
+    OnboardingDraft.objects.filter(id=draft.id).delete()
+
+    return {
+        "session": session,
+        "readiness": readiness,
+        "access": access,
+        "activated": True,
+        "idempotent": False,
+    }
+
+
+def _establishment_name_taken_excluding(
+    *,
+    organization_id,
+    normalized_name: str,
+    excluding_establishment_id,
+) -> bool:
+    return (
+        Establishment.objects.filter(organization_id=organization_id)
+        .exclude(id=excluding_establishment_id)
+        .annotate(name_key=Lower(Trim("name")))
+        .filter(name_key=normalized_name.lower())
+        .exists()
+    )
+
+
+def _get_non_owner_director_membership(
+    *,
+    establishment_id,
+) -> EstablishmentMembership | None:
+    owner_user_ids = _active_owner_user_ids(establishment_id=establishment_id)
+    return (
+        EstablishmentMembership.objects.filter(
+            establishment_id=establishment_id,
+            role=EstablishmentMembership.Role.DIRECTOR,
+            status__in=[
+                EstablishmentMembership.Status.INVITED,
+                EstablishmentMembership.Status.ACTIVE,
+            ],
+        )
+        .exclude(user_id__in=owner_user_ids)
+        .select_related("user")
+        .first()
+    )
+
+
+def _needs_director_invite_from_draft(
+    *,
+    establishment: Establishment,
+    director_email: str,
+) -> bool:
+    """
+    Return True if complete must invite a director.
+
+    Same normalized email as an existing INVITED/ACTIVE non-owner director → skip
+    (do not overwrite first/last name). Different email occupying the slot → raise.
+    """
+    existing = _get_non_owner_director_membership(establishment_id=establishment.id)
+    if existing is None:
+        return True
+
+    draft_email = User.normalize_email_value(director_email)
+    existing_email = User.normalize_email_value(existing.user.email)
+    if (
+        draft_email is not None
+        and existing_email is not None
+        and draft_email == existing_email
+    ):
+        return False
+
+    raise DirectorInvitationAlreadyExistsError
+
+
+def _materialize_draft_business_units(
+    *,
+    establishment: Establishment,
+    payload: dict,
+) -> dict[str, object]:
+    catalog_keys = {item["catalog_key"] for item in payload["business_units"]}
+    catalog_business_units = {
+        row.key: row
+        for row in CatalogBusinessUnit.objects.filter(
+            key__in=catalog_keys,
+            active=True,
+        )
+    }
+    subjects_by_business_unit: dict[str, list[dict]] = {}
+    for subject in payload["activity_subjects"]:
+        subjects_by_business_unit.setdefault(
+            subject["business_unit_client_key"],
+            [],
+        ).append(subject)
+
+    mapping: dict[str, object] = {}
+    for item in payload["business_units"]:
+        catalog_business_unit = catalog_business_units.get(item["catalog_key"])
+        if catalog_business_unit is None:
+            raise OnboardingDraftValidationError(
+                [
+                    {
+                        "code": "unknown_catalog_key",
+                        "section": "business_units",
+                        "key": item["catalog_key"],
+                    }
+                ]
+            )
+        selected_subjects = subjects_by_business_unit.get(item["client_key"], [])
+        generic_activity_subject_keys = [
+            subject["catalog_key"]
+            for subject in selected_subjects
+            if subject["catalog_key"] is not None
+        ]
+        free_activity_subjects = [
+            {
+                "label": subject["label"],
+                "description": subject.get("description", ""),
+            }
+            for subject in selected_subjects
+            if subject["catalog_key"] is None
+        ]
+        business_unit = create_onboarding_business_unit(
+            establishment=establishment,
+            catalog_business_unit=catalog_business_unit,
+            specific_name=item["specific_name"],
+            instance_description=item["instance_description"],
+            generic_activity_subject_keys=generic_activity_subject_keys,
+            free_activity_subjects=free_activity_subjects,
+            managed_by_onboarding_proposal=None,
+        )
+        mapping[item["client_key"]] = business_unit.id
+    return mapping
 
 
 @transaction.atomic
@@ -1203,6 +1636,10 @@ def submit_activity_description(
     if len(normalized_description) < ACTIVITY_DESCRIPTION_MIN_LENGTH:
         raise InvalidActivityDescriptionError(
             f"Activity description must be at least {ACTIVITY_DESCRIPTION_MIN_LENGTH} characters."
+        )
+    if len(normalized_description) > ACTIVITY_DESCRIPTION_MAX_LENGTH:
+        raise InvalidActivityDescriptionError(
+            f"Activity description must be at most {ACTIVITY_DESCRIPTION_MAX_LENGTH} characters."
         )
 
     activity_description, _created = EstablishmentActivityDescription.objects.update_or_create(
@@ -1236,7 +1673,21 @@ def submit_activity_description(
 def compute_activation_readiness(*, session: OnboardingSession) -> dict:
     session = _reload_onboarding_session(session)
     counts = _activation_counts(session)
+    description = getattr(session.establishment, "activity_description", None)
+    if description is None:
+        try:
+            description = EstablishmentActivityDescription.objects.filter(
+                establishment_id=session.establishment_id
+            ).first()
+        except EstablishmentActivityDescription.DoesNotExist:
+            description = None
+    description_ready = _is_valid_activity_description(description)
     sections = {
+        "activity_description": {
+            "is_ready": description_ready,
+            "required": True,
+            "is_skippable": False,
+        },
         "business_units": {
             "is_ready": counts["active_business_units_count"] >= 1,
             "required": True,
@@ -1256,7 +1707,11 @@ def compute_activation_readiness(*, session: OnboardingSession) -> dict:
             "is_skippable": False,
         },
     }
-    blockers = _activation_blockers(session=session, counts=counts)
+    blockers = _activation_blockers(
+        session=session,
+        counts=counts,
+        description_ready=description_ready,
+    )
 
     return {
         "is_ready": not blockers,
@@ -2551,6 +3006,7 @@ def activate_onboarding_session(
         if not access.can_manage:
             raise OnboardingAccessDeniedError
 
+        OnboardingDraft.objects.filter(onboarding_session_id=session.id).delete()
         readiness = compute_activation_readiness(session=session)
         return {
             "session": session,
@@ -2595,6 +3051,9 @@ def activate_onboarding_session(
     session.status = OnboardingSession.Status.ACTIVATED
     session.activated_at = now
     session.save(update_fields=["status", "activated_at", "updated_at"])
+
+    # Delete only after successful activation writes (same atomic transaction).
+    OnboardingDraft.objects.filter(onboarding_session_id=session.id).delete()
 
     return {
         "session": session,
@@ -3605,6 +4064,7 @@ def _activation_blockers(
     *,
     session: OnboardingSession,
     counts: dict,
+    description_ready: bool,
 ) -> list[dict]:
     blockers: list[dict] = []
 
@@ -3616,6 +4076,9 @@ def _activation_blockers(
 
     if session.establishment.status != Establishment.Status.DRAFT:
         blockers.append(_blocker("establishment_not_draft"))
+
+    if not description_ready:
+        blockers.append(_blocker("missing_or_invalid_activity_description"))
 
     if counts["active_business_units_count"] < 1:
         blockers.append(_blocker("missing_active_business_unit"))
@@ -3648,11 +4111,10 @@ def _blocker(code: str, *, message: str | None = None) -> dict:
 def _is_valid_activity_description(
     description: EstablishmentActivityDescription | None,
 ) -> bool:
-    return (
-        description is not None
-        and description.validated_at is not None
-        and len((description.description or "").strip()) >= ACTIVITY_DESCRIPTION_MIN_LENGTH
-    )
+    if description is None or description.validated_at is None:
+        return False
+    length = len((description.description or "").strip())
+    return ACTIVITY_DESCRIPTION_MIN_LENGTH <= length <= ACTIVITY_DESCRIPTION_MAX_LENGTH
 
 
 def _serialize_organization(organization: Organization) -> dict:

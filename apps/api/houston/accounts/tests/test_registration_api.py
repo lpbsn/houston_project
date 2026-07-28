@@ -17,6 +17,7 @@ from houston.accounts.tests.helpers import (
 from houston.establishments.models import (
     Establishment,
     EstablishmentMembership,
+    OnboardingDraft,
     OnboardingSession,
 )
 from houston.organizations.models import Organization
@@ -154,6 +155,56 @@ def test_password_mismatch_returns_400_and_creates_nothing(api_client):
     assert response.data["detail"] == "Request validation failed."
     assert "password_confirmation" in response.data["errors"]
     assert count_provisioned_entities() == before
+
+
+@override_settings(HOUSTON_REGISTRATION_INVITE_CODES=["valid-code"])
+def test_register_without_establishment_name_uses_temp_name_and_empty_draft(api_client):
+    csrf_token = ensure_csrf(api_client)
+    payload = registration_payload(email="omit.name@example.com")
+    payload.pop("establishment_name")
+
+    response = post_register(api_client, csrf_token, payload)
+
+    assert response.status_code == 201
+    establishment = Establishment.objects.get(id=response.data["establishment_id"])
+    assert establishment.name.startswith("draft-")
+    assert len(establishment.name) > len("draft-") + 20
+    draft = OnboardingDraft.objects.get(
+        onboarding_session_id=response.data["onboarding_session_id"]
+    )
+    assert draft.payload["establishment"]["name"] == ""
+
+
+@override_settings(HOUSTON_REGISTRATION_INVITE_CODES=["valid-code"])
+def test_register_with_blank_establishment_name_uses_temp_name(api_client):
+    csrf_token = ensure_csrf(api_client)
+    response = post_register(
+        api_client,
+        csrf_token,
+        registration_payload(email="blank.name@example.com", establishment_name="   "),
+    )
+
+    assert response.status_code == 201
+    establishment = Establishment.objects.get(id=response.data["establishment_id"])
+    assert establishment.name.startswith("draft-")
+
+
+@override_settings(HOUSTON_REGISTRATION_INVITE_CODES=["valid-code"])
+def test_register_with_establishment_name_keeps_client_name(api_client):
+    csrf_token = ensure_csrf(api_client)
+    response = post_register(
+        api_client,
+        csrf_token,
+        registration_payload(
+            email="named.est@example.com",
+            establishment_name="Client Hotel",
+        ),
+    )
+
+    assert response.status_code == 201
+    establishment = Establishment.objects.get(id=response.data["establishment_id"])
+    assert establishment.name == "Client Hotel"
+    assert not establishment.name.startswith("draft-")
 
 
 @override_settings(HOUSTON_REGISTRATION_INVITE_CODES=["valid-code"])

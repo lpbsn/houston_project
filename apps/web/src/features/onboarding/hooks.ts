@@ -1,18 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { bootstrapQueryKey } from '@/features/auth/api'
 
 import {
   activateOnboardingSession,
   applyOnboardingProposal,
+  completeOnboardingSession,
   createManualOnboardingProposal,
   getActivationSummary,
+  getOnboardingDraft,
   getOnboardingSession,
   getRuntimeConfig,
   inviteDirector,
   listOnboardingProposals,
   markReady,
   onboardingQueryKeys,
+  putOnboardingDraft,
   rejectOnboardingProposal,
   startOnboardingSession,
   submitManualOnboardingProposal,
@@ -20,10 +24,13 @@ import {
   suggestBusinessUnits,
   updateManualOnboardingProposal,
 } from './api'
+import type { OnboardingDraftPayload } from './lib/onboarding-draft-payload'
 import type {
   ActivationResponse,
   ActivationSummaryResponse,
   DirectorInvitationRequest,
+  OnboardingCompleteResponse,
+  OnboardingDraftResponse,
   OnboardingSessionCreateRequest,
   OnboardingProposalCreateRequest,
   OnboardingProposalUpdateRequest,
@@ -182,15 +189,29 @@ export function useActivateOnboardingSession(sessionId: string) {
 
 export function useBusinessUnitSuggestions(
   query: string,
-  options?: OnboardingQueryOptions,
+  options?: OnboardingQueryOptions & { minLength?: number; limit?: number },
 ) {
+  const minLength = options?.minLength ?? 2
   return useQuery({
-    queryKey: onboardingQueryKeys.catalogBusinessUnits(query),
-    queryFn: () => suggestBusinessUnits(query),
-    enabled: (options?.enabled ?? true) && query.length >= 2,
+    queryKey: [
+      ...onboardingQueryKeys.catalogBusinessUnits(query),
+      options?.limit ?? 'default',
+    ],
+    queryFn: () => suggestBusinessUnits(query, { limit: options?.limit }),
+    enabled: (options?.enabled ?? true) && query.length >= minLength,
     staleTime: options?.staleTime ?? 30_000,
   })
 }
+
+export function useCatalogBusinessUnitChips(options?: OnboardingQueryOptions) {
+  return useQuery({
+    queryKey: [...onboardingQueryKeys.catalogBusinessUnits(''), 'chips'],
+    queryFn: () => suggestBusinessUnits('', { limit: 200 }),
+    enabled: options?.enabled ?? true,
+    staleTime: options?.staleTime ?? 60_000,
+  })
+}
+
 
 export function useActivitySubjectSuggestions(
   businessUnitKey: string,
@@ -288,5 +309,209 @@ export function useApplyOnboardingProposal(sessionId: string) {
       })
     },
   })
+}
+
+export function useOnboardingDraft(
+  sessionId: string | null | undefined,
+  options?: OnboardingQueryOptions,
+) {
+  return useQuery({
+    queryKey: sessionId
+      ? onboardingQueryKeys.draft(sessionId)
+      : [...onboardingQueryKeys.sessions(), 'idle', 'draft'],
+    queryFn: () => getOnboardingDraft(sessionId!),
+    enabled: isQueryEnabled(sessionId, options),
+    staleTime: options?.staleTime,
+  })
+}
+
+export function useUpsertOnboardingDraft(sessionId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (payload: OnboardingDraftPayload) => putOnboardingDraft(sessionId, payload),
+    onSuccess: (response) => {
+      queryClient.setQueryData(onboardingQueryKeys.draft(sessionId), response)
+    },
+  })
+}
+
+export function useCompleteOnboardingSession(sessionId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () => completeOnboardingSession(sessionId),
+    onSuccess: async (response: OnboardingCompleteResponse) => {
+      queryClient.setQueryData(onboardingQueryKeys.session(sessionId), response.session)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: onboardingQueryKeys.session(sessionId) }),
+        queryClient.invalidateQueries({ queryKey: bootstrapQueryKey, exact: true }),
+        queryClient.removeQueries({ queryKey: onboardingQueryKeys.draft(sessionId) }),
+      ])
+    },
+  })
+}
+
+export type AutosaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+
+type UseOnboardingDraftAutosaveOptions = {
+  sessionId: string
+  debounceMs?: number
+  putDraft?: (payload: OnboardingDraftPayload) => Promise<OnboardingDraftResponse>
+  onSaved?: (response: OnboardingDraftResponse) => void
+  onError?: (error: unknown) => void
+}
+
+/**
+ * Serialized autosave: at most one PUT in flight; pending holds only the latest snapshot.
+ * `flush(snapshot)` cancels debounce, awaits in-flight, replaces pending, persists exact snapshot.
+ */
+export function useOnboardingDraftAutosave({
+  sessionId,
+  debounceMs = 1000,
+  putDraft,
+  onSaved,
+  onError,
+}: UseOnboardingDraftAutosaveOptions) {
+  const queryClient = useQueryClient()
+  const [status, setStatus] = useState<AutosaveStatus>('idle')
+  const stoppedRef = useRef(false)
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const inFlightPromiseRef = useRef<Promise<unknown> | null>(null)
+  const pendingSnapshotRef = useRef<OnboardingDraftPayload | null>(null)
+  /** Monotonic token so stale PUT completions cannot win after a newer flush. */
+  const writeTokenRef = useRef(0)
+  const putDraftRef = useRef(putDraft)
+  const onSavedRef = useRef(onSaved)
+  const onErrorRef = useRef(onError)
+
+  useEffect(() => {
+    putDraftRef.current = putDraft
+    onSavedRef.current = onSaved
+    onErrorRef.current = onError
+  }, [putDraft, onSaved, onError])
+
+  const clearDebounce = useCallback(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+      debounceTimerRef.current = null
+    }
+  }, [])
+
+  const runPut = useCallback(
+    async (snapshot: OnboardingDraftPayload, token: number) => {
+      setStatus('saving')
+      const put =
+        putDraftRef.current ??
+        ((payload: OnboardingDraftPayload) => putOnboardingDraft(sessionId, payload))
+
+      try {
+        const response = await put(snapshot)
+        if (token !== writeTokenRef.current) {
+          return response
+        }
+        queryClient.setQueryData(onboardingQueryKeys.draft(sessionId), response)
+        onSavedRef.current?.(response)
+        setStatus('saved')
+        return response
+      } catch (error) {
+        if (token === writeTokenRef.current) {
+          setStatus('error')
+          onErrorRef.current?.(error)
+        }
+        throw error
+      }
+    },
+    [queryClient, sessionId],
+  )
+
+  const awaitInFlight = useCallback(async () => {
+    if (!inFlightPromiseRef.current) {
+      return
+    }
+    try {
+      await inFlightPromiseRef.current
+    } catch {
+      // Ignore; caller decides next write.
+    }
+  }, [])
+
+  const pumpPending = useCallback(async () => {
+    await awaitInFlight()
+
+    while (pendingSnapshotRef.current && !stoppedRef.current) {
+      const snapshot = pendingSnapshotRef.current
+      pendingSnapshotRef.current = null
+      const token = ++writeTokenRef.current
+      const promise = runPut(snapshot, token)
+      inFlightPromiseRef.current = promise
+      try {
+        await promise
+      } catch {
+        // Keep looping only if a newer pending arrived.
+      } finally {
+        if (inFlightPromiseRef.current === promise) {
+          inFlightPromiseRef.current = null
+        }
+      }
+    }
+  }, [awaitInFlight, runPut])
+
+  const enqueue = useCallback(
+    (snapshot: OnboardingDraftPayload) => {
+      if (stoppedRef.current) {
+        return
+      }
+      pendingSnapshotRef.current = snapshot
+      clearDebounce()
+      debounceTimerRef.current = setTimeout(() => {
+        debounceTimerRef.current = null
+        void pumpPending()
+      }, debounceMs)
+    },
+    [clearDebounce, debounceMs, pumpPending],
+  )
+
+  const flush = useCallback(
+    async (snapshot: OnboardingDraftPayload) => {
+      clearDebounce()
+      await awaitInFlight()
+      // Navigation/complete snapshot always supersedes any older pending autosave.
+      pendingSnapshotRef.current = null
+      const token = ++writeTokenRef.current
+      const promise = runPut(snapshot, token)
+      inFlightPromiseRef.current = promise
+      try {
+        const response = await promise
+        return response
+      } finally {
+        if (inFlightPromiseRef.current === promise) {
+          inFlightPromiseRef.current = null
+        }
+        if (pendingSnapshotRef.current && !stoppedRef.current) {
+          void pumpPending()
+        }
+      }
+    },
+    [awaitInFlight, clearDebounce, pumpPending, runPut],
+  )
+
+  const stop = useCallback(() => {
+    stoppedRef.current = true
+    clearDebounce()
+    pendingSnapshotRef.current = null
+  }, [clearDebounce])
+
+  const resume = useCallback(() => {
+    stoppedRef.current = false
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      clearDebounce()
+    }
+  }, [clearDebounce])
+
+  return { status, enqueue, flush, stop, resume }
 }
 

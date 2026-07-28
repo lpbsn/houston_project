@@ -143,6 +143,7 @@ def test_activation_readiness_returns_blockers_when_setup_is_empty(onboarding_se
 
     assert readiness["is_ready"] is False
     assert blocker_codes(readiness) == {
+        "missing_or_invalid_activity_description",
         "missing_active_business_unit",
         "missing_active_or_invited_director",
     }
@@ -311,20 +312,18 @@ def test_active_director_satisfies_readiness(onboarding_session, owner):
     assert readiness["counts"]["active_or_invited_director_count"] == 1
 
 
-def test_activity_description_does_not_block_readiness(onboarding_session, owner):
+def test_activity_description_blocks_readiness_when_missing(onboarding_session, owner):
     create_ready_runtime(onboarding_session, owner)
-
-    from houston.establishments.models import EstablishmentActivityDescription
-
-    assert not EstablishmentActivityDescription.objects.filter(
+    EstablishmentActivityDescription.objects.filter(
         establishment=onboarding_session.establishment,
-    ).exists()
+    ).delete()
 
     readiness = compute_activation_readiness(session=onboarding_session)
 
-    assert "description" not in readiness["sections"]
-    assert readiness["is_ready"] is True
-
+    assert "activity_description" in readiness["sections"]
+    assert readiness["sections"]["activity_description"]["is_ready"] is False
+    assert readiness["is_ready"] is False
+    assert "missing_or_invalid_activity_description" in blocker_codes(readiness)
 
 def test_mark_ready_sets_ready_status_only_when_effectively_allowed(
     onboarding_session,
