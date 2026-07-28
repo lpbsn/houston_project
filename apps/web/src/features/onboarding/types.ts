@@ -28,3 +28,10 @@ export type OnboardingProposalCreateRequest =
   components['schemas']['OnboardingProposalCreateRequest']
 export type OnboardingProposalUpdateRequest =
   components['schemas']['PatchedOnboardingProposalUpdateRequest']
+export type OnboardingDraftResponse = components['schemas']['OnboardingDraftResponse']
+export type OnboardingDraftUpdateRequest = components['schemas']['OnboardingDraftUpdateRequest']
+export type OnboardingDraftValidation = components['schemas']['OnboardingDraftValidation']
+export type OnboardingDraftValidationErrorItem =
+  components['schemas']['OnboardingDraftValidationErrorItem']
+export type OnboardingDraftErrorResponse = components['schemas']['OnboardingDraftErrorResponse']
+export type OnboardingCompleteResponse = components['schemas']['OnboardingCompleteResponse']

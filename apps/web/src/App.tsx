@@ -542,6 +542,17 @@ function App() {
     )
   }
 
+  if (route.kind === 'static' && route.path === '/onboarding') {
+    return (
+      <>
+        <PwaUpdateBanner />
+        <div className="min-h-dvh bg-spore-cream text-spore-forest" data-testid="onboarding-shell">
+          <OnboardingPage onNavigate={navigate} />
+        </div>
+      </>
+    )
+  }
+
   const signOutAction = (
     <Button
       type="button"

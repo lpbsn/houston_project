@@ -19,9 +19,12 @@ import type {
   RuntimeConfigResponse,
   CatalogActivitySubjectSuggestion,
   CatalogBusinessUnitSuggestion,
+  OnboardingCompleteResponse,
+  OnboardingDraftResponse,
   OnboardingProposalCreateRequest,
   OnboardingProposalUpdateRequest,
 } from './types'
+import type { OnboardingDraftPayload } from './lib/onboarding-draft-payload'
 
 export const onboardingQueryKeys = {
   all: ['onboarding'] as const,
@@ -35,6 +38,8 @@ export const onboardingQueryKeys = {
     ['onboarding', 'sessions', sessionId, 'runtime-config'] as const,
   activationSummary: (sessionId: string) =>
     ['onboarding', 'sessions', sessionId, 'activation-summary'] as const,
+  draft: (sessionId: string) =>
+    ['onboarding', 'sessions', sessionId, 'draft'] as const,
   catalogBusinessUnits: (query: string) =>
     ['onboarding', 'catalog', 'business-units', query] as const,
   catalogActivitySubjects: (businessUnitKey: string, query: string) =>
@@ -291,13 +296,17 @@ export async function activateOnboardingSession(sessionId: string) {
   return result.data as ActivationResponse
 }
 
-export async function suggestBusinessUnits(query: string) {
+export async function suggestBusinessUnits(
+  query: string,
+  options?: { limit?: number },
+) {
   const result = await withAuthRetry(
     (accessToken) =>
       apiClient.GET('/api/v1/catalog/business-units/suggest/', {
         params: {
           query: {
             q: query,
+            limit: options?.limit,
           },
         },
         headers: getAuthHeaders(accessToken),
@@ -314,6 +323,79 @@ export async function suggestBusinessUnits(query: string) {
   }
 
   return result.data as CatalogBusinessUnitSuggestion[]
+}
+
+export async function getOnboardingDraft(sessionId: string) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/onboarding-sessions/{session_id}/draft/', {
+        params: {
+          path: { session_id: sessionId },
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildOnboardingError(
+      result.response,
+      result.error,
+      'Le brouillon d’onboarding n’a pas pu être chargé.',
+    )
+  }
+
+  return result.data as OnboardingDraftResponse
+}
+
+export async function putOnboardingDraft(
+  sessionId: string,
+  payload: OnboardingDraftPayload,
+) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.PUT('/api/v1/onboarding-sessions/{session_id}/draft/', {
+        params: {
+          path: { session_id: sessionId },
+        },
+        body: { payload },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildOnboardingError(
+      result.response,
+      result.error,
+      'Le brouillon d’onboarding n’a pas pu être enregistré.',
+    )
+  }
+
+  return result.data as OnboardingDraftResponse
+}
+
+export async function completeOnboardingSession(sessionId: string) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/onboarding-sessions/{session_id}/complete/', {
+        params: {
+          path: { session_id: sessionId },
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildOnboardingError(
+      result.response,
+      result.error,
+      'L’onboarding n’a pas pu être terminé.',
+    )
+  }
+
+  return result.data as OnboardingCompleteResponse
 }
 
 export async function suggestActivitySubjects(

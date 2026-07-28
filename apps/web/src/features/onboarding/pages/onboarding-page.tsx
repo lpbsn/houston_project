@@ -5,9 +5,7 @@ import { useAuth } from '@/app/auth-provider'
 import { Button } from '@/components/ui/button'
 import { resolvePendingLanding } from '@/features/auth/lib/pending-onboarding'
 import { shouldRedirectOnboardingToOperationalConfig } from '@/features/onboarding/lib/onboarding-route'
-import { ActivationSummaryCard } from '@/features/onboarding/components/activation-summary-card'
-import { ManualOnboardingV2Wizard } from '@/features/onboarding/components/manual-onboarding-v2-wizard'
-import { OnboardingHeroCard } from '@/features/onboarding/components/onboarding-hero-card'
+import { DraftOnboardingWizard } from '@/features/onboarding/components/draft-onboarding-wizard'
 import { OnboardingRegistrationCard } from '@/features/onboarding/components/onboarding-registration-card'
 import { OnboardingStartCard } from '@/features/onboarding/components/onboarding-start-card'
 import {
@@ -15,12 +13,7 @@ import {
   OnboardingLoadingState,
   OnboardingNotice,
 } from '@/features/onboarding/components/onboarding-state'
-import {
-  useActivationSummary,
-  useOnboardingSession,
-  useRuntimeConfig,
-  useStartOnboardingSession,
-} from '@/features/onboarding/hooks'
+import { useOnboardingSession, useStartOnboardingSession } from '@/features/onboarding/hooks'
 
 type OnboardingRouteParams = {
   establishmentId: string | null
@@ -105,12 +98,7 @@ export function OnboardingPage({ onNavigate }: { onNavigate?: (path: string) => 
       establishmentId: landing.pending.establishment_id,
       sessionId: landing.pending.onboarding_session_id,
     }
-  }, [
-    isAuthenticated,
-    isReady,
-    pendingOnboardingMemberships,
-    routeParams,
-  ])
+  }, [isAuthenticated, isReady, pendingOnboardingMemberships, routeParams])
 
   useEffect(() => {
     if (
@@ -139,12 +127,6 @@ export function OnboardingPage({ onNavigate }: { onNavigate?: (path: string) => 
   }, [isAuthenticated, isReady, onNavigate, shouldRedirectToOperationalConfig])
 
   const sessionQuery = useOnboardingSession(effectiveRouteParams.sessionId, {
-    enabled: Boolean(effectiveRouteParams.sessionId) && isAuthenticated,
-  })
-  const runtimeConfigQuery = useRuntimeConfig(effectiveRouteParams.sessionId, {
-    enabled: Boolean(effectiveRouteParams.sessionId) && isAuthenticated,
-  })
-  const activationSummaryQuery = useActivationSummary(effectiveRouteParams.sessionId, {
     enabled: Boolean(effectiveRouteParams.sessionId) && isAuthenticated,
   })
 
@@ -288,39 +270,9 @@ export function OnboardingPage({ onNavigate }: { onNavigate?: (path: string) => 
   }
 
   return (
-    <div className="space-y-4 sm:space-y-5">
-      <OnboardingHeroCard
-        activationSummary={activationSummaryQuery.data ?? null}
-        runtimeConfig={runtimeConfigQuery.data ?? null}
-        session={sessionQuery.data}
-      />
-
-      <ManualOnboardingV2Wizard
-        activationSummary={activationSummaryQuery.data ?? null}
-        activationSummaryError={activationSummaryQuery.error}
-        establishmentId={sessionQuery.data.establishment.id}
-        isActivationSummaryLoading={activationSummaryQuery.isPending}
-        onApplied={() => {
-          void runtimeConfigQuery.refetch()
-          void activationSummaryQuery.refetch()
-        }}
-        onRetryActivationSummary={() => {
-          void activationSummaryQuery.refetch()
-        }}
-        runtimeConfig={runtimeConfigQuery.data ?? null}
-        sessionId={effectiveRouteParams.sessionId}
-      />
-
-      <ActivationSummaryCard
-        activationSummary={activationSummaryQuery.data ?? null}
-        error={activationSummaryQuery.error}
-        isLoading={activationSummaryQuery.isPending}
-        onNavigate={onNavigate}
-        onRetry={() => {
-          void activationSummaryQuery.refetch()
-        }}
-        sessionId={effectiveRouteParams.sessionId}
-      />
-    </div>
+    <DraftOnboardingWizard
+      sessionId={effectiveRouteParams.sessionId}
+      onNavigate={onNavigate}
+    />
   )
 }
