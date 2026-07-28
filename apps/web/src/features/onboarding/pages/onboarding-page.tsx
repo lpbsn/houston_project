@@ -288,6 +288,7 @@ export function OnboardingPage({ onNavigate }: { onNavigate?: (path: string) => 
 
   return (
     <DraftOnboardingWizard
+      key={effectiveRouteParams.sessionId}
       sessionId={effectiveRouteParams.sessionId}
       onNavigate={onNavigate}
     />

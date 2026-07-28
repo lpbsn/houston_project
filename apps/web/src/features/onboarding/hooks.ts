@@ -385,9 +385,11 @@ export function useOnboardingDraftAutosave({
   const onSavedRef = useRef(onSaved)
   const onErrorRef = useRef(onError)
 
-  putDraftRef.current = putDraft
-  onSavedRef.current = onSaved
-  onErrorRef.current = onError
+  useEffect(() => {
+    putDraftRef.current = putDraft
+    onSavedRef.current = onSaved
+    onErrorRef.current = onError
+  }, [putDraft, onSaved, onError])
 
   const clearDebounce = useCallback(() => {
     if (debounceTimerRef.current) {

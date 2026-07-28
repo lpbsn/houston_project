@@ -81,6 +81,84 @@ function SaveStatus({ status }: { status: string }) {
   )
 }
 
+function NewSubjectForm({
+  titleId,
+  onClose,
+  onAdd,
+}: {
+  titleId: string
+  onClose: () => void
+  onAdd: (input: { label: string; description: string }) => void
+}) {
+  const [label, setLabel] = useState('')
+  const [description, setDescription] = useState('')
+
+  return (
+    <div className="flex flex-col gap-4 p-6">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 id={titleId} className="text-lg font-semibold text-spore-forest">
+            Nouveau sujet
+          </h2>
+          <p className="mt-1 text-sm text-spore-muted">
+            Renseignez le nom du sujet et une description optionnelle.
+          </p>
+        </div>
+        <button
+          type="button"
+          aria-label="Fermer"
+          className="rounded-lg p-1 text-spore-muted hover:bg-spore-cream"
+          onClick={onClose}
+        >
+          <X className="size-4" />
+        </button>
+      </div>
+      <label className="block space-y-1.5">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
+          Nom du sujet
+        </span>
+        <Input
+          value={label}
+          onChange={(event) => setLabel(event.target.value)}
+          placeholder="Ex. Propreté, Accueil, Sécurité..."
+          className="h-11 rounded-xl border-spore-forest/20"
+        />
+      </label>
+      <label className="block space-y-1.5">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
+          Description
+        </span>
+        <Textarea
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          placeholder="Décrivez ce sujet (optionnel)..."
+          className="min-h-24 rounded-xl border-spore-forest/15"
+        />
+      </label>
+      <div className="flex items-center justify-between gap-3 pt-1">
+        <button
+          type="button"
+          className="text-sm font-medium text-spore-muted hover:text-spore-forest"
+          onClick={onClose}
+        >
+          Annuler
+        </button>
+        <Button
+          type="button"
+          disabled={label.trim().length === 0}
+          className="h-10 rounded-xl bg-spore-moss text-white hover:bg-spore-forest"
+          onClick={() => {
+            onAdd({ label, description })
+            onClose()
+          }}
+        >
+          Ajouter le sujet
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 function NewSubjectDialog({
   open,
   onClose,
@@ -92,16 +170,12 @@ function NewSubjectDialog({
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const titleId = useId()
-  const [label, setLabel] = useState('')
-  const [description, setDescription] = useState('')
 
   useEffect(() => {
     const dialog = dialogRef.current
     if (!dialog) return
     if (open) {
       if (!dialog.open) dialog.showModal()
-      setLabel('')
-      setDescription('')
     } else if (dialog.open) {
       dialog.close()
     }
@@ -117,68 +191,7 @@ function NewSubjectDialog({
         if (event.target === dialogRef.current) onClose()
       }}
     >
-      <div className="flex flex-col gap-4 p-6">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 id={titleId} className="text-lg font-semibold text-spore-forest">
-              Nouveau sujet
-            </h2>
-            <p className="mt-1 text-sm text-spore-muted">
-              Renseignez le nom du sujet et une description optionnelle.
-            </p>
-          </div>
-          <button
-            type="button"
-            aria-label="Fermer"
-            className="rounded-lg p-1 text-spore-muted hover:bg-spore-cream"
-            onClick={onClose}
-          >
-            <X className="size-4" />
-          </button>
-        </div>
-        <label className="block space-y-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
-            Nom du sujet
-          </span>
-          <Input
-            value={label}
-            onChange={(event) => setLabel(event.target.value)}
-            placeholder="Ex. Propreté, Accueil, Sécurité..."
-            className="h-11 rounded-xl border-spore-forest/20"
-          />
-        </label>
-        <label className="block space-y-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
-            Description
-          </span>
-          <Textarea
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            placeholder="Décrivez ce sujet (optionnel)..."
-            className="min-h-24 rounded-xl border-spore-forest/15"
-          />
-        </label>
-        <div className="flex items-center justify-between gap-3 pt-1">
-          <button
-            type="button"
-            className="text-sm font-medium text-spore-muted hover:text-spore-forest"
-            onClick={onClose}
-          >
-            Annuler
-          </button>
-          <Button
-            type="button"
-            disabled={label.trim().length === 0}
-            className="h-10 rounded-xl bg-spore-moss text-white hover:bg-spore-forest"
-            onClick={() => {
-              onAdd({ label, description })
-              onClose()
-            }}
-          >
-            Ajouter le sujet
-          </Button>
-        </div>
-      </div>
+      {open ? <NewSubjectForm titleId={titleId} onClose={onClose} onAdd={onAdd} /> : null}
     </dialog>
   )
 }
@@ -197,14 +210,14 @@ function StructureStep({
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() => new Set())
   const [subjectModalBuKey, setSubjectModalBuKey] = useState<string | null>(null)
   const [seedingKey, setSeedingKey] = useState<string | null>(null)
+  const [prevBusinessUnits, setPrevBusinessUnits] = useState(draft.business_units)
 
-  useEffect(() => {
-    if (draft.business_units.length === 0) return
-    setExpandedKeys((current) => {
-      if (current.size > 0) return current
-      return new Set([draft.business_units[0]!.client_key])
-    })
-  }, [draft.business_units])
+  if (draft.business_units !== prevBusinessUnits) {
+    setPrevBusinessUnits(draft.business_units)
+    if (expandedKeys.size === 0 && draft.business_units.length > 0) {
+      setExpandedKeys(new Set([draft.business_units[0]!.client_key]))
+    }
+  }
 
   const unitTypeByKey = new Map(catalogUnits.map((unit) => [unit.key, unit.unit_type]))
 
@@ -779,52 +792,39 @@ export function DraftOnboardingWizard({ sessionId, onNavigate }: DraftOnboarding
 
   const [draft, setDraft] = useState<OnboardingDraftPayload | null>(null)
   const [hydrateError, setHydrateError] = useState<Error | null>(null)
+  const [hydrated, setHydrated] = useState(false)
+  const [isDirty, setIsDirty] = useState(false)
   const [step, setStep] = useState<'structure' | 'team'>('structure')
   const [navError, setNavError] = useState<string | null>(null)
   const [isNavigating, setIsNavigating] = useState(false)
-  const hydratedSessionRef = useRef<string | null>(null)
 
   const autosave = useOnboardingDraftAutosave({ sessionId })
   const { enqueue, flush, stop, resume, status: saveStatus } = autosave
-  const skipNextEnqueueRef = useRef(false)
 
-  useEffect(() => {
-    hydratedSessionRef.current = null
-    setDraft(null)
-    setHydrateError(null)
-    resume()
-  }, [sessionId, resume])
-
-  useEffect(() => {
-    if (!draftQuery.data) return
-    if (hydratedSessionRef.current === sessionId) return
-
+  if (!hydrated && draftQuery.data) {
     try {
       const parsed = parseOnboardingDraftPayload(draftQuery.data.payload)
-      skipNextEnqueueRef.current = true
       setDraft(parsed)
       setStep(parsed.current_step === DRAFT_STEP_TEAM ? 'team' : 'structure')
       setHydrateError(null)
-      hydratedSessionRef.current = sessionId
+      setHydrated(true)
     } catch (error) {
       setHydrateError(
         error instanceof OnboardingDraftPayloadParseError
           ? error
           : new OnboardingDraftPayloadParseError(),
       )
+      setHydrated(true)
     }
-  }, [draftQuery.data, sessionId])
+  }
 
   useEffect(() => {
-    if (!draft || hydratedSessionRef.current !== sessionId) return
-    if (skipNextEnqueueRef.current) {
-      skipNextEnqueueRef.current = false
-      return
-    }
+    if (!draft || !isDirty) return
     enqueue(draft)
-  }, [draft, enqueue, sessionId])
+  }, [draft, enqueue, isDirty])
 
   const updateDraft = useCallback((updater: SetStateAction<OnboardingDraftPayload>) => {
+    setIsDirty(true)
     setDraft((current) => {
       if (!current) return current
       return typeof updater === 'function' ? updater(current) : updater
