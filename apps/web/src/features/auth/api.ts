@@ -3,6 +3,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { apiClient, withAuthRetry } from '@/api/client'
 import { clearAllPlanningSubmissionIntents } from '@/features/action-plans/lib/action-plan-planning-submission-intent'
 import { clearObservationProcessingTrackerOnLogout } from '@/features/observations/lib/observation-processing-tracker-store'
+import { clearRegistrationSessionSnapshot } from '@/features/onboarding/lib/registration-session-storage'
 import { queryClient } from '@/lib/query-client'
 import {
   clearAuthenticatedQueryCache,
@@ -292,6 +293,7 @@ export function clearAuthState() {
   clearAccessToken()
   clearAllPlanningSubmissionIntents()
   clearObservationProcessingTrackerOnLogout()
+  clearRegistrationSessionSnapshot()
   clearSuccessToasts()
   clearAuthenticatedQueryCache(queryClient)
 }
@@ -399,10 +401,15 @@ export async function validateRegistrationOwner(input: RegistrationOwnerValidate
   )
 }
 
-export async function registerOnboarding(input: RegistrationRequest) {
+/** Registration payload; `establishment_name` may be omitted (backend generates a temp name). */
+export type OnboardingRegistrationInput = Omit<RegistrationRequest, 'establishment_name'> & {
+  establishment_name?: string
+}
+
+export async function registerOnboarding(input: OnboardingRegistrationInput) {
   const csrfToken = await ensureCsrfToken()
   const { data, error, response } = await apiClient.POST('/api/v1/auth/register/', {
-    body: input,
+    body: input as RegistrationRequest,
     credentials: 'include',
     headers: {
       'X-CSRFToken': csrfToken,

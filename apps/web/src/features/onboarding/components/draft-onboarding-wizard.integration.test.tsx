@@ -115,6 +115,14 @@ describe('draft onboarding integration', () => {
     renderWizard()
 
     await screen.findByTestId('draft-onboarding-wizard')
+    expect(screen.getByTestId('onboarding-stepper')).toBeTruthy()
+    expect(screen.getByTestId('onboarding-step-organization').getAttribute('data-state')).toBe(
+      'done',
+    )
+    expect(screen.getByTestId('onboarding-step-structure').getAttribute('data-state')).toBe(
+      'current',
+    )
+    expect(document.body.textContent).not.toMatch(/draft-[0-9a-f-]+/i)
 
     fireEvent.click(screen.getByRole('button', { name: /Ajouter un pôle/i }))
     fireEvent.change(screen.getByPlaceholderText(/Le Grand Hôtel Central/i), {

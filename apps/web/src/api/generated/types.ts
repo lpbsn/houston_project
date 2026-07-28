@@ -3584,6 +3584,7 @@ export interface components {
             password: string;
             password_confirmation: string;
             organization_name: string;
+            /** @default  */
             establishment_name: string;
         };
         RegistrationResponse: {

@@ -54,6 +54,7 @@ import {
   OnboardingErrorState,
   OnboardingLoadingState,
 } from '@/features/onboarding/components/onboarding-state'
+import { OnboardingStepper } from '@/features/onboarding/components/onboarding-stepper'
 
 type DraftOnboardingWizardProps = {
   sessionId: string
@@ -931,45 +932,12 @@ export function DraftOnboardingWizard({ sessionId, onNavigate }: DraftOnboarding
           Configurons votre établissement
         </h1>
         <p className="max-w-3xl text-sm leading-6 text-spore-muted sm:text-base">
-          Deux étapes rapides : présentez votre établissement et ses pôles d’activité, puis invitez
-          votre équipe. Vous pourrez tout modifier ensuite.
+          Présentez votre établissement et ses pôles d’activité, puis invitez votre équipe. Vous
+          pourrez tout modifier ensuite.
         </p>
       </div>
 
-      <div className="mb-8 flex flex-wrap gap-2">
-        <div
-          className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${
-            step === 'structure'
-              ? 'bg-spore-forest/5 font-medium text-spore-forest'
-              : 'text-spore-muted'
-          }`}
-        >
-          <span
-            className={`flex size-6 items-center justify-center rounded-full text-xs ${
-              step === 'team'
-                ? 'bg-spore-moss/30 text-spore-forest'
-                : 'bg-spore-forest text-white'
-            }`}
-          >
-            {step === 'team' ? <Check className="size-3.5" /> : '1'}
-          </span>
-          Établissement — Infos & pôles
-        </div>
-        <div
-          className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${
-            step === 'team' ? 'bg-spore-forest/5 font-medium text-spore-forest' : 'text-spore-muted'
-          }`}
-        >
-          <span
-            className={`flex size-6 items-center justify-center rounded-full text-xs ${
-              step === 'team' ? 'bg-spore-forest text-white' : 'bg-spore-forest/10 text-spore-muted'
-            }`}
-          >
-            2
-          </span>
-          Équipe — Membres & rôles
-        </div>
-      </div>
+      <OnboardingStepper current={step === 'structure' ? 'structure' : 'team'} />
 
       <SaveStatus status={saveStatus} />
 

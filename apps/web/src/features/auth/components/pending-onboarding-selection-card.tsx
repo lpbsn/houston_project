@@ -6,6 +6,7 @@ import {
   buildOnboardingUrl,
   type PendingOnboardingMembership,
 } from '@/features/auth/lib/pending-onboarding'
+import { displayEstablishmentName } from '@/features/onboarding/lib/display-establishment-name'
 
 type PendingOnboardingSelectionCardProps = {
   pendingMemberships: PendingOnboardingMembership[]
@@ -40,7 +41,12 @@ export function PendingOnboardingSelectionCard({
                 <Building2 className="size-4" />
               </span>
               <div className="space-y-1">
-                <p className="font-semibold">{pending.establishment_name}</p>
+                <p className="font-semibold">
+                  {displayEstablishmentName({
+                    establishmentName: pending.establishment_name,
+                    organizationName: pending.organization_name,
+                  })}
+                </p>
                 <p className="text-sm text-muted-foreground">
                   Rôle : {pending.role} · Statut : {pending.establishment_status}
                 </p>

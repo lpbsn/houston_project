@@ -5,8 +5,9 @@ import { useAuth } from '@/app/auth-provider'
 import { Button } from '@/components/ui/button'
 import { resolvePendingLanding } from '@/features/auth/lib/pending-onboarding'
 import { shouldRedirectOnboardingToOperationalConfig } from '@/features/onboarding/lib/onboarding-route'
+import { clearRegistrationSessionSnapshot } from '@/features/onboarding/lib/registration-session-storage'
 import { DraftOnboardingWizard } from '@/features/onboarding/components/draft-onboarding-wizard'
-import { OnboardingRegistrationCard } from '@/features/onboarding/components/onboarding-registration-card'
+import { OwnerOrgOnboardingStep } from '@/features/onboarding/components/owner-org-onboarding-step'
 import { OnboardingStartCard } from '@/features/onboarding/components/onboarding-start-card'
 import {
   OnboardingErrorState,
@@ -71,6 +72,7 @@ export function OnboardingPage({ onNavigate }: { onNavigate?: (path: string) => 
   }, [])
 
   const handleRegistered = useCallback((result: { establishmentId: string; sessionId: string }) => {
+    clearRegistrationSessionSnapshot()
     const nextParams = {
       establishmentId: result.establishmentId,
       sessionId: result.sessionId,
@@ -99,6 +101,21 @@ export function OnboardingPage({ onNavigate }: { onNavigate?: (path: string) => 
       sessionId: landing.pending.onboarding_session_id,
     }
   }, [isAuthenticated, isReady, pendingOnboardingMemberships, routeParams])
+
+  useEffect(() => {
+    if (!isReady || !isAuthenticated) {
+      return
+    }
+
+    if (effectiveRouteParams.establishmentId || effectiveRouteParams.sessionId) {
+      clearRegistrationSessionSnapshot()
+    }
+  }, [
+    effectiveRouteParams.establishmentId,
+    effectiveRouteParams.sessionId,
+    isAuthenticated,
+    isReady,
+  ])
 
   useEffect(() => {
     if (
@@ -185,7 +202,7 @@ export function OnboardingPage({ onNavigate }: { onNavigate?: (path: string) => 
 
   if (!effectiveRouteParams.sessionId && !effectiveRouteParams.establishmentId) {
     if (!isAuthenticated) {
-      return <OnboardingRegistrationCard onRegistered={handleRegistered} />
+      return <OwnerOrgOnboardingStep onRegistered={handleRegistered} onNavigate={onNavigate} />
     }
 
     const landing = resolvePendingLanding(pendingOnboardingMemberships)

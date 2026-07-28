@@ -139,6 +139,20 @@ def validate_onboarding_owner_registration(*, invite_code: str, email: str) -> N
     validate_registration_email_available(email)
 
 
+def resolve_registration_establishment_name(establishment_name: str | None) -> str:
+    """Return a client-provided name, or an opaque technical name if omitted/blank.
+
+    Uses a full UUID so collision under org-scoped uniqueness is negligible.
+    Do not retry after IntegrityError in a broken outer transaction — if a retry
+    loop is ever required, wrap only the establishment insert in a nested atomic
+    / savepoint.
+    """
+    cleaned = (establishment_name or "").strip()
+    if cleaned:
+        return cleaned
+    return f"draft-{uuid.uuid4()}"
+
+
 @transaction.atomic
 def provision_onboarding_registration(
     *,
@@ -148,7 +162,7 @@ def provision_onboarding_registration(
     email: str,
     password: str,
     organization_name: str,
-    establishment_name: str,
+    establishment_name: str | None = None,
 ) -> RegistrationResult:
     validate_registration_invite_code(invite_code)
     validate_registration_email_available(email)
@@ -160,7 +174,7 @@ def provision_onboarding_registration(
         status=Organization.Status.ACTIVE,
     )
     establishment = Establishment.objects.create(
-        name=establishment_name.strip(),
+        name=resolve_registration_establishment_name(establishment_name),
         organization=organization,
         status=Establishment.Status.DRAFT,
     )
@@ -210,7 +224,7 @@ def register_onboarding_owner(
     email: str,
     password: str,
     organization_name: str,
-    establishment_name: str,
+    establishment_name: str | None = None,
 ) -> RegistrationBundle:
     registration = provision_onboarding_registration(
         invite_code=invite_code,

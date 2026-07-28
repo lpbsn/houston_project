@@ -195,7 +195,12 @@ class RegistrationRequestSerializer(serializers.Serializer):
     password = serializers.CharField(trim_whitespace=False)
     password_confirmation = serializers.CharField(trim_whitespace=False)
     organization_name = serializers.CharField(trim_whitespace=True)
-    establishment_name = serializers.CharField(trim_whitespace=True)
+    establishment_name = serializers.CharField(
+        trim_whitespace=True,
+        required=False,
+        allow_blank=True,
+        default="",
+    )
 
     def validate_first_name(self, value: str) -> str:
         if not value:
@@ -208,11 +213,6 @@ class RegistrationRequestSerializer(serializers.Serializer):
         return value
 
     def validate_organization_name(self, value: str) -> str:
-        if not value:
-            raise serializers.ValidationError("This field may not be blank.")
-        return value
-
-    def validate_establishment_name(self, value: str) -> str:
         if not value:
             raise serializers.ValidationError("This field may not be blank.")
         return value

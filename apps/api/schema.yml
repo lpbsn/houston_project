@@ -10683,9 +10683,9 @@ components:
           type: string
         establishment_name:
           type: string
+          default: ''
       required:
       - email
-      - establishment_name
       - first_name
       - invite_code
       - last_name
