@@ -4760,8 +4760,8 @@ paths:
         name: statuses
         schema:
           type: string
-        description: 'Comma-separated feed statuses: open, in_progress, resolved (max
-          3).'
+        description: 'Comma-separated feed statuses: open, in_progress, interesting,
+          resolved, canceled (max 5).'
       - in: query
         name: view_mode
         schema:
@@ -4993,6 +4993,51 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/signals/{signal_id}/mark-interesting/:
+    post:
+      operationId: v1_establishments_signals_mark_interesting_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: signal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - signals
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
   /api/v1/establishments/{establishment_id}/signals/{signal_id}/pin/:
     post:
@@ -10538,6 +10583,8 @@ components:
       properties:
         can_pin:
           type: boolean
+        can_mark_interesting:
+          type: boolean
         can_cancel:
           type: boolean
         can_resolve:
@@ -10549,6 +10596,7 @@ components:
       required:
       - can_cancel
       - can_create_linked_action_plan
+      - can_mark_interesting
       - can_pin
       - can_qualify_routing
       - can_resolve

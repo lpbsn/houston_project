@@ -35,6 +35,7 @@ function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem 
     reporter_display_name: null,
     permission_hints: {
       can_pin: true,
+      can_mark_interesting: false,
       can_cancel: true,
       can_resolve: true,
       can_create_linked_action_plan: false,

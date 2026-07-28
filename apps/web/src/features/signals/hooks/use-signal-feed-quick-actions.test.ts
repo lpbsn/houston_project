@@ -15,6 +15,10 @@ const pinSignal = vi.fn(async () => ({ id: 'signal-1', is_pinned: true }))
 const unpinSignal = vi.fn(async () => ({ id: 'signal-1', is_pinned: false }))
 const resolveSignal = vi.fn(async () => ({ id: 'signal-1', status: 'resolved' }))
 const cancelSignal = vi.fn(async () => ({ id: 'signal-1', status: 'canceled' }))
+const markSignalInteresting = vi.fn(async () => ({
+  id: 'signal-1',
+  status: 'interesting',
+}))
 
 vi.mock('../hooks', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks')>()
@@ -24,6 +28,7 @@ vi.mock('../hooks', async (importOriginal) => {
     useUnpinSignalMutation: actual.useUnpinSignalMutation,
     useResolveSignalMutation: actual.useResolveSignalMutation,
     useCancelSignalMutation: actual.useCancelSignalMutation,
+    useMarkSignalInterestingMutation: actual.useMarkSignalInterestingMutation,
   }
 })
 
@@ -35,6 +40,7 @@ vi.mock('../api', async (importOriginal) => {
     unpinSignal: (...args: unknown[]) => unpinSignal(...args),
     resolveSignal: (...args: unknown[]) => resolveSignal(...args),
     cancelSignal: (...args: unknown[]) => cancelSignal(...args),
+    markSignalInteresting: (...args: unknown[]) => markSignalInteresting(...args),
   }
 })
 
@@ -61,6 +67,7 @@ function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem 
     reporter_display_name: null,
     permission_hints: {
       can_pin: true,
+      can_mark_interesting: false,
       can_cancel: true,
       can_resolve: true,
       can_create_linked_action_plan: false,
@@ -109,6 +116,7 @@ describe('useSignalFeedQuickActions', () => {
     unpinSignal.mockClear()
     resolveSignal.mockClear()
     cancelSignal.mockClear()
+    markSignalInteresting.mockClear()
     vi.spyOn(window, 'confirm').mockReturnValue(true)
   })
 
@@ -233,6 +241,70 @@ describe('useSignalFeedQuickActions', () => {
 
     expect(actionResult).toBe('abort')
     expect(cancelSignal).not.toHaveBeenCalled()
+    expect(result.current.actionsOpen).toBe(true)
+    expect(result.current.activeItem).not.toBeNull()
+  })
+
+  it('runs mark_interesting mutation when confirm is accepted and returns stay-open', async () => {
+    const { result } = renderQuickActionsHook()
+
+    act(() => {
+      result.current.openActions(
+        buildFeedItem({
+          permission_hints: {
+            can_pin: false,
+            can_mark_interesting: true,
+            can_cancel: false,
+            can_resolve: false,
+            can_create_linked_action_plan: false,
+            can_qualify_routing: false,
+          },
+        }),
+      )
+    })
+
+    let actionResult: string | undefined
+    act(() => {
+      actionResult = result.current.runAction('mark_interesting')
+    })
+
+    expect(actionResult).toBe('stay-open')
+
+    await waitFor(() => {
+      expect(markSignalInteresting).toHaveBeenCalledWith('est-1', 'signal-1')
+    })
+
+    await waitFor(() => {
+      expect(result.current.actionsOpen).toBe(false)
+    })
+  })
+
+  it('returns abort when mark_interesting confirm is declined', () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const { result } = renderQuickActionsHook()
+
+    act(() => {
+      result.current.openActions(
+        buildFeedItem({
+          permission_hints: {
+            can_pin: false,
+            can_mark_interesting: true,
+            can_cancel: false,
+            can_resolve: false,
+            can_create_linked_action_plan: false,
+            can_qualify_routing: false,
+          },
+        }),
+      )
+    })
+
+    let actionResult: string | undefined
+    act(() => {
+      actionResult = result.current.runAction('mark_interesting')
+    })
+
+    expect(actionResult).toBe('abort')
+    expect(markSignalInteresting).not.toHaveBeenCalled()
     expect(result.current.actionsOpen).toBe(true)
     expect(result.current.activeItem).not.toBeNull()
   })

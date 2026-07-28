@@ -65,6 +65,7 @@ function buildSignal(overrides: Partial<SignalDetail> = {}): SignalDetail {
     linked_action_plan_executions: [],
     permission_hints: {
       can_pin: false,
+      can_mark_interesting: false,
       can_cancel: false,
       can_resolve: false,
       can_create_linked_action_plan: false,
@@ -216,6 +217,7 @@ describe('SignalDetailPage tabs', () => {
       data: buildSignal({
         permission_hints: {
           can_pin: false,
+          can_mark_interesting: false,
           can_cancel: false,
           can_resolve: false,
           can_create_linked_action_plan: true,
@@ -251,6 +253,7 @@ describe('SignalDetailPage tabs', () => {
         activity_subject_label: null,
         permission_hints: {
           can_pin: false,
+          can_mark_interesting: false,
           can_cancel: false,
           can_resolve: false,
           can_create_linked_action_plan: false,
@@ -302,6 +305,7 @@ describe('SignalDetailPage lifecycle actions', () => {
       data: buildSignal({
         permission_hints: {
           can_pin: false,
+          can_mark_interesting: false,
           can_cancel: true,
           can_resolve: true,
           can_create_linked_action_plan: false,
@@ -328,6 +332,7 @@ describe('SignalDetailPage pin actions', () => {
       data: buildSignal({
         permission_hints: {
           can_pin: true,
+          can_mark_interesting: false,
           can_cancel: false,
           can_resolve: false,
           can_create_linked_action_plan: false,

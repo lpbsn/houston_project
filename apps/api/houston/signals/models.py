@@ -28,6 +28,7 @@ class ExpectedAction(models.TextChoices):
 class Signal(BaseModel):
     class Status(models.TextChoices):
         OPEN = "open", "Open"
+        INTERESTING = "interesting", "Interesting"
         IN_PROGRESS = "in_progress", "In progress"
         RESOLVED = "resolved", "Resolved"
         CANCELED = "canceled", "Canceled"

@@ -13,6 +13,7 @@ type SignalStatusBadgeProps = {
 const LABELS: Record<string, string> = {
   open: 'En attente',
   in_progress: 'En cours',
+  interesting: 'Intéressant',
   resolved: 'Résolue',
   canceled: 'Annulée',
   archived: 'Archivée',
@@ -25,6 +26,7 @@ const DETAIL_BADGE_CLASS = 'px-2.5 py-1 text-[10px]'
 const FEED_STATUS_CLASS: Record<string, string> = {
   open: 'bg-[#FFF4E5] text-[#B45309]',
   in_progress: terrainInProgress.badgeFeed,
+  interesting: 'bg-[#EEF2FF] text-[#1B4FD8]',
   resolved: 'bg-[#E6F4EA] text-[#137333]',
   canceled: 'bg-[#F0EFE9] text-[#7D7B75]',
   archived: 'bg-[#F0EFE9] text-[#7D7B75]',

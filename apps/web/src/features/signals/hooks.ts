@@ -13,6 +13,7 @@ import {
   fetchQualifyRoutingOptions,
   fetchSignalDetail,
   fetchSignalFeed,
+  markSignalInteresting,
   pinSignal,
   qualifySignalRouting,
   resolveSignal,
@@ -182,6 +183,26 @@ export function useResolveSignalMutation(establishmentId: string | null) {
         throw new Error('Observation introuvable.')
       }
       return resolveSignal(establishmentId, signalId)
+    },
+    onSuccess: (detail: SignalDetail, signalId) => {
+      if (establishmentId) {
+        invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+      }
+      if (establishmentId) {
+        queryClient.setQueryData(signalsQueryKeys.detail(establishmentId, signalId), detail)
+      }
+    },
+  })
+}
+
+export function useMarkSignalInterestingMutation(establishmentId: string | null) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (signalId: string) => {
+      if (!establishmentId) {
+        throw new Error('Observation introuvable.')
+      }
+      return markSignalInteresting(establishmentId, signalId)
     },
     onSuccess: (detail: SignalDetail, signalId) => {
       if (establishmentId) {

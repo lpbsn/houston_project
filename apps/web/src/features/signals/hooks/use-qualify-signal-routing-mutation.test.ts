@@ -49,6 +49,7 @@ const detailBase = {
   issue_focus: 'lampe',
   permission_hints: {
     can_pin: false,
+    can_mark_interesting: false,
     can_cancel: false,
     can_resolve: false,
     can_create_linked_action_plan: false,

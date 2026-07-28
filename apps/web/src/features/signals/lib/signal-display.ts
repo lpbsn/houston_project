@@ -28,18 +28,19 @@ export function formatSignalRelativeTime(iso: string): string {
 }
 
 export type SignalFeedStatusGroup = {
-  status: 'open' | 'in_progress' | 'resolved' | 'canceled'
+  status: 'open' | 'in_progress' | 'interesting' | 'resolved' | 'canceled'
   label: string
   dotVariant: TerrainSectionDotVariant
   items: SignalFeedItem[]
 }
 
 const STATUS_GROUP_META: Record<
-  'open' | 'in_progress' | 'resolved' | 'canceled',
+  'open' | 'in_progress' | 'interesting' | 'resolved' | 'canceled',
   { label: string; dotVariant: TerrainSectionDotVariant }
 > = {
   open: { label: 'En attente', dotVariant: 'warning' },
   in_progress: { label: 'En cours', dotVariant: 'teal' },
+  interesting: { label: 'Intéressants', dotVariant: 'primary' },
   resolved: { label: 'Résolues', dotVariant: 'success' },
   canceled: { label: 'Annulées', dotVariant: 'muted' },
 }
@@ -51,6 +52,7 @@ const STATUS_GROUP_META: Record<
 export function groupFeedItemsByStatus(items: SignalFeedItem[]): SignalFeedStatusGroup[] | null {
   const open = items.filter((item) => item.status === 'open')
   const inProgress = items.filter((item) => item.status === 'in_progress')
+  const interesting = items.filter((item) => item.status === 'interesting')
   const resolved = items.filter((item) => item.status === 'resolved')
   const canceled = items.filter((item) => item.status === 'canceled')
 
@@ -67,6 +69,13 @@ export function groupFeedItemsByStatus(items: SignalFeedItem[]): SignalFeedStatu
       status: 'in_progress',
       ...STATUS_GROUP_META.in_progress,
       items: inProgress,
+    })
+  }
+  if (interesting.length > 0) {
+    presentGroups.push({
+      status: 'interesting',
+      ...STATUS_GROUP_META.interesting,
+      items: interesting,
     })
   }
   if (resolved.length > 0) {
@@ -113,6 +122,7 @@ export const SIGNAL_CARD_LEFT_ACCENT = {
   pinned: 'border-l-[#1a1a1a]',
   open: 'border-l-[#EF9F27]',
   in_progress: 'border-l-[#3A7A96]',
+  interesting: 'border-l-[#1B4FD8]',
   resolved: 'border-l-[#1D9E75]',
   archived: 'border-l-[#555]',
   neutral: 'border-l-[#7D7B75]',
@@ -123,6 +133,7 @@ export const SIGNAL_CARD_LEFT_ACCENT_COLOR = {
   pinned: '#1a1a1a',
   open: '#EF9F27',
   in_progress: terrainInProgress.color,
+  interesting: '#1B4FD8',
   resolved: '#1D9E75',
   archived: '#555',
   neutral: '#7D7B75',
@@ -173,6 +184,9 @@ function getSignalCardLeftAccentColorKey(
   if (item.status === 'in_progress') {
     return 'in_progress'
   }
+  if (item.status === 'interesting') {
+    return 'interesting'
+  }
   if (item.status === 'resolved') {
     return 'resolved'
   }
@@ -193,6 +207,9 @@ export function getSignalStatusBadgeVariant(status: string): HoustonBadgeVariant
   }
   if (status === 'in_progress') {
     return 'teal'
+  }
+  if (status === 'interesting') {
+    return 'blue'
   }
   if (status === 'resolved') {
     return 'green'

@@ -5,12 +5,14 @@ import { resolveApiErrorMessage } from '@/lib/error-message'
 import { SignalsApiError } from '../api'
 import {
   useCancelSignalMutation,
+  useMarkSignalInterestingMutation,
   usePinSignalMutation,
   useResolveSignalMutation,
   useUnpinSignalMutation,
 } from '../hooks'
 import {
   SIGNAL_CANCEL_CONFIRM_MESSAGE,
+  SIGNAL_MARK_INTERESTING_CONFIRM_MESSAGE,
   type SignalFeedCardActionId,
 } from '../lib/signal-feed-card-actions'
 import type { SignalFeedFilters, SignalFeedItem, SignalViewMode } from '../types'
@@ -42,9 +44,12 @@ export function useSignalFeedQuickActions({
   const unpinMutation = useUnpinSignalMutation(establishmentId, cacheContext)
   const resolveMutation = useResolveSignalMutation(establishmentId)
   const cancelMutation = useCancelSignalMutation(establishmentId)
+  const markInterestingMutation = useMarkSignalInterestingMutation(establishmentId)
 
   const isLifecyclePending =
-    resolveMutation.isPending || cancelMutation.isPending
+    resolveMutation.isPending ||
+    cancelMutation.isPending ||
+    markInterestingMutation.isPending
 
   const isPending =
     pinMutation.isPending ||
@@ -116,7 +121,11 @@ export function useSignalFeedQuickActions({
   }
 
   function isLifecycleAction(actionId: SignalFeedCardActionId): boolean {
-    return actionId === 'resolve' || actionId === 'cancel'
+    return (
+      actionId === 'resolve' ||
+      actionId === 'cancel' ||
+      actionId === 'mark_interesting'
+    )
   }
 
   function runAction(actionId: SignalFeedCardActionId): SignalFeedQuickActionResult {
@@ -153,6 +162,14 @@ export function useSignalFeedQuickActions({
           void pinMutation.mutate(signalId)
         }
         return 'close'
+      case 'mark_interesting':
+        if (!window.confirm(SIGNAL_MARK_INTERESTING_CONFIRM_MESSAGE)) {
+          return 'abort'
+        }
+        return startLifecycleMutation(
+          (id, options) => void markInterestingMutation.mutate(id, options),
+          signalId,
+        )
       case 'resolve':
         return startLifecycleMutation(
           (id, options) => void resolveMutation.mutate(id, options),

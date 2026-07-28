@@ -11,7 +11,7 @@ from houston.signals.constants import ACTIVE_SIGNAL_STATUSES, FEED_SIGNAL_STATUS
 
 FEED_FILTERABLE_STATUSES = frozenset(FEED_SIGNAL_STATUSES)
 
-MAX_FILTER_STATUSES = 4
+MAX_FILTER_STATUSES = 5
 MAX_FILTER_BUSINESS_UNIT_IDS = 20
 MAX_FILTER_ACTIVITY_SUBJECT_IDS = 50
 
@@ -158,7 +158,7 @@ def _parse_statuses(raw: str | None) -> tuple[str, ...]:
     invalid = [value for value in normalized if value not in FEED_FILTERABLE_STATUSES]
     if invalid:
         raise SignalFeedFilterValidationError(
-            "statuses must only contain open, in_progress, resolved, or canceled.",
+            "statuses must only contain open, in_progress, interesting, resolved, or canceled.",
         )
 
     return normalized

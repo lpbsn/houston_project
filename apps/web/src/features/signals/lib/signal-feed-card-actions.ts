@@ -3,7 +3,15 @@ import type { PermissionHints, SignalFeedItem } from '../types'
 export const SIGNAL_CANCEL_CONFIRM_MESSAGE =
   'Confirmer l’annulation de cette observation ? Cette action est définitive.'
 
-export type SignalFeedCardActionId = 'pin' | 'resolve' | 'cancel' | 'qualify'
+export const SIGNAL_MARK_INTERESTING_CONFIRM_MESSAGE =
+  'Confirmer le marquage comme intéressant ? Cette action n’est pas réversible pour l’instant.'
+
+export type SignalFeedCardActionId =
+  | 'pin'
+  | 'mark_interesting'
+  | 'resolve'
+  | 'cancel'
+  | 'qualify'
 
 export type SignalFeedCardActionTone = 'neutral' | 'success' | 'danger'
 
@@ -16,6 +24,7 @@ export type SignalFeedCardActionOption = {
 export function canOpenSignalFeedCardActions(hints: PermissionHints): boolean {
   return (
     hints.can_pin ||
+    hints.can_mark_interesting ||
     hints.can_resolve ||
     hints.can_cancel ||
     hints.can_qualify_routing
@@ -40,6 +49,14 @@ export function getSignalFeedCardActionOptions(
     options.push({
       id: 'pin',
       label: isPinned ? 'Désépingler' : 'Épingler',
+      tone: 'neutral',
+    })
+  }
+
+  if (hints.can_mark_interesting) {
+    options.push({
+      id: 'mark_interesting',
+      label: 'Marquer comme intéressant',
       tone: 'neutral',
     })
   }

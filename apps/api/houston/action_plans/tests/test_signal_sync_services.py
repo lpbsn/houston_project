@@ -418,3 +418,71 @@ def test_cancel_after_manual_resolve_does_not_rollback(
     assert canceled.status == ActionPlanExecution.Status.CANCELED
     assert done_execution.status == ActionPlanExecution.Status.DONE
     assert signal.status == Signal.Status.RESOLVED
+
+
+def test_sync_noop_when_interesting_with_done_execution(
+    owner_membership,
+    business_unit,
+    staff_membership,
+):
+    """Inconsistent state: interesting must not auto-resolve via sync."""
+    _ = business_unit, staff_membership
+    signal = create_minimal_v3_signal(
+        owner_membership,
+        title="Interesting with done",
+        status=Signal.Status.INTERESTING,
+    )
+    execution = _create_linked_execution(
+        owner_membership=owner_membership,
+        signal=signal,
+        title="Forced done",
+        requires_validation=False,
+    )
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.IN_PROGRESS
+
+    execution.status = ActionPlanExecution.Status.DONE
+    execution.save(update_fields=["status", "updated_at"])
+    signal.status = Signal.Status.INTERESTING
+    signal.save(update_fields=["status", "updated_at"])
+
+    sync_signal_after_execution_change(signal=signal)
+
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.INTERESTING
+
+
+def test_sync_noop_when_interesting_with_all_canceled_executions(
+    owner_membership,
+    business_unit,
+    staff_membership,
+):
+    """Inconsistent state: interesting must not reopen to open via sync."""
+    _ = business_unit, staff_membership
+    signal = create_minimal_v3_signal(
+        owner_membership,
+        title="Interesting with canceled",
+        status=Signal.Status.INTERESTING,
+    )
+    execution = _create_linked_execution(
+        owner_membership=owner_membership,
+        signal=signal,
+        title="Forced canceled",
+    )
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.IN_PROGRESS
+
+    now = timezone.now()
+    execution.status = ActionPlanExecution.Status.CANCELED
+    execution.canceled_at = now
+    execution.last_activity_at = now
+    execution.save(
+        update_fields=["status", "canceled_at", "last_activity_at", "updated_at"]
+    )
+    signal.status = Signal.Status.INTERESTING
+    signal.save(update_fields=["status", "updated_at"])
+
+    sync_signal_after_execution_change(signal=signal)
+
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.INTERESTING

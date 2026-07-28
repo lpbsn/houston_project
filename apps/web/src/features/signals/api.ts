@@ -201,6 +201,25 @@ export async function resolveSignal(
   return assertSignalData<SignalDetail>(result)
 }
 
+export async function markSignalInteresting(
+  establishmentId: string,
+  signalId: string,
+): Promise<SignalDetail> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/signals/{signal_id}/mark-interesting/',
+        {
+          params: signalPathParams(establishmentId, signalId),
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  return assertSignalData<SignalDetail>(result)
+}
+
 export async function qualifySignalRouting(
   establishmentId: string,
   signalId: string,

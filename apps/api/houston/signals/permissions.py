@@ -6,7 +6,11 @@ from houston.establishments.permissions import (
     can_view_signal_feed as establishment_can_view_signal_feed,
 )
 from houston.establishments.role_constants import ADMIN_ROLES
-from houston.signals.constants import ACTIVE_SIGNAL_STATUSES, FEED_SIGNAL_STATUSES
+from houston.signals.constants import (
+    ACTIVE_SIGNAL_STATUSES,
+    CANCEL_RESOLVE_SIGNAL_STATUSES,
+    FEED_SIGNAL_STATUSES,
+)
 from houston.signals.models import Signal
 
 # Owner / Director / Manager — establishment-wide triage for unassigned signals (Lot 8 H5/H6).
@@ -169,6 +173,17 @@ def can_pin_signal(
     )
 
 
+def can_mark_signal_interesting(
+    membership: EstablishmentMembership | None,
+    signal: Signal,
+) -> bool:
+    return _signal_commandable_by_membership(
+        membership,
+        signal,
+        statuses=frozenset({Signal.Status.OPEN}),
+    )
+
+
 def can_cancel_signal(
     membership: EstablishmentMembership | None,
     signal: Signal,
@@ -191,7 +206,7 @@ def _can_cancel_or_resolve_signal(
         return False
     if signal.establishment_id != membership.establishment_id:
         return False
-    if signal.status not in ACTIVE_SIGNAL_STATUSES:
+    if signal.status not in CANCEL_RESOLVE_SIGNAL_STATUSES:
         return False
     if membership.role == EstablishmentMembership.Role.STAFF:
         return False
