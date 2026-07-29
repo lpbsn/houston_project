@@ -33,6 +33,7 @@ function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem 
     last_activity_at: '2026-06-30T10:00:00Z',
     created_at: '2026-06-30T08:00:00Z',
     reporter_display_name: null,
+    resolution_request: null,
     permission_hints: {
       can_pin: true,
       can_mark_interesting: false,
@@ -41,6 +42,10 @@ function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem 
       can_resolve: true,
       can_create_linked_action_plan: false,
       can_qualify_routing: false,
+      can_request_resolution: false,
+      can_approve_resolution_request: false,
+      can_reject_resolution_request: false,
+      can_cancel_resolution_request: false,
     },
     ...overrides,
   }

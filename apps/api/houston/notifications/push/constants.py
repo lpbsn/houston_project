@@ -19,6 +19,10 @@ PUSH_V1_EVENT_KEYS: frozenset[str] = frozenset(
         Notification.EventKey.SIGNAL_PINNED,
         Notification.EventKey.SIGNAL_RESOLVED,
         Notification.EventKey.SIGNAL_CANCELED,
+        Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_CREATED,
+        Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_APPROVED,
+        Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_REJECTED,
+        Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_CANCELED,
         Notification.EventKey.CHAT_MESSAGE_RECEIVED,
     }
 )

@@ -18,7 +18,17 @@ import { SignalLinkedActionPlansSection } from '../components/signal-linked-acti
 import { SignalStatusBadge } from '../components/signal-status-badge'
 import { SignalDetailClassificationSection } from '../components/signal-detail-classification-section'
 import { SignalDetailLabel } from '../components/signal-detail-label'
-import { useSignalDetailQuery } from '../hooks'
+import {
+  resolutionRequestEventsFromDetail,
+  SignalResolutionRequestSection,
+} from '../components/signal-resolution-request-section'
+import {
+  useApproveSignalResolutionRequestMutation,
+  useCancelSignalResolutionRequestMutation,
+  useCreateSignalResolutionRequestMutation,
+  useRejectSignalResolutionRequestMutation,
+  useSignalDetailQuery,
+} from '../hooks'
 import { SignalsApiError } from '../api'
 import { shouldShowSignalCreateActionPlan } from '../lib/signal-create-action'
 import { formatSignalRelativeTime, formatSignalAggregationLabel } from '../lib/signal-display'
@@ -43,9 +53,14 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
     initialDeepLink.tab === 'comments' ? 'comments' : 'details',
   )
   const [hasOpenedComments, setHasOpenedComments] = useState(initialDeepLink.tab === 'comments')
+  const [requestActionError, setRequestActionError] = useState<string | null>(null)
   const highlightCommentId = initialDeepLink.commentId
 
   const detailQuery = useSignalDetailQuery(establishmentId, signalId)
+  const createRequestMutation = useCreateSignalResolutionRequestMutation(establishmentId)
+  const approveRequestMutation = useApproveSignalResolutionRequestMutation(establishmentId)
+  const rejectRequestMutation = useRejectSignalResolutionRequestMutation(establishmentId)
+  const cancelRequestMutation = useCancelSignalResolutionRequestMutation(establishmentId)
 
   const handleTabChange = (tab: SignalDetailTab) => {
     if (tab === 'comments') {
@@ -76,6 +91,62 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
   const reporterName = signal.source_context.reporter_display_name?.trim()
   const showStickyCreateActionFooter = shouldShowSignalCreateActionPlan(signal.permission_hints)
   const showStickyFooter = activeTab === 'details' && showStickyCreateActionFooter
+  const resolutionRequest = signal.resolution_request
+  const resolutionRequestEvents = resolutionRequestEventsFromDetail(signal)
+
+  async function handleCreateResolutionRequest() {
+    setRequestActionError(null)
+    try {
+      await createRequestMutation.mutateAsync({ signalId })
+    } catch (error) {
+      setRequestActionError(resolveApiErrorMessage(error, SignalsApiError, 'Une erreur est survenue.'))
+    }
+  }
+
+  async function handleApproveResolutionRequest() {
+    if (!resolutionRequest) {
+      return
+    }
+    setRequestActionError(null)
+    try {
+      await approveRequestMutation.mutateAsync({
+        signalId,
+        requestId: resolutionRequest.id,
+      })
+    } catch (error) {
+      setRequestActionError(resolveApiErrorMessage(error, SignalsApiError, 'Une erreur est survenue.'))
+    }
+  }
+
+  async function handleRejectResolutionRequest() {
+    if (!resolutionRequest) {
+      return
+    }
+    setRequestActionError(null)
+    try {
+      await rejectRequestMutation.mutateAsync({
+        signalId,
+        requestId: resolutionRequest.id,
+      })
+    } catch (error) {
+      setRequestActionError(resolveApiErrorMessage(error, SignalsApiError, 'Une erreur est survenue.'))
+    }
+  }
+
+  async function handleCancelResolutionRequest() {
+    if (!resolutionRequest) {
+      return
+    }
+    setRequestActionError(null)
+    try {
+      await cancelRequestMutation.mutateAsync({
+        signalId,
+        requestId: resolutionRequest.id,
+      })
+    } catch (error) {
+      setRequestActionError(resolveApiErrorMessage(error, SignalsApiError, 'Une erreur est survenue.'))
+    }
+  }
 
   return (
     <div className="flex min-h-full flex-col">
@@ -125,6 +196,21 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
               {formatDescriptionContent(signal.structured_summary)}
             </p>
           </TerrainCard>
+
+          <SignalResolutionRequestSection
+            events={resolutionRequestEvents}
+            permissionHints={signal.permission_hints}
+            pendingRequestId={resolutionRequest?.id ?? null}
+            errorMessage={requestActionError}
+            isCreatePending={createRequestMutation.isPending}
+            isCancelPending={cancelRequestMutation.isPending}
+            isApprovePending={approveRequestMutation.isPending}
+            isRejectPending={rejectRequestMutation.isPending}
+            onCreate={() => void handleCreateResolutionRequest()}
+            onCancel={() => void handleCancelResolutionRequest()}
+            onApprove={() => void handleApproveResolutionRequest()}
+            onReject={() => void handleRejectResolutionRequest()}
+          />
 
           <SignalDetailPhotoSection mediaItems={signal.media_items ?? []} />
 

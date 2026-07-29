@@ -9,6 +9,10 @@ from houston.signals.api.views import (
     SignalPinView,
     SignalQualifyRoutingOptionsView,
     SignalQualifyRoutingView,
+    SignalResolutionRequestApproveView,
+    SignalResolutionRequestCancelView,
+    SignalResolutionRequestCreateView,
+    SignalResolutionRequestRejectView,
     SignalResolveView,
     SignalUnpinView,
 )
@@ -63,5 +67,25 @@ urlpatterns = [
         "establishments/<uuid:establishment_id>/signals/<uuid:signal_id>/qualify-routing/",
         SignalQualifyRoutingView.as_view(),
         name="signal-qualify-routing",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/signals/<uuid:signal_id>/resolution-requests/",
+        SignalResolutionRequestCreateView.as_view(),
+        name="signal-resolution-request-create",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/signals/<uuid:signal_id>/resolution-requests/<uuid:request_id>/approve/",
+        SignalResolutionRequestApproveView.as_view(),
+        name="signal-resolution-request-approve",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/signals/<uuid:signal_id>/resolution-requests/<uuid:request_id>/reject/",
+        SignalResolutionRequestRejectView.as_view(),
+        name="signal-resolution-request-reject",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/signals/<uuid:signal_id>/resolution-requests/<uuid:request_id>/cancel/",
+        SignalResolutionRequestCancelView.as_view(),
+        name="signal-resolution-request-cancel",
     ),
 ]

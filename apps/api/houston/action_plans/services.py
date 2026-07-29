@@ -404,6 +404,18 @@ def _activate_linked_signal_on_execution_create(*, signal: Signal) -> None:
     if not status_changed and not unpin_changed:
         return
 
+    if status_changed and signal.status == Signal.Status.OPEN:
+        from houston.signals.models import SignalResolutionRequest
+        from houston.signals.resolution_request_services import (
+            cancel_pending_resolution_request_for_signal,
+        )
+
+        cancel_pending_resolution_request_for_signal(
+            signal=signal,
+            reason=SignalResolutionRequest.CanceledReason.ACTION_PLAN_CREATED,
+            notify_requester=True,
+        )
+
     if status_changed:
         signal.status = Signal.Status.IN_PROGRESS
     if unpin_changed:

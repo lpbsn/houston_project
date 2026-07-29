@@ -1481,6 +1481,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/signals/{signal_id}/resolution-requests/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_signals_resolution_requests_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/signals/{signal_id}/resolution-requests/{request_id}/approve/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_signals_resolution_requests_approve_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/signals/{signal_id}/resolution-requests/{request_id}/cancel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_signals_resolution_requests_cancel_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/signals/{signal_id}/resolution-requests/{request_id}/reject/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_signals_resolution_requests_reject_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/signals/{signal_id}/resolve/": {
         parameters: {
             query?: never;
@@ -3005,6 +3069,14 @@ export interface components {
          * @enum {string}
          */
         EstablishmentNonOwnerMembershipRoleEnum: "director" | "manager" | "staff";
+        /**
+         * @description * `created` - created
+         *     * `approved` - approved
+         *     * `rejected` - rejected
+         *     * `canceled` - canceled
+         * @enum {string}
+         */
+        EventTypeEnum: "created" | "approved" | "rejected" | "canceled";
         ExecutionCommentListItem: {
             item_type: components["schemas"]["ExecutionCommentListItemItemTypeEnum"];
             /** Format: uuid */
@@ -3556,6 +3628,10 @@ export interface components {
             can_resolve: boolean;
             can_create_linked_action_plan: boolean;
             can_qualify_routing: boolean;
+            can_request_resolution: boolean;
+            can_approve_resolution_request: boolean;
+            can_reject_resolution_request: boolean;
+            can_cancel_resolution_request: boolean;
         };
         /**
          * @description * `info` - Info
@@ -3710,11 +3786,13 @@ export interface components {
             reporter_display_name?: string | null;
             aggregation_count: number;
             permission_hints: components["schemas"]["PermissionHints"];
+            resolution_request: components["schemas"]["SignalResolutionRequest"] | null;
             structured_summary: string;
             issue_focus: string;
             source_context: components["schemas"]["SourceContext"];
             media_items: components["schemas"]["SignalDetailMediaItem"][];
             linked_action_plan_executions: components["schemas"]["SignalLinkedActionPlanExecution"][];
+            resolution_request_events: components["schemas"]["SignalResolutionRequestEvent"][];
         };
         SignalDetailMediaItem: {
             /** Format: uuid */
@@ -3757,6 +3835,7 @@ export interface components {
             reporter_display_name?: string | null;
             aggregation_count: number;
             permission_hints: components["schemas"]["PermissionHints"];
+            resolution_request: components["schemas"]["SignalResolutionRequest"] | null;
         };
         SignalFeedResponse: {
             items: components["schemas"]["SignalFeedItem"][];
@@ -3820,16 +3899,58 @@ export interface components {
             reporter_display_name?: string | null;
             aggregation_count: number;
             permission_hints: components["schemas"]["PermissionHints"];
+            resolution_request: components["schemas"]["SignalResolutionRequest"] | null;
             structured_summary: string;
             issue_focus: string;
             source_context: components["schemas"]["SourceContext"];
             media_items: components["schemas"]["SignalDetailMediaItem"][];
             linked_action_plan_executions: components["schemas"]["SignalLinkedActionPlanExecution"][];
+            resolution_request_events: components["schemas"]["SignalResolutionRequestEvent"][];
             qualification_outcome: components["schemas"]["QualificationOutcomeEnum"];
             /** Format: uuid */
             surviving_signal_id: string;
             /** Format: uuid */
             merged_signal_id: string | null;
+        };
+        SignalResolutionRequest: {
+            /** Format: uuid */
+            id: string;
+            status: string;
+            review_route: string;
+            /** Format: date-time */
+            requested_at: string;
+            request_comment: string;
+            /** Format: date-time */
+            reviewed_at: string | null;
+            review_comment: string;
+            /** Format: date-time */
+            canceled_at: string | null;
+            canceled_reason: string;
+            cancel_comment: string;
+            /** Format: uuid */
+            requested_by_membership_id: string;
+            /** Format: uuid */
+            reviewed_by_membership_id: string | null;
+        };
+        SignalResolutionRequestCancel: {
+            /** @default  */
+            cancel_comment: string;
+        };
+        SignalResolutionRequestCreate: {
+            /** @default  */
+            request_comment: string;
+        };
+        SignalResolutionRequestEvent: {
+            /** Format: uuid */
+            request_id: string;
+            event_type: components["schemas"]["EventTypeEnum"];
+            /** Format: date-time */
+            occurred_at: string;
+            actor_display_name: string | null;
+        };
+        SignalResolutionRequestReview: {
+            /** @default  */
+            review_comment: string;
         };
         SourceContext: {
             /** Format: date-time */
@@ -9068,6 +9189,213 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
+            };
+        };
+    };
+    v1_establishments_signals_resolution_requests_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                signal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SignalResolutionRequestCreate"];
+                "application/x-www-form-urlencoded": components["schemas"]["SignalResolutionRequestCreate"];
+                "multipart/form-data": components["schemas"]["SignalResolutionRequestCreate"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalDetail"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_establishments_signals_resolution_requests_approve_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                request_id: string;
+                signal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SignalResolutionRequestReview"];
+                "application/x-www-form-urlencoded": components["schemas"]["SignalResolutionRequestReview"];
+                "multipart/form-data": components["schemas"]["SignalResolutionRequestReview"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalDetail"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_establishments_signals_resolution_requests_cancel_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                request_id: string;
+                signal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SignalResolutionRequestCancel"];
+                "application/x-www-form-urlencoded": components["schemas"]["SignalResolutionRequestCancel"];
+                "multipart/form-data": components["schemas"]["SignalResolutionRequestCancel"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalDetail"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_establishments_signals_resolution_requests_reject_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                request_id: string;
+                signal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SignalResolutionRequestReview"];
+                "application/x-www-form-urlencoded": components["schemas"]["SignalResolutionRequestReview"];
+                "multipart/form-data": components["schemas"]["SignalResolutionRequestReview"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalDetail"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

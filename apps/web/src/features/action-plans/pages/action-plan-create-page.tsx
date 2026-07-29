@@ -572,10 +572,18 @@ export function ActionPlanCreatePage({
     <div className="flex min-h-full flex-col">
       {signalDetail ? (
         <ActionLinkedSignalStrip>
-          <ActionLinkedSignalCard
-            title={signalDetail.title}
-            locationText={signalDetail.location_text || null}
-          />
+          <div className="space-y-2">
+            <ActionLinkedSignalCard
+              title={signalDetail.title}
+              locationText={signalDetail.location_text || null}
+            />
+            {signalDetail.resolution_request?.status === 'pending' ? (
+              <TerrainFeedback
+                variant="error"
+                message="Une demande de résolution est actuellement en attente. La création de ce plan d’action annulera cette demande."
+              />
+            ) : null}
+          </div>
         </ActionLinkedSignalStrip>
       ) : null}
 

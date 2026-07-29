@@ -1285,6 +1285,16 @@ def mark_signal_interesting(*, signal: Signal) -> Signal:
     locked_self = _lock_signals_by_uuid_order(signal)[0]
     if locked_self.status != Signal.Status.OPEN:
         raise SignalStateError("Only open signals can be marked interesting.")
+    from houston.signals.models import SignalResolutionRequest
+    from houston.signals.resolution_request_services import (
+        cancel_pending_resolution_request_for_signal,
+    )
+
+    cancel_pending_resolution_request_for_signal(
+        signal=locked_self,
+        reason=SignalResolutionRequest.CanceledReason.SIGNAL_MARKED_INTERESTING,
+        notify_requester=True,
+    )
     locked_self.status = Signal.Status.INTERESTING
     locked_self.is_pinned = False
     locked_self.pinned_at = None
@@ -1364,6 +1374,16 @@ def cancel_signal(
     locked_self, _, _ = _lock_signal_created_from_set_or_self(signal=signal)
     if locked_self.status == Signal.Status.IN_PROGRESS:
         raise SignalStateError(SIGNAL_IN_PROGRESS_MANUAL_CANCEL_DETAIL)
+    from houston.signals.models import SignalResolutionRequest
+    from houston.signals.resolution_request_services import (
+        cancel_pending_resolution_request_for_signal,
+    )
+
+    cancel_pending_resolution_request_for_signal(
+        signal=locked_self,
+        reason=SignalResolutionRequest.CanceledReason.SIGNAL_CANCELED,
+        notify_requester=True,
+    )
     result = _transition_active_signal_to_terminal(
         signal=locked_self,
         target_status=Signal.Status.CANCELED,
@@ -1388,6 +1408,14 @@ def resolve_signal(
     locked_self, _, _ = _lock_signal_created_from_set_or_self(signal=signal)
     if locked_self.status == Signal.Status.IN_PROGRESS:
         raise SignalStateError(SIGNAL_IN_PROGRESS_MANUAL_RESOLVE_DETAIL)
+    from houston.signals.resolution_request_services import (
+        enforce_requester_engagement_or_cancel_pending_on_resolve,
+    )
+
+    enforce_requester_engagement_or_cancel_pending_on_resolve(
+        signal=locked_self,
+        actor_membership=actor_membership,
+    )
     result = _resolve_signal_after_lock(
         original_signal=original_signal,
         locked_self=locked_self,
@@ -1401,6 +1429,14 @@ def resolve_signal_from_execution_sync(*, signal: Signal) -> Signal:
     """Automatic resolve from action-plan execution sync (allows in_progress)."""
     original_signal = signal
     locked_self, _, _ = _lock_signal_created_from_set_or_self(signal=signal)
+    from houston.signals.resolution_request_services import (
+        enforce_requester_engagement_or_cancel_pending_on_resolve,
+    )
+
+    enforce_requester_engagement_or_cancel_pending_on_resolve(
+        signal=locked_self,
+        actor_membership=None,
+    )
     return _resolve_signal_after_lock(
         original_signal=original_signal,
         locked_self=locked_self,

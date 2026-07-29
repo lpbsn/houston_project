@@ -34,6 +34,61 @@ class PermissionHintsSerializer(serializers.Serializer):
     can_resolve = serializers.BooleanField()
     can_create_linked_action_plan = serializers.BooleanField()
     can_qualify_routing = serializers.BooleanField()
+    can_request_resolution = serializers.BooleanField()
+    can_approve_resolution_request = serializers.BooleanField()
+    can_reject_resolution_request = serializers.BooleanField()
+    can_cancel_resolution_request = serializers.BooleanField()
+
+
+class SignalResolutionRequestSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    status = serializers.CharField()
+    review_route = serializers.CharField()
+    requested_at = serializers.DateTimeField()
+    request_comment = serializers.CharField(allow_blank=True)
+    reviewed_at = serializers.DateTimeField(allow_null=True)
+    review_comment = serializers.CharField(allow_blank=True)
+    canceled_at = serializers.DateTimeField(allow_null=True)
+    canceled_reason = serializers.CharField(allow_blank=True)
+    cancel_comment = serializers.CharField(allow_blank=True)
+    requested_by_membership_id = serializers.UUIDField()
+    reviewed_by_membership_id = serializers.UUIDField(allow_null=True)
+
+
+class SignalResolutionRequestEventSerializer(serializers.Serializer):
+    request_id = serializers.UUIDField()
+    event_type = serializers.ChoiceField(
+        choices=["created", "approved", "rejected", "canceled"],
+    )
+    occurred_at = serializers.DateTimeField()
+    actor_display_name = serializers.CharField(allow_null=True)
+
+
+class SignalResolutionRequestCreateSerializer(serializers.Serializer):
+    request_comment = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+        max_length=2000,
+    )
+
+
+class SignalResolutionRequestReviewSerializer(serializers.Serializer):
+    review_comment = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+        max_length=2000,
+    )
+
+
+class SignalResolutionRequestCancelSerializer(serializers.Serializer):
+    cancel_comment = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+        max_length=2000,
+    )
 
 
 class SignalFeedItemSerializer(serializers.Serializer):
@@ -60,6 +115,7 @@ class SignalFeedItemSerializer(serializers.Serializer):
     reporter_display_name = serializers.CharField(allow_null=True, required=False)
     aggregation_count = serializers.IntegerField()
     permission_hints = PermissionHintsSerializer()
+    resolution_request = SignalResolutionRequestSerializer(allow_null=True)
 
 
 class SignalFeedResponseSerializer(serializers.Serializer):
@@ -100,6 +156,7 @@ class SignalDetailSerializer(SignalFeedItemSerializer):
     source_context = SourceContextSerializer()
     media_items = SignalDetailMediaItemSerializer(many=True)
     linked_action_plan_executions = SignalLinkedActionPlanExecutionSerializer(many=True)
+    resolution_request_events = SignalResolutionRequestEventSerializer(many=True)
 
 
 class SignalQualifyRoutingRequestSerializer(serializers.Serializer):
@@ -127,16 +184,50 @@ class SignalQualifyRoutingResponseSerializer(SignalDetailSerializer):
     merged_signal_id = serializers.UUIDField(allow_null=True)
 
 
+def serialize_resolution_request(resolution_request) -> dict | None:
+    if resolution_request is None:
+        return None
+    return {
+        "id": resolution_request.id,
+        "status": resolution_request.status,
+        "review_route": resolution_request.review_route,
+        "requested_at": resolution_request.requested_at,
+        "request_comment": resolution_request.request_comment or "",
+        "reviewed_at": resolution_request.reviewed_at,
+        "review_comment": resolution_request.review_comment or "",
+        "canceled_at": resolution_request.canceled_at,
+        "canceled_reason": resolution_request.canceled_reason or "",
+        "cancel_comment": resolution_request.cancel_comment or "",
+        "requested_by_membership_id": resolution_request.requested_by_membership_id,
+        "reviewed_by_membership_id": resolution_request.reviewed_by_membership_id,
+    }
+
+
+def _pending_resolution_request_for_serialize(signal: Signal):
+    from houston.signals.permissions import get_pending_resolution_request_for_signal
+
+    pending_list = getattr(signal, "pending_resolution_requests", None)
+    if pending_list is not None:
+        return pending_list[0] if pending_list else None
+    return get_pending_resolution_request_for_signal(signal)
+
+
 def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
     from houston.action_plans.permissions import can_create_linked_action_plan
     from houston.signals.permissions import (
+        can_approve_resolution_request,
         can_archive_signal,
+        can_cancel_own_resolution_request,
         can_cancel_signal,
+        can_create_resolution_request,
         can_mark_signal_interesting,
         can_pin_signal,
         can_qualify_routing,
+        can_reject_resolution_request,
         can_resolve_signal,
     )
+
+    pending = _pending_resolution_request_for_serialize(signal)
 
     return {
         "id": signal.id,
@@ -183,6 +274,7 @@ def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
         "created_at": signal.created_at,
         "reporter_display_name": reporter_display_name_for_signal(signal),
         "aggregation_count": getattr(signal, "aggregation_count", 0) or 0,
+        "resolution_request": serialize_resolution_request(pending),
         "permission_hints": {
             "can_pin": can_pin_signal(membership, signal),
             "can_mark_interesting": can_mark_signal_interesting(membership, signal),
@@ -199,6 +291,16 @@ def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
                 proposed_affected_business_unit=signal.affected_business_unit,
                 proposed_responsible_business_unit=signal.responsible_business_unit,
                 proposed_activity_subject=signal.activity_subject,
+            ),
+            "can_request_resolution": can_create_resolution_request(membership, signal),
+            "can_approve_resolution_request": (
+                can_approve_resolution_request(membership, pending) if pending else False
+            ),
+            "can_reject_resolution_request": (
+                can_reject_resolution_request(membership, pending) if pending else False
+            ),
+            "can_cancel_resolution_request": (
+                can_cancel_own_resolution_request(membership, pending) if pending else False
             ),
         },
     }
@@ -243,8 +345,15 @@ def serialize_linked_action_plan_execution_for_signal_detail(
 
 def serialize_signal_detail(*, signal: Signal, membership, request) -> dict:
     from houston.action_plans.selectors import linked_action_plan_executions_for_signal_detail
+    from houston.signals.selectors import (
+        build_resolution_request_events,
+        list_resolution_requests_for_signal,
+    )
 
     payload = serialize_signal_feed_item(signal=signal, membership=membership)
+    # Detail keeps resolution_request as pending-only for actions; history is projected.
+    requests = list_resolution_requests_for_signal(signal_id=signal.id)
+    payload["resolution_request_events"] = build_resolution_request_events(requests)
     payload["structured_summary"] = signal.structured_summary
     payload["issue_focus"] = signal.issue_focus or ""
 

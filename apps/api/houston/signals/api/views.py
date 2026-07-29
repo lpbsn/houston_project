@@ -17,6 +17,9 @@ from houston.signals.api.serializers import (
     SignalFeedResponseSerializer,
     SignalQualifyRoutingRequestSerializer,
     SignalQualifyRoutingResponseSerializer,
+    SignalResolutionRequestCancelSerializer,
+    SignalResolutionRequestCreateSerializer,
+    SignalResolutionRequestReviewSerializer,
     serialize_signal_detail,
     serialize_signal_feed_item,
 )
@@ -44,16 +47,27 @@ from houston.signals.feed_filters import (
 from houston.signals.models import Signal
 from houston.signals.permissions import (
     can_access_qualify_routing_endpoint,
+    can_approve_resolution_request,
     can_archive_signal,
+    can_cancel_own_resolution_request,
     can_cancel_signal,
+    can_create_resolution_request,
     can_mark_signal_interesting,
     can_pin_signal,
+    can_reject_resolution_request,
     can_resolve_signal,
     can_use_needs_qualification_filter,
     can_view_signal_feed,
     is_triage_role,
 )
+from houston.signals.resolution_request_services import (
+    approve_signal_resolution_request,
+    cancel_signal_resolution_request_by_requester,
+    create_signal_resolution_request,
+    reject_signal_resolution_request,
+)
 from houston.signals.selectors import (
+    get_resolution_request_for_signal_command,
     get_signal_for_detail,
     get_signal_for_qualify_routing,
     signal_feed_queryset,
@@ -699,3 +713,276 @@ def _parse_page_size(raw: str | None) -> int:
     except (TypeError, ValueError):
         return DEFAULT_PAGE_SIZE
     return min(max(value, 1), MAX_PAGE_SIZE)
+
+
+def _resolution_request_error_response(exc: Exception) -> Response:
+    if isinstance(exc, SignalPermissionError):
+        return Response(
+            {"code": exc.error_code, "detail": str(exc) or "Permission denied."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    if isinstance(exc, (SignalStateError, SignalValidationError)):
+        return Response(
+            {
+                "code": exc.error_code,
+                "detail": str(exc) or "Invalid signal state.",
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    raise exc
+
+
+class SignalResolutionRequestCreateView(EstablishmentScopedSignalMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanViewSignalFeed,
+    ]
+
+    @extend_schema(
+        request=SignalResolutionRequestCreateSerializer,
+        responses={
+            201: SignalDetailSerializer,
+            400: ApiErrorResponseSerializer,
+            403: ApiErrorResponseSerializer,
+            404: OpenApiResponse(description="Not found"),
+        },
+    )
+    def post(self, request, establishment_id: uuid.UUID, signal_id: uuid.UUID):
+        membership = resolve_observation_actor_membership(
+            request,
+            establishment_id=establishment_id,
+        )
+        if membership is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        signal = get_signal_for_detail(membership=membership, signal_id=signal_id)
+        if signal is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not can_create_resolution_request(membership, signal):
+            from houston.establishments.models import EstablishmentMembership
+
+            if membership.role not in {
+                EstablishmentMembership.Role.STAFF,
+                EstablishmentMembership.Role.MANAGER,
+            }:
+                return Response(
+                    {"code": "permission_denied", "detail": "Permission denied."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        serializer = SignalResolutionRequestCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            create_signal_resolution_request(
+                signal=signal,
+                actor_membership=membership,
+                request_comment=serializer.validated_data.get("request_comment", ""),
+            )
+        except (SignalPermissionError, SignalStateError, SignalValidationError) as exc:
+            return _resolution_request_error_response(exc)
+
+        signal = get_signal_for_detail(membership=membership, signal_id=signal_id)
+        payload = serialize_signal_detail(
+            signal=signal,
+            membership=membership,
+            request=request,
+        )
+        return Response(SignalDetailSerializer(payload).data, status=status.HTTP_201_CREATED)
+
+
+class SignalResolutionRequestApproveView(EstablishmentScopedSignalMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanViewSignalFeed,
+    ]
+
+    @extend_schema(
+        request=SignalResolutionRequestReviewSerializer,
+        responses={
+            200: SignalDetailSerializer,
+            400: ApiErrorResponseSerializer,
+            403: ApiErrorResponseSerializer,
+            404: OpenApiResponse(description="Not found"),
+        },
+    )
+    def post(
+        self,
+        request,
+        establishment_id: uuid.UUID,
+        signal_id: uuid.UUID,
+        request_id: uuid.UUID,
+    ):
+        membership = resolve_observation_actor_membership(
+            request,
+            establishment_id=establishment_id,
+        )
+        if membership is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        signal, resolution_request = get_resolution_request_for_signal_command(
+            membership=membership,
+            signal_id=signal_id,
+            request_id=request_id,
+        )
+        if signal is None or resolution_request is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not can_approve_resolution_request(membership, resolution_request):
+            return Response(
+                {"code": "permission_denied", "detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = SignalResolutionRequestReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            approve_signal_resolution_request(
+                resolution_request=resolution_request,
+                actor_membership=membership,
+                review_comment=serializer.validated_data.get("review_comment", ""),
+            )
+        except (SignalPermissionError, SignalStateError, SignalValidationError) as exc:
+            return _resolution_request_error_response(exc)
+
+        signal = get_signal_for_detail(membership=membership, signal_id=signal_id)
+        payload = serialize_signal_detail(
+            signal=signal,
+            membership=membership,
+            request=request,
+        )
+        return Response(SignalDetailSerializer(payload).data)
+
+
+class SignalResolutionRequestRejectView(EstablishmentScopedSignalMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanViewSignalFeed,
+    ]
+
+    @extend_schema(
+        request=SignalResolutionRequestReviewSerializer,
+        responses={
+            200: SignalDetailSerializer,
+            400: ApiErrorResponseSerializer,
+            403: ApiErrorResponseSerializer,
+            404: OpenApiResponse(description="Not found"),
+        },
+    )
+    def post(
+        self,
+        request,
+        establishment_id: uuid.UUID,
+        signal_id: uuid.UUID,
+        request_id: uuid.UUID,
+    ):
+        membership = resolve_observation_actor_membership(
+            request,
+            establishment_id=establishment_id,
+        )
+        if membership is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        signal, resolution_request = get_resolution_request_for_signal_command(
+            membership=membership,
+            signal_id=signal_id,
+            request_id=request_id,
+        )
+        if signal is None or resolution_request is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not can_reject_resolution_request(membership, resolution_request):
+            return Response(
+                {"code": "permission_denied", "detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = SignalResolutionRequestReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            reject_signal_resolution_request(
+                resolution_request=resolution_request,
+                actor_membership=membership,
+                review_comment=serializer.validated_data.get("review_comment", ""),
+            )
+        except (SignalPermissionError, SignalStateError, SignalValidationError) as exc:
+            return _resolution_request_error_response(exc)
+
+        signal = get_signal_for_detail(membership=membership, signal_id=signal_id)
+        payload = serialize_signal_detail(
+            signal=signal,
+            membership=membership,
+            request=request,
+        )
+        return Response(SignalDetailSerializer(payload).data)
+
+
+class SignalResolutionRequestCancelView(EstablishmentScopedSignalMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanViewSignalFeed,
+    ]
+
+    @extend_schema(
+        request=SignalResolutionRequestCancelSerializer,
+        responses={
+            200: SignalDetailSerializer,
+            400: ApiErrorResponseSerializer,
+            403: ApiErrorResponseSerializer,
+            404: OpenApiResponse(description="Not found"),
+        },
+    )
+    def post(
+        self,
+        request,
+        establishment_id: uuid.UUID,
+        signal_id: uuid.UUID,
+        request_id: uuid.UUID,
+    ):
+        membership = resolve_observation_actor_membership(
+            request,
+            establishment_id=establishment_id,
+        )
+        if membership is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        signal, resolution_request = get_resolution_request_for_signal_command(
+            membership=membership,
+            signal_id=signal_id,
+            request_id=request_id,
+        )
+        if signal is None or resolution_request is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not can_cancel_own_resolution_request(membership, resolution_request):
+            return Response(
+                {"code": "permission_denied", "detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = SignalResolutionRequestCancelSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            cancel_signal_resolution_request_by_requester(
+                resolution_request=resolution_request,
+                actor_membership=membership,
+                cancel_comment=serializer.validated_data.get("cancel_comment", ""),
+            )
+        except (SignalPermissionError, SignalStateError, SignalValidationError) as exc:
+            return _resolution_request_error_response(exc)
+
+        signal = get_signal_for_detail(membership=membership, signal_id=signal_id)
+        payload = serialize_signal_detail(
+            signal=signal,
+            membership=membership,
+            request=request,
+        )
+        return Response(SignalDetailSerializer(payload).data)

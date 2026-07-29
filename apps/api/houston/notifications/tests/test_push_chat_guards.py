@@ -331,4 +331,20 @@ def test_push_v1_event_keys_includes_chat():
         Notification.EventKey.ACTION_PLAN_EXECUTION_UPDATED
         in push_constants.PUSH_V1_EVENT_KEYS
     )
-    assert len(push_constants.PUSH_V1_EVENT_KEYS) == 16
+    assert (
+        Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_CREATED
+        in push_constants.PUSH_V1_EVENT_KEYS
+    )
+    assert (
+        Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_APPROVED
+        in push_constants.PUSH_V1_EVENT_KEYS
+    )
+    assert (
+        Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_REJECTED
+        in push_constants.PUSH_V1_EVENT_KEYS
+    )
+    assert (
+        Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_CANCELED
+        in push_constants.PUSH_V1_EVENT_KEYS
+    )
+    assert len(push_constants.PUSH_V1_EVENT_KEYS) == 20

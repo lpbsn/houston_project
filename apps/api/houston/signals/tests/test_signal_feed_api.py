@@ -399,3 +399,99 @@ def test_signal_feed_query_count_grows_with_item_count(api_client):
     one_item = query_count_for(1)
     three_items = query_count_for(3)
     assert three_items - one_item <= SIGNAL_FEED_MAX_QUERY_DELTA_ONE_TO_THREE_ITEMS
+
+
+def test_signal_feed_query_count_flat_across_distinct_responsible_poles(api_client):
+    """B3: reviewer eligibility must stay O(1) even with distinct responsible BUs."""
+    from houston.establishments.models import EstablishmentMembership
+    from houston.testing.auth import (
+        assign_business_unit_scope,
+        build_api_membership_on_establishment,
+    )
+    from houston.testing.query_baseline import (
+        SIGNAL_FEED_MAX_QUERY_DELTA_ONE_TO_THREE_ITEMS,
+        capture_queries,
+    )
+    from houston.testing.taxonomy import create_v3_signal
+
+    def query_count_for(item_count: int) -> int:
+        owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+        taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
+        staff = build_api_membership_on_establishment(
+            owner,
+            role=EstablishmentMembership.Role.STAFF,
+        )
+        assign_business_unit_scope(staff, taxonomy.restaurant)
+        for index in range(item_count):
+            responsible = create_business_unit(
+                establishment=owner.establishment,
+                key=f"rr_pole_{item_count}_{index}",
+                label=f"RR Pole {item_count}-{index}",
+            )
+            manager = build_api_membership_on_establishment(
+                owner,
+                role=EstablishmentMembership.Role.MANAGER,
+            )
+            assign_business_unit_scope(manager, responsible)
+            create_v3_signal(
+                owner.establishment,
+                affected_business_unit=taxonomy.restaurant,
+                responsible_business_unit=responsible,
+                activity_subject=taxonomy.lighting_subject,
+                title=f"Multi pole {index}",
+                routing_status=Signal.RoutingStatus.RESOLVED,
+            )
+        token = login(api_client, user=staff.user)
+        url = signal_feed_url(owner.establishment_id) + "?view_mode=general"
+        with capture_queries() as context:
+            response = api_client.get(url, **auth_headers(token))
+        assert response.status_code == 200
+        assert len(response.json()["items"]) == item_count
+        assert all(
+            item["permission_hints"]["can_request_resolution"] is True
+            for item in response.json()["items"]
+        )
+        return len(context.captured_queries)
+
+    one_item = query_count_for(1)
+    three_items = query_count_for(3)
+    assert three_items - one_item <= SIGNAL_FEED_MAX_QUERY_DELTA_ONE_TO_THREE_ITEMS
+
+
+def test_signal_feed_query_count_flat_for_manager_resolution_hints(api_client):
+    """Manager path exercises pending/blocking/reviewer annotations without N+1."""
+    from houston.establishments.models import EstablishmentMembership
+    from houston.testing.auth import (
+        assign_business_unit_scope,
+        build_api_membership_on_establishment,
+    )
+    from houston.testing.query_baseline import (
+        SIGNAL_FEED_MAX_QUERY_DELTA_ONE_TO_THREE_ITEMS,
+        capture_queries,
+    )
+
+    def query_count_for(item_count: int) -> int:
+        owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+        build_api_membership_on_establishment(
+            owner,
+            role=EstablishmentMembership.Role.DIRECTOR,
+        )
+        manager = build_api_membership_on_establishment(
+            owner,
+            role=EstablishmentMembership.Role.MANAGER,
+        )
+        first_signal = _create_signal(owner, title="Manager scale 0")
+        assign_business_unit_scope(manager, first_signal.responsible_business_unit)
+        for index in range(1, item_count):
+            _create_signal(owner, title=f"Manager scale {index}")
+        token = login(api_client, user=manager.user)
+        url = signal_feed_url(owner.establishment_id) + "?view_mode=general"
+        with capture_queries() as context:
+            response = api_client.get(url, **auth_headers(token))
+        assert response.status_code == 200
+        assert len(response.json()["items"]) == item_count
+        return len(context.captured_queries)
+
+    one_item = query_count_for(1)
+    three_items = query_count_for(3)
+    assert three_items - one_item <= SIGNAL_FEED_MAX_QUERY_DELTA_ONE_TO_THREE_ITEMS

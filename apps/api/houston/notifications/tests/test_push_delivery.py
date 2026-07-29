@@ -48,6 +48,10 @@ EVENT_KEY_SUBJECT_TYPES = [
     (Notification.EventKey.SIGNAL_PINNED, Notification.SubjectType.SIGNAL),
     (Notification.EventKey.SIGNAL_RESOLVED, Notification.SubjectType.SIGNAL),
     (Notification.EventKey.SIGNAL_CANCELED, Notification.SubjectType.SIGNAL),
+    (Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_CREATED, Notification.SubjectType.SIGNAL),
+    (Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_APPROVED, Notification.SubjectType.SIGNAL),
+    (Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_REJECTED, Notification.SubjectType.SIGNAL),
+    (Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_CANCELED, Notification.SubjectType.SIGNAL),
 ]
 
 
