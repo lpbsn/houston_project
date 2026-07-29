@@ -31,7 +31,7 @@ API contract: [`apps/api/schema.yml`](../../apps/api/schema.yml).
 | BusinessUnit / ActivitySubject taxonomy | Live | Identity: `specific_name` + internal `routing_key`; catalog FK required (`PROTECT`); public API Lot 5 (no `routing_key`); legacy instance columns removed |
 | Observations + media + transcription | Live | Celery pipeline |
 | AI observation → Signal | Live | Pipeline **v6** (schema `ai_observation_pipeline_v6`, prompt `ai_observation_pipeline_v6_2`); Fake (CI) / OpenAI (opt-in smoke) |
-| Signal feed + lifecycle | Live | Pin, mark interesting, resolve, cancel |
+| Signal feed + lifecycle | Live | Pin, mark interesting, archive (interesting only; not exposed after), resolve, cancel |
 | Action Plan catalog + executions + feed | Live | See [`decisions/action_plan.md`](decisions/action_plan.md) |
 | Comments (signal + execution threads) | Live | REST + mention picker |
 | Notifications in-app | Live | List, preferences, mark read/archive |

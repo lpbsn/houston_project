@@ -1302,6 +1302,38 @@ def mark_signal_interesting(*, signal: Signal) -> Signal:
 
 
 @transaction.atomic
+def archive_signal(*, signal: Signal) -> Signal:
+    """User archive: interesting → archived. Does not set merged_into."""
+    locked_self, related_signals, observation_id = _lock_signal_created_from_set_or_self(
+        signal=signal,
+    )
+    if locked_self.status != Signal.Status.INTERESTING:
+        raise SignalStateError("Only interesting signals can be archived.")
+    _maybe_delete_created_from_media_under_locks(
+        signal=locked_self,
+        related_signals=related_signals,
+        observation_id=observation_id,
+    )
+    locked_self.status = Signal.Status.ARCHIVED
+    locked_self.is_pinned = False
+    locked_self.pinned_at = None
+    locked_self.pinned_by_membership = None
+    touch_signal_activity(signal=locked_self)
+    locked_self.save(
+        update_fields=[
+            "status",
+            "is_pinned",
+            "pinned_at",
+            "pinned_by_membership",
+            "last_activity_at",
+            "updated_at",
+        ]
+    )
+    _schedule_signal_invalidation(signal=locked_self, reason="signal.updated")
+    return locked_self
+
+
+@transaction.atomic
 def unpin_signal(*, signal: Signal) -> Signal:
     signal.is_pinned = False
     signal.pinned_at = None
@@ -1366,9 +1398,7 @@ def resolve_signal(
     return result
 
 
-def _delete_created_from_media_for_signal_terminal(*, signal: Signal) -> None:
-    from houston.observations.media_services import delete_all_observation_media
-
+def _created_from_observation_id_for_signal(*, signal: Signal) -> uuid.UUID | None:
     link = (
         signal.source_observation_links.filter(
             link_type=SignalSourceObservation.LinkType.CREATED_FROM,
@@ -1377,17 +1407,47 @@ def _delete_created_from_media_for_signal_terminal(*, signal: Signal) -> None:
         .first()
     )
     if link is None:
-        return
+        return None
+    return link.observation_id
 
-    observation_id = link.observation_id
+
+def _lock_signal_created_from_set_or_self(
+    *,
+    signal: Signal,
+) -> tuple[Signal, list[Signal], uuid.UUID | None]:
+    """Lock CREATED_FROM siblings (or self) in UUID order. Single lock acquisition."""
+    observation_id = _created_from_observation_id_for_signal(signal=signal)
+    if observation_id is None:
+        locked_self = _lock_signals_by_uuid_order(signal)[0]
+        return locked_self, [locked_self], None
+
     related_signals = list(
         Signal.objects.filter(
             source_observation_links__observation_id=observation_id,
             source_observation_links__link_type=SignalSourceObservation.LinkType.CREATED_FROM,
         )
-        .select_for_update()
+        .select_for_update(of=("self",))
         .order_by("id")
     )
+    by_id = {related.id: related for related in related_signals}
+    locked_self = by_id.get(signal.id)
+    if locked_self is None:
+        raise SignalStateError("Signal missing from CREATED_FROM lock set.")
+    return locked_self, related_signals, observation_id
+
+
+def _maybe_delete_created_from_media_under_locks(
+    *,
+    signal: Signal,
+    related_signals: list[Signal],
+    observation_id: uuid.UUID | None,
+) -> None:
+    """Delete CREATED_FROM media when related_signals are already locked."""
+    if observation_id is None:
+        return
+
+    from houston.observations.media_services import delete_all_observation_media
+
     active_count = sum(1 for related in related_signals if related.status in ACTIVE_SIGNAL_STATUSES)
     if active_count > 1:
         return
@@ -1399,6 +1459,17 @@ def _delete_created_from_media_for_signal_terminal(*, signal: Signal) -> None:
             cache = getattr(observation, "_prefetched_objects_cache", None)
             if cache is not None:
                 cache["media_items"] = []
+
+
+def _delete_created_from_media_for_signal_terminal(*, signal: Signal) -> None:
+    _locked_self, related_signals, observation_id = _lock_signal_created_from_set_or_self(
+        signal=signal,
+    )
+    _maybe_delete_created_from_media_under_locks(
+        signal=signal,
+        related_signals=related_signals,
+        observation_id=observation_id,
+    )
 
 
 def _transition_active_signal_to_terminal(

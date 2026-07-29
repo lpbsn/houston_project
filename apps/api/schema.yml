@@ -4850,6 +4850,51 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/signals/{signal_id}/archive/:
+    post:
+      operationId: v1_establishments_signals_archive_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: signal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - signals
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/signals/{signal_id}/cancel/:
     post:
       operationId: v1_establishments_signals_cancel_create
@@ -10585,6 +10630,8 @@ components:
           type: boolean
         can_mark_interesting:
           type: boolean
+        can_archive:
+          type: boolean
         can_cancel:
           type: boolean
         can_resolve:
@@ -10594,6 +10641,7 @@ components:
         can_qualify_routing:
           type: boolean
       required:
+      - can_archive
       - can_cancel
       - can_create_linked_action_plan
       - can_mark_interesting

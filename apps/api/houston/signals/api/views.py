@@ -40,6 +40,7 @@ from houston.signals.feed_filters import (
 )
 from houston.signals.permissions import (
     can_access_qualify_routing_endpoint,
+    can_archive_signal,
     can_cancel_signal,
     can_mark_signal_interesting,
     can_pin_signal,
@@ -54,6 +55,7 @@ from houston.signals.selectors import (
     signal_feed_queryset,
 )
 from houston.signals.services import (
+    archive_signal,
     cancel_signal,
     mark_signal_interesting,
     pin_signal,
@@ -396,6 +398,33 @@ class SignalMarkInterestingView(EstablishmentScopedSignalMixin, APIView):
         )
 
 
+class SignalArchiveView(EstablishmentScopedSignalMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanViewSignalFeed,
+    ]
+
+    @extend_schema(
+        tags=["signals"],
+        request=None,
+        responses={
+            200: SignalDetailSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def post(self, request, establishment_id, signal_id):
+        return _signal_lifecycle_command_response(
+            request=request,
+            establishment_id=self.establishment_id,
+            signal_id=signal_id,
+            action="archive",
+        )
+
+
 class SignalQualifyRoutingOptionsView(EstablishmentScopedSignalMixin, APIView):
     """Establishment-wide active BU/AS tree for qualify pickers (triage roles)."""
 
@@ -574,6 +603,12 @@ def _signal_lifecycle_command_response(
                 {"code": "permission_denied", "detail": "Permission denied."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+    elif action == "archive":
+        if not can_archive_signal(membership, signal):
+            return Response(
+                {"code": "permission_denied", "detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
     else:
         return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -582,6 +617,8 @@ def _signal_lifecycle_command_response(
             signal = cancel_signal(signal=signal, actor_membership=membership)
         elif action == "resolve":
             signal = resolve_signal(signal=signal, actor_membership=membership)
+        elif action == "archive":
+            signal = archive_signal(signal=signal)
         else:
             signal = mark_signal_interesting(signal=signal)
     except SignalBusinessConflictError as exc:

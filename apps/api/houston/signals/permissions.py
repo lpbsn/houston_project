@@ -184,6 +184,17 @@ def can_mark_signal_interesting(
     )
 
 
+def can_archive_signal(
+    membership: EstablishmentMembership | None,
+    signal: Signal,
+) -> bool:
+    return _signal_commandable_by_membership(
+        membership,
+        signal,
+        statuses=frozenset({Signal.Status.INTERESTING}),
+    )
+
+
 def can_cancel_signal(
     membership: EstablishmentMembership | None,
     signal: Signal,

@@ -9,6 +9,7 @@ import {
 import { invalidateEstablishmentSignalQueries } from '@/lib/query-invalidation'
 
 import {
+  archiveSignal,
   cancelSignal,
   fetchQualifyRoutingOptions,
   fetchSignalDetail,
@@ -211,6 +212,27 @@ export function useMarkSignalInterestingMutation(establishmentId: string | null)
       if (establishmentId) {
         queryClient.setQueryData(signalsQueryKeys.detail(establishmentId, signalId), detail)
       }
+    },
+  })
+}
+
+export function useArchiveSignalMutation(establishmentId: string | null) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (signalId: string) => {
+      if (!establishmentId) {
+        throw new Error('Observation introuvable.')
+      }
+      return archiveSignal(establishmentId, signalId)
+    },
+    onSuccess: (_detail: SignalDetail, signalId) => {
+      if (!establishmentId) {
+        return
+      }
+      invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+      queryClient.removeQueries({
+        queryKey: signalsQueryKeys.detail(establishmentId, signalId),
+      })
     },
   })
 }

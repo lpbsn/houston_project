@@ -1365,6 +1365,9 @@ def create_action_plan_with_execution(
         )
         if signal is None:
             raise ActionPlanValidationError("Invalid signal.")
+        from houston.signals.services import _lock_signals_by_uuid_order
+
+        signal = _lock_signals_by_uuid_order(signal)[0]
         _validate_linked_signal_active(signal=signal)
         if not can_create_linked_action_plan(created_by, signal=signal):
             raise ActionPlanPermissionError("Not allowed to create this action plan.")
