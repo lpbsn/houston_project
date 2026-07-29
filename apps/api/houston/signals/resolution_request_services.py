@@ -11,6 +11,7 @@ from houston.signals.constants import (
     SIGNAL_RESOLUTION_NO_RESPONSIBLE_POLE_DETAIL,
     SIGNAL_RESOLUTION_NOT_OPEN_DETAIL,
     SIGNAL_RESOLUTION_NOT_PENDING_DETAIL,
+    SIGNAL_RESOLUTION_ORIGIN_RESOLUTION_REQUEST,
     SIGNAL_RESOLUTION_PENDING_EXISTS_DETAIL,
     SIGNAL_RESOLUTION_REQUEST_COMMENT_MAX_LENGTH,
     SIGNAL_RESOLUTION_REQUESTER_ENGAGED_DETAIL,
@@ -224,6 +225,7 @@ def approve_signal_resolution_request(
         original_signal=locked_self,
         locked_self=locked_self,
         actor_membership=actor_membership,
+        resolution_origin=SIGNAL_RESOLUTION_ORIGIN_RESOLUTION_REQUEST,
     )
     _schedule_signal_invalidation(signal=locked_self, reason="signal.updated")
 

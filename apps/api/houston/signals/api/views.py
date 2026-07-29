@@ -647,9 +647,12 @@ def _signal_lifecycle_command_response(
         elif action == "resolve":
             signal = resolve_signal(signal=signal, actor_membership=membership)
         elif action == "archive":
-            signal = archive_signal(signal=signal)
+            signal = archive_signal(signal=signal, actor_membership=membership)
         else:
-            signal = mark_signal_interesting(signal=signal)
+            signal = mark_signal_interesting(
+                signal=signal,
+                actor_membership=membership,
+            )
     except SignalStateError as exc:
         return Response(
             {

@@ -288,7 +288,13 @@ def get_signal_for_detail(
             membership=membership,
         )
         .filter(id=signal_id)
-        .select_related("pinned_by_membership__user")
+        .select_related(
+            "pinned_by_membership__user",
+            "marked_interesting_by_membership",
+            "resolved_by_membership",
+            "canceled_by_membership",
+            "archived_by_membership",
+        )
         .first()
     )
     if signal is not None:
@@ -305,6 +311,10 @@ def get_signal_for_detail(
         .annotate(**_signal_list_annotations())
         .select_related(
             "pinned_by_membership__user",
+            "marked_interesting_by_membership",
+            "resolved_by_membership",
+            "canceled_by_membership",
+            "archived_by_membership",
             *_SIGNAL_LIST_SELECT_RELATED,
         )
         .prefetch_related(*_SIGNAL_LIST_PREFETCH),

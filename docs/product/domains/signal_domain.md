@@ -1,8 +1,8 @@
 # Signal Domain
 
 Status: authoritative
-Last reviewed: 2026-07-27
-Implementation status: partial (feed, detail, pin, mark interesting, archive, cancel, resolve implemented; Phase 5 core Action side effects implemented; pipeline **v6** aggregation on normalized `issue_focus` for `routing_status=resolved` only; timeline not implemented)
+Last reviewed: 2026-07-29
+Implementation status: partial (feed, detail, pin, mark interesting, archive, cancel, resolve implemented; Phase 5 core Action side effects implemented; pipeline **v6** aggregation on normalized `issue_focus` for `routing_status=resolved` only; Signal lifecycle actor fields + append-only `SignalLifecycleEvent` journal implemented write-side; user-facing timeline API not implemented)
 
 ## 1. Purpose
 
@@ -197,19 +197,40 @@ API responses expose `permission_hints` (`can_pin`, `can_mark_interesting`, `can
 
 ## 8. Events
 
-No Signal-specific event contract is implemented in current code or confirmed in `apps/api/schema.yml`.
+### Current-state actor fields (on `Signal`)
 
-Candidate events only:
-- `SignalCreated`
-- `SignalAggregated`
-- `SignalStatusChanged`
-- `SignalResolved`
-- `SignalCanceled`
-- `SignalArchived`
-- `SignalPinned`
-- `SignalUnpinned`
-- `SignalActionCreated`
-- `SignalCommentAdded`
+Detail API exposes (not feed):
+
+- `marked_interesting_by_membership_id` / `marked_interesting_at`
+- `resolved_by_membership_id` / `resolved_at` / `resolution_origin` (`manual` | `resolution_request` | `action_plan`)
+- `canceled_by_membership_id` / `canceled_at`
+- `archived_by_membership_id` / `archived_at`
+
+On `resolved → in_progress` (execution reopen), `resolved_*` and `resolution_origin` are cleared. Prior resolution remains in the journal.
+
+Action-plan auto-resolve: `resolved_by_membership` is null and `resolution_origin=action_plan`.
+
+### Append-only journal (`SignalLifecycleEvent`)
+
+Write-only internal journal (no timeline/list API in this ticket). Inserted in the **same transaction** as a valid Signal lifecycle transition that **effectively changes** status.
+
+Invariants:
+
+- insert-only from business services (never update/delete journal rows)
+- no event on invalid transition or no-op / idempotent sync replay
+- shared timestamp: Signal current `*_at` field and `occurred_at` use the same `now`
+- `metadata_safe` allowlists structured ids/statuses/origins only (no Observation text / user free text)
+- Resolution-request create/reject/cancel that leave Signal `open` do **not** write journal rows; approve that resolves writes `signal.resolved` with `resolution_origin=resolution_request`
+
+Event types:
+
+- `signal.marked_interesting`
+- `signal.archived`
+- `signal.resolved`
+- `signal.canceled`
+- `signal.moved_in_progress`
+
+Realtime/notification side effects remain after-commit hubs and are not this journal.
 
 ## 9. API Surface
 
@@ -230,7 +251,7 @@ Implemented in `apps/api/schema.yml` (establishment-scoped under `/api/v1/establ
 - `POST signals/{signal_id}/resolution-requests/{request_id}/cancel/` — requester cancels pending request; Signal remains `open`
 
 Not implemented in current schema:
-- fetch Signal timeline or events
+- fetch Signal timeline or `SignalLifecycleEvent` list
 - restore archived Signal
 
 Action Plan creation from a Signal is via `POST .../action-plans/` with optional `signal_id` (linked plan), not a nested Signal sub-resource.
