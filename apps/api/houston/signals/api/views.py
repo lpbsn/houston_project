@@ -20,9 +20,12 @@ from houston.signals.api.serializers import (
     serialize_signal_detail,
     serialize_signal_feed_item,
 )
+from houston.signals.constants import (
+    SIGNAL_IN_PROGRESS_MANUAL_CANCEL_DETAIL,
+    SIGNAL_IN_PROGRESS_MANUAL_RESOLVE_DETAIL,
+)
 from houston.signals.exceptions import (
     SignalAlreadyMergedError,
-    SignalBusinessConflictError,
     SignalPermissionError,
     SignalStateError,
     SignalValidationError,
@@ -38,6 +41,7 @@ from houston.signals.feed_filters import (
     build_applied_filters_payload,
     parse_signal_feed_filters,
 )
+from houston.signals.models import Signal
 from houston.signals.permissions import (
     can_access_qualify_routing_endpoint,
     can_archive_signal,
@@ -585,6 +589,17 @@ def _signal_lifecycle_command_response(
     if signal is None:
         return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
+    if action in {"cancel", "resolve"} and signal.status == Signal.Status.IN_PROGRESS:
+        detail = (
+            SIGNAL_IN_PROGRESS_MANUAL_CANCEL_DETAIL
+            if action == "cancel"
+            else SIGNAL_IN_PROGRESS_MANUAL_RESOLVE_DETAIL
+        )
+        return Response(
+            {"code": "invalid_signal_state", "detail": detail},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     if action == "cancel":
         if not can_cancel_signal(membership, signal):
             return Response(
@@ -621,17 +636,12 @@ def _signal_lifecycle_command_response(
             signal = archive_signal(signal=signal)
         else:
             signal = mark_signal_interesting(signal=signal)
-    except SignalBusinessConflictError as exc:
-        return Response(
-            {
-                "code": exc.error_code, 
-                "detail": "Cannot resolve signal with active linked action plans."
-            },
-            status=status.HTTP_409_CONFLICT,
-        )
     except SignalStateError as exc:
         return Response(
-            {"code": exc.error_code, "detail": "Invalid signal state."},
+            {
+                "code": exc.error_code,
+                "detail": str(exc) or "Invalid signal state.",
+            },
             status=status.HTTP_400_BAD_REQUEST,
         )
 

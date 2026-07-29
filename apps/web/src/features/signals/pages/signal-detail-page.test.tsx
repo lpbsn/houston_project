@@ -361,6 +361,29 @@ describe('SignalDetailPage linked action plans', () => {
     expect(screen.queryByText("Plans d'action")).toBeNull()
   })
 
+  it('shows resolve-via-action-plan hint when status is in_progress', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({ status: 'in_progress' }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    expect(
+      screen.getByText('Cette observation sera résolue via son plan d’action.'),
+    ).toBeTruthy()
+  })
+
+  it('does not show resolve-via-action-plan hint when status is open', () => {
+    renderPage()
+
+    expect(
+      screen.queryByText('Cette observation sera résolue via son plan d’action.'),
+    ).toBeNull()
+  })
+
   it('shows linked execution card and navigates on click', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,

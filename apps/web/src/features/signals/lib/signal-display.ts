@@ -40,7 +40,7 @@ const STATUS_GROUP_META: Record<
 > = {
   open: { label: 'En attente', dotVariant: 'warning' },
   in_progress: { label: 'En cours', dotVariant: 'teal' },
-  interesting: { label: 'Intéressants', dotVariant: 'primary' },
+  interesting: { label: 'Intéressants', dotVariant: 'mint' },
   resolved: { label: 'Résolues', dotVariant: 'success' },
   canceled: { label: 'Annulées', dotVariant: 'muted' },
 }
@@ -122,7 +122,7 @@ export const SIGNAL_CARD_LEFT_ACCENT = {
   pinned: 'border-l-[#1a1a1a]',
   open: 'border-l-[#EF9F27]',
   in_progress: 'border-l-[#3A7A96]',
-  interesting: 'border-l-[#1B4FD8]',
+  interesting: 'border-l-[#A4E5E0]',
   resolved: 'border-l-[#1D9E75]',
   archived: 'border-l-[#555]',
   neutral: 'border-l-[#7D7B75]',
@@ -133,7 +133,7 @@ export const SIGNAL_CARD_LEFT_ACCENT_COLOR = {
   pinned: '#1a1a1a',
   open: '#EF9F27',
   in_progress: terrainInProgress.color,
-  interesting: '#1B4FD8',
+  interesting: '#A4E5E0',
   resolved: '#1D9E75',
   archived: '#555',
   neutral: '#7D7B75',

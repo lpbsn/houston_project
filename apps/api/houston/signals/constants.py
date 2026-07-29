@@ -30,8 +30,20 @@ AI_EXPECTED_ACTION_VALUES = (
 # Aggregation targets, uniqueness constraint, linked action-plan creation.
 ACTIVE_SIGNAL_STATUSES = frozenset({"open", "in_progress", "interesting"})
 
-# Cancel / resolve commands only (interesting excluded).
+# System transition eligibility (service terminal transition + AP sync reopen/auto-resolve).
+# interesting excluded.
 CANCEL_RESOLVE_SIGNAL_STATUSES = frozenset({"open", "in_progress"})
+
+# Manual cancel / resolve API + permission_hints only (EVO-SIG-03).
+# in_progress must be resolved via action plans, not manual commands.
+MANUAL_CANCEL_RESOLVE_SIGNAL_STATUSES = frozenset({"open"})
+
+SIGNAL_IN_PROGRESS_MANUAL_RESOLVE_DETAIL = (
+    "Signal in progress must be resolved through its action plans."
+)
+SIGNAL_IN_PROGRESS_MANUAL_CANCEL_DETAIL = (
+    "Signal in progress cannot be canceled manually; cancel via its action plans."
+)
 
 # Default Signal Feed visibility (excludes archived).
 FEED_SIGNAL_STATUSES = frozenset(

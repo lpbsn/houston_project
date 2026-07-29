@@ -161,10 +161,10 @@ def sync_signal_after_execution_change(*, signal: Signal) -> Signal:
 
     if linked.exists() and linked.filter(status=EXECUTION_STATUS_DONE).exists():
         from houston.signals.constants import CANCEL_RESOLVE_SIGNAL_STATUSES
-        from houston.signals.services import resolve_signal
+        from houston.signals.services import resolve_signal_from_execution_sync
 
         if signal.status in CANCEL_RESOLVE_SIGNAL_STATUSES:
-            return resolve_signal(signal=signal, actor_membership=None)
+            return resolve_signal_from_execution_sync(signal=signal)
     return signal
 
 
@@ -173,6 +173,30 @@ def _sync_linked_signal_after_execution_change(*, execution: ActionPlanExecution
         return
     signal = Signal.objects.get(pk=execution.source_signal_id)
     sync_signal_after_execution_change(signal=signal)
+
+
+def _lock_source_signal_created_from_set_if_any(*, execution_id: uuid.UUID) -> None:
+    """Lock CREATED_FROM siblings (or self) before locking the execution row.
+
+    This prevents an order inversion between:
+    - Signal lifecycle transitions (which lock CREATED_FROM siblings)
+    - Action plan execution transitions (which hold row locks on executions)
+    """
+    source_signal_id = (
+        ActionPlanExecution.objects.filter(id=execution_id)
+        .values_list("source_signal_id", flat=True)
+        .first()
+    )
+    if source_signal_id is None:
+        return
+
+    signal = Signal.objects.filter(id=source_signal_id).first()
+    if signal is None:
+        return
+
+    from houston.signals.services import _lock_signal_created_from_set_or_self
+
+    _lock_signal_created_from_set_or_self(signal=signal)
 
 
 def _cancel_linked_active_executions_for_signal_resolve(
@@ -1646,6 +1670,7 @@ def mark_action_plan_execution_done(
     execution_id: uuid.UUID,
     actor_membership: EstablishmentMembership,
 ) -> ActionPlanExecution:
+    _lock_source_signal_created_from_set_if_any(execution_id=execution_id)
     execution = _lock_execution_for_transition(execution_id=execution_id)
     if execution.status != EXECUTION_STATUS_IN_PROGRESS:
         raise ActionPlanStateError("Execution cannot be marked done in its current state.")
@@ -1694,6 +1719,7 @@ def validate_action_plan_execution(
     execution_id: uuid.UUID,
     actor_membership: EstablishmentMembership,
 ) -> ActionPlanExecution:
+    _lock_source_signal_created_from_set_if_any(execution_id=execution_id)
     execution = _lock_execution_for_transition(execution_id=execution_id)
     if execution.status != EXECUTION_STATUS_PENDING_VALIDATION:
         raise ActionPlanStateError("Execution cannot be validated in its current state.")
@@ -1724,6 +1750,7 @@ def reopen_action_plan_execution(
     execution_id: uuid.UUID,
     actor: EstablishmentMembership,
 ) -> ActionPlanExecution:
+    _lock_source_signal_created_from_set_if_any(execution_id=execution_id)
     execution = _lock_execution_for_transition(execution_id=execution_id)
     if execution.status not in {
         EXECUTION_STATUS_PENDING_VALIDATION,
@@ -1774,6 +1801,7 @@ def cancel_action_plan_execution(
     execution_id: uuid.UUID,
     actor: EstablishmentMembership,
 ) -> ActionPlanExecution:
+    _lock_source_signal_created_from_set_if_any(execution_id=execution_id)
     execution = _lock_execution_for_transition(execution_id=execution_id)
     if execution.status not in CANCELABLE_EXECUTION_STATUSES:
         raise ActionPlanStateError("Execution cannot be canceled in its current state.")

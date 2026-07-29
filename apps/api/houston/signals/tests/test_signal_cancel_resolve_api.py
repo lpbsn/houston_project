@@ -8,6 +8,10 @@ from houston.accounts.models import User
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.tests.conftest import TEST_PASSWORD
 from houston.establishments.tests.taxonomy_helpers import create_membership_with_business_unit_scope
+from houston.signals.constants import (
+    SIGNAL_IN_PROGRESS_MANUAL_CANCEL_DETAIL,
+    SIGNAL_IN_PROGRESS_MANUAL_RESOLVE_DETAIL,
+)
 from houston.signals.models import Signal
 from houston.signals.tests.conftest import (
     auth_headers,
@@ -17,6 +21,7 @@ from houston.signals.tests.conftest import (
     login,
     signal_detail_url,
 )
+from houston.testing.auth import build_api_membership_on_establishment
 
 pytestmark = pytest.mark.django_db
 
@@ -68,9 +73,9 @@ def test_owner_can_cancel_without_body(api_client):
     assert response.json()["permission_hints"]["can_cancel"] is False
 
 
-def test_director_can_resolve_without_body(api_client):
+def test_director_can_resolve_open_without_body(api_client):
     membership = build_api_membership(role=EstablishmentMembership.Role.DIRECTOR)
-    signal = _signal(membership, status=Signal.Status.IN_PROGRESS)
+    signal = _signal(membership, status=Signal.Status.OPEN)
     token = login(api_client, user=membership.user)
 
     response = api_client.post(
@@ -80,6 +85,52 @@ def test_director_can_resolve_without_body(api_client):
 
     assert response.status_code == 200
     assert response.json()["status"] == Signal.Status.RESOLVED
+
+
+def test_manager_cannot_resolve_in_progress_manually(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    manager = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    signal = _signal(owner, status=Signal.Status.IN_PROGRESS)
+    taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
+    assert taxonomy.maintenance is not None
+    create_membership_with_business_unit_scope(
+        membership=manager,
+        business_unit=taxonomy.maintenance,
+    )
+    token = login(api_client, user=manager.user)
+
+    response = api_client.post(
+        signal_detail_url(manager.establishment_id, signal.id) + "resolve/",
+        **auth_headers(token),
+    )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["code"] == "invalid_signal_state"
+    assert body["detail"] == SIGNAL_IN_PROGRESS_MANUAL_RESOLVE_DETAIL
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.IN_PROGRESS
+
+
+def test_owner_cannot_cancel_in_progress_manually(api_client):
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = _signal(membership, status=Signal.Status.IN_PROGRESS)
+    token = login(api_client, user=membership.user)
+
+    response = api_client.post(
+        signal_detail_url(membership.establishment_id, signal.id) + "cancel/",
+        **auth_headers(token),
+    )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["code"] == "invalid_signal_state"
+    assert body["detail"] == SIGNAL_IN_PROGRESS_MANUAL_CANCEL_DETAIL
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.IN_PROGRESS
 
 
 def test_manager_cancel_requires_scope(api_client):
@@ -185,3 +236,19 @@ def test_detail_includes_cancel_resolve_hints(api_client):
     hints = response.json()["permission_hints"]
     assert hints["can_cancel"] is True
     assert hints["can_resolve"] is True
+
+
+def test_detail_denies_cancel_resolve_hints_for_in_progress(api_client):
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = _signal(membership, status=Signal.Status.IN_PROGRESS)
+    token = login(api_client, user=membership.user)
+
+    response = api_client.get(
+        signal_detail_url(membership.establishment_id, signal.id),
+        **auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    hints = response.json()["permission_hints"]
+    assert hints["can_cancel"] is False
+    assert hints["can_resolve"] is False

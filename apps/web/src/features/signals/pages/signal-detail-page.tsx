@@ -22,6 +22,7 @@ import { useSignalDetailQuery } from '../hooks'
 import { SignalsApiError } from '../api'
 import { shouldShowSignalCreateActionPlan } from '../lib/signal-create-action'
 import { formatSignalRelativeTime, formatSignalAggregationLabel } from '../lib/signal-display'
+import { SIGNAL_IN_PROGRESS_RESOLVE_VIA_ACTION_PLAN_HINT } from '../lib/signal-feed-card-actions'
 
 type SignalDetailPageProps = {
   signalId: string
@@ -126,6 +127,14 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
           </TerrainCard>
 
           <SignalDetailPhotoSection mediaItems={signal.media_items ?? []} />
+
+          {signal.status === 'in_progress' ? (
+            <TerrainCard>
+              <p className="text-[13px] leading-relaxed text-[#7D7B75]">
+                {SIGNAL_IN_PROGRESS_RESOLVE_VIA_ACTION_PLAN_HINT}
+              </p>
+            </TerrainCard>
+          ) : null}
 
           <SignalLinkedActionPlansSection
             executions={signal.linked_action_plan_executions}

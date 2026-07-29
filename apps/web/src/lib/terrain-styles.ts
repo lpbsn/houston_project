@@ -99,6 +99,7 @@ export type TerrainSectionDotVariant =
   | 'success'
   | 'teal'
   | 'brown'
+  | 'mint'
 
 export const terrainSectionDotVariants: Record<TerrainSectionDotVariant, string> = {
   danger: 'bg-[#E24B4A]',
@@ -108,6 +109,7 @@ export const terrainSectionDotVariants: Record<TerrainSectionDotVariant, string>
   success: 'bg-[#1D9E75]',
   teal: 'bg-[#3A7A96]',
   brown: 'bg-[#8B6914]',
+  mint: 'bg-[#A4E5E0]',
 }
 
 export function terrainCardClassName(className?: string) {

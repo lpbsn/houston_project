@@ -8,8 +8,8 @@ from houston.establishments.permissions import (
 from houston.establishments.role_constants import ADMIN_ROLES
 from houston.signals.constants import (
     ACTIVE_SIGNAL_STATUSES,
-    CANCEL_RESOLVE_SIGNAL_STATUSES,
     FEED_SIGNAL_STATUSES,
+    MANUAL_CANCEL_RESOLVE_SIGNAL_STATUSES,
 )
 from houston.signals.models import Signal
 
@@ -217,7 +217,7 @@ def _can_cancel_or_resolve_signal(
         return False
     if signal.establishment_id != membership.establishment_id:
         return False
-    if signal.status not in CANCEL_RESOLVE_SIGNAL_STATUSES:
+    if signal.status not in MANUAL_CANCEL_RESOLVE_SIGNAL_STATUSES:
         return False
     if membership.role == EstablishmentMembership.Role.STAFF:
         return False

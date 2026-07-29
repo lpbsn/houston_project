@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
+from django.db import close_old_connections
 from django.utils import timezone
 
+from houston.action_plans.constants import SIGNAL_BLOCKING_EXECUTION_STATUSES
 from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.services import (
     cancel_action_plan_execution,
@@ -13,8 +17,9 @@ from houston.action_plans.services import (
     validate_action_plan_execution,
 )
 from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
-from houston.signals.models import Signal
-from houston.signals.services import resolve_signal
+from houston.signals.models import Signal, SignalSourceObservation
+from houston.signals.services import resolve_signal, resolve_signal_from_execution_sync
+from houston.testing.pipeline import create_observation
 from houston.testing.taxonomy import create_minimal_v3_signal
 
 pytestmark = pytest.mark.django_db
@@ -163,7 +168,7 @@ def test_sync_does_not_reopen_resolved_signal_when_all_canceled(
         title="Canceled execution",
     )
 
-    resolve_signal(signal=signal, actor_membership=owner_membership)
+    resolve_signal_from_execution_sync(signal=signal)
     sync_signal_after_execution_change(signal=signal)
 
     signal.refresh_from_db()
@@ -279,7 +284,7 @@ def test_lifecycle_reopens_signal_to_open_after_cancel_following_validation_cycl
     assert signal.status == Signal.Status.OPEN
 
 
-def test_reopen_linked_execution_after_manual_resolve_sets_signal_in_progress(
+def test_reopen_linked_execution_after_auto_resolve_sets_signal_in_progress(
     owner_membership,
     business_unit,
     staff_membership,
@@ -299,7 +304,10 @@ def test_reopen_linked_execution_after_manual_resolve_sets_signal_in_progress(
         execution_id=execution.id,
         actor_membership=owner_membership,
     )
-    resolve_signal(signal=signal, actor_membership=owner_membership)
+    # sync may already auto-resolve the Signal via the done execution.
+    signal.refresh_from_db()
+    if signal.status != Signal.Status.RESOLVED:
+        resolve_signal_from_execution_sync(signal=signal)
     signal.refresh_from_db()
     assert signal.status == Signal.Status.RESOLVED
 
@@ -309,14 +317,17 @@ def test_reopen_linked_execution_after_manual_resolve_sets_signal_in_progress(
     assert signal.status == Signal.Status.IN_PROGRESS
 
 
-def test_resolve_signal_cancels_active_executions_and_resolves(
+def test_manual_resolve_refuses_in_progress_with_active_executions(
     owner_membership,
     business_unit,
     staff_membership,
 ):
+    from houston.signals.constants import SIGNAL_IN_PROGRESS_MANUAL_RESOLVE_DETAIL
+    from houston.signals.exceptions import SignalStateError
+
     signal = create_minimal_v3_signal(
         owner_membership,
-        title="Manual resolve",
+        title="Manual resolve refused",
         status=Signal.Status.IN_PROGRESS,
     )
     execution_a = _create_linked_execution(
@@ -330,7 +341,39 @@ def test_resolve_signal_cancels_active_executions_and_resolves(
         title="Active B",
     )
 
-    resolve_signal(signal=signal, actor_membership=owner_membership)
+    with pytest.raises(SignalStateError, match=SIGNAL_IN_PROGRESS_MANUAL_RESOLVE_DETAIL):
+        resolve_signal(signal=signal, actor_membership=owner_membership)
+
+    signal.refresh_from_db()
+    execution_a.refresh_from_db()
+    execution_b.refresh_from_db()
+    assert signal.status == Signal.Status.IN_PROGRESS
+    assert execution_a.status == ActionPlanExecution.Status.IN_PROGRESS
+    assert execution_b.status == ActionPlanExecution.Status.IN_PROGRESS
+
+
+def test_auto_resolve_cancels_active_executions_and_resolves(
+    owner_membership,
+    business_unit,
+    staff_membership,
+):
+    signal = create_minimal_v3_signal(
+        owner_membership,
+        title="Auto resolve",
+        status=Signal.Status.IN_PROGRESS,
+    )
+    execution_a = _create_linked_execution(
+        owner_membership=owner_membership,
+        signal=signal,
+        title="Active A",
+    )
+    execution_b = _create_linked_execution(
+        owner_membership=owner_membership,
+        signal=signal,
+        title="Active B",
+    )
+
+    resolve_signal_from_execution_sync(signal=signal)
 
     signal.refresh_from_db()
     execution_a.refresh_from_db()
@@ -344,14 +387,14 @@ def test_resolve_signal_cancels_active_executions_and_resolves(
     assert signal.status == Signal.Status.RESOLVED
 
 
-def test_sync_does_not_resolve_when_signal_manually_resolved_with_done_execution(
+def test_sync_does_not_resolve_when_signal_auto_resolved_with_done_execution(
     owner_membership,
     business_unit,
     staff_membership,
 ):
     signal = create_minimal_v3_signal(
         owner_membership,
-        title="Manual resolve stays",
+        title="Auto resolve stays",
         status=Signal.Status.IN_PROGRESS,
     )
     done_execution = _create_linked_execution(
@@ -370,7 +413,7 @@ def test_sync_does_not_resolve_when_signal_manually_resolved_with_done_execution
         actor_membership=owner_membership,
     )
 
-    resolve_signal(signal=signal, actor_membership=owner_membership)
+    resolve_signal_from_execution_sync(signal=signal)
     sync_signal_after_execution_change(signal=signal)
 
     signal.refresh_from_db()
@@ -486,3 +529,101 @@ def test_sync_noop_when_interesting_with_all_canceled_executions(
 
     signal.refresh_from_db()
     assert signal.status == Signal.Status.INTERESTING
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_resolve_vs_reopen_on_created_from_siblings_does_not_break_invariants(
+    owner_membership,
+    business_unit,
+    staff_membership,
+):
+    """Déclenche la course resolve(sibling_a) ↔ reopen(execution linked à sibling_b)."""
+    _ = business_unit, staff_membership
+
+    sibling_a = create_minimal_v3_signal(
+        owner_membership,
+        title="Sibling A",
+        status=Signal.Status.IN_PROGRESS,
+    )
+    sibling_b = create_minimal_v3_signal(
+        owner_membership,
+        title="Sibling B",
+        status=Signal.Status.IN_PROGRESS,
+    )
+
+    shared_observation = create_observation(membership=owner_membership, text="shared created_from")
+    SignalSourceObservation.objects.create(
+        signal=sibling_a,
+        observation=shared_observation,
+        link_type=SignalSourceObservation.LinkType.CREATED_FROM,
+    )
+    SignalSourceObservation.objects.create(
+        signal=sibling_b,
+        observation=shared_observation,
+        link_type=SignalSourceObservation.LinkType.CREATED_FROM,
+    )
+
+    # blocking execution for sibling_a: resolve must cancel it
+    blocking_execution_a = _create_linked_execution(
+        owner_membership=owner_membership,
+        signal=sibling_a,
+        title="blocking execution for A",
+        requires_validation=False,
+    )
+
+    # done execution for sibling_b: reopen should turn it back in_progress
+    execution_b = _create_linked_execution(
+        owner_membership=owner_membership,
+        signal=sibling_b,
+        title="done execution for B",
+        requires_validation=False,
+    )
+    mark_action_plan_execution_done(
+        execution_id=execution_b.id,
+        actor_membership=owner_membership,
+    )
+    execution_b.refresh_from_db()
+    assert execution_b.status == ActionPlanExecution.Status.DONE
+
+    # Ensure sibling_b is RESOLVED so reopen transitions it to IN_PROGRESS.
+    # Depending on sync timing, this may already have happened automatically.
+    sibling_b.refresh_from_db()
+    if sibling_b.status != Signal.Status.RESOLVED:
+        resolve_signal_from_execution_sync(signal=sibling_b)
+    sibling_b.refresh_from_db()
+    assert sibling_b.status == Signal.Status.RESOLVED
+
+    def run_resolve_a() -> None:
+        close_old_connections()
+        resolve_signal_from_execution_sync(signal=sibling_a)
+
+    def run_reopen_b() -> None:
+        close_old_connections()
+        reopen_action_plan_execution(execution_id=execution_b.id, actor=owner_membership)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(run_resolve_a), executor.submit(run_reopen_b)]
+        for future in futures:
+            future.result(timeout=30)
+
+    sibling_a.refresh_from_db()
+    sibling_b.refresh_from_db()
+    blocking_execution_a.refresh_from_db()
+    execution_b.refresh_from_db()
+
+    # Invariant: any resolved signal must not have blocking executions linked to it.
+    if sibling_a.status == Signal.Status.RESOLVED:
+        assert not ActionPlanExecution.objects.filter(
+            source_signal_id=sibling_a.id,
+            status__in=SIGNAL_BLOCKING_EXECUTION_STATUSES,
+        ).exists()
+
+    if sibling_b.status == Signal.Status.RESOLVED:
+        assert not ActionPlanExecution.objects.filter(
+            source_signal_id=sibling_b.id,
+            status__in=SIGNAL_BLOCKING_EXECUTION_STATUSES,
+        ).exists()
+
+    # Sanity checks for this scenario.
+    assert execution_b.status == ActionPlanExecution.Status.IN_PROGRESS
+    assert sibling_b.status == Signal.Status.IN_PROGRESS

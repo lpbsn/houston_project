@@ -130,13 +130,15 @@ This domain describes the validated MVP target behavior. Current code and `apps/
 
 - `resolved`
   - Situation considered operationally handled.
-  - Manual resolution is available via backend command `POST .../signals/{id}/resolve/` from `open` or `in_progress` only (`CANCEL_RESOLVE_SIGNAL_STATUSES`; `interesting` excluded).
-  - Automatic resolution when all linked Actions are terminal is implemented in Phase 5 (Action services).
-  - Manual resolve cancels linked blocking executions, then transitions the Signal to `resolved`.
+  - Manual resolution is available via backend command `POST .../signals/{id}/resolve/` from `open` only (`MANUAL_CANCEL_RESOLVE_SIGNAL_STATUSES`; `in_progress` and `interesting` excluded).
+  - Manual resolve/cancel on `in_progress` is refused with an explicit business error; resolution must go through linked Action Plan finalization.
+  - Automatic resolution when all linked Actions are terminal is implemented in Phase 5 (Action services) via `resolve_signal_from_execution_sync` (allows `open` / `in_progress`).
+  - Manual resolve from `open` cancels linked blocking executions (if any), then transitions the Signal to `resolved`.
 
 - `canceled`
   - Situation intentionally closed as no longer relevant to pursue.
-  - **MVP cancellation does not require a category, reason, or justification payload.** The command is `POST .../signals/{id}/cancel/` with no mandatory request body.
+  - Manual cancellation is available via `POST .../signals/{id}/cancel/` from `open` only (same eligibility as manual resolve).
+  - **MVP cancellation does not require a category, reason, or justification payload.** The command has no mandatory request body.
 
 - `archived`
   - Historical / terminal storage state outside all product surfaces in this version (no feed, no status filter, detail GET → 404).
@@ -154,7 +156,7 @@ Validated target transition rules:
 - `archived` is out of the active Signal feed by default.
 
 Validated in current code:
-- Manual cancel and resolve from `open` or `in_progress` only.
+- Manual cancel and resolve from `open` only (`MANUAL_CANCEL_RESOLVE_SIGNAL_STATUSES`). `in_progress` must be resolved via Action Plans.
 - Mark interesting from `open` only (Owner/Director/Manager with scope or unassigned triage; Staff denied).
 - Archive from `interesting` only (same RBAC shape as pin / mark interesting; Staff denied). Archived Signals are not exposed (feed/detail/filtre); `merged_into` stays null; media cleanup matches cancel/resolve.
 - Linked Action Plan creation from an active Signal (`open`, `in_progress`, or `interesting`) transitions `open`/`interesting` → `in_progress` and unpins if pinned; creation is rejected when the Signal is terminal (`resolved`, `canceled`, `archived`). When `source_signal_id` is set: if the Signal has a `responsible_business_unit_id`, `pilot_business_unit_id` must equal it; if responsible is null but an `activity_subject` is present, the pilot must equal the subject's owning BusinessUnit.
@@ -181,7 +183,7 @@ Not validated yet:
 - Detail access (implemented): any member who passes `can_view_signal_feed` may read **feed-visible** Signal detail by ID, including deep-links to Signals outside their Ma vue BU scope. Pin, mark interesting, archive, cancel, resolve, and create-action commands remain scope-aware for Manager (see [`rbac_permissions_domain.md`](rbac_permissions_domain.md) §7).
 - Visibility does not imply actionability.
 - Resolving Signals, canceling Signals, pinning, marking interesting, and archiving require backend command authorization (implemented). Creating Actions from Signals remains a separate workflow.
-- **Cancel and resolve** (implemented): Owner and Director may act on any `open`/`in_progress` Signal in the establishment; Manager may act only when `MembershipScope` covers the Signal taxonomy (or unassigned triage); **Staff are denied** cancel and resolve.
+- **Cancel and resolve** (implemented): Owner and Director may act on any `open` Signal in the establishment; Manager may act only when `MembershipScope` covers the Signal taxonomy (or unassigned triage); **Staff are denied** cancel and resolve. Manual cancel/resolve on `in_progress` is refused (permission hints false; API returns business error).
 - **Mark interesting** (implemented): same RBAC shape as pin — Owner/Director/Manager (scope or unassigned triage) on `open` only; **Staff denied**. Staff may still view `interesting` Signals in personal and general feed.
 - **Archive** (implemented): same RBAC shape as pin — Owner/Director/Manager (scope or unassigned triage) on `interesting` only; **Staff denied**. Archived Signals are not product-exposed.
 - Notifications and realtime events do not grant Signal access.

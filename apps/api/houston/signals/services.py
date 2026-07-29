@@ -49,6 +49,8 @@ from houston.signals.constants import (
     AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
     CANCEL_RESOLVE_SIGNAL_STATUSES,
     MAX_CANDIDATES_PER_OBSERVATION,
+    SIGNAL_IN_PROGRESS_MANUAL_CANCEL_DETAIL,
+    SIGNAL_IN_PROGRESS_MANUAL_RESOLVE_DETAIL,
     STRUCTURED_SUMMARY_SHORT_MAX_LENGTH,
 )
 from houston.signals.exceptions import (
@@ -1280,14 +1282,15 @@ def pin_signal(*, signal: Signal, membership: EstablishmentMembership) -> Signal
 
 @transaction.atomic
 def mark_signal_interesting(*, signal: Signal) -> Signal:
-    if signal.status != Signal.Status.OPEN:
+    locked_self = _lock_signals_by_uuid_order(signal)[0]
+    if locked_self.status != Signal.Status.OPEN:
         raise SignalStateError("Only open signals can be marked interesting.")
-    signal.status = Signal.Status.INTERESTING
-    signal.is_pinned = False
-    signal.pinned_at = None
-    signal.pinned_by_membership = None
-    touch_signal_activity(signal=signal)
-    signal.save(
+    locked_self.status = Signal.Status.INTERESTING
+    locked_self.is_pinned = False
+    locked_self.pinned_at = None
+    locked_self.pinned_by_membership = None
+    touch_signal_activity(signal=locked_self)
+    locked_self.save(
         update_fields=[
             "status",
             "is_pinned",
@@ -1297,8 +1300,8 @@ def mark_signal_interesting(*, signal: Signal) -> Signal:
             "updated_at",
         ]
     )
-    _schedule_signal_invalidation(signal=signal, reason="signal.updated")
-    return signal
+    _schedule_signal_invalidation(signal=locked_self, reason="signal.updated")
+    return locked_self
 
 
 @transaction.atomic
@@ -1358,8 +1361,11 @@ def cancel_signal(
     signal: Signal,
     actor_membership: EstablishmentMembership | None = None,
 ) -> Signal:
+    locked_self, _, _ = _lock_signal_created_from_set_or_self(signal=signal)
+    if locked_self.status == Signal.Status.IN_PROGRESS:
+        raise SignalStateError(SIGNAL_IN_PROGRESS_MANUAL_CANCEL_DETAIL)
     result = _transition_active_signal_to_terminal(
-        signal=signal,
+        signal=locked_self,
         target_status=Signal.Status.CANCELED,
     )
     from houston.notifications.scheduling import schedule_signal_canceled_notification
@@ -1377,16 +1383,47 @@ def resolve_signal(
     signal: Signal,
     actor_membership: EstablishmentMembership | None = None,
 ) -> Signal:
+    """Manual resolve (API). Refuses in_progress — use action-plan sync instead."""
+    original_signal = signal
+    locked_self, _, _ = _lock_signal_created_from_set_or_self(signal=signal)
+    if locked_self.status == Signal.Status.IN_PROGRESS:
+        raise SignalStateError(SIGNAL_IN_PROGRESS_MANUAL_RESOLVE_DETAIL)
+    result = _resolve_signal_after_lock(
+        original_signal=original_signal,
+        locked_self=locked_self,
+        actor_membership=actor_membership,
+    )
+    return result
+
+
+@transaction.atomic
+def resolve_signal_from_execution_sync(*, signal: Signal) -> Signal:
+    """Automatic resolve from action-plan execution sync (allows in_progress)."""
+    original_signal = signal
+    locked_self, _, _ = _lock_signal_created_from_set_or_self(signal=signal)
+    return _resolve_signal_after_lock(
+        original_signal=original_signal,
+        locked_self=locked_self,
+        actor_membership=None,
+    )
+
+
+def _resolve_signal_after_lock(
+    *,
+    original_signal: Signal,
+    locked_self: Signal,
+    actor_membership: EstablishmentMembership | None,
+) -> Signal:
     from houston.action_plans.services import (
         _cancel_linked_active_executions_for_signal_resolve,
     )
 
     _cancel_linked_active_executions_for_signal_resolve(
-        signal=signal,
+        signal=locked_self,
         actor_membership=actor_membership,
     )
     result = _transition_active_signal_to_terminal(
-        signal=signal,
+        signal=locked_self,
         target_status=Signal.Status.RESOLVED,
     )
     from houston.notifications.scheduling import schedule_signal_resolved_notification
@@ -1395,6 +1432,13 @@ def resolve_signal(
         signal_id=result.id,
         actor_membership_id=actor_membership.id if actor_membership is not None else None,
     )
+    # Keep caller-side in-memory Signal up-to-date.
+    original_signal.status = result.status
+    original_signal.is_pinned = result.is_pinned
+    original_signal.pinned_at = result.pinned_at
+    original_signal.pinned_by_membership = result.pinned_by_membership
+    original_signal.last_activity_at = result.last_activity_at
+    original_signal.updated_at = result.updated_at
     return result
 
 
@@ -1461,29 +1505,25 @@ def _maybe_delete_created_from_media_under_locks(
                 cache["media_items"] = []
 
 
-def _delete_created_from_media_for_signal_terminal(*, signal: Signal) -> None:
-    _locked_self, related_signals, observation_id = _lock_signal_created_from_set_or_self(
-        signal=signal,
-    )
-    _maybe_delete_created_from_media_under_locks(
-        signal=signal,
-        related_signals=related_signals,
-        observation_id=observation_id,
-    )
-
-
 def _transition_active_signal_to_terminal(
     *,
     signal: Signal,
     target_status: str,
 ) -> Signal:
-    if signal.status not in CANCEL_RESOLVE_SIGNAL_STATUSES:
+    locked_self, related_signals, observation_id = _lock_signal_created_from_set_or_self(
+        signal=signal,
+    )
+    if locked_self.status not in CANCEL_RESOLVE_SIGNAL_STATUSES:
         raise SignalStateError("Only active signals can be canceled or resolved.")
-    _delete_created_from_media_for_signal_terminal(signal=signal)
-    signal.status = target_status
-    signal.is_pinned = False
-    signal.pinned_at = None
-    signal.pinned_by_membership = None
+    _maybe_delete_created_from_media_under_locks(
+        signal=locked_self,
+        related_signals=related_signals,
+        observation_id=observation_id,
+    )
+    locked_self.status = target_status
+    locked_self.is_pinned = False
+    locked_self.pinned_at = None
+    locked_self.pinned_by_membership = None
     update_fields = [
         "status",
         "is_pinned",
@@ -1492,10 +1532,22 @@ def _transition_active_signal_to_terminal(
         "last_activity_at",
         "updated_at",
     ]
-    touch_signal_activity(signal=signal)
-    signal.save(update_fields=update_fields)
-    _schedule_signal_invalidation(signal=signal, reason="signal.updated")
-    return signal
+    touch_signal_activity(signal=locked_self)
+    locked_self.save(update_fields=update_fields)
+    _schedule_signal_invalidation(
+        signal=locked_self,
+        reason="signal.updated",
+    )
+    # Keep caller-side in-memory Signal up-to-date.
+    # Some call sites (including unit tests) reuse the same Signal instance
+    # right after a transition, without always re-fetching from the DB.
+    signal.status = locked_self.status
+    signal.is_pinned = locked_self.is_pinned
+    signal.pinned_at = locked_self.pinned_at
+    signal.pinned_by_membership = locked_self.pinned_by_membership
+    signal.last_activity_at = locked_self.last_activity_at
+    signal.updated_at = locked_self.updated_at
+    return locked_self
 
 
 def _schedule_signal_invalidation(*, signal: Signal, reason: str) -> None:

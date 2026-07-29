@@ -99,7 +99,7 @@ describe('getSignalFeedCardActionOptions', () => {
       getSignalFeedCardActionOptions(
         feedItem({ permission_hints: hints({ can_archive: true }) }),
       ),
-    ).toEqual([{ id: 'archive', label: 'Archiver', tone: 'danger' }])
+    ).toEqual([{ id: 'archive', label: 'Archiver', tone: 'neutral' }])
   })
 
   it('returns qualify action when can_qualify_routing', () => {
@@ -143,7 +143,7 @@ describe('getSignalFeedCardActionOptions', () => {
     ).toEqual([
       { id: 'pin', label: 'Désépingler', tone: 'neutral' },
       { id: 'mark_interesting', label: 'Marquer comme intéressant', tone: 'neutral' },
-      { id: 'archive', label: 'Archiver', tone: 'danger' },
+      { id: 'archive', label: 'Archiver', tone: 'neutral' },
       { id: 'resolve', label: 'Marquer comme résolue', tone: 'success' },
       { id: 'cancel', label: 'Annuler cette observation', tone: 'danger' },
     ])

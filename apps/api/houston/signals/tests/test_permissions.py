@@ -163,6 +163,25 @@ def test_staff_cannot_cancel_or_resolve_signal():
     assert not can_pin_signal(membership, signal)
 
 
+def test_owner_cannot_cancel_or_resolve_in_progress_signal():
+    membership = build_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = _build_signal(membership=membership)
+    signal.status = Signal.Status.IN_PROGRESS
+    signal.save(update_fields=["status", "updated_at"])
+
+    assert not can_cancel_signal(membership, signal)
+    assert not can_resolve_signal(membership, signal)
+
+
+def test_owner_can_cancel_or_resolve_open_signal():
+    membership = build_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = _build_signal(membership=membership)
+
+    assert signal.status == Signal.Status.OPEN
+    assert can_cancel_signal(membership, signal)
+    assert can_resolve_signal(membership, signal)
+
+
 def test_can_pin_signal_allows_open():
     membership = build_membership(role=EstablishmentMembership.Role.DIRECTOR)
     signal = _build_signal(membership=membership)
