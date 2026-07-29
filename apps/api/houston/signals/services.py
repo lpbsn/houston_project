@@ -51,6 +51,12 @@ from houston.signals.constants import (
     MAX_CANDIDATES_PER_OBSERVATION,
     SIGNAL_IN_PROGRESS_MANUAL_CANCEL_DETAIL,
     SIGNAL_IN_PROGRESS_MANUAL_RESOLVE_DETAIL,
+    SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
+    SIGNAL_LIFECYCLE_EVENT_CANCELED,
+    SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING,
+    SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+    SIGNAL_RESOLUTION_ORIGIN_ACTION_PLAN,
+    SIGNAL_RESOLUTION_ORIGIN_MANUAL,
     STRUCTURED_SUMMARY_SHORT_MAX_LENGTH,
 )
 from houston.signals.exceptions import (
@@ -60,6 +66,7 @@ from houston.signals.exceptions import (
     SignalStateError,
     SignalValidationError,
 )
+from houston.signals.lifecycle_events import record_signal_lifecycle_event
 from houston.signals.models import CandidateSignal, ExpectedAction, Signal, SignalSourceObservation
 from houston.signals.responsible_text_anchoring import (
     sanitize_unanchored_responsible_without_subject,
@@ -1281,9 +1288,14 @@ def pin_signal(*, signal: Signal, membership: EstablishmentMembership) -> Signal
 
 
 @transaction.atomic
-def mark_signal_interesting(*, signal: Signal) -> Signal:
+def mark_signal_interesting(
+    *,
+    signal: Signal,
+    actor_membership: EstablishmentMembership | None = None,
+) -> Signal:
     locked_self = _lock_signals_by_uuid_order(signal)[0]
-    if locked_self.status != Signal.Status.OPEN:
+    from_status = locked_self.status
+    if from_status != Signal.Status.OPEN:
         raise SignalStateError("Only open signals can be marked interesting.")
     from houston.signals.models import SignalResolutionRequest
     from houston.signals.resolution_request_services import (
@@ -1295,10 +1307,13 @@ def mark_signal_interesting(*, signal: Signal) -> Signal:
         reason=SignalResolutionRequest.CanceledReason.SIGNAL_MARKED_INTERESTING,
         notify_requester=True,
     )
+    now = timezone.now()
     locked_self.status = Signal.Status.INTERESTING
     locked_self.is_pinned = False
     locked_self.pinned_at = None
     locked_self.pinned_by_membership = None
+    locked_self.marked_interesting_by_membership = actor_membership
+    locked_self.marked_interesting_at = now
     touch_signal_activity(signal=locked_self)
     locked_self.save(
         update_fields=[
@@ -1306,31 +1321,51 @@ def mark_signal_interesting(*, signal: Signal) -> Signal:
             "is_pinned",
             "pinned_at",
             "pinned_by_membership",
+            "marked_interesting_by_membership",
+            "marked_interesting_at",
             "last_activity_at",
             "updated_at",
         ]
+    )
+    record_signal_lifecycle_event(
+        signal=locked_self,
+        event_type=SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING,
+        occurred_at=now,
+        actor_membership=actor_membership,
+        metadata_safe={
+            "from_status": from_status,
+            "to_status": Signal.Status.INTERESTING,
+        },
     )
     _schedule_signal_invalidation(signal=locked_self, reason="signal.updated")
     return locked_self
 
 
 @transaction.atomic
-def archive_signal(*, signal: Signal) -> Signal:
+def archive_signal(
+    *,
+    signal: Signal,
+    actor_membership: EstablishmentMembership | None = None,
+) -> Signal:
     """User archive: interesting → archived. Does not set merged_into."""
     locked_self, related_signals, observation_id = _lock_signal_created_from_set_or_self(
         signal=signal,
     )
-    if locked_self.status != Signal.Status.INTERESTING:
+    from_status = locked_self.status
+    if from_status != Signal.Status.INTERESTING:
         raise SignalStateError("Only interesting signals can be archived.")
     _maybe_delete_created_from_media_under_locks(
         signal=locked_self,
         related_signals=related_signals,
         observation_id=observation_id,
     )
+    now = timezone.now()
     locked_self.status = Signal.Status.ARCHIVED
     locked_self.is_pinned = False
     locked_self.pinned_at = None
     locked_self.pinned_by_membership = None
+    locked_self.archived_by_membership = actor_membership
+    locked_self.archived_at = now
     touch_signal_activity(signal=locked_self)
     locked_self.save(
         update_fields=[
@@ -1338,9 +1373,22 @@ def archive_signal(*, signal: Signal) -> Signal:
             "is_pinned",
             "pinned_at",
             "pinned_by_membership",
+            "archived_by_membership",
+            "archived_at",
             "last_activity_at",
             "updated_at",
         ]
+    )
+    record_signal_lifecycle_event(
+        signal=locked_self,
+        event_type=SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
+        occurred_at=now,
+        actor_membership=actor_membership,
+        metadata_safe={
+            "from_status": from_status,
+            "to_status": Signal.Status.ARCHIVED,
+            "origin": "user_archive",
+        },
     )
     _schedule_signal_invalidation(signal=locked_self, reason="signal.updated")
     return locked_self
@@ -1387,6 +1435,7 @@ def cancel_signal(
     result = _transition_active_signal_to_terminal(
         signal=locked_self,
         target_status=Signal.Status.CANCELED,
+        actor_membership=actor_membership,
     )
     from houston.notifications.scheduling import schedule_signal_canceled_notification
 
@@ -1420,6 +1469,7 @@ def resolve_signal(
         original_signal=original_signal,
         locked_self=locked_self,
         actor_membership=actor_membership,
+        resolution_origin=SIGNAL_RESOLUTION_ORIGIN_MANUAL,
     )
     return result
 
@@ -1441,6 +1491,7 @@ def resolve_signal_from_execution_sync(*, signal: Signal) -> Signal:
         original_signal=original_signal,
         locked_self=locked_self,
         actor_membership=None,
+        resolution_origin=SIGNAL_RESOLUTION_ORIGIN_ACTION_PLAN,
     )
 
 
@@ -1449,6 +1500,7 @@ def _resolve_signal_after_lock(
     original_signal: Signal,
     locked_self: Signal,
     actor_membership: EstablishmentMembership | None,
+    resolution_origin: str,
 ) -> Signal:
     from houston.action_plans.services import (
         _cancel_linked_active_executions_for_signal_resolve,
@@ -1461,6 +1513,8 @@ def _resolve_signal_after_lock(
     result = _transition_active_signal_to_terminal(
         signal=locked_self,
         target_status=Signal.Status.RESOLVED,
+        actor_membership=actor_membership,
+        resolution_origin=resolution_origin,
     )
     from houston.notifications.scheduling import schedule_signal_resolved_notification
 
@@ -1473,6 +1527,9 @@ def _resolve_signal_after_lock(
     original_signal.is_pinned = result.is_pinned
     original_signal.pinned_at = result.pinned_at
     original_signal.pinned_by_membership = result.pinned_by_membership
+    original_signal.resolved_by_membership = result.resolved_by_membership
+    original_signal.resolved_at = result.resolved_at
+    original_signal.resolution_origin = result.resolution_origin
     original_signal.last_activity_at = result.last_activity_at
     original_signal.updated_at = result.updated_at
     return result
@@ -1545,17 +1602,23 @@ def _transition_active_signal_to_terminal(
     *,
     signal: Signal,
     target_status: str,
+    actor_membership: EstablishmentMembership | None = None,
+    resolution_origin: str | None = None,
 ) -> Signal:
     locked_self, related_signals, observation_id = _lock_signal_created_from_set_or_self(
         signal=signal,
     )
-    if locked_self.status not in CANCEL_RESOLVE_SIGNAL_STATUSES:
+    from_status = locked_self.status
+    if from_status not in CANCEL_RESOLVE_SIGNAL_STATUSES:
         raise SignalStateError("Only active signals can be canceled or resolved.")
+    if from_status == target_status:
+        return locked_self
     _maybe_delete_created_from_media_under_locks(
         signal=locked_self,
         related_signals=related_signals,
         observation_id=observation_id,
     )
+    now = timezone.now()
     locked_self.status = target_status
     locked_self.is_pinned = False
     locked_self.pinned_at = None
@@ -1568,8 +1631,34 @@ def _transition_active_signal_to_terminal(
         "last_activity_at",
         "updated_at",
     ]
+    event_type = SIGNAL_LIFECYCLE_EVENT_CANCELED
+    metadata_safe: dict = {
+        "from_status": from_status,
+        "to_status": target_status,
+    }
+    if target_status == Signal.Status.RESOLVED:
+        event_type = SIGNAL_LIFECYCLE_EVENT_RESOLVED
+        locked_self.resolved_by_membership = actor_membership
+        locked_self.resolved_at = now
+        locked_self.resolution_origin = resolution_origin
+        update_fields.extend(
+            ["resolved_by_membership", "resolved_at", "resolution_origin"]
+        )
+        if resolution_origin is not None:
+            metadata_safe["resolution_origin"] = resolution_origin
+    elif target_status == Signal.Status.CANCELED:
+        locked_self.canceled_by_membership = actor_membership
+        locked_self.canceled_at = now
+        update_fields.extend(["canceled_by_membership", "canceled_at"])
     touch_signal_activity(signal=locked_self)
     locked_self.save(update_fields=update_fields)
+    record_signal_lifecycle_event(
+        signal=locked_self,
+        event_type=event_type,
+        occurred_at=now,
+        actor_membership=actor_membership,
+        metadata_safe=metadata_safe,
+    )
     _schedule_signal_invalidation(
         signal=locked_self,
         reason="signal.updated",
@@ -1581,6 +1670,11 @@ def _transition_active_signal_to_terminal(
     signal.is_pinned = locked_self.is_pinned
     signal.pinned_at = locked_self.pinned_at
     signal.pinned_by_membership = locked_self.pinned_by_membership
+    signal.resolved_by_membership = locked_self.resolved_by_membership
+    signal.resolved_at = locked_self.resolved_at
+    signal.resolution_origin = locked_self.resolution_origin
+    signal.canceled_by_membership = locked_self.canceled_by_membership
+    signal.canceled_at = locked_self.canceled_at
     signal.last_activity_at = locked_self.last_activity_at
     signal.updated_at = locked_self.updated_at
     return locked_self
@@ -1927,11 +2021,15 @@ def merge_signal_into_resolved(
         row.save(update_fields=["resolution_audit", "updated_at"])
     CandidateSignal.objects.filter(result_signal=source).update(result_signal=target)
 
+    from_status = source.status
+    now = timezone.now()
     source.status = Signal.Status.ARCHIVED
     source.merged_into = target
     source.is_pinned = False
     source.pinned_at = None
     source.pinned_by_membership = None
+    source.archived_by_membership = None
+    source.archived_at = now
     touch_signal_activity(signal=source)
     source.save(
         update_fields=[
@@ -1940,10 +2038,26 @@ def merge_signal_into_resolved(
             "is_pinned",
             "pinned_at",
             "pinned_by_membership",
+            "archived_by_membership",
+            "archived_at",
             "last_activity_at",
             "updated_at",
         ]
     )
+    if from_status != Signal.Status.ARCHIVED:
+        record_signal_lifecycle_event(
+            signal=source,
+            event_type=SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
+            occurred_at=now,
+            actor_membership=None,
+            metadata_safe={
+                "from_status": from_status,
+                "to_status": Signal.Status.ARCHIVED,
+                "origin": "qualify_merge",
+                "merged_into_signal_id": target.id,
+                "source_signal_id": source.id,
+            },
+        )
     touch_signal_activity(signal=target)
     target.save(update_fields=["last_activity_at", "updated_at"])
     _schedule_signal_invalidation(signal=source, reason="signal.updated")

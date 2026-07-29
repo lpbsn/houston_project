@@ -157,6 +157,18 @@ class SignalDetailSerializer(SignalFeedItemSerializer):
     media_items = SignalDetailMediaItemSerializer(many=True)
     linked_action_plan_executions = SignalLinkedActionPlanExecutionSerializer(many=True)
     resolution_request_events = SignalResolutionRequestEventSerializer(many=True)
+    marked_interesting_by_membership_id = serializers.UUIDField(allow_null=True)
+    marked_interesting_at = serializers.DateTimeField(allow_null=True)
+    resolved_by_membership_id = serializers.UUIDField(allow_null=True)
+    resolved_at = serializers.DateTimeField(allow_null=True)
+    resolution_origin = serializers.ChoiceField(
+        choices=["manual", "resolution_request", "action_plan"],
+        allow_null=True,
+    )
+    canceled_by_membership_id = serializers.UUIDField(allow_null=True)
+    canceled_at = serializers.DateTimeField(allow_null=True)
+    archived_by_membership_id = serializers.UUIDField(allow_null=True)
+    archived_at = serializers.DateTimeField(allow_null=True)
 
 
 class SignalQualifyRoutingRequestSerializer(serializers.Serializer):
@@ -356,6 +368,17 @@ def serialize_signal_detail(*, signal: Signal, membership, request) -> dict:
     payload["resolution_request_events"] = build_resolution_request_events(requests)
     payload["structured_summary"] = signal.structured_summary
     payload["issue_focus"] = signal.issue_focus or ""
+    payload["marked_interesting_by_membership_id"] = (
+        signal.marked_interesting_by_membership_id
+    )
+    payload["marked_interesting_at"] = signal.marked_interesting_at
+    payload["resolved_by_membership_id"] = signal.resolved_by_membership_id
+    payload["resolved_at"] = signal.resolved_at
+    payload["resolution_origin"] = signal.resolution_origin
+    payload["canceled_by_membership_id"] = signal.canceled_by_membership_id
+    payload["canceled_at"] = signal.canceled_at
+    payload["archived_by_membership_id"] = signal.archived_by_membership_id
+    payload["archived_at"] = signal.archived_at
 
     link = created_from_source_observation_link(signal)
     if link is None:

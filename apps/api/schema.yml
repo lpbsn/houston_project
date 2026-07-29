@@ -9976,6 +9976,9 @@ components:
         * `chat_conversation` - Chat conversation
         * `comment` - Comment
         * `signal` - Signal
+    NullEnum:
+      enum:
+      - null
     ObservationProcessingSignalSummary:
       type: object
       properties:
@@ -11081,6 +11084,16 @@ components:
       - pending_onboarding_memberships
       - permission_hints
       - user
+    ResolutionOriginEnum:
+      enum:
+      - manual
+      - resolution_request
+      - action_plan
+      type: string
+      description: |-
+        * `manual` - manual
+        * `resolution_request` - resolution_request
+        * `action_plan` - action_plan
     RoutingStatusEnum:
       enum:
       - resolved
@@ -11271,8 +11284,49 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SignalResolutionRequestEvent'
+        marked_interesting_by_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+        marked_interesting_at:
+          type: string
+          format: date-time
+          nullable: true
+        resolved_by_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+        resolution_origin:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ResolutionOriginEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        canceled_by_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+        canceled_at:
+          type: string
+          format: date-time
+          nullable: true
+        archived_by_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+        archived_at:
+          type: string
+          format: date-time
+          nullable: true
       required:
       - aggregation_count
+      - archived_at
+      - archived_by_membership_id
+      - canceled_at
+      - canceled_by_membership_id
       - created_at
       - id
       - is_pinned
@@ -11280,12 +11334,17 @@ components:
       - last_activity_at
       - linked_action_plan_executions
       - location_text
+      - marked_interesting_at
+      - marked_interesting_by_membership_id
       - media_count
       - media_items
       - operational_unit_key
       - permission_hints
+      - resolution_origin
       - resolution_request
       - resolution_request_events
+      - resolved_at
+      - resolved_by_membership_id
       - routing_status
       - source_context
       - status
@@ -11565,6 +11624,43 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SignalResolutionRequestEvent'
+        marked_interesting_by_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+        marked_interesting_at:
+          type: string
+          format: date-time
+          nullable: true
+        resolved_by_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+        resolution_origin:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ResolutionOriginEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        canceled_by_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+        canceled_at:
+          type: string
+          format: date-time
+          nullable: true
+        archived_by_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+        archived_at:
+          type: string
+          format: date-time
+          nullable: true
         qualification_outcome:
           $ref: '#/components/schemas/QualificationOutcomeEnum'
         surviving_signal_id:
@@ -11576,6 +11672,10 @@ components:
           nullable: true
       required:
       - aggregation_count
+      - archived_at
+      - archived_by_membership_id
+      - canceled_at
+      - canceled_by_membership_id
       - created_at
       - id
       - is_pinned
@@ -11583,14 +11683,19 @@ components:
       - last_activity_at
       - linked_action_plan_executions
       - location_text
+      - marked_interesting_at
+      - marked_interesting_by_membership_id
       - media_count
       - media_items
       - merged_signal_id
       - operational_unit_key
       - permission_hints
       - qualification_outcome
+      - resolution_origin
       - resolution_request
       - resolution_request_events
+      - resolved_at
+      - resolved_by_membership_id
       - routing_status
       - source_context
       - status

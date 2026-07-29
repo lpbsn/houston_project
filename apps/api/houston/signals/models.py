@@ -7,7 +7,15 @@ from houston.core.models import BaseModel
 from houston.signals.constants import (
     ACTIVE_SIGNAL_STATUSES,
     AI_ISSUE_FOCUS_MAX_LENGTH,
+    SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
+    SIGNAL_LIFECYCLE_EVENT_CANCELED,
+    SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING,
+    SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS,
+    SIGNAL_LIFECYCLE_EVENT_RESOLVED,
     SIGNAL_LOCATION_TEXT_MAX_LENGTH,
+    SIGNAL_RESOLUTION_ORIGIN_ACTION_PLAN,
+    SIGNAL_RESOLUTION_ORIGIN_MANUAL,
+    SIGNAL_RESOLUTION_ORIGIN_RESOLUTION_REQUEST,
     SIGNAL_STRUCTURED_SUMMARY_MAX_LENGTH,
     SIGNAL_TITLE_MAX_LENGTH,
 )
@@ -37,6 +45,14 @@ class Signal(BaseModel):
     class RoutingStatus(models.TextChoices):
         RESOLVED = "resolved", "Resolved"
         UNASSIGNED = "unassigned", "Unassigned"
+
+    class ResolutionOrigin(models.TextChoices):
+        MANUAL = SIGNAL_RESOLUTION_ORIGIN_MANUAL, "Manual"
+        RESOLUTION_REQUEST = (
+            SIGNAL_RESOLUTION_ORIGIN_RESOLUTION_REQUEST,
+            "Resolution request",
+        )
+        ACTION_PLAN = SIGNAL_RESOLUTION_ORIGIN_ACTION_PLAN, "Action plan"
 
     establishment = models.ForeignKey(
         "establishments.Establishment",
@@ -116,6 +132,44 @@ class Signal(BaseModel):
         blank=True,
     )
     last_activity_at = models.DateTimeField()
+    marked_interesting_by_membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.SET_NULL,
+        related_name="marked_interesting_signals",
+        null=True,
+        blank=True,
+    )
+    marked_interesting_at = models.DateTimeField(null=True, blank=True)
+    resolved_by_membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.SET_NULL,
+        related_name="resolved_signals",
+        null=True,
+        blank=True,
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolution_origin = models.CharField(
+        max_length=32,
+        choices=ResolutionOrigin.choices,
+        null=True,
+        blank=True,
+    )
+    canceled_by_membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.SET_NULL,
+        related_name="canceled_signals",
+        null=True,
+        blank=True,
+    )
+    canceled_at = models.DateTimeField(null=True, blank=True)
+    archived_by_membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.SET_NULL,
+        related_name="archived_signals",
+        null=True,
+        blank=True,
+    )
+    archived_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         indexes = [
@@ -160,6 +214,59 @@ class Signal(BaseModel):
 
     def __str__(self) -> str:
         return f"Signal {self.id} [{self.status}]"
+
+
+class SignalLifecycleEvent(BaseModel):
+    """Append-only journal of Signal lifecycle transitions. Insert-only from services."""
+
+    class EventType(models.TextChoices):
+        MARKED_INTERESTING = (
+            SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING,
+            "Marked interesting",
+        )
+        ARCHIVED = SIGNAL_LIFECYCLE_EVENT_ARCHIVED, "Archived"
+        RESOLVED = SIGNAL_LIFECYCLE_EVENT_RESOLVED, "Resolved"
+        CANCELED = SIGNAL_LIFECYCLE_EVENT_CANCELED, "Canceled"
+        MOVED_IN_PROGRESS = (
+            SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS,
+            "Moved in progress",
+        )
+
+    signal = models.ForeignKey(
+        Signal,
+        on_delete=models.CASCADE,
+        related_name="lifecycle_events",
+    )
+    establishment = models.ForeignKey(
+        "establishments.Establishment",
+        on_delete=models.CASCADE,
+        related_name="signal_lifecycle_events",
+    )
+    event_type = models.CharField(max_length=64, choices=EventType.choices)
+    actor_membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.SET_NULL,
+        related_name="signal_lifecycle_events",
+        null=True,
+        blank=True,
+    )
+    occurred_at = models.DateTimeField()
+    metadata_safe = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["signal", "occurred_at"],
+                name="sig_lifecycle_signal_at_idx",
+            ),
+            models.Index(
+                fields=["establishment", "occurred_at"],
+                name="sig_lifecycle_est_at_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"SignalLifecycleEvent {self.event_type} ({self.signal_id})"
 
 
 class CandidateSignal(BaseModel):

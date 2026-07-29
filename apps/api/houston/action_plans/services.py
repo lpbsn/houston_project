@@ -239,20 +239,51 @@ def _cancel_linked_active_executions_for_signal_resolve(
         )
 
 
-def _reopen_linked_signal_after_execution_reopen(*, execution: ActionPlanExecution) -> None:
+def _reopen_linked_signal_after_execution_reopen(
+    *,
+    execution: ActionPlanExecution,
+    actor_membership: EstablishmentMembership | None = None,
+) -> None:
     if execution.source_signal_id is None:
         return
     signal = Signal.objects.get(pk=execution.source_signal_id)
-    if signal.status != Signal.Status.RESOLVED:
+    from_status = signal.status
+    if from_status != Signal.Status.RESOLVED:
         return
+    from houston.signals.constants import SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS
+    from houston.signals.lifecycle_events import record_signal_lifecycle_event
     from houston.signals.services import (
         _schedule_signal_invalidation,
         touch_signal_activity,
     )
 
+    now = timezone.now()
     signal.status = Signal.Status.IN_PROGRESS
+    signal.resolved_by_membership = None
+    signal.resolved_at = None
+    signal.resolution_origin = None
     touch_signal_activity(signal=signal)
-    signal.save(update_fields=["status", "last_activity_at", "updated_at"])
+    signal.save(
+        update_fields=[
+            "status",
+            "resolved_by_membership",
+            "resolved_at",
+            "resolution_origin",
+            "last_activity_at",
+            "updated_at",
+        ]
+    )
+    record_signal_lifecycle_event(
+        signal=signal,
+        event_type=SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS,
+        occurred_at=now,
+        actor_membership=actor_membership,
+        metadata_safe={
+            "from_status": from_status,
+            "to_status": Signal.Status.IN_PROGRESS,
+            "action_plan_execution_id": execution.id,
+        },
+    )
     _schedule_signal_invalidation(signal=signal, reason="signal.updated")
 
 
@@ -390,7 +421,14 @@ def _qualify_linked_signal_for_create(
     return linked
 
 
-def _activate_linked_signal_on_execution_create(*, signal: Signal) -> None:
+def _activate_linked_signal_on_execution_create(
+    *,
+    signal: Signal,
+    actor_membership: EstablishmentMembership | None = None,
+    execution: ActionPlanExecution | None = None,
+) -> None:
+    from houston.signals.constants import SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS
+    from houston.signals.lifecycle_events import record_signal_lifecycle_event
     from houston.signals.services import (
         _schedule_signal_invalidation,
         touch_signal_activity,
@@ -404,6 +442,7 @@ def _activate_linked_signal_on_execution_create(*, signal: Signal) -> None:
     if not status_changed and not unpin_changed:
         return
 
+    from_status = signal.status
     if status_changed and signal.status == Signal.Status.OPEN:
         from houston.signals.models import SignalResolutionRequest
         from houston.signals.resolution_request_services import (
@@ -416,6 +455,7 @@ def _activate_linked_signal_on_execution_create(*, signal: Signal) -> None:
             notify_requester=True,
         )
 
+    now = timezone.now()
     if status_changed:
         signal.status = Signal.Status.IN_PROGRESS
     if unpin_changed:
@@ -430,6 +470,20 @@ def _activate_linked_signal_on_execution_create(*, signal: Signal) -> None:
     if unpin_changed:
         update_fields.extend(["is_pinned", "pinned_at", "pinned_by_membership"])
     signal.save(update_fields=update_fields)
+    if status_changed:
+        metadata_safe = {
+            "from_status": from_status,
+            "to_status": Signal.Status.IN_PROGRESS,
+        }
+        if execution is not None:
+            metadata_safe["action_plan_execution_id"] = execution.id
+        record_signal_lifecycle_event(
+            signal=signal,
+            event_type=SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS,
+            occurred_at=now,
+            actor_membership=actor_membership,
+            metadata_safe=metadata_safe,
+        )
     _schedule_signal_invalidation(signal=signal, reason="signal.updated")
 
 
@@ -1500,7 +1554,11 @@ def create_action_plan_with_execution(
         assignees=validated_assignees,
     )
     if signal is not None:
-        _activate_linked_signal_on_execution_create(signal=signal)
+        _activate_linked_signal_on_execution_create(
+            signal=signal,
+            actor_membership=created_by,
+            execution=execution,
+        )
     from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
     from houston.notifications.scheduling import (
         schedule_action_plan_execution_created_notification,
@@ -1790,7 +1848,10 @@ def reopen_action_plan_execution(
             "updated_at",
         ]
     )
-    _reopen_linked_signal_after_execution_reopen(execution=execution)
+    _reopen_linked_signal_after_execution_reopen(
+        execution=execution,
+        actor_membership=actor,
+    )
     from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
     from houston.notifications.scheduling import (
         schedule_action_plan_execution_reopened_notification,

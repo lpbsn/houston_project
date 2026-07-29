@@ -78,3 +78,44 @@ SIGNAL_RESOLUTION_NOT_PENDING_DETAIL = "Cette demande de résolution n'est plus 
 SIGNAL_RESOLUTION_REVIEWER_INELIGIBLE_DETAIL = (
     "Vous n'êtes plus éligible pour traiter cette demande de résolution."
 )
+
+# Signal.resolution_origin — how the current resolved state was reached.
+SIGNAL_RESOLUTION_ORIGIN_MANUAL = "manual"
+SIGNAL_RESOLUTION_ORIGIN_RESOLUTION_REQUEST = "resolution_request"
+SIGNAL_RESOLUTION_ORIGIN_ACTION_PLAN = "action_plan"
+SIGNAL_RESOLUTION_ORIGIN_VALUES = frozenset(
+    {
+        SIGNAL_RESOLUTION_ORIGIN_MANUAL,
+        SIGNAL_RESOLUTION_ORIGIN_RESOLUTION_REQUEST,
+        SIGNAL_RESOLUTION_ORIGIN_ACTION_PLAN,
+    }
+)
+
+# SignalLifecycleEvent.event_type — append-only Signal lifecycle journal.
+SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING = "signal.marked_interesting"
+SIGNAL_LIFECYCLE_EVENT_ARCHIVED = "signal.archived"
+SIGNAL_LIFECYCLE_EVENT_RESOLVED = "signal.resolved"
+SIGNAL_LIFECYCLE_EVENT_CANCELED = "signal.canceled"
+SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS = "signal.moved_in_progress"
+SIGNAL_LIFECYCLE_EVENT_TYPE_VALUES = frozenset(
+    {
+        SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING,
+        SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
+        SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+        SIGNAL_LIFECYCLE_EVENT_CANCELED,
+        SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS,
+    }
+)
+
+# Allowlisted keys for SignalLifecycleEvent.metadata_safe (no user free text).
+SIGNAL_LIFECYCLE_METADATA_SAFE_KEYS = frozenset(
+    {
+        "from_status",
+        "to_status",
+        "resolution_origin",
+        "origin",
+        "action_plan_execution_id",
+        "merged_into_signal_id",
+        "source_signal_id",
+    }
+)

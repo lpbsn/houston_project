@@ -90,6 +90,15 @@ function buildDetail(overrides: Partial<SignalDetail> = {}): SignalDetail {
     linked_action_plan_executions: [],
     resolution_request: null,
     resolution_request_events: [],
+    marked_interesting_by_membership_id: null,
+    marked_interesting_at: null,
+    resolved_by_membership_id: null,
+    resolved_at: null,
+    resolution_origin: null,
+    canceled_by_membership_id: null,
+    canceled_at: null,
+    archived_by_membership_id: null,
+    archived_at: null,
     ...overrides,
   }
 }

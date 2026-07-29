@@ -3253,6 +3253,8 @@ export interface components {
          * @enum {string}
          */
         NotificationSubjectTypeEnum: "action_plan_execution" | "chat_conversation" | "comment" | "signal";
+        /** @enum {unknown} */
+        NullEnum: null;
         ObservationProcessingSignalSummary: {
             /** Format: uuid */
             id: string;
@@ -3713,6 +3715,13 @@ export interface components {
             onboarding_session_id: string;
         };
         /**
+         * @description * `manual` - manual
+         *     * `resolution_request` - resolution_request
+         *     * `action_plan` - action_plan
+         * @enum {string}
+         */
+        ResolutionOriginEnum: "manual" | "resolution_request" | "action_plan";
+        /**
          * @description * `resolved` - resolved
          *     * `unassigned` - unassigned
          * @enum {string}
@@ -3793,6 +3802,23 @@ export interface components {
             media_items: components["schemas"]["SignalDetailMediaItem"][];
             linked_action_plan_executions: components["schemas"]["SignalLinkedActionPlanExecution"][];
             resolution_request_events: components["schemas"]["SignalResolutionRequestEvent"][];
+            /** Format: uuid */
+            marked_interesting_by_membership_id: string | null;
+            /** Format: date-time */
+            marked_interesting_at: string | null;
+            /** Format: uuid */
+            resolved_by_membership_id: string | null;
+            /** Format: date-time */
+            resolved_at: string | null;
+            resolution_origin: (components["schemas"]["ResolutionOriginEnum"] | components["schemas"]["NullEnum"]) | null;
+            /** Format: uuid */
+            canceled_by_membership_id: string | null;
+            /** Format: date-time */
+            canceled_at: string | null;
+            /** Format: uuid */
+            archived_by_membership_id: string | null;
+            /** Format: date-time */
+            archived_at: string | null;
         };
         SignalDetailMediaItem: {
             /** Format: uuid */
@@ -3906,6 +3932,23 @@ export interface components {
             media_items: components["schemas"]["SignalDetailMediaItem"][];
             linked_action_plan_executions: components["schemas"]["SignalLinkedActionPlanExecution"][];
             resolution_request_events: components["schemas"]["SignalResolutionRequestEvent"][];
+            /** Format: uuid */
+            marked_interesting_by_membership_id: string | null;
+            /** Format: date-time */
+            marked_interesting_at: string | null;
+            /** Format: uuid */
+            resolved_by_membership_id: string | null;
+            /** Format: date-time */
+            resolved_at: string | null;
+            resolution_origin: (components["schemas"]["ResolutionOriginEnum"] | components["schemas"]["NullEnum"]) | null;
+            /** Format: uuid */
+            canceled_by_membership_id: string | null;
+            /** Format: date-time */
+            canceled_at: string | null;
+            /** Format: uuid */
+            archived_by_membership_id: string | null;
+            /** Format: date-time */
+            archived_at: string | null;
             qualification_outcome: components["schemas"]["QualificationOutcomeEnum"];
             /** Format: uuid */
             surviving_signal_id: string;
