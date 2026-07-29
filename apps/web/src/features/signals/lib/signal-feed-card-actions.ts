@@ -6,9 +6,17 @@ export const SIGNAL_CANCEL_CONFIRM_MESSAGE =
 export const SIGNAL_MARK_INTERESTING_CONFIRM_MESSAGE =
   'Confirmer le marquage comme intéressant ? Cette action n’est pas réversible pour l’instant.'
 
+export const SIGNAL_ARCHIVE_CONFIRM_MESSAGE =
+  'Confirmer l’archivage de cette observation ? Cette action est définitive.'
+
+/** UX hint when resolve/cancel are unavailable because a linked action plan owns the lifecycle. */
+export const SIGNAL_IN_PROGRESS_RESOLVE_VIA_ACTION_PLAN_HINT =
+  'Cette observation sera résolue via son plan d’action.'
+
 export type SignalFeedCardActionId =
   | 'pin'
   | 'mark_interesting'
+  | 'archive'
   | 'resolve'
   | 'cancel'
   | 'qualify'
@@ -25,6 +33,7 @@ export function canOpenSignalFeedCardActions(hints: PermissionHints): boolean {
   return (
     hints.can_pin ||
     hints.can_mark_interesting ||
+    hints.can_archive ||
     hints.can_resolve ||
     hints.can_cancel ||
     hints.can_qualify_routing
@@ -57,6 +66,14 @@ export function getSignalFeedCardActionOptions(
     options.push({
       id: 'mark_interesting',
       label: 'Marquer comme intéressant',
+      tone: 'neutral',
+    })
+  }
+
+  if (hints.can_archive) {
+    options.push({
+      id: 'archive',
+      label: 'Archiver',
       tone: 'neutral',
     })
   }

@@ -19,7 +19,7 @@ from houston.action_plans.services import (
     validate_action_plan_execution,
 )
 from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
-from houston.signals.services import resolve_signal
+from houston.signals.services import resolve_signal_from_execution_sync
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -368,7 +368,7 @@ def test_invalidation_not_emitted_on_cancel_rollback(
     mock_notify.assert_not_called()
 
 
-def test_signal_resolve_cancels_linked_executions_with_canceled_invalidation(
+def test_signal_auto_resolve_cancels_linked_executions_with_canceled_invalidation(
     owner_membership,
     signal,
 ):
@@ -392,7 +392,7 @@ def test_signal_resolve_cancels_linked_executions_with_canceled_invalidation(
     )
 
     with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
-        resolve_signal(signal=signal, actor_membership=owner_membership)
+        resolve_signal_from_execution_sync(signal=signal)
         transaction.on_commit(lambda: None)
 
     execution.refresh_from_db()

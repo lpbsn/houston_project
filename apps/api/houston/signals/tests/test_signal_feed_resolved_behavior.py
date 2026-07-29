@@ -256,3 +256,5 @@ def test_in_progress_permission_hints_deny_pin(api_client):
     assert detail_response.status_code == 200
     hints = detail_response.json()["permission_hints"]
     assert hints["can_pin"] is False
+    assert hints["can_cancel"] is False
+    assert hints["can_resolve"] is False

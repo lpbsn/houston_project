@@ -4,9 +4,17 @@ import pytest
 from django.utils import timezone
 
 from houston.establishments.models import EstablishmentMembership
+from houston.signals.constants import (
+    SIGNAL_IN_PROGRESS_MANUAL_CANCEL_DETAIL,
+    SIGNAL_IN_PROGRESS_MANUAL_RESOLVE_DETAIL,
+)
 from houston.signals.exceptions import SignalStateError
 from houston.signals.models import Signal
-from houston.signals.services import cancel_signal, resolve_signal
+from houston.signals.services import (
+    cancel_signal,
+    resolve_signal,
+    resolve_signal_from_execution_sync,
+)
 from houston.signals.tests.conftest import build_api_membership, create_minimal_v3_signal
 
 pytestmark = pytest.mark.django_db
@@ -31,10 +39,38 @@ def test_cancel_signal_sets_canceled_and_clears_pin():
     assert result.pinned_by_membership_id is None
 
 
-def test_resolve_signal_sets_resolved():
-    signal = _signal(status=Signal.Status.IN_PROGRESS)
+def test_resolve_signal_sets_resolved_from_open():
+    signal = _signal(status=Signal.Status.OPEN)
 
     result = resolve_signal(signal=signal)
+
+    assert result.status == Signal.Status.RESOLVED
+
+
+def test_resolve_signal_rejects_in_progress():
+    signal = _signal(status=Signal.Status.IN_PROGRESS)
+
+    with pytest.raises(SignalStateError, match=SIGNAL_IN_PROGRESS_MANUAL_RESOLVE_DETAIL):
+        resolve_signal(signal=signal)
+
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.IN_PROGRESS
+
+
+def test_cancel_signal_rejects_in_progress():
+    signal = _signal(status=Signal.Status.IN_PROGRESS)
+
+    with pytest.raises(SignalStateError, match=SIGNAL_IN_PROGRESS_MANUAL_CANCEL_DETAIL):
+        cancel_signal(signal=signal)
+
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.IN_PROGRESS
+
+
+def test_resolve_signal_from_execution_sync_allows_in_progress():
+    signal = _signal(status=Signal.Status.IN_PROGRESS)
+
+    result = resolve_signal_from_execution_sync(signal=signal)
 
     assert result.status == Signal.Status.RESOLVED
 

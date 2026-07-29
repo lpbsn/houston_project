@@ -33,6 +33,7 @@ function buildFeedItem(
     permission_hints: {
       can_pin: true,
       can_mark_interesting: false,
+      can_archive: false,
       can_cancel: true,
       can_resolve: true,
       can_create_linked_action_plan: false,

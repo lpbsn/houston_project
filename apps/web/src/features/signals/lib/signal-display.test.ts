@@ -31,6 +31,7 @@ function item(overrides: Partial<SignalFeedItem> & { id: string }): SignalFeedIt
     permission_hints: {
       can_pin: false,
       can_mark_interesting: false,
+      can_archive: false,
       can_cancel: false,
       can_resolve: false,
       can_create_linked_action_plan: false,
@@ -70,7 +71,7 @@ describe('groupFeedItemsByStatus', () => {
     expect(groups?.[0].status).toBe('open')
     expect(groups?.[1].status).toBe('interesting')
     expect(groups?.[1].label).toBe('Intéressants')
-    expect(groups?.[1].dotVariant).toBe('primary')
+    expect(groups?.[1].dotVariant).toBe('mint')
     expect(groups?.[2].status).toBe('resolved')
   })
 
