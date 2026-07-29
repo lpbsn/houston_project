@@ -90,8 +90,28 @@ def _promote_one_execution(*, execution_id: uuid.UUID) -> bool:
         return False
 
     execution.status = EXECUTION_STATUS_IN_PROGRESS
+    execution.started_at = now
+    execution.started_by_membership = None
     execution.last_activity_at = now
-    execution.save(update_fields=["status", "last_activity_at", "updated_at"])
+    execution.save(
+        update_fields=[
+            "status",
+            "started_at",
+            "started_by_membership",
+            "last_activity_at",
+            "updated_at",
+        ]
+    )
+
+    from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_STARTED
+    from houston.action_plans.lifecycle_events import record_execution_lifecycle_event
+
+    record_execution_lifecycle_event(
+        execution=execution,
+        event_type=EXECUTION_LIFECYCLE_EVENT_STARTED,
+        occurred_at=now,
+        actor_membership=None,
+    )
 
     schedule_action_plan_execution_invalidation(
         execution=execution,

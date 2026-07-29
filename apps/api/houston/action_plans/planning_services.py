@@ -382,6 +382,7 @@ def _create_individual_execution(
         action_plan=action_plan,
         establishment_id=action_plan.establishment_id,
         created_by=actor,
+        lifecycle_actor_membership=actor,
         pilot_business_unit=action_plan.pilot_business_unit,
         title=action_plan.title,
         description=action_plan.description,

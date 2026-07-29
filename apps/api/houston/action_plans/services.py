@@ -205,6 +205,9 @@ def _cancel_linked_active_executions_for_signal_resolve(
     actor_membership: EstablishmentMembership | None = None,
 ) -> None:
     _ = actor_membership
+    from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_CANCELED
+    from houston.action_plans.lifecycle_events import record_execution_lifecycle_event
+
     now = timezone.now()
     active_executions = ActionPlanExecution.objects.filter(
         source_signal_id=signal.id,
@@ -213,16 +216,25 @@ def _cancel_linked_active_executions_for_signal_resolve(
     for execution in active_executions:
         execution.status = EXECUTION_STATUS_CANCELED
         execution.canceled_at = now
+        execution.canceled_by_membership = None
         execution.cancel_origin = CANCEL_ORIGIN_MANUAL
         execution.last_activity_at = now
         execution.save(
             update_fields=[
                 "status",
                 "canceled_at",
+                "canceled_by_membership",
                 "cancel_origin",
                 "last_activity_at",
                 "updated_at",
             ]
+        )
+        record_execution_lifecycle_event(
+            execution=execution,
+            event_type=EXECUTION_LIFECYCLE_EVENT_CANCELED,
+            occurred_at=now,
+            actor_membership=None,
+            metadata_safe={"cancel_origin": CANCEL_ORIGIN_MANUAL},
         )
         from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
         from houston.notifications.scheduling import (
@@ -1084,6 +1096,7 @@ def _create_execution_record(
     action_plan: ActionPlan | None,
     establishment_id: uuid.UUID,
     created_by: EstablishmentMembership,
+    lifecycle_actor_membership: EstablishmentMembership | None,
     pilot_business_unit: BusinessUnit,
     title: str,
     description: str,
@@ -1100,6 +1113,9 @@ def _create_execution_record(
     responsible_business_unit=None,
     activity_subject=None,
 ) -> ActionPlanExecution:
+    from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_CREATED
+    from houston.action_plans.lifecycle_events import record_execution_lifecycle_event
+
     now = timezone.now()
     if use_shared_chronology:
         chronology_owner_membership = None
@@ -1107,7 +1123,8 @@ def _create_execution_record(
         raise ActionPlanValidationError(
             "Individual chronology requires a chronology owner membership.",
         )
-    return ActionPlanExecution.objects.create(
+    status = initial_execution_status(start_at=start_at, now=now)
+    execution = ActionPlanExecution.objects.create(
         action_plan=action_plan,
         action_plan_schedule=action_plan_schedule,
         chronology_owner_membership=chronology_owner_membership,
@@ -1122,13 +1139,21 @@ def _create_execution_record(
         activity_subject=activity_subject,
         requires_validation=requires_validation,
         use_shared_chronology=use_shared_chronology,
-        status=initial_execution_status(start_at=start_at, now=now),
+        status=status,
         occurrence_date=occurrence_date,
         start_at=start_at,
         visible_from=visible_from,
         end_at=end_at,
         last_activity_at=now,
     )
+    record_execution_lifecycle_event(
+        execution=execution,
+        event_type=EXECUTION_LIFECYCLE_EVENT_CREATED,
+        occurred_at=execution.created_at,
+        actor_membership=lifecycle_actor_membership,
+        metadata_safe={"initial_status": status},
+    )
+    return execution
 
 
 def _lock_execution_for_write(*, execution_id: uuid.UUID) -> ActionPlanExecution:
@@ -1532,6 +1557,7 @@ def create_action_plan_with_execution(
         action_plan=action_plan,
         establishment_id=establishment_id,
         created_by=created_by,
+        lifecycle_actor_membership=created_by,
         pilot_business_unit=pilot_business_unit,
         title=normalized_title,
         description=normalized_description,
@@ -1697,6 +1723,7 @@ def create_execution_from_action_plan(
         action_plan=action_plan,
         establishment_id=action_plan.establishment_id,
         created_by=actor,
+        lifecycle_actor_membership=actor,
         pilot_business_unit=action_plan.pilot_business_unit,
         title=action_plan.title,
         description=action_plan.description,
@@ -1747,12 +1774,30 @@ def mark_action_plan_execution_done(
     if not can_mark_action_plan_execution_done(actor_membership, execution):
         raise ActionPlanPermissionError("Not allowed to mark this execution done.")
 
+    from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_MARKED_DONE
+    from houston.action_plans.lifecycle_events import record_execution_lifecycle_event
+
     now = timezone.now()
     execution.marked_done_at = now
+    execution.marked_done_by_membership = actor_membership
     execution.last_activity_at = now
     if execution.requires_validation:
         execution.status = EXECUTION_STATUS_PENDING_VALIDATION
-        execution.save(update_fields=["status", "marked_done_at", "last_activity_at", "updated_at"])
+        execution.save(
+            update_fields=[
+                "status",
+                "marked_done_at",
+                "marked_done_by_membership",
+                "last_activity_at",
+                "updated_at",
+            ]
+        )
+        record_execution_lifecycle_event(
+            execution=execution,
+            event_type=EXECUTION_LIFECYCLE_EVENT_MARKED_DONE,
+            occurred_at=now,
+            actor_membership=actor_membership,
+        )
         from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
         from houston.notifications.scheduling import (
             schedule_action_plan_execution_pending_validation_notification,
@@ -1769,7 +1814,21 @@ def mark_action_plan_execution_done(
         return execution
 
     execution.status = EXECUTION_STATUS_DONE
-    execution.save(update_fields=["status", "marked_done_at", "last_activity_at", "updated_at"])
+    execution.save(
+        update_fields=[
+            "status",
+            "marked_done_at",
+            "marked_done_by_membership",
+            "last_activity_at",
+            "updated_at",
+        ]
+    )
+    record_execution_lifecycle_event(
+        execution=execution,
+        event_type=EXECUTION_LIFECYCLE_EVENT_MARKED_DONE,
+        occurred_at=now,
+        actor_membership=actor_membership,
+    )
     from houston.action_plans.feed_pin_services import delete_action_plan_execution_feed_pins
     from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
 
@@ -1796,11 +1855,29 @@ def validate_action_plan_execution(
     if not can_validate_action_plan_execution(actor_membership, execution):
         raise ActionPlanPermissionError("Not allowed to validate this execution.")
 
+    from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_VALIDATED
+    from houston.action_plans.lifecycle_events import record_execution_lifecycle_event
+
     now = timezone.now()
     execution.status = EXECUTION_STATUS_DONE
     execution.validated_at = now
+    execution.validated_by_membership = actor_membership
     execution.last_activity_at = now
-    execution.save(update_fields=["status", "validated_at", "last_activity_at", "updated_at"])
+    execution.save(
+        update_fields=[
+            "status",
+            "validated_at",
+            "validated_by_membership",
+            "last_activity_at",
+            "updated_at",
+        ]
+    )
+    record_execution_lifecycle_event(
+        execution=execution,
+        event_type=EXECUTION_LIFECYCLE_EVENT_VALIDATED,
+        occurred_at=now,
+        actor_membership=actor_membership,
+    )
     from houston.action_plans.feed_pin_services import delete_action_plan_execution_feed_pins
     from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
 
@@ -1830,23 +1907,42 @@ def reopen_action_plan_execution(
     if not can_reopen_action_plan_execution(actor, execution):
         raise ActionPlanPermissionError("Not allowed to reopen this execution.")
 
+    from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_REOPENED
+    from houston.action_plans.lifecycle_events import record_execution_lifecycle_event
+
     now = timezone.now()
     execution.status = EXECUTION_STATUS_IN_PROGRESS
     execution.marked_done_at = None
+    execution.marked_done_by_membership = None
     execution.validated_at = None
+    execution.validated_by_membership = None
     execution.canceled_at = None
+    execution.canceled_by_membership = None
     execution.cancel_origin = None
+    execution.reopened_at = now
+    execution.reopened_by_membership = actor
     execution.last_activity_at = now
     execution.save(
         update_fields=[
             "status",
             "marked_done_at",
+            "marked_done_by_membership",
             "validated_at",
+            "validated_by_membership",
             "canceled_at",
+            "canceled_by_membership",
             "cancel_origin",
+            "reopened_at",
+            "reopened_by_membership",
             "last_activity_at",
             "updated_at",
         ]
+    )
+    record_execution_lifecycle_event(
+        execution=execution,
+        event_type=EXECUTION_LIFECYCLE_EVENT_REOPENED,
+        occurred_at=now,
+        actor_membership=actor,
     )
     _reopen_linked_signal_after_execution_reopen(
         execution=execution,
@@ -1887,16 +1983,28 @@ def cancel_action_plan_execution(
     now = timezone.now()
     execution.status = ActionPlanExecution.Status.CANCELED
     execution.canceled_at = now
+    execution.canceled_by_membership = actor
     execution.cancel_origin = CANCEL_ORIGIN_MANUAL
     execution.last_activity_at = now
     execution.save(
         update_fields=[
             "status",
             "canceled_at",
+            "canceled_by_membership",
             "cancel_origin",
             "last_activity_at",
             "updated_at",
         ]
+    )
+    from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_CANCELED
+    from houston.action_plans.lifecycle_events import record_execution_lifecycle_event
+
+    record_execution_lifecycle_event(
+        execution=execution,
+        event_type=EXECUTION_LIFECYCLE_EVENT_CANCELED,
+        occurred_at=now,
+        actor_membership=actor,
+        metadata_safe={"cancel_origin": CANCEL_ORIGIN_MANUAL},
     )
     from houston.action_plans.feed_pin_services import delete_action_plan_execution_feed_pins
     _sync_linked_signal_after_execution_change(execution=execution)

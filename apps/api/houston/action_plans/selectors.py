@@ -80,6 +80,12 @@ _EXECUTION_DETAIL_SELECT_RELATED = (
     "source_signal__activity_subject",
     "source_signal__activity_subject__catalog_activity_subject",
     "created_by__user",
+    "marked_done_by_membership__user",
+    "validated_by_membership__user",
+    "canceled_by_membership__user",
+    "reopened_by_membership__user",
+    "started_by_membership__user",
+    "reactivated_by_membership__user",
     "action_plan",
 )
 _EXECUTION_ASSIGNEE_PREFETCH = Prefetch(

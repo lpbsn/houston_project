@@ -46,6 +46,42 @@ def test_execution_detail_visible_to_assignee(
     assert len(body["involved_poles"]) >= 1
 
 
+def test_execution_detail_exposes_audit_current_fields_without_journal(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    from houston.action_plans.services import mark_action_plan_execution_done
+
+    execution = _execution_with_assignee(owner_membership, staff_membership, business_unit)
+    mark_action_plan_execution_done(
+        execution_id=execution.id,
+        actor_membership=owner_membership,
+    )
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_execution_url(owner_membership.establishment_id, execution.id),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["marked_done_by_membership_id"] == str(owner_membership.id)
+    assert body["marked_done_by_display_name"]
+    assert body["marked_done_at"]
+    assert body["validated_by_membership_id"] is None
+    assert body["canceled_by_membership_id"] is None
+    assert body["cancel_origin"] is None
+    assert body["reopened_by_membership_id"] is None
+    assert body["reopened_at"] is None
+    assert body["started_by_membership_id"] is None
+    assert body["started_at"] is None
+    assert body["reactivated_by_membership_id"] is None
+    assert body["reactivated_at"] is None
+    assert "lifecycle_events" not in body
+    assert "lifecycle_event" not in body
+
+
 def test_execution_lifecycle_mark_done_validate_reopen_cancel(
     api_client,
     owner_membership,

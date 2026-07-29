@@ -12,6 +12,13 @@ from houston.action_plans.constants import (
     CANCEL_ORIGIN_SCHEDULE_SYNC,
     CATALOG_STATUS_ACTIVE,
     CATALOG_STATUS_INACTIVE,
+    EXECUTION_LIFECYCLE_EVENT_CANCELED,
+    EXECUTION_LIFECYCLE_EVENT_CREATED,
+    EXECUTION_LIFECYCLE_EVENT_MARKED_DONE,
+    EXECUTION_LIFECYCLE_EVENT_REACTIVATED,
+    EXECUTION_LIFECYCLE_EVENT_REOPENED,
+    EXECUTION_LIFECYCLE_EVENT_STARTED,
+    EXECUTION_LIFECYCLE_EVENT_VALIDATED,
     EXECUTION_STATUS_IN_PROGRESS,
     EXECUTION_STATUS_SCHEDULED,
     MAX_TASK_POSITION,
@@ -337,8 +344,29 @@ class ActionPlanExecution(BaseModel):
     end_at = models.DateTimeField(null=True, blank=True)
     last_activity_at = models.DateTimeField()
     availability_notified_at = models.DateTimeField(null=True, blank=True)
+    marked_done_by_membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.SET_NULL,
+        related_name="action_plan_executions_marked_done",
+        null=True,
+        blank=True,
+    )
     marked_done_at = models.DateTimeField(null=True, blank=True)
+    validated_by_membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.SET_NULL,
+        related_name="action_plan_executions_validated",
+        null=True,
+        blank=True,
+    )
     validated_at = models.DateTimeField(null=True, blank=True)
+    canceled_by_membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.SET_NULL,
+        related_name="action_plan_executions_canceled",
+        null=True,
+        blank=True,
+    )
     canceled_at = models.DateTimeField(null=True, blank=True)
     cancel_origin = models.CharField(
         max_length=32,
@@ -349,6 +377,30 @@ class ActionPlanExecution(BaseModel):
             (CANCEL_ORIGIN_SCHEDULE_SYNC, "Schedule sync"),
         ],
     )
+    reopened_by_membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.SET_NULL,
+        related_name="action_plan_executions_reopened",
+        null=True,
+        blank=True,
+    )
+    reopened_at = models.DateTimeField(null=True, blank=True)
+    started_by_membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.SET_NULL,
+        related_name="action_plan_executions_started",
+        null=True,
+        blank=True,
+    )
+    started_at = models.DateTimeField(null=True, blank=True)
+    reactivated_by_membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.SET_NULL,
+        related_name="action_plan_executions_reactivated",
+        null=True,
+        blank=True,
+    )
+    reactivated_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         indexes = [
@@ -414,6 +466,58 @@ class ActionPlanExecution(BaseModel):
 
     def __str__(self) -> str:
         return f"ActionPlanExecution {self.id} [{self.status}]"
+
+
+class ActionPlanExecutionLifecycleEvent(BaseModel):
+    """Append-only journal of execution lifecycle transitions. Insert-only from services."""
+
+    class EventType(models.TextChoices):
+        CREATED = EXECUTION_LIFECYCLE_EVENT_CREATED, "Created"
+        STARTED = EXECUTION_LIFECYCLE_EVENT_STARTED, "Started"
+        MARKED_DONE = EXECUTION_LIFECYCLE_EVENT_MARKED_DONE, "Marked done"
+        VALIDATED = EXECUTION_LIFECYCLE_EVENT_VALIDATED, "Validated"
+        CANCELED = EXECUTION_LIFECYCLE_EVENT_CANCELED, "Canceled"
+        REOPENED = EXECUTION_LIFECYCLE_EVENT_REOPENED, "Reopened"
+        REACTIVATED = EXECUTION_LIFECYCLE_EVENT_REACTIVATED, "Reactivated"
+
+    action_plan_execution = models.ForeignKey(
+        ActionPlanExecution,
+        on_delete=models.CASCADE,
+        related_name="lifecycle_events",
+    )
+    establishment = models.ForeignKey(
+        "establishments.Establishment",
+        on_delete=models.CASCADE,
+        related_name="action_plan_execution_lifecycle_events",
+    )
+    event_type = models.CharField(max_length=64, choices=EventType.choices)
+    actor_membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.SET_NULL,
+        related_name="action_plan_execution_lifecycle_events",
+        null=True,
+        blank=True,
+    )
+    occurred_at = models.DateTimeField()
+    metadata_safe = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["action_plan_execution", "occurred_at"],
+                name="ap_exec_lifecycle_exec_at_idx",
+            ),
+            models.Index(
+                fields=["establishment", "occurred_at"],
+                name="ap_exec_lifecycle_est_at_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"ActionPlanExecutionLifecycleEvent {self.event_type} "
+            f"({self.action_plan_execution_id})"
+        )
 
 
 class ActionPlanExecutionFeedPin(BaseModel):

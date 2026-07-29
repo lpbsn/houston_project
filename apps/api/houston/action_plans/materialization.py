@@ -456,6 +456,7 @@ def materialize_execution_from_schedule(
                 chronology_owner_membership=source_membership,
                 establishment_id=schedule.establishment_id,
                 created_by=schedule.created_by,
+                lifecycle_actor_membership=None,
                 pilot_business_unit=action_plan.pilot_business_unit,
                 title=action_plan.title,
                 description=action_plan.description,
