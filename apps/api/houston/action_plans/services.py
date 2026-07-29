@@ -125,7 +125,12 @@ def _linked_active_executions_block_signal_sync(*, signal: Signal) -> bool:
 
 
 @transaction.atomic
-def sync_signal_after_execution_change(*, signal: Signal) -> Signal:
+def sync_signal_after_execution_change(
+    *,
+    signal: Signal,
+    actor_membership: EstablishmentMembership | None = None,
+    triggering_execution: ActionPlanExecution | None = None,
+) -> Signal:
     linked = ActionPlanExecution.objects.filter(source_signal_id=signal.id)
     if linked.filter(status__in=SIGNAL_BLOCKING_EXECUTION_STATUSES).exists():
         return signal
@@ -134,13 +139,19 @@ def sync_signal_after_execution_change(*, signal: Signal) -> Signal:
         linked.exists()
         and linked.filter(status=EXECUTION_STATUS_CANCELED).count() == linked.count()
     ):
-        from houston.signals.constants import CANCEL_RESOLVE_SIGNAL_STATUSES
+        from houston.signals.constants import (
+            CANCEL_RESOLVE_SIGNAL_STATUSES,
+            SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
+        )
+        from houston.signals.lifecycle_events import record_signal_lifecycle_event
         from houston.signals.services import (
             _schedule_signal_invalidation,
             touch_signal_activity,
         )
 
-        if signal.status in CANCEL_RESOLVE_SIGNAL_STATUSES:
+        from_status = signal.status
+        if from_status in CANCEL_RESOLVE_SIGNAL_STATUSES:
+            now = timezone.now()
             signal.status = Signal.Status.OPEN
             signal.is_pinned = False
             signal.pinned_at = None
@@ -156,6 +167,21 @@ def sync_signal_after_execution_change(*, signal: Signal) -> Signal:
                     "updated_at",
                 ]
             )
+            if from_status != Signal.Status.OPEN:
+                metadata_safe: dict = {
+                    "from_status": from_status,
+                    "to_status": Signal.Status.OPEN,
+                    "origin": "all_linked_executions_canceled",
+                }
+                if triggering_execution is not None:
+                    metadata_safe["action_plan_execution_id"] = triggering_execution.id
+                record_signal_lifecycle_event(
+                    signal=signal,
+                    event_type=SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
+                    occurred_at=now,
+                    actor_membership=actor_membership,
+                    metadata_safe=metadata_safe,
+                )
             _schedule_signal_invalidation(signal=signal, reason="signal.updated")
         return signal
 
@@ -168,11 +194,19 @@ def sync_signal_after_execution_change(*, signal: Signal) -> Signal:
     return signal
 
 
-def _sync_linked_signal_after_execution_change(*, execution: ActionPlanExecution) -> None:
+def _sync_linked_signal_after_execution_change(
+    *,
+    execution: ActionPlanExecution,
+    actor_membership: EstablishmentMembership | None = None,
+) -> None:
     if execution.source_signal_id is None:
         return
     signal = Signal.objects.get(pk=execution.source_signal_id)
-    sync_signal_after_execution_change(signal=signal)
+    sync_signal_after_execution_change(
+        signal=signal,
+        actor_membership=actor_membership,
+        triggering_execution=execution,
+    )
 
 
 def _lock_source_signal_created_from_set_if_any(*, execution_id: uuid.UUID) -> None:
@@ -1838,7 +1872,10 @@ def mark_action_plan_execution_done(
         execution=execution,
         reason="action_plan_execution.done",
     )
-    _sync_linked_signal_after_execution_change(execution=execution)
+    _sync_linked_signal_after_execution_change(
+        execution=execution,
+        actor_membership=actor_membership,
+    )
     return execution
 
 
@@ -1887,7 +1924,10 @@ def validate_action_plan_execution(
         execution=execution,
         reason="action_plan_execution.done",
     )
-    _sync_linked_signal_after_execution_change(execution=execution)
+    _sync_linked_signal_after_execution_change(
+        execution=execution,
+        actor_membership=actor_membership,
+    )
     return execution
 
 
@@ -2007,7 +2047,10 @@ def cancel_action_plan_execution(
         metadata_safe={"cancel_origin": CANCEL_ORIGIN_MANUAL},
     )
     from houston.action_plans.feed_pin_services import delete_action_plan_execution_feed_pins
-    _sync_linked_signal_after_execution_change(execution=execution)
+    _sync_linked_signal_after_execution_change(
+        execution=execution,
+        actor_membership=actor,
+    )
     from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
     from houston.notifications.scheduling import (
         schedule_action_plan_execution_canceled_notification,

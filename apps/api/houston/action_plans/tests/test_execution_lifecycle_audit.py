@@ -310,7 +310,10 @@ def test_mark_done_without_validation_emits_only_marked_done(
         actor_membership=owner_membership,
     )
     execution.refresh_from_db()
-    assert len(_events_of_type(execution=execution, event_type=EXECUTION_LIFECYCLE_EVENT_MARKED_DONE)) == 1
+    assert (
+        len(_events_of_type(execution=execution, event_type=EXECUTION_LIFECYCLE_EVENT_MARKED_DONE))
+        == 1
+    )
     assert not _events_of_type(execution=execution, event_type=EXECUTION_LIFECYCLE_EVENT_VALIDATED)
 
 

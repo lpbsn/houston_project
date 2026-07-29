@@ -4,6 +4,7 @@ import pytest
 from django.db import transaction
 
 from houston.action_plans.services import (
+    cancel_action_plan_execution,
     create_action_plan_with_execution,
     mark_action_plan_execution_done,
     reopen_action_plan_execution,
@@ -19,6 +20,7 @@ from houston.signals.constants import (
     SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
     SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING,
     SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS,
+    SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
     SIGNAL_LIFECYCLE_EVENT_RESOLVED,
     SIGNAL_RESOLUTION_ORIGIN_ACTION_PLAN,
     SIGNAL_RESOLUTION_ORIGIN_MANUAL,
@@ -432,3 +434,121 @@ def test_append_only_resolve_reopen_resolve_keeps_prior_event_intact():
     assert prior.occurred_at == first_occurred_at
     assert prior.metadata_safe == first_metadata
     assert prior.actor_membership_id is None
+
+
+def test_cancel_last_linked_execution_emits_moved_open_with_manual_actor():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = create_minimal_v3_signal(membership, title="Cancel last moved open")
+    execution = _create_linked_execution(owner_membership=membership, signal=signal)
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.IN_PROGRESS
+
+    cancel_action_plan_execution(execution_id=execution.id, actor=membership)
+    signal.refresh_from_db()
+
+    assert signal.status == Signal.Status.OPEN
+    moved_open = [
+        e
+        for e in _lifecycle_events(signal=signal)
+        if e.event_type == SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN
+    ]
+    assert len(moved_open) == 1
+    assert moved_open[0].actor_membership_id == membership.id
+    assert moved_open[0].metadata_safe == {
+        "from_status": Signal.Status.IN_PROGRESS,
+        "to_status": Signal.Status.OPEN,
+        "origin": "all_linked_executions_canceled",
+        "action_plan_execution_id": str(execution.id),
+    }
+
+
+def test_cancel_one_of_two_linked_executions_does_not_emit_moved_open():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = create_minimal_v3_signal(membership, title="Cancel one keep active")
+    execution_a = _create_linked_execution(
+        owner_membership=membership,
+        signal=signal,
+        title="Plan A",
+    )
+    _create_linked_execution(
+        owner_membership=membership,
+        signal=signal,
+        title="Plan B",
+    )
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.IN_PROGRESS
+
+    cancel_action_plan_execution(execution_id=execution_a.id, actor=membership)
+    signal.refresh_from_db()
+
+    assert signal.status == Signal.Status.IN_PROGRESS
+    assert not any(
+        e.event_type == SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN
+        for e in _lifecycle_events(signal=signal)
+    )
+
+
+def test_sync_all_canceled_without_actor_emits_moved_open_system_actor():
+    from houston.action_plans.constants import (
+        CANCEL_ORIGIN_MANUAL,
+        EXECUTION_STATUS_CANCELED,
+    )
+    from houston.action_plans.models import ActionPlanExecution
+
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = create_minimal_v3_signal(membership, title="System moved open")
+    execution = _create_linked_execution(owner_membership=membership, signal=signal)
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.IN_PROGRESS
+
+    ActionPlanExecution.objects.filter(pk=execution.id).update(
+        status=EXECUTION_STATUS_CANCELED,
+        cancel_origin=CANCEL_ORIGIN_MANUAL,
+    )
+
+    sync_signal_after_execution_change(signal=signal)
+    signal.refresh_from_db()
+
+    assert signal.status == Signal.Status.OPEN
+    moved_open = [
+        e
+        for e in _lifecycle_events(signal=signal)
+        if e.event_type == SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN
+    ]
+    assert len(moved_open) == 1
+    assert moved_open[0].actor_membership_id is None
+    assert moved_open[0].metadata_safe["origin"] == "all_linked_executions_canceled"
+    assert "action_plan_execution_id" not in moved_open[0].metadata_safe
+
+
+def test_moved_open_replay_and_already_open_are_idempotent():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = create_minimal_v3_signal(membership, title="Moved open replay")
+    execution = _create_linked_execution(owner_membership=membership, signal=signal)
+
+    cancel_action_plan_execution(execution_id=execution.id, actor=membership)
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.OPEN
+    count_after_cancel = SignalLifecycleEvent.objects.filter(
+        signal=signal,
+        event_type=SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
+    ).count()
+    assert count_after_cancel == 1
+
+    sync_signal_after_execution_change(signal=signal, actor_membership=membership)
+    assert (
+        SignalLifecycleEvent.objects.filter(
+            signal=signal,
+            event_type=SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
+        ).count()
+        == count_after_cancel
+    )
+
+    sync_signal_after_execution_change(signal=signal)
+    assert (
+        SignalLifecycleEvent.objects.filter(
+            signal=signal,
+            event_type=SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
+        ).count()
+        == count_after_cancel
+    )
