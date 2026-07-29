@@ -9,14 +9,18 @@ import {
 import { invalidateEstablishmentSignalQueries } from '@/lib/query-invalidation'
 
 import {
+  approveSignalResolutionRequest,
   archiveSignal,
   cancelSignal,
+  cancelSignalResolutionRequest,
+  createSignalResolutionRequest,
   fetchQualifyRoutingOptions,
   fetchSignalDetail,
   fetchSignalFeed,
   markSignalInteresting,
   pinSignal,
   qualifySignalRouting,
+  rejectSignalResolutionRequest,
   resolveSignal,
   signalsQueryKeys,
   unpinSignal,
@@ -233,6 +237,102 @@ export function useArchiveSignalMutation(establishmentId: string | null) {
       queryClient.removeQueries({
         queryKey: signalsQueryKeys.detail(establishmentId, signalId),
       })
+    },
+  })
+}
+
+export function useCreateSignalResolutionRequestMutation(establishmentId: string | null) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { signalId: string; requestComment?: string }) => {
+      if (!establishmentId) {
+        throw new Error('Observation introuvable.')
+      }
+      return createSignalResolutionRequest(establishmentId, input.signalId, {
+        request_comment: input.requestComment,
+      })
+    },
+    onSuccess: (detail, variables) => {
+      if (!establishmentId) {
+        return
+      }
+      invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+      queryClient.setQueryData(signalsQueryKeys.detail(establishmentId, variables.signalId), detail)
+    },
+  })
+}
+
+export function useApproveSignalResolutionRequestMutation(establishmentId: string | null) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      signalId: string
+      requestId: string
+      reviewComment?: string
+    }) => {
+      if (!establishmentId) {
+        throw new Error('Observation introuvable.')
+      }
+      return approveSignalResolutionRequest(establishmentId, input.signalId, input.requestId, {
+        review_comment: input.reviewComment,
+      })
+    },
+    onSuccess: (detail, variables) => {
+      if (!establishmentId) {
+        return
+      }
+      invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+      queryClient.setQueryData(signalsQueryKeys.detail(establishmentId, variables.signalId), detail)
+    },
+  })
+}
+
+export function useRejectSignalResolutionRequestMutation(establishmentId: string | null) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      signalId: string
+      requestId: string
+      reviewComment?: string
+    }) => {
+      if (!establishmentId) {
+        throw new Error('Observation introuvable.')
+      }
+      return rejectSignalResolutionRequest(establishmentId, input.signalId, input.requestId, {
+        review_comment: input.reviewComment,
+      })
+    },
+    onSuccess: (detail, variables) => {
+      if (!establishmentId) {
+        return
+      }
+      invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+      queryClient.setQueryData(signalsQueryKeys.detail(establishmentId, variables.signalId), detail)
+    },
+  })
+}
+
+export function useCancelSignalResolutionRequestMutation(establishmentId: string | null) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      signalId: string
+      requestId: string
+      cancelComment?: string
+    }) => {
+      if (!establishmentId) {
+        throw new Error('Observation introuvable.')
+      }
+      return cancelSignalResolutionRequest(establishmentId, input.signalId, input.requestId, {
+        cancel_comment: input.cancelComment,
+      })
+    },
+    onSuccess: (detail, variables) => {
+      if (!establishmentId) {
+        return
+      }
+      invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+      queryClient.setQueryData(signalsQueryKeys.detail(establishmentId, variables.signalId), detail)
     },
   })
 }

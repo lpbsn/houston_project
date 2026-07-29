@@ -165,6 +165,11 @@ function FeedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {item.resolution_request?.status === 'pending' ? (
+            <span className="rounded-full bg-[#EEF4FF] px-2 py-1 text-[10px] font-semibold text-[#355CA8]">
+              Validation demandée
+            </span>
+          ) : null}
           <SignalStatusBadge status={item.status} variant="feed" />
         </div>
       </div>

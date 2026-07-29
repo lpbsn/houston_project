@@ -189,7 +189,15 @@ def _iter_membership_scopes(membership: EstablishmentMembership) -> Iterable[Mem
     if cache is not None and "scope_links" in cache:
         return membership.scope_links.all()
 
-    return MembershipScope.objects.filter(membership=membership).select_related("business_unit")
+    cached = getattr(membership, "_houston_cached_scope_links", None)
+    if cached is not None:
+        return cached
+
+    scopes = tuple(
+        MembershipScope.objects.filter(membership=membership).select_related("business_unit")
+    )
+    membership._houston_cached_scope_links = scopes
+    return scopes
 
 
 def _resolve_scope_inputs(

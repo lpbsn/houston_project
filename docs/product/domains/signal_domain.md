@@ -113,6 +113,8 @@ This domain describes the validated MVP target behavior. Current code and `apps/
 - `open`
   - Active structured situation requiring supervision.
   - Normal creation state for a newly persisted Signal.
+  - May carry an associated **SignalResolutionRequest** (`pending`, `approved`, `rejected`, `canceled`) without changing `Signal.status`.
+  - A pending resolution request is an associated workflow state, **not** a Signal lifecycle status; no `pending_validation` Signal status exists.
 
 - `interesting`
   - Useful situation kept outside the default operational urgency buckets.
@@ -134,6 +136,7 @@ This domain describes the validated MVP target behavior. Current code and `apps/
   - Manual resolve/cancel on `in_progress` is refused with an explicit business error; resolution must go through linked Action Plan finalization.
   - Automatic resolution when all linked Actions are terminal is implemented in Phase 5 (Action services) via `resolve_signal_from_execution_sync` (allows `open` / `in_progress`).
   - Manual resolve from `open` cancels linked blocking executions (if any), then transitions the Signal to `resolved`.
+  - If a pending resolution request exists, a manual or automatic resolve by another authorized actor cancels that request with reason `signal_resolved_elsewhere`.
 
 - `canceled`
   - Situation intentionally closed as no longer relevant to pursue.
@@ -184,12 +187,13 @@ Not validated yet:
 - Visibility does not imply actionability.
 - Resolving Signals, canceling Signals, pinning, marking interesting, and archiving require backend command authorization (implemented). Creating Actions from Signals remains a separate workflow.
 - **Cancel and resolve** (implemented): Owner and Director may act on any `open` Signal in the establishment; Manager may act only when `MembershipScope` covers the Signal taxonomy (or unassigned triage); **Staff are denied** cancel and resolve. Manual cancel/resolve on `in_progress` is refused (permission hints false; API returns business error).
+- **Resolution request workflow** (implemented): Staff may request review from eligible Managers; Managers with current responsible-pole coverage may request review from eligible Directors. A pending request blocks **the requester Manager only** from resolving directly until they cancel the request or a reviewer decides; another authorized resolver may still resolve and auto-cancel the request.
 - **Mark interesting** (implemented): same RBAC shape as pin — Owner/Director/Manager (scope or unassigned triage) on `open` only; **Staff denied**. Staff may still view `interesting` Signals in personal and general feed.
 - **Archive** (implemented): same RBAC shape as pin — Owner/Director/Manager (scope or unassigned triage) on `interesting` only; **Staff denied**. Archived Signals are not product-exposed.
 - Notifications and realtime events do not grant Signal access.
 - Raw Observation text is not exposed through Signal permissions.
 
-API responses expose `permission_hints` (`can_pin`, `can_mark_interesting`, `can_archive`, `can_cancel`, `can_resolve`, `can_create_linked_action_plan`, `can_qualify_routing`) for UI display; backend permission checks on command endpoints remain authoritative. `can_create_linked_action_plan` is signal-scoped: it indicates whether the current membership may create a linked Action Plan from this Signal. Action Plan create enforcement remains the final authority.
+API responses expose `permission_hints` (`can_pin`, `can_mark_interesting`, `can_archive`, `can_cancel`, `can_resolve`, `can_create_linked_action_plan`, `can_qualify_routing`, `can_request_resolution`, `can_approve_resolution_request`, `can_reject_resolution_request`, `can_cancel_resolution_request`) for UI display; backend permission checks on command endpoints remain authoritative. `can_create_linked_action_plan` is signal-scoped: it indicates whether the current membership may create a linked Action Plan from this Signal. Action Plan create enforcement remains the final authority.
 
 ## 8. Events
 
@@ -220,6 +224,10 @@ Implemented in `apps/api/schema.yml` (establishment-scoped under `/api/v1/establ
 - `POST signals/{signal_id}/resolve/` — **no mandatory body**; sets status `resolved`
 - `POST signals/{signal_id}/mark-interesting/` — **no mandatory body**; sets status `interesting`
 - `POST signals/{signal_id}/archive/` — **no mandatory body**; `interesting` → `archived` (not exposed afterward)
+- `POST signals/{signal_id}/resolution-requests/` — create a pending resolution request; Signal remains `open`
+- `POST signals/{signal_id}/resolution-requests/{request_id}/approve/` — approve request and resolve Signal atomically
+- `POST signals/{signal_id}/resolution-requests/{request_id}/reject/` — reject request; Signal remains `open`
+- `POST signals/{signal_id}/resolution-requests/{request_id}/cancel/` — requester cancels pending request; Signal remains `open`
 
 Not implemented in current schema:
 - fetch Signal timeline or events

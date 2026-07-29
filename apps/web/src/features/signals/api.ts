@@ -239,6 +239,107 @@ export async function archiveSignal(
   return assertSignalData<SignalDetail>(result)
 }
 
+export async function createSignalResolutionRequest(
+  establishmentId: string,
+  signalId: string,
+  body: { request_comment?: string } = {},
+): Promise<SignalDetail> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/signals/{signal_id}/resolution-requests/',
+        {
+          params: signalPathParams(establishmentId, signalId),
+          headers: getAuthHeaders(accessToken),
+          body: { request_comment: body.request_comment ?? '' },
+        },
+      ),
+    { refreshable: true },
+  )
+
+  return assertSignalData<SignalDetail>(result)
+}
+
+function resolutionRequestPathParams(
+  establishmentId: string,
+  signalId: string,
+  requestId: string,
+) {
+  return {
+    path: {
+      establishment_id: establishmentId,
+      signal_id: signalId,
+      request_id: requestId,
+    },
+  }
+}
+
+export async function approveSignalResolutionRequest(
+  establishmentId: string,
+  signalId: string,
+  requestId: string,
+  body: { review_comment?: string } = {},
+): Promise<SignalDetail> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/signals/{signal_id}/resolution-requests/{request_id}/approve/',
+        {
+          params: resolutionRequestPathParams(establishmentId, signalId, requestId),
+          headers: getAuthHeaders(accessToken),
+          body: { review_comment: body.review_comment ?? '' },
+        },
+      ),
+    { refreshable: true },
+  )
+
+  return assertSignalData<SignalDetail>(result)
+}
+
+export async function rejectSignalResolutionRequest(
+  establishmentId: string,
+  signalId: string,
+  requestId: string,
+  body: { review_comment?: string } = {},
+): Promise<SignalDetail> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/signals/{signal_id}/resolution-requests/{request_id}/reject/',
+        {
+          params: resolutionRequestPathParams(establishmentId, signalId, requestId),
+          headers: getAuthHeaders(accessToken),
+          body: { review_comment: body.review_comment ?? '' },
+        },
+      ),
+    { refreshable: true },
+  )
+
+  return assertSignalData<SignalDetail>(result)
+}
+
+export async function cancelSignalResolutionRequest(
+  establishmentId: string,
+  signalId: string,
+  requestId: string,
+  body: { cancel_comment?: string } = {},
+): Promise<SignalDetail> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/signals/{signal_id}/resolution-requests/{request_id}/cancel/',
+        {
+          params: resolutionRequestPathParams(establishmentId, signalId, requestId),
+          headers: getAuthHeaders(accessToken),
+          body: { cancel_comment: body.cancel_comment ?? '' },
+        },
+      ),
+    { refreshable: true },
+  )
+
+  return assertSignalData<SignalDetail>(result)
+}
+
 export async function qualifySignalRouting(
   establishmentId: string,
   signalId: string,

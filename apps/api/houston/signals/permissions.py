@@ -206,7 +206,12 @@ def can_resolve_signal(
     membership: EstablishmentMembership | None,
     signal: Signal,
 ) -> bool:
-    return _can_cancel_or_resolve_signal(membership, signal)
+    if not _can_cancel_or_resolve_signal(membership, signal):
+        return False
+    # UX hint: requester with pending Manager→Director (or any route) cannot resolve.
+    if membership_is_pending_resolution_requester(membership, signal):
+        return False
+    return True
 
 
 def _can_cancel_or_resolve_signal(
@@ -318,3 +323,224 @@ def can_use_needs_qualification_filter(
     if membership is None:
         return False
     return is_triage_role(membership)
+
+
+def get_pending_resolution_request_for_signal(signal: Signal):
+    from houston.signals.models import SignalResolutionRequest
+
+    pending_list = getattr(signal, "pending_resolution_requests", None)
+    if pending_list is not None:
+        return pending_list[0] if pending_list else None
+
+    return (
+        SignalResolutionRequest.objects.filter(
+            signal_id=signal.id,
+            status=SignalResolutionRequest.Status.PENDING,
+        )
+        .select_related("requested_by_membership")
+        .first()
+    )
+
+
+def membership_is_pending_resolution_requester(
+    membership: EstablishmentMembership | None,
+    signal: Signal,
+) -> bool:
+    if membership is None:
+        return False
+    pending = get_pending_resolution_request_for_signal(signal)
+    if pending is None:
+        return False
+    return pending.requested_by_membership_id == membership.id
+
+
+def _signal_has_blocking_linked_executions(signal: Signal) -> bool:
+    annotated = getattr(signal, "has_blocking_linked_execution", None)
+    if annotated is not None:
+        return bool(annotated)
+
+    from houston.action_plans.constants import SIGNAL_BLOCKING_EXECUTION_STATUSES
+    from houston.action_plans.models import ActionPlanExecution
+
+    return ActionPlanExecution.objects.filter(
+        source_signal_id=signal.id,
+        status__in=SIGNAL_BLOCKING_EXECUTION_STATUSES,
+    ).exists()
+
+
+def list_eligible_resolution_reviewers_for_route(
+    *,
+    signal: Signal,
+    review_route: str,
+) -> list[EstablishmentMembership]:
+    from houston.signals.models import SignalResolutionRequest
+
+    if signal.responsible_business_unit_id is None:
+        return []
+
+    if review_route == SignalResolutionRequest.ReviewRoute.STAFF_TO_MANAGER:
+        return list(
+            EstablishmentMembership.objects.filter(
+                establishment_id=signal.establishment_id,
+                status=EstablishmentMembership.Status.ACTIVE,
+                role=EstablishmentMembership.Role.MANAGER,
+                scope_links__business_unit_id=signal.responsible_business_unit_id,
+            )
+            .select_related("user")
+            .distinct()
+        )
+
+    if review_route == SignalResolutionRequest.ReviewRoute.MANAGER_TO_DIRECTOR:
+        return list(
+            EstablishmentMembership.objects.filter(
+                establishment_id=signal.establishment_id,
+                status=EstablishmentMembership.Status.ACTIVE,
+                role=EstablishmentMembership.Role.DIRECTOR,
+            ).select_related("user")
+        )
+
+    return []
+
+
+def has_eligible_resolution_reviewers_for_route(
+    *,
+    signal: Signal,
+    review_route: str,
+) -> bool:
+    annotated = getattr(signal, "has_eligible_resolution_reviewers", None)
+    if annotated is not None:
+        return bool(annotated)
+    return bool(
+        list_eligible_resolution_reviewers_for_route(
+            signal=signal,
+            review_route=review_route,
+        )
+    )
+
+
+def is_eligible_resolution_reviewer(
+    membership: EstablishmentMembership | None,
+    *,
+    signal: Signal,
+    review_route: str,
+) -> bool:
+    if membership is None:
+        return False
+    if membership.status != EstablishmentMembership.Status.ACTIVE:
+        return False
+    if membership.establishment_id != signal.establishment_id:
+        return False
+    return any(
+        reviewer.id == membership.id
+        for reviewer in list_eligible_resolution_reviewers_for_route(
+            signal=signal,
+            review_route=review_route,
+        )
+    )
+
+
+def resolve_review_route_for_membership(
+    membership: EstablishmentMembership,
+) -> str | None:
+    from houston.signals.models import SignalResolutionRequest
+
+    if membership.role == EstablishmentMembership.Role.STAFF:
+        return SignalResolutionRequest.ReviewRoute.STAFF_TO_MANAGER
+    if membership.role == EstablishmentMembership.Role.MANAGER:
+        return SignalResolutionRequest.ReviewRoute.MANAGER_TO_DIRECTOR
+    return None
+
+
+def can_create_resolution_request(
+    membership: EstablishmentMembership | None,
+    signal: Signal,
+) -> bool:
+    if membership is None:
+        return False
+    if membership.status != EstablishmentMembership.Status.ACTIVE:
+        return False
+    if signal.establishment_id != membership.establishment_id:
+        return False
+    if signal.status != Signal.Status.OPEN:
+        return False
+    if signal.responsible_business_unit_id is None:
+        return False
+    if not can_view_signal_detail(membership, signal):
+        return False
+
+    review_route = resolve_review_route_for_membership(membership)
+    if review_route is None:
+        return False
+
+    from houston.signals.models import SignalResolutionRequest
+
+    if review_route == SignalResolutionRequest.ReviewRoute.STAFF_TO_MANAGER:
+        if membership.role != EstablishmentMembership.Role.STAFF:
+            return False
+    elif review_route == SignalResolutionRequest.ReviewRoute.MANAGER_TO_DIRECTOR:
+        if membership.role != EstablishmentMembership.Role.MANAGER:
+            return False
+        if not membership_scope_covers_business_unit(
+            membership,
+            signal.responsible_business_unit,
+        ):
+            return False
+    else:
+        return False
+
+    if get_pending_resolution_request_for_signal(signal) is not None:
+        return False
+    if _signal_has_blocking_linked_executions(signal):
+        return False
+    if not has_eligible_resolution_reviewers_for_route(
+        signal=signal,
+        review_route=review_route,
+    ):
+        return False
+    return True
+
+
+def can_review_resolution_request(
+    membership: EstablishmentMembership | None,
+    request,
+) -> bool:
+    from houston.signals.models import SignalResolutionRequest
+
+    if membership is None:
+        return False
+    if request.status != SignalResolutionRequest.Status.PENDING:
+        return False
+    signal = request.signal
+    return is_eligible_resolution_reviewer(
+        membership,
+        signal=signal,
+        review_route=request.review_route,
+    )
+
+
+def can_cancel_own_resolution_request(
+    membership: EstablishmentMembership | None,
+    request,
+) -> bool:
+    from houston.signals.models import SignalResolutionRequest
+
+    if membership is None:
+        return False
+    if request.status != SignalResolutionRequest.Status.PENDING:
+        return False
+    return request.requested_by_membership_id == membership.id
+
+
+def can_approve_resolution_request(
+    membership: EstablishmentMembership | None,
+    request,
+) -> bool:
+    return can_review_resolution_request(membership, request)
+
+
+def can_reject_resolution_request(
+    membership: EstablishmentMembership | None,
+    request,
+) -> bool:
+    return can_review_resolution_request(membership, request)
+

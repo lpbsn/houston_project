@@ -73,6 +73,8 @@ function buildSignalDetail(overrides: Record<string, unknown> = {}) {
     responsible_business_unit_label: 'Rooftop',
     affected_business_unit_id: null,
     activity_subject_id: null,
+    resolution_request: null,
+    resolution_request_events: [],
     permission_hints: {
       can_create_linked_action_plan: true,
     },
@@ -1010,6 +1012,42 @@ describe('ActionPlanCreatePage', () => {
       screen.getByText("Vous n'avez pas la permission de créer un plan d'action."),
     ).toBeTruthy()
     expect(createMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('shows warning when linked signal has a pending resolution request', () => {
+    signalDetailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignalDetail({
+        resolution_request: {
+          id: 'req-1',
+          status: 'pending',
+          review_route: 'manager_to_director',
+          requested_at: '2026-06-30T08:00:00Z',
+          request_comment: '',
+          reviewed_at: null,
+          review_comment: '',
+          canceled_at: null,
+          canceled_reason: '',
+          cancel_comment: '',
+          requested_by_membership_id: 'member-manager',
+          reviewed_by_membership_id: null,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderPage({
+      mode: 'signal-linked',
+      signalId: 'sig-1',
+      backPath: '/signals/sig-1',
+    })
+
+    expect(
+      screen.getByText(
+        'Une demande de résolution est actuellement en attente. La création de ce plan d’action annulera cette demande.',
+      ),
+    ).toBeTruthy()
   })
 
   it('creates per-assignee plan via single atomic create with planning intent', async () => {

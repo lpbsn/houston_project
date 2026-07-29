@@ -958,3 +958,160 @@ def schedule_chat_message_received_notification(
         subject_type=Notification.SubjectType.CHAT_CONVERSATION,
         subject_id=conversation_id,
     )
+
+
+def _load_resolution_request(*, resolution_request_id: uuid.UUID):
+    from houston.signals.models import SignalResolutionRequest
+
+    return (
+        SignalResolutionRequest.objects.filter(id=resolution_request_id)
+        .select_related(
+            "signal",
+            "signal__responsible_business_unit",
+            "requested_by_membership__user",
+            "reviewed_by_membership__user",
+        )
+        .first()
+    )
+
+
+def _resolution_request_signal_id(*, resolution_request_id: uuid.UUID) -> uuid.UUID | None:
+    from houston.signals.models import SignalResolutionRequest
+
+    return (
+        SignalResolutionRequest.objects.filter(id=resolution_request_id)
+        .values_list("signal_id", flat=True)
+        .first()
+    )
+
+
+def schedule_signal_resolution_request_created_notification(
+    *,
+    resolution_request_id: uuid.UUID,
+    actor_membership_id: uuid.UUID,
+) -> None:
+    def deliver() -> None:
+        from houston.signals.models import SignalResolutionRequest
+        from houston.signals.permissions import list_eligible_resolution_reviewers_for_route
+
+        resolution_request = _load_resolution_request(
+            resolution_request_id=resolution_request_id,
+        )
+        if resolution_request is None:
+            return
+        if resolution_request.status != SignalResolutionRequest.Status.PENDING:
+            return
+        signal = resolution_request.signal
+        recipients = list_eligible_resolution_reviewers_for_route(
+            signal=signal,
+            review_route=resolution_request.review_route,
+        )
+        _deliver_signal_notifications(
+            signal=signal,
+            event_key=Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_CREATED,
+            priority=Notification.Priority.ACTION_REQUIRED,
+            recipients=recipients,
+            actor_membership=_load_actor(
+                establishment_id=signal.establishment_id,
+                actor_membership_id=actor_membership_id,
+            ),
+            exclude_actor_if_recipient=True,
+        )
+
+    signal_id = _resolution_request_signal_id(resolution_request_id=resolution_request_id)
+    if signal_id is None:
+        return
+
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_CREATED,
+        subject_type=Notification.SubjectType.SIGNAL,
+        subject_id=signal_id,
+    )
+
+
+def schedule_signal_resolution_request_reviewed_notification(
+    *,
+    resolution_request_id: uuid.UUID,
+    actor_membership_id: uuid.UUID,
+) -> None:
+    def deliver() -> None:
+        from houston.signals.models import SignalResolutionRequest
+
+        resolution_request = _load_resolution_request(
+            resolution_request_id=resolution_request_id,
+        )
+        if resolution_request is None:
+            return
+        if resolution_request.status == SignalResolutionRequest.Status.APPROVED:
+            event_key = Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_APPROVED
+        elif resolution_request.status == SignalResolutionRequest.Status.REJECTED:
+            event_key = Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_REJECTED
+        else:
+            return
+        signal = resolution_request.signal
+        requester = resolution_request.requested_by_membership
+        _deliver_signal_notifications(
+            signal=signal,
+            event_key=event_key,
+            priority=Notification.Priority.INFO,
+            recipients=[requester],
+            actor_membership=_load_actor(
+                establishment_id=signal.establishment_id,
+                actor_membership_id=actor_membership_id,
+            ),
+            exclude_actor_if_recipient=True,
+        )
+
+    signal_id = _resolution_request_signal_id(resolution_request_id=resolution_request_id)
+    if signal_id is None:
+        return
+
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_APPROVED,
+        subject_type=Notification.SubjectType.SIGNAL,
+        subject_id=signal_id,
+    )
+
+
+def schedule_signal_resolution_request_auto_canceled_notification(
+    *,
+    resolution_request_id: uuid.UUID,
+) -> None:
+    def deliver() -> None:
+        from houston.signals.models import SignalResolutionRequest
+
+        resolution_request = _load_resolution_request(
+            resolution_request_id=resolution_request_id,
+        )
+        if resolution_request is None:
+            return
+        if resolution_request.status != SignalResolutionRequest.Status.CANCELED:
+            return
+        if (
+            resolution_request.canceled_reason
+            == SignalResolutionRequest.CanceledReason.CANCELED_BY_REQUESTER
+        ):
+            return
+        signal = resolution_request.signal
+        requester = resolution_request.requested_by_membership
+        _deliver_signal_notifications(
+            signal=signal,
+            event_key=Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_CANCELED,
+            priority=Notification.Priority.INFO,
+            recipients=[requester],
+            actor_membership=None,
+            exclude_actor_if_recipient=False,
+        )
+
+    signal_id = _resolution_request_signal_id(resolution_request_id=resolution_request_id)
+    if signal_id is None:
+        return
+
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_CANCELED,
+        subject_type=Notification.SubjectType.SIGNAL,
+        subject_id=signal_id,
+    )

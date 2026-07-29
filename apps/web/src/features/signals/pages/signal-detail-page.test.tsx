@@ -63,6 +63,8 @@ function buildSignal(overrides: Partial<SignalDetail> = {}): SignalDetail {
     },
     media_items: [],
     linked_action_plan_executions: [],
+    resolution_request: null,
+    resolution_request_events: [],
     permission_hints: {
       can_pin: false,
       can_mark_interesting: false,
@@ -71,6 +73,10 @@ function buildSignal(overrides: Partial<SignalDetail> = {}): SignalDetail {
       can_resolve: false,
       can_create_linked_action_plan: false,
       can_qualify_routing: false,
+      can_request_resolution: false,
+      can_approve_resolution_request: false,
+      can_reject_resolution_request: false,
+      can_cancel_resolution_request: false,
     },
     ...overrides,
   }
@@ -89,6 +95,22 @@ vi.mock('@/app/auth-provider', () => ({
 
 vi.mock('../hooks', () => ({
   useSignalDetailQuery: () => detailQueryMock(),
+  useCreateSignalResolutionRequestMutation: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useApproveSignalResolutionRequestMutation: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useRejectSignalResolutionRequestMutation: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useCancelSignalResolutionRequestMutation: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
 }))
 
 vi.mock('@/features/comments/components/comment-section', () => ({
@@ -224,6 +246,10 @@ describe('SignalDetailPage tabs', () => {
           can_resolve: false,
           can_create_linked_action_plan: true,
           can_qualify_routing: false,
+          can_request_resolution: false,
+          can_approve_resolution_request: false,
+          can_reject_resolution_request: false,
+          can_cancel_resolution_request: false,
         },
       }),
       refetch: vi.fn(),
@@ -261,6 +287,10 @@ describe('SignalDetailPage tabs', () => {
           can_resolve: false,
           can_create_linked_action_plan: false,
           can_qualify_routing: true,
+          can_request_resolution: false,
+          can_approve_resolution_request: false,
+          can_reject_resolution_request: false,
+          can_cancel_resolution_request: false,
         },
       }),
       refetch: vi.fn(),
@@ -314,6 +344,10 @@ describe('SignalDetailPage lifecycle actions', () => {
           can_resolve: true,
           can_create_linked_action_plan: false,
           can_qualify_routing: false,
+          can_request_resolution: false,
+          can_approve_resolution_request: false,
+          can_reject_resolution_request: false,
+          can_cancel_resolution_request: false,
         },
       }),
       refetch: vi.fn(),
@@ -325,6 +359,324 @@ describe('SignalDetailPage lifecycle actions', () => {
     expect(screen.queryByRole('button', { name: 'Annuler' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Marquer comme résolue' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Annuler cette observation' })).toBeNull()
+  })
+
+  it('shows create resolution request CTA when enabled', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({
+        permission_hints: {
+          can_pin: false,
+          can_mark_interesting: false,
+          can_archive: false,
+          can_cancel: false,
+          can_resolve: false,
+          can_create_linked_action_plan: false,
+          can_qualify_routing: false,
+          can_request_resolution: true,
+          can_approve_resolution_request: false,
+          can_reject_resolution_request: false,
+          can_cancel_resolution_request: false,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    expect(screen.getByText('Demande de résolution')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Demander la résolution' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Demander la résolution' }).className).toContain(
+      'bg-[#114660]',
+    )
+  })
+
+  it('places resolution section after description', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({
+        permission_hints: {
+          can_pin: false,
+          can_mark_interesting: false,
+          can_archive: false,
+          can_cancel: false,
+          can_resolve: false,
+          can_create_linked_action_plan: false,
+          can_qualify_routing: false,
+          can_request_resolution: true,
+          can_approve_resolution_request: false,
+          can_reject_resolution_request: false,
+          can_cancel_resolution_request: false,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    const description = screen.getByText('Description')
+    const resolution = screen.getByText('Demande de résolution')
+    expect(
+      description.compareDocumentPosition(resolution) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  it('shows pending history and requester cancel action', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({
+        resolution_request: {
+          id: 'req-1',
+          status: 'pending',
+          review_route: 'manager_to_director',
+          requested_at: '2026-06-30T08:00:00Z',
+          request_comment: 'Corrigé',
+          reviewed_at: null,
+          review_comment: '',
+          canceled_at: null,
+          canceled_reason: '',
+          cancel_comment: '',
+          requested_by_membership_id: 'membership-1',
+          reviewed_by_membership_id: null,
+        },
+        resolution_request_events: [
+          {
+            request_id: 'req-1',
+            event_type: 'created',
+            occurred_at: '2026-06-30T08:00:00Z',
+            actor_display_name: 'Alice',
+          },
+        ],
+        permission_hints: {
+          can_pin: false,
+          can_mark_interesting: false,
+          can_archive: false,
+          can_cancel: false,
+          can_resolve: false,
+          can_create_linked_action_plan: false,
+          can_qualify_routing: false,
+          can_request_resolution: false,
+          can_approve_resolution_request: false,
+          can_reject_resolution_request: false,
+          can_cancel_resolution_request: true,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    expect(
+      screen.getByText(/Demande de résolution en attente — Envoyée par Alice/),
+    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Annuler la demande' })).toBeTruthy()
+  })
+
+  it('shows create+approve history and approve/reject actions', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({
+        resolution_request: {
+          id: 'req-1',
+          status: 'pending',
+          review_route: 'staff_to_manager',
+          requested_at: '2026-06-30T08:00:00Z',
+          request_comment: '',
+          reviewed_at: null,
+          review_comment: '',
+          canceled_at: null,
+          canceled_reason: '',
+          cancel_comment: '',
+          requested_by_membership_id: 'membership-1',
+          reviewed_by_membership_id: null,
+        },
+        resolution_request_events: [
+          {
+            request_id: 'req-1',
+            event_type: 'created',
+            occurred_at: '2026-06-30T08:00:00Z',
+            actor_display_name: 'Alice',
+          },
+        ],
+        permission_hints: {
+          can_pin: false,
+          can_mark_interesting: false,
+          can_archive: false,
+          can_cancel: false,
+          can_resolve: false,
+          can_create_linked_action_plan: false,
+          can_qualify_routing: false,
+          can_request_resolution: false,
+          can_approve_resolution_request: true,
+          can_reject_resolution_request: true,
+          can_cancel_resolution_request: false,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    const approve = screen.getByRole('button', { name: 'Approuver' })
+    const reject = screen.getByRole('button', { name: 'Refuser la demande' })
+    expect(approve.className).toContain('bg-[#1D9E75]')
+    expect(reject.className).toContain('bg-destructive')
+  })
+
+  it('keeps history and create CTA after rejected request', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({
+        resolution_request: null,
+        resolution_request_events: [
+          {
+            request_id: 'req-1',
+            event_type: 'rejected',
+            occurred_at: '2026-06-30T09:00:00Z',
+            actor_display_name: 'Bob',
+          },
+          {
+            request_id: 'req-1',
+            event_type: 'created',
+            occurred_at: '2026-06-30T08:00:00Z',
+            actor_display_name: 'Alice',
+          },
+        ],
+        permission_hints: {
+          can_pin: false,
+          can_mark_interesting: false,
+          can_archive: false,
+          can_cancel: false,
+          can_resolve: false,
+          can_create_linked_action_plan: false,
+          can_qualify_routing: false,
+          can_request_resolution: true,
+          can_approve_resolution_request: false,
+          can_reject_resolution_request: false,
+          can_cancel_resolution_request: false,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    expect(screen.getByText(/Demande de résolution refusée — Refusée par Bob/)).toBeTruthy()
+    expect(screen.getByText(/Demande de résolution en attente — Envoyée par Alice/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Demander la résolution' })).toBeTruthy()
+  })
+
+  it('keeps history and create CTA after canceled request', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({
+        resolution_request: null,
+        resolution_request_events: [
+          {
+            request_id: 'req-1',
+            event_type: 'canceled',
+            occurred_at: '2026-06-30T09:00:00Z',
+            actor_display_name: 'Alice',
+          },
+          {
+            request_id: 'req-1',
+            event_type: 'created',
+            occurred_at: '2026-06-30T08:00:00Z',
+            actor_display_name: 'Alice',
+          },
+        ],
+        permission_hints: {
+          can_pin: false,
+          can_mark_interesting: false,
+          can_archive: false,
+          can_cancel: false,
+          can_resolve: false,
+          can_create_linked_action_plan: false,
+          can_qualify_routing: false,
+          can_request_resolution: true,
+          can_approve_resolution_request: false,
+          can_reject_resolution_request: false,
+          can_cancel_resolution_request: false,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    expect(screen.getByText(/Demande de résolution annulée — Annulée par Alice/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Demander la résolution' })).toBeTruthy()
+  })
+
+  it('renders reject then new request history in descending order', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({
+        resolution_request: {
+          id: 'req-2',
+          status: 'pending',
+          review_route: 'manager_to_director',
+          requested_at: '2026-06-30T12:00:00Z',
+          request_comment: '',
+          reviewed_at: null,
+          review_comment: '',
+          canceled_at: null,
+          canceled_reason: '',
+          cancel_comment: '',
+          requested_by_membership_id: 'membership-1',
+          reviewed_by_membership_id: null,
+        },
+        resolution_request_events: [
+          {
+            request_id: 'req-2',
+            event_type: 'created',
+            occurred_at: '2026-06-30T12:00:00Z',
+            actor_display_name: 'Alice',
+          },
+          {
+            request_id: 'req-1',
+            event_type: 'rejected',
+            occurred_at: '2026-06-30T11:00:00Z',
+            actor_display_name: 'Bob',
+          },
+          {
+            request_id: 'req-1',
+            event_type: 'created',
+            occurred_at: '2026-06-30T10:00:00Z',
+            actor_display_name: 'Alice',
+          },
+        ],
+        permission_hints: {
+          can_pin: false,
+          can_mark_interesting: false,
+          can_archive: false,
+          can_cancel: false,
+          can_resolve: false,
+          can_create_linked_action_plan: false,
+          can_qualify_routing: false,
+          can_request_resolution: false,
+          can_approve_resolution_request: false,
+          can_reject_resolution_request: false,
+          can_cancel_resolution_request: true,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    const items = screen.getAllByRole('listitem').map((item) => item.textContent ?? '')
+    expect(items).toHaveLength(3)
+    expect(items[0]).toContain('Envoyée par Alice')
+    expect(items[1]).toContain('Refusée par Bob')
+    expect(items[2]).toContain('Envoyée par Alice')
   })
 })
 
@@ -342,6 +694,10 @@ describe('SignalDetailPage pin actions', () => {
           can_resolve: false,
           can_create_linked_action_plan: false,
           can_qualify_routing: false,
+          can_request_resolution: false,
+          can_approve_resolution_request: false,
+          can_reject_resolution_request: false,
+          can_cancel_resolution_request: false,
         },
       }),
       refetch: vi.fn(),

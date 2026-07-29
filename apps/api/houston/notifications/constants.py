@@ -32,6 +32,10 @@ LOT1_EVENT_KEYS: frozenset[str] = frozenset(
         "signal.pinned",
         "signal.resolved",
         "signal.canceled",
+        "signal.resolution_request.created",
+        "signal.resolution_request.approved",
+        "signal.resolution_request.rejected",
+        "signal.resolution_request.canceled",
         "chat.message.received",
     }
 )
@@ -102,6 +106,22 @@ NOTIFICATION_COPY: dict[str, tuple[str, str]] = {
     "signal.canceled": (
         "Observation annulée",
         "Une observation a été annulée.",
+    ),
+    "signal.resolution_request.created": (
+        "Demande de résolution",
+        "Une demande de résolution attend votre validation.",
+    ),
+    "signal.resolution_request.approved": (
+        "Résolution approuvée",
+        "Votre demande de résolution a été approuvée.",
+    ),
+    "signal.resolution_request.rejected": (
+        "Résolution refusée",
+        "Votre demande de résolution a été refusée.",
+    ),
+    "signal.resolution_request.canceled": (
+        "Demande de résolution annulée",
+        "Votre demande de résolution a été annulée.",
     ),
     "chat.message.received": (
         "Message reçu de {actor_display_name}",

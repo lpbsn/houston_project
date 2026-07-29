@@ -49,3 +49,32 @@ SIGNAL_IN_PROGRESS_MANUAL_CANCEL_DETAIL = (
 FEED_SIGNAL_STATUSES = frozenset(
     {"open", "in_progress", "interesting", "resolved", "canceled"}
 )
+
+SIGNAL_RESOLUTION_REQUEST_COMMENT_MAX_LENGTH = 2000
+
+SIGNAL_RESOLUTION_NO_MANAGER_REVIEWER_DETAIL = (
+    "Aucun manager actif ne couvre le pôle responsable de cette observation."
+)
+SIGNAL_RESOLUTION_NO_DIRECTOR_REVIEWER_DETAIL = (
+    "Aucun director actif n'est disponible pour valider cette demande."
+)
+SIGNAL_RESOLUTION_PENDING_EXISTS_DETAIL = (
+    "Une demande de résolution est déjà en attente pour cette observation."
+)
+SIGNAL_RESOLUTION_BLOCKING_EXECUTION_DETAIL = (
+    "Une exécution liée bloque la demande de résolution."
+)
+SIGNAL_RESOLUTION_NOT_OPEN_DETAIL = (
+    "Seules les observations ouvertes peuvent faire l'objet d'une demande de résolution."
+)
+SIGNAL_RESOLUTION_NO_RESPONSIBLE_POLE_DETAIL = (
+    "L'observation doit avoir un pôle responsable pour demander la résolution."
+)
+SIGNAL_RESOLUTION_REQUESTER_ENGAGED_DETAIL = (
+    "Vous avez une demande de résolution en attente ; annulez-la avant de résoudre "
+    "directement, ou attendez la décision du reviewer."
+)
+SIGNAL_RESOLUTION_NOT_PENDING_DETAIL = "Cette demande de résolution n'est plus en attente."
+SIGNAL_RESOLUTION_REVIEWER_INELIGIBLE_DETAIL = (
+    "Vous n'êtes plus éligible pour traiter cette demande de résolution."
+)

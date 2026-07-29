@@ -5185,6 +5185,232 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/signals/{signal_id}/resolution-requests/:
+    post:
+      operationId: v1_establishments_signals_resolution_requests_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: signal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignalResolutionRequestCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SignalResolutionRequestCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SignalResolutionRequestCreate'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          description: Not found
+  /api/v1/establishments/{establishment_id}/signals/{signal_id}/resolution-requests/{request_id}/approve/:
+    post:
+      operationId: v1_establishments_signals_resolution_requests_approve_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: request_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: signal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignalResolutionRequestReview'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SignalResolutionRequestReview'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SignalResolutionRequestReview'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          description: Not found
+  /api/v1/establishments/{establishment_id}/signals/{signal_id}/resolution-requests/{request_id}/cancel/:
+    post:
+      operationId: v1_establishments_signals_resolution_requests_cancel_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: request_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: signal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignalResolutionRequestCancel'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SignalResolutionRequestCancel'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SignalResolutionRequestCancel'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          description: Not found
+  /api/v1/establishments/{establishment_id}/signals/{signal_id}/resolution-requests/{request_id}/reject/:
+    post:
+      operationId: v1_establishments_signals_resolution_requests_reject_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: request_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: signal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignalResolutionRequestReview'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SignalResolutionRequestReview'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SignalResolutionRequestReview'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          description: Not found
   /api/v1/establishments/{establishment_id}/signals/{signal_id}/resolve/:
     post:
       operationId: v1_establishments_signals_resolve_create
@@ -9318,6 +9544,18 @@ components:
         * `director` - Director
         * `manager` - Manager
         * `staff` - Staff
+    EventTypeEnum:
+      enum:
+      - created
+      - approved
+      - rejected
+      - canceled
+      type: string
+      description: |-
+        * `created` - created
+        * `approved` - approved
+        * `rejected` - rejected
+        * `canceled` - canceled
     ExecutionCommentListItem:
       type: object
       properties:
@@ -10640,13 +10878,25 @@ components:
           type: boolean
         can_qualify_routing:
           type: boolean
+        can_request_resolution:
+          type: boolean
+        can_approve_resolution_request:
+          type: boolean
+        can_reject_resolution_request:
+          type: boolean
+        can_cancel_resolution_request:
+          type: boolean
       required:
+      - can_approve_resolution_request
       - can_archive
       - can_cancel
+      - can_cancel_resolution_request
       - can_create_linked_action_plan
       - can_mark_interesting
       - can_pin
       - can_qualify_routing
+      - can_reject_resolution_request
+      - can_request_resolution
       - can_resolve
     PriorityEnum:
       enum:
@@ -10999,6 +11249,10 @@ components:
           type: integer
         permission_hints:
           $ref: '#/components/schemas/PermissionHints'
+        resolution_request:
+          allOf:
+          - $ref: '#/components/schemas/SignalResolutionRequest'
+          nullable: true
         structured_summary:
           type: string
         issue_focus:
@@ -11013,6 +11267,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SignalLinkedActionPlanExecution'
+        resolution_request_events:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignalResolutionRequestEvent'
       required:
       - aggregation_count
       - created_at
@@ -11026,6 +11284,8 @@ components:
       - media_items
       - operational_unit_key
       - permission_hints
+      - resolution_request
+      - resolution_request_events
       - routing_status
       - source_context
       - status
@@ -11123,6 +11383,10 @@ components:
           type: integer
         permission_hints:
           $ref: '#/components/schemas/PermissionHints'
+        resolution_request:
+          allOf:
+          - $ref: '#/components/schemas/SignalResolutionRequest'
+          nullable: true
       required:
       - aggregation_count
       - created_at
@@ -11133,6 +11397,7 @@ components:
       - media_count
       - operational_unit_key
       - permission_hints
+      - resolution_request
       - routing_status
       - status
       - structured_summary_short
@@ -11278,6 +11543,10 @@ components:
           type: integer
         permission_hints:
           $ref: '#/components/schemas/PermissionHints'
+        resolution_request:
+          allOf:
+          - $ref: '#/components/schemas/SignalResolutionRequest'
+          nullable: true
         structured_summary:
           type: string
         issue_focus:
@@ -11292,6 +11561,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SignalLinkedActionPlanExecution'
+        resolution_request_events:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignalResolutionRequestEvent'
         qualification_outcome:
           $ref: '#/components/schemas/QualificationOutcomeEnum'
         surviving_signal_id:
@@ -11316,6 +11589,8 @@ components:
       - operational_unit_key
       - permission_hints
       - qualification_outcome
+      - resolution_request
+      - resolution_request_events
       - routing_status
       - source_context
       - status
@@ -11323,6 +11598,95 @@ components:
       - structured_summary_short
       - surviving_signal_id
       - title
+    SignalResolutionRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        review_route:
+          type: string
+        requested_at:
+          type: string
+          format: date-time
+        request_comment:
+          type: string
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
+        review_comment:
+          type: string
+        canceled_at:
+          type: string
+          format: date-time
+          nullable: true
+        canceled_reason:
+          type: string
+        cancel_comment:
+          type: string
+        requested_by_membership_id:
+          type: string
+          format: uuid
+        reviewed_by_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - cancel_comment
+      - canceled_at
+      - canceled_reason
+      - id
+      - request_comment
+      - requested_at
+      - requested_by_membership_id
+      - review_comment
+      - review_route
+      - reviewed_at
+      - reviewed_by_membership_id
+      - status
+    SignalResolutionRequestCancel:
+      type: object
+      properties:
+        cancel_comment:
+          type: string
+          default: ''
+          maxLength: 2000
+    SignalResolutionRequestCreate:
+      type: object
+      properties:
+        request_comment:
+          type: string
+          default: ''
+          maxLength: 2000
+    SignalResolutionRequestEvent:
+      type: object
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        event_type:
+          $ref: '#/components/schemas/EventTypeEnum'
+        occurred_at:
+          type: string
+          format: date-time
+        actor_display_name:
+          type: string
+          nullable: true
+      required:
+      - actor_display_name
+      - event_type
+      - occurred_at
+      - request_id
+    SignalResolutionRequestReview:
+      type: object
+      properties:
+        review_comment:
+          type: string
+          default: ''
+          maxLength: 2000
     SourceContext:
       type: object
       properties:

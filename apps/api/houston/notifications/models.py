@@ -57,6 +57,22 @@ class Notification(BaseModel):
         SIGNAL_PINNED = "signal.pinned", "Signal pinned"
         SIGNAL_RESOLVED = "signal.resolved", "Signal resolved"
         SIGNAL_CANCELED = "signal.canceled", "Signal canceled"
+        SIGNAL_RESOLUTION_REQUEST_CREATED = (
+            "signal.resolution_request.created",
+            "Signal resolution request created",
+        )
+        SIGNAL_RESOLUTION_REQUEST_APPROVED = (
+            "signal.resolution_request.approved",
+            "Signal resolution request approved",
+        )
+        SIGNAL_RESOLUTION_REQUEST_REJECTED = (
+            "signal.resolution_request.rejected",
+            "Signal resolution request rejected",
+        )
+        SIGNAL_RESOLUTION_REQUEST_CANCELED = (
+            "signal.resolution_request.canceled",
+            "Signal resolution request canceled",
+        )
         CHAT_MESSAGE_RECEIVED = "chat.message.received", "Chat message received"
 
     class SubjectType(models.TextChoices):

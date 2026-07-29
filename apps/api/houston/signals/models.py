@@ -323,3 +323,84 @@ class SignalSourceObservation(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.signal_id} <- {self.observation_id} ({self.link_type})"
+
+
+class SignalResolutionRequest(BaseModel):
+    class ReviewRoute(models.TextChoices):
+        STAFF_TO_MANAGER = "staff_to_manager", "Staff to manager"
+        MANAGER_TO_DIRECTOR = "manager_to_director", "Manager to director"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+        CANCELED = "canceled", "Canceled"
+
+    class CanceledReason(models.TextChoices):
+        CANCELED_BY_REQUESTER = "canceled_by_requester", "Canceled by requester"
+        SIGNAL_RESOLVED_ELSEWHERE = (
+            "signal_resolved_elsewhere",
+            "Signal resolved elsewhere",
+        )
+        SIGNAL_CANCELED = "signal_canceled", "Signal canceled"
+        SIGNAL_MARKED_INTERESTING = (
+            "signal_marked_interesting",
+            "Signal marked interesting",
+        )
+        ACTION_PLAN_CREATED = "action_plan_created", "Action plan created"
+        SIGNAL_NO_LONGER_OPEN = "signal_no_longer_open", "Signal no longer open"
+
+    signal = models.ForeignKey(
+        Signal,
+        on_delete=models.CASCADE,
+        related_name="resolution_requests",
+    )
+    requested_by_membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.PROTECT,
+        related_name="signal_resolution_requests_created",
+    )
+    requested_at = models.DateTimeField()
+    review_route = models.CharField(max_length=32, choices=ReviewRoute.choices)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    request_comment = models.TextField(blank=True, default="")
+    reviewed_by_membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.PROTECT,
+        related_name="signal_resolution_requests_reviewed",
+        null=True,
+        blank=True,
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_comment = models.TextField(blank=True, default="")
+    canceled_at = models.DateTimeField(null=True, blank=True)
+    canceled_reason = models.CharField(
+        max_length=40,
+        choices=CanceledReason.choices,
+        blank=True,
+        default="",
+    )
+    cancel_comment = models.TextField(blank=True, default="")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["signal"],
+                condition=Q(status="pending"),
+                name="signal_resolution_req_pending_uniq",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["signal", "status"], name="sig_res_req_signal_status_idx"),
+            models.Index(
+                fields=["review_route", "status"],
+                name="sig_res_req_route_status_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"SignalResolutionRequest {self.id} [{self.status}]"

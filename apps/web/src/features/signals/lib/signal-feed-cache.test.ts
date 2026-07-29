@@ -80,10 +80,16 @@ function buildDetail(overrides: Partial<SignalDetail> = {}): SignalDetail {
       can_resolve: false,
       can_create_linked_action_plan: false,
       can_qualify_routing: false,
+      can_request_resolution: false,
+      can_approve_resolution_request: false,
+      can_reject_resolution_request: false,
+      can_cancel_resolution_request: false,
     },
     source_context: { type: 'observation', observation_id: 'obs-1' },
     media_items: [],
     linked_action_plan_executions: [],
+    resolution_request: null,
+    resolution_request_events: [],
     ...overrides,
   }
 }
