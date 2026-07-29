@@ -11,6 +11,7 @@ from houston.signals.constants import (
     SIGNAL_LIFECYCLE_EVENT_CANCELED,
     SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING,
     SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS,
+    SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
     SIGNAL_LIFECYCLE_EVENT_RESOLVED,
     SIGNAL_LOCATION_TEXT_MAX_LENGTH,
     SIGNAL_RESOLUTION_ORIGIN_ACTION_PLAN,
@@ -231,6 +232,7 @@ class SignalLifecycleEvent(BaseModel):
             SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS,
             "Moved in progress",
         )
+        MOVED_OPEN = SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN, "Moved open"
 
     signal = models.ForeignKey(
         Signal,

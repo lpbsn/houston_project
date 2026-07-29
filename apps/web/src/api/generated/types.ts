@@ -2250,12 +2250,37 @@ export interface components {
             occurrence_date: string | null;
             /** Format: date-time */
             last_activity_at: string;
+            /** Format: uuid */
+            marked_done_by_membership_id: string | null;
+            marked_done_by_display_name: string | null;
             /** Format: date-time */
             marked_done_at: string | null;
+            /** Format: uuid */
+            validated_by_membership_id: string | null;
+            validated_by_display_name: string | null;
             /** Format: date-time */
             validated_at: string | null;
+            /** Format: uuid */
+            canceled_by_membership_id: string | null;
+            canceled_by_display_name: string | null;
             /** Format: date-time */
             canceled_at: string | null;
+            cancel_origin: (components["schemas"]["CancelOriginEnum"] | components["schemas"]["NullEnum"]) | null;
+            /** Format: uuid */
+            reopened_by_membership_id: string | null;
+            reopened_by_display_name: string | null;
+            /** Format: date-time */
+            reopened_at: string | null;
+            /** Format: uuid */
+            started_by_membership_id: string | null;
+            started_by_display_name: string | null;
+            /** Format: date-time */
+            started_at: string | null;
+            /** Format: uuid */
+            reactivated_by_membership_id: string | null;
+            reactivated_by_display_name: string | null;
+            /** Format: date-time */
+            reactivated_at: string | null;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -2696,6 +2721,12 @@ export interface components {
             establishment_name: string;
             business_units: components["schemas"]["BusinessUnitTreeItem"][];
         };
+        /**
+         * @description * `manual` - manual
+         *     * `schedule_sync` - schedule_sync
+         * @enum {string}
+         */
+        CancelOriginEnum: "manual" | "schedule_sync";
         CatalogActivitySubjectSuggestion: {
             key: string;
             label: string;

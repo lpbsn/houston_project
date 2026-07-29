@@ -7432,15 +7432,74 @@ components:
         last_activity_at:
           type: string
           format: date-time
+        marked_done_by_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+        marked_done_by_display_name:
+          type: string
+          nullable: true
         marked_done_at:
           type: string
           format: date-time
+          nullable: true
+        validated_by_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+        validated_by_display_name:
+          type: string
           nullable: true
         validated_at:
           type: string
           format: date-time
           nullable: true
+        canceled_by_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+        canceled_by_display_name:
+          type: string
+          nullable: true
         canceled_at:
+          type: string
+          format: date-time
+          nullable: true
+        cancel_origin:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/CancelOriginEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        reopened_by_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+        reopened_by_display_name:
+          type: string
+          nullable: true
+        reopened_at:
+          type: string
+          format: date-time
+          nullable: true
+        started_by_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+        started_by_display_name:
+          type: string
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        reactivated_by_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+        reactivated_by_display_name:
+          type: string
+          nullable: true
+        reactivated_at:
           type: string
           format: date-time
           nullable: true
@@ -7469,7 +7528,10 @@ components:
       - activity_subject
       - affected_business_unit
       - assignees_by_pole
+      - cancel_origin
       - canceled_at
+      - canceled_by_display_name
+      - canceled_by_membership_id
       - created_at
       - created_by_display_name
       - created_by_id
@@ -7479,19 +7541,32 @@ components:
       - involved_poles
       - last_activity_at
       - marked_done_at
+      - marked_done_by_display_name
+      - marked_done_by_membership_id
       - occurrence_date
       - permission_hints
       - pilot_business_unit
+      - reactivated_at
+      - reactivated_by_display_name
+      - reactivated_by_membership_id
+      - reopened_at
+      - reopened_by_display_name
+      - reopened_by_membership_id
       - requires_validation
       - responsible_business_unit
       - signal_summary
       - start_at
+      - started_at
+      - started_by_display_name
+      - started_by_membership_id
       - status
       - task_executions
       - title
       - updated_at
       - use_shared_chronology
       - validated_at
+      - validated_by_display_name
+      - validated_by_membership_id
       - visible_from
     ActionPlanExecutionFeedAssignee:
       type: object
@@ -8604,6 +8679,14 @@ components:
       - business_units
       - establishment_id
       - establishment_name
+    CancelOriginEnum:
+      enum:
+      - manual
+      - schedule_sync
+      type: string
+      description: |-
+        * `manual` - manual
+        * `schedule_sync` - schedule_sync
     CatalogActivitySubjectSuggestion:
       type: object
       properties:

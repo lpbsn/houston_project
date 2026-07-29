@@ -537,9 +537,28 @@ class ActionPlanExecutionDetailSerializer(serializers.Serializer):
     end_at = serializers.DateTimeField(allow_null=True)
     occurrence_date = serializers.DateField(allow_null=True)
     last_activity_at = serializers.DateTimeField()
+    marked_done_by_membership_id = serializers.UUIDField(allow_null=True)
+    marked_done_by_display_name = serializers.CharField(allow_null=True)
     marked_done_at = serializers.DateTimeField(allow_null=True)
+    validated_by_membership_id = serializers.UUIDField(allow_null=True)
+    validated_by_display_name = serializers.CharField(allow_null=True)
     validated_at = serializers.DateTimeField(allow_null=True)
+    canceled_by_membership_id = serializers.UUIDField(allow_null=True)
+    canceled_by_display_name = serializers.CharField(allow_null=True)
     canceled_at = serializers.DateTimeField(allow_null=True)
+    cancel_origin = serializers.ChoiceField(
+        choices=["manual", "schedule_sync"],
+        allow_null=True,
+    )
+    reopened_by_membership_id = serializers.UUIDField(allow_null=True)
+    reopened_by_display_name = serializers.CharField(allow_null=True)
+    reopened_at = serializers.DateTimeField(allow_null=True)
+    started_by_membership_id = serializers.UUIDField(allow_null=True)
+    started_by_display_name = serializers.CharField(allow_null=True)
+    started_at = serializers.DateTimeField(allow_null=True)
+    reactivated_by_membership_id = serializers.UUIDField(allow_null=True)
+    reactivated_by_display_name = serializers.CharField(allow_null=True)
+    reactivated_at = serializers.DateTimeField(allow_null=True)
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
     assignees_by_pole = ActionPlanAssigneesByPoleSerializer(many=True)
@@ -733,6 +752,11 @@ def serialize_execution_detail(
         build_action_plan_execution_permission_hints,
     )
 
+    def _optional_membership_display(membership_obj) -> str | None:
+        if membership_obj is None:
+            return None
+        return _membership_display_name(membership_obj)
+
     return {
         "id": execution.id,
         "action_plan_id": execution.action_plan_id,
@@ -755,9 +779,37 @@ def serialize_execution_detail(
         "end_at": execution.end_at,
         "occurrence_date": execution.occurrence_date,
         "last_activity_at": execution.last_activity_at,
+        "marked_done_by_membership_id": execution.marked_done_by_membership_id,
+        "marked_done_by_display_name": _optional_membership_display(
+            execution.marked_done_by_membership
+        ),
         "marked_done_at": execution.marked_done_at,
+        "validated_by_membership_id": execution.validated_by_membership_id,
+        "validated_by_display_name": _optional_membership_display(
+            execution.validated_by_membership
+        ),
         "validated_at": execution.validated_at,
+        "canceled_by_membership_id": execution.canceled_by_membership_id,
+        "canceled_by_display_name": _optional_membership_display(
+            execution.canceled_by_membership
+        ),
         "canceled_at": execution.canceled_at,
+        "cancel_origin": execution.cancel_origin,
+        "reopened_by_membership_id": execution.reopened_by_membership_id,
+        "reopened_by_display_name": _optional_membership_display(
+            execution.reopened_by_membership
+        ),
+        "reopened_at": execution.reopened_at,
+        "started_by_membership_id": execution.started_by_membership_id,
+        "started_by_display_name": _optional_membership_display(
+            execution.started_by_membership
+        ),
+        "started_at": execution.started_at,
+        "reactivated_by_membership_id": execution.reactivated_by_membership_id,
+        "reactivated_by_display_name": _optional_membership_display(
+            execution.reactivated_by_membership
+        ),
+        "reactivated_at": execution.reactivated_at,
         "created_at": execution.created_at,
         "updated_at": execution.updated_at,
         "assignees_by_pole": _serialize_assignees_by_pole(execution),

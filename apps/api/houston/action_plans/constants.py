@@ -109,6 +109,36 @@ CANCEL_ORIGINS = frozenset(
     }
 )
 
+# ActionPlanExecutionLifecycleEvent.event_type — append-only execution lifecycle journal.
+EXECUTION_LIFECYCLE_EVENT_CREATED = "action_plan_execution.created"
+EXECUTION_LIFECYCLE_EVENT_STARTED = "action_plan_execution.started"
+EXECUTION_LIFECYCLE_EVENT_MARKED_DONE = "action_plan_execution.marked_done"
+EXECUTION_LIFECYCLE_EVENT_VALIDATED = "action_plan_execution.validated"
+EXECUTION_LIFECYCLE_EVENT_CANCELED = "action_plan_execution.canceled"
+EXECUTION_LIFECYCLE_EVENT_REOPENED = "action_plan_execution.reopened"
+EXECUTION_LIFECYCLE_EVENT_REACTIVATED = "action_plan_execution.reactivated"
+EXECUTION_LIFECYCLE_EVENT_TYPE_VALUES = frozenset(
+    {
+        EXECUTION_LIFECYCLE_EVENT_CREATED,
+        EXECUTION_LIFECYCLE_EVENT_STARTED,
+        EXECUTION_LIFECYCLE_EVENT_MARKED_DONE,
+        EXECUTION_LIFECYCLE_EVENT_VALIDATED,
+        EXECUTION_LIFECYCLE_EVENT_CANCELED,
+        EXECUTION_LIFECYCLE_EVENT_REOPENED,
+        EXECUTION_LIFECYCLE_EVENT_REACTIVATED,
+    }
+)
+
+# Allowlisted keys for ActionPlanExecutionLifecycleEvent.metadata_safe (no user free text).
+EXECUTION_LIFECYCLE_METADATA_SAFE_KEYS = frozenset(
+    {
+        "initial_status",
+        "cancel_origin",
+        "reactivation_origin",
+        "to_status",
+    }
+)
+
 TASK_STATUS_PENDING = "pending"
 TASK_STATUS_DONE = "done"
 TASK_STATUS_SKIPPED = "skipped"

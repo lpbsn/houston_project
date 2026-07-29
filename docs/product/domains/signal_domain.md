@@ -210,6 +210,8 @@ On `resolved → in_progress` (execution reopen), `resolved_*` and `resolution_o
 
 Action-plan auto-resolve: `resolved_by_membership` is null and `resolution_origin=action_plan`.
 
+On `in_progress → open` (all linked executions canceled), the journal records `signal.moved_open`. Actor is the cancel actor when cancel is manual; otherwise null. No event when the Signal is already `open` or remains `in_progress`.
+
 ### Append-only journal (`SignalLifecycleEvent`)
 
 Write-only internal journal (no timeline/list API in this ticket). Inserted in the **same transaction** as a valid Signal lifecycle transition that **effectively changes** status.
@@ -229,6 +231,7 @@ Event types:
 - `signal.resolved`
 - `signal.canceled`
 - `signal.moved_in_progress`
+- `signal.moved_open`
 
 Realtime/notification side effects remain after-commit hubs and are not this journal.
 
