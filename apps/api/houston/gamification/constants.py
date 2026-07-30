@@ -40,6 +40,41 @@ IDEMPOTENCY_KEY_MAX_LENGTH = 255
 RULE_VERSION_MAX_LENGTH = 64
 BADGE_CODE_MAX_LENGTH = 16
 
+# Canonical source_type for Signal progress awards (GAM-02).
+SOURCE_TYPE_SIGNAL = "signal"
+
+# Canonical source_type for resolution-request awards (GAM-03).
+SOURCE_TYPE_SIGNAL_RESOLUTION_REQUEST = "signal_resolution_request"
+
+# Reason codes aligned with SignalLifecycleEvent.event_type (GAM-02).
+REASON_SIGNAL_MARKED_INTERESTING = "signal.marked_interesting"
+REASON_SIGNAL_MOVED_IN_PROGRESS = "signal.moved_in_progress"
+REASON_SIGNAL_RESOLVED = "signal.resolved"
+
+# Reason code for approved SignalResolutionRequest (GAM-03).
+REASON_RESOLUTION_REQUEST_APPROVED = "resolution_request.approved"
+
+DELTA_SIGNAL_MARKED_INTERESTING = 1
+DELTA_SIGNAL_MOVED_IN_PROGRESS = 1
+DELTA_SIGNAL_RESOLVED = 2
+DELTA_RESOLUTION_REQUEST_APPROVED = 2
+
+# event_type → (reason_code, delta). Only rewarded Signal progress types.
+SIGNAL_PROGRESS_REWARDS: dict[str, tuple[str, int]] = {
+    REASON_SIGNAL_MARKED_INTERESTING: (
+        REASON_SIGNAL_MARKED_INTERESTING,
+        DELTA_SIGNAL_MARKED_INTERESTING,
+    ),
+    REASON_SIGNAL_MOVED_IN_PROGRESS: (
+        REASON_SIGNAL_MOVED_IN_PROGRESS,
+        DELTA_SIGNAL_MOVED_IN_PROGRESS,
+    ),
+    REASON_SIGNAL_RESOLVED: (
+        REASON_SIGNAL_RESOLVED,
+        DELTA_SIGNAL_RESOLVED,
+    ),
+}
+
 # Empty for GAM-01; GAM-02+ hooks must add keys explicitly before persisting.
 AWARD_METADATA_SAFE_KEYS: frozenset[str] = frozenset()
 

@@ -1327,7 +1327,7 @@ def mark_signal_interesting(
             "updated_at",
         ]
     )
-    record_signal_lifecycle_event(
+    lifecycle_event = record_signal_lifecycle_event(
         signal=locked_self,
         event_type=SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING,
         occurred_at=now,
@@ -1337,6 +1337,9 @@ def mark_signal_interesting(
             "to_status": Signal.Status.INTERESTING,
         },
     )
+    from houston.gamification.services import award_signal_progress_points
+
+    award_signal_progress_points(signal=locked_self, lifecycle_event=lifecycle_event)
     _schedule_signal_invalidation(signal=locked_self, reason="signal.updated")
     return locked_self
 
@@ -1652,13 +1655,17 @@ def _transition_active_signal_to_terminal(
         update_fields.extend(["canceled_by_membership", "canceled_at"])
     touch_signal_activity(signal=locked_self)
     locked_self.save(update_fields=update_fields)
-    record_signal_lifecycle_event(
+    lifecycle_event = record_signal_lifecycle_event(
         signal=locked_self,
         event_type=event_type,
         occurred_at=now,
         actor_membership=actor_membership,
         metadata_safe=metadata_safe,
     )
+    if target_status == Signal.Status.RESOLVED:
+        from houston.gamification.services import award_signal_progress_points
+
+        award_signal_progress_points(signal=locked_self, lifecycle_event=lifecycle_event)
     _schedule_signal_invalidation(
         signal=locked_self,
         reason="signal.updated",

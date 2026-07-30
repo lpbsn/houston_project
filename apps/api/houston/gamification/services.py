@@ -15,7 +15,13 @@ from houston.establishments.timezone_utils import (
 )
 from houston.gamification.constants import (
     CURRENT_RULE_VERSION,
+    DELTA_RESOLUTION_REQUEST_APPROVED,
+    REASON_RESOLUTION_REQUEST_APPROVED,
+    SIGNAL_PROGRESS_REWARDS,
+    SOURCE_TYPE_SIGNAL,
+    SOURCE_TYPE_SIGNAL_RESOLUTION_REQUEST,
     badge_for_score,
+    build_idempotency_key,
     sanitize_award_metadata_safe,
 )
 from houston.gamification.exceptions import (
@@ -509,3 +515,109 @@ def award_points(
             season_id=season.id,
             existing=raced,
         )
+
+
+def award_signal_progress_points(
+    *,
+    signal,
+    lifecycle_event,
+) -> None:
+    """Award Signal progress points for the first eligible lifecycle of each type.
+
+    Must run in the same transaction.atomic as the Signal status transition and
+    lifecycle write. Non-rewarded event types and non-first episodes are no-ops.
+    """
+    from houston.signals.models import SignalLifecycleEvent, SignalSourceObservation
+
+    reward = SIGNAL_PROGRESS_REWARDS.get(lifecycle_event.event_type)
+    if reward is None:
+        return
+    reason_code, delta = reward
+
+    first_id = (
+        SignalLifecycleEvent.objects.filter(
+            signal_id=signal.id,
+            event_type=lifecycle_event.event_type,
+        )
+        .order_by("occurred_at", "id")
+        .values_list("id", flat=True)
+        .first()
+    )
+    if first_id != lifecycle_event.id:
+        return
+
+    eligible_link_types = (
+        SignalSourceObservation.LinkType.CREATED_FROM,
+        SignalSourceObservation.LinkType.AGGREGATED_FROM,
+    )
+    membership_ids = (
+        SignalSourceObservation.objects.filter(
+            signal_id=signal.id,
+            link_type__in=eligible_link_types,
+            created_at__lte=lifecycle_event.occurred_at,
+            observation__submitted_by_membership__establishment_id=signal.establishment_id,
+        )
+        .values_list("observation__submitted_by_membership_id", flat=True)
+        .distinct()
+    )
+    memberships = EstablishmentMembership.objects.filter(id__in=membership_ids)
+    if not memberships:
+        return
+
+    establishment = Establishment.objects.get(pk=signal.establishment_id)
+    for membership in memberships:
+        award_points(
+            membership=membership,
+            establishment=establishment,
+            delta=delta,
+            reason_code=reason_code,
+            source_type=SOURCE_TYPE_SIGNAL,
+            source_id=signal.id,
+            occurred_at=lifecycle_event.occurred_at,
+            idempotency_key=build_idempotency_key(
+                reason_code=reason_code,
+                subject_id=signal.id,
+                membership_id=membership.id,
+            ),
+            source_event_id=lifecycle_event.id,
+        )
+
+
+def award_resolution_request_approved_points(*, resolution_request) -> None:
+    """Award +2 to the requester for an approved resolution request.
+
+    Must run in the same transaction.atomic as the pending → approved
+    transition. The approved request is the source of truth (not signal.resolved).
+    """
+    from houston.signals.models import SignalResolutionRequest
+
+    if resolution_request.status != SignalResolutionRequest.Status.APPROVED:
+        raise GamificationValidationError(
+            "Resolution request must be approved to award points.",
+            code="gamification_resolution_request_not_approved",
+        )
+    if resolution_request.reviewed_at is None:
+        raise GamificationValidationError(
+            "Resolution request reviewed_at is required to award points.",
+            code="gamification_resolution_request_reviewed_at_missing",
+        )
+
+    membership = resolution_request.requested_by_membership
+    establishment = Establishment.objects.get(
+        pk=resolution_request.signal.establishment_id,
+    )
+    award_points(
+        membership=membership,
+        establishment=establishment,
+        delta=DELTA_RESOLUTION_REQUEST_APPROVED,
+        reason_code=REASON_RESOLUTION_REQUEST_APPROVED,
+        source_type=SOURCE_TYPE_SIGNAL_RESOLUTION_REQUEST,
+        source_id=resolution_request.id,
+        occurred_at=resolution_request.reviewed_at,
+        idempotency_key=build_idempotency_key(
+            reason_code=REASON_RESOLUTION_REQUEST_APPROVED,
+            subject_id=resolution_request.id,
+            membership_id=membership.id,
+        ),
+        source_event_id=resolution_request.id,
+    )
