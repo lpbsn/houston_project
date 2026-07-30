@@ -1455,6 +1455,18 @@ paths:
         required: true
       tags:
       - action-plans
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionPlanExecutionValidateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ActionPlanExecutionValidateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ActionPlanExecutionValidateRequest'
+        required: true
       security:
       - BearerAccessToken: []
       responses:
@@ -7354,6 +7366,19 @@ components:
       - tasks
       - title
       - updated_at
+    ActionPlanExecutionActiveReview:
+      type: object
+      properties:
+        stars:
+          type: integer
+          maximum: 5
+          minimum: 0
+        comment:
+          type: string
+          maxLength: 2000
+      required:
+      - comment
+      - stars
     ActionPlanExecutionAssigneeUpdate:
       type: object
       properties:
@@ -7523,8 +7548,13 @@ components:
             $ref: '#/components/schemas/ActionPlanTaskExecution'
         permission_hints:
           $ref: '#/components/schemas/ActionPlanExecutionPermissionHints'
+        active_review:
+          allOf:
+          - $ref: '#/components/schemas/ActionPlanExecutionActiveReview'
+          nullable: true
       required:
       - action_plan_id
+      - active_review
       - activity_subject
       - affected_business_unit
       - assignees_by_pole
@@ -7769,6 +7799,18 @@ components:
           type: boolean
       required:
       - is_pinned
+    ActionPlanExecutionValidateRequest:
+      type: object
+      properties:
+        stars:
+          type: integer
+          maximum: 5
+          minimum: 0
+        comment:
+          type: string
+          maxLength: 2000
+      required:
+      - stars
     ActionPlanInvolvedPole:
       type: object
       properties:

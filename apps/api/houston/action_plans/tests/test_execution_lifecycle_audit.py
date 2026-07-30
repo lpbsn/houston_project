@@ -263,6 +263,7 @@ def test_mark_done_validate_reopen_set_current_fields_and_matching_timestamps(
     done = validate_action_plan_execution(
         execution_id=pending.id,
         actor_membership=owner_membership,
+        stars=4,
     )
     done.refresh_from_db()
     validated = _events_of_type(execution=done, event_type=EXECUTION_LIFECYCLE_EVENT_VALIDATED)

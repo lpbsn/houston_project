@@ -199,6 +199,7 @@ def test_validate_emits_done_reason(
         validate_action_plan_execution(
             execution_id=execution.id,
             actor_membership=owner_membership,
+            stars=4,
         )
         transaction.on_commit(lambda: None)
 

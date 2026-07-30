@@ -10,6 +10,7 @@ import { ActionPlanExecutionDetailPage } from './action-plan-execution-detail-pa
 
 const detailQueryMock = vi.fn()
 const navigateMock = vi.fn()
+const validateMutateAsyncMock = vi.fn()
 
 const { CommentSectionMock } = vi.hoisted(() => ({
   CommentSectionMock: vi.fn(() => createElement('div', { 'data-testid': 'comment-section' })),
@@ -71,6 +72,7 @@ function buildExecution(
       is_pilot_pole_assignee: true,
       can_pin: false,
     },
+    active_review: null,
     ...overrides,
   }
 }
@@ -99,7 +101,7 @@ vi.mock('../hooks', () => ({
     error: null,
   }),
   useValidateActionPlanExecutionMutation: () => ({
-    mutateAsync: vi.fn(),
+    mutateAsync: validateMutateAsyncMock,
     isPending: false,
     error: null,
   }),
@@ -709,6 +711,55 @@ describe('ActionPlanExecutionDetailPage UI refonte', () => {
 
     expect(screen.getByRole('button', { name: 'Valider' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Marquer terminé' })).toBeNull()
+  })
+
+  it('opens rating sheet and submits selected stars', async () => {
+    validateMutateAsyncMock.mockResolvedValue(
+      buildExecution({
+        status: 'done',
+      }),
+    )
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildExecution({
+        status: 'pending_validation',
+        permission_hints: {
+          can_mark_done: false,
+          can_validate: true,
+          can_reopen: false,
+          can_cancel: false,
+          can_update: false,
+          is_pilot_pole_assignee: false,
+          can_pin: false,
+        },
+      }),
+      error: null,
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Valider' }))
+    expect(
+      screen.getByRole('dialog', { name: "Évaluer la réalisation du plan d'action" }),
+    ).toBeTruthy()
+
+    const confirmButton = screen.getByRole('button', { name: 'Confirmer' })
+    expect(confirmButton).toHaveProperty('disabled', true)
+
+    fireEvent.click(screen.getByRole('radio', { name: '3 étoiles' }))
+    fireEvent.change(screen.getByPlaceholderText('Ajouter un commentaire'), {
+      target: { value: 'Très bon résultat' },
+    })
+    fireEvent.click(confirmButton)
+
+    await waitFor(() => {
+      expect(validateMutateAsyncMock).toHaveBeenCalledWith({
+        stars: 3,
+        comment: 'Très bon résultat',
+      })
+    })
   })
 
   it('shows Rouvrir button when can_reopen is true', () => {

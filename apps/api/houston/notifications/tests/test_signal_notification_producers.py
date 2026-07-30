@@ -579,6 +579,7 @@ def test_mark_done_validate_emits_signal_resolved_notification():
     validate_action_plan_execution(
         execution_id=pending.id,
         actor_membership=owner,
+        stars=4,
     )
 
     notifications = [

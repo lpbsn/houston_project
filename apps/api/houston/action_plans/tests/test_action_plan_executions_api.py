@@ -90,6 +90,7 @@ def test_execution_lifecycle_mark_done_validate_reopen_cancel(
 ):
     execution = _execution_with_assignee(owner_membership, staff_membership, business_unit)
     owner_token = login(api_client, user=owner_membership.user)
+    detail_url = action_plan_execution_url(owner_membership.establishment_id, execution.id)
 
     mark_done = api_client.post(
         action_plan_execution_url(owner_membership.establishment_id, execution.id, "mark-done/"),
@@ -98,12 +99,25 @@ def test_execution_lifecycle_mark_done_validate_reopen_cancel(
     assert mark_done.status_code == 200
     assert mark_done.json()["status"] == ActionPlanExecution.Status.PENDING_VALIDATION
 
+    before_validate = api_client.get(detail_url, **auth_headers(owner_token))
+    assert before_validate.status_code == 200
+    assert before_validate.json()["active_review"] is None
+
     validate = api_client.post(
         action_plan_execution_url(owner_membership.establishment_id, execution.id, "validate/"),
+        {"stars": 4, "comment": "Bien fait"},
+        format="json",
         **auth_headers(owner_token),
     )
     assert validate.status_code == 200
     assert validate.json()["status"] == ActionPlanExecution.Status.DONE
+
+    after_validate = api_client.get(detail_url, **auth_headers(owner_token))
+    assert after_validate.status_code == 200
+    assert after_validate.json()["active_review"] == {
+        "stars": 4,
+        "comment": "Bien fait",
+    }
 
     reopen = api_client.post(
         action_plan_execution_url(owner_membership.establishment_id, execution.id, "reopen/"),
@@ -112,12 +126,96 @@ def test_execution_lifecycle_mark_done_validate_reopen_cancel(
     assert reopen.status_code == 200
     assert reopen.json()["status"] == ActionPlanExecution.Status.IN_PROGRESS
 
+    after_reopen = api_client.get(detail_url, **auth_headers(owner_token))
+    assert after_reopen.status_code == 200
+    assert after_reopen.json()["active_review"] is None
+
     cancel = api_client.post(
         action_plan_execution_url(owner_membership.establishment_id, execution.id, "cancel/"),
         **auth_headers(owner_token),
     )
     assert cancel.status_code == 200
     assert cancel.json()["status"] == ActionPlanExecution.Status.CANCELED
+
+
+def test_validate_requires_explicit_stars(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    execution = _execution_with_assignee(owner_membership, staff_membership, business_unit)
+    owner_token = login(api_client, user=owner_membership.user)
+    api_client.post(
+        action_plan_execution_url(owner_membership.establishment_id, execution.id, "mark-done/"),
+        **auth_headers(owner_token),
+    )
+
+    validate = api_client.post(
+        action_plan_execution_url(owner_membership.establishment_id, execution.id, "validate/"),
+        {},
+        format="json",
+        **auth_headers(owner_token),
+    )
+
+    assert validate.status_code == 400
+    assert validate.json()["code"] == "invalid_input"
+
+
+def test_validate_accepts_comment_at_max_length(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    from houston.action_plans.constants import ACTION_PLAN_EXECUTION_REVIEW_COMMENT_MAX_LENGTH
+
+    execution = _execution_with_assignee(owner_membership, staff_membership, business_unit)
+    owner_token = login(api_client, user=owner_membership.user)
+    api_client.post(
+        action_plan_execution_url(owner_membership.establishment_id, execution.id, "mark-done/"),
+        **auth_headers(owner_token),
+    )
+    comment = "a" * ACTION_PLAN_EXECUTION_REVIEW_COMMENT_MAX_LENGTH
+
+    validate = api_client.post(
+        action_plan_execution_url(owner_membership.establishment_id, execution.id, "validate/"),
+        {"stars": 4, "comment": comment},
+        format="json",
+        **auth_headers(owner_token),
+    )
+
+    assert validate.status_code == 200
+    assert validate.json()["active_review"] == {"stars": 4, "comment": comment}
+
+
+def test_validate_rejects_comment_over_max_length(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    from houston.action_plans.constants import ACTION_PLAN_EXECUTION_REVIEW_COMMENT_MAX_LENGTH
+
+    execution = _execution_with_assignee(owner_membership, staff_membership, business_unit)
+    owner_token = login(api_client, user=owner_membership.user)
+    api_client.post(
+        action_plan_execution_url(owner_membership.establishment_id, execution.id, "mark-done/"),
+        **auth_headers(owner_token),
+    )
+
+    validate = api_client.post(
+        action_plan_execution_url(owner_membership.establishment_id, execution.id, "validate/"),
+        {
+            "stars": 4,
+            "comment": "a" * (ACTION_PLAN_EXECUTION_REVIEW_COMMENT_MAX_LENGTH + 1),
+        },
+        format="json",
+        **auth_headers(owner_token),
+    )
+
+    assert validate.status_code == 400
+    assert validate.json()["code"] == "invalid_input"
 
 
 def test_mentioned_out_of_scope_staff_can_read_execution_detail(

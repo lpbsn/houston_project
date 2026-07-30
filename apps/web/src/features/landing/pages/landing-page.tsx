@@ -2,7 +2,6 @@ import { DirectionSection } from '@/features/landing/components/direction-sectio
 import { FinalCtaSection, LandingFooter } from '@/features/landing/components/final-cta-section'
 import { HeroSection } from '@/features/landing/components/hero-section'
 import { HowItWorksSection } from '@/features/landing/components/how-it-works-section'
-import { PricingSection } from '@/features/landing/components/pricing-section'
 import { ProblemSwarmSection } from '@/features/landing/components/problem-swarm-section'
 import { SoonAvailableProvider } from '@/features/landing/components/soon-available-provider'
 import { TransitionSolutionSection } from '@/features/landing/components/transition-solution-section'
@@ -18,7 +17,6 @@ export function LandingPage() {
             <TransitionSolutionSection />
             <HowItWorksSection />
             <DirectionSection />
-            <PricingSection onCta={openSoon} />
             <FinalCtaSection onCta={openSoon} />
           </main>
           <LandingFooter />

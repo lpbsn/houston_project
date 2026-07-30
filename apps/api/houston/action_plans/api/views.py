@@ -22,6 +22,7 @@ from houston.action_plans.api.serializers import (
     ActionPlanExecutionDetailSerializer,
     ActionPlanExecutionPinStateSerializer,
     ActionPlanExecutionUpdateRequestSerializer,
+    ActionPlanExecutionValidateRequestSerializer,
     ActionPlanListItemSerializer,
     ActionPlanPlanningSubmitRequestSerializer,
     ActionPlanPlanningSubmitResponseSerializer,
@@ -1010,7 +1011,7 @@ class ActionPlanExecutionValidateView(EstablishmentScopedActionPlanMixin, APIVie
 
     @extend_schema(
         tags=["action-plans"],
-        request=None,
+        request=ActionPlanExecutionValidateRequestSerializer,
         responses={
             200: ActionPlanExecutionDetailSerializer,
             400: OpenApiResponse(response=ApiErrorResponseSerializer),
@@ -1020,12 +1021,44 @@ class ActionPlanExecutionValidateView(EstablishmentScopedActionPlanMixin, APIVie
         },
     )
     def post(self, request, establishment_id, execution_id):
-        return _execution_command_response(
-            request=request,
-            establishment_id=self.establishment_id,
-            execution_id=execution_id,
-            service_fn=validate_action_plan_execution,
+        membership = _resolve_membership(request, establishment_id)
+        if isinstance(membership, Response):
+            return membership
+
+        execution = get_action_plan_execution_for_detail(
+            membership=membership,
+            execution_id=uuid.UUID(str(execution_id)),
         )
+        if execution is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        request_serializer = ActionPlanExecutionValidateRequestSerializer(data=request.data)
+        if not request_serializer.is_valid():
+            return Response(
+                {
+                    "code": "invalid_input",
+                    "detail": "Invalid request payload.",
+                    "errors": request_serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            execution = validate_action_plan_execution(
+                execution_id=execution.id,
+                actor_membership=membership,
+                stars=request_serializer.validated_data["stars"],
+                comment=request_serializer.validated_data.get("comment"),
+            )
+        except (ActionPlanPermissionError, ActionPlanValidationError, ActionPlanStateError) as exc:
+            return _action_plan_error_response(exc)
+
+        execution = get_action_plan_execution_for_detail(
+            membership=membership,
+            execution_id=execution.id,
+        )
+        payload = serialize_execution_detail(execution, membership=membership)
+        return Response(ActionPlanExecutionDetailSerializer(payload).data)
 
 
 def _reopen_execution(*, execution_id, actor_membership):
