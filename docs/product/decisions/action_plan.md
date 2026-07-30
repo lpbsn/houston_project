@@ -152,7 +152,7 @@ Si une exécution liée est rouverte après résolution du signal (manuelle ou a
 signal repasse IN_PROGRESS
 ```
 
-**Port Lot 2D :** `sync_signal_after_execution_change` pour le recalcul automatique (annulations → OPEN ; exécutions terminales avec ≥1 `done` → RESOLVED) ; flux resolve manuel distinct. Tests obligatoires : annulations successives côté exécutions → OPEN ; mark-done / validate résolvent le signal quand toutes exécutions terminales avec ≥1 `done` ; `pending_validation` ne résout pas ; resolve manuel → cancel actives + signal RESOLVED même si toutes canceled ensuite ; reopen exécution après resolve → IN_PROGRESS ; résolution manuelle prime sur recalcul auto (signal déjà RESOLVED ne repasse pas OPEN).
+**Port Lot 2D :** `sync_signal_after_execution_change` pour le recalcul automatique (annulations → OPEN ; exécutions terminales avec ≥1 `done` → RESOLVED) ; flux resolve manuel distinct. Tests obligatoires : annulations successives côté exécutions → OPEN ; mark-done / validate résolvent le signal quand toutes exécutions terminales avec ≥1 `done` ; `pending_validation` ne résout pas ; resolve manuel → cancel actives + signal RESOLVED même si toutes canceled ensuite ; reopen exécution depuis `pending_validation` uniquement (ne réactive pas un Signal `RESOLVED`) ; `DONE` est terminal (reopen interdit) ; résolution manuelle prime sur recalcul auto (signal déjà RESOLVED ne repasse pas OPEN).
 
 ### Decision 26.6 — Catalogue multi-pôles {#decision-26-6}
 
@@ -253,7 +253,7 @@ promotion auto (Beat, lazy read, sync schedule) : scheduled → in_progress si s
 aucune transition automatique ne régresse un statut
 pending_validation = commencée et active (pas terminale)
 done / canceled = terminaux
-reopen explicite : pending_validation | done (sans validated_at) → in_progress ; done validé (validated_at) → interdit (409 business_conflict)
+reopen explicite : pending_validation → in_progress ; done (avec ou sans validated_at) → interdit (400 invalid_action_plan_state)
 end_at ne termine jamais automatiquement une exécution
 sync schedule : promouvoir les scheduled dues du schedule (exhaustif) avant classify ;
   pending_validation préservée / non réécrite ; distinct de done/canceled

@@ -36,7 +36,6 @@ from houston.action_plans.constants import (
 from houston.action_plans.exceptions import (
     ActionPlanPermissionError,
     ActionPlanStateError,
-    ActionPlanValidatedExecutionConflictError,
     ActionPlanValidationError,
 )
 from houston.action_plans.models import (
@@ -1964,15 +1963,8 @@ def reopen_action_plan_execution(
 ) -> ActionPlanExecution:
     _lock_source_signal_created_from_set_if_any(execution_id=execution_id)
     execution = _lock_execution_for_transition(execution_id=execution_id)
-    if execution.status not in {
-        EXECUTION_STATUS_PENDING_VALIDATION,
-        EXECUTION_STATUS_DONE,
-    }:
+    if execution.status != EXECUTION_STATUS_PENDING_VALIDATION:
         raise ActionPlanStateError("Execution cannot be reopened in its current state.")
-    if execution.validated_at is not None:
-        raise ActionPlanValidatedExecutionConflictError(
-            "A validated action plan execution cannot be reopened."
-        )
     if not can_reopen_action_plan_execution(actor, execution):
         raise ActionPlanPermissionError("Not allowed to reopen this execution.")
 

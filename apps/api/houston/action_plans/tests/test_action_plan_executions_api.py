@@ -88,7 +88,35 @@ def test_execution_lifecycle_mark_done_validate_rejects_reopen(
     staff_membership,
     business_unit,
 ):
-    execution = _execution_with_assignee(owner_membership, staff_membership, business_unit)
+    from unittest.mock import patch
+
+    from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_REOPENED
+    from houston.action_plans.models import ActionPlanExecutionLifecycleEvent
+    from houston.notifications.models import Notification
+    from houston.signals.models import Signal
+    from houston.testing.taxonomy import create_minimal_v3_signal
+
+    _ = business_unit, staff_membership
+    signal = create_minimal_v3_signal(
+        owner_membership,
+        title="Validated done reopen rejected",
+        status=Signal.Status.IN_PROGRESS,
+    )
+    pilot_bu = signal.responsible_business_unit
+    assert pilot_bu is not None
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=pilot_bu.id,
+        title="Lifecycle plan validated",
+        source_signal_id=signal.id,
+        requires_validation=True,
+        tasks=[build_task_payload(task="Task 1", business_unit=pilot_bu)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=pilot_bu)
+        ],
+        use_shared_chronology=True,
+    )
     owner_token = login(api_client, user=owner_membership.user)
     detail_url = action_plan_execution_url(owner_membership.establishment_id, execution.id)
 
@@ -122,15 +150,30 @@ def test_execution_lifecycle_mark_done_validate_rejects_reopen(
     }
     assert after_validate.json()["permission_hints"]["can_reopen"] is False
 
-    reopen = api_client.post(
-        action_plan_execution_url(owner_membership.establishment_id, execution.id, "reopen/"),
-        **auth_headers(owner_token),
-    )
-    assert reopen.status_code == 409
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.RESOLVED
+    signal_status_before = signal.status
+    signal_resolved_at = signal.resolved_at
+    event_count_before = ActionPlanExecutionLifecycleEvent.objects.filter(
+        action_plan_execution_id=execution.id,
+    ).count()
+    notif_count_before = Notification.objects.filter(
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_REOPENED,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution.id,
+    ).count()
+
+    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
+        reopen = api_client.post(
+            action_plan_execution_url(owner_membership.establishment_id, execution.id, "reopen/"),
+            **auth_headers(owner_token),
+        )
+    assert reopen.status_code == 400
     assert reopen.json() == {
-        "code": "business_conflict",
-        "detail": "A validated action plan execution cannot be reopened.",
+        "code": "invalid_action_plan_state",
+        "detail": "Execution cannot be reopened in its current state.",
     }
+    mock_notify.assert_not_called()
 
     after_reopen = api_client.get(detail_url, **auth_headers(owner_token))
     assert after_reopen.status_code == 200
@@ -141,25 +184,65 @@ def test_execution_lifecycle_mark_done_validate_rejects_reopen(
         "comment": "Bien fait",
     }
     assert after_reopen.json()["reopened_at"] is None
+    assert (
+        ActionPlanExecutionLifecycleEvent.objects.filter(
+            action_plan_execution_id=execution.id,
+        ).count()
+        == event_count_before
+    )
+    assert not ActionPlanExecutionLifecycleEvent.objects.filter(
+        action_plan_execution_id=execution.id,
+        event_type=EXECUTION_LIFECYCLE_EVENT_REOPENED,
+    ).exists()
+    assert (
+        Notification.objects.filter(
+            event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_REOPENED,
+            subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+            subject_id=execution.id,
+        ).count()
+        == notif_count_before
+    )
+    signal.refresh_from_db()
+    assert signal.status == signal_status_before
+    assert signal.resolved_at == signal_resolved_at
 
 
-def test_execution_lifecycle_reopen_without_validation_then_cancel(
+def test_execution_lifecycle_done_without_validation_rejects_reopen(
     api_client,
     owner_membership,
     staff_membership,
     business_unit,
 ):
+    from unittest.mock import patch
+
+    from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_REOPENED
+    from houston.action_plans.models import ActionPlanExecutionLifecycleEvent
+    from houston.notifications.models import Notification
+    from houston.signals.models import Signal
+    from houston.testing.taxonomy import create_minimal_v3_signal
+
+    _ = business_unit, staff_membership
+    signal = create_minimal_v3_signal(
+        owner_membership,
+        title="Unvalidated done reopen rejected",
+        status=Signal.Status.IN_PROGRESS,
+    )
+    pilot_bu = signal.responsible_business_unit
+    assert pilot_bu is not None
     _, execution = create_action_plan_with_execution(
         establishment_id=owner_membership.establishment_id,
         created_by=owner_membership,
-        pilot_business_unit_id=business_unit.id,
+        pilot_business_unit_id=pilot_bu.id,
         title="No validation lifecycle",
+        source_signal_id=signal.id,
         requires_validation=False,
         assignees=[
-            build_assignee_payload(membership=staff_membership, business_unit=business_unit)
+            build_assignee_payload(membership=owner_membership, business_unit=pilot_bu)
         ],
+        use_shared_chronology=True,
     )
     owner_token = login(api_client, user=owner_membership.user)
+    detail_url = action_plan_execution_url(owner_membership.establishment_id, execution.id)
 
     mark_done = api_client.post(
         action_plan_execution_url(owner_membership.establishment_id, execution.id, "mark-done/"),
@@ -168,6 +251,78 @@ def test_execution_lifecycle_reopen_without_validation_then_cancel(
     assert mark_done.status_code == 200
     assert mark_done.json()["status"] == ActionPlanExecution.Status.DONE
     assert mark_done.json()["validated_at"] is None
+    assert mark_done.json()["permission_hints"]["can_reopen"] is False
+    marked_done_at = mark_done.json()["marked_done_at"]
+
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.RESOLVED
+    signal_resolved_at = signal.resolved_at
+    event_count_before = ActionPlanExecutionLifecycleEvent.objects.filter(
+        action_plan_execution_id=execution.id,
+    ).count()
+    notif_count_before = Notification.objects.filter(
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_REOPENED,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution.id,
+    ).count()
+
+    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
+        reopen = api_client.post(
+            action_plan_execution_url(owner_membership.establishment_id, execution.id, "reopen/"),
+            **auth_headers(owner_token),
+        )
+    assert reopen.status_code == 400
+    assert reopen.json() == {
+        "code": "invalid_action_plan_state",
+        "detail": "Execution cannot be reopened in its current state.",
+    }
+    mock_notify.assert_not_called()
+
+    after_reopen = api_client.get(detail_url, **auth_headers(owner_token))
+    assert after_reopen.status_code == 200
+    assert after_reopen.json()["status"] == ActionPlanExecution.Status.DONE
+    assert after_reopen.json()["validated_at"] is None
+    assert after_reopen.json()["marked_done_at"] == marked_done_at
+    assert after_reopen.json()["reopened_at"] is None
+    assert after_reopen.json()["permission_hints"]["can_reopen"] is False
+    assert (
+        ActionPlanExecutionLifecycleEvent.objects.filter(
+            action_plan_execution_id=execution.id,
+        ).count()
+        == event_count_before
+    )
+    assert not ActionPlanExecutionLifecycleEvent.objects.filter(
+        action_plan_execution_id=execution.id,
+        event_type=EXECUTION_LIFECYCLE_EVENT_REOPENED,
+    ).exists()
+    assert (
+        Notification.objects.filter(
+            event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_REOPENED,
+            subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+            subject_id=execution.id,
+        ).count()
+        == notif_count_before
+    )
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.RESOLVED
+    assert signal.resolved_at == signal_resolved_at
+
+
+def test_execution_lifecycle_reopen_from_pending_validation_then_cancel(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    execution = _execution_with_assignee(owner_membership, staff_membership, business_unit)
+    owner_token = login(api_client, user=owner_membership.user)
+
+    mark_done = api_client.post(
+        action_plan_execution_url(owner_membership.establishment_id, execution.id, "mark-done/"),
+        **auth_headers(owner_token),
+    )
+    assert mark_done.status_code == 200
+    assert mark_done.json()["status"] == ActionPlanExecution.Status.PENDING_VALIDATION
     assert mark_done.json()["permission_hints"]["can_reopen"] is True
 
     reopen = api_client.post(

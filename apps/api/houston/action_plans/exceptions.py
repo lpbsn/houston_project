@@ -43,10 +43,6 @@ class ActionPlanStaleExecutionError(ActionPlanConflictError):
         super().__init__(message)
 
 
-class ActionPlanValidatedExecutionConflictError(ActionPlanConflictError):
-    error_code = "business_conflict"
-
-
 class PlanningSubmissionPayloadConflict(ActionPlanConflictError):
     error_code = "planning_submission_conflict"
 

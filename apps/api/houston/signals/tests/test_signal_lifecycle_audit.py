@@ -255,9 +255,12 @@ def test_create_linked_plan_emits_moved_in_progress_with_creator_actor():
     assert events[0].actor_membership_id == membership.id
 
 
-def test_reopen_clears_resolved_fields_and_emits_moved_in_progress():
+def test_done_execution_cannot_reopen_keeps_resolved_signal_fields():
+    from houston.action_plans.exceptions import ActionPlanStateError
+    from houston.action_plans.models import ActionPlanExecution
+
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    signal = create_minimal_v3_signal(membership, title="Reopen clear audit")
+    signal = create_minimal_v3_signal(membership, title="Done cannot reopen audit")
     execution = _create_linked_execution(owner_membership=membership, signal=signal)
     mark_action_plan_execution_done(
         execution_id=execution.id,
@@ -266,21 +269,29 @@ def test_reopen_clears_resolved_fields_and_emits_moved_in_progress():
     signal.refresh_from_db()
     first_resolved_at = signal.resolved_at
     assert first_resolved_at is not None
-
-    reopen_action_plan_execution(execution_id=execution.id, actor=membership)
-    signal.refresh_from_db()
-
-    assert signal.status == Signal.Status.IN_PROGRESS
-    assert signal.resolved_by_membership_id is None
-    assert signal.resolved_at is None
-    assert signal.resolution_origin is None
-    moved = [
+    assert signal.status == Signal.Status.RESOLVED
+    moved_before = [
         e
         for e in _lifecycle_events(signal=signal)
         if e.event_type == SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS
     ]
-    assert len(moved) >= 2
-    assert moved[-1].actor_membership_id == membership.id
+
+    with pytest.raises(ActionPlanStateError, match="cannot be reopened"):
+        reopen_action_plan_execution(execution_id=execution.id, actor=membership)
+
+    signal.refresh_from_db()
+    execution.refresh_from_db()
+    assert execution.status == ActionPlanExecution.Status.DONE
+    assert execution.reopened_at is None
+    assert signal.status == Signal.Status.RESOLVED
+    assert signal.resolved_at == first_resolved_at
+    assert signal.resolution_origin is not None
+    moved_after = [
+        e
+        for e in _lifecycle_events(signal=signal)
+        if e.event_type == SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS
+    ]
+    assert len(moved_after) == len(moved_before)
 
 
 def test_detail_exposes_audit_fields_feed_does_not():
@@ -400,7 +411,9 @@ def test_shared_timestamp_between_resolved_at_and_occurred_at():
     assert signal.resolved_at == event.occurred_at
 
 
-def test_append_only_resolve_reopen_resolve_keeps_prior_event_intact():
+def test_append_only_resolve_keeps_prior_event_intact_after_failed_done_reopen():
+    from houston.action_plans.exceptions import ActionPlanStateError
+
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     signal = create_minimal_v3_signal(membership, title="Append only cycle")
     execution = _create_linked_execution(owner_membership=membership, signal=signal)
@@ -417,11 +430,8 @@ def test_append_only_resolve_reopen_resolve_keeps_prior_event_intact():
     first_occurred_at = first.occurred_at
     first_metadata = dict(first.metadata_safe)
 
-    reopen_action_plan_execution(execution_id=execution.id, actor=membership)
-    mark_action_plan_execution_done(
-        execution_id=execution.id,
-        actor_membership=membership,
-    )
+    with pytest.raises(ActionPlanStateError, match="cannot be reopened"):
+        reopen_action_plan_execution(execution_id=execution.id, actor=membership)
 
     resolved_events = list(
         SignalLifecycleEvent.objects.filter(
@@ -429,7 +439,7 @@ def test_append_only_resolve_reopen_resolve_keeps_prior_event_intact():
             event_type=SIGNAL_LIFECYCLE_EVENT_RESOLVED,
         ).order_by("occurred_at", "id")
     )
-    assert len(resolved_events) == 2
+    assert len(resolved_events) == 1
     prior = SignalLifecycleEvent.objects.get(id=first_id)
     assert prior.occurred_at == first_occurred_at
     assert prior.metadata_safe == first_metadata
