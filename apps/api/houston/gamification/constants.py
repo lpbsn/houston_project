@@ -46,6 +46,9 @@ SOURCE_TYPE_SIGNAL = "signal"
 # Canonical source_type for resolution-request awards (GAM-03).
 SOURCE_TYPE_SIGNAL_RESOLUTION_REQUEST = "signal_resolution_request"
 
+# Canonical source_type for ActionPlanExecution launch awards (GAM-04).
+SOURCE_TYPE_ACTION_PLAN_EXECUTION = "action_plan_execution"
+
 # Reason codes aligned with SignalLifecycleEvent.event_type (GAM-02).
 REASON_SIGNAL_MARKED_INTERESTING = "signal.marked_interesting"
 REASON_SIGNAL_MOVED_IN_PROGRESS = "signal.moved_in_progress"
@@ -54,10 +57,18 @@ REASON_SIGNAL_RESOLVED = "signal.resolved"
 # Reason code for approved SignalResolutionRequest (GAM-03).
 REASON_RESOLUTION_REQUEST_APPROVED = "resolution_request.approved"
 
+# Reason code for eligible ActionPlanExecution launch (GAM-04).
+REASON_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE = "action_plan.execution_started_eligible"
+
+# Reason code for recurring ActionPlanExecution completion without validation (GAM-05).
+REASON_RECURRING_EXECUTION_DONE = "recurring_execution.done"
+
 DELTA_SIGNAL_MARKED_INTERESTING = 1
 DELTA_SIGNAL_MOVED_IN_PROGRESS = 1
 DELTA_SIGNAL_RESOLVED = 2
 DELTA_RESOLUTION_REQUEST_APPROVED = 2
+DELTA_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE = 2
+DELTA_RECURRING_EXECUTION_DONE = 2
 
 # event_type → (reason_code, delta). Only rewarded Signal progress types.
 SIGNAL_PROGRESS_REWARDS: dict[str, tuple[str, int]] = {

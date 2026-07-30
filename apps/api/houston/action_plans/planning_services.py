@@ -26,6 +26,7 @@ from houston.action_plans.permissions import can_use_action_plan
 from houston.action_plans.planning_submission_hash import compute_planning_request_hash
 from houston.action_plans.schedule_services import create_action_plan_schedule_for_planning_engine
 from houston.action_plans.services import (
+    _award_gam04_for_created_in_progress_execution,
     _create_execution_record,
     _materialize_execution_structure,
     _merge_plan_task_assignees_into_assignee_payloads,
@@ -402,6 +403,7 @@ def _create_individual_execution(
         plan_tasks=plan_tasks,
         assignees=validated_assignees,
     )
+    _award_gam04_for_created_in_progress_execution(execution=execution)
     return execution
 
 

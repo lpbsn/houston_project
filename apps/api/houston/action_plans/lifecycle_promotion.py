@@ -106,11 +106,17 @@ def _promote_one_execution(*, execution_id: uuid.UUID) -> bool:
     from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_STARTED
     from houston.action_plans.lifecycle_events import record_execution_lifecycle_event
 
-    record_execution_lifecycle_event(
+    lifecycle_event = record_execution_lifecycle_event(
         execution=execution,
         event_type=EXECUTION_LIFECYCLE_EVENT_STARTED,
         occurred_at=now,
         actor_membership=None,
+    )
+    from houston.gamification.services import award_action_plan_execution_started_points
+
+    award_action_plan_execution_started_points(
+        execution=execution,
+        lifecycle_event=lifecycle_event,
     )
 
     schedule_action_plan_execution_invalidation(

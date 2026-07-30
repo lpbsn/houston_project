@@ -19,6 +19,7 @@ from houston.action_plans.constants import (
     CANCELABLE_EXECUTION_STATUSES,
     CATALOG_STATUS_ACTIVE,
     CATALOG_STATUS_INACTIVE,
+    EXECUTION_LIFECYCLE_EVENT_CREATED,
     EXECUTION_STATUS_CANCELED,
     EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
@@ -1203,6 +1204,23 @@ def _lock_execution_for_transition(*, execution_id: uuid.UUID) -> ActionPlanExec
     return _lock_execution_for_write(execution_id=execution_id)
 
 
+def _award_gam04_for_created_in_progress_execution(*, execution: ActionPlanExecution) -> None:
+    lifecycle_event = (
+        execution.lifecycle_events.filter(event_type=EXECUTION_LIFECYCLE_EVENT_CREATED)
+        .order_by("occurred_at", "id")
+        .first()
+    )
+    if lifecycle_event is None:
+        return
+
+    from houston.gamification.services import award_action_plan_execution_started_points
+
+    award_action_plan_execution_started_points(
+        execution=execution,
+        lifecycle_event=lifecycle_event,
+    )
+
+
 def _lock_execution_task_after_execution(
     *,
     execution: ActionPlanExecution,
@@ -1618,6 +1636,7 @@ def create_action_plan_with_execution(
         plan_tasks=plan_tasks,
         assignees=validated_assignees,
     )
+    _award_gam04_for_created_in_progress_execution(execution=execution)
     if signal is not None:
         _activate_linked_signal_on_execution_create(
             signal=signal,
@@ -1783,6 +1802,7 @@ def create_execution_from_action_plan(
         plan_tasks=plan_tasks,
         assignees=validated_assignees,
     )
+    _award_gam04_for_created_in_progress_execution(execution=execution)
     if emit_side_effects:
         from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
         from houston.notifications.scheduling import (
@@ -1868,6 +1888,10 @@ def mark_action_plan_execution_done(
         occurred_at=now,
         actor_membership=actor_membership,
     )
+    from houston.gamification.services import award_recurring_execution_done_points
+
+    award_recurring_execution_done_points(execution=execution)
+
     from houston.action_plans.feed_pin_services import delete_action_plan_execution_feed_pins
     from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
 

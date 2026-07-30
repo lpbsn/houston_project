@@ -35,6 +35,7 @@ from houston.action_plans.models import (
 from houston.action_plans.permissions import _scope_business_unit_ids
 from houston.action_plans.services import (
     ValidatedAssigneePayload,
+    _award_gam04_for_created_in_progress_execution,
     _create_execution_record,
     _execution_task_snapshot_fields,
     _materialize_execution_structure,
@@ -500,6 +501,8 @@ def materialize_execution_from_schedule(
         plan_tasks=plan_tasks,
         assignees=assignees,
     )
+    if execution.status == EXECUTION_STATUS_IN_PROGRESS:
+        _award_gam04_for_created_in_progress_execution(execution=execution)
     if emit_side_effects:
         from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
         from houston.notifications.scheduling import (
