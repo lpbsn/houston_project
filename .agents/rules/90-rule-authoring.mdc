@@ -1,0 +1,31 @@
+---
+description: Rules for creating or editing Cursor .mdc project rules.
+globs:
+  - ".cursor/rules/**/*.mdc"
+alwaysApply: false
+---
+
+# Rule Authoring Rules
+
+## Goal
+Rules must reduce repeated prompt context, not become documentation dumps.
+
+## Format
+- Use `.mdc`.
+- Include frontmatter.
+- Use `alwaysApply: true` only for tiny global rules.
+- Use `globs` for file-scoped rules.
+- Use `description` for agent-requested rules.
+
+## Quality
+- Keep each rule short and enforceable.
+- Prefer project-specific constraints over generic advice.
+- Do not duplicate the same instruction across many rules.
+- Do not copy long docs into rules.
+- Link or mention stable docs instead of embedding them.
+- Remove rules that no longer prevent real mistakes.
+
+## Token budget
+- Always rules must be minimal.
+- Domain-heavy rules should be agent-requested, not always.
+- If a rule exceeds about 80 lines, split or compress it.

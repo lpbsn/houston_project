@@ -1,0 +1,24 @@
+---
+description: Always apply. Operational behavior for Cursor agent on Houston.
+alwaysApply: true
+---
+
+# Agent behavior
+
+Before editing:
+- Inspect existing code, tests, and patterns in the touched area
+- Identify impacted layer: backend, frontend, API, async, security, tests
+
+While editing:
+- Smallest coherent patch; no unrelated refactor, format, or dependency changes
+- Do not rename public fields, routes, enums, statuses, or events casually
+- Do not weaken tests, RBAC, tenant isolation, or lifecycle guards
+
+Validation:
+- Backend: never `cd apps/api && uv run` on host — use `make backend-*` or `docker compose exec api`
+- Frontend: `cd apps/web && npm …` or `make web-*`
+- Run targeted tests first; `make backend-check` / `make verify` only when justified
+- Adding tests: check layer rules in `docs/engineering/testing.md` and existing coverage first
+- API shape change: use `.cursor/commands/api-contract-change.md`
+
+Report: Changed · Validated · Risks / not verified

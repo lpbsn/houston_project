@@ -40,8 +40,10 @@ If API shape changes: update backend serializer/view/tests, regenerate schema an
 | Local dev / Docker | [`docs/engineering/local_development.md`](docs/engineering/local_development.md) |
 | Testing | [`docs/engineering/testing.md`](docs/engineering/testing.md) |
 
-## Cursor
+## Codex
 
-Agent behavior: [`.cursor/rules/00-agent-behavior.mdc`](.cursor/rules/00-agent-behavior.mdc)
+Imported Cursor rules: [`.agents/rules/00-agent-behavior.mdc`](.agents/rules/00-agent-behavior.mdc)
 
-Commands (invoke explicitly): `scope` · `implement-change` · `audit` · `review` · `api-contract-change` · `mobile-pwa-debug` · `test-audit`
+Command prompt copies: [`.agents/commands`](.agents/commands)
+
+Slash prompts installed in `~/.codex/prompts`: `scope` · `implement-change` · `audit` · `review` · `api-contract-change` · `mobile-pwa-debug` · `test-audit`
