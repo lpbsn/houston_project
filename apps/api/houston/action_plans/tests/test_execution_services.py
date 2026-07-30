@@ -14,7 +14,6 @@ from houston.action_plans.constants import (
 from houston.action_plans.exceptions import (
     ActionPlanPermissionError,
     ActionPlanStateError,
-    ActionPlanValidatedExecutionConflictError,
     ActionPlanValidationError,
 )
 from houston.action_plans.models import (
@@ -753,11 +752,14 @@ def test_reopen_from_pending_validation_clears_timestamps(
     assert execution.cancel_origin is None
 
 
-def test_reopen_from_done_clears_timestamps(
+def test_reopen_rejects_done_without_validation_without_side_effects(
     owner_membership,
     business_unit,
     staff_membership,
 ):
+    from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_REOPENED
+    from houston.action_plans.models import ActionPlanExecutionLifecycleEvent
+
     _, execution = create_action_plan_with_execution(
         establishment_id=owner_membership.establishment_id,
         created_by=owner_membership,
@@ -772,17 +774,34 @@ def test_reopen_from_done_clears_timestamps(
         execution_id=execution.id,
         actor_membership=owner_membership,
     )
+    done.refresh_from_db()
+    marked_done_at = done.marked_done_at
+    event_count_before = ActionPlanExecutionLifecycleEvent.objects.filter(
+        action_plan_execution_id=done.id,
+    ).count()
 
-    reopened = reopen_action_plan_execution(
-        execution_id=done.id,
-        actor=owner_membership,
+    with pytest.raises(ActionPlanStateError, match="cannot be reopened"):
+        reopen_action_plan_execution(
+            execution_id=done.id,
+            actor=owner_membership,
+        )
+
+    done.refresh_from_db()
+    assert done.status == ActionPlanExecution.Status.DONE
+    assert done.marked_done_at == marked_done_at
+    assert done.validated_at is None
+    assert done.reopened_at is None
+    assert done.reopened_by_membership_id is None
+    assert (
+        ActionPlanExecutionLifecycleEvent.objects.filter(
+            action_plan_execution_id=done.id,
+        ).count()
+        == event_count_before
     )
-
-    reopened.refresh_from_db()
-    assert reopened.status == ActionPlanExecution.Status.IN_PROGRESS
-    assert reopened.marked_done_at is None
-    assert reopened.validated_at is None
-    assert reopened.canceled_at is None
+    assert not ActionPlanExecutionLifecycleEvent.objects.filter(
+        action_plan_execution_id=done.id,
+        event_type=EXECUTION_LIFECYCLE_EVENT_REOPENED,
+    ).exists()
 
 
 def test_reopen_rejects_validated_execution_without_side_effects(
@@ -814,10 +833,7 @@ def test_reopen_rejects_validated_execution_without_side_effects(
         action_plan_execution_id=execution_with_assignee.id,
     ).count()
 
-    with pytest.raises(
-        ActionPlanValidatedExecutionConflictError,
-        match="A validated action plan execution cannot be reopened.",
-    ):
+    with pytest.raises(ActionPlanStateError, match="cannot be reopened"):
         reopen_action_plan_execution(
             execution_id=execution_with_assignee.id,
             actor=owner_membership,

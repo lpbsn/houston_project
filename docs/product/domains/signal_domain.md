@@ -206,7 +206,7 @@ Detail API exposes (not feed):
 - `canceled_by_membership_id` / `canceled_at`
 - `archived_by_membership_id` / `archived_at`
 
-On `resolved → in_progress` (execution reopen), `resolved_*` and `resolution_origin` are cleared. Prior resolution remains in the journal.
+On `resolved → in_progress` (defensive path if an execution reopen ever reactivates a linked Signal), `resolved_*` and `resolution_origin` are cleared. Prior resolution remains in the journal. Product reopen is only allowed from `pending_validation`, which does not resolve the Signal, so this path is not reached by the legal reopen API.
 
 Action-plan auto-resolve: `resolved_by_membership` is null and `resolution_origin=action_plan`.
 

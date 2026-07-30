@@ -250,7 +250,7 @@ def test_reopen_emits_updated_reason(
         created_by=owner_membership,
         pilot_business_unit_id=business_unit.id,
         title="Reopen plan",
-        requires_validation=False,
+        requires_validation=True,
         tasks=[build_task_payload(task="Task", business_unit=business_unit)],
         assignees=[
             build_assignee_payload(membership=staff_membership, business_unit=business_unit)

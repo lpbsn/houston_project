@@ -7,6 +7,7 @@ from django.db import close_old_connections
 from django.utils import timezone
 
 from houston.action_plans.constants import SIGNAL_BLOCKING_EXECUTION_STATUSES
+from houston.action_plans.exceptions import ActionPlanStateError
 from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.services import (
     cancel_action_plan_execution,
@@ -17,7 +18,7 @@ from houston.action_plans.services import (
     validate_action_plan_execution,
 )
 from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
-from houston.signals.models import Signal, SignalSourceObservation
+from houston.signals.models import Signal, SignalLifecycleEvent, SignalSourceObservation
 from houston.signals.services import resolve_signal, resolve_signal_from_execution_sync
 from houston.testing.pipeline import create_observation
 from houston.testing.taxonomy import create_minimal_v3_signal
@@ -251,8 +252,7 @@ def test_validated_execution_cannot_reopen_and_keeps_signal_resolved(
     business_unit,
     staff_membership,
 ):
-    from houston.action_plans.exceptions import ActionPlanValidatedExecutionConflictError
-
+    _ = business_unit, staff_membership
     signal = create_minimal_v3_signal(
         owner_membership,
         title="Validated stays resolved",
@@ -277,7 +277,7 @@ def test_validated_execution_cannot_reopen_and_keeps_signal_resolved(
     signal.refresh_from_db()
     assert signal.status == Signal.Status.RESOLVED
 
-    with pytest.raises(ActionPlanValidatedExecutionConflictError):
+    with pytest.raises(ActionPlanStateError, match="cannot be reopened"):
         reopen_action_plan_execution(
             execution_id=validated.id,
             actor=owner_membership,
@@ -290,14 +290,74 @@ def test_validated_execution_cannot_reopen_and_keeps_signal_resolved(
     assert signal.status == Signal.Status.RESOLVED
 
 
-def test_reopen_linked_execution_after_auto_resolve_sets_signal_in_progress(
+def test_reopen_from_pending_validation_with_linked_signal_keeps_signal_unchanged(
     owner_membership,
     business_unit,
     staff_membership,
 ):
+    from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_REOPENED
+    from houston.action_plans.models import ActionPlanExecutionLifecycleEvent
+
+    _ = business_unit, staff_membership
     signal = create_minimal_v3_signal(
         owner_membership,
-        title="Reopen signal",
+        title="Pending reopen signal stable",
+        status=Signal.Status.IN_PROGRESS,
+    )
+    execution = _create_linked_execution(
+        owner_membership=owner_membership,
+        signal=signal,
+        title="Pending reopen",
+        requires_validation=True,
+    )
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.IN_PROGRESS
+
+    pending = mark_action_plan_execution_done(
+        execution_id=execution.id,
+        actor_membership=owner_membership,
+    )
+    assert pending.status == ActionPlanExecution.Status.PENDING_VALIDATION
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.IN_PROGRESS
+    signal_event_ids_before_reopen = list(
+        SignalLifecycleEvent.objects.filter(signal=signal)
+        .order_by("id")
+        .values_list("id", flat=True)
+    )
+
+    reopened = reopen_action_plan_execution(
+        execution_id=pending.id,
+        actor=owner_membership,
+    )
+    reopened.refresh_from_db()
+    signal.refresh_from_db()
+
+    assert reopened.status == ActionPlanExecution.Status.IN_PROGRESS
+    assert reopened.reopened_at is not None
+    assert reopened.reopened_by_membership_id == owner_membership.id
+    assert reopened.marked_done_at is None
+    assert ActionPlanExecutionLifecycleEvent.objects.filter(
+        action_plan_execution_id=reopened.id,
+        event_type=EXECUTION_LIFECYCLE_EVENT_REOPENED,
+    ).exists()
+    assert signal.status == Signal.Status.IN_PROGRESS
+    assert list(
+        SignalLifecycleEvent.objects.filter(signal=signal)
+        .order_by("id")
+        .values_list("id", flat=True)
+    ) == signal_event_ids_before_reopen
+
+
+def test_done_execution_cannot_reopen_and_keeps_signal_resolved(
+    owner_membership,
+    business_unit,
+    staff_membership,
+):
+    _ = business_unit, staff_membership
+    signal = create_minimal_v3_signal(
+        owner_membership,
+        title="Done stays resolved",
         status=Signal.Status.IN_PROGRESS,
     )
     execution = _create_linked_execution(
@@ -310,17 +370,22 @@ def test_reopen_linked_execution_after_auto_resolve_sets_signal_in_progress(
         execution_id=execution.id,
         actor_membership=owner_membership,
     )
-    # sync may already auto-resolve the Signal via the done execution.
     signal.refresh_from_db()
     if signal.status != Signal.Status.RESOLVED:
         resolve_signal_from_execution_sync(signal=signal)
     signal.refresh_from_db()
     assert signal.status == Signal.Status.RESOLVED
+    resolved_at = signal.resolved_at
 
-    reopen_action_plan_execution(execution_id=execution.id, actor=owner_membership)
+    with pytest.raises(ActionPlanStateError, match="cannot be reopened"):
+        reopen_action_plan_execution(execution_id=execution.id, actor=owner_membership)
 
+    execution.refresh_from_db()
     signal.refresh_from_db()
-    assert signal.status == Signal.Status.IN_PROGRESS
+    assert execution.status == ActionPlanExecution.Status.DONE
+    assert execution.reopened_at is None
+    assert signal.status == Signal.Status.RESOLVED
+    assert signal.resolved_at == resolved_at
 
 
 def test_manual_resolve_refuses_in_progress_with_active_executions(
@@ -538,12 +603,12 @@ def test_sync_noop_when_interesting_with_all_canceled_executions(
 
 
 @pytest.mark.django_db(transaction=True)
-def test_concurrent_resolve_vs_reopen_on_created_from_siblings_does_not_break_invariants(
+def test_concurrent_resolve_vs_done_reopen_reject_on_created_from_siblings(
     owner_membership,
     business_unit,
     staff_membership,
 ):
-    """Déclenche la course resolve(sibling_a) ↔ reopen(execution linked à sibling_b)."""
+    """resolve(sibling_a) en parallèle d'un reopen refusé sur DONE (sibling_b)."""
     _ = business_unit, staff_membership
 
     sibling_a = create_minimal_v3_signal(
@@ -569,7 +634,6 @@ def test_concurrent_resolve_vs_reopen_on_created_from_siblings_does_not_break_in
         link_type=SignalSourceObservation.LinkType.CREATED_FROM,
     )
 
-    # blocking execution for sibling_a: resolve must cancel it
     blocking_execution_a = _create_linked_execution(
         owner_membership=owner_membership,
         signal=sibling_a,
@@ -577,7 +641,6 @@ def test_concurrent_resolve_vs_reopen_on_created_from_siblings_does_not_break_in
         requires_validation=False,
     )
 
-    # done execution for sibling_b: reopen should turn it back in_progress
     execution_b = _create_linked_execution(
         owner_membership=owner_membership,
         signal=sibling_b,
@@ -591,13 +654,13 @@ def test_concurrent_resolve_vs_reopen_on_created_from_siblings_does_not_break_in
     execution_b.refresh_from_db()
     assert execution_b.status == ActionPlanExecution.Status.DONE
 
-    # Ensure sibling_b is RESOLVED so reopen transitions it to IN_PROGRESS.
-    # Depending on sync timing, this may already have happened automatically.
     sibling_b.refresh_from_db()
     if sibling_b.status != Signal.Status.RESOLVED:
         resolve_signal_from_execution_sync(signal=sibling_b)
     sibling_b.refresh_from_db()
     assert sibling_b.status == Signal.Status.RESOLVED
+
+    reopen_errors: list[BaseException] = []
 
     def run_resolve_a() -> None:
         close_old_connections()
@@ -605,31 +668,32 @@ def test_concurrent_resolve_vs_reopen_on_created_from_siblings_does_not_break_in
 
     def run_reopen_b() -> None:
         close_old_connections()
-        reopen_action_plan_execution(execution_id=execution_b.id, actor=owner_membership)
+        try:
+            reopen_action_plan_execution(execution_id=execution_b.id, actor=owner_membership)
+        except ActionPlanStateError as exc:
+            reopen_errors.append(exc)
+        else:
+            reopen_errors.append(AssertionError("reopen from DONE should fail"))
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         futures = [executor.submit(run_resolve_a), executor.submit(run_reopen_b)]
         for future in futures:
             future.result(timeout=30)
 
+    assert len(reopen_errors) == 1
+    assert isinstance(reopen_errors[0], ActionPlanStateError)
+
     sibling_a.refresh_from_db()
     sibling_b.refresh_from_db()
     blocking_execution_a.refresh_from_db()
     execution_b.refresh_from_db()
 
-    # Invariant: any resolved signal must not have blocking executions linked to it.
     if sibling_a.status == Signal.Status.RESOLVED:
         assert not ActionPlanExecution.objects.filter(
             source_signal_id=sibling_a.id,
             status__in=SIGNAL_BLOCKING_EXECUTION_STATUSES,
         ).exists()
 
-    if sibling_b.status == Signal.Status.RESOLVED:
-        assert not ActionPlanExecution.objects.filter(
-            source_signal_id=sibling_b.id,
-            status__in=SIGNAL_BLOCKING_EXECUTION_STATUSES,
-        ).exists()
-
-    # Sanity checks for this scenario.
-    assert execution_b.status == ActionPlanExecution.Status.IN_PROGRESS
-    assert sibling_b.status == Signal.Status.IN_PROGRESS
+    assert execution_b.status == ActionPlanExecution.Status.DONE
+    assert sibling_b.status == Signal.Status.RESOLVED
+    assert execution_b.reopened_at is None

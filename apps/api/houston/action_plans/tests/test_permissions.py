@@ -505,6 +505,30 @@ def test_pilot_manager_can_mark_done_validate_reopen_cancel(
     assert can_reopen_action_plan_execution(manager_membership, validated) is False
 
 
+def test_cannot_reopen_done_without_validation(
+    owner_membership,
+    business_unit,
+    manager_membership,
+    staff_membership,
+):
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Done no validation reopen denied",
+        requires_validation=False,
+        assignees=[
+            build_assignee_payload(membership=staff_membership, business_unit=business_unit)
+        ],
+    )
+    done = mark_action_plan_execution_done(
+        execution_id=execution.id,
+        actor_membership=manager_membership,
+    )
+    assert done.status == ActionPlanExecution.Status.DONE
+    assert can_reopen_action_plan_execution(manager_membership, done) is False
+
+
 def test_contributor_manager_cannot_mark_done_or_validate(
     owner_membership,
     business_unit,

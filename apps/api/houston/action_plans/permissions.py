@@ -497,12 +497,7 @@ def can_reopen_action_plan_execution(
         establishment_id=execution.establishment_id,
     ):
         return False
-    if execution.status not in {
-        ActionPlanExecution.Status.PENDING_VALIDATION,
-        ActionPlanExecution.Status.DONE,
-    }:
-        return False
-    if execution.validated_at is not None:
+    if execution.status != ActionPlanExecution.Status.PENDING_VALIDATION:
         return False
     if membership is None:
         return False
