@@ -38,7 +38,7 @@ describe('ActionPlanExecutionDetailReviewSection', () => {
 
     const rating = screen.getByRole('img', { name: 'Note : 0 sur 5' })
     expect(rating.querySelectorAll('svg')).toHaveLength(5)
-    for (const svg of rating.querySelectorAll('svg')) {
+    for (const svg of Array.from(rating.querySelectorAll('svg'))) {
       expect(svg.classList.contains('text-[#EF9F27]')).toBe(false)
       expect(svg.classList.contains('text-[#C9C6BD]')).toBe(true)
     }
