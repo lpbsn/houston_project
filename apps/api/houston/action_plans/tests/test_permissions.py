@@ -497,6 +497,13 @@ def test_pilot_manager_can_mark_done_validate_reopen_cancel(
     assert can_reopen_action_plan_execution(manager_membership, pending) is True
     assert can_cancel_action_plan_execution(manager_membership, pending) is True
 
+    validated = validate_action_plan_execution(
+        execution_id=pending.id,
+        actor_membership=manager_membership,
+        stars=4,
+    )
+    assert can_reopen_action_plan_execution(manager_membership, validated) is False
+
 
 def test_contributor_manager_cannot_mark_done_or_validate(
     owner_membership,

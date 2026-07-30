@@ -55,6 +55,7 @@ class ActionPlanExecutionFeedItemSerializer(serializers.Serializer):
     description_short = serializers.CharField()
     status = serializers.CharField()
     requires_validation = serializers.BooleanField()
+    validated_at = serializers.DateTimeField(allow_null=True)
     pilot_business_unit = ActionPlanBusinessUnitSerializer()
     involved_poles = serializers.ListField(child=serializers.DictField())
     signal_summary = serializers.DictField(allow_null=True)
@@ -112,6 +113,7 @@ def serialize_action_plan_execution_feed_item(
         "description_short": description_short(execution.description),
         "status": execution.status,
         "requires_validation": execution.requires_validation,
+        "validated_at": execution.validated_at,
         "pilot_business_unit": _serialize_business_unit(execution.pilot_business_unit),
         "involved_poles": _serialize_involved_poles(execution),
         "signal_summary": _serialize_signal_summary(execution),

@@ -197,7 +197,7 @@ function ActionPlanFeedAssigneeRow({
       {showStatusBadge ? (
         <div className="flex shrink-0 items-center gap-1.5">
           {showPinnedBadge && item.is_pinned ? <ActionPlanPinnedBadge /> : null}
-          <ActionPlanStatusBadge status={item.status} />
+          <ActionPlanStatusBadge status={item.status} validatedAt={item.validated_at} />
         </div>
       ) : showPinnedBadge && item.is_pinned ? (
         <div className="flex shrink-0 items-center">

@@ -14,6 +14,7 @@ from houston.action_plans.constants import (
 from houston.action_plans.exceptions import (
     ActionPlanPermissionError,
     ActionPlanStateError,
+    ActionPlanValidatedExecutionConflictError,
     ActionPlanValidationError,
 )
 from houston.action_plans.models import (
@@ -784,10 +785,13 @@ def test_reopen_from_done_clears_timestamps(
     assert reopened.canceled_at is None
 
 
-def test_reopen_from_done_deactivates_active_review(
+def test_reopen_rejects_validated_execution_without_side_effects(
     owner_membership,
     execution_with_assignee,
 ):
+    from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_REOPENED
+    from houston.action_plans.models import ActionPlanExecutionLifecycleEvent
+
     pending = mark_action_plan_execution_done(
         execution_id=execution_with_assignee.id,
         actor_membership=owner_membership,
@@ -796,17 +800,49 @@ def test_reopen_from_done_deactivates_active_review(
         execution_id=pending.id,
         actor_membership=owner_membership,
         stars=3,
+        comment="OK",
     )
 
-    reopen_action_plan_execution(
-        execution_id=execution_with_assignee.id,
-        actor=owner_membership,
-    )
-
+    execution_with_assignee.refresh_from_db()
+    validated_at = execution_with_assignee.validated_at
+    validated_by_id = execution_with_assignee.validated_by_membership_id
     review = ActionPlanExecutionReview.objects.get(
-        action_plan_execution_id=execution_with_assignee.id
+        action_plan_execution_id=execution_with_assignee.id,
+        is_active=True,
     )
-    assert review.is_active is False
+    event_count_before = ActionPlanExecutionLifecycleEvent.objects.filter(
+        action_plan_execution_id=execution_with_assignee.id,
+    ).count()
+
+    with pytest.raises(
+        ActionPlanValidatedExecutionConflictError,
+        match="A validated action plan execution cannot be reopened.",
+    ):
+        reopen_action_plan_execution(
+            execution_id=execution_with_assignee.id,
+            actor=owner_membership,
+        )
+
+    execution_with_assignee.refresh_from_db()
+    review.refresh_from_db()
+    assert execution_with_assignee.status == ActionPlanExecution.Status.DONE
+    assert execution_with_assignee.validated_at == validated_at
+    assert execution_with_assignee.validated_by_membership_id == validated_by_id
+    assert execution_with_assignee.reopened_at is None
+    assert execution_with_assignee.reopened_by_membership_id is None
+    assert review.is_active is True
+    assert review.stars == 3
+    assert review.comment == "OK"
+    assert (
+        ActionPlanExecutionLifecycleEvent.objects.filter(
+            action_plan_execution_id=execution_with_assignee.id,
+        ).count()
+        == event_count_before
+    )
+    assert not ActionPlanExecutionLifecycleEvent.objects.filter(
+        action_plan_execution_id=execution_with_assignee.id,
+        event_type=EXECUTION_LIFECYCLE_EVENT_REOPENED,
+    ).exists()
 
 
 def test_cancel_from_in_progress_sets_canceled_at(

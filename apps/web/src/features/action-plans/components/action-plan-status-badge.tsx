@@ -6,6 +6,7 @@ import { formatActionPlanExecutionStatusLabel } from '../lib/action-plan-display
 
 type ActionPlanStatusBadgeProps = {
   status: string
+  validatedAt?: string | null
   variant?: 'default' | 'detail' | 'executionHeader'
 }
 
@@ -33,6 +34,7 @@ function getBadgeVariant(status: string) {
 
 export function ActionPlanStatusBadge({
   status,
+  validatedAt = null,
   variant = 'default',
 }: ActionPlanStatusBadgeProps) {
   const badgeVariant = getBadgeVariant(status)
@@ -48,7 +50,7 @@ export function ActionPlanStatusBadge({
         isExecutionHeaderInProgress && 'text-white',
       )}
     >
-      {formatActionPlanExecutionStatusLabel(status)}
+      {formatActionPlanExecutionStatusLabel(status, { validatedAt })}
     </HoustonBadge>
   )
 }

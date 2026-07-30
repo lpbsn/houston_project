@@ -20,6 +20,7 @@ from houston.action_plans.constants import (
     EXECUTION_STATUS_IN_PROGRESS,
     EXECUTION_STATUS_SCHEDULED,
 )
+from houston.action_plans.exceptions import ActionPlanValidatedExecutionConflictError
 from houston.action_plans.lifecycle_events import sanitize_lifecycle_metadata_safe
 from houston.action_plans.lifecycle_promotion import promote_due_scheduled_executions
 from houston.action_plans.materialization import materialize_execution_from_schedule
@@ -244,7 +245,7 @@ def test_concurrent_materialization_emits_single_created_event(
     )
 
 
-def test_mark_done_validate_reopen_set_current_fields_and_matching_timestamps(
+def test_mark_done_validate_sets_current_fields_and_rejects_reopen(
     owner_membership,
     execution_with_assignee,
 ):
@@ -271,6 +272,43 @@ def test_mark_done_validate_reopen_set_current_fields_and_matching_timestamps(
     assert done.validated_by_membership_id == owner_membership.id
     assert done.validated_at == validated[0].occurred_at
 
+    with pytest.raises(ActionPlanValidatedExecutionConflictError):
+        reopen_action_plan_execution(
+            execution_id=done.id,
+            actor=owner_membership,
+        )
+
+    done.refresh_from_db()
+    assert done.status == ActionPlanExecution.Status.DONE
+    assert done.validated_at == validated[0].occurred_at
+    assert done.reopened_at is None
+    assert not _events_of_type(execution=done, event_type=EXECUTION_LIFECYCLE_EVENT_REOPENED)
+
+
+def test_reopen_without_validation_sets_reopened_fields_and_matching_timestamps(
+    owner_membership,
+    business_unit,
+    staff_membership,
+):
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Reopen without validation audit",
+        requires_validation=False,
+        assignees=[
+            build_assignee_payload(membership=staff_membership, business_unit=business_unit)
+        ],
+    )
+    done = mark_action_plan_execution_done(
+        execution_id=execution.id,
+        actor_membership=owner_membership,
+    )
+    done.refresh_from_db()
+    marked = _events_of_type(execution=done, event_type=EXECUTION_LIFECYCLE_EVENT_MARKED_DONE)
+    assert len(marked) == 1
+    assert done.validated_at is None
+
     reopened = reopen_action_plan_execution(
         execution_id=done.id,
         actor=owner_membership,
@@ -287,8 +325,7 @@ def test_mark_done_validate_reopen_set_current_fields_and_matching_timestamps(
     assert reopened.marked_done_by_membership_id is None
     assert reopened.validated_at is None
     assert reopened.validated_by_membership_id is None
-    # Prior journal rows preserved.
-    assert len(_lifecycle_events(execution=reopened)) >= 4
+    assert len(_lifecycle_events(execution=reopened)) >= 3
 
 
 def test_mark_done_without_validation_emits_only_marked_done(

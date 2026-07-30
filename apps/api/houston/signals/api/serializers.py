@@ -145,6 +145,7 @@ class SignalLinkedActionPlanExecutionSerializer(serializers.Serializer):
     title = serializers.CharField()
     status = serializers.CharField()
     requires_validation = serializers.BooleanField()
+    validated_at = serializers.DateTimeField(allow_null=True)
     pilot_business_unit = ActionPlanBusinessUnitSerializer()
     last_activity_at = serializers.DateTimeField()
     created_at = serializers.DateTimeField()
@@ -349,6 +350,7 @@ def serialize_linked_action_plan_execution_for_signal_detail(
         "title": execution.title,
         "status": execution.status,
         "requires_validation": execution.requires_validation,
+        "validated_at": execution.validated_at,
         "pilot_business_unit": _serialize_business_unit(execution.pilot_business_unit),
         "last_activity_at": execution.last_activity_at,
         "created_at": execution.created_at,

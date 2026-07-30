@@ -36,6 +36,7 @@ from houston.action_plans.constants import (
 from houston.action_plans.exceptions import (
     ActionPlanPermissionError,
     ActionPlanStateError,
+    ActionPlanValidatedExecutionConflictError,
     ActionPlanValidationError,
 )
 from houston.action_plans.models import (
@@ -1968,6 +1969,10 @@ def reopen_action_plan_execution(
         EXECUTION_STATUS_DONE,
     }:
         raise ActionPlanStateError("Execution cannot be reopened in its current state.")
+    if execution.validated_at is not None:
+        raise ActionPlanValidatedExecutionConflictError(
+            "A validated action plan execution cannot be reopened."
+        )
     if not can_reopen_action_plan_execution(actor, execution):
         raise ActionPlanPermissionError("Not allowed to reopen this execution.")
 

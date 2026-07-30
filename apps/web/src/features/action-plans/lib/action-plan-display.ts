@@ -26,7 +26,10 @@ import type {
   ActionPlanTaskTemplate,
 } from '../types'
 
-export function formatActionPlanExecutionStatusLabel(status: string): string {
+export function formatActionPlanExecutionStatusLabel(
+  status: string,
+  options?: { validatedAt?: string | null },
+): string {
   switch (status) {
     case 'in_progress':
       return 'En cours'
@@ -35,7 +38,7 @@ export function formatActionPlanExecutionStatusLabel(status: string): string {
     case 'scheduled':
       return 'Planifiée'
     case 'done':
-      return 'Terminé'
+      return options?.validatedAt != null ? 'Validée' : 'Terminé'
     case 'canceled':
       return 'Annulé'
     default:

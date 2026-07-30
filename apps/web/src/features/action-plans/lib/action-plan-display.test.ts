@@ -10,6 +10,7 @@ import {
   computeActionPlanDeadlineState,
   flattenActionPlanAssignees,
   formatActionPlanCreatedAtLabel,
+  formatActionPlanExecutionStatusLabel,
   formatActionPlanTaskAssigneePoleLine,
   formatActionPlanTaskEditorMetaLine,
   groupActionPlansByPilotBusinessUnit,
@@ -50,6 +51,19 @@ describe('groupActionPlansByPilotBusinessUnit', () => {
     expect(sections).toHaveLength(2)
     expect(sections[0]?.businessUnitLabel).toBe('Hôtel')
     expect(sections[1]?.items).toHaveLength(1)
+  })
+})
+
+describe('formatActionPlanExecutionStatusLabel', () => {
+  it('labels done without validation as Terminé', () => {
+    expect(formatActionPlanExecutionStatusLabel('done')).toBe('Terminé')
+    expect(formatActionPlanExecutionStatusLabel('done', { validatedAt: null })).toBe('Terminé')
+  })
+
+  it('labels done with validatedAt as Validée', () => {
+    expect(
+      formatActionPlanExecutionStatusLabel('done', { validatedAt: '2026-07-30T10:00:00Z' }),
+    ).toBe('Validée')
   })
 })
 

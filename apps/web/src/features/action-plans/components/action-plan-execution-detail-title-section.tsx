@@ -24,7 +24,11 @@ export function ActionPlanExecutionDetailTitleSection({
     <TerrainCard className="space-y-2">
       <div className="flex items-start justify-between gap-2">
         <h1 className="text-lg font-bold leading-snug text-[#222222]">{execution.title}</h1>
-        <ActionPlanStatusBadge status={execution.status} variant="executionHeader" />
+        <ActionPlanStatusBadge
+          status={execution.status}
+          validatedAt={execution.validated_at}
+          variant="executionHeader"
+        />
       </div>
 
       <div className="flex items-center gap-2">

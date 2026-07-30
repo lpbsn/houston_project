@@ -57,6 +57,7 @@ function buildFeedItem(
     description_short: 'Description longue à ne pas afficher',
     status: 'in_progress',
     requires_validation: false,
+    validated_at: null,
     pilot_business_unit: { id: 'bu-1', specific_name: 'Restaurant', instance_description: '', active: true, generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' } },
     involved_poles: [
       {
