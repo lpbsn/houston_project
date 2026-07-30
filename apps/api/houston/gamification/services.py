@@ -15,9 +15,12 @@ from houston.establishments.timezone_utils import (
 )
 from houston.gamification.constants import (
     CURRENT_RULE_VERSION,
+    DELTA_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE,
     DELTA_RESOLUTION_REQUEST_APPROVED,
+    REASON_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE,
     REASON_RESOLUTION_REQUEST_APPROVED,
     SIGNAL_PROGRESS_REWARDS,
+    SOURCE_TYPE_ACTION_PLAN_EXECUTION,
     SOURCE_TYPE_SIGNAL,
     SOURCE_TYPE_SIGNAL_RESOLUTION_REQUEST,
     badge_for_score,
@@ -581,6 +584,103 @@ def award_signal_progress_points(
             ),
             source_event_id=lifecycle_event.id,
         )
+
+
+def _action_plan_execution_assigned_membership_ids(*, execution) -> set[UUID]:
+    from houston.action_plans.models import ActionPlanAssignee, ActionPlanExecutionTask
+
+    direct_ids = ActionPlanAssignee.objects.filter(
+        action_plan_execution_id=execution.id,
+    ).values_list("membership_id", flat=True)
+    task_ids = ActionPlanExecutionTask.objects.filter(
+        action_plan_execution_id=execution.id,
+        assigned_membership_id__isnull=False,
+    ).values_list("assigned_membership_id", flat=True)
+    return set(direct_ids) | set(task_ids)
+
+
+def _action_plan_execution_started_is_eligible(*, execution) -> bool:
+    assigned_membership_ids = _action_plan_execution_assigned_membership_ids(
+        execution=execution,
+    )
+    if not assigned_membership_ids:
+        return False
+
+    creator_id = execution.created_by_id
+    if execution.source_signal_id is not None:
+        return any(membership_id != creator_id for membership_id in assigned_membership_ids)
+    return creator_id not in assigned_membership_ids
+
+
+def _canonical_action_plan_execution_started_lifecycle_event(*, execution):
+    from houston.action_plans.constants import (
+        EXECUTION_LIFECYCLE_EVENT_CREATED,
+        EXECUTION_LIFECYCLE_EVENT_STARTED,
+        EXECUTION_STATUS_IN_PROGRESS,
+    )
+
+    created = (
+        execution.lifecycle_events.filter(
+            event_type=EXECUTION_LIFECYCLE_EVENT_CREATED,
+            metadata_safe__initial_status=EXECUTION_STATUS_IN_PROGRESS,
+        )
+        .order_by("occurred_at", "id")
+        .first()
+    )
+    if created is not None:
+        return created
+
+    return (
+        execution.lifecycle_events.filter(event_type=EXECUTION_LIFECYCLE_EVENT_STARTED)
+        .order_by("occurred_at", "id")
+        .first()
+    )
+
+
+def award_action_plan_execution_started_points(
+    *,
+    execution,
+    lifecycle_event,
+) -> None:
+    """Award +2 to the execution creator when an eligible execution starts.
+
+    Must run in the same transaction.atomic as the execution creation or
+    scheduled → in_progress transition. Reopens/reactivations are intentionally
+    not rewarded.
+    """
+    from houston.action_plans.constants import EXECUTION_STATUS_IN_PROGRESS
+
+    if execution.status != EXECUTION_STATUS_IN_PROGRESS:
+        return
+
+    canonical_lifecycle_event = _canonical_action_plan_execution_started_lifecycle_event(
+        execution=execution,
+    )
+    if canonical_lifecycle_event is None:
+        raise GamificationValidationError(
+            "Action plan execution has started without a canonical lifecycle event.",
+            code="gamification_action_plan_execution_started_lifecycle_missing",
+        )
+
+    if not _action_plan_execution_started_is_eligible(execution=execution):
+        return
+
+    establishment = Establishment.objects.get(pk=execution.establishment_id)
+    award_points(
+        membership=execution.created_by,
+        establishment=establishment,
+        delta=DELTA_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE,
+        reason_code=REASON_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE,
+        source_type=SOURCE_TYPE_ACTION_PLAN_EXECUTION,
+        source_id=execution.id,
+        occurred_at=canonical_lifecycle_event.occurred_at,
+        idempotency_key=build_idempotency_key(
+            reason_code=REASON_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE,
+            subject_id=execution.id,
+            membership_id=execution.created_by_id,
+        ),
+        source_event_id=canonical_lifecycle_event.id,
+    )
 
 
 def award_resolution_request_approved_points(*, resolution_request) -> None:
