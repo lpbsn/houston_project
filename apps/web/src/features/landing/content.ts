@@ -148,30 +148,6 @@ export const directionContent = {
   ] as const,
 } as const
 
-export const pricingContent = {
-  title: 'Un prix qui suit votre développement',
-  subtitle: "Signaux, plans d'action, suivi terrain — tout est inclus, dès le premier jour.",
-  badge: 'OFFRE UNIQUE',
-  price: '129€',
-  priceSuffix: '/ mois / site',
-  features: [
-    'Toute la plateforme incluse',
-    "Jusqu'à 5 pôles d'activité",
-    'Utilisateurs illimités',
-  ] as const,
-  trialCta: "Démarrer l'essai gratuit — 14 jours",
-  comingSoonLabel: 'Bientôt disponible',
-  poleExtension: {
-    title: 'Votre établissement a plus de 5 pôles d’activité ?',
-    body: 'Food hall, resort, tiers-lieux — +15€/mois par pôle supplémentaire. Aucune surprise, aucune négociation : le même principe s’applique à tout le monde.',
-  },
-  multiSite: {
-    title: 'Vous gérez plusieurs établissements ?',
-    body: 'Ajoutez le pilotage groupe : reporting consolidé, benchmark inter-sites, un seul tableau de bord. À partir de 149€/mois, quel que soit le nombre de sites dans la tranche.',
-    detailCta: 'Voir le détail',
-  },
-} as const
-
 export const finalCtaContent = {
   title: "Prêt à exploiter l'intelligence de votre terrain ?",
   cta: 'Demander une démo',
@@ -187,8 +163,6 @@ export const footerContent = {
 
 export const soonAvailableMessages = {
   demo: 'Les demandes de démo seront bientôt disponibles.',
-  trial: "L'essai gratuit sera bientôt disponible.",
-  group: 'Le pilotage groupe sera bientôt disponible.',
 } as const
 
 export const legalContent = {

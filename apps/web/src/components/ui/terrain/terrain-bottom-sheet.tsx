@@ -8,6 +8,7 @@ type TerrainBottomSheetProps = {
   onClose: () => void
   children: ReactNode
   footer?: ReactNode
+  dismissible?: boolean
 }
 
 export function TerrainBottomSheet({
@@ -16,6 +17,7 @@ export function TerrainBottomSheet({
   onClose,
   children,
   footer,
+  dismissible = true,
 }: TerrainBottomSheetProps) {
   const titleId = useId()
 
@@ -28,8 +30,9 @@ export function TerrainBottomSheet({
       <button
         type="button"
         className="absolute inset-0 bg-black/40"
-        aria-label="Fermer"
-        onClick={onClose}
+        disabled={!dismissible}
+        aria-label={dismissible ? 'Fermer' : undefined}
+        onClick={dismissible ? onClose : undefined}
       />
       <div
         role="dialog"

@@ -31,6 +31,7 @@ import {
   ActionPlanExecutionTaskActionsSheet,
   type ActionPlanTaskActionId,
 } from '../components/action-plan-execution-task-actions-sheet'
+import { ActionPlanExecutionValidateRatingSheet } from '../components/action-plan-execution-validate-rating-sheet'
 import { ActionPlanExecutionStickyFooter } from '../components/action-plan-execution-sticky-footer'
 import { ActionPlanExecutionTaskFilters } from '../components/action-plan-execution-task-filters'
 import { ActionPlanExecutionTaskList } from '../components/action-plan-execution-task-list'
@@ -120,6 +121,9 @@ function ActionPlanExecutionDetailPageContent({
   const [taskActionsTask, setTaskActionsTask] = useState<ActionPlanTaskExecution | null>(null)
   const [observationTaskId, setObservationTaskId] = useState<string | null>(null)
   const [observationText, setObservationText] = useState('')
+  const [validationStars, setValidationStars] = useState<number | null>(null)
+  const [validationComment, setValidationComment] = useState('')
+  const [isValidationSheetOpen, setIsValidationSheetOpen] = useState(false)
   const [selectedPoleId, setSelectedPoleId] = useState<string | null>(null)
 
   const poleSummaries = useMemo(
@@ -193,9 +197,22 @@ function ActionPlanExecutionDetailPageContent({
   }
 
   async function handleValidate() {
+    setIsValidationSheetOpen(true)
+  }
+
+  async function handleValidateConfirm() {
     setFeedback(null)
     try {
-      await validateMutation.mutateAsync()
+      if (validationStars == null) {
+        return
+      }
+      await validateMutation.mutateAsync({
+        stars: validationStars,
+        comment: validationComment,
+      })
+      setIsValidationSheetOpen(false)
+      setValidationStars(null)
+      setValidationComment('')
       notifySuccess({ message: 'Plan validé.', kind: 'validated' })
     } catch (error) {
       setFeedback({
@@ -449,6 +466,24 @@ function ActionPlanExecutionDetailPageContent({
         onClose={() => {
           setObservationTaskId(null)
           setObservationText('')
+        }}
+      />
+
+      <ActionPlanExecutionValidateRatingSheet
+        open={isValidationSheetOpen}
+        stars={validationStars}
+        comment={validationComment}
+        isPending={validateMutation.isPending}
+        onStarsChange={setValidationStars}
+        onCommentChange={setValidationComment}
+        onConfirm={() => void handleValidateConfirm()}
+        onClose={() => {
+          if (validateMutation.isPending) {
+            return
+          }
+          setIsValidationSheetOpen(false)
+          setValidationStars(null)
+          setValidationComment('')
         }}
       />
     </div>

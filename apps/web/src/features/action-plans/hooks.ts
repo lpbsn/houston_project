@@ -34,6 +34,7 @@ import {
 import type {
   ActionPlanCatalogListFilters,
   ActionPlanCreateRequest,
+  ActionPlanExecutionValidateRequest,
   ActionPlanPlanningSubmitRequest,
   ActionPlanTaskCreateObservationRequest,
   ActionPlanTaskSkipRequest,
@@ -297,7 +298,14 @@ export function useValidateActionPlanExecutionMutation(
   establishmentId: string,
   executionId: string,
 ) {
-  return useExecutionCommandMutation(establishmentId, executionId, validateActionPlanExecution)
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: ActionPlanExecutionValidateRequest) =>
+      validateActionPlanExecution(establishmentId, executionId, body),
+    onSuccess: () => {
+      invalidateActionPlanExecutionSurfaces(queryClient, establishmentId, executionId)
+    },
+  })
 }
 
 export function useReopenActionPlanExecutionMutation(

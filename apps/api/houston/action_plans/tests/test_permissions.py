@@ -108,6 +108,7 @@ def _execution_for_permissions(
             execution = validate_action_plan_execution(
                 execution_id=execution.id,
                 actor_membership=owner,
+                stars=4,
             )
     elif status != ActionPlanExecution.Status.IN_PROGRESS:
         execution.status = status

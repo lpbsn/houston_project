@@ -216,6 +216,7 @@ def test_validate_execution_resolves_linked_signal(
     validate_action_plan_execution(
         execution_id=pending.id,
         actor_membership=owner_membership,
+        stars=4,
     )
 
     signal.refresh_from_db()
@@ -269,6 +270,7 @@ def test_lifecycle_reopens_signal_to_open_after_cancel_following_validation_cycl
     validated = validate_action_plan_execution(
         execution_id=pending.id,
         actor_membership=owner_membership,
+        stars=4,
     )
     reopened = reopen_action_plan_execution(
         execution_id=validated.id,

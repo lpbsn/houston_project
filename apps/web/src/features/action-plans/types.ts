@@ -34,6 +34,8 @@ export type ActionPlanTaskCreateObservationRequest =
   components['schemas']['ActionPlanTaskCreateObservationRequest']
 export type ActionPlanTaskCreateObservationResponse =
   components['schemas']['ActionPlanTaskCreateObservationResponse']
+export type ActionPlanExecutionValidateRequest =
+  components['schemas']['ActionPlanExecutionValidateRequest']
 export type ActionPlanPermissionHints = components['schemas']['ActionPlanPermissionHints']
 export type ActionPlanExecutionPermissionHints =
   components['schemas']['ActionPlanExecutionPermissionHints']

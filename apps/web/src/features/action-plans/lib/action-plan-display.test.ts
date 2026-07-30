@@ -151,6 +151,7 @@ function buildExecutionDetail(
       is_pilot_pole_assignee: true,
       can_pin: false,
     },
+    active_review: null,
     ...overrides,
   }
 }

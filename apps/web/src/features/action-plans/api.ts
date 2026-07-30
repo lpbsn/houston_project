@@ -17,6 +17,7 @@ import type {
   ActionPlanExecutionFeedItemWrapper,
   ActionPlanExecutionFeedResponse,
   ActionPlanExecutionUpcomingResponse,
+  ActionPlanExecutionValidateRequest,
   ActionPlanExecutionPinState,
   ActionPlanListItem,
   ActionPlanPlanningSubmitRequest,
@@ -409,6 +410,7 @@ export async function markActionPlanExecutionDone(
 export async function validateActionPlanExecution(
   establishmentId: string,
   executionId: string,
+  body: ActionPlanExecutionValidateRequest,
 ): Promise<ActionPlanExecutionDetail> {
   const result = await withAuthRetry(
     (accessToken) =>
@@ -416,6 +418,7 @@ export async function validateActionPlanExecution(
         '/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/validate/',
         {
           params: executionPath(establishmentId, executionId),
+          body: body as components['schemas']['ActionPlanExecutionValidateRequest'],
           headers: getAuthHeaders(accessToken),
         },
       ),

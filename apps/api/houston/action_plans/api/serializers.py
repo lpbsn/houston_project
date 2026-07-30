@@ -6,6 +6,7 @@ from rest_framework import serializers
 
 from houston.action_plans.constants import (
     ACTION_PLAN_DESCRIPTION_MAX_LENGTH,
+    ACTION_PLAN_EXECUTION_REVIEW_COMMENT_MAX_LENGTH,
     ACTION_PLAN_SKIPPED_REASON_MAX_LENGTH,
     ACTION_PLAN_TASK_MAX_LENGTH,
     ACTION_PLAN_TITLE_MAX_LENGTH,
@@ -517,6 +518,11 @@ class ActionPlanTaskExecutionSerializer(serializers.Serializer):
     permission_hints = ActionPlanTaskExecutionPermissionHintsSerializer()
 
 
+class ActionPlanExecutionActiveReviewSerializer(serializers.Serializer):
+    stars = serializers.IntegerField(min_value=0, max_value=5)
+    comment = serializers.CharField(max_length=ACTION_PLAN_EXECUTION_REVIEW_COMMENT_MAX_LENGTH)
+
+
 class ActionPlanExecutionDetailSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     action_plan_id = serializers.UUIDField(allow_null=True)
@@ -565,6 +571,7 @@ class ActionPlanExecutionDetailSerializer(serializers.Serializer):
     involved_poles = ActionPlanInvolvedPoleSerializer(many=True)
     task_executions = ActionPlanTaskExecutionSerializer(many=True)
     permission_hints = ActionPlanExecutionPermissionHintsSerializer()
+    active_review = ActionPlanExecutionActiveReviewSerializer(allow_null=True)
 
 
 class ActionPlanTaskSkipRequestSerializer(serializers.Serializer):
@@ -573,6 +580,15 @@ class ActionPlanTaskSkipRequestSerializer(serializers.Serializer):
         required=False,
         allow_null=True,
         allow_blank=True,
+    )
+
+
+class ActionPlanExecutionValidateRequestSerializer(serializers.Serializer):
+    stars = serializers.IntegerField(min_value=0, max_value=5)
+    comment = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=ACTION_PLAN_EXECUTION_REVIEW_COMMENT_MAX_LENGTH,
     )
 
 
@@ -743,6 +759,20 @@ def serialize_task_execution(
     }
 
 
+def _serialize_active_review(execution: ActionPlanExecution) -> dict | None:
+    prefetched = getattr(execution, "_prefetched_active_reviews", None)
+    if prefetched is not None:
+        review = prefetched[0] if prefetched else None
+    else:
+        review = execution.reviews.filter(is_active=True).first()
+    if review is None:
+        return None
+    return {
+        "stars": review.stars,
+        "comment": review.comment,
+    }
+
+
 def serialize_execution_detail(
     execution: ActionPlanExecution,
     *,
@@ -822,6 +852,7 @@ def serialize_execution_detail(
             membership=membership,
             execution=execution,
         ),
+        "active_review": _serialize_active_review(execution),
     }
 
 

@@ -5,6 +5,7 @@ from django.db.models import Q
 
 from houston.action_plans.constants import (
     ACTION_PLAN_DESCRIPTION_MAX_LENGTH,
+    ACTION_PLAN_EXECUTION_REVIEW_COMMENT_MAX_LENGTH,
     ACTION_PLAN_SKIPPED_REASON_MAX_LENGTH,
     ACTION_PLAN_TASK_MAX_LENGTH,
     ACTION_PLAN_TITLE_MAX_LENGTH,
@@ -466,6 +467,52 @@ class ActionPlanExecution(BaseModel):
 
     def __str__(self) -> str:
         return f"ActionPlanExecution {self.id} [{self.status}]"
+
+
+class ActionPlanExecutionReview(BaseModel):
+    action_plan_execution = models.ForeignKey(
+        ActionPlanExecution,
+        on_delete=models.CASCADE,
+        related_name="reviews",
+    )
+    reviewer_membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.PROTECT,
+        related_name="action_plan_execution_reviews",
+    )
+    stars = models.PositiveSmallIntegerField()
+    comment = models.TextField(
+        blank=True,
+        default="",
+        max_length=ACTION_PLAN_EXECUTION_REVIEW_COMMENT_MAX_LENGTH,
+    )
+    reviewed_at = models.DateTimeField()
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["action_plan_execution", "reviewed_at"],
+                name="ap_exec_review_exec_at_idx",
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(stars__gte=0, stars__lte=5),
+                name="action_plan_execution_review_stars_bounds",
+            ),
+            models.UniqueConstraint(
+                fields=["action_plan_execution"],
+                condition=Q(is_active=True),
+                name="uniq_action_plan_execution_active_review",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"ActionPlanExecutionReview execution={self.action_plan_execution_id} "
+            f"stars={self.stars} active={self.is_active}"
+        )
 
 
 class ActionPlanExecutionLifecycleEvent(BaseModel):

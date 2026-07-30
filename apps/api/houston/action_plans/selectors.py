@@ -29,6 +29,7 @@ from houston.action_plans.models import (
     ActionPlanAssignee,
     ActionPlanExecution,
     ActionPlanExecutionFeedPin,
+    ActionPlanExecutionReview,
     ActionPlanExecutionTask,
     ActionPlanSchedule,
     ActionPlanScheduleAssignee,
@@ -103,9 +104,15 @@ _EXECUTION_TASK_DETAIL_PREFETCH = Prefetch(
         "execution_team__business_unit__catalog_business_unit",
     ).order_by("position", "created_at"),
 )
+_EXECUTION_ACTIVE_REVIEW_PREFETCH = Prefetch(
+    "reviews",
+    queryset=ActionPlanExecutionReview.objects.filter(is_active=True),
+    to_attr="_prefetched_active_reviews",
+)
 _EXECUTION_DETAIL_PREFETCH = (
     _EXECUTION_ASSIGNEE_PREFETCH,
     _EXECUTION_TASK_DETAIL_PREFETCH,
+    _EXECUTION_ACTIVE_REVIEW_PREFETCH,
     "execution_teams__business_unit",
     "execution_teams__business_unit__catalog_business_unit",
 )

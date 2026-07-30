@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { LandingPage } from './landing-page'
-import { APP_LOGIN_URL, heroContent, pricingContent } from '../content'
+import { APP_LOGIN_URL, heroContent } from '../content'
 
 vi.mock('framer-motion', async () => {
   const actual = await vi.importActual<typeof import('framer-motion')>('framer-motion')
@@ -26,14 +26,12 @@ describe('LandingPage', () => {
     expect(screen.getByRole('heading', { level: 1, name: heroContent.h1 })).toBeTruthy()
   })
 
-  it('renders essential sections, pricing, and coming-soon markers', () => {
+  it('renders essential sections and metrics', () => {
     render(<LandingPage />)
 
     expect(screen.getByRole('heading', { name: /trois étapes/i })).toBeTruthy()
     expect(screen.getByText('5s')).toBeTruthy()
     expect(screen.getByText('100%')).toBeTruthy()
-    expect(screen.getByText(pricingContent.price)).toBeTruthy()
-    expect(screen.getAllByText(pricingContent.comingSoonLabel).length).toBeGreaterThanOrEqual(2)
   })
 
   it('opens the soon-available dialog from the demo CTA', () => {

@@ -6,7 +6,11 @@ import pytest
 from django.db import close_old_connections
 from django.utils import timezone
 
-from houston.action_plans.constants import CANCEL_ORIGIN_MANUAL, CATALOG_STATUS_ACTIVE
+from houston.action_plans.constants import (
+    ACTION_PLAN_EXECUTION_REVIEW_COMMENT_MAX_LENGTH,
+    CANCEL_ORIGIN_MANUAL,
+    CATALOG_STATUS_ACTIVE,
+)
 from houston.action_plans.exceptions import (
     ActionPlanPermissionError,
     ActionPlanStateError,
@@ -15,6 +19,7 @@ from houston.action_plans.exceptions import (
 from houston.action_plans.models import (
     ActionPlanAssignee,
     ActionPlanExecution,
+    ActionPlanExecutionReview,
     ActionPlanExecutionTask,
     ActionPlanExecutionTeam,
     ActionPlanTask,
@@ -29,6 +34,7 @@ from houston.action_plans.services import (
     validate_action_plan_execution,
 )
 from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
+from houston.comments.models import Comment, CommentMention
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.models import Signal
 from houston.testing.factories import create_establishment
@@ -603,11 +609,125 @@ def test_validate_sets_validated_at(owner_membership, execution_with_assignee):
     execution = validate_action_plan_execution(
         execution_id=pending.id,
         actor_membership=owner_membership,
+        stars=4,
     )
 
     execution.refresh_from_db()
     assert execution.status == ActionPlanExecution.Status.DONE
     assert execution.validated_at is not None
+    review = ActionPlanExecutionReview.objects.get(action_plan_execution=execution)
+    assert review.stars == 4
+    assert review.comment == ""
+
+
+def test_validate_with_zero_stars_and_blank_comment_creates_review_without_comment(
+    owner_membership,
+    execution_with_assignee,
+):
+    pending = mark_action_plan_execution_done(
+        execution_id=execution_with_assignee.id,
+        actor_membership=owner_membership,
+    )
+
+    validate_action_plan_execution(
+        execution_id=pending.id,
+        actor_membership=owner_membership,
+        stars=0,
+        comment="   ",
+    )
+
+    assert ActionPlanExecutionReview.objects.filter(
+        action_plan_execution_id=pending.id,
+        reviewer_membership=owner_membership,
+        stars=0,
+        comment="",
+        is_active=True,
+    ).exists()
+    assert Comment.objects.filter(action_plan_execution_id=pending.id).count() == 0
+
+
+def test_validate_with_comment_stores_review_without_creating_comment(
+    owner_membership,
+    execution_with_assignee,
+):
+    pending = mark_action_plan_execution_done(
+        execution_id=execution_with_assignee.id,
+        actor_membership=owner_membership,
+    )
+
+    validate_action_plan_execution(
+        execution_id=pending.id,
+        actor_membership=owner_membership,
+        stars=5,
+        comment="Bravo",
+    )
+
+    review = ActionPlanExecutionReview.objects.get(
+        action_plan_execution_id=pending.id,
+        is_active=True,
+    )
+    assert review.stars == 5
+    assert review.comment == "Bravo"
+    assert Comment.objects.filter(action_plan_execution_id=pending.id).count() == 0
+    assert CommentMention.objects.filter(comment__action_plan_execution_id=pending.id).count() == 0
+
+
+def test_validate_accepts_review_comment_at_max_length(owner_membership, execution_with_assignee):
+    pending = mark_action_plan_execution_done(
+        execution_id=execution_with_assignee.id,
+        actor_membership=owner_membership,
+    )
+    comment = "a" * ACTION_PLAN_EXECUTION_REVIEW_COMMENT_MAX_LENGTH
+
+    validate_action_plan_execution(
+        execution_id=pending.id,
+        actor_membership=owner_membership,
+        stars=4,
+        comment=comment,
+    )
+
+    review = ActionPlanExecutionReview.objects.get(
+        action_plan_execution_id=pending.id,
+        is_active=True,
+    )
+    assert review.comment == comment
+    assert Comment.objects.filter(action_plan_execution_id=pending.id).count() == 0
+
+
+def test_validate_rejects_review_comment_over_max_length(owner_membership, execution_with_assignee):
+    pending = mark_action_plan_execution_done(
+        execution_id=execution_with_assignee.id,
+        actor_membership=owner_membership,
+    )
+
+    with pytest.raises(ActionPlanValidationError, match="at most"):
+        validate_action_plan_execution(
+            execution_id=pending.id,
+            actor_membership=owner_membership,
+            stars=4,
+            comment="a" * (ACTION_PLAN_EXECUTION_REVIEW_COMMENT_MAX_LENGTH + 1),
+        )
+
+    assert (
+        ActionPlanExecutionReview.objects.filter(
+            action_plan_execution_id=pending.id
+        ).count()
+        == 0
+    )
+
+
+def test_validate_rejects_out_of_range_stars(owner_membership, execution_with_assignee):
+    pending = mark_action_plan_execution_done(
+        execution_id=execution_with_assignee.id,
+        actor_membership=owner_membership,
+    )
+
+    with pytest.raises(ActionPlanValidationError, match="between 0 and 5"):
+        validate_action_plan_execution(
+            execution_id=pending.id,
+            actor_membership=owner_membership,
+            stars=6,
+        )
 
 
 def test_reopen_from_pending_validation_clears_timestamps(
@@ -664,6 +784,31 @@ def test_reopen_from_done_clears_timestamps(
     assert reopened.canceled_at is None
 
 
+def test_reopen_from_done_deactivates_active_review(
+    owner_membership,
+    execution_with_assignee,
+):
+    pending = mark_action_plan_execution_done(
+        execution_id=execution_with_assignee.id,
+        actor_membership=owner_membership,
+    )
+    validate_action_plan_execution(
+        execution_id=pending.id,
+        actor_membership=owner_membership,
+        stars=3,
+    )
+
+    reopen_action_plan_execution(
+        execution_id=execution_with_assignee.id,
+        actor=owner_membership,
+    )
+
+    review = ActionPlanExecutionReview.objects.get(
+        action_plan_execution_id=execution_with_assignee.id
+    )
+    assert review.is_active is False
+
+
 def test_cancel_from_in_progress_sets_canceled_at(
     owner_membership,
     execution_with_assignee,
@@ -716,6 +861,7 @@ def test_validate_rejects_non_pending(owner_membership, execution_with_assignee)
         validate_action_plan_execution(
             execution_id=execution_with_assignee.id,
             actor_membership=owner_membership,
+            stars=4,
         )
 
 
@@ -862,6 +1008,7 @@ def test_contributor_manager_validate_denied(
         validate_action_plan_execution(
             execution_id=pending.id,
             actor_membership=contributor_manager_membership,
+            stars=4,
         )
 
 

@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from houston.action_plans.constants import (
     ACTION_PLAN_DESCRIPTION_MAX_LENGTH,
+    ACTION_PLAN_EXECUTION_REVIEW_COMMENT_MAX_LENGTH,
     ACTION_PLAN_SKIPPED_REASON_MAX_LENGTH,
     ACTION_PLAN_TASK_MAX_LENGTH,
     ACTION_PLAN_TITLE_MAX_LENGTH,
@@ -41,6 +42,7 @@ from houston.action_plans.models import (
     ActionPlan,
     ActionPlanAssignee,
     ActionPlanExecution,
+    ActionPlanExecutionReview,
     ActionPlanExecutionTask,
     ActionPlanExecutionTeam,
     ActionPlanSchedule,
@@ -1884,6 +1886,8 @@ def validate_action_plan_execution(
     *,
     execution_id: uuid.UUID,
     actor_membership: EstablishmentMembership,
+    stars: int,
+    comment: str | None = None,
 ) -> ActionPlanExecution:
     _lock_source_signal_created_from_set_if_any(execution_id=execution_id)
     execution = _lock_execution_for_transition(execution_id=execution_id)
@@ -1891,11 +1895,31 @@ def validate_action_plan_execution(
         raise ActionPlanStateError("Execution cannot be validated in its current state.")
     if not can_validate_action_plan_execution(actor_membership, execution):
         raise ActionPlanPermissionError("Not allowed to validate this execution.")
+    if stars < 0 or stars > 5:
+        raise ActionPlanValidationError("Review stars must be between 0 and 5.")
+    normalized_comment = (comment or "").strip()
+    if len(normalized_comment) > ACTION_PLAN_EXECUTION_REVIEW_COMMENT_MAX_LENGTH:
+        raise ActionPlanValidationError(
+            "Review comment must be at most "
+            f"{ACTION_PLAN_EXECUTION_REVIEW_COMMENT_MAX_LENGTH} characters."
+        )
+    if ActionPlanExecutionReview.objects.select_for_update().filter(
+        action_plan_execution_id=execution.id,
+        is_active=True,
+    ).exists():
+        raise ActionPlanStateError("Execution already has an active review.")
 
     from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_VALIDATED
     from houston.action_plans.lifecycle_events import record_execution_lifecycle_event
 
     now = timezone.now()
+    ActionPlanExecutionReview.objects.create(
+        action_plan_execution=execution,
+        reviewer_membership=actor_membership,
+        stars=stars,
+        comment=normalized_comment,
+        reviewed_at=now,
+    )
     execution.status = EXECUTION_STATUS_DONE
     execution.validated_at = now
     execution.validated_by_membership = actor_membership
@@ -1951,6 +1975,10 @@ def reopen_action_plan_execution(
     from houston.action_plans.lifecycle_events import record_execution_lifecycle_event
 
     now = timezone.now()
+    ActionPlanExecutionReview.objects.filter(
+        action_plan_execution_id=execution.id,
+        is_active=True,
+    ).update(is_active=False, updated_at=now)
     execution.status = EXECUTION_STATUS_IN_PROGRESS
     execution.marked_done_at = None
     execution.marked_done_by_membership = None

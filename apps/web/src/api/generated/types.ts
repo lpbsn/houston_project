@@ -2214,6 +2214,10 @@ export interface components {
             requires_validation: boolean;
             is_reusable: boolean;
         };
+        ActionPlanExecutionActiveReview: {
+            stars: number;
+            comment: string;
+        };
         ActionPlanExecutionAssigneeUpdate: {
             /** Format: uuid */
             membership_id: string;
@@ -2289,6 +2293,7 @@ export interface components {
             involved_poles: components["schemas"]["ActionPlanInvolvedPole"][];
             task_executions: components["schemas"]["ActionPlanTaskExecution"][];
             permission_hints: components["schemas"]["ActionPlanExecutionPermissionHints"];
+            active_review: components["schemas"]["ActionPlanExecutionActiveReview"] | null;
         };
         ActionPlanExecutionFeedAssignee: {
             /** Format: uuid */
@@ -2367,6 +2372,10 @@ export interface components {
         };
         ActionPlanExecutionPinState: {
             is_pinned: boolean;
+        };
+        ActionPlanExecutionValidateRequest: {
+            stars: number;
+            comment?: string;
         };
         ActionPlanInvolvedPole: {
             business_unit: components["schemas"]["ActionPlanBusinessUnit"];
@@ -5452,7 +5461,13 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActionPlanExecutionValidateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ActionPlanExecutionValidateRequest"];
+                "multipart/form-data": components["schemas"]["ActionPlanExecutionValidateRequest"];
+            };
+        };
         responses: {
             200: {
                 headers: {
