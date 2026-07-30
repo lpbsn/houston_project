@@ -398,6 +398,7 @@ function TerminalActionPlanFeedCard({
   const showActions =
     onOpenActions && canOpenActionPlanExecutionFeedCardActions(item.permission_hints)
   const progressState = getActionPlanFeedProgressState(item)
+  const showStatusBadge = sidebarVariant === 'done'
 
   return (
     <article
@@ -407,7 +408,10 @@ function TerminalActionPlanFeedCard({
       role="button"
       tabIndex={0}
     >
-      <ActionPlanFeedSidebar variant={sidebarVariant} />
+      <ActionPlanFeedSidebar
+        variant={sidebarVariant}
+        validatedAt={sidebarVariant === 'done' ? item.validated_at : null}
+      />
 
       <div className="min-w-0 flex-1 p-4">
         <ActionPlanFeedClassificationBlock item={item} signalInput={signalInput}>
@@ -437,7 +441,7 @@ function TerminalActionPlanFeedCard({
 
         <ActionPlanFeedAssigneeRow
           item={item}
-          showStatusBadge={false}
+          showStatusBadge={showStatusBadge}
           showPinnedBadge
           avatarClassName={avatarClassName}
         />

@@ -473,21 +473,44 @@ describe('ActionPlanExecutionFeedCard', () => {
     expect(onSelect).not.toHaveBeenCalled()
   })
 
-  it('renders done card with success sidebar and progress bar', () => {
+  it('renders done card with success sidebar, Terminé badge, and progress bar', () => {
     render(
       <ActionPlanExecutionFeedCard
-        item={buildFeedItem({ status: 'done', treated_task_count: 4, task_count: 4 })}
+        item={buildFeedItem({
+          status: 'done',
+          validated_at: null,
+          treated_task_count: 4,
+          task_count: 4,
+        })}
         onSelect={onSelect}
       />,
     )
 
     expect(screen.getByLabelText('Terminé')).toBeTruthy()
+    expect(screen.getByText('Terminé')).toBeTruthy()
     expect(document.querySelector('.bg-\\[\\#1D9E75\\]')).toBeTruthy()
     expect(screen.getByRole('progressbar', { name: 'Progression des tâches : 4/4' })).toBeTruthy()
     expect(screen.getByText('4/4')).toBeTruthy()
     expect(screen.queryByText('Tâche 4/4')).toBeNull()
+  })
+
+  it('renders done card with Validée badge and sidebar when validated_at is set', () => {
+    render(
+      <ActionPlanExecutionFeedCard
+        item={buildFeedItem({
+          status: 'done',
+          validated_at: '2026-07-30T10:00:00Z',
+          treated_task_count: 4,
+          task_count: 4,
+        })}
+        onSelect={onSelect}
+      />,
+    )
+
+    expect(screen.getByLabelText('Validée')).toBeTruthy()
+    expect(screen.getByText('Validée')).toBeTruthy()
+    expect(screen.queryByLabelText('Terminé')).toBeNull()
     expect(screen.queryByText('Terminé')).toBeNull()
-    expect(screen.queryByRole('status')).toBeNull()
   })
 
   it('renders canceled card with muted sidebar and progress bar', () => {

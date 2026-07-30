@@ -253,7 +253,7 @@ promotion auto (Beat, lazy read, sync schedule) : scheduled → in_progress si s
 aucune transition automatique ne régresse un statut
 pending_validation = commencée et active (pas terminale)
 done / canceled = terminaux
-reopen explicite : pending_validation | done → in_progress
+reopen explicite : pending_validation | done (sans validated_at) → in_progress ; done validé (validated_at) → interdit (409 business_conflict)
 end_at ne termine jamais automatiquement une exécution
 sync schedule : promouvoir les scheduled dues du schedule (exhaustif) avant classify ;
   pending_validation préservée / non réécrite ; distinct de done/canceled
