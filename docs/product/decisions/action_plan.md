@@ -146,11 +146,15 @@ La résolution manuelle **prime** sur le recalcul automatique : tant que le sign
 
 #### Réouverture d'une exécution liée
 
-Si une exécution liée est rouverte après résolution du signal (manuelle ou automatique) :
+Le reopen produit légal est uniquement `pending_validation → in_progress`.
+`pending_validation` ne résout pas le Signal ; ce reopen ne le mute donc pas
+(typiquement le Signal reste `IN_PROGRESS`).
 
-```txt
-signal repasse IN_PROGRESS
-```
+`DONE` est terminal : une exécution `DONE` (validée ou non) ne peut plus être
+rouverte, y compris après résolution automatique ou manuelle du Signal lié.
+
+Le chemin technique défensif `resolved → in_progress` (helper d’exécution
+rouverte) n’est pas accessible par le workflow produit légal.
 
 **Port Lot 2D :** `sync_signal_after_execution_change` pour le recalcul automatique (annulations → OPEN ; exécutions terminales avec ≥1 `done` → RESOLVED) ; flux resolve manuel distinct. Tests obligatoires : annulations successives côté exécutions → OPEN ; mark-done / validate résolvent le signal quand toutes exécutions terminales avec ≥1 `done` ; `pending_validation` ne résout pas ; resolve manuel → cancel actives + signal RESOLVED même si toutes canceled ensuite ; reopen exécution depuis `pending_validation` uniquement (ne réactive pas un Signal `RESOLVED`) ; `DONE` est terminal (reopen interdit) ; résolution manuelle prime sur recalcul auto (signal déjà RESOLVED ne repasse pas OPEN).
 
