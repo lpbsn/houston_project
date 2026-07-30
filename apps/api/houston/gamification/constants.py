@@ -60,11 +60,15 @@ REASON_RESOLUTION_REQUEST_APPROVED = "resolution_request.approved"
 # Reason code for eligible ActionPlanExecution launch (GAM-04).
 REASON_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE = "action_plan.execution_started_eligible"
 
+# Reason code for recurring ActionPlanExecution completion without validation (GAM-05).
+REASON_RECURRING_EXECUTION_DONE = "recurring_execution.done"
+
 DELTA_SIGNAL_MARKED_INTERESTING = 1
 DELTA_SIGNAL_MOVED_IN_PROGRESS = 1
 DELTA_SIGNAL_RESOLVED = 2
 DELTA_RESOLUTION_REQUEST_APPROVED = 2
 DELTA_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE = 2
+DELTA_RECURRING_EXECUTION_DONE = 2
 
 # event_type → (reason_code, delta). Only rewarded Signal progress types.
 SIGNAL_PROGRESS_REWARDS: dict[str, tuple[str, int]] = {

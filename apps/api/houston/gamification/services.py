@@ -16,8 +16,10 @@ from houston.establishments.timezone_utils import (
 from houston.gamification.constants import (
     CURRENT_RULE_VERSION,
     DELTA_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE,
+    DELTA_RECURRING_EXECUTION_DONE,
     DELTA_RESOLUTION_REQUEST_APPROVED,
     REASON_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE,
+    REASON_RECURRING_EXECUTION_DONE,
     REASON_RESOLUTION_REQUEST_APPROVED,
     SIGNAL_PROGRESS_REWARDS,
     SOURCE_TYPE_ACTION_PLAN_EXECUTION,
@@ -597,6 +599,106 @@ def _action_plan_execution_assigned_membership_ids(*, execution) -> set[UUID]:
         assigned_membership_id__isnull=False,
     ).values_list("assigned_membership_id", flat=True)
     return set(direct_ids) | set(task_ids)
+
+
+def _canonical_recurring_execution_done_lifecycle_event(*, execution):
+    from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_MARKED_DONE
+    from houston.action_plans.models import ActionPlanExecutionLifecycleEvent
+
+    return (
+        ActionPlanExecutionLifecycleEvent.objects.filter(
+            action_plan_execution_id=execution.id,
+            event_type=EXECUTION_LIFECYCLE_EVENT_MARKED_DONE,
+        )
+        .order_by("occurred_at", "id")
+        .first()
+    )
+
+
+def _recurring_execution_done_participant_memberships(
+    *,
+    execution,
+    canonical_lifecycle_event,
+) -> list[EstablishmentMembership]:
+    from houston.action_plans.models import ActionPlanAssignee, ActionPlanExecutionTask
+    from houston.comments.models import CommentMention
+
+    direct_ids = ActionPlanAssignee.objects.filter(
+        action_plan_execution_id=execution.id,
+    ).values_list("membership_id", flat=True)
+    task_ids = ActionPlanExecutionTask.objects.filter(
+        action_plan_execution_id=execution.id,
+        assigned_membership_id__isnull=False,
+    ).values_list("assigned_membership_id", flat=True)
+    mention_ids = CommentMention.objects.filter(
+        comment__action_plan_execution_id=execution.id,
+        comment__created_at__lte=canonical_lifecycle_event.occurred_at,
+    ).values_list("mentioned_membership_id", flat=True)
+    membership_ids = set(direct_ids) | set(task_ids) | set(mention_ids)
+
+    if execution.action_plan_id is not None:
+        membership_ids.discard(execution.action_plan.created_by_id)
+    if not membership_ids:
+        return []
+
+    return list(
+        EstablishmentMembership.objects.filter(
+            id__in=membership_ids,
+            establishment_id=execution.establishment_id,
+            status=EstablishmentMembership.Status.ACTIVE,
+        ).order_by("id")
+    )
+
+
+def award_recurring_execution_done_points(*, execution) -> None:
+    """Award +2 to eligible participants when a recurring execution is done.
+
+    Must run in the same transaction.atomic as the in_progress → done transition
+    and marked_done lifecycle write.
+    """
+    from houston.action_plans.constants import EXECUTION_STATUS_DONE
+
+    if execution.status != EXECUTION_STATUS_DONE:
+        return
+    if execution.action_plan_schedule_id is None:
+        return
+    if execution.requires_validation:
+        return
+
+    canonical_lifecycle_event = _canonical_recurring_execution_done_lifecycle_event(
+        execution=execution,
+    )
+    if canonical_lifecycle_event is None:
+        raise GamificationValidationError(
+            "Recurring action plan execution is done without a canonical "
+            "marked_done lifecycle event.",
+            code="gamification_recurring_execution_done_lifecycle_missing",
+        )
+
+    memberships = _recurring_execution_done_participant_memberships(
+        execution=execution,
+        canonical_lifecycle_event=canonical_lifecycle_event,
+    )
+    if not memberships:
+        return
+
+    establishment = Establishment.objects.get(pk=execution.establishment_id)
+    for membership in memberships:
+        award_points(
+            membership=membership,
+            establishment=establishment,
+            delta=DELTA_RECURRING_EXECUTION_DONE,
+            reason_code=REASON_RECURRING_EXECUTION_DONE,
+            source_type=SOURCE_TYPE_ACTION_PLAN_EXECUTION,
+            source_id=execution.id,
+            occurred_at=canonical_lifecycle_event.occurred_at,
+            idempotency_key=build_idempotency_key(
+                reason_code=REASON_RECURRING_EXECUTION_DONE,
+                subject_id=execution.id,
+                membership_id=membership.id,
+            ),
+            source_event_id=canonical_lifecycle_event.id,
+        )
 
 
 def _action_plan_execution_started_is_eligible(*, execution) -> bool:

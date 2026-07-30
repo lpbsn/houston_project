@@ -1888,6 +1888,10 @@ def mark_action_plan_execution_done(
         occurred_at=now,
         actor_membership=actor_membership,
     )
+    from houston.gamification.services import award_recurring_execution_done_points
+
+    award_recurring_execution_done_points(execution=execution)
+
     from houston.action_plans.feed_pin_services import delete_action_plan_execution_feed_pins
     from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
 
