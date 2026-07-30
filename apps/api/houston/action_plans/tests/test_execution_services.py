@@ -6,8 +6,11 @@ import pytest
 from django.db import close_old_connections
 from django.utils import timezone
 
-from houston.action_plans.constants import CANCEL_ORIGIN_MANUAL, CATALOG_STATUS_ACTIVE
-from houston.action_plans.constants import ACTION_PLAN_EXECUTION_REVIEW_COMMENT_MAX_LENGTH
+from houston.action_plans.constants import (
+    ACTION_PLAN_EXECUTION_REVIEW_COMMENT_MAX_LENGTH,
+    CANCEL_ORIGIN_MANUAL,
+    CATALOG_STATUS_ACTIVE,
+)
 from houston.action_plans.exceptions import (
     ActionPlanPermissionError,
     ActionPlanStateError,
@@ -34,7 +37,6 @@ from houston.action_plans.tests.helpers import build_assignee_payload, build_tas
 from houston.comments.models import Comment, CommentMention
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.models import Signal
-from houston.testing.auth import build_api_membership_on_establishment
 from houston.testing.factories import create_establishment
 from houston.testing.taxonomy import create_minimal_v3_signal
 
@@ -706,7 +708,12 @@ def test_validate_rejects_review_comment_over_max_length(owner_membership, execu
             comment="a" * (ACTION_PLAN_EXECUTION_REVIEW_COMMENT_MAX_LENGTH + 1),
         )
 
-    assert ActionPlanExecutionReview.objects.filter(action_plan_execution_id=pending.id).count() == 0
+    assert (
+        ActionPlanExecutionReview.objects.filter(
+            action_plan_execution_id=pending.id
+        ).count()
+        == 0
+    )
 
 
 def test_validate_rejects_out_of_range_stars(owner_membership, execution_with_assignee):
