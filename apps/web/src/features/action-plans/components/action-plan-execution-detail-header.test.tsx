@@ -100,7 +100,7 @@ describe('ActionPlanExecutionDetailHeader', () => {
     const note = screen.getByText('Note')
     const deadline = screen.getByText('Deadline')
     expect(note.compareDocumentPosition(deadline) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(screen.getByRole('img', { name: '2 étoiles' })).toBeTruthy()
+    expect(screen.getByRole('img', { name: 'Note : 2 sur 5' })).toBeTruthy()
     expect(screen.getByText('À améliorer')).toBeTruthy()
   })
 })
