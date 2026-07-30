@@ -525,13 +525,16 @@ def _activate_linked_signal_on_execution_create(
         }
         if execution is not None:
             metadata_safe["action_plan_execution_id"] = execution.id
-        record_signal_lifecycle_event(
+        lifecycle_event = record_signal_lifecycle_event(
             signal=signal,
             event_type=SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS,
             occurred_at=now,
             actor_membership=actor_membership,
             metadata_safe=metadata_safe,
         )
+        from houston.gamification.services import award_signal_progress_points
+
+        award_signal_progress_points(signal=signal, lifecycle_event=lifecycle_event)
     _schedule_signal_invalidation(signal=signal, reason="signal.updated")
 
 
