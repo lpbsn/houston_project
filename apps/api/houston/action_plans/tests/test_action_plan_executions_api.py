@@ -82,7 +82,7 @@ def test_execution_detail_exposes_audit_current_fields_without_journal(
     assert "lifecycle_event" not in body
 
 
-def test_execution_lifecycle_mark_done_validate_reopen_cancel(
+def test_execution_lifecycle_mark_done_validate_rejects_reopen(
     api_client,
     owner_membership,
     staff_membership,
@@ -111,6 +111,8 @@ def test_execution_lifecycle_mark_done_validate_reopen_cancel(
     )
     assert validate.status_code == 200
     assert validate.json()["status"] == ActionPlanExecution.Status.DONE
+    validated_at = validate.json()["validated_at"]
+    assert validated_at is not None
 
     after_validate = api_client.get(detail_url, **auth_headers(owner_token))
     assert after_validate.status_code == 200
@@ -118,6 +120,55 @@ def test_execution_lifecycle_mark_done_validate_reopen_cancel(
         "stars": 4,
         "comment": "Bien fait",
     }
+    assert after_validate.json()["permission_hints"]["can_reopen"] is False
+
+    reopen = api_client.post(
+        action_plan_execution_url(owner_membership.establishment_id, execution.id, "reopen/"),
+        **auth_headers(owner_token),
+    )
+    assert reopen.status_code == 409
+    assert reopen.json() == {
+        "code": "business_conflict",
+        "detail": "A validated action plan execution cannot be reopened.",
+    }
+
+    after_reopen = api_client.get(detail_url, **auth_headers(owner_token))
+    assert after_reopen.status_code == 200
+    assert after_reopen.json()["status"] == ActionPlanExecution.Status.DONE
+    assert after_reopen.json()["validated_at"] == validated_at
+    assert after_reopen.json()["active_review"] == {
+        "stars": 4,
+        "comment": "Bien fait",
+    }
+    assert after_reopen.json()["reopened_at"] is None
+
+
+def test_execution_lifecycle_reopen_without_validation_then_cancel(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="No validation lifecycle",
+        requires_validation=False,
+        assignees=[
+            build_assignee_payload(membership=staff_membership, business_unit=business_unit)
+        ],
+    )
+    owner_token = login(api_client, user=owner_membership.user)
+
+    mark_done = api_client.post(
+        action_plan_execution_url(owner_membership.establishment_id, execution.id, "mark-done/"),
+        **auth_headers(owner_token),
+    )
+    assert mark_done.status_code == 200
+    assert mark_done.json()["status"] == ActionPlanExecution.Status.DONE
+    assert mark_done.json()["validated_at"] is None
+    assert mark_done.json()["permission_hints"]["can_reopen"] is True
 
     reopen = api_client.post(
         action_plan_execution_url(owner_membership.establishment_id, execution.id, "reopen/"),
@@ -125,10 +176,6 @@ def test_execution_lifecycle_mark_done_validate_reopen_cancel(
     )
     assert reopen.status_code == 200
     assert reopen.json()["status"] == ActionPlanExecution.Status.IN_PROGRESS
-
-    after_reopen = api_client.get(detail_url, **auth_headers(owner_token))
-    assert after_reopen.status_code == 200
-    assert after_reopen.json()["active_review"] is None
 
     cancel = api_client.post(
         action_plan_execution_url(owner_membership.establishment_id, execution.id, "cancel/"),

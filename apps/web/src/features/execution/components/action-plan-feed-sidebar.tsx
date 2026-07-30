@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 type ActionPlanFeedSidebarProps = {
   state?: ActionPlanFeedSidebarState
   variant?: 'done' | 'canceled'
+  validatedAt?: string | null
   className?: string
 }
 
@@ -62,10 +63,17 @@ function TerminalSidebarIcon({ variant }: { variant: 'done' | 'canceled' }) {
   )
 }
 
-export function ActionPlanFeedSidebar({ state, variant, className }: ActionPlanFeedSidebarProps) {
+export function ActionPlanFeedSidebar({
+  state,
+  variant,
+  validatedAt = null,
+  className,
+}: ActionPlanFeedSidebarProps) {
   if (variant === 'done' || variant === 'canceled') {
     const backgroundClassName =
       variant === 'done' ? terrain.successBg : 'bg-[#7D7B75]'
+    const ariaLabel =
+      variant === 'canceled' ? 'Annulé' : validatedAt != null ? 'Validée' : 'Terminé'
 
     return (
       <div
@@ -74,7 +82,7 @@ export function ActionPlanFeedSidebar({ state, variant, className }: ActionPlanF
           backgroundClassName,
           className,
         )}
-        aria-label={variant === 'done' ? 'Terminé' : 'Annulé'}
+        aria-label={ariaLabel}
       >
         <TerminalSidebarIcon variant={variant} />
       </div>

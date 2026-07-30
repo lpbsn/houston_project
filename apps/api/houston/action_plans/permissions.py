@@ -502,6 +502,8 @@ def can_reopen_action_plan_execution(
         ActionPlanExecution.Status.DONE,
     }:
         return False
+    if execution.validated_at is not None:
+        return False
     if membership is None:
         return False
     if membership.role in ADMIN_ROLES:

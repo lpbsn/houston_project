@@ -2307,6 +2307,8 @@ export interface components {
             description_short: string;
             status: string;
             requires_validation: boolean;
+            /** Format: date-time */
+            validated_at: string | null;
             pilot_business_unit: components["schemas"]["ActionPlanBusinessUnit"];
             involved_poles: {
                 [key: string]: unknown;
@@ -3917,6 +3919,8 @@ export interface components {
             title: string;
             status: string;
             requires_validation: boolean;
+            /** Format: date-time */
+            validated_at: string | null;
             pilot_business_unit: components["schemas"]["ActionPlanBusinessUnit"];
             /** Format: date-time */
             last_activity_at: string;
@@ -5404,6 +5408,14 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

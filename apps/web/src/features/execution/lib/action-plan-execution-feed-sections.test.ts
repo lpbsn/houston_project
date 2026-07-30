@@ -16,6 +16,7 @@ function buildFeedItem(
     title: 'Plan',
     description_short: 'Description',
     requires_validation: false,
+    validated_at: null,
     pilot_business_unit: { id: 'bu-1', specific_name: 'Restaurant', instance_description: '', active: true, generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' } },
     involved_poles: [],
     signal_summary: null,

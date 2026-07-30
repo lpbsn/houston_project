@@ -970,6 +970,8 @@ def _execution_command_response(*, request, establishment_id, execution_id, serv
             execution_id=execution.id,
             actor_membership=membership,
         )
+    except ActionPlanConflictError as exc:
+        return _action_plan_conflict_response(exc)
     except (ActionPlanPermissionError, ActionPlanValidationError, ActionPlanStateError) as exc:
         return _action_plan_error_response(exc)
 
@@ -1088,6 +1090,7 @@ class ActionPlanExecutionReopenView(EstablishmentScopedActionPlanMixin, APIView)
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=ApiErrorResponseSerializer),
+            409: OpenApiResponse(response=ApiErrorResponseSerializer),
         },
     )
     def post(self, request, establishment_id, execution_id):

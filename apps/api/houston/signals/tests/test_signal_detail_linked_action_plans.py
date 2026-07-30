@@ -83,6 +83,7 @@ def test_signal_detail_includes_visible_linked_execution(api_client):
     assert item["id"] == str(execution.id)
     assert item["title"] == "Fix leak"
     assert item["status"] == execution.status
+    assert item["validated_at"] is None
     assert item["pilot_business_unit"]["id"] == str(taxonomy.maintenance.id)
     assert "last_activity_at" in item
     assert "created_at" in item

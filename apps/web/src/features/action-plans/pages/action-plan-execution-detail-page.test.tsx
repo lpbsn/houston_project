@@ -787,6 +787,31 @@ describe('ActionPlanExecutionDetailPage UI refonte', () => {
     expect(screen.getByRole('button', { name: 'Rouvrir' })).toBeTruthy()
   })
 
+  it('hides Rouvrir button when can_reopen is false', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildExecution({
+        status: 'done',
+        permission_hints: {
+          can_mark_done: false,
+          can_validate: false,
+          can_reopen: false,
+          can_cancel: false,
+          can_update: false,
+          is_pilot_pole_assignee: false,
+          can_pin: false,
+        },
+      }),
+      error: null,
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    expect(screen.queryByRole('button', { name: 'Rouvrir' })).toBeNull()
+  })
+
   it('shows Annuler button when can_cancel is true', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,

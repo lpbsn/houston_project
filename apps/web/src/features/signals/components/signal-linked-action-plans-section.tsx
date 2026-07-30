@@ -28,7 +28,11 @@ function LinkedActionPlanCard({ execution, onSelect }: LinkedActionPlanCardProps
         <p className="min-w-0 flex-1 truncate text-sm font-semibold text-[#1a1a1a]">
           {execution.title}
         </p>
-        <ActionPlanStatusBadge status={execution.status} variant="detail" />
+        <ActionPlanStatusBadge
+          status={execution.status}
+          validatedAt={execution.validated_at}
+          variant="detail"
+        />
         <span className="shrink-0 text-[13px] text-[#aaa]" aria-hidden>
           &gt;
         </span>

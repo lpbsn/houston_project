@@ -1398,6 +1398,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/unpin/:
     post:
       operationId: v1_establishments_action_plan_executions_unpin_create
@@ -7623,6 +7629,10 @@ components:
           type: string
         requires_validation:
           type: boolean
+        validated_at:
+          type: string
+          format: date-time
+          nullable: true
         pilot_business_unit:
           $ref: '#/components/schemas/ActionPlanBusinessUnit'
         involved_poles:
@@ -7686,6 +7696,7 @@ components:
       - task_executions
       - title
       - treated_task_count
+      - validated_at
     ActionPlanExecutionFeedItemWrapper:
       type: object
       properties:
@@ -11618,6 +11629,10 @@ components:
           type: string
         requires_validation:
           type: boolean
+        validated_at:
+          type: string
+          format: date-time
+          nullable: true
         pilot_business_unit:
           $ref: '#/components/schemas/ActionPlanBusinessUnit'
         last_activity_at:
@@ -11634,6 +11649,7 @@ components:
       - requires_validation
       - status
       - title
+      - validated_at
     SignalQualifyRoutingRequest:
       type: object
       properties:

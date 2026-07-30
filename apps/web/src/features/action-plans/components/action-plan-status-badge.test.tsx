@@ -35,6 +35,20 @@ describe('ActionPlanStatusBadge', () => {
     )
 
     expect(container.querySelector('.bg-\\[\\#1D9E75\\]')).toBeTruthy()
+    expect(container.textContent).toContain('Terminé')
+  })
+
+  it('renders Validée when done and validatedAt is set', () => {
+    const { container } = render(
+      createElement(ActionPlanStatusBadge, {
+        status: 'done',
+        validatedAt: '2026-07-30T10:00:00Z',
+        variant: 'executionHeader',
+      }),
+    )
+
+    expect(container.querySelector('.bg-\\[\\#1D9E75\\]')).toBeTruthy()
+    expect(container.textContent).toContain('Validée')
   })
 
   it('renders executionHeader variant canceled with gray background', () => {

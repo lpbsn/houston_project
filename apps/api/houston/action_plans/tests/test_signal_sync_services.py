@@ -246,14 +246,16 @@ def test_pending_validation_does_not_resolve_linked_signal(
     assert signal.status == Signal.Status.IN_PROGRESS
 
 
-def test_lifecycle_reopens_signal_to_open_after_cancel_following_validation_cycle(
+def test_validated_execution_cannot_reopen_and_keeps_signal_resolved(
     owner_membership,
     business_unit,
     staff_membership,
 ):
+    from houston.action_plans.exceptions import ActionPlanValidatedExecutionConflictError
+
     signal = create_minimal_v3_signal(
         owner_membership,
-        title="Lifecycle succeeds",
+        title="Validated stays resolved",
         status=Signal.Status.IN_PROGRESS,
     )
     execution = _create_linked_execution(
@@ -272,18 +274,20 @@ def test_lifecycle_reopens_signal_to_open_after_cancel_following_validation_cycl
         actor_membership=owner_membership,
         stars=4,
     )
-    reopened = reopen_action_plan_execution(
-        execution_id=validated.id,
-        actor=owner_membership,
-    )
-    canceled = cancel_action_plan_execution(
-        execution_id=reopened.id,
-        actor=owner_membership,
-    )
-
-    assert canceled.status == ActionPlanExecution.Status.CANCELED
     signal.refresh_from_db()
-    assert signal.status == Signal.Status.OPEN
+    assert signal.status == Signal.Status.RESOLVED
+
+    with pytest.raises(ActionPlanValidatedExecutionConflictError):
+        reopen_action_plan_execution(
+            execution_id=validated.id,
+            actor=owner_membership,
+        )
+
+    validated.refresh_from_db()
+    signal.refresh_from_db()
+    assert validated.status == ActionPlanExecution.Status.DONE
+    assert validated.validated_at is not None
+    assert signal.status == Signal.Status.RESOLVED
 
 
 def test_reopen_linked_execution_after_auto_resolve_sets_signal_in_progress(
