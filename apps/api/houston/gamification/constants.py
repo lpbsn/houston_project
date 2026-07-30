@@ -8,6 +8,8 @@ Notifications and realtime invalidation stay after_commit.
 from __future__ import annotations
 
 import uuid
+from typing import Any
+from uuid import UUID
 
 SEASON_STATUS_ACTIVE = "active"
 SEASON_STATUS_CLOSED = "closed"
@@ -37,6 +39,9 @@ SOURCE_EVENT_ID_MAX_LENGTH = 64
 IDEMPOTENCY_KEY_MAX_LENGTH = 255
 RULE_VERSION_MAX_LENGTH = 64
 BADGE_CODE_MAX_LENGTH = 16
+
+# Empty for GAM-01; GAM-02+ hooks must add keys explicitly before persisting.
+AWARD_METADATA_SAFE_KEYS: frozenset[str] = frozenset()
 
 # Payload fields compared on idempotent award_points retries.
 # metadata_safe is intentionally excluded from the identity payload.
@@ -73,3 +78,22 @@ def build_idempotency_key(
 ) -> str:
     """Build ledger idempotency key (rule_version is audit-only, not in the key)."""
     return f"{reason_code}:{subject_id}:{membership_id}"
+
+
+def sanitize_award_metadata_safe(metadata: dict[str, Any] | None) -> dict[str, Any]:
+    """Keep only allowlisted structured keys; stringify UUID-like values."""
+    if not metadata:
+        return {}
+    safe: dict[str, Any] = {}
+    for key, value in metadata.items():
+        if key not in AWARD_METADATA_SAFE_KEYS:
+            continue
+        if value is None:
+            continue
+        if isinstance(value, UUID):
+            safe[key] = str(value)
+        elif isinstance(value, (str, int, float, bool)):
+            safe[key] = value
+        else:
+            continue
+    return safe

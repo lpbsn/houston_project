@@ -34,6 +34,8 @@ class GamificationSeason(BaseModel):
     )
     starts_at = models.DateTimeField()
     ends_at = models.DateTimeField()
+    # Audit snapshot at open time. Month bound resolution uses the locked
+    # establishment's current timezone; revisit if product-mutable TZ lands.
     timezone = models.CharField(max_length=ESTABLISHMENT_TIMEZONE_MAX_LENGTH)
     rule_version = models.CharField(
         max_length=RULE_VERSION_MAX_LENGTH,

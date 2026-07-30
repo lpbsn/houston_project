@@ -353,3 +353,184 @@ def test_ensure_rejects_past_gap_when_later_season_exists(paris_establishment):
             aware_local("Europe/Paris", 2026, 6, 15, 12),
         )
     assert exc_info.value.code == "gamification_season_past_gap"
+
+
+def test_award_idempotent_after_close_no_side_effects(
+    paris_membership,
+    paris_establishment,
+    monkeypatch,
+):
+    season = open_season(paris_establishment, month_start_local=date(2026, 7, 1))
+    occurred_at = aware_local("Europe/Paris", 2026, 7, 15, 12)
+    first = _award(
+        membership=paris_membership,
+        establishment=paris_establishment,
+        occurred_at=occurred_at,
+        delta=2,
+        idempotency_key="idem-after-close",
+        source_id="subj-close",
+    )
+    close_season(season, closed_at=aware_local("Europe/Paris", 2026, 8, 1))
+
+    def _ensure_should_not_run(*args, **kwargs):
+        raise AssertionError("ensure_season_for_occurred_at must not run on idempotent retry")
+
+    with monkeypatch.context() as m:
+        m.setattr(
+            "houston.gamification.services.ensure_season_for_occurred_at",
+            _ensure_should_not_run,
+        )
+        second = _award(
+            membership=paris_membership,
+            establishment=paris_establishment,
+            occurred_at=occurred_at,
+            delta=2,
+            idempotency_key="idem-after-close",
+            source_id="subj-close",
+        )
+        assert second.id == first.id
+
+        with pytest.raises(GamificationIdempotencyConflictError):
+            _award(
+                membership=paris_membership,
+                establishment=paris_establishment,
+                occurred_at=occurred_at,
+                delta=9,
+                idempotency_key="idem-after-close",
+                source_id="subj-close",
+            )
+
+    with pytest.raises(GamificationSeasonClosedError):
+        _award(
+            membership=paris_membership,
+            establishment=paris_establishment,
+            occurred_at=occurred_at,
+            idempotency_key="new-after-close",
+            source_id="subj-new",
+        )
+
+
+def test_award_metadata_safe_strips_disallowed_keys(paris_membership, paris_establishment):
+    open_season(paris_establishment, month_start_local=date(2026, 7, 1))
+    tx = award_points(
+        membership=paris_membership,
+        establishment=paris_establishment,
+        delta=1,
+        reason_code="test.award",
+        source_type="test",
+        source_id="meta-1",
+        occurred_at=aware_local("Europe/Paris", 2026, 7, 15, 12),
+        idempotency_key="meta-safe",
+        metadata_safe={"raw_observation": "secret text", "nested": {"a": 1}},
+    )
+    assert tx.metadata_safe == {}
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_identical_awards_one_ledger_row(paris_membership, paris_establishment):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from django.db import close_old_connections
+
+    occurred_at = aware_local("Europe/Paris", 2026, 7, 15, 12)
+    key = "concurrent-same-award"
+
+    def run_award():
+        close_old_connections()
+        try:
+            return _award(
+                membership=paris_membership,
+                establishment=paris_establishment,
+                occurred_at=occurred_at,
+                delta=2,
+                idempotency_key=key,
+                source_id="subj-concurrent",
+                source_event_id="evt-1",
+            )
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(run_award), pool.submit(run_award)]
+        results = [f.result(timeout=15) for f in futures]
+
+    assert results[0].id == results[1].id
+    assert PointTransaction.objects.filter(idempotency_key=key).count() == 1
+    assert (
+        GamificationSeason.objects.filter(
+            establishment=paris_establishment,
+            status=GamificationSeason.Status.ACTIVE,
+        ).count()
+        == 1
+    )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_award_integrity_error_fallback_deterministic(
+    paris_membership,
+    paris_establishment,
+):
+    import threading
+    from unittest.mock import patch
+
+    from django.db import close_old_connections, connection
+
+    if connection.vendor != "postgresql":
+        pytest.skip("PostgreSQL-only concurrency test")
+
+    open_season(paris_establishment, month_start_local=date(2026, 7, 1))
+    occurred_at = aware_local("Europe/Paris", 2026, 7, 15, 12)
+    key = "idem-integrity-fallback"
+    award_kwargs = dict(
+        membership=paris_membership,
+        establishment=paris_establishment,
+        delta=2,
+        reason_code="test.award",
+        source_type="test",
+        source_id="subj-integrity",
+        source_event_id="evt-1",
+        occurred_at=occurred_at,
+        idempotency_key=key,
+    )
+
+    loser_past_early = threading.Event()
+    winner_committed = threading.Event()
+    loser_result: list[PointTransaction] = []
+    loser_errors: list[BaseException] = []
+    loser_thread_box: dict[str, threading.Thread | None] = {"thread": None}
+
+    real_ensure = ensure_season_for_occurred_at
+
+    def ensure_router(establishment, occurred_at, **kwargs):
+        if threading.current_thread() is loser_thread_box["thread"]:
+            loser_past_early.set()
+            assert winner_committed.wait(timeout=5)
+            return real_ensure(establishment, occurred_at, **kwargs)
+        return real_ensure(establishment, occurred_at, **kwargs)
+
+    def loser_txn() -> None:
+        close_old_connections()
+        try:
+            loser_result.append(award_points(**award_kwargs))
+        except BaseException as exc:
+            loser_errors.append(exc)
+        finally:
+            close_old_connections()
+
+    thread = threading.Thread(target=loser_txn, name="gamification-idem-loser")
+    loser_thread_box["thread"] = thread
+
+    with patch(
+        "houston.gamification.services.ensure_season_for_occurred_at",
+        ensure_router,
+    ):
+        thread.start()
+        assert loser_past_early.wait(timeout=5)
+        winner = award_points(**award_kwargs)
+        winner_committed.set()
+        thread.join(timeout=15)
+
+    assert loser_errors == []
+    assert len(loser_result) == 1
+    assert loser_result[0].id == winner.id
+    assert PointTransaction.objects.filter(idempotency_key=key).count() == 1

@@ -16,6 +16,7 @@ from houston.establishments.timezone_utils import (
 from houston.gamification.constants import (
     CURRENT_RULE_VERSION,
     badge_for_score,
+    sanitize_award_metadata_safe,
 )
 from houston.gamification.exceptions import (
     GamificationIdempotencyConflictError,
@@ -28,6 +29,11 @@ from houston.gamification.selectors import (
     get_season_by_starts_at,
     month_bounds_for_occurred_at,
 )
+
+
+def _lock_establishment(establishment_id: UUID) -> Establishment:
+    """Return the establishment row locked for update (reloaded from DB)."""
+    return Establishment.objects.select_for_update().get(pk=establishment_id)
 
 
 def _month_start_date(value: date | datetime, *, establishment: Establishment) -> date:
@@ -67,12 +73,15 @@ def _bounds_for_month_start(
     return starts_at, ends_at
 
 
+@transaction.atomic
 def open_season(
     establishment: Establishment,
     *,
     month_start_local: date | datetime | None = None,
     rule_version: str | None = None,
 ) -> GamificationSeason:
+    establishment = _lock_establishment(establishment.id)
+
     if month_start_local is None:
         month_start = establishment_local_date(establishment=establishment).replace(day=1)
     else:
@@ -107,16 +116,20 @@ def open_season(
     )
 
 
+@transaction.atomic
 def close_season(
     season: GamificationSeason,
     *,
     closed_at: datetime | None = None,
 ) -> GamificationSeason:
-    """Close an active season and persist final badge awards.
-
-    Caller should hold select_for_update on the season when racing with award_points.
-    """
-    if season.status != GamificationSeason.Status.ACTIVE:
+    """Close an active season and persist final badge awards."""
+    _lock_establishment(season.establishment_id)
+    locked = (
+        GamificationSeason.objects.select_for_update()
+        .filter(pk=season.pk)
+        .get()
+    )
+    if locked.status != GamificationSeason.Status.ACTIVE:
         raise GamificationValidationError(
             "Only an active season can be closed.",
             code="gamification_season_not_active",
@@ -124,7 +137,7 @@ def close_season(
 
     moment = closed_at or timezone.now()
     scores = (
-        PointTransaction.objects.filter(season_id=season.id)
+        PointTransaction.objects.filter(season_id=locked.id)
         .values("membership_id")
         .annotate(total=Sum("delta"))
     )
@@ -135,17 +148,17 @@ def close_season(
             continue
         BadgeAward.objects.create(
             membership_id=row["membership_id"],
-            establishment_id=season.establishment_id,
-            season_id=season.id,
+            establishment_id=locked.establishment_id,
+            season_id=locked.id,
             badge_code=badge_code,
             points_total=total,
             awarded_at=moment,
         )
 
-    season.status = GamificationSeason.Status.CLOSED
-    season.closed_at = moment
-    season.save(update_fields=["status", "closed_at", "updated_at"])
-    return season
+    locked.status = GamificationSeason.Status.CLOSED
+    locked.closed_at = moment
+    locked.save(update_fields=["status", "closed_at", "updated_at"])
+    return locked
 
 
 def _close_and_open_next(
@@ -182,6 +195,8 @@ def ensure_season_for_occurred_at(
             code="gamification_occurred_at_naive",
         )
 
+    establishment = _lock_establishment(establishment.id)
+
     starts_at, _ends_at = month_bounds_for_occurred_at(
         establishment=establishment,
         occurred_at=occurred_at,
@@ -190,7 +205,6 @@ def ensure_season_for_occurred_at(
         establishment_timezone(establishment)
     ).date()
 
-    # Serialize with close/award on the active season row when present.
     active = (
         GamificationSeason.objects.select_for_update()
         .filter(
@@ -262,6 +276,8 @@ def rollover_establishment_if_due(
             code="gamification_now_naive",
         )
 
+    establishment = _lock_establishment(establishment.id)
+
     local_today = establishment_local_date(establishment=establishment, at=moment)
     target_month_start = local_today.replace(day=1)
     target_starts, _target_ends = _bounds_for_month_start(
@@ -314,25 +330,29 @@ def _payload_matches(
     *,
     membership_id: UUID,
     establishment_id: UUID,
-    season_id: UUID,
     delta: int,
     reason_code: str,
     source_type: str,
     source_id: str,
     source_event_id: str,
     occurred_at: datetime,
+    season_id: UUID | None = None,
 ) -> bool:
-    return (
+    if not (
         existing.membership_id == membership_id
         and existing.establishment_id == establishment_id
-        and existing.season_id == season_id
         and existing.delta == delta
         and existing.reason_code == reason_code
         and existing.source_type == source_type
         and existing.source_id == source_id
         and existing.source_event_id == source_event_id
         and existing.occurred_at == occurred_at
-    )
+    ):
+        return False
+    if season_id is not None:
+        return existing.season_id == season_id
+    season = existing.season
+    return season.starts_at <= occurred_at < season.ends_at
 
 
 def _resolve_existing_idempotent(
@@ -340,26 +360,31 @@ def _resolve_existing_idempotent(
     idempotency_key: str,
     membership_id: UUID,
     establishment_id: UUID,
-    season_id: UUID,
     delta: int,
     reason_code: str,
     source_type: str,
     source_id: str,
     source_event_id: str,
     occurred_at: datetime,
+    season_id: UUID | None = None,
+    existing: PointTransaction | None = None,
 ) -> PointTransaction:
-    existing = PointTransaction.objects.get(idempotency_key=idempotency_key)
+    if existing is None:
+        existing = (
+            PointTransaction.objects.select_related("season")
+            .get(idempotency_key=idempotency_key)
+        )
     if _payload_matches(
         existing,
         membership_id=membership_id,
         establishment_id=establishment_id,
-        season_id=season_id,
         delta=delta,
         reason_code=reason_code,
         source_type=source_type,
         source_id=source_id,
         source_event_id=source_event_id,
         occurred_at=occurred_at,
+        season_id=season_id,
     ):
         return existing
     raise GamificationIdempotencyConflictError(
@@ -405,6 +430,25 @@ def award_points(
     source_id_str = str(source_id)
     source_event_id_str = _normalize_source_event_id(source_event_id)
 
+    existing = (
+        PointTransaction.objects.select_related("season")
+        .filter(idempotency_key=idempotency_key)
+        .first()
+    )
+    if existing is not None:
+        return _resolve_existing_idempotent(
+            idempotency_key=idempotency_key,
+            membership_id=membership.id,
+            establishment_id=establishment.id,
+            delta=delta,
+            reason_code=reason_code,
+            source_type=source_type,
+            source_id=source_id_str,
+            source_event_id=source_event_id_str,
+            occurred_at=occurred_at,
+            existing=existing,
+        )
+
     season = ensure_season_for_occurred_at(establishment, occurred_at)
     season = (
         GamificationSeason.objects.select_for_update()
@@ -428,50 +472,40 @@ def award_points(
             code="gamification_occurred_at_outside_season",
         )
 
-    existing = PointTransaction.objects.filter(idempotency_key=idempotency_key).first()
-    if existing is not None:
-        return _resolve_existing_idempotent(
-            idempotency_key=idempotency_key,
-            membership_id=membership.id,
-            establishment_id=establishment.id,
-            season_id=season.id,
-            delta=delta,
-            reason_code=reason_code,
-            source_type=source_type,
-            source_id=source_id_str,
-            source_event_id=source_event_id_str,
-            occurred_at=occurred_at,
-        )
-
-    sid = transaction.savepoint()
     try:
-        created = PointTransaction.objects.create(
-            membership=membership,
-            establishment=establishment,
-            season=season,
-            delta=delta,
-            reason_code=reason_code,
-            source_type=source_type,
-            source_id=source_id_str,
-            source_event_id=source_event_id_str,
-            rule_version=season.rule_version,
-            occurred_at=occurred_at,
-            idempotency_key=idempotency_key,
-            metadata_safe=metadata_safe or {},
-        )
+        with transaction.atomic():
+            return PointTransaction.objects.create(
+                membership=membership,
+                establishment=establishment,
+                season=season,
+                delta=delta,
+                reason_code=reason_code,
+                source_type=source_type,
+                source_id=source_id_str,
+                source_event_id=source_event_id_str,
+                rule_version=season.rule_version,
+                occurred_at=occurred_at,
+                idempotency_key=idempotency_key,
+                metadata_safe=sanitize_award_metadata_safe(metadata_safe),
+            )
     except IntegrityError:
-        transaction.savepoint_rollback(sid)
+        raced = (
+            PointTransaction.objects.select_related("season")
+            .filter(idempotency_key=idempotency_key)
+            .first()
+        )
+        if raced is None:
+            raise
         return _resolve_existing_idempotent(
             idempotency_key=idempotency_key,
             membership_id=membership.id,
             establishment_id=establishment.id,
-            season_id=season.id,
             delta=delta,
             reason_code=reason_code,
             source_type=source_type,
             source_id=source_id_str,
             source_event_id=source_event_id_str,
             occurred_at=occurred_at,
+            season_id=season.id,
+            existing=raced,
         )
-    transaction.savepoint_commit(sid)
-    return created

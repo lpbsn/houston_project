@@ -34,20 +34,51 @@ def rollover_gamification_seasons_task(
             ).order_by("id")
 
         processed = 0
+        failed = 0
         for establishment in establishments.iterator():
-            rollover_establishment_if_due(establishment)
-            processed += 1
+            try:
+                rollover_establishment_if_due(establishment)
+                processed += 1
+            except Exception as exc:
+                failed += 1
+                logger.error(
+                    "gamification_rollover_establishment_failed",
+                    extra=build_celery_task_failure_log_context(
+                        establishment_id=str(establishment.id),
+                        exception_class=type(exc).__name__,
+                        task_name="rollover_gamification_seasons_task",
+                    ),
+                    exc_info=False,
+                )
 
         logger.info(
             "gamification_rollover_task_completed",
             extra={
                 "establishment_id": establishment_id,
                 "processed_count": processed,
+                "failed_count": failed,
                 "event": "gamification_rollover_task_completed",
             },
         )
+        if failed:
+            logger.error(
+                "gamification_rollover_task_partial_failure",
+                extra=build_celery_task_failure_log_context(
+                    establishment_id=establishment_id,
+                    exception_class="PartialFailure",
+                    task_name="rollover_gamification_seasons_task",
+                ),
+                exc_info=False,
+            )
+            raise RuntimeError(
+                f"gamification rollover failed for {failed} establishment(s)"
+            )
         return processed
     except Exception as exc:
+        if isinstance(exc, RuntimeError) and str(exc).startswith(
+            "gamification rollover failed"
+        ):
+            raise
         logger.error(
             "gamification_rollover_task_failed",
             extra=build_celery_task_failure_log_context(
