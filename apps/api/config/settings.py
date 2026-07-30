@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "houston.chat",
     "houston.ai",
     "houston.uploads",
+    "houston.gamification",
 ]
 
 MIDDLEWARE = [
@@ -214,6 +215,13 @@ CELERY_BEAT_SCHEDULE = {
     "promote-scheduled-action-plan-executions": {
         "task": "houston.action_plans.tasks.promote_scheduled_action_plan_executions_task",
         "schedule": crontab(minute="*/1"),
+    },
+    "rollover-gamification-seasons": {
+        "task": "houston.gamification.tasks.rollover_gamification_seasons_task",
+        "schedule": crontab(
+            minute=f"*/{env_int('HOUSTON_GAMIFICATION_ROLLOVER_BEAT_MINUTE_INTERVAL', 15)}",
+        ),
+        "kwargs": {"establishment_id": None},
     },
 }
 
