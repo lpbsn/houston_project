@@ -221,6 +221,10 @@ def approve_signal_resolution_request(
         ],
     )
 
+    from houston.gamification.services import award_resolution_request_approved_points
+
+    award_resolution_request_approved_points(resolution_request=locked_request)
+
     _resolve_signal_after_lock(
         original_signal=locked_self,
         locked_self=locked_self,

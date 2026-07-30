@@ -15,8 +15,11 @@ from houston.establishments.timezone_utils import (
 )
 from houston.gamification.constants import (
     CURRENT_RULE_VERSION,
+    DELTA_RESOLUTION_REQUEST_APPROVED,
+    REASON_RESOLUTION_REQUEST_APPROVED,
     SIGNAL_PROGRESS_REWARDS,
     SOURCE_TYPE_SIGNAL,
+    SOURCE_TYPE_SIGNAL_RESOLUTION_REQUEST,
     badge_for_score,
     build_idempotency_key,
     sanitize_award_metadata_safe,
@@ -578,3 +581,43 @@ def award_signal_progress_points(
             ),
             source_event_id=lifecycle_event.id,
         )
+
+
+def award_resolution_request_approved_points(*, resolution_request) -> None:
+    """Award +2 to the requester for an approved resolution request.
+
+    Must run in the same transaction.atomic as the pending → approved
+    transition. The approved request is the source of truth (not signal.resolved).
+    """
+    from houston.signals.models import SignalResolutionRequest
+
+    if resolution_request.status != SignalResolutionRequest.Status.APPROVED:
+        raise GamificationValidationError(
+            "Resolution request must be approved to award points.",
+            code="gamification_resolution_request_not_approved",
+        )
+    if resolution_request.reviewed_at is None:
+        raise GamificationValidationError(
+            "Resolution request reviewed_at is required to award points.",
+            code="gamification_resolution_request_reviewed_at_missing",
+        )
+
+    membership = resolution_request.requested_by_membership
+    establishment = Establishment.objects.get(
+        pk=resolution_request.signal.establishment_id,
+    )
+    award_points(
+        membership=membership,
+        establishment=establishment,
+        delta=DELTA_RESOLUTION_REQUEST_APPROVED,
+        reason_code=REASON_RESOLUTION_REQUEST_APPROVED,
+        source_type=SOURCE_TYPE_SIGNAL_RESOLUTION_REQUEST,
+        source_id=resolution_request.id,
+        occurred_at=resolution_request.reviewed_at,
+        idempotency_key=build_idempotency_key(
+            reason_code=REASON_RESOLUTION_REQUEST_APPROVED,
+            subject_id=resolution_request.id,
+            membership_id=membership.id,
+        ),
+        source_event_id=resolution_request.id,
+    )
