@@ -30,6 +30,18 @@ BADGE_THRESHOLDS: dict[str, int] = {
     BADGE_CODE_GOLD: BADGE_THRESHOLD_GOLD,
 }
 
+BADGE_DISPLAY_ORDER: tuple[str, ...] = (
+    BADGE_CODE_BRONZE,
+    BADGE_CODE_SILVER,
+    BADGE_CODE_GOLD,
+)
+
+BADGE_LABELS: dict[str, str] = {
+    BADGE_CODE_BRONZE: "Bronze",
+    BADGE_CODE_SILVER: "Argent",
+    BADGE_CODE_GOLD: "Or",
+}
+
 CURRENT_RULE_VERSION = "gamification_rules_v1"
 
 REASON_CODE_MAX_LENGTH = 64
@@ -66,12 +78,94 @@ REASON_RECURRING_EXECUTION_DONE = "recurring_execution.done"
 # Reason code for validated ActionPlanExecution review awards (GAM-06).
 REASON_EXECUTION_REVIEWED = "execution.reviewed"
 
+# Non-awarded explanatory rule kept in the user-visible catalogue.
+REASON_SIGNAL_CANCELED_DISPLAY = "signal.canceled"
+
 DELTA_SIGNAL_MARKED_INTERESTING = 1
 DELTA_SIGNAL_MOVED_IN_PROGRESS = 1
 DELTA_SIGNAL_RESOLVED = 2
 DELTA_RESOLUTION_REQUEST_APPROVED = 2
 DELTA_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE = 2
 DELTA_RECURRING_EXECUTION_DONE = 2
+
+UNKNOWN_REASON_LABEL = "Raison de points inconnue"
+
+REASON_LABELS_FR: dict[str, str] = {
+    REASON_SIGNAL_MARKED_INTERESTING: "Observation marquee comme interessante",
+    REASON_SIGNAL_MOVED_IN_PROGRESS: "Observation prise en charge",
+    REASON_SIGNAL_RESOLVED: "Observation resolue",
+    REASON_RESOLUTION_REQUEST_APPROVED: "Demande de resolution approuvee",
+    REASON_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE: "Plan d'action demarre",
+    REASON_RECURRING_EXECUTION_DONE: "Action recurrente terminee",
+    REASON_EXECUTION_REVIEWED: "Plan d'action valide selon la note",
+}
+
+POINTS_RULE_CATALOG: tuple[dict[str, Any], ...] = (
+    {
+        "code": REASON_SIGNAL_MARKED_INTERESTING,
+        "label": REASON_LABELS_FR[REASON_SIGNAL_MARKED_INTERESTING],
+        "points": DELTA_SIGNAL_MARKED_INTERESTING,
+        "points_min": DELTA_SIGNAL_MARKED_INTERESTING,
+        "points_max": DELTA_SIGNAL_MARKED_INTERESTING,
+    },
+    {
+        "code": REASON_SIGNAL_MOVED_IN_PROGRESS,
+        "label": REASON_LABELS_FR[REASON_SIGNAL_MOVED_IN_PROGRESS],
+        "points": DELTA_SIGNAL_MOVED_IN_PROGRESS,
+        "points_min": DELTA_SIGNAL_MOVED_IN_PROGRESS,
+        "points_max": DELTA_SIGNAL_MOVED_IN_PROGRESS,
+    },
+    {
+        "code": REASON_SIGNAL_RESOLVED,
+        "label": REASON_LABELS_FR[REASON_SIGNAL_RESOLVED],
+        "points": DELTA_SIGNAL_RESOLVED,
+        "points_min": DELTA_SIGNAL_RESOLVED,
+        "points_max": DELTA_SIGNAL_RESOLVED,
+    },
+    {
+        "code": REASON_RESOLUTION_REQUEST_APPROVED,
+        "label": REASON_LABELS_FR[REASON_RESOLUTION_REQUEST_APPROVED],
+        "points": DELTA_RESOLUTION_REQUEST_APPROVED,
+        "points_min": DELTA_RESOLUTION_REQUEST_APPROVED,
+        "points_max": DELTA_RESOLUTION_REQUEST_APPROVED,
+    },
+    {
+        "code": REASON_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE,
+        "label": REASON_LABELS_FR[REASON_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE],
+        "points": DELTA_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE,
+        "points_min": DELTA_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE,
+        "points_max": DELTA_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE,
+    },
+    {
+        "code": REASON_RECURRING_EXECUTION_DONE,
+        "label": REASON_LABELS_FR[REASON_RECURRING_EXECUTION_DONE],
+        "points": DELTA_RECURRING_EXECUTION_DONE,
+        "points_min": DELTA_RECURRING_EXECUTION_DONE,
+        "points_max": DELTA_RECURRING_EXECUTION_DONE,
+    },
+    {
+        "code": REASON_EXECUTION_REVIEWED,
+        "label": REASON_LABELS_FR[REASON_EXECUTION_REVIEWED],
+        "points": None,
+        "points_min": 0,
+        "points_max": 5,
+    },
+    {
+        "code": REASON_SIGNAL_CANCELED_DISPLAY,
+        "label": "Observation annulee",
+        "points": 0,
+        "points_min": 0,
+        "points_max": 0,
+    },
+)
+
+EXPOSABLE_SOURCE_TYPES = frozenset(
+    {
+        SOURCE_TYPE_SIGNAL,
+        SOURCE_TYPE_SIGNAL_RESOLUTION_REQUEST,
+        SOURCE_TYPE_ACTION_PLAN_EXECUTION,
+    }
+)
 
 # event_type → (reason_code, delta). Only rewarded Signal progress types.
 SIGNAL_PROGRESS_REWARDS: dict[str, tuple[str, int]] = {

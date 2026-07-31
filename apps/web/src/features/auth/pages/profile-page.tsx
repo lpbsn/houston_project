@@ -24,6 +24,8 @@ import {
   useNotificationPreferencesQuery,
   useUpdateNotificationPreferencesMutation,
 } from '@/features/notifications/hooks'
+import { GamificationScoreCard } from '@/features/gamification/components/gamification-score-card'
+import { useGamificationOverviewQuery } from '@/features/gamification/hooks'
 import { useWebPushToggle } from '@/features/push/hooks'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -175,6 +177,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
     Boolean(establishmentId) &&
     (canManageOrganization || role === 'owner' || role === 'director' || canManageRuntimeConfig)
   const notificationPreferencesQuery = useNotificationPreferencesQuery(establishmentId)
+  const gamificationOverviewQuery = useGamificationOverviewQuery(establishmentId)
   const updateNotificationPreferencesMutation =
     useUpdateNotificationPreferencesMutation(establishmentId)
   const notificationsEnabled = notificationPreferencesQuery.data?.notifications_enabled ?? true
@@ -192,6 +195,15 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-4 pt-3">
+      <GamificationScoreCard
+        data={gamificationOverviewQuery.data}
+        isLoading={gamificationOverviewQuery.isLoading}
+        isError={gamificationOverviewQuery.isError}
+        onRetry={() => {
+          void gamificationOverviewQuery.refetch()
+        }}
+      />
+
       <TerrainCard className="flex items-center gap-3 p-4">
         <div
           className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#BFCFFF] text-lg font-bold text-[#1B4FD8]"
