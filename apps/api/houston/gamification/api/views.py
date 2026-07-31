@@ -76,6 +76,7 @@ class GamificationOverviewView(EstablishmentScopedGamificationMixin, APIView):
         responses={
             200: GamificationOverviewSerializer,
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
         },
         description="Returns the authenticated membership gamification summary and rules.",
@@ -107,6 +108,7 @@ class GamificationTransactionListView(EstablishmentScopedGamificationMixin, APIV
             200: GamificationTransactionListSerializer,
             400: OpenApiResponse(response=ApiErrorResponseSerializer),
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
         },
         description="Lists point transactions for the authenticated membership.",

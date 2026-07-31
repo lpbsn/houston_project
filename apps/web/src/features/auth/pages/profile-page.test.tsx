@@ -78,6 +78,61 @@ const webPushToggleState = vi.hoisted(() => ({
   },
 }))
 
+const { gamificationQueryState, refetchGamification } = vi.hoisted(() => {
+  const refetch = vi.fn()
+
+  return {
+    refetchGamification: refetch,
+    gamificationQueryState: {
+      current: {
+        data: {
+          current: {
+            season_id: 'season-1',
+            period: {
+              starts_at: '2026-07-01T00:00:00Z',
+              ends_at: '2026-08-01T00:00:00Z',
+            },
+            score: 47,
+            grade: 'bronze',
+            next_grade: 'silver',
+            next_grade_threshold: 50,
+            points_to_next_grade: 3,
+            progress_ratio: 0.94,
+            is_max_grade: false,
+          },
+          rules: {
+            grades: [
+              { code: 'bronze', label: 'Bronze', threshold: 30 },
+              { code: 'silver', label: 'Argent', threshold: 50 },
+              { code: 'gold', label: 'Or', threshold: 70 },
+            ],
+            points: [
+              {
+                code: 'signal.created',
+                label: 'Observation créée',
+                points: 1,
+                points_min: 1,
+                points_max: 1,
+              },
+              {
+                code: 'signal.canceled',
+                label: 'Observation annulée',
+                points: 0,
+                points_min: 0,
+                points_max: 0,
+              },
+            ],
+          },
+          seasons: { items: [] },
+        },
+        isLoading: false,
+        isError: false,
+        refetch,
+      },
+    },
+  }
+})
+
 vi.mock('@/app/auth-provider', () => ({
   useAuth: () => authState.current,
 }))
@@ -95,6 +150,10 @@ vi.mock('@/features/notifications/hooks', () => ({
   }),
 }))
 
+vi.mock('@/features/gamification/hooks', () => ({
+  useGamificationOverviewQuery: () => gamificationQueryState.current,
+}))
+
 vi.mock('@/features/push/hooks', () => ({
   useWebPushToggle: () => webPushToggleState.current,
 }))
@@ -104,6 +163,52 @@ afterEach(() => {
   onNavigate.mockReset()
   onSignOut.mockReset()
   mutate.mockReset()
+  refetchGamification.mockReset()
+  gamificationQueryState.current = {
+    data: {
+      current: {
+        season_id: 'season-1',
+        period: {
+          starts_at: '2026-07-01T00:00:00Z',
+          ends_at: '2026-08-01T00:00:00Z',
+        },
+        score: 47,
+        grade: 'bronze',
+        next_grade: 'silver',
+        next_grade_threshold: 50,
+        points_to_next_grade: 3,
+        progress_ratio: 0.94,
+        is_max_grade: false,
+      },
+      rules: {
+        grades: [
+          { code: 'bronze', label: 'Bronze', threshold: 30 },
+          { code: 'silver', label: 'Argent', threshold: 50 },
+          { code: 'gold', label: 'Or', threshold: 70 },
+        ],
+        points: [
+          {
+            code: 'signal.created',
+            label: 'Observation créée',
+            points: 1,
+            points_min: 1,
+            points_max: 1,
+          },
+          {
+            code: 'signal.canceled',
+            label: 'Observation annulée',
+            points: 0,
+            points_min: 0,
+            points_max: 0,
+          },
+        ],
+      },
+      seasons: { items: [] },
+    },
+    isLoading: false,
+    isError: false,
+    refetch: refetchGamification,
+  }
   webPushToggleState.current = {
     state: 'disabled',
     message: null,
@@ -118,6 +223,157 @@ afterEach(() => {
 })
 
 describe('ProfilePage', () => {
+  it('renders current score and next grade from gamification API data', () => {
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    expect(screen.getByText('47')).toBeTruthy()
+    expect(screen.getByText('Bronze')).toBeTruthy()
+    expect(screen.getByText('Argent')).toBeTruthy()
+    expect(screen.getByText('Plus que 3 pts')).toBeTruthy()
+  })
+
+  it('renders no unlocked grade state from gamification API data', () => {
+    gamificationQueryState.current = {
+      ...gamificationQueryState.current,
+      data: {
+        ...gamificationQueryState.current.data,
+        current: {
+          ...gamificationQueryState.current.data.current,
+          score: 0,
+          grade: null,
+          next_grade: 'bronze',
+          next_grade_threshold: 30,
+          points_to_next_grade: 30,
+          progress_ratio: 0,
+          is_max_grade: false,
+        },
+      },
+    }
+
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    expect(screen.getByText('0')).toBeTruthy()
+    expect(screen.getByText('Aucun grade débloqué')).toBeTruthy()
+    expect(screen.getByText('Bronze')).toBeTruthy()
+  })
+
+  it('renders max grade without inventing a next grade', () => {
+    gamificationQueryState.current = {
+      ...gamificationQueryState.current,
+      data: {
+        ...gamificationQueryState.current.data,
+        current: {
+          ...gamificationQueryState.current.data.current,
+          score: 70,
+          grade: 'gold',
+          next_grade: null,
+          next_grade_threshold: null,
+          points_to_next_grade: 0,
+          progress_ratio: 1,
+          is_max_grade: true,
+        },
+      },
+    }
+
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    expect(screen.getByText('Or')).toBeTruthy()
+    expect(screen.getByText('Grade maximal')).toBeTruthy()
+    expect(screen.getByText('Grade maximal atteint')).toBeTruthy()
+  })
+
+  it('opens and closes the score explanation sheet', () => {
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /En savoir plus/i }))
+
+    expect(screen.getByRole('dialog', { name: 'Comment fonctionne le score ?' })).toBeTruthy()
+    expect(screen.getByText('Observation créée')).toBeTruthy()
+    expect(screen.getByText('Observation annulée')).toBeTruthy()
+    expect(screen.getByText('À partir de 30 points')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compris' }))
+    expect(screen.queryByRole('dialog', { name: 'Comment fonctionne le score ?' })).toBeNull()
+  })
+
+  it('keeps profile controls usable when gamification fails and retries locally', () => {
+    gamificationQueryState.current = {
+      ...gamificationQueryState.current,
+      data: undefined,
+      isError: true,
+    }
+
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    expect(screen.getByText("Le score n'a pas pu être chargé.")).toBeTruthy()
+    expect(screen.getByText('Marie Renaud')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Installer l'application/i })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
+    expect(refetchGamification).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps profile visible while gamification is loading locally', () => {
+    gamificationQueryState.current = {
+      ...gamificationQueryState.current,
+      data: undefined,
+      isLoading: true,
+    }
+
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    expect(screen.getByText('Score & progression')).toBeTruthy()
+    expect(screen.getByText('Marie Renaud')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Installer l'application/i })).toBeTruthy()
+  })
+
+  it('renders rewards as a disabled accessible placeholder without navigation', () => {
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    const rewardsButton = screen.getByRole('button', {
+      name: 'Récompenses - Bientôt disponible',
+    })
+    expect(rewardsButton).toHaveProperty('disabled', true)
+
+    fireEvent.click(rewardsButton)
+    expect(onNavigate).not.toHaveBeenCalled()
+  })
+
   it('shows loading state while bootstrapping', () => {
     authState.current = {
       ...authState.current,

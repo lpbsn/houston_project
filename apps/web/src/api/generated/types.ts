@@ -1115,6 +1115,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/gamification/me/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns the authenticated membership gamification summary and rules. */
+        get: operations["v1_establishments_gamification_me_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/gamification/me/transactions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lists point transactions for the authenticated membership. */
+        get: operations["v1_establishments_gamification_me_transactions_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/membership-invitations/": {
         parameters: {
             query?: never;
@@ -3164,6 +3198,89 @@ export interface components {
          * @enum {string}
          */
         ExecutionCommentThreadItemItemTypeEnum: "execution_thread";
+        GamificationCurrentSummary: {
+            /** Format: uuid */
+            season_id: string | null;
+            period: components["schemas"]["GamificationPeriod"];
+            score: number;
+            grade: string | null;
+            next_grade: string | null;
+            next_grade_threshold: number | null;
+            points_to_next_grade: number;
+            /** Format: double */
+            progress_ratio: number;
+            is_max_grade: boolean;
+        };
+        GamificationGradeRule: {
+            code: string;
+            label: string;
+            threshold: number;
+        };
+        GamificationOverview: {
+            current: components["schemas"]["GamificationCurrentSummary"];
+            rules: components["schemas"]["GamificationRules"];
+            seasons: components["schemas"]["GamificationSeasonList"];
+        };
+        GamificationPeriod: {
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+        };
+        GamificationPointsRule: {
+            code: string;
+            label: string;
+            points: number | null;
+            points_min: number;
+            points_max: number;
+        };
+        GamificationRules: {
+            grades: components["schemas"]["GamificationGradeRule"][];
+            points: components["schemas"]["GamificationPointsRule"][];
+        };
+        GamificationSeasonItem: {
+            /** Format: uuid */
+            season_id: string | null;
+            period: components["schemas"]["GamificationPeriod"];
+            status: string;
+            score: number;
+            grade: string | null;
+            /** Format: date-time */
+            closed_at: string | null;
+        };
+        GamificationSeasonList: {
+            items: components["schemas"]["GamificationSeasonItem"][];
+        };
+        GamificationTransactionItem: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            occurred_at: string;
+            delta: number;
+            reason_code: string;
+            reason_label: string;
+            season: components["schemas"]["GamificationTransactionSeason"];
+            source: components["schemas"]["GamificationTransactionSource"] | null;
+            is_correction: boolean;
+            is_reversal: boolean;
+            /** Format: uuid */
+            reversed_transaction_id: string | null;
+        };
+        GamificationTransactionList: {
+            items: components["schemas"]["GamificationTransactionItem"][];
+            next_cursor: string | null;
+            has_more: boolean;
+        };
+        GamificationTransactionSeason: {
+            /** Format: uuid */
+            season_id: string;
+            period: components["schemas"]["GamificationPeriod"];
+            status: string;
+        };
+        GamificationTransactionSource: {
+            type: string;
+            id: string;
+        };
         HealthResponse: {
             status: string;
         };
@@ -8063,6 +8180,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_gamification_me_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GamificationOverview"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_gamification_me_transactions_retrieve: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                page_size?: number;
+                season_id?: string;
+            };
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GamificationTransactionList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
                 };
             };
         };
