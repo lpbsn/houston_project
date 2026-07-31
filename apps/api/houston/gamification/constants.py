@@ -62,7 +62,6 @@ SOURCE_TYPE_SIGNAL_RESOLUTION_REQUEST = "signal_resolution_request"
 SOURCE_TYPE_ACTION_PLAN_EXECUTION = "action_plan_execution"
 
 # Reason codes aligned with SignalLifecycleEvent.event_type (GAM-02).
-REASON_SIGNAL_MARKED_INTERESTING = "signal.marked_interesting"
 REASON_SIGNAL_MOVED_IN_PROGRESS = "signal.moved_in_progress"
 REASON_SIGNAL_RESOLVED = "signal.resolved"
 
@@ -81,7 +80,6 @@ REASON_EXECUTION_REVIEWED = "execution.reviewed"
 # Non-awarded explanatory rule kept in the user-visible catalogue.
 REASON_SIGNAL_CANCELED_DISPLAY = "signal.canceled"
 
-DELTA_SIGNAL_MARKED_INTERESTING = 1
 DELTA_SIGNAL_MOVED_IN_PROGRESS = 1
 DELTA_SIGNAL_RESOLVED = 2
 DELTA_RESOLUTION_REQUEST_APPROVED = 2
@@ -91,7 +89,6 @@ DELTA_RECURRING_EXECUTION_DONE = 2
 UNKNOWN_REASON_LABEL = "Raison de points inconnue"
 
 REASON_LABELS_FR: dict[str, str] = {
-    REASON_SIGNAL_MARKED_INTERESTING: "Observation marquee comme interessante",
     REASON_SIGNAL_MOVED_IN_PROGRESS: "Observation prise en charge",
     REASON_SIGNAL_RESOLVED: "Observation resolue",
     REASON_RESOLUTION_REQUEST_APPROVED: "Demande de resolution approuvee",
@@ -101,13 +98,6 @@ REASON_LABELS_FR: dict[str, str] = {
 }
 
 POINTS_RULE_CATALOG: tuple[dict[str, Any], ...] = (
-    {
-        "code": REASON_SIGNAL_MARKED_INTERESTING,
-        "label": REASON_LABELS_FR[REASON_SIGNAL_MARKED_INTERESTING],
-        "points": DELTA_SIGNAL_MARKED_INTERESTING,
-        "points_min": DELTA_SIGNAL_MARKED_INTERESTING,
-        "points_max": DELTA_SIGNAL_MARKED_INTERESTING,
-    },
     {
         "code": REASON_SIGNAL_MOVED_IN_PROGRESS,
         "label": REASON_LABELS_FR[REASON_SIGNAL_MOVED_IN_PROGRESS],
@@ -169,10 +159,6 @@ EXPOSABLE_SOURCE_TYPES = frozenset(
 
 # event_type → (reason_code, delta). Only rewarded Signal progress types.
 SIGNAL_PROGRESS_REWARDS: dict[str, tuple[str, int]] = {
-    REASON_SIGNAL_MARKED_INTERESTING: (
-        REASON_SIGNAL_MARKED_INTERESTING,
-        DELTA_SIGNAL_MARKED_INTERESTING,
-    ),
     REASON_SIGNAL_MOVED_IN_PROGRESS: (
         REASON_SIGNAL_MOVED_IN_PROGRESS,
         DELTA_SIGNAL_MOVED_IN_PROGRESS,

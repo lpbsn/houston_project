@@ -14,7 +14,6 @@ from houston.gamification.constants import (
     REASON_EXECUTION_REVIEWED,
     REASON_RECURRING_EXECUTION_DONE,
     REASON_RESOLUTION_REQUEST_APPROVED,
-    REASON_SIGNAL_MARKED_INTERESTING,
     REASON_SIGNAL_MOVED_IN_PROGRESS,
     REASON_SIGNAL_RESOLVED,
     SOURCE_TYPE_ACTION_PLAN_EXECUTION,
@@ -167,7 +166,7 @@ def test_overview_returns_score_progress_and_rules(api_client):
         establishment=establishment,
         occurred_at=aware_local("UTC", 2026, 7, 5, 12),
         delta=47,
-        reason_code=REASON_SIGNAL_MARKED_INTERESTING,
+        reason_code=REASON_SIGNAL_MOVED_IN_PROGRESS,
         idempotency_key="overview-score",
     )
     token = login(api_client, user=membership.user)
@@ -186,7 +185,6 @@ def test_overview_returns_score_progress_and_rules(api_client):
     assert body["current"]["progress_ratio"] == 0.94
     rule_codes = {rule["code"] for rule in body["rules"]["points"]}
     assert {
-        REASON_SIGNAL_MARKED_INTERESTING,
         REASON_SIGNAL_MOVED_IN_PROGRESS,
         REASON_SIGNAL_RESOLVED,
         REASON_RESOLUTION_REQUEST_APPROVED,
@@ -195,6 +193,7 @@ def test_overview_returns_score_progress_and_rules(api_client):
         REASON_EXECUTION_REVIEWED,
         "signal.canceled",
     } <= rule_codes
+    assert "signal.marked_interesting" not in rule_codes
 
 
 def test_transactions_payload_is_allowlisted(api_client):

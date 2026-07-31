@@ -5,6 +5,7 @@ from datetime import date
 
 import pytest
 
+from houston.establishments.models import EstablishmentMembership
 from houston.gamification.constants import (
     BADGE_CODE_BRONZE,
     BADGE_CODE_GOLD,
@@ -13,7 +14,6 @@ from houston.gamification.constants import (
     REASON_EXECUTION_REVIEWED,
     REASON_RECURRING_EXECUTION_DONE,
     REASON_RESOLUTION_REQUEST_APPROVED,
-    REASON_SIGNAL_MARKED_INTERESTING,
     REASON_SIGNAL_MOVED_IN_PROGRESS,
     REASON_SIGNAL_RESOLVED,
     UNKNOWN_REASON_LABEL,
@@ -24,10 +24,12 @@ from houston.gamification.selectors import (
     gamification_rules_payload,
     grade_progress_payload,
     list_personal_gamification_seasons,
+    point_delta_by_membership_id_for_source,
     reason_label,
 )
 from houston.gamification.services import award_points, close_season, open_season
 from houston.gamification.tests.conftest import aware_local
+from houston.testing.factories import create_establishment, create_membership
 
 pytestmark = pytest.mark.django_db
 
@@ -170,7 +172,6 @@ def test_closed_season_under_bronze_has_no_final_grade(
 
 def test_reason_labels_cover_gam02_to_gam06_and_unknown_fallback():
     expected_codes = {
-        REASON_SIGNAL_MARKED_INTERESTING,
         REASON_SIGNAL_MOVED_IN_PROGRESS,
         REASON_SIGNAL_RESOLVED,
         REASON_RESOLUTION_REQUEST_APPROVED,
@@ -182,6 +183,45 @@ def test_reason_labels_cover_gam02_to_gam06_and_unknown_fallback():
     rule_codes = {rule["code"] for rule in rules["points"]}
 
     assert expected_codes <= rule_codes
+    assert "signal.marked_interesting" not in rule_codes
     for code in expected_codes:
         assert reason_label(code) != UNKNOWN_REASON_LABEL
     assert reason_label("future.unknown") == UNKNOWN_REASON_LABEL
+
+
+def test_point_delta_by_membership_id_for_source_matches_exact_source_only():
+    establishment = create_establishment(name="Exact Source Hotel", timezone="UTC")
+    membership = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    target_source_id = uuid.uuid4()
+    other_source_id = uuid.uuid4()
+    open_season(establishment, month_start_local=date(2026, 7, 1))
+    _award(
+        membership=membership,
+        establishment=establishment,
+        occurred_at=aware_local("UTC", 2026, 7, 5, 12),
+        delta=2,
+        reason_code=REASON_SIGNAL_RESOLVED,
+        source_id=target_source_id,
+        idempotency_key="exact-target",
+    )
+    _award(
+        membership=membership,
+        establishment=establishment,
+        occurred_at=aware_local("UTC", 2026, 7, 5, 12),
+        delta=2,
+        reason_code=REASON_SIGNAL_RESOLVED,
+        source_id=other_source_id,
+        idempotency_key="exact-other",
+    )
+
+    delta_by_membership_id = point_delta_by_membership_id_for_source(
+        reason_code=REASON_SIGNAL_RESOLVED,
+        source_type="test",
+        source_id=target_source_id,
+        membership_ids={membership.id},
+    )
+
+    assert delta_by_membership_id == {membership.id: 2}

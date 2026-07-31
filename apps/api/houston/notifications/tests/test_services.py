@@ -13,6 +13,7 @@ from houston.comments.services import create_signal_comment
 from houston.establishments.models import EstablishmentMembership
 from houston.notifications.constants import (
     DEDUPE_WINDOW,
+    NOTIFICATION_TITLE_MAX_LENGTH,
     build_default_dedupe_key,
     build_mention_dedupe_key,
 )
@@ -295,6 +296,36 @@ def test_unsupported_subject_type_skips_creation():
     )
 
     assert notification is None
+
+
+def test_point_prefix_applies_before_final_title_truncation():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
+    assign_business_unit_scope(staff, maintenance)
+    signal = create_signal_v3_for_membership(
+        owner,
+        affected_business_unit=hotel,
+        responsible_business_unit=maintenance,
+        activity_subject=electricite,
+    )
+    long_pole_name = "Pole " + ("A" * 160)
+
+    notification = create_in_app_notification(
+        establishment_id=owner.establishment_id,
+        recipient_membership=staff,
+        event_key=Notification.EventKey.SIGNAL_CREATED,
+        subject_type=Notification.SubjectType.SIGNAL,
+        subject_id=signal.id,
+        priority=Notification.Priority.ACTION_REQUIRED,
+        actor_membership=owner,
+        pole_name=long_pole_name,
+        point_delta=2,
+    )
+
+    assert notification is not None
+    assert notification.title.startswith("+2 points - Nouvelle observation")
+    assert len(notification.title) == NOTIFICATION_TITLE_MAX_LENGTH
 
 
 def test_comment_mention_subject_recheck_uses_parent_visibility():

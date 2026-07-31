@@ -12,6 +12,7 @@ from houston.establishments.permissions import is_valid_membership
 from houston.notifications.constants import (
     DEDUPE_WINDOW,
     LOT1_EVENT_KEYS,
+    NOTIFICATION_TITLE_MAX_LENGTH,
     build_default_dedupe_key,
     render_notification_copy,
 )
@@ -69,6 +70,13 @@ def _is_duplicate_notification(
     ).exists()
 
 
+def _title_with_point_prefix(*, title: str, point_delta: int | None) -> str:
+    if point_delta is None or point_delta <= 0:
+        return title[:NOTIFICATION_TITLE_MAX_LENGTH]
+    label = "point" if point_delta == 1 else "points"
+    return f"+{point_delta} {label} - {title}"[:NOTIFICATION_TITLE_MAX_LENGTH]
+
+
 @transaction.atomic
 def create_in_app_notification(
     *,
@@ -84,6 +92,7 @@ def create_in_app_notification(
     exclude_actor_if_recipient: bool = True,
     skip_subject_visibility_recheck: bool = False,
     pole_name: str | None = None,
+    point_delta: int | None = None,
 ) -> Notification | None:
     if event_key not in LOT1_EVENT_KEYS:
         raise NotificationValidationError("Invalid event_key.")
@@ -136,7 +145,9 @@ def create_in_app_notification(
         event_key,
         actor_display_name=_membership_display_name(actor_membership),
         pole_name=pole_name,
+        truncate_title=False,
     )
+    title = _title_with_point_prefix(title=title, point_delta=point_delta)
 
     try:
         notification = Notification.objects.create(
@@ -199,6 +210,8 @@ def create_in_app_notifications_for_recipients(
     skip_subject_visibility_recheck: bool = False,
     pole_name: str | None = None,
     idempotency_key_for_recipient=None,
+    point_delta: int | None = None,
+    point_delta_by_recipient_id: dict[uuid.UUID, int] | None = None,
 ) -> list[Notification]:
     seen_recipient_ids: set[uuid.UUID] = set()
     created: list[Notification] = []
@@ -211,6 +224,11 @@ def create_in_app_notifications_for_recipients(
         idempotency_key = None
         if idempotency_key_for_recipient is not None:
             idempotency_key = idempotency_key_for_recipient(recipient.id)
+        effective_point_delta = (
+            point_delta_by_recipient_id.get(recipient.id)
+            if point_delta_by_recipient_id is not None
+            else point_delta
+        )
 
         notification = create_in_app_notification(
             establishment_id=establishment_id,
@@ -225,6 +243,7 @@ def create_in_app_notifications_for_recipients(
             exclude_actor_if_recipient=exclude_actor_if_recipient,
             skip_subject_visibility_recheck=skip_subject_visibility_recheck,
             pole_name=pole_name,
+            point_delta=effective_point_delta,
         )
         if notification is not None:
             created.append(notification)

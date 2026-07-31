@@ -1,15 +1,26 @@
 from __future__ import annotations
 
+from datetime import time as dt_time
+from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
 from django.db import transaction
+from django.utils import timezone
 
+from houston.action_plans.models import (
+    ActionPlan,
+    ActionPlanAssignee,
+    ActionPlanExecution,
+    ActionPlanExecutionTeam,
+    ActionPlanSchedule,
+)
 from houston.action_plans.services import (
     cancel_action_plan_execution,
     create_action_plan_with_execution,
     mark_action_plan_execution_done,
     reopen_action_plan_execution,
+    validate_action_plan_execution,
 )
 from houston.action_plans.tests.helpers import (
     build_assignee_payload,
@@ -17,8 +28,15 @@ from houston.action_plans.tests.helpers import (
     create_open_signal,
 )
 from houston.establishments.models import EstablishmentMembership
+from houston.gamification.constants import (
+    REASON_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE,
+    SOURCE_TYPE_ACTION_PLAN_EXECUTION,
+)
+from houston.gamification.services import award_points
 from houston.notifications.models import Notification
+from houston.signals.models import SignalSourceObservation
 from houston.testing.factories import create_membership
+from houston.testing.pipeline import create_observation
 from houston.testing.taxonomy import create_membership_with_business_unit_scope
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -71,6 +89,63 @@ def _creation_notifications(*, execution_id) -> list[Notification]:
     ]
 
 
+def _create_recurring_execution(
+    *,
+    creator,
+    business_unit,
+    assignee,
+    requires_validation: bool,
+) -> ActionPlanExecution:
+    today = timezone.now().date()
+    plan = ActionPlan.objects.create(
+        establishment=creator.establishment,
+        created_by=creator,
+        pilot_business_unit=business_unit,
+        title="Recurring notification plan",
+        description="Recurring notification plan",
+        requires_validation=requires_validation,
+    )
+    schedule = ActionPlanSchedule.objects.create(
+        action_plan=plan,
+        establishment=creator.establishment,
+        created_by=creator,
+        use_shared_chronology=True,
+        start_date=today,
+        end_date=today + timedelta(days=7),
+        start_at=dt_time(8, 0),
+        end_at=dt_time(9, 0),
+        recurrence_days=["monday", "tuesday", "wednesday", "thursday", "friday"],
+        status=ActionPlanSchedule.Status.ACTIVE,
+    )
+    execution = ActionPlanExecution.objects.create(
+        action_plan=plan,
+        action_plan_schedule=schedule,
+        establishment=creator.establishment,
+        created_by=creator,
+        title=plan.title,
+        description=plan.description,
+        pilot_business_unit=business_unit,
+        requires_validation=requires_validation,
+        use_shared_chronology=True,
+        status=ActionPlanExecution.Status.IN_PROGRESS,
+        occurrence_date=today,
+        start_at=timezone.now() - timedelta(minutes=15),
+        end_at=timezone.now() + timedelta(minutes=45),
+        last_activity_at=timezone.now(),
+    )
+    team = ActionPlanExecutionTeam.objects.create(
+        action_plan_execution=execution,
+        business_unit=business_unit,
+        is_pilot=True,
+    )
+    ActionPlanAssignee.objects.create(
+        action_plan_execution=execution,
+        execution_team=team,
+        membership=assignee,
+    )
+    return execution
+
+
 def test_execution_created_from_signal_when_source_signal_set(
     owner_membership,
     establishment,
@@ -82,6 +157,12 @@ def test_execution_created_from_signal_when_source_signal_set(
     maintenance_business_unit = signal.responsible_business_unit
     assert maintenance_business_unit is not None
     staff_membership = _maintenance_staff(establishment, maintenance_business_unit)
+    observation = create_observation(membership=staff_membership)
+    SignalSourceObservation.objects.create(
+        signal=signal,
+        observation=observation,
+        link_type=SignalSourceObservation.LinkType.CREATED_FROM,
+    )
 
     _, execution = create_action_plan_with_execution(
         establishment_id=owner_membership.establishment_id,
@@ -107,6 +188,7 @@ def test_execution_created_from_signal_when_source_signal_set(
         notifications[0].event_key
         == Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED_FROM_SIGNAL
     )
+    assert notifications[0].title == "+1 point - Plan d'action lié à une observation"
 
 
 def test_execution_created_unchanged_when_source_signal_null(
@@ -279,6 +361,162 @@ def test_pending_validation_notifies_validators(
     for notification in notifications:
         if notification.event_key == Notification.EventKey.ACTION_PLAN_EXECUTION_PENDING_VALIDATION:
             _assert_generic_copy(notification)
+
+
+def test_execution_started_notification_uses_exact_execution_points(
+    owner_membership,
+    business_unit,
+):
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Started points plan",
+        tasks=[build_task_payload(task="Task", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit)
+        ],
+    )
+    Notification.objects.filter(subject_id=execution.id).delete()
+    award_points(
+        membership=owner_membership,
+        establishment=owner_membership.establishment,
+        delta=2,
+        reason_code=REASON_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE,
+        source_type=SOURCE_TYPE_ACTION_PLAN_EXECUTION,
+        source_id=execution.id,
+        occurred_at=timezone.now(),
+        idempotency_key=f"started-prefix:{execution.id}:{owner_membership.id}",
+    )
+
+    from houston.notifications.scheduling import schedule_action_plan_execution_started_notification
+
+    schedule_action_plan_execution_started_notification(
+        execution_id=execution.id,
+        actor_membership_id=None,
+    )
+
+    notifications = [
+        item
+        for item in _notifications_for_execution(execution_id=execution.id)
+        if item.event_key == Notification.EventKey.ACTION_PLAN_EXECUTION_STARTED
+    ]
+    assert len(notifications) == 1
+    assert notifications[0].recipient_membership_id == owner_membership.id
+    assert notifications[0].title == "+2 points - Plan d'action démarré"
+
+
+def test_recurring_done_notifies_only_gam05_beneficiary_with_points(
+    owner_membership,
+    business_unit,
+    staff_membership,
+):
+    execution = _create_recurring_execution(
+        creator=owner_membership,
+        business_unit=business_unit,
+        assignee=staff_membership,
+        requires_validation=False,
+    )
+    Notification.objects.filter(subject_id=execution.id).delete()
+
+    mark_action_plan_execution_done(
+        execution_id=execution.id,
+        actor_membership=staff_membership,
+    )
+
+    notifications = [
+        item
+        for item in _notifications_for_execution(execution_id=execution.id)
+        if item.event_key == Notification.EventKey.ACTION_PLAN_EXECUTION_DONE
+    ]
+    assert len(notifications) == 1
+    assert notifications[0].recipient_membership_id == staff_membership.id
+    assert notifications[0].title == "+2 points - Action récurrente terminée"
+
+    from houston.notifications.scheduling import schedule_action_plan_execution_done_notification
+
+    schedule_action_plan_execution_done_notification(
+        execution_id=execution.id,
+        actor_membership_id=staff_membership.id,
+    )
+
+    notifications = [
+        item
+        for item in _notifications_for_execution(execution_id=execution.id)
+        if item.event_key == Notification.EventKey.ACTION_PLAN_EXECUTION_DONE
+    ]
+    assert len(notifications) == 1
+    assert notifications[0].title == "+2 points - Action récurrente terminée"
+
+
+def test_recurring_done_creates_no_notification_without_gam05_beneficiary(
+    owner_membership,
+    business_unit,
+):
+    execution = _create_recurring_execution(
+        creator=owner_membership,
+        business_unit=business_unit,
+        assignee=owner_membership,
+        requires_validation=False,
+    )
+    Notification.objects.filter(subject_id=execution.id).delete()
+
+    mark_action_plan_execution_done(
+        execution_id=execution.id,
+        actor_membership=owner_membership,
+    )
+
+    assert [
+        item
+        for item in _notifications_for_execution(execution_id=execution.id)
+        if item.event_key == Notification.EventKey.ACTION_PLAN_EXECUTION_DONE
+    ] == []
+
+
+@pytest.mark.parametrize(
+    ("stars", "expected_title"),
+    [
+        (0, "Plan d'action validé"),
+        (1, "+1 point - Plan d'action validé"),
+        (2, "+2 points - Plan d'action validé"),
+        (3, "+3 points - Plan d'action validé"),
+        (4, "+4 points - Plan d'action validé"),
+        (5, "+5 points - Plan d'action validé"),
+    ],
+)
+def test_validated_notifies_gam06_participants_with_exact_points(
+    owner_membership,
+    business_unit,
+    staff_membership,
+    stars,
+    expected_title,
+):
+    execution = _create_recurring_execution(
+        creator=owner_membership,
+        business_unit=business_unit,
+        assignee=staff_membership,
+        requires_validation=True,
+    )
+    Notification.objects.filter(subject_id=execution.id).delete()
+
+    pending = mark_action_plan_execution_done(
+        execution_id=execution.id,
+        actor_membership=staff_membership,
+    )
+    validate_action_plan_execution(
+        execution_id=pending.id,
+        actor_membership=owner_membership,
+        stars=stars,
+    )
+
+    notifications = [
+        item
+        for item in _notifications_for_execution(execution_id=execution.id)
+        if item.event_key == Notification.EventKey.ACTION_PLAN_EXECUTION_VALIDATED
+    ]
+    assert len(notifications) == 1
+    assert notifications[0].recipient_membership_id == staff_membership.id
+    assert notifications[0].title == expected_title
 
 
 def test_canceled_notifies_assignees_excludes_actor(

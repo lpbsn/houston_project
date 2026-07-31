@@ -82,6 +82,124 @@ def sum_points_for_membership_season(
     return int(total or 0)
 
 
+def point_delta_by_membership_id_for_source(
+    *,
+    reason_code: str,
+    source_type: str,
+    source_id: UUID | str,
+    membership_ids: set[UUID] | list[UUID] | tuple[UUID, ...] | None = None,
+) -> dict[UUID, int]:
+    queryset = PointTransaction.objects.filter(
+        reason_code=reason_code,
+        source_type=source_type,
+        source_id=str(source_id),
+    )
+    if membership_ids is not None:
+        queryset = queryset.filter(membership_id__in=membership_ids)
+    return {
+        row["membership_id"]: int(row["delta"] or 0)
+        for row in queryset.values("membership_id").annotate(delta=Sum("delta"))
+    }
+
+
+def canonical_recurring_execution_done_lifecycle_event(*, execution):
+    from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_MARKED_DONE
+    from houston.action_plans.models import ActionPlanExecutionLifecycleEvent
+
+    return (
+        ActionPlanExecutionLifecycleEvent.objects.filter(
+            action_plan_execution_id=execution.id,
+            event_type=EXECUTION_LIFECYCLE_EVENT_MARKED_DONE,
+        )
+        .order_by("occurred_at", "id")
+        .first()
+    )
+
+
+def recurring_execution_done_participant_memberships(
+    *,
+    execution,
+    canonical_lifecycle_event,
+) -> list[EstablishmentMembership]:
+    from houston.action_plans.models import ActionPlanAssignee, ActionPlanExecutionTask
+    from houston.comments.models import CommentMention
+
+    direct_ids = ActionPlanAssignee.objects.filter(
+        action_plan_execution_id=execution.id,
+    ).values_list("membership_id", flat=True)
+    task_ids = ActionPlanExecutionTask.objects.filter(
+        action_plan_execution_id=execution.id,
+        assigned_membership_id__isnull=False,
+    ).values_list("assigned_membership_id", flat=True)
+    mention_ids = CommentMention.objects.filter(
+        comment__action_plan_execution_id=execution.id,
+        comment__created_at__lte=canonical_lifecycle_event.occurred_at,
+    ).values_list("mentioned_membership_id", flat=True)
+    membership_ids = set(direct_ids) | set(task_ids) | set(mention_ids)
+
+    if execution.action_plan_id is not None:
+        membership_ids.discard(execution.action_plan.created_by_id)
+    if not membership_ids:
+        return []
+
+    return list(
+        EstablishmentMembership.objects.filter(
+            id__in=membership_ids,
+            establishment_id=execution.establishment_id,
+            status=EstablishmentMembership.Status.ACTIVE,
+        ).order_by("id")
+    )
+
+
+def canonical_execution_review(*, execution):
+    from houston.action_plans.models import ActionPlanExecutionReview
+
+    return (
+        ActionPlanExecutionReview.objects.filter(
+            action_plan_execution_id=execution.id,
+            is_active=True,
+        )
+        .order_by("reviewed_at", "id")
+        .first()
+    )
+
+
+def execution_reviewed_participant_memberships(
+    *,
+    execution,
+    review,
+) -> list[EstablishmentMembership]:
+    from houston.action_plans.models import ActionPlanAssignee, ActionPlanExecutionTask
+    from houston.comments.models import CommentMention
+
+    direct_ids = ActionPlanAssignee.objects.filter(
+        action_plan_execution_id=execution.id,
+    ).values_list("membership_id", flat=True)
+    task_ids = ActionPlanExecutionTask.objects.filter(
+        action_plan_execution_id=execution.id,
+        assigned_membership_id__isnull=False,
+    ).values_list("assigned_membership_id", flat=True)
+    mention_ids = CommentMention.objects.filter(
+        comment__action_plan_execution_id=execution.id,
+        comment__created_at__lte=review.reviewed_at,
+    ).values_list("mentioned_membership_id", flat=True)
+    membership_ids = set(direct_ids) | set(task_ids) | set(mention_ids)
+
+    if execution.action_plan_id is not None:
+        membership_ids.discard(execution.action_plan.created_by_id)
+    membership_ids.discard(review.reviewer_membership_id)
+    if not membership_ids:
+        return []
+
+    return list(
+        EstablishmentMembership.objects.filter(
+            id__in=membership_ids,
+            establishment_id=execution.establishment_id,
+            status=EstablishmentMembership.Status.ACTIVE,
+        ).order_by("id")
+    )
+
+
 def provisional_badge_for_membership_season(
     membership: EstablishmentMembership,
     season: GamificationSeason,

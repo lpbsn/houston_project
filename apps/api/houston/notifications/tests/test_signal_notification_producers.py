@@ -16,7 +16,11 @@ from houston.ai.observation_pipeline_schema import PipelineCandidateOutput
 from houston.establishments.models import BusinessUnit, EstablishmentMembership
 from houston.notifications.models import Notification
 from houston.signals.exceptions import SignalStateError
-from houston.signals.models import Signal
+from houston.signals.models import Signal, SignalSourceObservation
+from houston.signals.resolution_request_services import (
+    approve_signal_resolution_request,
+    create_signal_resolution_request,
+)
 from houston.signals.services import (
     ResolvedTaxonomy,
     aggregate_candidate_into_signal,
@@ -462,19 +466,70 @@ def test_signal_resolved_notifies_pole_excludes_actor():
         role=EstablishmentMembership.Role.MANAGER,
     )
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    other_staff = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
+    )
     taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
     assert taxonomy.maintenance is not None
     assign_business_unit_scope(manager, taxonomy.maintenance)
     assign_business_unit_scope(staff, taxonomy.maintenance)
+    assign_business_unit_scope(other_staff, taxonomy.maintenance)
     signal = _open_signal(owner)
+    observation = create_observation(membership=staff)
+    SignalSourceObservation.objects.create(
+        signal=signal,
+        observation=observation,
+        link_type=SignalSourceObservation.LinkType.CREATED_FROM,
+    )
     Notification.objects.filter(subject_id=signal.id).delete()
 
     resolve_signal(signal=signal, actor_membership=manager)
 
     notifications = _notifications_for_signal(signal_id=signal.id)
+    assert len(notifications) == 2
+    by_recipient_id = {item.recipient_membership_id: item for item in notifications}
+    assert by_recipient_id[staff.id].event_key == Notification.EventKey.SIGNAL_RESOLVED
+    assert by_recipient_id[staff.id].title == "+2 points - Observation résolue"
+    assert by_recipient_id[other_staff.id].event_key == Notification.EventKey.SIGNAL_RESOLVED
+    assert by_recipient_id[other_staff.id].title == "Observation résolue"
+
+
+def test_resolution_request_approved_notification_includes_requester_points():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    requester = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    reviewer = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
+    assert taxonomy.maintenance is not None
+    assign_business_unit_scope(requester, taxonomy.maintenance)
+    assign_business_unit_scope(reviewer, taxonomy.maintenance)
+    signal = _open_signal(owner)
+
+    request = create_signal_resolution_request(
+        signal=signal,
+        actor_membership=requester,
+    )
+    Notification.objects.filter(subject_id=signal.id).delete()
+
+    approve_signal_resolution_request(
+        resolution_request=request,
+        actor_membership=reviewer,
+    )
+
+    notifications = [
+        item
+        for item in _notifications_for_signal(signal_id=signal.id)
+        if item.event_key == Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_APPROVED
+    ]
     assert len(notifications) == 1
-    assert notifications[0].recipient_membership_id == staff.id
-    assert notifications[0].event_key == Notification.EventKey.SIGNAL_RESOLVED
+    assert notifications[0].recipient_membership_id == requester.id
+    assert notifications[0].title == "+2 points - Résolution approuvée"
 
 
 def test_signal_canceled_notifies_pole_excludes_actor():
