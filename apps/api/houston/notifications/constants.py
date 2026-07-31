@@ -22,6 +22,8 @@ LOT1_EVENT_KEYS: frozenset[str] = frozenset(
         "action_plan.execution.canceled",
         "action_plan.execution.reopened",
         "action_plan.execution.started",
+        "action_plan.execution.done",
+        "action_plan.execution.validated",
         "action_plan.execution.updated",
         "comment.mention.created",
         "comment.signal.created",
@@ -65,6 +67,14 @@ NOTIFICATION_COPY: dict[str, tuple[str, str]] = {
     "action_plan.execution.started": (
         "Plan d'action démarré",
         "Une exécution planifiée commence maintenant.",
+    ),
+    "action_plan.execution.done": (
+        "Action récurrente terminée",
+        "Une action récurrente a été terminée.",
+    ),
+    "action_plan.execution.validated": (
+        "Plan d'action validé",
+        "Une exécution de plan d'action a été validée.",
     ),
     "action_plan.execution.updated": (
         "Plan d'action modifié",
@@ -196,6 +206,7 @@ def render_notification_copy(
     *,
     actor_display_name: str | None = None,
     pole_name: str | None = None,
+    truncate_title: bool = True,
 ) -> tuple[str, str]:
     title_template, body_template = NOTIFICATION_COPY[event_key]
     display_name = actor_display_name or DEFAULT_ACTOR_DISPLAY_NAME
@@ -214,4 +225,6 @@ def render_notification_copy(
         if "{actor_display_name}" in body_template
         else body_template
     )
-    return title[:NOTIFICATION_TITLE_MAX_LENGTH], body[:NOTIFICATION_BODY_MAX_LENGTH]
+    if truncate_title:
+        title = title[:NOTIFICATION_TITLE_MAX_LENGTH]
+    return title, body[:NOTIFICATION_BODY_MAX_LENGTH]

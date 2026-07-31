@@ -1894,6 +1894,7 @@ def mark_action_plan_execution_done(
 
     from houston.action_plans.feed_pin_services import delete_action_plan_execution_feed_pins
     from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
+    from houston.notifications.scheduling import schedule_action_plan_execution_done_notification
 
     delete_action_plan_execution_feed_pins(execution_id=execution.id)
 
@@ -1901,6 +1902,11 @@ def mark_action_plan_execution_done(
         execution=execution,
         reason="action_plan_execution.done",
     )
+    if execution.action_plan_schedule_id is not None:
+        schedule_action_plan_execution_done_notification(
+            execution_id=execution.id,
+            actor_membership_id=actor_membership.id,
+        )
     _sync_linked_signal_after_execution_change(
         execution=execution,
         actor_membership=actor_membership,
@@ -1972,12 +1978,19 @@ def validate_action_plan_execution(
 
     from houston.action_plans.feed_pin_services import delete_action_plan_execution_feed_pins
     from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
+    from houston.notifications.scheduling import (
+        schedule_action_plan_execution_validated_notification,
+    )
 
     delete_action_plan_execution_feed_pins(execution_id=execution.id)
 
     schedule_action_plan_execution_invalidation(
         execution=execution,
         reason="action_plan_execution.done",
+    )
+    schedule_action_plan_execution_validated_notification(
+        execution_id=execution.id,
+        actor_membership_id=actor_membership.id,
     )
     _sync_linked_signal_after_execution_change(
         execution=execution,

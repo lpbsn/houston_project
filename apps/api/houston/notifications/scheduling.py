@@ -12,6 +12,22 @@ from houston.action_plans.models import ActionPlanExecution
 from houston.chat.models import ChatMessage
 from houston.comments.models import Comment, CommentMention
 from houston.establishments.models import BusinessUnit, EstablishmentMembership
+from houston.gamification.constants import (
+    REASON_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE,
+    REASON_EXECUTION_REVIEWED,
+    REASON_RECURRING_EXECUTION_DONE,
+    REASON_RESOLUTION_REQUEST_APPROVED,
+    REASON_SIGNAL_MOVED_IN_PROGRESS,
+    REASON_SIGNAL_RESOLVED,
+    SOURCE_TYPE_ACTION_PLAN_EXECUTION,
+    SOURCE_TYPE_SIGNAL,
+    SOURCE_TYPE_SIGNAL_RESOLUTION_REQUEST,
+)
+from houston.gamification.selectors import (
+    canonical_execution_review,
+    execution_reviewed_participant_memberships,
+    point_delta_by_membership_id_for_source,
+)
 from houston.notifications.constants import (
     build_action_plan_execution_recipient_idempotency_key,
     build_action_plan_execution_updated_idempotency_key,
@@ -89,7 +105,7 @@ def _load_actor(
 def _load_action_plan_execution(*, execution_id: uuid.UUID) -> ActionPlanExecution | None:
     return (
         ActionPlanExecution.objects.filter(id=execution_id)
-        .select_related("created_by")
+        .select_related("action_plan", "created_by")
         .prefetch_related("assignees__membership")
         .first()
     )
@@ -101,6 +117,10 @@ def _resolve_execution_created_event_key(*, execution: ActionPlanExecution) -> s
     return Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED
 
 
+def _membership_ids(memberships: list[EstablishmentMembership]) -> set[uuid.UUID]:
+    return {membership.id for membership in memberships}
+
+
 def _deliver_action_plan_execution_notifications(
     *,
     execution: ActionPlanExecution,
@@ -110,6 +130,7 @@ def _deliver_action_plan_execution_notifications(
     actor_membership: EstablishmentMembership | None,
     exclude_actor_if_recipient: bool = True,
     use_recipient_idempotency: bool = False,
+    point_delta_by_recipient_id: dict[uuid.UUID, int] | None = None,
 ) -> None:
     if not recipients:
         return
@@ -133,6 +154,7 @@ def _deliver_action_plan_execution_notifications(
         idempotency_key_for_recipient=(
             idempotency_key_for_recipient if use_recipient_idempotency else None
         ),
+        point_delta_by_recipient_id=point_delta_by_recipient_id,
     )
 
 
@@ -164,6 +186,17 @@ def emit_action_plan_execution_availability_if_due(
 
     event_key = _resolve_execution_created_event_key(execution=execution)
     recipients = resolve_action_plan_execution_created_recipients(execution=execution)
+    point_delta_by_recipient_id = None
+    if (
+        event_key == Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED_FROM_SIGNAL
+        and execution.source_signal_id is not None
+    ):
+        point_delta_by_recipient_id = point_delta_by_membership_id_for_source(
+            reason_code=REASON_SIGNAL_MOVED_IN_PROGRESS,
+            source_type=SOURCE_TYPE_SIGNAL,
+            source_id=execution.source_signal_id,
+            membership_ids=_membership_ids(recipients),
+        )
     _deliver_action_plan_execution_notifications(
         execution=execution,
         event_key=event_key,
@@ -174,6 +207,7 @@ def emit_action_plan_execution_availability_if_due(
             actor_membership_id=actor_membership_id,
         ),
         use_recipient_idempotency=True,
+        point_delta_by_recipient_id=point_delta_by_recipient_id,
     )
     now = timezone.now()
     execution.availability_notified_at = now
@@ -220,6 +254,12 @@ def schedule_action_plan_execution_started_notification(
         if execution is None:
             return
         recipients = resolve_action_plan_execution_created_recipients(execution=execution)
+        point_delta_by_recipient_id = point_delta_by_membership_id_for_source(
+            reason_code=REASON_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE,
+            source_type=SOURCE_TYPE_ACTION_PLAN_EXECUTION,
+            source_id=execution.id,
+            membership_ids=_membership_ids(recipients),
+        )
         _deliver_action_plan_execution_notifications(
             execution=execution,
             event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_STARTED,
@@ -230,11 +270,101 @@ def schedule_action_plan_execution_started_notification(
                 actor_membership_id=actor_membership_id,
             ),
             use_recipient_idempotency=True,
+            point_delta_by_recipient_id=point_delta_by_recipient_id,
         )
 
     _run_notification_after_commit(
         deliver=deliver,
         event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_STARTED,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution_id,
+    )
+
+
+def schedule_action_plan_execution_done_notification(
+    *,
+    execution_id: uuid.UUID,
+    actor_membership_id: uuid.UUID | None,
+) -> None:
+    def deliver() -> None:
+        execution = _load_action_plan_execution(execution_id=execution_id)
+        if execution is None:
+            return
+        point_delta_by_recipient_id = point_delta_by_membership_id_for_source(
+            reason_code=REASON_RECURRING_EXECUTION_DONE,
+            source_type=SOURCE_TYPE_ACTION_PLAN_EXECUTION,
+            source_id=execution.id,
+        )
+        if not point_delta_by_recipient_id:
+            return
+        recipients = list(
+            EstablishmentMembership.objects.filter(
+                id__in=point_delta_by_recipient_id.keys(),
+                establishment_id=execution.establishment_id,
+                status=EstablishmentMembership.Status.ACTIVE,
+            ).select_related("user")
+        )
+        _deliver_action_plan_execution_notifications(
+            execution=execution,
+            event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_DONE,
+            priority=Notification.Priority.INFO,
+            recipients=recipients,
+            actor_membership=_load_actor(
+                establishment_id=execution.establishment_id,
+                actor_membership_id=actor_membership_id,
+            ),
+            exclude_actor_if_recipient=False,
+            use_recipient_idempotency=True,
+            point_delta_by_recipient_id=point_delta_by_recipient_id,
+        )
+
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_DONE,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution_id,
+    )
+
+
+def schedule_action_plan_execution_validated_notification(
+    *,
+    execution_id: uuid.UUID,
+    actor_membership_id: uuid.UUID,
+) -> None:
+    def deliver() -> None:
+        execution = _load_action_plan_execution(execution_id=execution_id)
+        if execution is None:
+            return
+        review = canonical_execution_review(execution=execution)
+        if review is None:
+            return
+        recipients = execution_reviewed_participant_memberships(
+            execution=execution,
+            review=review,
+        )
+        point_delta_by_recipient_id = point_delta_by_membership_id_for_source(
+            reason_code=REASON_EXECUTION_REVIEWED,
+            source_type=SOURCE_TYPE_ACTION_PLAN_EXECUTION,
+            source_id=execution.id,
+            membership_ids=_membership_ids(recipients),
+        )
+        _deliver_action_plan_execution_notifications(
+            execution=execution,
+            event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_VALIDATED,
+            priority=Notification.Priority.INFO,
+            recipients=recipients,
+            actor_membership=_load_actor(
+                establishment_id=execution.establishment_id,
+                actor_membership_id=actor_membership_id,
+            ),
+            exclude_actor_if_recipient=False,
+            use_recipient_idempotency=True,
+            point_delta_by_recipient_id=point_delta_by_recipient_id,
+        )
+
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_VALIDATED,
         subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
         subject_id=execution_id,
     )
@@ -692,6 +822,7 @@ def _deliver_signal_notifications(
     actor_membership: EstablishmentMembership | None,
     exclude_actor_if_recipient: bool = True,
     pole_name: str | None = None,
+    point_delta_by_recipient_id: dict[uuid.UUID, int] | None = None,
 ) -> None:
     if not recipients:
         return
@@ -705,6 +836,7 @@ def _deliver_signal_notifications(
         actor_membership=actor_membership,
         exclude_actor_if_recipient=exclude_actor_if_recipient,
         pole_name=pole_name,
+        point_delta_by_recipient_id=point_delta_by_recipient_id,
     )
 
 
@@ -789,6 +921,12 @@ def schedule_signal_resolved_notification(
         if signal is None:
             return
         recipients = _lifecycle_signal_recipients(signal=signal)
+        point_delta_by_recipient_id = point_delta_by_membership_id_for_source(
+            reason_code=REASON_SIGNAL_RESOLVED,
+            source_type=SOURCE_TYPE_SIGNAL,
+            source_id=signal.id,
+            membership_ids=_membership_ids(recipients),
+        )
         _deliver_signal_notifications(
             signal=signal,
             event_key=Notification.EventKey.SIGNAL_RESOLVED,
@@ -799,6 +937,7 @@ def schedule_signal_resolved_notification(
                 actor_membership_id=actor_membership_id,
             ),
             exclude_actor_if_recipient=actor_membership_id is not None,
+            point_delta_by_recipient_id=point_delta_by_recipient_id,
         )
 
     _run_notification_after_commit(
@@ -1051,6 +1190,14 @@ def schedule_signal_resolution_request_reviewed_notification(
             return
         signal = resolution_request.signal
         requester = resolution_request.requested_by_membership
+        point_delta_by_recipient_id = None
+        if event_key == Notification.EventKey.SIGNAL_RESOLUTION_REQUEST_APPROVED:
+            point_delta_by_recipient_id = point_delta_by_membership_id_for_source(
+                reason_code=REASON_RESOLUTION_REQUEST_APPROVED,
+                source_type=SOURCE_TYPE_SIGNAL_RESOLUTION_REQUEST,
+                source_id=resolution_request.id,
+                membership_ids={requester.id},
+            )
         _deliver_signal_notifications(
             signal=signal,
             event_key=event_key,
@@ -1061,6 +1208,7 @@ def schedule_signal_resolution_request_reviewed_notification(
                 actor_membership_id=actor_membership_id,
             ),
             exclude_actor_if_recipient=True,
+            point_delta_by_recipient_id=point_delta_by_recipient_id,
         )
 
     signal_id = _resolution_request_signal_id(resolution_request_id=resolution_request_id)

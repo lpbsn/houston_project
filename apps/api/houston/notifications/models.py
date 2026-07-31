@@ -38,6 +38,14 @@ class Notification(BaseModel):
             "action_plan.execution.started",
             "Action plan execution started",
         )
+        ACTION_PLAN_EXECUTION_DONE = (
+            "action_plan.execution.done",
+            "Action plan execution done",
+        )
+        ACTION_PLAN_EXECUTION_VALIDATED = (
+            "action_plan.execution.validated",
+            "Action plan execution validated",
+        )
         ACTION_PLAN_EXECUTION_UPDATED = (
             "action_plan.execution.updated",
             "Action plan execution updated",

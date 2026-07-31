@@ -15,10 +15,8 @@ from houston.action_plans.services import (
 from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
 from houston.establishments.models import EstablishmentMembership
 from houston.gamification.constants import (
-    DELTA_SIGNAL_MARKED_INTERESTING,
     DELTA_SIGNAL_MOVED_IN_PROGRESS,
     DELTA_SIGNAL_RESOLVED,
-    REASON_SIGNAL_MARKED_INTERESTING,
     REASON_SIGNAL_MOVED_IN_PROGRESS,
     REASON_SIGNAL_RESOLVED,
     SOURCE_TYPE_SIGNAL,
@@ -26,6 +24,7 @@ from houston.gamification.constants import (
 from houston.gamification.models import PointTransaction
 from houston.gamification.services import award_signal_progress_points
 from houston.signals.constants import (
+    SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING,
     SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS,
     SIGNAL_LIFECYCLE_EVENT_RESOLVED,
 )
@@ -95,7 +94,7 @@ def _txs(*, membership=None, signal=None, reason_code=None):
     return list(qs.order_by("created_at", "id"))
 
 
-def test_dedup_multiple_observations_same_membership_interesting():
+def test_mark_interesting_creates_lifecycle_without_points():
     membership = create_membership(
         establishment=create_establishment(name="Dedup Hotel", timezone="UTC"),
         role=EstablishmentMembership.Role.OWNER,
@@ -114,15 +113,11 @@ def test_dedup_multiple_observations_same_membership_interesting():
     mark_signal_interesting(signal=signal, actor_membership=membership)
 
     txs = _txs(membership=membership, signal=signal)
-    assert len(txs) == 1
-    assert txs[0].delta == DELTA_SIGNAL_MARKED_INTERESTING
-    assert txs[0].reason_code == REASON_SIGNAL_MARKED_INTERESTING
-    event = SignalLifecycleEvent.objects.get(
+    assert txs == []
+    SignalLifecycleEvent.objects.get(
         signal=signal,
-        event_type=REASON_SIGNAL_MARKED_INTERESTING,
+        event_type=SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING,
     )
-    assert txs[0].source_event_id == str(event.id)
-    assert txs[0].occurred_at == event.occurred_at
 
 
 def test_non_retroactivity_observer_linked_after_in_progress():
@@ -198,16 +193,14 @@ def test_cumulative_interesting_in_progress_resolved():
 
     txs = _txs(membership=membership, signal=signal)
     assert [t.reason_code for t in txs] == [
-        REASON_SIGNAL_MARKED_INTERESTING,
         REASON_SIGNAL_MOVED_IN_PROGRESS,
         REASON_SIGNAL_RESOLVED,
     ]
     assert [t.delta for t in txs] == [
-        DELTA_SIGNAL_MARKED_INTERESTING,
         DELTA_SIGNAL_MOVED_IN_PROGRESS,
         DELTA_SIGNAL_RESOLVED,
     ]
-    assert sum(t.delta for t in txs) == 4
+    assert sum(t.delta for t in txs) == 3
 
 
 def test_merged_from_excluded():
@@ -235,11 +228,11 @@ def test_merged_from_excluded():
 
     mark_signal_interesting(signal=signal, actor_membership=creator)
 
-    assert len(_txs(membership=creator, signal=signal)) == 1
+    assert len(_txs(membership=creator, signal=signal)) == 0
     assert len(_txs(membership=merged_author, signal=signal)) == 0
 
 
-def test_first_lifecycle_guard_skips_duplicate_event():
+def test_first_lifecycle_guard_skips_duplicate_in_progress_event():
     membership = create_membership(
         establishment=create_establishment(name="Guard Hotel", timezone="UTC"),
         role=EstablishmentMembership.Role.OWNER,
@@ -250,17 +243,17 @@ def test_first_lifecycle_guard_skips_duplicate_event():
         membership=membership,
         link_type=SignalSourceObservation.LinkType.CREATED_FROM,
     )
-    mark_signal_interesting(signal=signal, actor_membership=membership)
+    _create_linked_execution(owner_membership=membership, signal=signal)
     assert len(_txs(membership=membership, signal=signal)) == 1
 
     second = record_signal_lifecycle_event(
         signal=signal,
-        event_type=REASON_SIGNAL_MARKED_INTERESTING,
+        event_type=SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS,
         occurred_at=timezone.now() + timedelta(seconds=1),
         actor_membership=membership,
         metadata_safe={
-            "from_status": Signal.Status.OPEN,
-            "to_status": Signal.Status.INTERESTING,
+            "from_status": Signal.Status.INTERESTING,
+            "to_status": Signal.Status.IN_PROGRESS,
         },
     )
     award_signal_progress_points(signal=signal, lifecycle_event=second)
@@ -268,7 +261,7 @@ def test_first_lifecycle_guard_skips_duplicate_event():
     assert len(_txs(membership=membership, signal=signal)) == 1
 
 
-def test_award_failure_rolls_back_transition_and_lifecycle():
+def test_mark_interesting_does_not_call_award_points():
     membership = create_membership(
         establishment=create_establishment(name="Rollback Hotel", timezone="UTC"),
         role=EstablishmentMembership.Role.OWNER,
@@ -284,12 +277,11 @@ def test_award_failure_rolls_back_transition_and_lifecycle():
         "houston.gamification.services.award_points",
         side_effect=RuntimeError("forced award failure"),
     ):
-        with pytest.raises(RuntimeError, match="forced award failure"):
-            mark_signal_interesting(signal=signal, actor_membership=membership)
+        mark_signal_interesting(signal=signal, actor_membership=membership)
 
     signal.refresh_from_db()
-    assert signal.status == Signal.Status.OPEN
-    assert SignalLifecycleEvent.objects.filter(signal=signal).count() == 0
+    assert signal.status == Signal.Status.INTERESTING
+    assert SignalLifecycleEvent.objects.filter(signal=signal).count() == 1
     assert PointTransaction.objects.count() == 0
 
 
@@ -306,7 +298,7 @@ def test_cancel_creates_no_points_and_keeps_prior():
     )
     mark_signal_interesting(signal=prior_signal, actor_membership=membership)
     prior_count = PointTransaction.objects.filter(membership=membership).count()
-    assert prior_count == 1
+    assert prior_count == 0
 
     cancelable = create_minimal_v3_signal(membership, title="To cancel")
     _link_observation(
@@ -489,8 +481,7 @@ def test_deactivated_membership_still_receives_points():
     mark_signal_interesting(signal=signal, actor_membership=None)
 
     txs = _txs(membership=membership, signal=signal)
-    assert len(txs) == 1
-    assert txs[0].delta == DELTA_SIGNAL_MARKED_INTERESTING
+    assert txs == []
 
 
 def test_cross_establishment_membership_not_awarded():
@@ -520,7 +511,7 @@ def test_cross_establishment_membership_not_awarded():
 
     mark_signal_interesting(signal=signal, actor_membership=home_member)
 
-    assert len(_txs(membership=home_member, signal=signal)) == 1
+    assert len(_txs(membership=home_member, signal=signal)) == 0
     assert len(_txs(membership=other_member, signal=signal)) == 0
 
 
