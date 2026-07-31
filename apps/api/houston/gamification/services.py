@@ -19,6 +19,7 @@ from houston.gamification.constants import (
     DELTA_RECURRING_EXECUTION_DONE,
     DELTA_RESOLUTION_REQUEST_APPROVED,
     REASON_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE,
+    REASON_EXECUTION_REVIEWED,
     REASON_RECURRING_EXECUTION_DONE,
     REASON_RESOLUTION_REQUEST_APPROVED,
     SIGNAL_PROGRESS_REWARDS,
@@ -648,6 +649,103 @@ def _recurring_execution_done_participant_memberships(
             status=EstablishmentMembership.Status.ACTIVE,
         ).order_by("id")
     )
+
+
+def _canonical_execution_review(*, execution):
+    from houston.action_plans.models import ActionPlanExecutionReview
+
+    return (
+        ActionPlanExecutionReview.objects.filter(
+            action_plan_execution_id=execution.id,
+            is_active=True,
+        )
+        .order_by("reviewed_at", "id")
+        .first()
+    )
+
+
+def _execution_reviewed_participant_memberships(
+    *,
+    execution,
+    review,
+) -> list[EstablishmentMembership]:
+    from houston.action_plans.models import ActionPlanAssignee, ActionPlanExecutionTask
+    from houston.comments.models import CommentMention
+
+    direct_ids = ActionPlanAssignee.objects.filter(
+        action_plan_execution_id=execution.id,
+    ).values_list("membership_id", flat=True)
+    task_ids = ActionPlanExecutionTask.objects.filter(
+        action_plan_execution_id=execution.id,
+        assigned_membership_id__isnull=False,
+    ).values_list("assigned_membership_id", flat=True)
+    mention_ids = CommentMention.objects.filter(
+        comment__action_plan_execution_id=execution.id,
+        comment__created_at__lte=review.reviewed_at,
+    ).values_list("mentioned_membership_id", flat=True)
+    membership_ids = set(direct_ids) | set(task_ids) | set(mention_ids)
+
+    if execution.action_plan_id is not None:
+        membership_ids.discard(execution.action_plan.created_by_id)
+    membership_ids.discard(review.reviewer_membership_id)
+    if not membership_ids:
+        return []
+
+    return list(
+        EstablishmentMembership.objects.filter(
+            id__in=membership_ids,
+            establishment_id=execution.establishment_id,
+            status=EstablishmentMembership.Status.ACTIVE,
+        ).order_by("id")
+    )
+
+
+def award_action_plan_execution_reviewed_points(*, execution) -> None:
+    """Award review-star points to eligible participants when validation is final.
+
+    Must run in the same transaction.atomic as the pending_validation → done
+    transition, review creation, and validated lifecycle write.
+    """
+    from houston.action_plans.constants import EXECUTION_STATUS_DONE
+
+    if execution.status != EXECUTION_STATUS_DONE:
+        return
+    if not execution.requires_validation:
+        return
+
+    review = _canonical_execution_review(execution=execution)
+    if review is None:
+        raise GamificationValidationError(
+            "Action plan execution is validated without a canonical review.",
+            code="gamification_execution_review_missing",
+        )
+    if review.stars == 0:
+        return
+
+    memberships = _execution_reviewed_participant_memberships(
+        execution=execution,
+        review=review,
+    )
+    if not memberships:
+        return
+
+    establishment = Establishment.objects.get(pk=execution.establishment_id)
+    for membership in memberships:
+        award_points(
+            membership=membership,
+            establishment=establishment,
+            delta=review.stars,
+            reason_code=REASON_EXECUTION_REVIEWED,
+            source_type=SOURCE_TYPE_ACTION_PLAN_EXECUTION,
+            source_id=execution.id,
+            occurred_at=review.reviewed_at,
+            idempotency_key=build_idempotency_key(
+                reason_code=REASON_EXECUTION_REVIEWED,
+                subject_id=execution.id,
+                membership_id=membership.id,
+            ),
+            source_event_id=review.id,
+        )
 
 
 def award_recurring_execution_done_points(*, execution) -> None:

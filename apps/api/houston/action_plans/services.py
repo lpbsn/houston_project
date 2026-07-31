@@ -1966,6 +1966,10 @@ def validate_action_plan_execution(
         occurred_at=now,
         actor_membership=actor_membership,
     )
+    from houston.gamification.services import award_action_plan_execution_reviewed_points
+
+    award_action_plan_execution_reviewed_points(execution=execution)
+
     from houston.action_plans.feed_pin_services import delete_action_plan_execution_feed_pins
     from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
 

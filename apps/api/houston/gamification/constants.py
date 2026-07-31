@@ -63,6 +63,9 @@ REASON_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE = "action_plan.execution_started_e
 # Reason code for recurring ActionPlanExecution completion without validation (GAM-05).
 REASON_RECURRING_EXECUTION_DONE = "recurring_execution.done"
 
+# Reason code for validated ActionPlanExecution review awards (GAM-06).
+REASON_EXECUTION_REVIEWED = "execution.reviewed"
+
 DELTA_SIGNAL_MARKED_INTERESTING = 1
 DELTA_SIGNAL_MOVED_IN_PROGRESS = 1
 DELTA_SIGNAL_RESOLVED = 2
