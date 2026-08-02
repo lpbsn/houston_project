@@ -1,12 +1,14 @@
 import { apiClient, withAuthRetry } from '@/api/client'
 import { parseStandardApiError } from '@/lib/api-errors'
 
-import type { GamificationOverview } from './types'
+import type { GamificationOverview, GamificationTransactionList } from './types'
 
 export const gamificationQueryKeys = {
   all: ['gamification'] as const,
   overview: (establishmentId: string) =>
     ['gamification', 'overview', establishmentId] as const,
+  transactions: (establishmentId: string) =>
+    ['gamification', 'transactions', establishmentId] as const,
 }
 
 export class GamificationApiError extends Error {
@@ -36,11 +38,11 @@ function parseError(response: Response, payload: unknown): GamificationApiError 
   return new GamificationApiError({ status, detail, code })
 }
 
-function assertGamificationData(result: {
+function assertGamificationData<T>(result: {
   response: Response
-  data?: GamificationOverview
+  data?: T
   error?: unknown
-}): GamificationOverview {
+}): T {
   if (result.response.ok && result.data) {
     return result.data
   }
@@ -64,5 +66,29 @@ export async function fetchGamificationOverview(
     { refreshable: true },
   )
 
-  return assertGamificationData(result)
+  return assertGamificationData<GamificationOverview>(result)
+}
+
+export async function fetchGamificationTransactions(
+  establishmentId: string,
+  options: { cursor?: string; pageSize?: number } = {},
+): Promise<GamificationTransactionList> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/establishments/{establishment_id}/gamification/me/transactions/', {
+        params: {
+          path: {
+            establishment_id: establishmentId,
+          },
+          query: {
+            ...(options.cursor ? { cursor: options.cursor } : {}),
+            ...(options.pageSize ? { page_size: options.pageSize } : {}),
+          },
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  return assertGamificationData<GamificationTransactionList>(result)
 }

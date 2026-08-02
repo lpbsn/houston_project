@@ -196,6 +196,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-4 pt-3">
       <GamificationScoreCard
+        establishmentId={establishmentId}
         data={gamificationOverviewQuery.data}
         isLoading={gamificationOverviewQuery.isLoading}
         isError={gamificationOverviewQuery.isError}

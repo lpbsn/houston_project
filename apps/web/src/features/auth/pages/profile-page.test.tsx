@@ -152,6 +152,17 @@ vi.mock('@/features/notifications/hooks', () => ({
 
 vi.mock('@/features/gamification/hooks', () => ({
   useGamificationOverviewQuery: () => gamificationQueryState.current,
+  useGamificationTransactionsInfiniteQuery: () => ({
+    data: { pages: [{ items: [], next_cursor: null, has_more: false }] },
+    error: null,
+    fetchNextPage: vi.fn(),
+    hasNextPage: false,
+    isError: false,
+    isFetchingNextPage: false,
+    isLoading: false,
+    isSuccess: true,
+    refetch: vi.fn(),
+  }),
 }))
 
 vi.mock('@/features/push/hooks', () => ({
