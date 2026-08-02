@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { ChevronRight, Gift, Medal } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { ChevronDown, ChevronRight, ChevronUp, Gift, LoaderCircle, Medal } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -8,16 +8,30 @@ import {
   TerrainErrorState,
   TerrainSectionLabel,
 } from '@/components/ui/terrain'
+import { resolveApiErrorMessage } from '@/lib/error-message'
 import { cn } from '@/lib/utils'
 
 import { GamificationScoreSheet } from './gamification-score-sheet'
-import type { GamificationGradeRule, GamificationOverview } from '../types'
+import { GamificationApiError } from '../api'
+import { useGamificationTransactionsInfiniteQuery } from '../hooks'
+import type {
+  GamificationGradeRule,
+  GamificationOverview,
+  GamificationTransactionItem,
+} from '../types'
 
 type GamificationScoreCardProps = {
+  establishmentId: string | null
   data: GamificationOverview | undefined
   isLoading: boolean
   isError: boolean
   onRetry: () => void
+}
+
+type HistoryDisclosureState = {
+  establishmentId: string | null
+  isOpen: boolean
+  hasOpened: boolean
 }
 
 function clampProgressRatio(progressRatio: number) {
@@ -33,6 +47,41 @@ function findGradeLabel(
   }
 
   return grades.find((grade) => grade.code === gradeCode)?.label ?? gradeCode
+}
+
+function formatPointDelta(delta: number): string {
+  const sign = delta > 0 ? '+' : ''
+  const label = Math.abs(delta) === 1 ? 'point' : 'points'
+  return `${sign}${delta} ${label}`
+}
+
+function formatTransactionDate(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+function uniqueTransactions(items: GamificationTransactionItem[]): GamificationTransactionItem[] {
+  const seenIds = new Set<string>()
+  const unique: GamificationTransactionItem[] = []
+
+  for (const item of items) {
+    if (seenIds.has(item.id)) {
+      continue
+    }
+    seenIds.add(item.id)
+    unique.push(item)
+  }
+
+  return unique
 }
 
 function LoadingScoreCard() {
@@ -52,12 +101,31 @@ function LoadingScoreCard() {
 }
 
 export function GamificationScoreCard({
+  establishmentId,
   data,
   isLoading,
   isError,
   onRetry,
 }: GamificationScoreCardProps) {
   const [isSheetOpen, setIsSheetOpen] = useState(false)
+  const [historyState, setHistoryState] = useState<HistoryDisclosureState>({
+    establishmentId: null,
+    isOpen: false,
+    hasOpened: false,
+  })
+
+  const historyStateMatchesEstablishment = historyState.establishmentId === establishmentId
+  const isHistoryOpen = historyStateMatchesEstablishment ? historyState.isOpen : false
+  const hasOpenedHistory = historyStateMatchesEstablishment ? historyState.hasOpened : false
+  const transactionsQuery = useGamificationTransactionsInfiniteQuery(
+    establishmentId,
+    hasOpenedHistory,
+  )
+  const transactions = useMemo(
+    () =>
+      uniqueTransactions(transactionsQuery.data?.pages.flatMap((page) => page.items) ?? []),
+    [transactionsQuery.data],
+  )
 
   const current = data?.current
   const gradeRules = data?.rules.grades ?? []
@@ -88,6 +156,22 @@ export function GamificationScoreCard({
       ? 'Grade maximal atteint'
       : `Plus que ${current.points_to_next_grade} pts`
   const gradeLabel = currentGradeLabel ?? 'Aucun grade débloqué'
+  const historyContentId = 'gamification-points-history'
+
+  function toggleHistory() {
+    setHistoryState((currentState) => {
+      const matchesCurrentEstablishment =
+        currentState.establishmentId === establishmentId
+      const nextIsOpen = matchesCurrentEstablishment ? !currentState.isOpen : true
+      return {
+        establishmentId,
+        isOpen: nextIsOpen,
+        hasOpened: matchesCurrentEstablishment
+          ? currentState.hasOpened || nextIsOpen
+          : nextIsOpen,
+      }
+    })
+  }
 
   return (
     <div className="space-y-2">
@@ -148,6 +232,107 @@ export function GamificationScoreCard({
                 <span>{current.next_grade_threshold} pts</span>
               ) : null}
             </div>
+          </div>
+
+          <div className="rounded-xl border border-[#E8E6DF] bg-[#F8F7F3]">
+            <button
+              type="button"
+              className="flex min-h-11 w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm font-semibold text-[#114660]"
+              onClick={toggleHistory}
+              aria-expanded={isHistoryOpen}
+              aria-controls={historyContentId}
+            >
+              <span>Historique des points</span>
+              {isHistoryOpen ? (
+                <ChevronUp className="h-4 w-4 shrink-0 text-[#7D7B75]" aria-hidden />
+              ) : (
+                <ChevronDown className="h-4 w-4 shrink-0 text-[#7D7B75]" aria-hidden />
+              )}
+            </button>
+
+            {isHistoryOpen ? (
+              <div
+                id={historyContentId}
+                className="border-t border-[#E8E6DF] px-3 py-3"
+              >
+                {transactionsQuery.isLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-[#7D7B75]">
+                    <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
+                    Chargement de l’historique…
+                  </div>
+                ) : null}
+
+                {transactionsQuery.isError ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-[#7D7B75]">
+                      {resolveApiErrorMessage(
+                        transactionsQuery.error,
+                        GamificationApiError,
+                        "L’historique des points n’a pas pu être chargé.",
+                      )}
+                    </p>
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-[#1B4FD8]"
+                      onClick={() => void transactionsQuery.refetch()}
+                    >
+                      Réessayer
+                    </button>
+                  </div>
+                ) : null}
+
+                {transactionsQuery.isSuccess && transactions.length === 0 ? (
+                  <p className="text-sm text-[#7D7B75]">Aucun point pour le moment.</p>
+                ) : null}
+
+                {transactions.length > 0 ? (
+                  <div className="space-y-3">
+                    <ul className="space-y-2">
+                      {transactions.map((transaction) => {
+                        const dateLabel = formatTransactionDate(transaction.occurred_at)
+                        return (
+                          <li
+                            key={transaction.id}
+                            className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 rounded-lg bg-white px-3 py-2"
+                          >
+                            <span className="text-sm font-bold text-[#114660]">
+                              {formatPointDelta(transaction.delta)}
+                            </span>
+                            <span className="min-w-0 text-sm font-semibold text-[#1a1a1a]">
+                              {transaction.reason_label}
+                            </span>
+                            {dateLabel ? (
+                              <span className="col-start-2 text-xs text-[#7D7B75]">
+                                {dateLabel}
+                              </span>
+                            ) : null}
+                          </li>
+                        )
+                      })}
+                    </ul>
+
+                    {transactionsQuery.hasNextPage ? (
+                      <div className="flex justify-center pt-1">
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-[#1B4FD8] disabled:opacity-60"
+                          onClick={() => void transactionsQuery.fetchNextPage()}
+                          disabled={transactionsQuery.isFetchingNextPage}
+                        >
+                          {transactionsQuery.isFetchingNextPage
+                            ? 'Chargement…'
+                            : 'Afficher plus'}
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-center text-xs text-[#a3a19a]">
+                        Fin de l’historique
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <div className="grid grid-cols-2 gap-2">

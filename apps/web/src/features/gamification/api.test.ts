@@ -10,8 +10,8 @@ vi.mock('@/api/client', () => ({
     callback('test-token'),
 }))
 
-import { fetchGamificationOverview } from './api'
-import type { GamificationOverview } from './types'
+import { fetchGamificationOverview, fetchGamificationTransactions } from './api'
+import type { GamificationOverview, GamificationTransactionList } from './types'
 
 const overview: GamificationOverview = {
   current: {
@@ -47,6 +47,32 @@ const overview: GamificationOverview = {
   seasons: { items: [] },
 }
 
+const transactions: GamificationTransactionList = {
+  items: [
+    {
+      id: 'tx-1',
+      occurred_at: '2026-07-31T14:32:00',
+      delta: 2,
+      reason_code: 'signal.resolved',
+      reason_label: 'Observation résolue',
+      season: {
+        season_id: 'season-1',
+        period: {
+          starts_at: '2026-07-01T00:00:00Z',
+          ends_at: '2026-08-01T00:00:00Z',
+        },
+        status: 'active',
+      },
+      source: { type: 'signal', id: 'signal-1' },
+      is_correction: false,
+      is_reversal: false,
+      reversed_transaction_id: null,
+    },
+  ],
+  next_cursor: 'cursor-1',
+  has_more: true,
+}
+
 describe('gamification api', () => {
   beforeEach(() => {
     getMock.mockReset()
@@ -65,6 +91,26 @@ describe('gamification api', () => {
       expect.objectContaining({
         params: {
           path: { establishment_id: 'est-1' },
+        },
+      }),
+    )
+  })
+
+  it('fetches authenticated point transactions with cursor pagination', async () => {
+    getMock.mockResolvedValue({
+      data: transactions,
+      error: undefined,
+      response: { ok: true, status: 200 } as Response,
+    })
+
+    await fetchGamificationTransactions('est-1', { cursor: 'cursor-1' })
+
+    expect(getMock).toHaveBeenCalledWith(
+      '/api/v1/establishments/{establishment_id}/gamification/me/transactions/',
+      expect.objectContaining({
+        params: {
+          path: { establishment_id: 'est-1' },
+          query: { cursor: 'cursor-1' },
         },
       }),
     )
