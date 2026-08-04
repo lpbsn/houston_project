@@ -1,4 +1,4 @@
-import { LoaderCircle } from 'lucide-react'
+import { LoaderCircle, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -180,7 +180,7 @@ export function OwnerOrgOnboardingStep({
 
   return (
     <div
-      className="mx-auto w-full max-w-[96rem] px-4 pb-28 pt-6 sm:px-8 lg:px-10"
+      className="mx-auto w-full max-w-[96rem] px-4 pb-16 pt-6 sm:px-8 sm:pb-20 lg:px-10"
       data-testid="owner-org-onboarding-step"
     >
       <div className="mb-6 space-y-3">
@@ -199,54 +199,69 @@ export function OwnerOrgOnboardingStep({
       <OnboardingStepper current="organization" />
 
       <form
-        className="mx-auto max-w-xl space-y-4 rounded-[1.85rem] border border-[#ece5da] bg-[#fffdf9] p-6 shadow-[0_24px_52px_-40px_rgba(46,72,173,0.28)]"
+        className="mx-auto max-w-2xl space-y-5 rounded-2xl border border-spore-forest/10 bg-white p-5 sm:p-6"
         onSubmit={handleSubmit}
       >
-        <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor="invite_code">
+        <div className="flex items-start gap-3">
+          <div className="flex size-10 items-center justify-center rounded-full bg-spore-forest text-white">
+            <UserRound className="size-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-spore-forest">Compte propriétaire</h2>
+            <p className="mt-1 text-sm text-spore-muted">
+              Créez l’accès owner qui pilotera l’organisation.
+            </p>
+          </div>
+        </div>
+
+        <label className="block space-y-1.5" htmlFor="invite_code">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
             Code d’invitation
-          </label>
+          </span>
           <Input
             id="invite_code"
             autoComplete="off"
             value={form.invite_code}
             onChange={(event) => updateField('invite_code', event.target.value)}
             placeholder="Entrez votre code d’invitation"
+            className="h-11 rounded-xl border-spore-forest/15"
             required
           />
-        </div>
+        </label>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="first_name">
+          <label className="block space-y-1.5" htmlFor="first_name">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
               Prénom
-            </label>
+            </span>
             <Input
               id="first_name"
               autoComplete="given-name"
               value={form.first_name}
               onChange={(event) => updateField('first_name', event.target.value)}
+              className="h-11 rounded-xl border-spore-forest/15"
               required
             />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="last_name">
+          </label>
+          <label className="block space-y-1.5" htmlFor="last_name">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
               Nom
-            </label>
+            </span>
             <Input
               id="last_name"
               autoComplete="family-name"
               value={form.last_name}
               onChange={(event) => updateField('last_name', event.target.value)}
+              className="h-11 rounded-xl border-spore-forest/15"
               required
             />
-          </div>
+          </label>
         </div>
 
-        <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor="email">
+        <label className="block space-y-1.5" htmlFor="email">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
             E-mail
-          </label>
+          </span>
           <Input
             id="email"
             type="email"
@@ -254,53 +269,59 @@ export function OwnerOrgOnboardingStep({
             value={form.email}
             onChange={(event) => updateField('email', event.target.value)}
             placeholder="vous@exemple.com"
+            className="h-11 rounded-xl border-spore-forest/15"
             required
           />
-        </div>
+        </label>
 
-        <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor="password">
-            Mot de passe
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block space-y-1.5" htmlFor="password">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
+              Mot de passe
+            </span>
+            <Input
+              id="password"
+              type="password"
+              autoComplete="new-password"
+              value={form.password}
+              onChange={(event) => updateField('password', event.target.value)}
+              className="h-11 rounded-xl border-spore-forest/15"
+              required
+            />
           </label>
-          <Input
-            id="password"
-            type="password"
-            autoComplete="new-password"
-            value={form.password}
-            onChange={(event) => updateField('password', event.target.value)}
-            required
-          />
-        </div>
 
-        <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor="password_confirmation">
-            Confirmer le mot de passe
+          <label className="block space-y-1.5" htmlFor="password_confirmation">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
+              Confirmer le mot de passe
+            </span>
+            <Input
+              id="password_confirmation"
+              type="password"
+              autoComplete="new-password"
+              value={form.password_confirmation}
+              onChange={(event) => updateField('password_confirmation', event.target.value)}
+              className="h-11 rounded-xl border-spore-forest/15"
+              required
+            />
           </label>
-          <Input
-            id="password_confirmation"
-            type="password"
-            autoComplete="new-password"
-            value={form.password_confirmation}
-            onChange={(event) => updateField('password_confirmation', event.target.value)}
-            required
-          />
         </div>
 
-        <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor="organization_name">
+        <label className="block space-y-1.5" htmlFor="organization_name">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
             Nom de l’organisation
-          </label>
+          </span>
           <Input
             id="organization_name"
             value={form.organization_name}
             onChange={(event) => updateField('organization_name', event.target.value)}
+            className="h-11 rounded-xl border-spore-forest/15"
             required
           />
-        </div>
+        </label>
 
         {fieldError ? (
           <div
-            className="rounded-xl border border-rose-300/60 bg-rose-50 px-3 py-2 text-sm text-rose-900"
+            className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
             data-testid="owner-org-error"
           >
             {fieldError}
@@ -311,7 +332,7 @@ export function OwnerOrgOnboardingStep({
           <Button
             type="button"
             variant="outline"
-            className="h-11 w-full rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
+            className="h-11 w-full rounded-xl border-spore-forest/15 bg-white"
             data-testid="owner-org-login-cta"
             onClick={() => onNavigate?.('/login')}
           >
@@ -319,7 +340,11 @@ export function OwnerOrgOnboardingStep({
           </Button>
         ) : null}
 
-        <Button className="h-11 w-full rounded-[1rem]" disabled={isSubmitting} type="submit">
+        <Button
+          className="h-11 w-full rounded-xl bg-spore-forest text-white hover:bg-spore-moss disabled:bg-spore-moss/40"
+          disabled={isSubmitting}
+          type="submit"
+        >
           {isSubmitting ? (
             <>
               <LoaderCircle className="size-4 animate-spin" />
