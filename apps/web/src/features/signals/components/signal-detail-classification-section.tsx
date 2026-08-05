@@ -1,8 +1,10 @@
+import { Button } from '@/components/ui/button'
 import { TerrainCard } from '@/components/ui/terrain'
 import {
   formatSignalClassification,
   type SignalClassificationInput,
 } from '@/lib/signal-classification'
+import { cn } from '@/lib/utils'
 
 import { isSignalNeedsQualification } from '../lib/signal-qualify-routing'
 import { isSignalMissingResponsibleClassification } from '../lib/signal-unclassified'
@@ -18,6 +20,10 @@ type SignalDetailClassificationSectionProps = {
     responsible_business_unit_id?: string | null
     activity_subject_id?: string | null
   }
+  canQualify: boolean
+  isQualifyOpening: boolean
+  qualifyErrorMessage: string | null
+  onQualify: () => void
 }
 
 function ClassificationField({ label, value }: { label: string; value: string }) {
@@ -33,6 +39,10 @@ const UNDEFINED_LABEL = 'Non défini'
 
 export function SignalDetailClassificationSection({
   signal,
+  canQualify,
+  isQualifyOpening,
+  qualifyErrorMessage,
+  onQualify,
 }: SignalDetailClassificationSectionProps) {
   const classification = formatSignalClassification(signal)
   const location = signal.location_text?.trim()
@@ -61,17 +71,39 @@ export function SignalDetailClassificationSection({
     !subjectValue &&
     !affectedValue &&
     !location &&
-    !isUnclassified
+    !isUnclassified &&
+    !canQualify
   ) {
     return null
   }
 
   return (
     <TerrainCard>
-      <div className="flex items-start justify-between gap-2">
-        <SignalDetailLabel>Classification</SignalDetailLabel>
-        <SignalUnclassifiedBadge signal={signal} variant="detail" />
+      <div className="relative min-h-0 pr-24">
+        <div className="flex min-w-0 items-center gap-2">
+          <SignalDetailLabel>Classification</SignalDetailLabel>
+          <SignalUnclassifiedBadge signal={signal} variant="detail" />
+        </div>
+        {canQualify ? (
+          <Button
+            type="button"
+            variant="outline"
+            className={cn(
+              'absolute top-1/2 right-0 h-8 -translate-y-1/2 rounded-full border-[#E8E6DF] bg-white px-3 text-xs font-medium whitespace-nowrap text-[#1B4FD8] hover:bg-[#F5F4F0] hover:text-[#1B4FD8]',
+              'focus-visible:ring-[#1B4FD8]/30',
+            )}
+            disabled={isQualifyOpening}
+            onClick={onQualify}
+          >
+            {isQualifyOpening ? 'Chargement…' : 'Qualifier'}
+          </Button>
+        ) : null}
       </div>
+      {qualifyErrorMessage ? (
+        <p className="mt-2 text-sm text-destructive" role="alert">
+          {qualifyErrorMessage}
+        </p>
+      ) : null}
       <div className="mt-3 space-y-3">
         {responsibleValue ? (
           <ClassificationField label="Pôle responsable" value={responsibleValue} />

@@ -18,6 +18,7 @@ import { SignalLinkedActionPlansSection } from '../components/signal-linked-acti
 import { SignalStatusBadge } from '../components/signal-status-badge'
 import { SignalDetailClassificationSection } from '../components/signal-detail-classification-section'
 import { SignalDetailLabel } from '../components/signal-detail-label'
+import { SignalQualifyRoutingSheet } from '../components/signal-qualify-routing-sheet'
 import {
   resolutionRequestEventsFromDetail,
   SignalResolutionRequestSection,
@@ -29,7 +30,9 @@ import {
   useRejectSignalResolutionRequestMutation,
   useSignalDetailQuery,
 } from '../hooks'
+import { useSignalQualifySheet } from '../hooks/use-signal-qualify-sheet'
 import { SignalsApiError } from '../api'
+import { shouldShowSignalQualifyRouting } from '../lib/signal-qualify-routing'
 import { shouldShowSignalCreateActionPlan } from '../lib/signal-create-action'
 import { formatSignalRelativeTime, formatSignalAggregationLabel } from '../lib/signal-display'
 import { SIGNAL_IN_PROGRESS_RESOLVE_VIA_ACTION_PLAN_HINT } from '../lib/signal-feed-card-actions'
@@ -61,6 +64,7 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
   const approveRequestMutation = useApproveSignalResolutionRequestMutation(establishmentId)
   const rejectRequestMutation = useRejectSignalResolutionRequestMutation(establishmentId)
   const cancelRequestMutation = useCancelSignalResolutionRequestMutation(establishmentId)
+  const qualifySheet = useSignalQualifySheet({ establishmentId, onNavigate })
 
   const handleTabChange = (tab: SignalDetailTab) => {
     if (tab === 'comments') {
@@ -90,6 +94,7 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
   const signal = detailQuery.data
   const reporterName = signal.source_context.reporter_display_name?.trim()
   const showStickyCreateActionFooter = shouldShowSignalCreateActionPlan(signal.permission_hints)
+  const canQualifyRouting = shouldShowSignalQualifyRouting(signal.permission_hints)
   const showStickyFooter = activeTab === 'details' && showStickyCreateActionFooter
   const resolutionRequest = signal.resolution_request
   const resolutionRequestEvents = resolutionRequestEventsFromDetail(signal)
@@ -188,7 +193,13 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
             ) : null}
           </TerrainCard>
 
-          <SignalDetailClassificationSection signal={signal} />
+          <SignalDetailClassificationSection
+            signal={signal}
+            canQualify={canQualifyRouting}
+            isQualifyOpening={qualifySheet.opening}
+            qualifyErrorMessage={!qualifySheet.open ? qualifySheet.errorMessage : null}
+            onQualify={() => void qualifySheet.openForSignal(signal.id)}
+          />
 
           <TerrainCard>
             <SignalDetailLabel>Description</SignalDetailLabel>
@@ -248,6 +259,19 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
       {showStickyFooter ? (
         <SignalDetailStickyFooter
           onCreateActionPlan={() => onNavigate(`/signals/${signalId}/plan`)}
+        />
+      ) : null}
+
+      {establishmentId && qualifySheet.open && qualifySheet.signal ? (
+        <SignalQualifyRoutingSheet
+          key={qualifySheet.signal.id}
+          open={qualifySheet.open}
+          establishmentId={establishmentId}
+          signal={qualifySheet.signal}
+          isPending={qualifySheet.isPending}
+          errorMessage={qualifySheet.errorMessage}
+          onClose={qualifySheet.close}
+          onSubmit={(patch) => void qualifySheet.submit(patch)}
         />
       ) : null}
     </div>

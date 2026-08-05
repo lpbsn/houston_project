@@ -337,7 +337,7 @@ describe('ActionPlanExecutionFeedCard', () => {
 
     const title = screen.getByRole('heading', { level: 3, name: 'Plan incendie' })
     const actionsButton = screen.getByRole('button', { name: 'Actions du plan d’action' })
-    const metaRow = actionsButton.parentElement?.parentElement
+    const metaRow = actionsButton.parentElement?.parentElement?.parentElement
 
     expect(screen.getByText('Restaurant')).toBeTruthy()
     expect(metaRow?.className).toContain('items-center')
@@ -365,7 +365,7 @@ describe('ActionPlanExecutionFeedCard', () => {
 
     const title = screen.getByRole('heading', { level: 3, name: 'Plan incendie' })
     const actionsButton = screen.getByRole('button', { name: 'Actions du plan d’action' })
-    const metaRow = actionsButton.parentElement?.parentElement
+    const metaRow = actionsButton.parentElement?.parentElement?.parentElement
 
     expect(screen.getByText('Linge')).toBeTruthy()
     expect(screen.getByText('Restaurant')).toBeTruthy()

@@ -55,8 +55,8 @@ describe('canOpenSignalFeedCardActions', () => {
     expect(canOpenSignalFeedCardActions(hints({ can_cancel: true }))).toBe(true)
   })
 
-  it('returns true when can_qualify_routing is true', () => {
-    expect(canOpenSignalFeedCardActions(hints({ can_qualify_routing: true }))).toBe(true)
+  it('returns false when only can_qualify_routing is true', () => {
+    expect(canOpenSignalFeedCardActions(hints({ can_qualify_routing: true }))).toBe(false)
   })
 })
 
@@ -102,12 +102,12 @@ describe('getSignalFeedCardActionOptions', () => {
     ).toEqual([{ id: 'archive', label: 'Archiver', tone: 'neutral' }])
   })
 
-  it('returns qualify action when can_qualify_routing', () => {
+  it('does not return qualify action when can_qualify_routing', () => {
     expect(
       getSignalFeedCardActionOptions(
         feedItem({ permission_hints: hints({ can_qualify_routing: true }) }),
       ),
-    ).toEqual([{ id: 'qualify', label: 'Qualifier le routage', tone: 'neutral' }])
+    ).toEqual([])
   })
 
   it('returns resolve action when can_resolve', () => {

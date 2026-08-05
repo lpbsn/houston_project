@@ -24,11 +24,11 @@ type SignalFeedCardActionsSheetProps = {
 function actionButtonClassName(tone: SignalFeedCardActionTone): string {
   switch (tone) {
     case 'success':
-      return cn('rounded-lg border px-3 py-2.5', terrain.successSurface, terrain.success)
+      return cn(terrain.successSurface, terrain.success)
     case 'danger':
-      return cn('rounded-lg border px-3 py-2.5', terrain.errorSurface, terrain.danger)
+      return cn(terrain.errorSurface, terrain.danger)
     case 'neutral':
-      return 'rounded-lg border border-[#E8E6DF] bg-[#F5F4F0] px-3 py-2.5'
+      return 'border-[#E8E6DF] bg-[#F5F4F0] text-[#1a1a1a]'
     default: {
       const exhaustiveCheck: never = tone
       return exhaustiveCheck
@@ -39,11 +39,11 @@ function actionButtonClassName(tone: SignalFeedCardActionTone): string {
 function actionLabelClassName(tone: SignalFeedCardActionTone): string {
   switch (tone) {
     case 'success':
-      return cn('text-sm font-medium', terrain.success)
+      return cn('text-[15px] font-semibold', terrain.success)
     case 'danger':
-      return cn('text-sm font-medium', terrain.danger)
+      return cn('text-[15px] font-semibold', terrain.danger)
     case 'neutral':
-      return 'text-sm font-medium text-[#1a1a1a]'
+      return 'text-[15px] font-semibold text-[#1a1a1a]'
     default: {
       const exhaustiveCheck: never = tone
       return exhaustiveCheck
@@ -79,13 +79,13 @@ export function SignalFeedCardActionsSheet({
   return createPortal(
     <div onClick={(event) => event.stopPropagation()}>
       <TerrainBottomSheet title="Actions" open={open} onClose={handleClose}>
-        <ul className="flex flex-col gap-2">
+        <ul className="flex flex-col gap-2.5">
           {options.map((option) => (
             <li key={option.id}>
               <button
                 type="button"
                 className={cn(
-                  'flex min-h-11 w-full items-center justify-between text-left disabled:cursor-not-allowed disabled:opacity-50',
+                  'flex min-h-[52px] w-full items-center justify-between rounded-lg border px-3 py-3 text-left transition active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50',
                   actionButtonClassName(option.tone),
                 )}
                 disabled={isPending}
