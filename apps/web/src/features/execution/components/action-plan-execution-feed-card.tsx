@@ -65,6 +65,7 @@ function ActionPlanFeedCardActionsButton({ item, onOpenActions }: ActionPlanFeed
   return (
     <FeedCardActionsButton
       ariaLabel="Actions du plan d’action"
+      variant="prominent"
       onClick={(event) => {
         stopCardNavigation(event)
         onOpenActions(item)

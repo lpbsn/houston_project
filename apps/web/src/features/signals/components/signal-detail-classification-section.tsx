@@ -79,8 +79,8 @@ export function SignalDetailClassificationSection({
 
   return (
     <TerrainCard>
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <div className="relative min-h-0 pr-24">
+        <div className="flex min-w-0 items-center gap-2">
           <SignalDetailLabel>Classification</SignalDetailLabel>
           <SignalUnclassifiedBadge signal={signal} variant="detail" />
         </div>
@@ -89,7 +89,7 @@ export function SignalDetailClassificationSection({
             type="button"
             variant="outline"
             className={cn(
-              'min-h-11 shrink-0 rounded-full border-[#E8E6DF] bg-white px-3 text-xs font-medium text-[#1B4FD8] hover:bg-[#F5F4F0] hover:text-[#1B4FD8]',
+              'absolute top-1/2 right-0 h-8 -translate-y-1/2 rounded-full border-[#E8E6DF] bg-white px-3 text-xs font-medium whitespace-nowrap text-[#1B4FD8] hover:bg-[#F5F4F0] hover:text-[#1B4FD8]',
               'focus-visible:ring-[#1B4FD8]/30',
             )}
             disabled={isQualifyOpening}

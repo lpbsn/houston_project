@@ -58,6 +58,7 @@ function SignalCardActionsButton({ item, onOpenActions }: SignalCardActionsButto
   return (
     <FeedCardActionsButton
       ariaLabel="Actions de l'observation"
+      variant="prominent"
       onClick={(event) => {
         stopCardNavigation(event)
         onOpenActions(item)

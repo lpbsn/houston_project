@@ -97,7 +97,7 @@ describe('SignalCard feed variant', () => {
 
     const title = screen.getByRole('heading', { level: 3, name: 'Fuite d eau' })
     const actionsButton = screen.getByRole('button', { name: "Actions de l'observation" })
-    const metaRow = actionsButton.parentElement?.parentElement
+    const metaRow = actionsButton.parentElement?.parentElement?.parentElement
 
     expect(metaRow?.contains(actionsButton)).toBe(true)
     expect(metaRow?.nextElementSibling?.contains(title)).toBe(true)
