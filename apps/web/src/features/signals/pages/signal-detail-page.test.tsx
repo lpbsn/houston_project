@@ -11,8 +11,22 @@ import { SignalDetailPage } from './signal-detail-page'
 const navigate = vi.fn()
 const detailQueryMock = vi.fn()
 
-const { CommentSectionMock } = vi.hoisted(() => ({
+const {
+  CommentSectionMock,
+  SignalQualifyRoutingSheetMock,
+  closeQualifySheetMock,
+  openForSignalMock,
+  submitQualifySheetMock,
+  useSignalQualifySheetMock,
+} = vi.hoisted(() => ({
   CommentSectionMock: vi.fn(() => createElement('div', { 'data-testid': 'comment-section' })),
+  SignalQualifyRoutingSheetMock: vi.fn(() =>
+    createElement('div', { 'data-testid': 'qualify-routing-sheet' }),
+  ),
+  closeQualifySheetMock: vi.fn(),
+  openForSignalMock: vi.fn(),
+  submitQualifySheetMock: vi.fn(),
+  useSignalQualifySheetMock: vi.fn(),
 }))
 
 function buildLinkedExecution(
@@ -127,6 +141,14 @@ vi.mock('@/features/comments/components/comment-section', () => ({
   CommentSection: CommentSectionMock,
 }))
 
+vi.mock('../hooks/use-signal-qualify-sheet', () => ({
+  useSignalQualifySheet: useSignalQualifySheetMock,
+}))
+
+vi.mock('../components/signal-qualify-routing-sheet', () => ({
+  SignalQualifyRoutingSheet: SignalQualifyRoutingSheetMock,
+}))
+
 function renderPage() {
   return render(
     createElement(SignalDetailPage, {
@@ -145,6 +167,18 @@ function getCommentsTab() {
 }
 
 beforeEach(() => {
+  openForSignalMock.mockResolvedValue({ ok: true })
+  useSignalQualifySheetMock.mockReturnValue({
+    open: false,
+    opening: false,
+    signalId: null,
+    signal: null,
+    isPending: false,
+    errorMessage: null,
+    openForSignal: openForSignalMock,
+    close: closeQualifySheetMock,
+    submit: submitQualifySheetMock,
+  })
   detailQueryMock.mockReturnValue({
     isLoading: false,
     isError: false,
@@ -274,7 +308,7 @@ describe('SignalDetailPage tabs', () => {
     expect(screen.queryByRole('button', { name: "+ Plan d'action" })).toBeNull()
   })
 
-  it('does not show qualify CTA from detail even when can_qualify_routing is true', () => {
+  it('wires qualify CTA to the qualification hook from detail', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -308,9 +342,45 @@ describe('SignalDetailPage tabs', () => {
 
     renderPage()
 
-    expect(screen.queryByRole('button', { name: 'Qualifier' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Qualifier' }))
+
+    expect(useSignalQualifySheetMock).toHaveBeenCalledWith({
+      establishmentId: 'est-1',
+      onNavigate: navigate,
+    })
+    expect(openForSignalMock).toHaveBeenCalledWith('signal-1')
     expect(screen.queryByText('À qualifier')).toBeNull()
     expect(screen.getByText('Non classifié')).toBeTruthy()
+  })
+
+  it('renders qualification sheet from qualify hook state', () => {
+    const signal = buildSignal()
+    useSignalQualifySheetMock.mockReturnValue({
+      open: true,
+      opening: false,
+      signalId: signal.id,
+      signal,
+      isPending: true,
+      errorMessage: 'Erreur de qualification.',
+      openForSignal: openForSignalMock,
+      close: closeQualifySheetMock,
+      submit: submitQualifySheetMock,
+    })
+
+    renderPage()
+
+    expect(screen.getByTestId('qualify-routing-sheet')).toBeTruthy()
+    expect(SignalQualifyRoutingSheetMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        open: true,
+        establishmentId: 'est-1',
+        signal,
+        isPending: true,
+        errorMessage: 'Erreur de qualification.',
+        onClose: closeQualifySheetMock,
+      }),
+      undefined,
+    )
   })
 
   it('shows affected pole and Non classifié when only affected is set', () => {

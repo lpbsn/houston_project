@@ -18,7 +18,6 @@ import {
   type SignalFeedCardActionId,
 } from '../lib/signal-feed-card-actions'
 import type { SignalFeedFilters, SignalFeedItem, SignalViewMode } from '../types'
-import type { OpenSignalQualifySheetResult } from './use-signal-qualify-sheet'
 
 export type SignalFeedQuickActionResult = 'close' | 'stay-open' | 'abort'
 
@@ -26,14 +25,12 @@ type UseSignalFeedQuickActionsOptions = {
   establishmentId: string | null
   viewMode: SignalViewMode
   filters: SignalFeedFilters
-  onQualifyRequest?: (signalId: string) => Promise<OpenSignalQualifySheetResult>
 }
 
 export function useSignalFeedQuickActions({
   establishmentId,
   viewMode,
   filters,
-  onQualifyRequest,
 }: UseSignalFeedQuickActionsOptions) {
   const cacheContext = { viewMode, filters }
   const [activeItem, setActiveItem] = useState<SignalFeedItem | null>(null)
@@ -145,21 +142,6 @@ export function useSignalFeedQuickActions({
     const signalId = activeItem.id
 
     switch (actionId) {
-      case 'qualify': {
-        if (!onQualifyRequest) {
-          return 'abort'
-        }
-        setActionError(null)
-        void (async () => {
-          const result = await onQualifyRequest(signalId)
-          if (result.ok === false) {
-            setActionError(result.message)
-            return
-          }
-          resetActionsSheet()
-        })()
-        return 'stay-open'
-      }
       case 'pin':
         if (activeItem.is_pinned) {
           void unpinMutation.mutate(signalId)

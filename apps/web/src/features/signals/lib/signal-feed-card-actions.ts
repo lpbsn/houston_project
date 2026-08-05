@@ -19,7 +19,6 @@ export type SignalFeedCardActionId =
   | 'archive'
   | 'resolve'
   | 'cancel'
-  | 'qualify'
 
 export type SignalFeedCardActionTone = 'neutral' | 'success' | 'danger'
 
@@ -35,8 +34,7 @@ export function canOpenSignalFeedCardActions(hints: PermissionHints): boolean {
     hints.can_mark_interesting ||
     hints.can_archive ||
     hints.can_resolve ||
-    hints.can_cancel ||
-    hints.can_qualify_routing
+    hints.can_cancel
   )
 }
 
@@ -45,14 +43,6 @@ export function getSignalFeedCardActionOptions(
 ): SignalFeedCardActionOption[] {
   const options: SignalFeedCardActionOption[] = []
   const { permission_hints: hints, is_pinned: isPinned } = item
-
-  if (hints.can_qualify_routing) {
-    options.push({
-      id: 'qualify',
-      label: 'Qualifier le routage',
-      tone: 'neutral',
-    })
-  }
 
   if (hints.can_pin) {
     options.push({

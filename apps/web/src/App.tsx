@@ -377,7 +377,6 @@ function App() {
       return (
         <LazySignalFeedPage
           onOpenSignal={(id) => navigate(`/signals/${id}`)}
-          onNavigate={navigate}
         />
       )
     }

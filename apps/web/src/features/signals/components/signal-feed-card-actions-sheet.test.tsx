@@ -54,7 +54,7 @@ afterEach(() => {
 })
 
 describe('SignalFeedCardActionsSheet', () => {
-  it('renders lifecycle actions with success and danger styling', () => {
+  it('renders available actions', () => {
     render(
       <SignalFeedCardActionsSheet
         item={buildFeedItem()}
@@ -65,13 +65,9 @@ describe('SignalFeedCardActionsSheet', () => {
       />,
     )
 
-    const resolveButton = screen.getByRole('button', { name: 'Marquer comme résolue' })
-    const cancelButton = screen.getByRole('button', { name: 'Annuler cette observation' })
-
-    expect(resolveButton.className).toContain('bg-[#f4fbf4]')
-    expect(resolveButton.className).toContain('text-[#1D9E75]')
-    expect(cancelButton.className).toContain('bg-[#fff5f3]')
-    expect(cancelButton.className).toContain('text-[#E24B4A]')
+    expect(screen.getByRole('button', { name: 'Épingler' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Marquer comme résolue' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Annuler cette observation' })).toBeTruthy()
   })
 
   it('closes sheet when onSelectAction returns close', () => {

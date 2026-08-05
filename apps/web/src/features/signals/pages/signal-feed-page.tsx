@@ -18,10 +18,8 @@ import {
   SignalFeedFiltersBar,
 } from '../components/signal-feed-filters-bar'
 import { SignalFeedTabs } from '../components/signal-feed-tabs'
-import { SignalQualifyRoutingSheet } from '../components/signal-qualify-routing-sheet'
 import { useSignalFeedQuery } from '../hooks'
 import { useSignalFeedQuickActions } from '../hooks/use-signal-feed-quick-actions'
-import { useSignalQualifySheet } from '../hooks/use-signal-qualify-sheet'
 import { SignalsApiError } from '../api'
 import { groupFeedItemsByStatus, partitionFeedPinnedItems } from '../lib/signal-display'
 import {
@@ -35,10 +33,9 @@ const SIGNAL_FEED_DEFAULT_COLLAPSED_SECTIONS = ['interesting', 'resolved', 'canc
 
 type SignalFeedPageProps = {
   onOpenSignal: (signalId: string) => void
-  onNavigate?: (pathname: string, options?: { replace?: boolean }) => void
 }
 
-export function SignalFeedPage({ onOpenSignal, onNavigate }: SignalFeedPageProps) {
+export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
   const auth = useAuth()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
   const membershipRole = auth.bootstrap?.active_membership?.role ?? null
@@ -48,22 +45,10 @@ export function SignalFeedPage({ onOpenSignal, onNavigate }: SignalFeedPageProps
   const normalizedFilters = normalizeSignalFeedFilters(filters)
   const feedQuery = useSignalFeedQuery(establishmentId, viewMode, normalizedFilters)
   const filtersActive = hasActiveSignalFeedFilters(normalizedFilters)
-  const qualifySheet = useSignalQualifySheet({
-    establishmentId,
-    onNavigate:
-      onNavigate ??
-      ((pathname) => {
-        const match = pathname.match(/^\/signals\/([^/?#]+)/)
-        if (match?.[1]) {
-          onOpenSignal(match[1])
-        }
-      }),
-  })
   const quickActions = useSignalFeedQuickActions({
     establishmentId,
     viewMode,
     filters: normalizedFilters,
-    onQualifyRequest: (signalId) => qualifySheet.openForSignal(signalId),
   })
 
   const feedItems =
@@ -234,19 +219,6 @@ export function SignalFeedPage({ onOpenSignal, onNavigate }: SignalFeedPageProps
           errorMessage={quickActions.actionError}
           onClose={quickActions.closeActions}
           onSelectAction={quickActions.runAction}
-        />
-      ) : null}
-
-      {establishmentId && qualifySheet.open && qualifySheet.signal ? (
-        <SignalQualifyRoutingSheet
-          key={qualifySheet.signal.id}
-          open={qualifySheet.open}
-          establishmentId={establishmentId}
-          signal={qualifySheet.signal}
-          isPending={qualifySheet.isPending}
-          errorMessage={qualifySheet.errorMessage}
-          onClose={qualifySheet.close}
-          onSubmit={(patch) => void qualifySheet.submit(patch)}
         />
       ) : null}
     </div>

@@ -372,6 +372,33 @@ describe('SignalCard actions menu', () => {
     expect(screen.queryByRole('button', { name: "Actions de l'observation" })).toBeNull()
   })
 
+  it('does not show actions menu when only routing qualification is allowed', () => {
+    render(
+      <SignalCard
+        item={buildFeedItem({
+          permission_hints: {
+            can_pin: false,
+            can_mark_interesting: false,
+            can_archive: false,
+            can_cancel: false,
+            can_resolve: false,
+            can_create_linked_action_plan: false,
+            can_qualify_routing: true,
+            can_request_resolution: false,
+            can_approve_resolution_request: false,
+            can_reject_resolution_request: false,
+            can_cancel_resolution_request: false,
+          },
+        })}
+        onSelect={onSelect}
+        onOpenActions={onOpenActions}
+        variant="feed"
+      />,
+    )
+
+    expect(screen.queryByRole('button', { name: "Actions de l'observation" })).toBeNull()
+  })
+
   it('does not show actions menu when onOpenActions is not provided', () => {
     render(
       <SignalCard
