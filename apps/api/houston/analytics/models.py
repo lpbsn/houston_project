@@ -14,6 +14,14 @@ PATTERN_ISSUE_COMMENT_MAX_LENGTH = 500
 PATTERN_STATUS_ACTIVE = "active"
 PATTERN_STATUS_MERGED = "merged"
 PATTERN_STATUS_RETIRED = "retired"
+ASSIGNMENT_SIGNATURE_MAX_LENGTH = 128
+CLASSIFIER_VERSION_MAX_LENGTH = 80
+ASSIGNMENT_ERROR_CODE_MAX_LENGTH = 80
+ASSIGNMENT_STATUS_NOT_STARTED = "not_started"
+ASSIGNMENT_STATUS_PROCESSING = "processing"
+ASSIGNMENT_STATUS_SUCCEEDED = "succeeded"
+ASSIGNMENT_STATUS_TEMPORARY_FAILED = "temporary_failed"
+ASSIGNMENT_STATUS_PERMANENTLY_FAILED = "permanently_failed"
 
 
 class OperationalPattern(BaseModel):
@@ -279,3 +287,171 @@ class PatternIssueReport(BaseModel):
 
     def __str__(self) -> str:
         return f"PatternIssueReport {self.id} [{self.status}]"
+
+
+class SignalPatternAssignment(BaseModel):
+    class ClassificationStatus(models.TextChoices):
+        NOT_STARTED = ASSIGNMENT_STATUS_NOT_STARTED, "Not started"
+        PROCESSING = ASSIGNMENT_STATUS_PROCESSING, "Processing"
+        SUCCEEDED = ASSIGNMENT_STATUS_SUCCEEDED, "Succeeded"
+        TEMPORARY_FAILED = ASSIGNMENT_STATUS_TEMPORARY_FAILED, "Temporary failed"
+        PERMANENTLY_FAILED = ASSIGNMENT_STATUS_PERMANENTLY_FAILED, "Permanently failed"
+
+    signal = models.OneToOneField(
+        "signals.Signal",
+        on_delete=models.CASCADE,
+        related_name="pattern_assignment",
+    )
+    pattern = models.ForeignKey(
+        OperationalPattern,
+        on_delete=models.PROTECT,
+        related_name="signal_assignments",
+        null=True,
+        blank=True,
+    )
+    classification_status = models.CharField(
+        max_length=32,
+        choices=ClassificationStatus.choices,
+        default=ClassificationStatus.NOT_STARTED,
+    )
+    assigned_signature = models.CharField(
+        max_length=ASSIGNMENT_SIGNATURE_MAX_LENGTH,
+        blank=True,
+        default="",
+    )
+    assigned_classifier_version = models.CharField(
+        max_length=CLASSIFIER_VERSION_MAX_LENGTH,
+        blank=True,
+        default="",
+    )
+    assigned_at = models.DateTimeField(null=True, blank=True)
+    pending_signature = models.CharField(
+        max_length=ASSIGNMENT_SIGNATURE_MAX_LENGTH,
+        blank=True,
+        default="",
+    )
+    pending_classifier_version = models.CharField(
+        max_length=CLASSIFIER_VERSION_MAX_LENGTH,
+        blank=True,
+        default="",
+    )
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    last_error_code = models.CharField(
+        max_length=ASSIGNMENT_ERROR_CODE_MAX_LENGTH,
+        blank=True,
+        default="",
+    )
+    last_attempted_at = models.DateTimeField(null=True, blank=True)
+    next_retry_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["classification_status", "next_retry_at"],
+                name="sig_pat_assign_retry_idx",
+            ),
+            models.Index(
+                fields=["pattern", "classification_status"],
+                name="sig_pat_asgn_pattern_st_idx",
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    ~Q(classification_status=ASSIGNMENT_STATUS_SUCCEEDED)
+                    | Q(pattern__isnull=False)
+                ),
+                name="sig_pat_assign_succeeded_pattern",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~Q(classification_status=ASSIGNMENT_STATUS_NOT_STARTED)
+                    | Q(pattern__isnull=True)
+                ),
+                name="sig_pat_assign_not_started_null",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(pattern__isnull=False)
+                    | Q(
+                        assigned_signature="",
+                        assigned_classifier_version="",
+                        assigned_at__isnull=True,
+                    )
+                ),
+                name="sig_pat_assign_null_empty_success",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(pattern__isnull=True)
+                    | (
+                        ~Q(assigned_signature="")
+                        & ~Q(assigned_classifier_version="")
+                        & Q(assigned_at__isnull=False)
+                    )
+                ),
+                name="sig_pat_assign_pattern_success_meta",
+            ),
+        ]
+
+    def clean(self) -> None:
+        super().clean()
+        errors: dict[str, str] = {}
+
+        if (
+            self.classification_status == self.ClassificationStatus.SUCCEEDED
+            and self.pattern_id is None
+        ):
+            errors["pattern"] = "Succeeded assignments require a pattern."
+
+        if (
+            self.classification_status == self.ClassificationStatus.NOT_STARTED
+            and self.pattern_id is not None
+        ):
+            errors["pattern"] = "Not started assignments cannot have a pattern."
+
+        if self.pattern_id is None:
+            if self.assigned_signature:
+                errors["assigned_signature"] = (
+                    "Assignments without a pattern cannot have an assigned signature."
+                )
+            if self.assigned_classifier_version:
+                errors["assigned_classifier_version"] = (
+                    "Assignments without a pattern cannot have an assigned classifier version."
+                )
+            if self.assigned_at is not None:
+                errors["assigned_at"] = (
+                    "Assignments without a pattern cannot have an assigned timestamp."
+                )
+        else:
+            if not self.assigned_signature:
+                errors["assigned_signature"] = (
+                    "Assignments with a pattern require an assigned signature."
+                )
+            if not self.assigned_classifier_version:
+                errors["assigned_classifier_version"] = (
+                    "Assignments with a pattern require an assigned classifier version."
+                )
+            if self.assigned_at is None:
+                errors["assigned_at"] = (
+                    "Assignments with a pattern require an assigned timestamp."
+                )
+
+        if self.pattern_id is not None:
+            pattern = self.pattern
+            if pattern.status != OperationalPattern.Status.ACTIVE:
+                errors["pattern"] = "Assigned pattern must be active."
+            elif (
+                self.signal_id is not None
+                and pattern.organization_id
+                != self.signal.establishment.organization_id
+            ):
+                errors["pattern"] = (
+                    "Assigned pattern must belong to the signal organization."
+                )
+
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self) -> str:
+        return f"SignalPatternAssignment {self.signal_id} [{self.classification_status}]"
