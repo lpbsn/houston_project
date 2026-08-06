@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "houston.establishments",
     "houston.observations",
     "houston.signals",
+    "houston.analytics",
     "houston.action_plans",
     "houston.comments",
     "houston.notifications",
