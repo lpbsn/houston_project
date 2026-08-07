@@ -63,8 +63,12 @@ def build_signal_pattern_payload(signal: Signal) -> dict[str, Any]:
     }
 
 
+def build_signal_pattern_identity_payload(signal: Signal) -> dict[str, Any]:
+    return build_signal_pattern_payload(signal)["signal"]
+
+
 def build_signal_pattern_signature(signal: Signal) -> str:
-    payload = build_signal_pattern_payload(signal)
+    payload = build_signal_pattern_identity_payload(signal)
     canonical = json.dumps(
         payload,
         ensure_ascii=False,

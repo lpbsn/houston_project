@@ -425,6 +425,8 @@ def classify_signal_pattern(
     signal = _load_signal_for_pattern_classification(signal_id)
     if signal is None:
         return None
+    if signal.merged_into_id is not None:
+        return None
 
     provider = provider or get_pattern_classifier_provider()
     signature = build_signal_pattern_signature(signal)
@@ -524,6 +526,7 @@ def _load_signal_for_pattern_classification(signal_id: uuid.UUID) -> Signal | No
             "responsible_business_unit",
             "activity_subject",
             "operational_unit",
+            "merged_into",
         )
         .filter(pk=signal_id)
         .first()

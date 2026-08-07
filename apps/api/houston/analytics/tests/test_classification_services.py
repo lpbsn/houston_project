@@ -19,6 +19,7 @@ from houston.analytics.classifier import (
 )
 from houston.analytics.exceptions import AnalyticsValidationError
 from houston.analytics.models import OperationalPattern, SignalPatternAssignment
+from houston.analytics.scheduling import schedule_reclassification_if_signature_changed
 from houston.analytics.services import (
     PatternClassificationRetryableError,
     claim_signal_pattern_classification,
@@ -31,6 +32,7 @@ from houston.analytics.signature import (
     build_signal_pattern_payload,
     build_signal_pattern_signature,
 )
+from houston.establishments.models import OperationalUnit
 from houston.establishments.tests.taxonomy_helpers import (
     create_activity_subject,
     create_business_unit,
@@ -103,6 +105,116 @@ def test_signature_is_deterministic():
     assert build_signal_pattern_signature(signal) == build_signal_pattern_signature(signal)
 
 
+def test_signature_ignores_business_unit_context_changes():
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    other_affected = create_business_unit(
+        establishment=membership.establishment,
+        key="spa",
+        label="Spa",
+    )
+    other_responsible = create_business_unit(
+        establishment=membership.establishment,
+        key="security",
+        label="Security",
+    )
+    before = build_signal_pattern_signature(signal)
+
+    signal.affected_business_unit = other_affected
+    signal.responsible_business_unit = other_responsible
+    signal.save(
+        update_fields=[
+            "affected_business_unit",
+            "responsible_business_unit",
+            "updated_at",
+        ]
+    )
+
+    assert build_signal_pattern_signature(signal) == before
+
+
+@pytest.mark.parametrize(
+    "field_name,value_factory",
+    [
+        ("title", lambda membership: "Nouvelle panne clim"),
+        ("structured_summary", lambda membership: "La climatisation fuit maintenant."),
+        ("issue_focus", lambda membership: "fuite climatisation"),
+        (
+            "activity_subject",
+            lambda membership: create_activity_subject(
+                establishment=membership.establishment,
+                business_unit=create_business_unit(
+                    establishment=membership.establishment,
+                    key="housekeeping",
+                    label="Housekeeping",
+                ),
+                label="Cleaning",
+            ),
+        ),
+        (
+            "operational_unit",
+            lambda membership: OperationalUnit.objects.create(
+                establishment=membership.establishment,
+                key="room-101",
+                label="Room 101",
+            ),
+        ),
+    ],
+)
+def test_signature_changes_for_phenomenon_identity_fields(field_name, value_factory):
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    before = build_signal_pattern_signature(signal)
+    value = value_factory(membership)
+
+    setattr(signal, field_name, value)
+    signal.save(update_fields=[field_name, "updated_at"])
+
+    assert build_signal_pattern_signature(signal) != before
+
+
+def test_reclassification_scheduler_noops_when_signature_is_unchanged():
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    before = build_signal_pattern_signature(signal)
+
+    with (
+        patch("houston.analytics.scheduling.transaction.on_commit") as on_commit,
+        patch("houston.analytics.tasks.classify_signal_pattern_task.delay") as delay,
+    ):
+        scheduled = schedule_reclassification_if_signature_changed(
+            signal=signal,
+            before_signature=before,
+        )
+
+    assert scheduled is False
+    on_commit.assert_not_called()
+    delay.assert_not_called()
+
+
+def test_reclassification_scheduler_enqueues_when_signature_changes():
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    before = build_signal_pattern_signature(signal)
+    signal.issue_focus = "fuite climatisation"
+    signal.save(update_fields=["issue_focus", "updated_at"])
+
+    with (
+        patch(
+            "houston.analytics.scheduling.transaction.on_commit",
+            side_effect=lambda callback: callback(),
+        ),
+        patch("houston.analytics.tasks.classify_signal_pattern_task.delay") as delay,
+    ):
+        scheduled = schedule_reclassification_if_signature_changed(
+            signal=signal,
+            before_signature=before,
+        )
+
+    assert scheduled is True
+    delay.assert_called_once_with(str(signal.id))
+
+
 def test_claim_returns_already_succeeded_before_processing():
     membership = build_membership()
     signal = create_signal_for_membership(membership)
@@ -150,6 +262,29 @@ def test_claim_recent_processing_blocks_second_provider_call(settings):
     assert first.status == "claimed"
     assert second.status == "already_processing"
     assert second.attempt_count == first.attempt_count
+
+
+def test_claim_new_signature_during_processing_obsoletes_previous_attempt(settings):
+    settings.HOUSTON_ANALYTICS_PATTERN_PROCESSING_STALE_SECONDS = 60
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    first = claim_signal_pattern_classification(
+        signal=signal,
+        signature="sig-v1",
+        classifier_version="classifier-v1",
+    )
+
+    second = claim_signal_pattern_classification(
+        signal=signal,
+        signature="sig-v2",
+        classifier_version="classifier-v1",
+    )
+
+    assert first.status == "claimed"
+    assert second.status == "claimed"
+    assert second.attempt_count == first.attempt_count + 1
+    assignment = SignalPatternAssignment.objects.get(signal=signal)
+    assert assignment.pending_signature == "sig-v2"
 
 
 def test_claim_stale_processing_recovers_attempt(settings):
@@ -225,6 +360,29 @@ def test_classify_attaches_existing_active_candidate():
     )
     assert assignment.pattern_id == pattern.id
     assert AIUsageLog.objects.filter(ai_domain=AIUsageLog.Domain.ANALYTICS_PATTERN).count() == 1
+
+
+def test_classify_merged_signal_noops_without_provider_call():
+    membership = build_membership()
+    survivor = create_signal_for_membership(membership, title="Survivor")
+    source = Signal.objects.create(
+        establishment=membership.establishment,
+        routing_status=Signal.RoutingStatus.UNASSIGNED,
+        title="Source",
+        structured_summary="Structured issue summary",
+        status=Signal.Status.ARCHIVED,
+        merged_into=survivor,
+        last_activity_at=timezone.now(),
+    )
+    provider = FakePatternClassifierProvider(
+        payload={"result_type": "new_pattern", "canonical_label": "Défaillance climatisation"}
+    )
+
+    assignment = classify_signal_pattern(source.id, provider=provider)
+
+    assert assignment is None
+    assert provider.calls == []
+    assert not SignalPatternAssignment.objects.filter(signal=source).exists()
 
 
 def test_classify_creates_new_canonical_pattern():
