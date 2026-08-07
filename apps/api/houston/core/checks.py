@@ -217,6 +217,7 @@ def check_production_openai_configuration(app_configs, **kwargs):
     providers = (
         settings.HOUSTON_AI_OBSERVATION_PROVIDER,
         settings.HOUSTON_AI_TRANSCRIPTION_PROVIDER,
+        settings.HOUSTON_AI_ANALYTICS_PATTERN_PROVIDER,
     )
     if any(provider.strip().lower() == "openai" for provider in providers) and not openai_api_key:
         return [
@@ -230,4 +231,3 @@ def check_production_openai_configuration(app_configs, **kwargs):
             )
         ]
     return []
-

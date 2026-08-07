@@ -157,9 +157,13 @@ def test_overview_without_current_season_does_not_mutate(api_client, monkeypatch
     assert GamificationSeason.objects.count() == before
 
 
-def test_overview_returns_score_progress_and_rules(api_client):
+def test_overview_returns_score_progress_and_rules(api_client, monkeypatch):
     membership = build_api_membership()
     establishment = membership.establishment
+    monkeypatch.setattr(
+        "houston.gamification.selectors.timezone.now",
+        lambda: aware_local("UTC", 2026, 7, 20, 12),
+    )
     open_season(establishment, month_start_local=date(2026, 7, 1))
     _award(
         membership=membership,

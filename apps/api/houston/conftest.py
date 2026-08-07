@@ -27,6 +27,7 @@ _RELAXED_AUTH_THROTTLE_RATES = {
 def force_fake_observation_pipeline_provider(settings):
     """Runtime default is openai; pytest/CI must use fake only (no live OpenAI)."""
     settings.HOUSTON_AI_OBSERVATION_PROVIDER = "fake"
+    settings.HOUSTON_AI_ANALYTICS_PATTERN_PROVIDER = "fake"
 
 
 @pytest.fixture(autouse=True)
@@ -47,6 +48,24 @@ def forbid_live_openai_observation_propose(request, monkeypatch):
 
     monkeypatch.setattr(
         "houston.ai.observation_pipeline.OpenAIObservationPipelineProvider.propose",
+        _forbidden,
+    )
+
+
+@pytest.fixture(autouse=True)
+def forbid_live_openai_pattern_classify(request, monkeypatch):
+    """Fail standard tests if the Analytics OpenAI classifier is invoked accidentally."""
+    if request.node.get_closest_marker("allow_openai_pattern_classify"):
+        return
+
+    def _forbidden(*args, **kwargs):
+        pytest.fail(
+            "OpenAIPatternClassifierProvider.classify was called during standard tests. "
+            "Use FakePatternClassifierProvider or mock classify."
+        )
+
+    monkeypatch.setattr(
+        "houston.analytics.classifier.OpenAIPatternClassifierProvider.classify",
         _forbidden,
     )
 

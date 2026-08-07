@@ -23,6 +23,11 @@ from houston.ai.observation_pipeline_schema import (
     ObservationPipelineOutput,
     PipelineCandidateOutput,
 )
+from houston.analytics.scheduling import (
+    schedule_reclassification_if_signature_changed,
+    schedule_signal_pattern_classification_on_commit,
+)
+from houston.analytics.signature import build_signal_pattern_signature
 from houston.core.observability import (
     build_observation_pipeline_candidate_apply_log_context,
     build_observation_pipeline_timing_log_context,
@@ -220,6 +225,10 @@ def record_source_observation_link(
     return link
 
 
+def _schedule_signal_pattern_classification(*, signal: Signal) -> None:
+    schedule_signal_pattern_classification_on_commit(signal.id)
+
+
 @transaction.atomic
 def create_signal_from_candidate(
     *,
@@ -305,6 +314,7 @@ def create_signal_from_candidate(
         observation=observation,
         link_type=SignalSourceObservation.LinkType.CREATED_FROM,
     )
+    _schedule_signal_pattern_classification(signal=signal)
     _schedule_signal_invalidation(signal=signal, reason="signal.created")
     from houston.notifications.scheduling import schedule_signal_created_notification
 
@@ -2234,6 +2244,7 @@ def qualify_signal_routing(
             source=source,
             survivor=collision,
         )
+        survivor_signature_before = build_signal_pattern_signature(collision)
         survivor = merge_signal_into_resolved(
             source=source,
             target=collision,
@@ -2249,6 +2260,10 @@ def qualify_signal_routing(
             signal_id=survivor.id,
             actor_membership_id=membership.id,
             previous_recipient_ids=previous_attention_recipient_ids,
+        )
+        schedule_reclassification_if_signature_changed(
+            signal=survivor,
+            before_signature=survivor_signature_before,
         )
         return QualifySignalRoutingResult(
             signal=survivor,
@@ -2277,6 +2292,7 @@ def qualify_signal_routing(
         source=locked_source,
         survivor=None,
     )
+    source_signature_before = build_signal_pattern_signature(locked_source)
 
     locked_source.affected_business_unit = resolution.affected_business_unit
     locked_source.responsible_business_unit = resolution.responsible_business_unit
@@ -2317,6 +2333,7 @@ def qualify_signal_routing(
             source=locked_source,
             survivor=collision,
         )
+        survivor_signature_before = build_signal_pattern_signature(collision)
         survivor = merge_signal_into_resolved(
             source=locked_source,
             target=collision,
@@ -2332,6 +2349,10 @@ def qualify_signal_routing(
             signal_id=survivor.id,
             actor_membership_id=membership.id,
             previous_recipient_ids=previous_attention_recipient_ids,
+        )
+        schedule_reclassification_if_signature_changed(
+            signal=survivor,
+            before_signature=survivor_signature_before,
         )
         return QualifySignalRoutingResult(
             signal=survivor,
@@ -2354,6 +2375,10 @@ def qualify_signal_routing(
         },
     )
     _schedule_signal_invalidation(signal=locked_source, reason="signal.updated")
+    schedule_reclassification_if_signature_changed(
+        signal=locked_source,
+        before_signature=source_signature_before,
+    )
     from houston.notifications.scheduling import schedule_signal_qualified_notification
 
     schedule_signal_qualified_notification(
