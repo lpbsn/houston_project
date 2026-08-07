@@ -22,6 +22,8 @@ ASSIGNMENT_STATUS_PROCESSING = "processing"
 ASSIGNMENT_STATUS_SUCCEEDED = "succeeded"
 ASSIGNMENT_STATUS_TEMPORARY_FAILED = "temporary_failed"
 ASSIGNMENT_STATUS_PERMANENTLY_FAILED = "permanently_failed"
+ASSIGNMENT_SOURCE_CLASSIFIER = "classifier"
+ASSIGNMENT_SOURCE_OWNER_CORRECTION = "owner_correction"
 
 
 class OperationalPattern(BaseModel):
@@ -142,7 +144,9 @@ class PatternLifecycleEvent(BaseModel):
     class EventType(models.TextChoices):
         CREATED = "created", "Created"
         MERGED = "merged", "Merged"
+        RENAMED = "renamed", "Renamed"
         RETIRED = "retired", "Retired"
+        SIGNALS_MOVED = "signals_moved", "Signals moved"
 
     pattern = models.ForeignKey(
         OperationalPattern,
@@ -297,6 +301,10 @@ class SignalPatternAssignment(BaseModel):
         TEMPORARY_FAILED = ASSIGNMENT_STATUS_TEMPORARY_FAILED, "Temporary failed"
         PERMANENTLY_FAILED = ASSIGNMENT_STATUS_PERMANENTLY_FAILED, "Permanently failed"
 
+    class AssignmentSource(models.TextChoices):
+        CLASSIFIER = ASSIGNMENT_SOURCE_CLASSIFIER, "Classifier"
+        OWNER_CORRECTION = ASSIGNMENT_SOURCE_OWNER_CORRECTION, "Owner correction"
+
     signal = models.OneToOneField(
         "signals.Signal",
         on_delete=models.CASCADE,
@@ -343,6 +351,16 @@ class SignalPatternAssignment(BaseModel):
     )
     last_attempted_at = models.DateTimeField(null=True, blank=True)
     next_retry_at = models.DateTimeField(null=True, blank=True)
+    assignment_source = models.CharField(
+        max_length=32,
+        choices=AssignmentSource.choices,
+        default=AssignmentSource.CLASSIFIER,
+    )
+    owner_correction_signature = models.CharField(
+        max_length=ASSIGNMENT_SIGNATURE_MAX_LENGTH,
+        blank=True,
+        default="",
+    )
 
     class Meta:
         indexes = [
@@ -353,6 +371,10 @@ class SignalPatternAssignment(BaseModel):
             models.Index(
                 fields=["pattern", "classification_status"],
                 name="sig_pat_asgn_pattern_st_idx",
+            ),
+            models.Index(
+                fields=["assignment_source"],
+                name="sig_pat_assign_source_idx",
             ),
         ]
         constraints = [
@@ -391,6 +413,27 @@ class SignalPatternAssignment(BaseModel):
                     )
                 ),
                 name="sig_pat_assign_pattern_success_meta",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~Q(assignment_source=ASSIGNMENT_SOURCE_CLASSIFIER)
+                    | Q(owner_correction_signature="")
+                ),
+                name="sig_pat_assign_classifier_no_owner",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~Q(assignment_source=ASSIGNMENT_SOURCE_OWNER_CORRECTION)
+                    | ~Q(owner_correction_signature="")
+                ),
+                name="sig_pat_assign_owner_sig_required",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~Q(assignment_source=ASSIGNMENT_SOURCE_OWNER_CORRECTION)
+                    | Q(pattern__isnull=False)
+                ),
+                name="sig_pat_assign_owner_pattern",
             ),
         ]
 
@@ -449,6 +492,21 @@ class SignalPatternAssignment(BaseModel):
                 errors["pattern"] = (
                     "Assigned pattern must belong to the signal organization."
                 )
+
+        if self.assignment_source == self.AssignmentSource.CLASSIFIER:
+            if self.owner_correction_signature:
+                errors["owner_correction_signature"] = (
+                    "Classifier assignments cannot have an owner correction signature."
+                )
+        elif self.assignment_source == self.AssignmentSource.OWNER_CORRECTION:
+            if not self.owner_correction_signature:
+                errors["owner_correction_signature"] = (
+                    "Owner-corrected assignments require an owner correction signature."
+                )
+            if self.pattern_id is None:
+                errors["pattern"] = "Owner-corrected assignments require a pattern."
+        else:
+            errors["assignment_source"] = "Invalid assignment source."
 
         if errors:
             raise ValidationError(errors)
