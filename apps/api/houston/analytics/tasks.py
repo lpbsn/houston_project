@@ -2,17 +2,14 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import timedelta
 
 from celery import shared_task
 from django.conf import settings
-from django.utils import timezone
 
 from houston.analytics.services import (
     PatternClassificationRetryableError,
     classify_signal_pattern,
-    mark_assignment_permanently_failed,
-    mark_assignment_temporary_failed,
+    finalize_retryable_pattern_classification_error,
 )
 from houston.signals.models import Signal
 
@@ -41,25 +38,15 @@ def classify_signal_pattern_task(self, signal_id: str) -> None:
         if signal is None:
             return
 
-        if self.request.retries < (self.max_retries or 0):
-            retry_delay = self.default_retry_delay or 0
-            mark_assignment_temporary_failed(
-                signal=signal,
-                error_code=exc.error_code,
-                expected_attempt_count=exc.attempt_count,
-                pending_signature=exc.pending_signature,
-                pending_classifier_version=exc.pending_classifier_version,
-                next_retry_at=timezone.now() + timedelta(seconds=retry_delay),
-            )
-            raise self.retry(exc=exc) from exc
-
-        mark_assignment_permanently_failed(
+        finalization = finalize_retryable_pattern_classification_error(
             signal=signal,
-            error_code="retry_exhausted",
-            expected_attempt_count=exc.attempt_count,
-            pending_signature=exc.pending_signature,
-            pending_classifier_version=exc.pending_classifier_version,
+            exc=exc,
+            retries=self.request.retries,
+            max_retries=self.max_retries or 0,
+            retry_delay_seconds=self.default_retry_delay or 0,
         )
+        if finalization.outcome == "retry":
+            raise self.retry(exc=exc) from exc
     except Exception:
         logger.exception(
             "analytics_pattern_classification_task_failed",

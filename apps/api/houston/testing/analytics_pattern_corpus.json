@@ -1,0 +1,208 @@
+{
+  "schema_version": "analytics_pattern_corpus_v1",
+  "description": "Synthetic/anonymized seed corpus for Analytics pattern grouping evaluation.",
+  "scenarios": [
+    {
+      "id": "hotel_facilities",
+      "source": "synthetic/anonymized seed",
+      "business_units": [
+        {"key": "rooms", "label": "Rooms"},
+        {"key": "maintenance", "label": "Maintenance"},
+        {"key": "frontdesk", "label": "Front desk"}
+      ],
+      "activity_subjects": [
+        {"key": "climate", "business_unit_key": "maintenance", "label": "Climate equipment"},
+        {"key": "plumbing", "business_unit_key": "maintenance", "label": "Plumbing"},
+        {"key": "access", "business_unit_key": "frontdesk", "label": "Room access"},
+        {"key": "minibar", "business_unit_key": "rooms", "label": "Minibar"}
+      ],
+      "operational_units": [
+        {"key": "floor_2", "label": "Floor 2"},
+        {"key": "floor_5", "label": "Floor 5"}
+      ],
+      "initial_patterns": [
+        {"pattern_key": "hvac_outage", "label": "Guest room climate equipment unavailable"},
+        {"pattern_key": "water_leak", "label": "Water leak in guest area"},
+        {"pattern_key": "room_access_failure", "label": "Guest room access failure"}
+      ],
+      "signals": [
+        {"ref": "hf_01", "title": "Room climate not cooling", "structured_summary": "The guest room climate unit no longer cools the room.", "issue_focus": "climate unit not cooling", "activity_subject_key": "climate", "operational_unit_key": "floor_5", "affected_business_unit_key": "rooms", "responsible_business_unit_key": "maintenance", "expected_pattern_key": "hvac_outage"},
+        {"ref": "hf_02", "title": "Air system stopped in room", "structured_summary": "The room air system stopped and the temperature is rising.", "issue_focus": "climate unit stopped", "activity_subject_key": "climate", "operational_unit_key": "floor_5", "affected_business_unit_key": "rooms", "responsible_business_unit_key": "maintenance", "expected_pattern_key": "hvac_outage"},
+        {"ref": "hf_03", "title": "Water under sink", "structured_summary": "Water is visible under the guest bathroom sink.", "issue_focus": "water leak sink", "activity_subject_key": "plumbing", "operational_unit_key": "floor_2", "affected_business_unit_key": "rooms", "responsible_business_unit_key": "maintenance", "expected_pattern_key": "water_leak"},
+        {"ref": "hf_04", "title": "Bathroom leak near vanity", "structured_summary": "A leak is spreading near the bathroom vanity area.", "issue_focus": "bathroom water leak", "activity_subject_key": "plumbing", "operational_unit_key": "floor_2", "affected_business_unit_key": "rooms", "responsible_business_unit_key": "maintenance", "expected_pattern_key": "water_leak"},
+        {"ref": "hf_05", "title": "Guest card cannot open door", "structured_summary": "The guest card is valid but the room door does not open.", "issue_focus": "key card door access", "activity_subject_key": "access", "operational_unit_key": "floor_5", "affected_business_unit_key": "frontdesk", "responsible_business_unit_key": "frontdesk", "expected_pattern_key": "room_access_failure"},
+        {"ref": "hf_06", "title": "Missing minibar bottles", "structured_summary": "Several expected minibar bottles are missing before check-in.", "issue_focus": "minibar restock missing", "activity_subject_key": "minibar", "operational_unit_key": "floor_5", "affected_business_unit_key": "rooms", "responsible_business_unit_key": "rooms", "expected_new_pattern_label": "Minibar replenishment gap"}
+      ],
+      "fake_responses": {
+        "hf_01": {"result_type": "existing_pattern", "pattern_key": "hvac_outage"},
+        "hf_02": {"result_type": "existing_pattern", "pattern_key": "hvac_outage"},
+        "hf_03": {"result_type": "existing_pattern", "pattern_key": "water_leak"},
+        "hf_04": {"result_type": "existing_pattern", "pattern_key": "water_leak"},
+        "hf_05": {"result_type": "existing_pattern", "pattern_key": "room_access_failure"},
+        "hf_06": {"result_type": "new_pattern", "canonical_label": "Minibar replenishment gap"}
+      },
+      "must_link": [["hf_01", "hf_02"], ["hf_03", "hf_04"]],
+      "must_not_link": [["hf_01", "hf_03"], ["hf_01", "hf_05"], ["hf_03", "hf_06"]]
+    },
+    {
+      "id": "restaurant_stock",
+      "source": "synthetic/anonymized seed",
+      "business_units": [
+        {"key": "restaurant", "label": "Restaurant"},
+        {"key": "bar", "label": "Bar"},
+        {"key": "kitchen", "label": "Kitchen"}
+      ],
+      "activity_subjects": [
+        {"key": "dry_stock", "business_unit_key": "kitchen", "label": "Dry stock"},
+        {"key": "cold_storage", "business_unit_key": "kitchen", "label": "Cold storage"},
+        {"key": "bar_stock", "business_unit_key": "bar", "label": "Bar stock"}
+      ],
+      "operational_units": [
+        {"key": "main_kitchen", "label": "Main kitchen"},
+        {"key": "service_bar", "label": "Service bar"}
+      ],
+      "initial_patterns": [
+        {"pattern_key": "ingredient_shortage", "label": "Ingredient shortage before service"},
+        {"pattern_key": "cold_storage_temperature", "label": "Cold storage temperature anomaly"}
+      ],
+      "signals": [
+        {"ref": "rs_01", "title": "Bread stock almost empty", "structured_summary": "Bread stock is almost empty before the lunch service.", "issue_focus": "bread shortage", "activity_subject_key": "dry_stock", "operational_unit_key": "main_kitchen", "affected_business_unit_key": "restaurant", "responsible_business_unit_key": "kitchen", "expected_pattern_key": "ingredient_shortage"},
+        {"ref": "rs_02", "title": "Pasta unavailable for service", "structured_summary": "The kitchen has no remaining pasta for the next service.", "issue_focus": "pasta shortage", "activity_subject_key": "dry_stock", "operational_unit_key": "main_kitchen", "affected_business_unit_key": "restaurant", "responsible_business_unit_key": "kitchen", "expected_pattern_key": "ingredient_shortage"},
+        {"ref": "rs_03", "title": "Cold room temperature high", "structured_summary": "The cold room is above the expected temperature range.", "issue_focus": "cold room warm", "activity_subject_key": "cold_storage", "operational_unit_key": "main_kitchen", "affected_business_unit_key": "kitchen", "responsible_business_unit_key": "kitchen", "expected_pattern_key": "cold_storage_temperature"},
+        {"ref": "rs_04", "title": "Fridge readings too warm", "structured_summary": "Several fridge readings are too warm for safe storage.", "issue_focus": "fridge temperature high", "activity_subject_key": "cold_storage", "operational_unit_key": "main_kitchen", "affected_business_unit_key": "kitchen", "responsible_business_unit_key": "kitchen", "expected_pattern_key": "cold_storage_temperature"},
+        {"ref": "rs_05", "title": "Mojito syrup missing", "structured_summary": "The bar has no mojito syrup for the evening service.", "issue_focus": "mojito syrup shortage", "activity_subject_key": "bar_stock", "operational_unit_key": "service_bar", "affected_business_unit_key": "bar", "responsible_business_unit_key": "bar", "expected_new_pattern_label": "Bar syrup stockout"},
+        {"ref": "rs_06", "title": "Coffee capsules low", "structured_summary": "Coffee capsules are below the minimum stock level.", "issue_focus": "coffee capsule shortage", "activity_subject_key": "bar_stock", "operational_unit_key": "service_bar", "affected_business_unit_key": "restaurant", "responsible_business_unit_key": "bar", "expected_pattern_key": "ingredient_shortage"}
+      ],
+      "fake_responses": {
+        "rs_01": {"result_type": "existing_pattern", "pattern_key": "ingredient_shortage"},
+        "rs_02": {"result_type": "existing_pattern", "pattern_key": "ingredient_shortage"},
+        "rs_03": {"result_type": "existing_pattern", "pattern_key": "cold_storage_temperature"},
+        "rs_04": {"result_type": "existing_pattern", "pattern_key": "cold_storage_temperature"},
+        "rs_05": {"result_type": "new_pattern", "canonical_label": "Bar syrup stockout"},
+        "rs_06": {"result_type": "existing_pattern", "pattern_key": "ingredient_shortage"}
+      },
+      "must_link": [["rs_01", "rs_02"], ["rs_03", "rs_04"], ["rs_01", "rs_06"]],
+      "must_not_link": [["rs_01", "rs_03"], ["rs_03", "rs_05"], ["rs_05", "rs_06"]]
+    },
+    {
+      "id": "housekeeping_rooms",
+      "source": "synthetic/anonymized seed",
+      "business_units": [
+        {"key": "housekeeping", "label": "Housekeeping"},
+        {"key": "laundry", "label": "Laundry"},
+        {"key": "rooms", "label": "Rooms"}
+      ],
+      "activity_subjects": [
+        {"key": "room_cleaning", "business_unit_key": "housekeeping", "label": "Room cleaning"},
+        {"key": "linen", "business_unit_key": "laundry", "label": "Linen"},
+        {"key": "amenities", "business_unit_key": "housekeeping", "label": "Amenities"}
+      ],
+      "operational_units": [
+        {"key": "floor_1", "label": "Floor 1"},
+        {"key": "floor_3", "label": "Floor 3"}
+      ],
+      "initial_patterns": [
+        {"pattern_key": "cleaning_delay", "label": "Room cleaning delay"},
+        {"pattern_key": "linen_shortage", "label": "Linen shortage for room setup"}
+      ],
+      "signals": [
+        {"ref": "hr_01", "title": "Room not ready after checkout", "structured_summary": "A checked-out room is still not cleaned for the next guest.", "issue_focus": "room cleaning delay", "activity_subject_key": "room_cleaning", "operational_unit_key": "floor_1", "affected_business_unit_key": "rooms", "responsible_business_unit_key": "housekeeping", "expected_pattern_key": "cleaning_delay"},
+        {"ref": "hr_02", "title": "Cleaning queue blocking check-in", "structured_summary": "Several rooms are waiting for cleaning before check-in.", "issue_focus": "cleaning backlog", "activity_subject_key": "room_cleaning", "operational_unit_key": "floor_3", "affected_business_unit_key": "rooms", "responsible_business_unit_key": "housekeeping", "expected_pattern_key": "cleaning_delay"},
+        {"ref": "hr_03", "title": "No bath towels available", "structured_summary": "The floor stock has no bath towels for room setup.", "issue_focus": "bath towel shortage", "activity_subject_key": "linen", "operational_unit_key": "floor_3", "affected_business_unit_key": "rooms", "responsible_business_unit_key": "laundry", "expected_pattern_key": "linen_shortage"},
+        {"ref": "hr_04", "title": "Missing bed sheets", "structured_summary": "Clean bed sheets are not available for the room turnover.", "issue_focus": "bed sheet shortage", "activity_subject_key": "linen", "operational_unit_key": "floor_1", "affected_business_unit_key": "rooms", "responsible_business_unit_key": "laundry", "expected_pattern_key": "linen_shortage"},
+        {"ref": "hr_05", "title": "Soap dispensers empty", "structured_summary": "Soap dispensers are empty in several guest rooms.", "issue_focus": "soap amenity refill", "activity_subject_key": "amenities", "operational_unit_key": "floor_3", "affected_business_unit_key": "rooms", "responsible_business_unit_key": "housekeeping", "expected_new_pattern_label": "Guest amenity refill gap"},
+        {"ref": "hr_06", "title": "Shampoo bottles missing", "structured_summary": "Shampoo bottles are missing from the room amenity setup.", "issue_focus": "shampoo amenity missing", "activity_subject_key": "amenities", "operational_unit_key": "floor_1", "affected_business_unit_key": "rooms", "responsible_business_unit_key": "housekeeping", "expected_new_pattern_label": "Guest amenity refill gap"}
+      ],
+      "fake_responses": {
+        "hr_01": {"result_type": "existing_pattern", "pattern_key": "cleaning_delay"},
+        "hr_02": {"result_type": "existing_pattern", "pattern_key": "cleaning_delay"},
+        "hr_03": {"result_type": "existing_pattern", "pattern_key": "linen_shortage"},
+        "hr_04": {"result_type": "existing_pattern", "pattern_key": "linen_shortage"},
+        "hr_05": {"result_type": "new_pattern", "canonical_label": "Guest amenity refill gap"},
+        "hr_06": {"result_type": "new_pattern", "canonical_label": "Guest amenity refill gap"}
+      },
+      "must_link": [["hr_01", "hr_02"], ["hr_03", "hr_04"], ["hr_05", "hr_06"]],
+      "must_not_link": [["hr_01", "hr_03"], ["hr_01", "hr_05"], ["hr_03", "hr_05"]]
+    },
+    {
+      "id": "safety_public_areas",
+      "source": "synthetic/anonymized seed",
+      "business_units": [
+        {"key": "safety", "label": "Safety"},
+        {"key": "maintenance", "label": "Maintenance"},
+        {"key": "public_area", "label": "Public area"}
+      ],
+      "activity_subjects": [
+        {"key": "floor_safety", "business_unit_key": "safety", "label": "Floor safety"},
+        {"key": "fire_alarm", "business_unit_key": "maintenance", "label": "Fire alarm"},
+        {"key": "lighting", "business_unit_key": "maintenance", "label": "Lighting"}
+      ],
+      "operational_units": [
+        {"key": "lobby", "label": "Lobby"},
+        {"key": "corridor", "label": "Corridor"}
+      ],
+      "initial_patterns": [
+        {"pattern_key": "slip_hazard", "label": "Slip hazard in public area"},
+        {"pattern_key": "alarm_fault", "label": "Alarm device fault"}
+      ],
+      "signals": [
+        {"ref": "sp_01", "title": "Wet floor at lobby entrance", "structured_summary": "The lobby entrance floor is wet and needs securing.", "issue_focus": "wet floor slip risk", "activity_subject_key": "floor_safety", "operational_unit_key": "lobby", "affected_business_unit_key": "public_area", "responsible_business_unit_key": "safety", "expected_pattern_key": "slip_hazard"},
+        {"ref": "sp_02", "title": "Slippery corridor", "structured_summary": "A corridor section is slippery and should be secured.", "issue_focus": "slippery floor", "activity_subject_key": "floor_safety", "operational_unit_key": "corridor", "affected_business_unit_key": "public_area", "responsible_business_unit_key": "safety", "expected_pattern_key": "slip_hazard"},
+        {"ref": "sp_03", "title": "Alarm panel error", "structured_summary": "The fire alarm panel shows a device fault.", "issue_focus": "alarm device fault", "activity_subject_key": "fire_alarm", "operational_unit_key": "corridor", "affected_business_unit_key": "public_area", "responsible_business_unit_key": "maintenance", "expected_pattern_key": "alarm_fault"},
+        {"ref": "sp_04", "title": "Detector warning light", "structured_summary": "A detector warning light remains active near the service corridor.", "issue_focus": "detector fault", "activity_subject_key": "fire_alarm", "operational_unit_key": "corridor", "affected_business_unit_key": "public_area", "responsible_business_unit_key": "maintenance", "expected_pattern_key": "alarm_fault"},
+        {"ref": "sp_05", "title": "Lobby light flickers", "structured_summary": "A lobby light is flickering repeatedly.", "issue_focus": "flickering light", "activity_subject_key": "lighting", "operational_unit_key": "lobby", "affected_business_unit_key": "public_area", "responsible_business_unit_key": "maintenance", "expected_new_pattern_label": "Public area lighting instability"},
+        {"ref": "sp_06", "title": "Corridor light out", "structured_summary": "A corridor light is out and reduces visibility.", "issue_focus": "light outage", "activity_subject_key": "lighting", "operational_unit_key": "corridor", "affected_business_unit_key": "public_area", "responsible_business_unit_key": "maintenance", "expected_new_pattern_label": "Public area lighting instability"}
+      ],
+      "fake_responses": {
+        "sp_01": {"result_type": "existing_pattern", "pattern_key": "slip_hazard"},
+        "sp_02": {"result_type": "existing_pattern", "pattern_key": "slip_hazard"},
+        "sp_03": {"result_type": "existing_pattern", "pattern_key": "alarm_fault"},
+        "sp_04": {"result_type": "existing_pattern", "pattern_key": "alarm_fault"},
+        "sp_05": {"result_type": "new_pattern", "canonical_label": "Public area lighting instability"},
+        "sp_06": {"result_type": "new_pattern", "canonical_label": "Public area lighting instability"}
+      },
+      "must_link": [["sp_01", "sp_02"], ["sp_03", "sp_04"], ["sp_05", "sp_06"]],
+      "must_not_link": [["sp_01", "sp_03"], ["sp_01", "sp_05"], ["sp_03", "sp_06"]]
+    },
+    {
+      "id": "frontdesk_guest_flow",
+      "source": "synthetic/anonymized seed",
+      "business_units": [
+        {"key": "frontdesk", "label": "Front desk"},
+        {"key": "concierge", "label": "Concierge"},
+        {"key": "it", "label": "IT support"}
+      ],
+      "activity_subjects": [
+        {"key": "guest_queue", "business_unit_key": "frontdesk", "label": "Guest queue"},
+        {"key": "reservation_system", "business_unit_key": "it", "label": "Reservation system"},
+        {"key": "transport", "business_unit_key": "concierge", "label": "Transport request"}
+      ],
+      "operational_units": [
+        {"key": "reception", "label": "Reception"},
+        {"key": "desk_backoffice", "label": "Desk back office"}
+      ],
+      "initial_patterns": [
+        {"pattern_key": "checkin_queue", "label": "Check-in queue congestion"},
+        {"pattern_key": "reservation_system_issue", "label": "Reservation system access issue"}
+      ],
+      "signals": [
+        {"ref": "fg_01", "title": "Check-in line too long", "structured_summary": "The check-in line is building up at reception.", "issue_focus": "check in queue", "activity_subject_key": "guest_queue", "operational_unit_key": "reception", "affected_business_unit_key": "frontdesk", "responsible_business_unit_key": "frontdesk", "expected_pattern_key": "checkin_queue"},
+        {"ref": "fg_02", "title": "Guests waiting at reception", "structured_summary": "Guests are waiting too long before being checked in.", "issue_focus": "guest waiting check in", "activity_subject_key": "guest_queue", "operational_unit_key": "reception", "affected_business_unit_key": "frontdesk", "responsible_business_unit_key": "frontdesk", "expected_pattern_key": "checkin_queue"},
+        {"ref": "fg_03", "title": "Reservation screen unavailable", "structured_summary": "The reservation screen cannot be accessed from the desk.", "issue_focus": "reservation screen unavailable", "activity_subject_key": "reservation_system", "operational_unit_key": "desk_backoffice", "affected_business_unit_key": "frontdesk", "responsible_business_unit_key": "it", "expected_pattern_key": "reservation_system_issue"},
+        {"ref": "fg_04", "title": "Booking lookup fails", "structured_summary": "Booking lookup fails during guest arrival.", "issue_focus": "booking lookup failure", "activity_subject_key": "reservation_system", "operational_unit_key": "desk_backoffice", "affected_business_unit_key": "frontdesk", "responsible_business_unit_key": "it", "expected_pattern_key": "reservation_system_issue"},
+        {"ref": "fg_05", "title": "Taxi request delayed", "structured_summary": "A guest taxi request has not been handled in time.", "issue_focus": "taxi request delay", "activity_subject_key": "transport", "operational_unit_key": "reception", "affected_business_unit_key": "concierge", "responsible_business_unit_key": "concierge", "expected_new_pattern_label": "Guest transport request delay"},
+        {"ref": "fg_06", "title": "Airport transfer pending", "structured_summary": "An airport transfer request remains pending close to departure.", "issue_focus": "airport transfer delay", "activity_subject_key": "transport", "operational_unit_key": "reception", "affected_business_unit_key": "concierge", "responsible_business_unit_key": "concierge", "expected_new_pattern_label": "Guest transport request delay"}
+      ],
+      "fake_responses": {
+        "fg_01": {"result_type": "existing_pattern", "pattern_key": "checkin_queue"},
+        "fg_02": {"result_type": "existing_pattern", "pattern_key": "checkin_queue"},
+        "fg_03": {"result_type": "existing_pattern", "pattern_key": "reservation_system_issue"},
+        "fg_04": {"result_type": "existing_pattern", "pattern_key": "reservation_system_issue"},
+        "fg_05": {"result_type": "new_pattern", "canonical_label": "Guest transport request delay"},
+        "fg_06": {"result_type": "new_pattern", "canonical_label": "Guest transport request delay"}
+      },
+      "must_link": [["fg_01", "fg_02"], ["fg_03", "fg_04"], ["fg_05", "fg_06"]],
+      "must_not_link": [["fg_01", "fg_03"], ["fg_01", "fg_05"], ["fg_03", "fg_06"]]
+    }
+  ]
+}

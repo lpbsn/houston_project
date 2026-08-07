@@ -67,6 +67,12 @@ class PatternClassificationClaimResult:
     assignment: SignalPatternAssignment
 
 
+@dataclass(frozen=True)
+class PatternClassificationRetryFinalization:
+    outcome: str
+    assignment: SignalPatternAssignment
+
+
 @transaction.atomic
 def create_operational_pattern(
     *,
@@ -346,6 +352,41 @@ def mark_assignment_permanently_failed(
         expected_attempt_count=expected_attempt_count,
         pending_signature=pending_signature,
         pending_classifier_version=pending_classifier_version,
+    )
+
+
+def finalize_retryable_pattern_classification_error(
+    *,
+    signal: Signal,
+    exc: PatternClassificationRetryableError,
+    retries: int,
+    max_retries: int,
+    retry_delay_seconds: int,
+) -> PatternClassificationRetryFinalization:
+    if retries < max_retries:
+        assignment = mark_assignment_temporary_failed(
+            signal=signal,
+            error_code=exc.error_code,
+            expected_attempt_count=exc.attempt_count,
+            pending_signature=exc.pending_signature,
+            pending_classifier_version=exc.pending_classifier_version,
+            next_retry_at=timezone.now() + timedelta(seconds=retry_delay_seconds),
+        )
+        return PatternClassificationRetryFinalization(
+            outcome="retry",
+            assignment=assignment,
+        )
+
+    assignment = mark_assignment_permanently_failed(
+        signal=signal,
+        error_code="retry_exhausted",
+        expected_attempt_count=exc.attempt_count,
+        pending_signature=exc.pending_signature,
+        pending_classifier_version=exc.pending_classifier_version,
+    )
+    return PatternClassificationRetryFinalization(
+        outcome="retry_exhausted",
+        assignment=assignment,
     )
 
 
