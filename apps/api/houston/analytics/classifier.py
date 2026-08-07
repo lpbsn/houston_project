@@ -9,6 +9,12 @@ from django.conf import settings
 
 ANALYTICS_PATTERN_PROMPT_VERSION = "analytics_pattern_v1"
 ANALYTICS_PATTERN_SCHEMA_VERSION = "analytics_pattern_v1"
+ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION = (
+    "analytics_pattern_duplicate_guard_v1"
+)
+ANALYTICS_PATTERN_DUPLICATE_GUARD_SCHEMA_VERSION = (
+    "analytics_pattern_duplicate_guard_v1"
+)
 RESPONSE_FORMAT_JSON_SCHEMA_STRICT = "json_schema_strict"
 
 
@@ -57,10 +63,22 @@ class PatternClassifierResponse:
     canonical_label: str = ""
 
 
+@dataclass(frozen=True)
+class PatternDuplicateGuardResponse:
+    result_type: str
+    pattern_id: uuid.UUID | None = None
+
+
 class PatternClassifierProvider(Protocol):
     provider: str
 
     def classify(
+        self,
+        *,
+        input_payload: dict[str, Any],
+    ) -> PatternClassifierProviderResponse: ...
+
+    def assess_duplicate(
         self,
         *,
         input_payload: dict[str, Any],
@@ -159,6 +177,61 @@ class OpenAIPatternClassifierProvider:
             provider_request_id=self.last_provider_request_id,
         )
 
+    def assess_duplicate(
+        self,
+        *,
+        input_payload: dict[str, Any],
+    ) -> PatternClassifierProviderResponse:
+        if not self.api_key:
+            raise PatternClassifierUnavailableError("OpenAI API key is not configured.")
+
+        try:
+            from openai import APIConnectionError, APITimeoutError, BadRequestError
+        except ImportError as exc:
+            raise PatternClassifierUnavailableError("OpenAI SDK is not installed.") from exc
+
+        try:
+            response = self._get_client().chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": _duplicate_guard_system_prompt()},
+                    {"role": "user", "content": json.dumps(input_payload, ensure_ascii=False)},
+                ],
+                response_format=openai_duplicate_guard_response_format(),
+                temperature=0.0,
+            )
+        except APITimeoutError as exc:
+            raise PatternClassifierTimeoutError("OpenAI request timed out.") from exc
+        except APIConnectionError as exc:
+            raise PatternClassifierUnavailableError("OpenAI is unavailable.") from exc
+        except BadRequestError as exc:
+            if _is_invalid_response_format_schema_error(exc):
+                raise PatternClassifierSchemaError(
+                    "OpenAI rejected the analytics duplicate guard response schema.",
+                ) from exc
+            raise PatternClassifierProviderBadRequestError(
+                "OpenAI rejected the analytics duplicate guard request.",
+            ) from exc
+
+        self.last_provider_request_id = getattr(response, "id", "") or ""
+        content = response.choices[0].message.content if response.choices else None
+        if not content:
+            raise PatternClassifierInvalidOutputError("OpenAI returned an empty response.")
+        try:
+            payload = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise PatternClassifierInvalidOutputError("OpenAI returned invalid JSON.") from exc
+
+        usage = getattr(response, "usage", None)
+        return PatternClassifierProviderResponse(
+            payload=payload,
+            input_tokens=getattr(usage, "prompt_tokens", None),
+            output_tokens=getattr(usage, "completion_tokens", None),
+            total_tokens=getattr(usage, "total_tokens", None),
+            model=self.model,
+            provider_request_id=self.last_provider_request_id,
+        )
+
 
 class FakePatternClassifierProvider:
     provider = "fake"
@@ -167,11 +240,16 @@ class FakePatternClassifierProvider:
         self,
         *,
         payload: dict[str, Any] | None = None,
+        duplicate_guard_payload: dict[str, Any] | None = None,
         exc: Exception | None = None,
+        duplicate_guard_exc: Exception | None = None,
     ):
         self._payload = payload
+        self._duplicate_guard_payload = duplicate_guard_payload
         self._exc = exc
+        self._duplicate_guard_exc = duplicate_guard_exc
         self.calls: list[dict[str, Any]] = []
+        self.duplicate_guard_calls: list[dict[str, Any]] = []
         self.model = "fake"
 
     def classify(self, *, input_payload: dict[str, Any]) -> PatternClassifierProviderResponse:
@@ -181,6 +259,20 @@ class FakePatternClassifierProvider:
         payload = (
             self._payload if self._payload is not None else _default_fake_payload(input_payload)
         )
+        return PatternClassifierProviderResponse(payload=payload, model=self.model)
+
+    def assess_duplicate(
+        self,
+        *,
+        input_payload: dict[str, Any],
+    ) -> PatternClassifierProviderResponse:
+        self.duplicate_guard_calls.append(input_payload)
+        if self._duplicate_guard_exc is not None:
+            raise self._duplicate_guard_exc
+        payload = self._duplicate_guard_payload or {
+            "result_type": "create_new_pattern",
+            "pattern_id": None,
+        }
         return PatternClassifierProviderResponse(payload=payload, model=self.model)
 
 
@@ -220,6 +312,44 @@ def parse_pattern_classifier_response(payload: dict[str, Any]) -> PatternClassif
 
     raise PatternClassifierInvalidOutputError(
         "Pattern classifier response must be discriminated.",
+        payload=payload,
+    )
+
+
+def parse_pattern_duplicate_guard_response(
+    payload: dict[str, Any],
+) -> PatternDuplicateGuardResponse:
+    result_type = payload.get("result_type")
+    pattern_id = payload.get("pattern_id")
+
+    if result_type == "create_new_pattern":
+        if pattern_id:
+            raise PatternClassifierInvalidOutputError(
+                "create_new_pattern response must not include pattern_id.",
+                payload=payload,
+            )
+        return PatternDuplicateGuardResponse(result_type="create_new_pattern")
+
+    if result_type == "reuse_existing_pattern":
+        if not pattern_id:
+            raise PatternClassifierInvalidOutputError(
+                "reuse_existing_pattern response must include pattern_id.",
+                payload=payload,
+            )
+        try:
+            parsed_pattern_id = uuid.UUID(str(pattern_id))
+        except (TypeError, ValueError) as exc:
+            raise PatternClassifierInvalidOutputError(
+                "reuse_existing_pattern response has invalid pattern_id.",
+                payload=payload,
+            ) from exc
+        return PatternDuplicateGuardResponse(
+            result_type="reuse_existing_pattern",
+            pattern_id=parsed_pattern_id,
+        )
+
+    raise PatternClassifierInvalidOutputError(
+        "Pattern duplicate guard response must be discriminated.",
         payload=payload,
     )
 
@@ -266,6 +396,28 @@ def openai_strict_response_format() -> dict[str, Any]:
     }
 
 
+def openai_duplicate_guard_response_format() -> dict[str, Any]:
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "analytics_pattern_duplicate_guard",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "result_type": {
+                        "type": "string",
+                        "enum": ["reuse_existing_pattern", "create_new_pattern"],
+                    },
+                    "pattern_id": {"type": ["string", "null"]},
+                },
+                "required": ["result_type", "pattern_id"],
+            },
+        },
+    }
+
+
 def _default_fake_payload(input_payload: dict[str, Any]) -> dict[str, Any]:
     active_patterns = input_payload.get("active_patterns") or []
     if active_patterns:
@@ -293,3 +445,18 @@ Règles:
 
 def _system_prompt() -> str:
     return _ANALYTICS_PATTERN_SYSTEM_PROMPT
+
+
+_ANALYTICS_PATTERN_DUPLICATE_GUARD_SYSTEM_PROMPT = """\
+Tu vérifies si un nouveau libellé de motif Analytics est un doublon sémantique.
+Réponds uniquement avec le JSON strict demandé.
+
+Règles:
+- Réutilise un motif existant seulement si la même identité de phénomène est claire.
+- Ignore les business units, l'établissement, le routing et les actions.
+- En cas de doute, retourne create_new_pattern.
+"""
+
+
+def _duplicate_guard_system_prompt() -> str:
+    return _ANALYTICS_PATTERN_DUPLICATE_GUARD_SYSTEM_PROMPT

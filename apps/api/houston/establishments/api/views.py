@@ -147,6 +147,7 @@ from houston.establishments.services import (
     reactivate_runtime_business_unit,
     reinvite_membership_for_establishment,
     reject_onboarding_proposal,
+    resolve_stale_owner_actor_membership_for_deactivation,
     serialize_onboarding_draft,
     start_onboarding_session,
     submit_activity_description,
@@ -511,8 +512,6 @@ class MembershipDeactivateView(APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [
         permissions.IsAuthenticated,
-        HasActiveMembership,
-        CanViewTeamMemberships,
     ]
 
     @extend_schema(
@@ -534,10 +533,25 @@ class MembershipDeactivateView(APIView):
     )
     def post(self, request, establishment_id, membership_id):
         access_context = get_api_access_context(request)
+        current_membership = access_context.active_membership
+        if current_membership is None:
+            current_membership = resolve_stale_owner_actor_membership_for_deactivation(
+                user=request.user,
+                establishment_id=establishment_id,
+                membership_id=membership_id,
+            )
+        if current_membership is None:
+            return Response(
+                {
+                    "code": "membership_management_forbidden",
+                    "detail": "You cannot manage this membership.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         try:
             membership = deactivate_membership_for_management(
-                current_membership=access_context.active_membership,
+                current_membership=current_membership,
                 establishment_id=establishment_id,
                 membership_id=membership_id,
             )
@@ -575,7 +589,7 @@ class MembershipDeactivateView(APIView):
 
         serializer = EstablishmentMembershipResponseSerializer(
             membership,
-            context={"actor_membership": access_context.active_membership},
+            context={"actor_membership": current_membership},
         )
         return Response(serializer.data)
 

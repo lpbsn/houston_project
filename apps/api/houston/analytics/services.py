@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
 
@@ -13,6 +13,8 @@ from django.utils import timezone
 
 from houston.ai.models import AIUsageLog
 from houston.analytics.classifier import (
+    ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION,
+    ANALYTICS_PATTERN_DUPLICATE_GUARD_SCHEMA_VERSION,
     ANALYTICS_PATTERN_PROMPT_VERSION,
     ANALYTICS_PATTERN_SCHEMA_VERSION,
     PatternClassifierError,
@@ -23,6 +25,7 @@ from houston.analytics.classifier import (
     classifier_version_for_provider,
     get_pattern_classifier_provider,
     parse_pattern_classifier_response,
+    parse_pattern_duplicate_guard_response,
 )
 from houston.analytics.exceptions import AnalyticsValidationError
 from houston.analytics.labels import normalize_pattern_label
@@ -39,6 +42,8 @@ from houston.analytics.signature import (
 from houston.establishments.models import EstablishmentMembership
 from houston.organizations.models import Organization
 from houston.signals.models import Signal
+
+DUPLICATE_GUARD_SHORTLIST_STRATEGY = "token_overlap_v1"
 
 
 class PatternClassificationRetryableError(Exception):
@@ -71,6 +76,37 @@ class PatternClassificationClaimResult:
 class PatternClassificationRetryFinalization:
     outcome: str
     assignment: SignalPatternAssignment
+
+
+class PatternClassificationObsoleteAttempt(Exception):
+    def __init__(self, assignment: SignalPatternAssignment):
+        super().__init__("Analytics pattern classification attempt is obsolete.")
+        self.assignment = assignment
+
+
+@dataclass(frozen=True)
+class PatternDuplicateGuardCandidate:
+    id: uuid.UUID
+    label: str
+    normalized_label: str
+    score: float
+
+
+@dataclass(frozen=True)
+class PatternDuplicateGuardDecision:
+    action: str
+    pattern_id: uuid.UUID | None = None
+    reason: str = ""
+
+
+@dataclass(frozen=True)
+class PatternClassifierPatternResolution:
+    mode: str
+    label: str = ""
+    pattern_id: uuid.UUID | None = None
+    duplicate_guard_decision: PatternDuplicateGuardDecision = field(
+        default_factory=lambda: PatternDuplicateGuardDecision(action="skipped")
+    )
 
 
 @transaction.atomic
@@ -179,6 +215,69 @@ def _require_expected_processing_attempt(
             "Assignment attempt is obsolete.",
             code="analytics_assignment_obsolete_attempt",
         )
+
+
+def _require_current_processing_attempt(
+    assignment: SignalPatternAssignment,
+    *,
+    expected_attempt_count: int,
+    pending_signature: str,
+    pending_classifier_version: str,
+) -> None:
+    _require_expected_processing_attempt(
+        assignment,
+        expected_attempt_count=expected_attempt_count,
+    )
+    if (
+        assignment.pending_signature != pending_signature
+        or assignment.pending_classifier_version != pending_classifier_version
+    ):
+        raise AnalyticsValidationError(
+            "Assignment attempt is obsolete.",
+            code="analytics_assignment_obsolete_attempt",
+        )
+
+
+def _mark_locked_assignment_succeeded(
+    *,
+    assignment: SignalPatternAssignment,
+    pattern: OperationalPattern,
+    assigned_signature: str,
+    assigned_classifier_version: str,
+    assigned_at=None,
+) -> SignalPatternAssignment:
+    occurred_at = assigned_at or timezone.now()
+    assignment.classification_status = SignalPatternAssignment.ClassificationStatus.SUCCEEDED
+    assignment.pattern = pattern
+    assignment.assigned_signature = _require_nonblank(
+        assigned_signature,
+        field_name="assigned_signature",
+    )
+    assignment.assigned_classifier_version = _require_nonblank(
+        assigned_classifier_version,
+        field_name="assigned_classifier_version",
+    )
+    assignment.assigned_at = occurred_at
+    assignment.pending_signature = ""
+    assignment.pending_classifier_version = ""
+    assignment.last_error_code = ""
+    assignment.last_attempted_at = occurred_at
+    assignment.next_retry_at = None
+    return _validate_and_save_assignment(
+        assignment,
+        update_fields=[
+            "classification_status",
+            "pattern",
+            "assigned_signature",
+            "assigned_classifier_version",
+            "assigned_at",
+            "pending_signature",
+            "pending_classifier_version",
+            "last_error_code",
+            "last_attempted_at",
+            "next_retry_at",
+        ],
+    )
 
 
 @transaction.atomic
@@ -462,6 +561,7 @@ def classify_signal_pattern(
     signal_id: uuid.UUID,
     *,
     provider: PatternClassifierProvider | None = None,
+    duplicate_guard_enabled: bool = True,
 ) -> SignalPatternAssignment | None:
     signal = _load_signal_for_pattern_classification(signal_id)
     if signal is None:
@@ -493,19 +593,25 @@ def classify_signal_pattern(
     try:
         provider_response = provider.classify(input_payload=input_payload)
         parsed = parse_pattern_classifier_response(provider_response.payload)
-        with transaction.atomic():
-            pattern = _resolve_classifier_pattern(
-                signal=signal,
-                response=parsed,
-                candidates=candidates,
-            )
-            assignment = mark_assignment_succeeded(
-                signal=signal,
-                pattern=pattern,
-                assigned_signature=signature,
-                assigned_classifier_version=classifier_version,
-                expected_attempt_count=claim.attempt_count,
-            )
+        resolution = _prepare_classifier_pattern_resolution(
+            signal=signal,
+            response=parsed,
+            candidates=candidates,
+            provider=provider,
+            duplicate_guard_enabled=duplicate_guard_enabled,
+        )
+        assignment = _finalize_pattern_classification_success(
+            signal=signal,
+            resolution=resolution,
+            assigned_signature=signature,
+            assigned_classifier_version=classifier_version,
+            expected_attempt_count=claim.attempt_count,
+        )
+        setattr(
+            assignment,
+            "_analytics_duplicate_guard_decision",
+            resolution.duplicate_guard_decision.action,
+        )
         _write_analytics_usage_log(
             signal=signal,
             provider=provider.provider,
@@ -518,6 +624,8 @@ def classify_signal_pattern(
             total_tokens=provider_response.total_tokens,
         )
         return assignment
+    except PatternClassificationObsoleteAttempt as exc:
+        return exc.assignment
     except (PatternClassifierTimeoutError, PatternClassifierUnavailableError) as exc:
         _write_analytics_usage_log(
             signal=signal,
@@ -588,23 +696,339 @@ def _active_pattern_candidates(signal: Signal) -> list[dict[str, str]]:
     ]
 
 
-def _resolve_classifier_pattern(
+def _prepare_classifier_pattern_resolution(
     *,
     signal: Signal,
     response,
     candidates: list[dict[str, str]],
-) -> OperationalPattern:
+    provider: PatternClassifierProvider,
+    duplicate_guard_enabled: bool,
+) -> PatternClassifierPatternResolution:
     if response.result_type == "existing_pattern":
         candidate_ids = {uuid.UUID(candidate["id"]) for candidate in candidates}
         if response.pattern_id not in candidate_ids:
             raise PatternClassifierInvalidOutputError(
                 "Classifier selected a pattern outside active candidates.",
             )
-        pattern = OperationalPattern.objects.select_for_update().get(pk=response.pattern_id)
-        return _resolve_active_pattern_target(signal=signal, pattern=pattern)
+        return PatternClassifierPatternResolution(
+            mode="existing_pattern",
+            pattern_id=response.pattern_id,
+        )
 
     label = _validate_new_pattern_label(signal=signal, label=response.canonical_label)
-    return _get_or_create_active_pattern_for_label(signal=signal, label=label)
+    normalized = normalize_pattern_label(label)
+    strict_duplicate = _find_active_pattern_by_normalized_label(
+        signal=signal,
+        normalized_label=normalized,
+    )
+    if strict_duplicate is not None:
+        return PatternClassifierPatternResolution(
+            mode="reuse_pattern",
+            label=label,
+            pattern_id=strict_duplicate.id,
+            duplicate_guard_decision=PatternDuplicateGuardDecision(
+                action="skipped",
+                pattern_id=strict_duplicate.id,
+                reason="strict_duplicate",
+            ),
+        )
+
+    shortlist = (
+        _duplicate_guard_shortlist(signal=signal, canonical_label=label)
+        if duplicate_guard_enabled
+        else []
+    )
+    if not shortlist:
+        return PatternClassifierPatternResolution(
+            mode="create_pattern",
+            label=label,
+            duplicate_guard_decision=PatternDuplicateGuardDecision(
+                action="skipped",
+                reason="no_candidates" if duplicate_guard_enabled else "disabled",
+            ),
+        )
+
+    decision = _assess_duplicate_guard_best_effort(
+        signal=signal,
+        provider=provider,
+        canonical_label=label,
+        shortlist=shortlist,
+    )
+    if decision.action == "reused" and decision.pattern_id is not None:
+        return PatternClassifierPatternResolution(
+            mode="reuse_pattern",
+            label=label,
+            pattern_id=decision.pattern_id,
+            duplicate_guard_decision=decision,
+        )
+
+    return PatternClassifierPatternResolution(
+        mode="create_pattern",
+        label=label,
+        duplicate_guard_decision=decision,
+    )
+
+
+def _finalize_pattern_classification_success(
+    *,
+    signal: Signal,
+    resolution: PatternClassifierPatternResolution,
+    assigned_signature: str,
+    assigned_classifier_version: str,
+    expected_attempt_count: int,
+) -> SignalPatternAssignment:
+    try:
+        with transaction.atomic():
+            locked_signal = _locked_signal(signal)
+            assignment = _get_or_create_assignment_for_locked_signal(locked_signal)
+            _require_current_processing_attempt(
+                assignment,
+                expected_attempt_count=expected_attempt_count,
+                pending_signature=assigned_signature,
+                pending_classifier_version=assigned_classifier_version,
+            )
+            pattern = _resolve_pattern_resolution_for_write(
+                signal=locked_signal,
+                resolution=resolution,
+            )
+            assignment = _mark_locked_assignment_succeeded(
+                assignment=assignment,
+                pattern=pattern,
+                assigned_signature=assigned_signature,
+                assigned_classifier_version=assigned_classifier_version,
+            )
+            return assignment
+    except AnalyticsValidationError as exc:
+        if getattr(exc, "code", None) == "analytics_assignment_obsolete_attempt":
+            assignment = SignalPatternAssignment.objects.get(signal=signal)
+            raise PatternClassificationObsoleteAttempt(assignment) from exc
+        raise
+
+
+def _resolve_pattern_resolution_for_write(
+    *,
+    signal: Signal,
+    resolution: PatternClassifierPatternResolution,
+) -> OperationalPattern:
+    if resolution.mode == "existing_pattern":
+        if resolution.pattern_id is None:
+            raise PatternClassifierInvalidOutputError("Pattern resolution missing target.")
+        pattern = OperationalPattern.objects.select_for_update().get(
+            pk=resolution.pattern_id
+        )
+        return _resolve_active_pattern_target(signal=signal, pattern=pattern)
+
+    if resolution.mode == "reuse_pattern":
+        if resolution.pattern_id is not None:
+            try:
+                pattern = OperationalPattern.objects.select_for_update().get(
+                    pk=resolution.pattern_id
+                )
+            except OperationalPattern.DoesNotExist:
+                pattern = None
+            if pattern is None:
+                return _get_or_create_active_pattern_for_label(
+                    signal=signal,
+                    label=resolution.label,
+                )
+            try:
+                return _resolve_active_pattern_target(signal=signal, pattern=pattern)
+            except PatternClassifierInvalidOutputError:
+                pass
+
+    return _get_or_create_active_pattern_for_label(signal=signal, label=resolution.label)
+
+
+def _find_active_pattern_by_normalized_label(
+    *,
+    signal: Signal,
+    normalized_label: str,
+) -> OperationalPattern | None:
+    return (
+        OperationalPattern.objects.filter(
+            organization=signal.establishment.organization,
+            normalized_label=normalized_label,
+            status=OperationalPattern.Status.ACTIVE,
+        )
+        .order_by("normalized_label", "label")
+        .first()
+    )
+
+
+def _duplicate_guard_shortlist(
+    *,
+    signal: Signal,
+    canonical_label: str,
+) -> list[PatternDuplicateGuardCandidate]:
+    min_score = settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE
+    max_candidates = settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MAX_CANDIDATES
+    if max_candidates <= 0:
+        return []
+
+    source_tokens = _duplicate_guard_source_tokens(
+        signal=signal,
+        canonical_label=canonical_label,
+    )
+    if not source_tokens:
+        return []
+
+    candidates: list[PatternDuplicateGuardCandidate] = []
+    for pattern in OperationalPattern.objects.filter(
+        organization=signal.establishment.organization,
+        status=OperationalPattern.Status.ACTIVE,
+    ):
+        candidate_tokens = _normalized_tokens(pattern.label)
+        if not candidate_tokens:
+            continue
+        score = len(source_tokens & candidate_tokens) / len(candidate_tokens)
+        if score >= min_score:
+            candidates.append(
+                PatternDuplicateGuardCandidate(
+                    id=pattern.id,
+                    label=pattern.label,
+                    normalized_label=pattern.normalized_label,
+                    score=score,
+                )
+            )
+
+    candidates.sort(
+        key=lambda candidate: (
+            -candidate.score,
+            candidate.normalized_label,
+            candidate.label,
+        )
+    )
+    return candidates[:max_candidates]
+
+
+def _duplicate_guard_source_tokens(
+    *,
+    signal: Signal,
+    canonical_label: str,
+) -> set[str]:
+    activity_subject = signal.activity_subject.label if signal.activity_subject_id else ""
+    operational_unit = signal.operational_unit.label if signal.operational_unit_id else ""
+    return _normalized_tokens(
+        " ".join(
+            [
+                canonical_label,
+                signal.title,
+                signal.structured_summary,
+                signal.issue_focus,
+                activity_subject,
+                operational_unit,
+            ]
+        )
+    )
+
+
+def _normalized_tokens(value: str) -> set[str]:
+    return {
+        token
+        for token in normalize_pattern_label(value).split()
+        if len(token) >= 3
+    }
+
+
+def _assess_duplicate_guard_best_effort(
+    *,
+    signal: Signal,
+    provider: PatternClassifierProvider,
+    canonical_label: str,
+    shortlist: list[PatternDuplicateGuardCandidate],
+) -> PatternDuplicateGuardDecision:
+    shortlist_ids = {candidate.id for candidate in shortlist}
+    input_payload = {
+        "schema_version": ANALYTICS_PATTERN_DUPLICATE_GUARD_SCHEMA_VERSION,
+        "prompt_version": ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION,
+        "signal": _duplicate_guard_signal_payload(signal),
+        "canonical_label": canonical_label,
+        "candidate_patterns": [
+            {
+                "id": str(candidate.id),
+                "label": candidate.label,
+                "normalized_label": candidate.normalized_label,
+            }
+            for candidate in shortlist
+        ],
+    }
+
+    started_at = time.monotonic()
+    try:
+        response = provider.assess_duplicate(input_payload=input_payload)
+        parsed = parse_pattern_duplicate_guard_response(response.payload)
+        if parsed.result_type == "reuse_existing_pattern":
+            if parsed.pattern_id not in shortlist_ids:
+                _write_duplicate_guard_usage_log(
+                    signal=signal,
+                    provider=provider.provider,
+                    model=response.model or getattr(provider, "model", ""),
+                    status=AIUsageLog.Status.FAILED,
+                    latency_ms=_elapsed_ms(started_at),
+                    correlation_id=uuid.uuid4(),
+                    error_code="duplicate_guard_pattern_outside_shortlist",
+                    input_tokens=response.input_tokens,
+                    output_tokens=response.output_tokens,
+                    total_tokens=response.total_tokens,
+                )
+                return PatternDuplicateGuardDecision(
+                    action="fallback",
+                    reason="outside_shortlist",
+                )
+            _write_duplicate_guard_usage_log(
+                signal=signal,
+                provider=provider.provider,
+                model=response.model or getattr(provider, "model", ""),
+                status=AIUsageLog.Status.SUCCEEDED,
+                latency_ms=_elapsed_ms(started_at),
+                correlation_id=uuid.uuid4(),
+                input_tokens=response.input_tokens,
+                output_tokens=response.output_tokens,
+                total_tokens=response.total_tokens,
+            )
+            return PatternDuplicateGuardDecision(
+                action="reused",
+                pattern_id=parsed.pattern_id,
+            )
+
+        _write_duplicate_guard_usage_log(
+            signal=signal,
+            provider=provider.provider,
+            model=response.model or getattr(provider, "model", ""),
+            status=AIUsageLog.Status.SUCCEEDED,
+            latency_ms=_elapsed_ms(started_at),
+            correlation_id=uuid.uuid4(),
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
+            total_tokens=response.total_tokens,
+        )
+        return PatternDuplicateGuardDecision(action="created")
+    except PatternClassifierError as exc:
+        _write_duplicate_guard_usage_log(
+            signal=signal,
+            provider=provider.provider,
+            model=getattr(provider, "model", ""),
+            status=AIUsageLog.Status.FAILED,
+            latency_ms=_elapsed_ms(started_at),
+            correlation_id=uuid.uuid4(),
+            error_code=getattr(exc, "error_code", "duplicate_guard_error"),
+        )
+        return PatternDuplicateGuardDecision(
+            action="fallback",
+            reason=getattr(exc, "error_code", "duplicate_guard_error"),
+        )
+
+
+def _duplicate_guard_signal_payload(signal: Signal) -> dict[str, Any]:
+    activity_subject = signal.activity_subject.label if signal.activity_subject_id else ""
+    operational_unit = signal.operational_unit.label if signal.operational_unit_id else ""
+    return {
+        "title": signal.title,
+        "structured_summary": signal.structured_summary,
+        "issue_focus": signal.issue_focus,
+        "activity_subject": activity_subject,
+        "operational_unit": operational_unit,
+    }
 
 
 def _resolve_active_pattern_target(
@@ -618,12 +1042,9 @@ def _resolve_active_pattern_target(
     ):
         return pattern
 
-    if pattern.status == OperationalPattern.Status.MERGED and pattern.merged_into_id is not None:
-        target = OperationalPattern.objects.select_for_update().get(pk=pattern.merged_into_id)
-        if (
-            target.organization_id == signal.establishment.organization_id
-            and target.status == OperationalPattern.Status.ACTIVE
-        ):
+    if pattern.status == OperationalPattern.Status.MERGED:
+        target = _resolve_merged_pattern_chain(signal=signal, pattern=pattern)
+        if target is not None:
             return target
 
     active = (
@@ -639,6 +1060,30 @@ def _resolve_active_pattern_target(
         return active
 
     raise PatternClassifierInvalidOutputError("No active target pattern could be resolved.")
+
+
+def _resolve_merged_pattern_chain(
+    *,
+    signal: Signal,
+    pattern: OperationalPattern,
+) -> OperationalPattern | None:
+    seen = {pattern.id}
+    current = pattern
+    for _ in range(5):
+        if current.merged_into_id is None:
+            return None
+        target = OperationalPattern.objects.select_for_update().get(pk=current.merged_into_id)
+        if target.id in seen:
+            return None
+        seen.add(target.id)
+        if target.organization_id != signal.establishment.organization_id:
+            return None
+        if target.status == OperationalPattern.Status.ACTIVE:
+            return target
+        if target.status != OperationalPattern.Status.MERGED:
+            return None
+        current = target
+    return None
 
 
 def _validate_new_pattern_label(*, signal: Signal, label: str) -> str:
@@ -721,6 +1166,37 @@ def _write_analytics_usage_log(
         total_tokens=total_tokens,
         error_code=error_code,
         error_context={},
+        correlation_id=correlation_id,
+        establishment=signal.establishment,
+    )
+
+
+def _write_duplicate_guard_usage_log(
+    *,
+    signal: Signal,
+    provider: str,
+    model: str,
+    status: str,
+    latency_ms: int,
+    correlation_id: uuid.UUID,
+    error_code: str = "",
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+    total_tokens: int | None = None,
+) -> None:
+    AIUsageLog.objects.create(
+        ai_domain=AIUsageLog.Domain.ANALYTICS_PATTERN,
+        provider=provider,
+        model=model or "",
+        prompt_version=ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION,
+        schema_version=ANALYTICS_PATTERN_DUPLICATE_GUARD_SCHEMA_VERSION,
+        status=status,
+        latency_ms=latency_ms,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
+        error_code=error_code,
+        error_context={"phase": "analytics_pattern_duplicate_guard"},
         correlation_id=correlation_id,
         establishment=signal.establishment,
     )

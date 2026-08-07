@@ -6,11 +6,13 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.db import IntegrityError, close_old_connections, connections
+from django.db import IntegrityError, close_old_connections, connection, connections
 from django.utils import timezone
 
 from houston.ai.models import AIUsageLog
 from houston.analytics.classifier import (
+    ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION,
+    ANALYTICS_PATTERN_DUPLICATE_GUARD_SCHEMA_VERSION,
     FakePatternClassifierProvider,
     OpenAIPatternClassifierProvider,
     PatternClassifierInvalidOutputError,
@@ -22,6 +24,7 @@ from houston.analytics.models import OperationalPattern, SignalPatternAssignment
 from houston.analytics.scheduling import schedule_reclassification_if_signature_changed
 from houston.analytics.services import (
     PatternClassificationRetryableError,
+    _duplicate_guard_shortlist,
     claim_signal_pattern_classification,
     classify_signal_pattern,
     create_operational_pattern,
@@ -398,6 +401,249 @@ def test_classify_creates_new_canonical_pattern():
         SignalPatternAssignment.ClassificationStatus.SUCCEEDED
     )
     assert assignment.pattern.label == "Défaillance climatisation"
+
+
+def test_new_pattern_strict_duplicate_reuses_without_duplicate_guard():
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    existing = create_pattern_for_signal(signal, label="Défaillance climatisation")
+    provider = FakePatternClassifierProvider(
+        payload={"result_type": "new_pattern", "canonical_label": "défaillance climatisation"},
+        duplicate_guard_payload={"result_type": "create_new_pattern", "pattern_id": None},
+    )
+
+    assignment = classify_signal_pattern(signal.id, provider=provider)
+
+    assert assignment.pattern_id == existing.id
+    assert provider.duplicate_guard_calls == []
+    assert getattr(assignment, "_analytics_duplicate_guard_decision") == "skipped"
+    assert AIUsageLog.objects.filter(ai_domain=AIUsageLog.Domain.ANALYTICS_PATTERN).count() == 1
+
+
+def test_duplicate_guard_reuses_shortlisted_active_pattern(settings):
+    settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE = 0.5
+    membership = build_membership()
+    signal = create_signal_for_membership(membership, title="Climate unit offline")
+    existing = create_pattern_for_signal(signal, label="Climate equipment failure")
+    provider = FakePatternClassifierProvider(
+        payload={"result_type": "new_pattern", "canonical_label": "Climate equipment outage"},
+        duplicate_guard_payload={
+            "result_type": "reuse_existing_pattern",
+            "pattern_id": str(existing.id),
+        },
+    )
+
+    assignment = classify_signal_pattern(signal.id, provider=provider)
+
+    assert assignment.pattern_id == existing.id
+    assert len(provider.duplicate_guard_calls) == 1
+    assert getattr(assignment, "_analytics_duplicate_guard_decision") == "reused"
+    serialized_guard_payload = str(provider.duplicate_guard_calls[0])
+    assert "Bar" not in serialized_guard_payload
+    assert "Maintenance" not in serialized_guard_payload
+    guard_log = AIUsageLog.objects.get(
+        prompt_version=ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION
+    )
+    assert guard_log.schema_version == ANALYTICS_PATTERN_DUPLICATE_GUARD_SCHEMA_VERSION
+    assert guard_log.error_context == {"phase": "analytics_pattern_duplicate_guard"}
+
+
+def test_duplicate_guard_shortlist_empty_creates_without_guard_call(settings):
+    settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE = 0.9
+    membership = build_membership()
+    signal = create_signal_for_membership(membership, title="Climate unit offline")
+    create_pattern_for_signal(signal, label="Unrelated linen shortage")
+    provider = FakePatternClassifierProvider(
+        payload={"result_type": "new_pattern", "canonical_label": "Climate equipment outage"},
+        duplicate_guard_payload={"result_type": "create_new_pattern", "pattern_id": None},
+    )
+
+    assignment = classify_signal_pattern(signal.id, provider=provider)
+
+    assert assignment.pattern.label == "Climate equipment outage"
+    assert provider.duplicate_guard_calls == []
+    assert getattr(assignment, "_analytics_duplicate_guard_decision") == "skipped"
+    assert AIUsageLog.objects.filter(
+        prompt_version=ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION
+    ).count() == 0
+
+
+def test_duplicate_guard_invalid_output_falls_back_to_create(settings):
+    settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE = 0.5
+    membership = build_membership()
+    signal = create_signal_for_membership(membership, title="Climate unit offline")
+    create_pattern_for_signal(signal, label="Climate equipment failure")
+    provider = FakePatternClassifierProvider(
+        payload={"result_type": "new_pattern", "canonical_label": "Climate equipment outage"},
+        duplicate_guard_payload={
+            "result_type": "reuse_existing_pattern",
+            "pattern_id": str(membership.id),
+        },
+    )
+
+    assignment = classify_signal_pattern(signal.id, provider=provider)
+
+    assert assignment.pattern.label == "Climate equipment outage"
+    assert getattr(assignment, "_analytics_duplicate_guard_decision") == "fallback"
+    guard_log = AIUsageLog.objects.get(
+        prompt_version=ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION
+    )
+    assert guard_log.status == AIUsageLog.Status.FAILED
+    assert guard_log.error_code == "duplicate_guard_pattern_outside_shortlist"
+
+
+def test_duplicate_guard_timeout_falls_back_without_retry(settings):
+    settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE = 0.5
+    membership = build_membership()
+    signal = create_signal_for_membership(membership, title="Climate unit offline")
+    create_pattern_for_signal(signal, label="Climate equipment failure")
+    provider = FakePatternClassifierProvider(
+        payload={"result_type": "new_pattern", "canonical_label": "Climate equipment outage"},
+        duplicate_guard_exc=PatternClassifierTimeoutError("timeout"),
+    )
+
+    assignment = classify_signal_pattern(signal.id, provider=provider)
+
+    assert assignment.classification_status == (
+        SignalPatternAssignment.ClassificationStatus.SUCCEEDED
+    )
+    assert assignment.pattern.label == "Climate equipment outage"
+    assert getattr(assignment, "_analytics_duplicate_guard_decision") == "fallback"
+    guard_log = AIUsageLog.objects.get(
+        prompt_version=ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION
+    )
+    assert guard_log.status == AIUsageLog.Status.FAILED
+    assert guard_log.error_code == "provider_timeout"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_duplicate_guard_call_happens_outside_transaction(settings):
+    settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE = 0.5
+    membership = build_membership()
+    signal = create_signal_for_membership(membership, title="Climate unit offline")
+    existing = create_pattern_for_signal(signal, label="Climate equipment failure")
+    in_atomic_values = []
+
+    class RecordingProvider(FakePatternClassifierProvider):
+        def assess_duplicate(self, *, input_payload):
+            in_atomic_values.append(connection.in_atomic_block)
+            return super().assess_duplicate(input_payload=input_payload)
+
+    provider = RecordingProvider(
+        payload={"result_type": "new_pattern", "canonical_label": "Climate equipment outage"},
+        duplicate_guard_payload={
+            "result_type": "reuse_existing_pattern",
+            "pattern_id": str(existing.id),
+        },
+    )
+
+    classify_signal_pattern(signal.id, provider=provider)
+
+    assert in_atomic_values == [False]
+
+
+def test_obsolete_attempt_cannot_leave_orphan_pattern(settings):
+    settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE = 0.5
+    membership = build_membership()
+    signal = create_signal_for_membership(membership, title="Climate unit offline")
+    create_pattern_for_signal(signal, label="Climate equipment failure")
+
+    class ObsoletingProvider(FakePatternClassifierProvider):
+        def assess_duplicate(self, *, input_payload):
+            SignalPatternAssignment.objects.filter(signal=signal).update(attempt_count=999)
+            return super().assess_duplicate(input_payload=input_payload)
+
+    provider = ObsoletingProvider(
+        payload={"result_type": "new_pattern", "canonical_label": "Climate equipment outage"},
+        duplicate_guard_payload={"result_type": "create_new_pattern", "pattern_id": None},
+    )
+    before_patterns = OperationalPattern.objects.count()
+
+    assignment = classify_signal_pattern(signal.id, provider=provider)
+
+    assert assignment.classification_status == (
+        SignalPatternAssignment.ClassificationStatus.PROCESSING
+    )
+    assert OperationalPattern.objects.count() == before_patterns
+
+
+def test_duplicate_guard_reuse_resolves_merged_candidate_chain(settings):
+    settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE = 0.5
+    membership = build_membership()
+    signal = create_signal_for_membership(membership, title="Climate unit offline")
+    candidate = create_pattern_for_signal(signal, label="Climate equipment failure")
+    target = create_pattern_for_signal(signal, label="Climate equipment outage target")
+
+    class MergingProvider(FakePatternClassifierProvider):
+        def assess_duplicate(self, *, input_payload):
+            OperationalPattern.objects.filter(pk=candidate.pk).update(
+                status=OperationalPattern.Status.MERGED,
+                merged_into=target,
+            )
+            return super().assess_duplicate(input_payload=input_payload)
+
+    provider = MergingProvider(
+        payload={"result_type": "new_pattern", "canonical_label": "Climate equipment outage"},
+        duplicate_guard_payload={
+            "result_type": "reuse_existing_pattern",
+            "pattern_id": str(candidate.id),
+        },
+    )
+
+    assignment = classify_signal_pattern(signal.id, provider=provider)
+
+    assert assignment.pattern_id == target.id
+
+
+def test_duplicate_guard_reuse_with_merged_cycle_falls_back_to_create(settings):
+    settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE = 0.5
+    membership = build_membership()
+    signal = create_signal_for_membership(membership, title="Climate unit offline")
+    first = create_pattern_for_signal(signal, label="Climate equipment failure")
+    second = create_pattern_for_signal(signal, label="Climate equipment issue")
+
+    class CyclingProvider(FakePatternClassifierProvider):
+        def assess_duplicate(self, *, input_payload):
+            OperationalPattern.objects.filter(pk=first.pk).update(
+                status=OperationalPattern.Status.MERGED,
+                merged_into=second,
+            )
+            OperationalPattern.objects.filter(pk=second.pk).update(
+                status=OperationalPattern.Status.MERGED,
+                merged_into=first,
+            )
+            return super().assess_duplicate(input_payload=input_payload)
+
+    provider = CyclingProvider(
+        payload={"result_type": "new_pattern", "canonical_label": "Climate equipment outage"},
+        duplicate_guard_payload={
+            "result_type": "reuse_existing_pattern",
+            "pattern_id": str(first.id),
+        },
+    )
+
+    assignment = classify_signal_pattern(signal.id, provider=provider)
+
+    assert assignment.pattern.label == "Climate equipment outage"
+
+
+def test_duplicate_guard_shortlist_uses_stable_functional_tie_break(settings):
+    settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE = 0.5
+    settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MAX_CANDIDATES = 2
+    membership = build_membership()
+    signal = create_signal_for_membership(membership, title="Climate unit offline")
+    create_pattern_for_signal(signal, label="Climate alpha")
+    create_pattern_for_signal(signal, label="Climate beta")
+
+    shortlist = _duplicate_guard_shortlist(
+        signal=signal,
+        canonical_label="Climate outage",
+    )
+
+    assert [candidate.label for candidate in shortlist] == [
+        "Climate alpha",
+        "Climate beta",
+    ]
 
 
 @pytest.mark.parametrize(

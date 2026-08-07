@@ -31,7 +31,8 @@
         {"ref": "hf_03", "title": "Water under sink", "structured_summary": "Water is visible under the guest bathroom sink.", "issue_focus": "water leak sink", "activity_subject_key": "plumbing", "operational_unit_key": "floor_2", "affected_business_unit_key": "rooms", "responsible_business_unit_key": "maintenance", "expected_pattern_key": "water_leak"},
         {"ref": "hf_04", "title": "Bathroom leak near vanity", "structured_summary": "A leak is spreading near the bathroom vanity area.", "issue_focus": "bathroom water leak", "activity_subject_key": "plumbing", "operational_unit_key": "floor_2", "affected_business_unit_key": "rooms", "responsible_business_unit_key": "maintenance", "expected_pattern_key": "water_leak"},
         {"ref": "hf_05", "title": "Guest card cannot open door", "structured_summary": "The guest card is valid but the room door does not open.", "issue_focus": "key card door access", "activity_subject_key": "access", "operational_unit_key": "floor_5", "affected_business_unit_key": "frontdesk", "responsible_business_unit_key": "frontdesk", "expected_pattern_key": "room_access_failure"},
-        {"ref": "hf_06", "title": "Missing minibar bottles", "structured_summary": "Several expected minibar bottles are missing before check-in.", "issue_focus": "minibar restock missing", "activity_subject_key": "minibar", "operational_unit_key": "floor_5", "affected_business_unit_key": "rooms", "responsible_business_unit_key": "rooms", "expected_new_pattern_label": "Minibar replenishment gap"}
+        {"ref": "hf_06", "title": "Missing minibar bottles", "structured_summary": "Several expected minibar bottles are missing before check-in.", "issue_focus": "minibar restock missing", "activity_subject_key": "minibar", "operational_unit_key": "floor_5", "affected_business_unit_key": "rooms", "responsible_business_unit_key": "rooms", "expected_new_pattern_label": "Minibar replenishment gap"},
+        {"ref": "hf_07", "title": "Bathroom pipe dripping", "structured_summary": "Water is dripping from a bathroom pipe in a guest room.", "issue_focus": "pipe dripping leak", "activity_subject_key": "plumbing", "operational_unit_key": "floor_2", "affected_business_unit_key": "rooms", "responsible_business_unit_key": "maintenance", "expected_pattern_key": "water_leak"}
       ],
       "fake_responses": {
         "hf_01": {"result_type": "existing_pattern", "pattern_key": "hvac_outage"},
@@ -39,10 +40,11 @@
         "hf_03": {"result_type": "existing_pattern", "pattern_key": "water_leak"},
         "hf_04": {"result_type": "existing_pattern", "pattern_key": "water_leak"},
         "hf_05": {"result_type": "existing_pattern", "pattern_key": "room_access_failure"},
-        "hf_06": {"result_type": "new_pattern", "canonical_label": "Minibar replenishment gap"}
+        "hf_06": {"result_type": "new_pattern", "canonical_label": "Minibar replenishment gap"},
+        "hf_07": {"result_type": "new_pattern", "canonical_label": "Guest area water leak", "duplicate_guard_response": {"result_type": "reuse_existing_pattern", "pattern_key": "water_leak"}}
       },
-      "must_link": [["hf_01", "hf_02"], ["hf_03", "hf_04"]],
-      "must_not_link": [["hf_01", "hf_03"], ["hf_01", "hf_05"], ["hf_03", "hf_06"]]
+      "must_link": [["hf_01", "hf_02"], ["hf_03", "hf_04"], ["hf_03", "hf_07"]],
+      "must_not_link": [["hf_01", "hf_03"], ["hf_01", "hf_05"], ["hf_03", "hf_06"], ["hf_01", "hf_07"]]
     },
     {
       "id": "restaurant_stock",

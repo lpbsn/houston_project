@@ -211,10 +211,27 @@ def test_eval_idempotence_only_scores_successful_first_pass():
     scenario = report.scenario_results[0]
 
     assert scenario.idempotence == {
-        "eligible_signal_count": 6,
-        "passed_signal_count": 6,
+        "eligible_signal_count": 7,
+        "passed_signal_count": 7,
         "status": "pass",
     }
+
+
+def test_eval_compares_duplicate_guard_against_isolated_baseline():
+    report = evaluate_analytics_pattern_corpus(
+        scenario_ids=["hotel_facilities"],
+        provider_name="fake",
+    )
+    scenario = report.scenario_results[0]
+    comparison = scenario.duplicate_guard_comparison
+
+    assert comparison["baseline"]["new_pattern_count"] == 2
+    assert comparison["guard"]["new_pattern_count"] == 1
+    assert comparison["guard"]["duplicate_guard_reuse_count"] == 1
+    assert comparison["delta"]["false_merge_failing_count"] == 0
+    hf_07 = next(result for result in scenario.signal_results if result.ref == "hf_07")
+    assert hf_07.assigned_pattern_key == "water_leak"
+    assert hf_07.duplicate_guard_decision == "reused"
 
 
 def test_eval_case_id_selects_complete_scenario_without_orphan_pairs():

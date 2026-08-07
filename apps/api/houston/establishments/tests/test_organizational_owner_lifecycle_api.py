@@ -955,6 +955,116 @@ def test_concurrent_owner_deactivations_preserve_last_full_coverage_owner():
     assert len(membership_access_calls) == 2
 
 
+def test_stale_owner_deactivation_returns_invariant_after_actor_was_deactivated(api_client):
+    organization = create_organization(name="Stale Owner Deactivate Org")
+    active_a = create_establishment(name="Stale Owner A", organization=organization)
+    active_b = create_establishment(name="Stale Owner B", organization=organization)
+    owner_one = setup_full_coverage_owner(
+        establishments=[active_a, active_b],
+        username="stale_owner_one",
+    )
+    owner_two = setup_full_coverage_owner(
+        establishments=[active_a, active_b],
+        username="stale_owner_two",
+    )
+    membership_one = EstablishmentMembership.objects.get(
+        user=owner_one,
+        establishment=active_a,
+    )
+    membership_two = EstablishmentMembership.objects.get(
+        user=owner_two,
+        establishment=active_a,
+    )
+    stale_access_token = login(api_client, identifier=owner_one.email)
+    stale_access_token = switch_establishment(
+        api_client,
+        access_token=stale_access_token,
+        establishment_id=active_a.id,
+    )
+
+    deactivate_owner_one = post_membership_action(
+        api_client,
+        actor=owner_two,
+        establishment_id=active_a.id,
+        membership_id=membership_one.id,
+        action="deactivate",
+    )
+    assert deactivate_owner_one.status_code == 200, deactivate_owner_one.json()
+
+    response = api_client.post(
+        membership_url(
+            establishment_id=active_a.id,
+            membership_id=membership_two.id,
+            action="deactivate",
+        ),
+        format="json",
+        **auth_headers(stale_access_token),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "organizational_owner_invariant_conflict"
+    assert owner_statuses_for_user(user=owner_one, establishments=[active_a, active_b]) == {
+        EstablishmentMembership.Status.DEACTIVATED
+    }
+    assert owner_statuses_for_user(user=owner_two, establishments=[active_a, active_b]) == {
+        EstablishmentMembership.Status.ACTIVE
+    }
+
+
+def test_stale_owner_deactivation_cannot_manage_non_owner_membership(api_client):
+    organization = create_organization(name="Stale Owner Non Owner Org")
+    active_a = create_establishment(name="Stale Non Owner A", organization=organization)
+    active_b = create_establishment(name="Stale Non Owner B", organization=organization)
+    owner_one = setup_full_coverage_owner(
+        establishments=[active_a, active_b],
+        username="stale_non_owner_one",
+    )
+    owner_two = setup_full_coverage_owner(
+        establishments=[active_a, active_b],
+        username="stale_non_owner_two",
+    )
+    director = create_user(username="stale_non_owner_director")
+    director_membership = create_membership(
+        user=director,
+        establishment=active_a,
+        role=EstablishmentMembership.Role.DIRECTOR,
+    )
+    membership_one = EstablishmentMembership.objects.get(
+        user=owner_one,
+        establishment=active_a,
+    )
+    stale_access_token = login(api_client, identifier=owner_one.email)
+    stale_access_token = switch_establishment(
+        api_client,
+        access_token=stale_access_token,
+        establishment_id=active_a.id,
+    )
+
+    deactivate_owner_one = post_membership_action(
+        api_client,
+        actor=owner_two,
+        establishment_id=active_a.id,
+        membership_id=membership_one.id,
+        action="deactivate",
+    )
+    assert deactivate_owner_one.status_code == 200, deactivate_owner_one.json()
+
+    response = api_client.post(
+        membership_url(
+            establishment_id=active_a.id,
+            membership_id=director_membership.id,
+            action="deactivate",
+        ),
+        format="json",
+        **auth_headers(stale_access_token),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "membership_management_forbidden"
+    director_membership.refresh_from_db()
+    assert director_membership.status == EstablishmentMembership.Status.ACTIVE
+
+
 def test_membership_patch_demote_owner_remains_forbidden(api_client):
     organization = create_organization(name="Patch Demote Org")
     active_a = create_establishment(name="Patch Demote A", organization=organization)
