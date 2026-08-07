@@ -42,6 +42,29 @@ def create_pattern_for_membership(membership, *, label="Guest Bathroom"):
     )
 
 
+def process_then_succeed(
+    *,
+    signal,
+    pattern,
+    signature,
+    classifier_version,
+    assigned_at=None,
+):
+    processing = mark_assignment_processing(
+        signal=signal,
+        pending_signature=signature,
+        pending_classifier_version=classifier_version,
+    )
+    return mark_assignment_succeeded(
+        signal=signal,
+        pattern=pattern,
+        assigned_signature=signature,
+        assigned_classifier_version=classifier_version,
+        expected_attempt_count=processing.attempt_count,
+        assigned_at=assigned_at,
+    )
+
+
 def test_get_or_create_assignment_for_signal_is_idempotent():
     membership = build_membership()
     signal = create_signal_for_membership(membership)
@@ -146,11 +169,11 @@ def test_processing_increments_attempt_and_preserves_last_success():
     signal = create_signal_for_membership(membership)
     pattern = create_pattern_for_membership(membership)
     assigned_at = timezone.now() - timedelta(hours=1)
-    mark_assignment_succeeded(
+    process_then_succeed(
         signal=signal,
         pattern=pattern,
-        assigned_signature="sig-v1",
-        assigned_classifier_version="classifier-v1",
+        signature="sig-v1",
+        classifier_version="classifier-v1",
         assigned_at=assigned_at,
     )
 
@@ -163,7 +186,7 @@ def test_processing_increments_attempt_and_preserves_last_success():
     assert assignment.classification_status == (
         SignalPatternAssignment.ClassificationStatus.PROCESSING
     )
-    assert assignment.attempt_count == 1
+    assert assignment.attempt_count == 2
     assert assignment.pending_signature == "sig-v2"
     assert assignment.pending_classifier_version == "classifier-v2"
     assert assignment.pattern_id == pattern.id
@@ -180,11 +203,11 @@ def test_succeeded_replaces_pattern_and_clears_pending_and_error_fields():
     first_pattern = create_pattern_for_membership(membership, label="First")
     second_pattern = create_pattern_for_membership(membership, label="Second")
     first_assigned_at = timezone.now() - timedelta(hours=2)
-    mark_assignment_succeeded(
+    process_then_succeed(
         signal=signal,
         pattern=first_pattern,
-        assigned_signature="sig-v1",
-        assigned_classifier_version="classifier-v1",
+        signature="sig-v1",
+        classifier_version="classifier-v1",
         assigned_at=first_assigned_at,
     )
     assignment = mark_assignment_processing(
@@ -202,6 +225,7 @@ def test_succeeded_replaces_pattern_and_clears_pending_and_error_fields():
         pattern=second_pattern,
         assigned_signature="sig-v2",
         assigned_classifier_version="classifier-v2",
+        expected_attempt_count=assignment.attempt_count,
         assigned_at=second_assigned_at,
     )
 
@@ -239,20 +263,24 @@ def test_failures_finish_processing_and_preserve_last_success(
     signal = create_signal_for_membership(membership)
     pattern = create_pattern_for_membership(membership)
     assigned_at = timezone.now() - timedelta(hours=1)
-    mark_assignment_succeeded(
+    process_then_succeed(
         signal=signal,
         pattern=pattern,
-        assigned_signature="sig-v1",
-        assigned_classifier_version="classifier-v1",
+        signature="sig-v1",
+        classifier_version="classifier-v1",
         assigned_at=assigned_at,
     )
-    mark_assignment_processing(
+    processing = mark_assignment_processing(
         signal=signal,
         pending_signature="sig-v2",
         pending_classifier_version="classifier-v2",
     )
 
-    assignment = failure_service(signal=signal, error_code="provider_timeout")
+    assignment = failure_service(
+        signal=signal,
+        error_code="provider_timeout",
+        expected_attempt_count=processing.attempt_count,
+    )
 
     assert assignment.classification_status == expected_status
     assert assignment.pattern_id == pattern.id
@@ -268,14 +296,14 @@ def test_temporary_failure_stores_retry_without_modifying_assigned_at():
     pattern = create_pattern_for_membership(membership)
     assigned_at = timezone.now() - timedelta(hours=1)
     retry_at = timezone.now() + timedelta(minutes=10)
-    mark_assignment_succeeded(
+    process_then_succeed(
         signal=signal,
         pattern=pattern,
-        assigned_signature="sig-v1",
-        assigned_classifier_version="classifier-v1",
+        signature="sig-v1",
+        classifier_version="classifier-v1",
         assigned_at=assigned_at,
     )
-    mark_assignment_processing(
+    processing = mark_assignment_processing(
         signal=signal,
         pending_signature="sig-v2",
         pending_classifier_version="classifier-v2",
@@ -284,6 +312,7 @@ def test_temporary_failure_stores_retry_without_modifying_assigned_at():
     assignment = mark_assignment_temporary_failed(
         signal=signal,
         error_code="provider_timeout",
+        expected_attempt_count=processing.attempt_count,
         next_retry_at=retry_at,
     )
 
@@ -300,6 +329,7 @@ def test_failure_without_processing_attempt_is_refused():
         mark_assignment_temporary_failed(
             signal=signal,
             error_code="provider_timeout",
+            expected_attempt_count=1,
         )
 
 
@@ -319,6 +349,11 @@ def test_cross_organization_pattern_is_refused():
     other_membership = build_membership()
     signal = create_signal_for_membership(membership)
     pattern = create_pattern_for_membership(other_membership)
+    processing = mark_assignment_processing(
+        signal=signal,
+        pending_signature="sig-v1",
+        pending_classifier_version="classifier-v1",
+    )
 
     with pytest.raises(AnalyticsValidationError):
         mark_assignment_succeeded(
@@ -326,6 +361,7 @@ def test_cross_organization_pattern_is_refused():
             pattern=pattern,
             assigned_signature="sig-v1",
             assigned_classifier_version="classifier-v1",
+            expected_attempt_count=processing.attempt_count,
         )
 
 
@@ -346,6 +382,11 @@ def test_inactive_pattern_is_refused(status):
         status=status,
         merged_into=target if status == OperationalPattern.Status.MERGED else None,
     )
+    processing = mark_assignment_processing(
+        signal=signal,
+        pending_signature="sig-v1",
+        pending_classifier_version="classifier-v1",
+    )
 
     with pytest.raises(AnalyticsValidationError):
         mark_assignment_succeeded(
@@ -353,4 +394,5 @@ def test_inactive_pattern_is_refused(status):
             pattern=pattern,
             assigned_signature="sig-v1",
             assigned_classifier_version="classifier-v1",
+            expected_attempt_count=processing.attempt_count,
         )

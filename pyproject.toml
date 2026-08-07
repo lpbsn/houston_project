@@ -38,6 +38,7 @@ markers = [
     "openai_smoke: opt-in live OpenAI onboarding test (requires HOUSTON_RUN_OPENAI_SMOKE_TEST=1)",
     "openai_observation_smoke: opt-in live OpenAI observation pipeline test (requires HOUSTON_RUN_OPENAI_OBSERVATION_SMOKE_TEST=1)",
     "allow_openai_observation_propose: test may call OpenAIObservationPipelineProvider.propose (e.g. missing API key guard test)",
+    "allow_openai_pattern_classify: test may call OpenAIPatternClassifierProvider.classify with a mocked client",
     "openai_transcription_smoke: opt-in live OpenAI transcription test",
     "slow: tests over 1s or explicit sleep",
     "auth_throttle: tests that assert real rate-limit behavior (429); excluded from relaxed-throttle fixture",

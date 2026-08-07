@@ -220,6 +220,17 @@ def record_source_observation_link(
     return link
 
 
+def _schedule_signal_pattern_classification(*, signal: Signal) -> None:
+    signal_id = signal.id
+
+    def _enqueue() -> None:
+        from houston.analytics.tasks import classify_signal_pattern_task
+
+        classify_signal_pattern_task.delay(str(signal_id))
+
+    transaction.on_commit(_enqueue)
+
+
 @transaction.atomic
 def create_signal_from_candidate(
     *,
@@ -305,6 +316,7 @@ def create_signal_from_candidate(
         observation=observation,
         link_type=SignalSourceObservation.LinkType.CREATED_FROM,
     )
+    _schedule_signal_pattern_classification(signal=signal)
     _schedule_signal_invalidation(signal=signal, reason="signal.created")
     from houston.notifications.scheduling import schedule_signal_created_notification
 

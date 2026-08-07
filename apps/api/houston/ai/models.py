@@ -10,6 +10,7 @@ class AIUsageLog(BaseModel):
         ONBOARDING = "onboarding", "Onboarding"
         TRANSCRIPTION = "transcription", "Transcription"
         OBSERVATION_PIPELINE = "observation_pipeline", "Observation pipeline"
+        ANALYTICS_PATTERN = "analytics_pattern", "Analytics pattern"
 
     class Status(models.TextChoices):
         STARTED = "started", "Started"
