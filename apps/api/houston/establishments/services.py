@@ -3190,6 +3190,44 @@ def update_membership_for_management(
     return _reload_membership_for_response(membership.id)
 
 
+def resolve_stale_owner_actor_membership_for_deactivation(
+    *,
+    user: User | None,
+    establishment_id,
+    membership_id,
+) -> EstablishmentMembership | None:
+    if user is None or not getattr(user, "is_authenticated", False):
+        return None
+    if user.status != User.Status.ACTIVE:
+        return None
+
+    target = (
+        EstablishmentMembership.objects.filter(
+            id=membership_id,
+            establishment_id=establishment_id,
+            role=EstablishmentMembership.Role.OWNER,
+            establishment__status=Establishment.Status.ACTIVE,
+            establishment__organization__status=Organization.Status.ACTIVE,
+        )
+        .select_related("establishment", "establishment__organization")
+        .first()
+    )
+    if target is None:
+        return None
+
+    return (
+        EstablishmentMembership.objects.filter(
+            user_id=user.id,
+            establishment_id=establishment_id,
+            role=EstablishmentMembership.Role.OWNER,
+            status=EstablishmentMembership.Status.DEACTIVATED,
+            establishment__organization_id=target.establishment.organization_id,
+        )
+        .select_related("user", "establishment", "establishment__organization")
+        .first()
+    )
+
+
 @transaction.atomic
 def deactivate_membership_for_management(
     *,

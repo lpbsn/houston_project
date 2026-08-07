@@ -337,8 +337,53 @@ def _validate_fake_response(
             f"{label}: new_pattern fake response {signal_ref!r} must not include pattern_key",
             errors,
         )
+        _validate_duplicate_guard_response(
+            label=label,
+            signal_ref=signal_ref,
+            response=response.get("duplicate_guard_response"),
+            pattern_keys=pattern_keys,
+            errors=errors,
+        )
         return
     errors.append(f"{label}: fake response {signal_ref!r} has invalid result_type")
+
+
+def _validate_duplicate_guard_response(
+    *,
+    label: str,
+    signal_ref: str,
+    response: Any,
+    pattern_keys: set[str],
+    errors: list[str],
+) -> None:
+    if response is None:
+        return
+    _require(
+        isinstance(response, dict),
+        f"{label}: duplicate guard response {signal_ref!r} must be an object",
+        errors,
+    )
+    if not isinstance(response, dict):
+        return
+    result_type = response.get("result_type")
+    if result_type == "reuse_existing_pattern":
+        _require(
+            response.get("pattern_key") in pattern_keys,
+            f"{label}: duplicate guard response {signal_ref!r} references unknown pattern_key",
+            errors,
+        )
+        return
+    if result_type == "create_new_pattern":
+        _require(
+            "pattern_key" not in response,
+            f"{label}: create_new_pattern duplicate guard response {signal_ref!r} "
+            "must not include pattern_key",
+            errors,
+        )
+        return
+    errors.append(
+        f"{label}: duplicate guard response {signal_ref!r} has invalid result_type"
+    )
 
 
 def _validate_pairs(

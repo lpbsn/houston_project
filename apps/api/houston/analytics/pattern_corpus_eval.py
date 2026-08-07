@@ -12,6 +12,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from houston.analytics.classifier import (
+    ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION,
+    ANALYTICS_PATTERN_DUPLICATE_GUARD_SCHEMA_VERSION,
     ANALYTICS_PATTERN_PROMPT_VERSION,
     ANALYTICS_PATTERN_SCHEMA_VERSION,
     FakePatternClassifierProvider,
@@ -23,6 +25,7 @@ from houston.analytics.classifier import (
 from houston.analytics.labels import normalize_pattern_label
 from houston.analytics.models import OperationalPattern, SignalPatternAssignment
 from houston.analytics.services import (
+    DUPLICATE_GUARD_SHORTLIST_STRATEGY,
     PatternClassificationRetryableError,
     classify_signal_pattern,
     create_operational_pattern,
@@ -63,6 +66,7 @@ class CorpusSignalResult:
     expected_new_pattern_label: str = ""
     error_code: str = ""
     provider_call_count: int = 0
+    duplicate_guard_decision: str = ""
 
 
 @dataclass(frozen=True)
@@ -72,6 +76,7 @@ class CorpusScenarioResult:
     signal_results: tuple[CorpusSignalResult, ...]
     metrics: dict[str, Any] = field(default_factory=dict)
     idempotence: dict[str, Any] = field(default_factory=dict)
+    duplicate_guard_comparison: dict[str, Any] = field(default_factory=dict)
     errors: tuple[str, ...] = ()
 
 
@@ -96,10 +101,19 @@ class CapturingPatternClassifierProvider:
         self.model = getattr(provider, "model", "")
         self._provider = provider
         self.calls: list[dict[str, Any]] = []
+        self.duplicate_guard_calls: list[dict[str, Any]] = []
 
     def classify(self, *, input_payload: dict[str, Any]) -> PatternClassifierProviderResponse:
         self.calls.append(input_payload)
         return self._provider.classify(input_payload=input_payload)
+
+    def assess_duplicate(
+        self,
+        *,
+        input_payload: dict[str, Any],
+    ) -> PatternClassifierProviderResponse:
+        self.duplicate_guard_calls.append(input_payload)
+        return self._provider.assess_duplicate(input_payload=input_payload)
 
 
 class CorpusFakePatternClassifierProvider(FakePatternClassifierProvider):
@@ -128,6 +142,32 @@ class CorpusFakePatternClassifierProvider(FakePatternClassifierProvider):
             payload={
                 "result_type": "new_pattern",
                 "canonical_label": self._response["canonical_label"],
+            },
+            model=self.model,
+        )
+
+    def assess_duplicate(
+        self,
+        *,
+        input_payload: dict[str, Any],
+    ) -> PatternClassifierProviderResponse:
+        self.duplicate_guard_calls.append(input_payload)
+        response = self._response.get("duplicate_guard_response") or {
+            "result_type": "create_new_pattern"
+        }
+        if response["result_type"] == "reuse_existing_pattern":
+            pattern_key = response["pattern_key"]
+            return PatternClassifierProviderResponse(
+                payload={
+                    "result_type": "reuse_existing_pattern",
+                    "pattern_id": str(self._pattern_ids_by_key[pattern_key]),
+                },
+                model=self.model,
+            )
+        return PatternClassifierProviderResponse(
+            payload={
+                "result_type": "create_new_pattern",
+                "pattern_id": None,
             },
             model=self.model,
         )
@@ -183,6 +223,13 @@ def analytics_pattern_corpus_eval_report_to_dict(
         "classifier_version": report.classifier_version,
         "prompt_version": report.prompt_version,
         "schema_version": report.schema_version,
+        "duplicate_guard": {
+            "prompt_version": ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION,
+            "schema_version": ANALYTICS_PATTERN_DUPLICATE_GUARD_SCHEMA_VERSION,
+            "shortlist_strategy": DUPLICATE_GUARD_SHORTLIST_STRATEGY,
+            "min_score": settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE,
+            "max_candidates": settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MAX_CANDIDATES,
+        },
         "timeout_seconds": report.timeout_seconds,
         "max_retries": report.max_retries,
         "retry_delay_seconds": report.retry_delay_seconds,
@@ -198,6 +245,7 @@ def analytics_pattern_corpus_eval_report_to_dict(
                 "signal_order": list(scenario.signal_order),
                 "metrics": scenario.metrics,
                 "idempotence": scenario.idempotence,
+                "duplicate_guard_comparison": scenario.duplicate_guard_comparison,
                 "errors": list(scenario.errors),
                 "signals": [
                     {
@@ -210,6 +258,7 @@ def analytics_pattern_corpus_eval_report_to_dict(
                         "expected_new_pattern_label": signal.expected_new_pattern_label,
                         "error_code": signal.error_code,
                         "provider_call_count": signal.provider_call_count,
+                        "duplicate_guard_decision": signal.duplicate_guard_decision,
                     }
                     for signal in scenario.signal_results
                 ],
@@ -323,6 +372,42 @@ def _evaluate_scenario(
     scenario: dict[str, Any],
     provider_name: str,
 ) -> CorpusScenarioResult:
+    with transaction.atomic():
+        baseline = _evaluate_scenario_once(
+            scenario=scenario,
+            provider_name=provider_name,
+            duplicate_guard_enabled=False,
+        )
+        transaction.set_rollback(True)
+
+    with transaction.atomic():
+        guarded = _evaluate_scenario_once(
+            scenario=scenario,
+            provider_name=provider_name,
+            duplicate_guard_enabled=True,
+        )
+        transaction.set_rollback(True)
+
+    return CorpusScenarioResult(
+        scenario_id=guarded.scenario_id,
+        signal_order=guarded.signal_order,
+        signal_results=guarded.signal_results,
+        metrics=guarded.metrics,
+        idempotence=guarded.idempotence,
+        duplicate_guard_comparison=_duplicate_guard_comparison(
+            baseline=baseline,
+            guarded=guarded,
+        ),
+        errors=guarded.errors,
+    )
+
+
+def _evaluate_scenario_once(
+    *,
+    scenario: dict[str, Any],
+    provider_name: str,
+    duplicate_guard_enabled: bool,
+) -> CorpusScenarioResult:
     membership = build_membership()
     establishment = membership.establishment
     business_units = {
@@ -394,8 +479,10 @@ def _evaluate_scenario(
             provider=provider,
             max_retries=3,
             retry_delay_seconds=30,
+            duplicate_guard_enabled=duplicate_guard_enabled,
         )
         all_provider_calls.extend(provider.calls)
+        all_provider_calls.extend(provider.duplicate_guard_calls)
         signal_results.append(
             _build_signal_result(
                 signal_ref=raw["ref"],
@@ -414,6 +501,7 @@ def _evaluate_scenario(
         first_results=tuple(signal_results),
         provider_name=provider_name,
         pattern_ids_by_key=pattern_ids_by_key,
+        duplicate_guard_enabled=duplicate_guard_enabled,
     )
     metrics = _scenario_metrics(
         scenario=scenario,
@@ -429,17 +517,87 @@ def _evaluate_scenario(
     )
 
 
+def _duplicate_guard_comparison(
+    *,
+    baseline: CorpusScenarioResult,
+    guarded: CorpusScenarioResult,
+) -> dict[str, Any]:
+    baseline_new_patterns = _new_pattern_count(baseline.signal_results)
+    guarded_new_patterns = _new_pattern_count(guarded.signal_results)
+    return {
+        "baseline": {
+            "new_pattern_count": baseline_new_patterns,
+            "fragmentation_false_separation_count": baseline.metrics[
+                "fragmentation_false_separation_count"
+            ],
+            "false_merge_failing_count": baseline.metrics["false_merge_rate"].get(
+                "failing_count",
+                0,
+            ),
+            "technical_success_rate": baseline.metrics["technical_success_rate"],
+        },
+        "guard": {
+            "new_pattern_count": guarded_new_patterns,
+            "fragmentation_false_separation_count": guarded.metrics[
+                "fragmentation_false_separation_count"
+            ],
+            "false_merge_failing_count": guarded.metrics["false_merge_rate"].get(
+                "failing_count",
+                0,
+            ),
+            "technical_success_rate": guarded.metrics["technical_success_rate"],
+            "duplicate_guard_reuse_count": guarded.metrics[
+                "duplicate_guard_reuse_count"
+            ],
+            "duplicate_guard_created_count": guarded.metrics[
+                "duplicate_guard_created_count"
+            ],
+            "duplicate_guard_skipped_count": guarded.metrics[
+                "duplicate_guard_skipped_count"
+            ],
+            "duplicate_guard_fallback_count": guarded.metrics[
+                "duplicate_guard_fallback_count"
+            ],
+        },
+        "delta": {
+            "new_pattern_count": guarded_new_patterns - baseline_new_patterns,
+            "fragmentation_false_separation_count": guarded.metrics[
+                "fragmentation_false_separation_count"
+            ]
+            - baseline.metrics["fragmentation_false_separation_count"],
+            "false_merge_failing_count": guarded.metrics["false_merge_rate"].get(
+                "failing_count",
+                0,
+            )
+            - baseline.metrics["false_merge_rate"].get("failing_count", 0),
+        },
+    }
+
+
+def _new_pattern_count(signal_results: tuple[CorpusSignalResult, ...]) -> int:
+    return sum(
+        1
+        for result in signal_results
+        if result.technical_success and result.assigned_pattern_key is None
+    )
+
+
 def _run_classification_to_terminal_state(
     *,
     signal: Signal,
     provider: CapturingPatternClassifierProvider | CorpusFakePatternClassifierProvider,
     max_retries: int,
     retry_delay_seconds: int,
+    duplicate_guard_enabled: bool = True,
 ) -> SignalPatternAssignment | None:
     retries = 0
     while True:
         try:
-            return classify_signal_pattern(signal.id, provider=provider)
+            return classify_signal_pattern(
+                signal.id,
+                provider=provider,
+                duplicate_guard_enabled=duplicate_guard_enabled,
+            )
         except PatternClassificationRetryableError as exc:
             signal.refresh_from_db()
             finalization = finalize_retryable_pattern_classification_error(
@@ -462,6 +620,7 @@ def _evaluate_idempotence(
     first_results: tuple[CorpusSignalResult, ...],
     provider_name: str,
     pattern_ids_by_key: dict[str, Any],
+    duplicate_guard_enabled: bool,
 ) -> dict[str, Any]:
     eligible = [
         result
@@ -477,13 +636,18 @@ def _evaluate_idempotence(
             pattern_ids_by_key=pattern_ids_by_key,
         )
         before_patterns = OperationalPattern.objects.count()
-        assignment = classify_signal_pattern(signals_by_ref[result.ref].id, provider=provider)
+        assignment = classify_signal_pattern(
+            signals_by_ref[result.ref].id,
+            provider=provider,
+            duplicate_guard_enabled=duplicate_guard_enabled,
+        )
         after_patterns = OperationalPattern.objects.count()
         if (
             assignment is not None
             and assignment.classification_status
             == SignalPatternAssignment.ClassificationStatus.SUCCEEDED
             and not provider.calls
+            and not provider.duplicate_guard_calls
             and before_patterns == after_patterns
         ):
             passed += 1
@@ -529,6 +693,11 @@ def _build_signal_result(
         expected_new_pattern_label=signal_spec.get("expected_new_pattern_label", ""),
         error_code=assignment.last_error_code,
         provider_call_count=provider_call_count,
+        duplicate_guard_decision=getattr(
+            assignment,
+            "_analytics_duplicate_guard_decision",
+            "",
+        ),
     )
 
 
@@ -591,6 +760,18 @@ def _scenario_metrics(
             scenario=scenario,
         )
     )
+    guard_reused = sum(
+        1 for result in signal_results if result.duplicate_guard_decision == "reused"
+    )
+    guard_created = sum(
+        1 for result in signal_results if result.duplicate_guard_decision == "created"
+    )
+    guard_skipped = sum(
+        1 for result in signal_results if result.duplicate_guard_decision == "skipped"
+    )
+    guard_fallback = sum(
+        1 for result in signal_results if result.duplicate_guard_decision == "fallback"
+    )
 
     return {
         "false_merge_rate": _rate_metric(
@@ -626,6 +807,10 @@ def _scenario_metrics(
             total=len(expected_new_results),
             metric_name="canonical_label_quality_rate",
         ),
+        "duplicate_guard_reuse_count": guard_reused,
+        "duplicate_guard_created_count": guard_created,
+        "duplicate_guard_skipped_count": guard_skipped,
+        "duplicate_guard_fallback_count": guard_fallback,
     }
 
 
@@ -712,6 +897,22 @@ def _combine_metrics(
             passed=label_passed,
             total=expected_new_total,
             metric_name="canonical_label_quality_rate",
+        ),
+        "duplicate_guard_reuse_count": sum(
+            scenario.metrics["duplicate_guard_reuse_count"]
+            for scenario in scenario_results
+        ),
+        "duplicate_guard_created_count": sum(
+            scenario.metrics["duplicate_guard_created_count"]
+            for scenario in scenario_results
+        ),
+        "duplicate_guard_skipped_count": sum(
+            scenario.metrics["duplicate_guard_skipped_count"]
+            for scenario in scenario_results
+        ),
+        "duplicate_guard_fallback_count": sum(
+            scenario.metrics["duplicate_guard_fallback_count"]
+            for scenario in scenario_results
         ),
     }
 

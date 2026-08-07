@@ -24,6 +24,10 @@ def env_int(name: str, default: int) -> int:
     return int(env_str(name, str(default)))
 
 
+def env_float(name: str, default: float) -> float:
+    return float(env_str(name, str(default)))
+
+
 SECRET_KEY = env_str("DJANGO_SECRET_KEY", "replace-me-for-local-dev")
 DEBUG = env_bool("DJANGO_DEBUG", default=True)
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
@@ -178,6 +182,14 @@ HOUSTON_AI_ANALYTICS_PATTERN_TIMEOUT_SECONDS = env_int(
 HOUSTON_AI_ANALYTICS_PATTERN_MAX_RETRIES = env_int(
     "HOUSTON_AI_ANALYTICS_PATTERN_MAX_RETRIES",
     2,
+)
+HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE = env_float(
+    "HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE",
+    0.5,
+)
+HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MAX_CANDIDATES = env_int(
+    "HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MAX_CANDIDATES",
+    5,
 )
 AUTH_USER_MODEL = "accounts.User"
 
