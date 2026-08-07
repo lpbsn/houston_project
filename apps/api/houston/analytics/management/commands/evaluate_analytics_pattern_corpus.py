@@ -6,7 +6,7 @@ from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 
 from houston.analytics.pattern_corpus_eval import (
-    all_thresholds_passed,
+    analytics_pattern_corpus_eval_passed,
     analytics_pattern_corpus_eval_report_to_dict,
     evaluate_analytics_pattern_corpus,
     format_analytics_pattern_corpus_eval_report,
@@ -88,5 +88,7 @@ class Command(BaseCommand):
         else:
             self.stdout.write(format_analytics_pattern_corpus_eval_report(report))
 
-        if options["fail_on_threshold"] and not all_thresholds_passed(report.metrics):
-            raise CommandError("Analytics pattern corpus eval failed thresholds.")
+        if options["fail_on_threshold"] and not analytics_pattern_corpus_eval_passed(
+            report
+        ):
+            raise CommandError("Analytics pattern corpus eval failed.")

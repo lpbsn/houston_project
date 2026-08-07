@@ -176,6 +176,7 @@ def evaluate_analytics_pattern_corpus(
 def analytics_pattern_corpus_eval_report_to_dict(
     report: AnalyticsPatternCorpusEvalReport,
 ) -> dict[str, Any]:
+    thresholds_passed = all_thresholds_passed(report.metrics)
     return {
         "provider": report.provider,
         "provider_model": report.provider_model,
@@ -187,7 +188,10 @@ def analytics_pattern_corpus_eval_report_to_dict(
         "retry_delay_seconds": report.retry_delay_seconds,
         "metrics": report.metrics,
         "errors": list(report.errors),
-        "all_thresholds_passed": all_thresholds_passed(report.metrics),
+        "thresholds_passed": thresholds_passed,
+        "evaluation_status": (
+            "pass" if analytics_pattern_corpus_eval_passed(report) else "fail"
+        ),
         "scenarios": [
             {
                 "scenario_id": scenario.scenario_id,
@@ -249,6 +253,16 @@ def all_thresholds_passed(metrics: dict[str, Any]) -> bool:
         metric.get("status") in {"pass", "not_applicable"}
         for key, metric in metrics.items()
         if key in MAIN_THRESHOLDS
+    )
+
+
+def analytics_pattern_corpus_eval_passed(
+    report: AnalyticsPatternCorpusEvalReport,
+) -> bool:
+    return (
+        not report.errors
+        and bool(report.scenario_results)
+        and all_thresholds_passed(report.metrics)
     )
 
 

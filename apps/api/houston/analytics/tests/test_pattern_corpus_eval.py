@@ -15,6 +15,7 @@ from houston.analytics.classifier import (
 )
 from houston.analytics.models import OperationalPattern, SignalPatternAssignment
 from houston.analytics.pattern_corpus_eval import (
+    CorpusScenarioResult,
     _run_classification_to_terminal_state,
     analytics_pattern_corpus_eval_report_to_dict,
     evaluate_analytics_pattern_corpus,
@@ -296,6 +297,23 @@ def test_command_json_output_is_stable_and_non_mutating():
     assert not UUID_RE.search(json.dumps(payload, sort_keys=True))
 
 
+def test_command_full_fake_corpus_passes_thresholds():
+    buffer = StringIO()
+
+    call_command(
+        "evaluate_analytics_pattern_corpus",
+        provider="fake",
+        json=True,
+        fail_on_threshold=True,
+        stdout=buffer,
+    )
+    payload = json.loads(buffer.getvalue())
+
+    assert payload["thresholds_passed"] is True
+    assert payload["evaluation_status"] == "pass"
+    assert payload["metrics"]["technical_success_rate"]["status"] == "pass"
+
+
 def test_command_archive_writes_only_when_requested(tmp_path):
     buffer = StringIO()
 
@@ -313,6 +331,120 @@ def test_command_archive_writes_only_when_requested(tmp_path):
 
 
 def test_command_fail_on_threshold_ignores_not_applicable(monkeypatch):
+    from houston.analytics.pattern_corpus_eval import AnalyticsPatternCorpusEvalReport
+
+    report = AnalyticsPatternCorpusEvalReport(
+        provider="fake",
+        provider_model="fake",
+        classifier_version="analytics_pattern_v1:fake:fake",
+        prompt_version="analytics_pattern_v1",
+        schema_version="analytics_pattern_v1",
+        timeout_seconds=None,
+        max_retries=3,
+        retry_delay_seconds=30,
+        scenario_results=(
+            CorpusScenarioResult(
+                scenario_id="empty_metric_scenario",
+                signal_order=(),
+                signal_results=(),
+            ),
+        ),
+        metrics={
+            "false_merge_rate": {
+                "passed": 0,
+                "total": 0,
+                "rate": None,
+                "status": "not_applicable",
+            },
+            "acceptable_grouping_rate": {
+                "passed": 0,
+                "total": 0,
+                "rate": None,
+                "status": "not_applicable",
+            },
+            "technical_success_rate": {
+                "passed": 0,
+                "total": 0,
+                "rate": None,
+                "status": "not_applicable",
+            },
+        },
+    )
+    monkeypatch.setattr(
+        "houston.analytics.management.commands.evaluate_analytics_pattern_corpus.evaluate_analytics_pattern_corpus",
+        lambda **kwargs: report,
+    )
+
+    call_command(
+        "evaluate_analytics_pattern_corpus",
+        provider="fake",
+        fail_on_threshold=True,
+        stdout=StringIO(),
+    )
+
+
+def test_command_fail_on_threshold_raises_for_report_errors(monkeypatch):
+    from houston.analytics.pattern_corpus_eval import AnalyticsPatternCorpusEvalReport
+
+    report = AnalyticsPatternCorpusEvalReport(
+        provider="fake",
+        provider_model="fake",
+        classifier_version="analytics_pattern_v1:fake:fake",
+        prompt_version="analytics_pattern_v1",
+        schema_version="analytics_pattern_v1",
+        timeout_seconds=None,
+        max_retries=3,
+        retry_delay_seconds=30,
+        scenario_results=(
+            CorpusScenarioResult(
+                scenario_id="failed_scenario",
+                signal_order=(),
+                signal_results=(),
+            ),
+        ),
+        metrics={
+            "false_merge_rate": {
+                "passed": 0,
+                "total": 0,
+                "rate": None,
+                "status": "not_applicable",
+            },
+            "acceptable_grouping_rate": {
+                "passed": 0,
+                "total": 0,
+                "rate": None,
+                "status": "not_applicable",
+            },
+            "technical_success_rate": {
+                "passed": 0,
+                "total": 0,
+                "rate": None,
+                "status": "not_applicable",
+            },
+        },
+        errors=("scenario: ProgrammingError",),
+    )
+    monkeypatch.setattr(
+        "houston.analytics.management.commands.evaluate_analytics_pattern_corpus.evaluate_analytics_pattern_corpus",
+        lambda **kwargs: report,
+    )
+    buffer = StringIO()
+
+    with pytest.raises(CommandError, match="eval failed"):
+        call_command(
+            "evaluate_analytics_pattern_corpus",
+            provider="fake",
+            json=True,
+            fail_on_threshold=True,
+            stdout=buffer,
+        )
+    payload = json.loads(buffer.getvalue())
+
+    assert payload["thresholds_passed"] is True
+    assert payload["evaluation_status"] == "fail"
+
+
+def test_command_fail_on_threshold_raises_when_no_scenario_succeeded(monkeypatch):
     from houston.analytics.pattern_corpus_eval import AnalyticsPatternCorpusEvalReport
 
     report = AnalyticsPatternCorpusEvalReport(
@@ -350,13 +482,20 @@ def test_command_fail_on_threshold_ignores_not_applicable(monkeypatch):
         "houston.analytics.management.commands.evaluate_analytics_pattern_corpus.evaluate_analytics_pattern_corpus",
         lambda **kwargs: report,
     )
+    buffer = StringIO()
 
-    call_command(
-        "evaluate_analytics_pattern_corpus",
-        provider="fake",
-        fail_on_threshold=True,
-        stdout=StringIO(),
-    )
+    with pytest.raises(CommandError, match="eval failed"):
+        call_command(
+            "evaluate_analytics_pattern_corpus",
+            provider="fake",
+            json=True,
+            fail_on_threshold=True,
+            stdout=buffer,
+        )
+    payload = json.loads(buffer.getvalue())
+
+    assert payload["thresholds_passed"] is True
+    assert payload["evaluation_status"] == "fail"
 
 
 def test_command_fail_on_threshold_raises_for_applicable_failure(monkeypatch):
@@ -398,7 +537,7 @@ def test_command_fail_on_threshold_raises_for_applicable_failure(monkeypatch):
         lambda **kwargs: report,
     )
 
-    with pytest.raises(CommandError, match="failed thresholds"):
+    with pytest.raises(CommandError, match="eval failed"):
         call_command(
             "evaluate_analytics_pattern_corpus",
             provider="fake",

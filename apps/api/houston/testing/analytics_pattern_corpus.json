@@ -70,7 +70,7 @@
         {"ref": "rs_02", "title": "Pasta unavailable for service", "structured_summary": "The kitchen has no remaining pasta for the next service.", "issue_focus": "pasta shortage", "activity_subject_key": "dry_stock", "operational_unit_key": "main_kitchen", "affected_business_unit_key": "restaurant", "responsible_business_unit_key": "kitchen", "expected_pattern_key": "ingredient_shortage"},
         {"ref": "rs_03", "title": "Cold room temperature high", "structured_summary": "The cold room is above the expected temperature range.", "issue_focus": "cold room warm", "activity_subject_key": "cold_storage", "operational_unit_key": "main_kitchen", "affected_business_unit_key": "kitchen", "responsible_business_unit_key": "kitchen", "expected_pattern_key": "cold_storage_temperature"},
         {"ref": "rs_04", "title": "Fridge readings too warm", "structured_summary": "Several fridge readings are too warm for safe storage.", "issue_focus": "fridge temperature high", "activity_subject_key": "cold_storage", "operational_unit_key": "main_kitchen", "affected_business_unit_key": "kitchen", "responsible_business_unit_key": "kitchen", "expected_pattern_key": "cold_storage_temperature"},
-        {"ref": "rs_05", "title": "Mojito syrup missing", "structured_summary": "The bar has no mojito syrup for the evening service.", "issue_focus": "mojito syrup shortage", "activity_subject_key": "bar_stock", "operational_unit_key": "service_bar", "affected_business_unit_key": "bar", "responsible_business_unit_key": "bar", "expected_new_pattern_label": "Bar syrup stockout"},
+        {"ref": "rs_05", "title": "Mojito syrup missing", "structured_summary": "The bar has no mojito syrup for the evening service.", "issue_focus": "mojito syrup shortage", "activity_subject_key": "bar_stock", "operational_unit_key": "service_bar", "affected_business_unit_key": "bar", "responsible_business_unit_key": "bar", "expected_new_pattern_label": "Syrup stock shortage"},
         {"ref": "rs_06", "title": "Coffee capsules low", "structured_summary": "Coffee capsules are below the minimum stock level.", "issue_focus": "coffee capsule shortage", "activity_subject_key": "bar_stock", "operational_unit_key": "service_bar", "affected_business_unit_key": "restaurant", "responsible_business_unit_key": "bar", "expected_pattern_key": "ingredient_shortage"}
       ],
       "fake_responses": {
@@ -78,7 +78,7 @@
         "rs_02": {"result_type": "existing_pattern", "pattern_key": "ingredient_shortage"},
         "rs_03": {"result_type": "existing_pattern", "pattern_key": "cold_storage_temperature"},
         "rs_04": {"result_type": "existing_pattern", "pattern_key": "cold_storage_temperature"},
-        "rs_05": {"result_type": "new_pattern", "canonical_label": "Bar syrup stockout"},
+        "rs_05": {"result_type": "new_pattern", "canonical_label": "Syrup stock shortage"},
         "rs_06": {"result_type": "existing_pattern", "pattern_key": "ingredient_shortage"}
       },
       "must_link": [["rs_01", "rs_02"], ["rs_03", "rs_04"], ["rs_01", "rs_06"]],
@@ -150,16 +150,16 @@
         {"ref": "sp_02", "title": "Slippery corridor", "structured_summary": "A corridor section is slippery and should be secured.", "issue_focus": "slippery floor", "activity_subject_key": "floor_safety", "operational_unit_key": "corridor", "affected_business_unit_key": "public_area", "responsible_business_unit_key": "safety", "expected_pattern_key": "slip_hazard"},
         {"ref": "sp_03", "title": "Alarm panel error", "structured_summary": "The fire alarm panel shows a device fault.", "issue_focus": "alarm device fault", "activity_subject_key": "fire_alarm", "operational_unit_key": "corridor", "affected_business_unit_key": "public_area", "responsible_business_unit_key": "maintenance", "expected_pattern_key": "alarm_fault"},
         {"ref": "sp_04", "title": "Detector warning light", "structured_summary": "A detector warning light remains active near the service corridor.", "issue_focus": "detector fault", "activity_subject_key": "fire_alarm", "operational_unit_key": "corridor", "affected_business_unit_key": "public_area", "responsible_business_unit_key": "maintenance", "expected_pattern_key": "alarm_fault"},
-        {"ref": "sp_05", "title": "Lobby light flickers", "structured_summary": "A lobby light is flickering repeatedly.", "issue_focus": "flickering light", "activity_subject_key": "lighting", "operational_unit_key": "lobby", "affected_business_unit_key": "public_area", "responsible_business_unit_key": "maintenance", "expected_new_pattern_label": "Public area lighting instability"},
-        {"ref": "sp_06", "title": "Corridor light out", "structured_summary": "A corridor light is out and reduces visibility.", "issue_focus": "light outage", "activity_subject_key": "lighting", "operational_unit_key": "corridor", "affected_business_unit_key": "public_area", "responsible_business_unit_key": "maintenance", "expected_new_pattern_label": "Public area lighting instability"}
+        {"ref": "sp_05", "title": "Lobby light flickers", "structured_summary": "A lobby light is flickering repeatedly.", "issue_focus": "flickering light", "activity_subject_key": "lighting", "operational_unit_key": "lobby", "affected_business_unit_key": "public_area", "responsible_business_unit_key": "maintenance", "expected_new_pattern_label": "Lighting reliability issue"},
+        {"ref": "sp_06", "title": "Corridor light out", "structured_summary": "A corridor light is out and reduces visibility.", "issue_focus": "light outage", "activity_subject_key": "lighting", "operational_unit_key": "corridor", "affected_business_unit_key": "public_area", "responsible_business_unit_key": "maintenance", "expected_new_pattern_label": "Lighting reliability issue"}
       ],
       "fake_responses": {
         "sp_01": {"result_type": "existing_pattern", "pattern_key": "slip_hazard"},
         "sp_02": {"result_type": "existing_pattern", "pattern_key": "slip_hazard"},
         "sp_03": {"result_type": "existing_pattern", "pattern_key": "alarm_fault"},
         "sp_04": {"result_type": "existing_pattern", "pattern_key": "alarm_fault"},
-        "sp_05": {"result_type": "new_pattern", "canonical_label": "Public area lighting instability"},
-        "sp_06": {"result_type": "new_pattern", "canonical_label": "Public area lighting instability"}
+        "sp_05": {"result_type": "new_pattern", "canonical_label": "Lighting reliability issue"},
+        "sp_06": {"result_type": "new_pattern", "canonical_label": "Lighting reliability issue"}
       },
       "must_link": [["sp_01", "sp_02"], ["sp_03", "sp_04"], ["sp_05", "sp_06"]],
       "must_not_link": [["sp_01", "sp_03"], ["sp_01", "sp_05"], ["sp_03", "sp_06"]]
