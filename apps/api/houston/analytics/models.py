@@ -146,6 +146,7 @@ class PatternLifecycleEvent(BaseModel):
         MERGED = "merged", "Merged"
         RENAMED = "renamed", "Renamed"
         RETIRED = "retired", "Retired"
+        SPLIT = "split", "Split"
         SIGNALS_MOVED = "signals_moved", "Signals moved"
 
     pattern = models.ForeignKey(

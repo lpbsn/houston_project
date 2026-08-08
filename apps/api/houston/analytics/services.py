@@ -79,12 +79,28 @@ class PatternClassificationClaimResult:
     status: str
     attempt_count: int | None
     assignment: SignalPatternAssignment
+    reason: str = ""
 
 
 @dataclass(frozen=True)
 class PatternClassificationRetryFinalization:
     outcome: str
     assignment: SignalPatternAssignment
+
+
+@dataclass(frozen=True)
+class OwnerPatternMoveResult:
+    moved_assignments: tuple[SignalPatternAssignment, ...]
+    moved_signal_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class PatternSplitResult:
+    source_pattern: OperationalPattern
+    target_pattern: OperationalPattern | None
+    target_created: bool
+    moved_assignments: tuple[SignalPatternAssignment, ...]
+    correction_id: str
 
 
 class PatternClassificationObsoleteAttempt(Exception):
@@ -377,59 +393,202 @@ def move_signals_between_patterns(
         )
         _require_active_pattern_pair(source=source, target=target)
 
-        assignment_by_signal_id = {assignment.signal_id: assignment for assignment in assignments}
-        if set(assignment_by_signal_id) != set(normalized_signal_ids):
-            raise AnalyticsValidationError(
-                "Every moved signal requires an assignment.",
-                code="analytics_assignment_missing",
-            )
+        move_result = _move_locked_signal_assignments_for_owner_correction(
+            normalized_signal_ids=normalized_signal_ids,
+            locked_signals=locked_signals,
+            assignments=assignments,
+            source=source,
+            target=target,
+            actor_membership=actor_membership,
+            occurred_at=occurred_at,
+        )
 
-        moved_assignments: list[SignalPatternAssignment] = []
-        moved_signal_ids: list[str] = []
-        for signal in locked_signals:
-            if signal.establishment.organization_id != source.organization_id:
-                raise AnalyticsValidationError(
-                    "Signal belongs to another organization.",
-                    code="analytics_signal_wrong_organization",
-                )
-            if not can_correct_signal_pattern_assignment(
-                actor_membership,
-                signal=signal,
-            ):
-                raise AnalyticsValidationError(
-                    "Owner cannot correct this signal assignment.",
-                    code="analytics_signal_scope_forbidden",
-                )
-            assignment = assignment_by_signal_id[signal.id]
-            if assignment.pattern_id == target.id:
-                continue
-            if assignment.pattern_id != source.id:
-                raise AnalyticsValidationError(
-                    "Signal is not assigned to the source pattern.",
-                    code="analytics_assignment_wrong_pattern",
-                )
-            signature = build_signal_pattern_signature(signal)
-            moved_assignments.append(
-                _mark_locked_assignment_owner_corrected(
-                    assignment=assignment,
-                    signal=signal,
-                    pattern=target,
-                    signature=signature,
-                    occurred_at=occurred_at,
-                )
-            )
-            moved_signal_ids.append(str(signal.id))
-
-        if moved_signal_ids:
+        if move_result.moved_signal_ids:
             _create_signal_move_events(
                 source=source,
                 target=target,
                 actor_membership=actor_membership,
                 occurred_at=occurred_at,
                 correction_id=str(uuid.uuid4()),
-                moved_signal_ids=moved_signal_ids,
+                moved_signal_ids=list(move_result.moved_signal_ids),
             )
-        return tuple(moved_assignments)
+        return move_result.moved_assignments
+
+
+def split_operational_pattern_to_existing(
+    *,
+    actor_membership: EstablishmentMembership,
+    source_pattern: OperationalPattern,
+    target_pattern: OperationalPattern,
+    signal_ids,
+    occurred_at=None,
+) -> PatternSplitResult:
+    occurred_at = occurred_at or timezone.now()
+    normalized_signal_ids = _normalize_uuid_list(signal_ids)
+    if not normalized_signal_ids:
+        return PatternSplitResult(
+            source_pattern=source_pattern,
+            target_pattern=target_pattern,
+            target_created=False,
+            moved_assignments=(),
+            correction_id="",
+        )
+
+    with transaction.atomic():
+        locked_signals = _lock_signals_for_owner_correction(normalized_signal_ids)
+        if len(locked_signals) != len(normalized_signal_ids):
+            raise AnalyticsValidationError(
+                "One or more signals were not found.",
+                code="analytics_signal_not_found",
+            )
+        assignments = _lock_assignments_for_signals(normalized_signal_ids)
+        patterns = _lock_patterns_for_owner_correction([source_pattern.id, target_pattern.id])
+        source = patterns[source_pattern.id]
+        target = patterns[target_pattern.id]
+        _require_owner_correction_permission(
+            actor_membership=actor_membership,
+            organization=source.organization,
+        )
+        _require_active_pattern_pair(source=source, target=target)
+        move_result = _move_locked_signal_assignments_for_owner_correction(
+            normalized_signal_ids=normalized_signal_ids,
+            locked_signals=locked_signals,
+            assignments=assignments,
+            source=source,
+            target=target,
+            actor_membership=actor_membership,
+            occurred_at=occurred_at,
+        )
+        correction_id = str(uuid.uuid4()) if move_result.moved_signal_ids else ""
+        if move_result.moved_signal_ids:
+            _create_split_event(
+                source=source,
+                target=target,
+                actor_membership=actor_membership,
+                occurred_at=occurred_at,
+                correction_id=correction_id,
+                target_created=False,
+                selected_signal_count=len(normalized_signal_ids),
+                moved_signal_count=len(move_result.moved_signal_ids),
+            )
+            _create_signal_move_events(
+                source=source,
+                target=target,
+                actor_membership=actor_membership,
+                occurred_at=occurred_at,
+                correction_id=correction_id,
+                moved_signal_ids=list(move_result.moved_signal_ids),
+            )
+        return PatternSplitResult(
+            source_pattern=source,
+            target_pattern=target,
+            target_created=False,
+            moved_assignments=move_result.moved_assignments,
+            correction_id=correction_id,
+        )
+
+
+def split_operational_pattern_to_new(
+    *,
+    actor_membership: EstablishmentMembership,
+    source_pattern: OperationalPattern,
+    label: str,
+    signal_ids,
+    occurred_at=None,
+) -> PatternSplitResult:
+    occurred_at = occurred_at or timezone.now()
+    normalized_signal_ids = _normalize_uuid_list(signal_ids)
+    if not normalized_signal_ids:
+        return PatternSplitResult(
+            source_pattern=source_pattern,
+            target_pattern=None,
+            target_created=False,
+            moved_assignments=(),
+            correction_id="",
+        )
+
+    with transaction.atomic():
+        locked_signals = _lock_signals_for_owner_correction(normalized_signal_ids)
+        if len(locked_signals) != len(normalized_signal_ids):
+            raise AnalyticsValidationError(
+                "One or more signals were not found.",
+                code="analytics_signal_not_found",
+            )
+        assignments = _lock_assignments_for_signals(normalized_signal_ids)
+        patterns = _lock_patterns_for_owner_correction([source_pattern.id])
+        source = patterns[source_pattern.id]
+        _require_owner_correction_permission(
+            actor_membership=actor_membership,
+            organization=source.organization,
+        )
+        if source.status != OperationalPattern.Status.ACTIVE:
+            raise AnalyticsValidationError(
+                "Source pattern must be active.",
+                code="analytics_pattern_source_not_active",
+            )
+        _require_split_label_available(organization=source.organization, label=label)
+        _require_locked_signals_assigned_to_source(
+            normalized_signal_ids=normalized_signal_ids,
+            locked_signals=locked_signals,
+            assignments=assignments,
+            source=source,
+            actor_membership=actor_membership,
+        )
+
+        correction_id = str(uuid.uuid4())
+        try:
+            with transaction.atomic():
+                target = create_operational_pattern(
+                    organization=source.organization,
+                    label=label,
+                    created_by_membership=actor_membership,
+                    occurred_at=occurred_at,
+                    metadata_safe={
+                        "correction_id": correction_id,
+                        "created_for_split": True,
+                        "split_source_pattern_id": str(source.id),
+                    },
+                )
+        except IntegrityError as exc:
+            raise AnalyticsValidationError(
+                "An active pattern with this normalized label already exists.",
+                code="analytics_pattern_label_conflict",
+            ) from exc
+
+        move_result = _move_locked_signal_assignments_for_owner_correction(
+            normalized_signal_ids=normalized_signal_ids,
+            locked_signals=locked_signals,
+            assignments=assignments,
+            source=source,
+            target=target,
+            actor_membership=actor_membership,
+            occurred_at=occurred_at,
+        )
+        _create_split_event(
+            source=source,
+            target=target,
+            actor_membership=actor_membership,
+            occurred_at=occurred_at,
+            correction_id=correction_id,
+            target_created=True,
+            selected_signal_count=len(normalized_signal_ids),
+            moved_signal_count=len(move_result.moved_signal_ids),
+        )
+        _create_signal_move_events(
+            source=source,
+            target=target,
+            actor_membership=actor_membership,
+            occurred_at=occurred_at,
+            correction_id=correction_id,
+            moved_signal_ids=list(move_result.moved_signal_ids),
+        )
+        return PatternSplitResult(
+            source_pattern=source,
+            target_pattern=target,
+            target_created=True,
+            moved_assignments=move_result.moved_assignments,
+            correction_id=correction_id,
+        )
 
 
 def _terminal_merge_precheck(
@@ -567,6 +726,121 @@ def _lock_patterns_for_owner_correction(
     return {pattern.id: pattern for pattern in patterns}
 
 
+def _require_split_label_available(
+    *,
+    organization: Organization,
+    label: str,
+) -> None:
+    normalized_label = normalize_pattern_label(label)
+    if not normalized_label:
+        raise AnalyticsValidationError(
+            "Pattern label cannot be blank.",
+            code="analytics_pattern_label_blank",
+        )
+    if OperationalPattern.objects.filter(
+        organization=organization,
+        normalized_label=normalized_label,
+        status=OperationalPattern.Status.ACTIVE,
+    ).exists():
+        raise AnalyticsValidationError(
+            "An active pattern with this normalized label already exists.",
+            code="analytics_pattern_label_conflict",
+        )
+
+
+def _require_locked_signals_assigned_to_source(
+    *,
+    normalized_signal_ids: list[uuid.UUID],
+    locked_signals: list[Signal],
+    assignments: list[SignalPatternAssignment],
+    source: OperationalPattern,
+    actor_membership: EstablishmentMembership,
+) -> None:
+    assignment_by_signal_id = {assignment.signal_id: assignment for assignment in assignments}
+    if set(assignment_by_signal_id) != set(normalized_signal_ids):
+        raise AnalyticsValidationError(
+            "Every moved signal requires an assignment.",
+            code="analytics_assignment_missing",
+        )
+    for signal in locked_signals:
+        if signal.establishment.organization_id != source.organization_id:
+            raise AnalyticsValidationError(
+                "Signal belongs to another organization.",
+                code="analytics_signal_wrong_organization",
+            )
+        if not can_correct_signal_pattern_assignment(
+            actor_membership,
+            signal=signal,
+        ):
+            raise AnalyticsValidationError(
+                "Owner cannot correct this signal assignment.",
+                code="analytics_signal_scope_forbidden",
+            )
+        if assignment_by_signal_id[signal.id].pattern_id != source.id:
+            raise AnalyticsValidationError(
+                "Signal is not assigned to the source pattern.",
+                code="analytics_assignment_wrong_pattern",
+            )
+
+
+def _move_locked_signal_assignments_for_owner_correction(
+    *,
+    normalized_signal_ids: list[uuid.UUID],
+    locked_signals: list[Signal],
+    assignments: list[SignalPatternAssignment],
+    source: OperationalPattern,
+    target: OperationalPattern,
+    actor_membership: EstablishmentMembership,
+    occurred_at,
+) -> OwnerPatternMoveResult:
+    assignment_by_signal_id = {assignment.signal_id: assignment for assignment in assignments}
+    if set(assignment_by_signal_id) != set(normalized_signal_ids):
+        raise AnalyticsValidationError(
+            "Every moved signal requires an assignment.",
+            code="analytics_assignment_missing",
+        )
+
+    moved_assignments: list[SignalPatternAssignment] = []
+    moved_signal_ids: list[str] = []
+    for signal in locked_signals:
+        if signal.establishment.organization_id != source.organization_id:
+            raise AnalyticsValidationError(
+                "Signal belongs to another organization.",
+                code="analytics_signal_wrong_organization",
+            )
+        if not can_correct_signal_pattern_assignment(
+            actor_membership,
+            signal=signal,
+        ):
+            raise AnalyticsValidationError(
+                "Owner cannot correct this signal assignment.",
+                code="analytics_signal_scope_forbidden",
+            )
+        assignment = assignment_by_signal_id[signal.id]
+        if assignment.pattern_id == target.id:
+            continue
+        if assignment.pattern_id != source.id:
+            raise AnalyticsValidationError(
+                "Signal is not assigned to the source pattern.",
+                code="analytics_assignment_wrong_pattern",
+            )
+        moved_assignments.append(
+            _mark_locked_assignment_owner_corrected(
+                assignment=assignment,
+                signal=signal,
+                pattern=target,
+                signature=build_signal_pattern_signature(signal),
+                occurred_at=occurred_at,
+            )
+        )
+        moved_signal_ids.append(str(signal.id))
+
+    return OwnerPatternMoveResult(
+        moved_assignments=tuple(moved_assignments),
+        moved_signal_ids=tuple(moved_signal_ids),
+    )
+
+
 def _mark_locked_assignment_owner_corrected(
     *,
     assignment: SignalPatternAssignment,
@@ -676,6 +950,33 @@ def _create_signal_move_events(
                     "chunk_count": len(chunks),
                 },
             )
+
+
+def _create_split_event(
+    *,
+    source: OperationalPattern,
+    target: OperationalPattern,
+    actor_membership: EstablishmentMembership,
+    occurred_at,
+    correction_id: str,
+    target_created: bool,
+    selected_signal_count: int,
+    moved_signal_count: int,
+) -> PatternLifecycleEvent:
+    return _create_pattern_event(
+        pattern=source,
+        event_type=PatternLifecycleEvent.EventType.SPLIT,
+        actor_membership=actor_membership,
+        occurred_at=occurred_at,
+        metadata_safe={
+            "correction_id": correction_id,
+            "source_pattern_id": str(source.id),
+            "target_pattern_id": str(target.id),
+            "target_created": target_created,
+            "selected_signal_count": selected_signal_count,
+            "moved_signal_count": moved_signal_count,
+        },
+    )
 
 
 def _validate_and_save_assignment(
@@ -1070,6 +1371,7 @@ def claim_signal_pattern_classification(
             status="already_succeeded",
             attempt_count=None,
             assignment=assignment,
+            reason="owner_correction_protected",
         )
 
     if (
@@ -1081,6 +1383,7 @@ def claim_signal_pattern_classification(
             status="already_succeeded",
             attempt_count=None,
             assignment=assignment,
+            reason="already_current",
         )
 
     now = timezone.now()
@@ -1097,6 +1400,7 @@ def claim_signal_pattern_classification(
             status="already_processing",
             attempt_count=assignment.attempt_count,
             assignment=assignment,
+            reason="recent_processing",
         )
 
     assignment.classification_status = SignalPatternAssignment.ClassificationStatus.PROCESSING
@@ -1122,6 +1426,7 @@ def claim_signal_pattern_classification(
         status="claimed",
         attempt_count=assignment.attempt_count,
         assignment=assignment,
+        reason="claimed",
     )
 
 
@@ -1146,6 +1451,8 @@ def classify_signal_pattern(
         classifier_version=classifier_version,
     )
     if claim.status != "claimed":
+        setattr(claim.assignment, "_analytics_claim_status", claim.status)
+        setattr(claim.assignment, "_analytics_claim_reason", claim.reason)
         return claim.assignment
 
     assert claim.attempt_count is not None
@@ -1180,6 +1487,13 @@ def classify_signal_pattern(
             "_analytics_duplicate_guard_decision",
             resolution.duplicate_guard_decision.action,
         )
+        setattr(
+            assignment,
+            "_analytics_duplicate_guard_reason",
+            resolution.duplicate_guard_decision.reason,
+        )
+        setattr(assignment, "_analytics_claim_status", claim.status)
+        setattr(assignment, "_analytics_claim_reason", claim.reason)
         _write_analytics_usage_log(
             signal=signal,
             provider=provider.provider,
@@ -1193,6 +1507,8 @@ def classify_signal_pattern(
         )
         return assignment
     except PatternClassificationObsoleteAttempt as exc:
+        setattr(exc.assignment, "_analytics_claim_status", "obsolete")
+        setattr(exc.assignment, "_analytics_claim_reason", "obsolete_attempt")
         return exc.assignment
     except (PatternClassifierTimeoutError, PatternClassifierUnavailableError) as exc:
         _write_analytics_usage_log(
@@ -1225,7 +1541,10 @@ def classify_signal_pattern(
             )
         except AnalyticsValidationError as validation_error:
             if _is_obsolete_assignment_error(validation_error):
-                return SignalPatternAssignment.objects.get(signal=signal)
+                assignment = SignalPatternAssignment.objects.get(signal=signal)
+                setattr(assignment, "_analytics_claim_status", "obsolete")
+                setattr(assignment, "_analytics_claim_reason", "obsolete_attempt")
+                return assignment
             raise
         _write_analytics_usage_log(
             signal=signal,
@@ -1236,7 +1555,10 @@ def classify_signal_pattern(
             correlation_id=uuid.uuid4(),
             error_code=error_code,
         )
-        return SignalPatternAssignment.objects.get(signal=signal)
+        assignment = SignalPatternAssignment.objects.get(signal=signal)
+        setattr(assignment, "_analytics_claim_status", claim.status)
+        setattr(assignment, "_analytics_claim_reason", claim.reason)
+        return assignment
 
 
 def _load_signal_for_pattern_classification(signal_id: uuid.UUID) -> Signal | None:
