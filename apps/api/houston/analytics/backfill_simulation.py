@@ -26,6 +26,7 @@ from houston.analytics.classifier import (
     get_pattern_classifier_provider,
 )
 from houston.analytics.models import OperationalPattern, SignalPatternAssignment
+from houston.analytics.retry_policy import analytics_pattern_task_retry_policy
 from houston.analytics.services import (
     DUPLICATE_GUARD_SHORTLIST_STRATEGY,
     PatternClassificationRetryableError,
@@ -38,8 +39,6 @@ BACKFILL_SIMULATION_SCHEMA_VERSION = "analytics_pattern_backfill_simulation_v1"
 BACKFILL_SIMULATION_DEFAULT_LIMIT = 100
 BACKFILL_SIMULATION_OPT_IN_ENV = "HOUSTON_RUN_ANALYTICS_PATTERN_BACKFILL_SIMULATION"
 BACKFILL_SIMULATION_ARCHIVE_DIR = Path(".artifacts/analytics-pattern-backfill-simulation")
-BACKFILL_SIMULATION_TASK_MAX_RETRIES = 3
-BACKFILL_SIMULATION_TASK_RETRY_DELAY_SECONDS = 30
 
 
 @dataclass(frozen=True)
@@ -150,6 +149,7 @@ class BackfillSignalSimulationResult:
 
 @dataclass(frozen=True)
 class BackfillSimulationReport:
+    provider_mode: str
     provider: str
     provider_model: str
     classifier_version: str
@@ -186,6 +186,11 @@ def simulate_analytics_pattern_backfill(
         raise ValueError("provider must be 'fake' or 'configured'")
     if normalized_provider == "configured":
         _assert_configured_provider_simulation_enabled()
+    selected_provider = provider or _provider_for_name(normalized_provider)
+    _assert_effective_provider_simulation_allowed(
+        provider_name=normalized_provider,
+        provider=selected_provider,
+    )
 
     max_limit = int(
         getattr(settings, "HOUSTON_ANALYTICS_PATTERN_BACKFILL_SIMULATION_MAX_LIMIT", 500)
@@ -200,7 +205,6 @@ def simulate_analytics_pattern_backfill(
         start_after_signal_id=start_after_signal_id,
         limit=effective_limit,
     )
-    selected_provider = provider or _provider_for_name(normalized_provider)
     capturing_provider = CapturingBackfillPatternClassifierProvider(selected_provider)
 
     with transaction.atomic():
@@ -230,6 +234,7 @@ def backfill_simulation_report_to_dict(report: BackfillSimulationReport) -> dict
     metrics = _metrics(report.signal_results, report.provider_calls)
     return {
         "schema_version": BACKFILL_SIMULATION_SCHEMA_VERSION,
+        "provider_mode": report.provider_mode,
         "provider": report.provider,
         "provider_model": report.provider_model,
         "classifier_version": report.classifier_version,
@@ -321,7 +326,8 @@ def _simulate_selected_signals(
         initial_processing_signal_ids=initial_processing_signal_ids,
     )
     return BackfillSimulationReport(
-        provider=provider_name,
+        provider_mode=provider_name,
+        provider=provider.provider,
         provider_model=provider.model,
         classifier_version=classifier_version_for_provider(provider),
         prompt_version=ANALYTICS_PATTERN_PROMPT_VERSION,
@@ -436,12 +442,13 @@ def _run_classification_to_terminal_state(
             claim_decisions.append("claimed")
             claim_reasons.append("retryable_error")
             signal.refresh_from_db()
+            retry_policy = analytics_pattern_task_retry_policy()
             finalization = finalize_retryable_pattern_classification_error(
                 signal=signal,
                 exc=exc,
                 retries=retries,
-                max_retries=BACKFILL_SIMULATION_TASK_MAX_RETRIES,
-                retry_delay_seconds=BACKFILL_SIMULATION_TASK_RETRY_DELAY_SECONDS,
+                max_retries=retry_policy.max_retries,
+                retry_delay_seconds=retry_policy.retry_delay_seconds,
             )
             if finalization.outcome == "retry":
                 retries += 1
@@ -715,6 +722,18 @@ def _assert_configured_provider_simulation_enabled() -> None:
     if provider_name == "fake":
         raise RuntimeError(
             "Configured Analytics pattern backfill simulation requires a non-fake provider."
+        )
+
+
+def _assert_effective_provider_simulation_allowed(
+    *,
+    provider_name: str,
+    provider: PatternClassifierProvider,
+) -> None:
+    if provider_name == "configured" and provider.provider.strip().lower() == "fake":
+        raise RuntimeError(
+            "Configured Analytics pattern backfill simulation requires a non-fake "
+            "effective provider."
         )
 
 

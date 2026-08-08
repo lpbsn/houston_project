@@ -9,6 +9,10 @@ from django.core.management.base import CommandError
 from django.utils import timezone
 
 from houston.ai.models import AIUsageLog
+from houston.analytics.backfill import (
+    backfill_analytics_patterns,
+    backfill_report_to_dict,
+)
 from houston.analytics.backfill_simulation import (
     backfill_simulation_report_to_dict,
     simulate_analytics_pattern_backfill,
@@ -31,11 +35,20 @@ from houston.analytics.services import (
     move_signals_between_patterns,
 )
 from houston.analytics.signature import build_signal_pattern_signature
+from houston.analytics.tasks import classify_signal_pattern_task
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.models import Signal
 from houston.testing.factories import build_membership
 
 pytestmark = pytest.mark.django_db
+
+
+class OpenAIReportedFakeProvider(FakePatternClassifierProvider):
+    provider = "openai"
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.model = "openai-test"
 
 
 def create_signal_for_membership(membership, *, title="Issue", status=Signal.Status.OPEN):
@@ -225,6 +238,43 @@ def test_backfill_retryable_errors_finalize_without_persisting_processing():
     assert not hasattr(signal, "pattern_assignment")
 
 
+def test_backfill_simulation_and_real_backfill_share_task_retry_policy(
+    settings,
+    monkeypatch,
+):
+    settings.DEBUG = True
+    monkeypatch.setattr(classify_signal_pattern_task, "max_retries", 0)
+    monkeypatch.setattr(classify_signal_pattern_task, "default_retry_delay", 0)
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    simulation_signal = create_signal_for_membership(owner, title="Simulation")
+    backfill_signal = create_signal_for_membership(owner, title="Backfill")
+
+    simulation_report = simulate_analytics_pattern_backfill(
+        establishment_id=owner.establishment_id,
+        provider_name="fake",
+        provider=FakePatternClassifierProvider(
+            exc=PatternClassifierTimeoutError("timeout"),
+        ),
+        limit=1,
+    )
+    backfill_report = backfill_analytics_patterns(
+        signal_ids=[backfill_signal.id],
+        provider_name="fake",
+        provider=FakePatternClassifierProvider(
+            exc=PatternClassifierTimeoutError("timeout"),
+        ),
+        limit=10,
+    )
+    simulation_payload = backfill_simulation_report_to_dict(simulation_report)
+    backfill_payload = backfill_report_to_dict(backfill_report)
+
+    assert simulation_payload["signals"][0]["signal_id"] == str(simulation_signal.id)
+    assert simulation_payload["metrics"]["outcomes"] == {"retry_exhausted": 1}
+    assert backfill_payload["metrics"]["outcomes"] == {"retry_exhausted": 1}
+    assert simulation_payload["metrics"]["provider_calls"]["classification_count"] == 1
+    assert backfill_payload["metrics"]["provider_calls"]["classification_count"] == 1
+
+
 def test_backfill_permanent_provider_errors_report_failure_without_persisting_processing():
     owner = build_membership(role=EstablishmentMembership.Role.OWNER)
     signal = create_signal_for_membership(owner)
@@ -276,6 +326,53 @@ def test_backfill_report_is_safe_and_tracks_duplicate_guard_option():
     assert "location_text" not in serialized
     assert "expected_action" not in serialized
     assert existing.label in serialized
+
+
+def test_configured_simulation_reports_mode_and_effective_provider(settings, monkeypatch):
+    monkeypatch.setenv("HOUSTON_RUN_ANALYTICS_PATTERN_BACKFILL_SIMULATION", "1")
+    monkeypatch.setattr(settings, "HOUSTON_AI_ANALYTICS_PATTERN_PROVIDER", "openai")
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    create_signal_for_membership(owner)
+
+    report = simulate_analytics_pattern_backfill(
+        establishment_id=owner.establishment_id,
+        provider_name="configured",
+        provider=OpenAIReportedFakeProvider(),
+        limit=10,
+    )
+    payload = backfill_simulation_report_to_dict(report)
+
+    assert payload["provider_mode"] == "configured"
+    assert payload["provider"] == "openai"
+    assert payload["provider_model"] == "openai-test"
+
+
+def test_configured_simulation_rejects_injected_fake_before_pipeline(
+    settings,
+    monkeypatch,
+):
+    monkeypatch.setenv("HOUSTON_RUN_ANALYTICS_PATTERN_BACKFILL_SIMULATION", "1")
+    monkeypatch.setattr(settings, "HOUSTON_AI_ANALYTICS_PATTERN_PROVIDER", "openai")
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = create_signal_for_membership(owner)
+    provider = FakePatternClassifierProvider()
+    before_patterns = OperationalPattern.objects.count()
+    before_events = PatternLifecycleEvent.objects.count()
+    before_logs = AIUsageLog.objects.count()
+
+    with pytest.raises(RuntimeError, match="non-fake effective provider"):
+        simulate_analytics_pattern_backfill(
+            establishment_id=owner.establishment_id,
+            provider_name="configured",
+            provider=provider,
+            limit=10,
+        )
+
+    assert provider.calls == []
+    assert not SignalPatternAssignment.objects.filter(signal=signal).exists()
+    assert OperationalPattern.objects.count() == before_patterns
+    assert PatternLifecycleEvent.objects.count() == before_events
+    assert AIUsageLog.objects.count() == before_logs
 
 
 def test_backfill_command_json_and_archive(tmp_path):
