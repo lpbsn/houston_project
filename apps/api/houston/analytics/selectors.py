@@ -9,6 +9,12 @@ from houston.analytics.permissions import (
     analytics_signal_scope_q_for_membership,
     empty_signal_scope_q,
 )
+from houston.analytics.status_matrix import (
+    actionable_signal_q,
+    default_analytics_signal_q,
+    recurrence_signal_q,
+    resolution_time_signal_q,
+)
 from houston.establishments.membership_scope import membership_scope_prefetch
 from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.organizations.models import Organization
@@ -27,6 +33,62 @@ def analytics_readable_signals_queryset(
         establishment_id=establishment_id,
     )
     return Signal.objects.filter(scope_q).distinct()
+
+
+def analytics_default_signals_queryset(
+    user: User | None,
+    *,
+    organization_id=None,
+    establishment_id=None,
+) -> QuerySet[Signal]:
+    return _analytics_readable_signals_for_status_q(
+        user,
+        default_analytics_signal_q(),
+        organization_id=organization_id,
+        establishment_id=establishment_id,
+    )
+
+
+def analytics_actionable_signals_queryset(
+    user: User | None,
+    *,
+    organization_id=None,
+    establishment_id=None,
+) -> QuerySet[Signal]:
+    return _analytics_readable_signals_for_status_q(
+        user,
+        actionable_signal_q(),
+        organization_id=organization_id,
+        establishment_id=establishment_id,
+    )
+
+
+def analytics_recurrence_signals_queryset(
+    user: User | None,
+    *,
+    organization_id=None,
+    establishment_id=None,
+) -> QuerySet[Signal]:
+    return _analytics_readable_signals_for_status_q(
+        user,
+        recurrence_signal_q(),
+        organization_id=organization_id,
+        establishment_id=establishment_id,
+    )
+
+
+def analytics_resolution_time_signals_queryset(
+    user: User | None,
+    *,
+    organization_id=None,
+    establishment_id=None,
+) -> QuerySet[Signal]:
+    return _analytics_readable_signals_for_status_q(
+        user,
+        resolution_time_signal_q(),
+        organization_id=organization_id,
+        establishment_id=establishment_id,
+    )
 
 
 def analytics_readable_assignments_queryset(
@@ -97,3 +159,18 @@ def _analytics_signal_scope_q_for_user(
     for membership in memberships:
         scope_q |= analytics_signal_scope_q_for_membership(membership)
     return scope_q
+
+
+def _analytics_readable_signals_for_status_q(
+    user: User | None,
+    status_q: Q,
+    *,
+    organization_id=None,
+    establishment_id=None,
+) -> QuerySet[Signal]:
+    scope_q = _analytics_signal_scope_q_for_user(
+        user,
+        organization_id=organization_id,
+        establishment_id=establishment_id,
+    )
+    return Signal.objects.filter(scope_q & status_q).distinct()
