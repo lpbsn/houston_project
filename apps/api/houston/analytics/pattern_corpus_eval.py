@@ -24,6 +24,7 @@ from houston.analytics.classifier import (
 )
 from houston.analytics.labels import normalize_pattern_label
 from houston.analytics.models import OperationalPattern, SignalPatternAssignment
+from houston.analytics.payload_safety import assert_provider_payloads_are_safe
 from houston.analytics.services import (
     DUPLICATE_GUARD_SHORTLIST_STRATEGY,
     PatternClassificationRetryableError,
@@ -1016,21 +1017,12 @@ def _assert_no_processing_assignments(signals: Any) -> None:
 
 
 def _assert_payloads_are_safe(payloads: list[dict[str, Any]]) -> None:
-    serialized = json.dumps(payloads, ensure_ascii=False)
-    forbidden_tokens = (
-        "raw_text",
-        "media",
-        "comment",
-        "action_plan",
-        "author",
-        "submitted_at",
-        "location_text",
-        "routing_status",
-        "expected_action",
-    )
-    for token in forbidden_tokens:
-        if token in serialized:
-            raise RuntimeError("Analytics pattern eval sent forbidden provider payload data.")
+    try:
+        assert_provider_payloads_are_safe(payloads)
+    except RuntimeError as exc:
+        raise RuntimeError(
+            "Analytics pattern eval sent forbidden provider payload data."
+        ) from exc
 
 
 def _selected_scenario_ids(raw_scenario_ids: list[str] | None) -> list[str]:
