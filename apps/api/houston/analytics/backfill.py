@@ -12,10 +12,7 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 
-from houston.analytics.backfill_simulation import (
-    CapturingBackfillPatternClassifierProvider,
-    _payload_safety_errors,
-)
+from houston.analytics.backfill_simulation import CapturingBackfillPatternClassifierProvider
 from houston.analytics.classifier import (
     ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION,
     ANALYTICS_PATTERN_DUPLICATE_GUARD_SCHEMA_VERSION,
@@ -27,6 +24,7 @@ from houston.analytics.classifier import (
     get_pattern_classifier_provider,
 )
 from houston.analytics.models import OperationalPattern, SignalPatternAssignment
+from houston.analytics.payload_safety import provider_payload_safety_errors
 from houston.analytics.retry_policy import analytics_pattern_task_retry_policy
 from houston.analytics.services import (
     DUPLICATE_GUARD_SHORTLIST_STRATEGY,
@@ -123,7 +121,7 @@ def backfill_analytics_patterns(
         mode = "explicit_signal_ids"
         cursor = ""
     else:
-        selected_signal_ids, exclusions, cursor, next_scan_cursor = _scan_signal_ids(
+        selected_signal_ids, exclusions, cursor, _ = _scan_signal_ids(
             scope=scope,
             start_after_signal_id=start_after_signal_id,
             limit=effective_limit,
@@ -156,7 +154,12 @@ def backfill_analytics_patterns(
                 }
             )
 
-    payload_errors = _payload_safety_errors(
+    if mode == "scan":
+        next_scan_cursor = _safe_next_scan_cursor(
+            input_cursor=cursor,
+            signal_results=signal_results,
+        )
+    payload_errors = provider_payload_safety_errors(
         capturing_provider.calls + capturing_provider.duplicate_guard_calls
     )
     report = BackfillReport(
@@ -491,6 +494,21 @@ def _metrics(
             "latency_ms_total": sum(call.latency_ms for call in provider_calls),
         },
     }
+
+
+def _safe_next_scan_cursor(
+    *,
+    input_cursor: str,
+    signal_results: list[BackfillSignalResult],
+) -> str:
+    if not signal_results:
+        return ""
+    next_cursor = input_cursor
+    for result in signal_results:
+        if result.remaining_reason:
+            return next_cursor
+        next_cursor = result.signal_id
+    return next_cursor
 
 
 def _signal_result_to_dict(result: BackfillSignalResult) -> dict[str, Any]:

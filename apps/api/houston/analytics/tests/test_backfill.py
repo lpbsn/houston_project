@@ -24,6 +24,7 @@ from houston.analytics.models import (
     PatternLifecycleEvent,
     SignalPatternAssignment,
 )
+from houston.analytics.payload_safety import provider_payload_safety_errors
 from houston.analytics.services import (
     create_operational_pattern,
     mark_assignment_processing,
@@ -57,6 +58,55 @@ class MixedProvider:
                 model=self.model,
             )
         raise RuntimeError("unexpected provider failure")
+
+    def assess_duplicate(self, *, input_payload):
+        return PatternClassifierProviderResponse(
+            payload={"result_type": "create_new_pattern", "pattern_id": None},
+            model=self.model,
+        )
+
+
+class SuccessFailureSuccessProvider:
+    provider = "fake"
+    model = "fake"
+
+    def __init__(self):
+        self.calls = 0
+
+    def classify(self, *, input_payload):
+        self.calls += 1
+        if self.calls == 2:
+            raise PatternClassifierTimeoutError("middle provider timeout")
+        return PatternClassifierProviderResponse(
+            payload={
+                "result_type": "new_pattern",
+                "pattern_id": None,
+                "canonical_label": f"Operational backfill issue {self.calls}",
+            },
+            model=self.model,
+        )
+
+    def assess_duplicate(self, *, input_payload):
+        return PatternClassifierProviderResponse(
+            payload={"result_type": "create_new_pattern", "pattern_id": None},
+            model=self.model,
+        )
+
+
+class UnsafeInputPayloadProvider:
+    provider = "fake"
+    model = "fake"
+
+    def classify(self, *, input_payload):
+        input_payload["raw_text"] = "secret"
+        return PatternClassifierProviderResponse(
+            payload={
+                "result_type": "new_pattern",
+                "pattern_id": None,
+                "canonical_label": "Unsafe payload issue",
+            },
+            model=self.model,
+        )
 
     def assess_duplicate(self, *, input_payload):
         return PatternClassifierProviderResponse(
@@ -343,11 +393,51 @@ def test_fail_on_error_does_not_rollback_successful_signals(settings, monkeypatc
     ]
     assert payload["metrics"]["remaining_signal_ids"] == [str(second.id)]
     assert payload["metrics"]["remaining_by_reason"] == {"reported": 1}
-    assert payload["next_scan_cursor"] == str(second.id)
+    assert payload["next_scan_cursor"] == str(first.id)
     assert SignalPatternAssignment.objects.filter(
         signal=first,
         classification_status=SignalPatternAssignment.ClassificationStatus.SUCCEEDED,
     ).exists()
+
+
+def test_scan_cursor_stops_before_middle_batch_failure_and_resume_replays(settings):
+    settings.DEBUG = True
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    first = create_signal_for_membership(owner, title="First")
+    second = create_signal_for_membership(owner, title="Second")
+    third = create_signal_for_membership(owner, title="Third")
+
+    first_report = backfill_analytics_patterns(
+        establishment_id=owner.establishment_id,
+        provider_name="fake",
+        provider=SuccessFailureSuccessProvider(),
+        limit=10,
+    )
+    first_payload = backfill_report_to_dict(first_report)
+
+    assert [signal["signal_id"] for signal in first_payload["signals"]] == [
+        str(first.id),
+        str(second.id),
+        str(third.id),
+    ]
+    assert first_payload["metrics"]["remaining_signal_ids"] == [str(second.id)]
+    assert first_payload["next_scan_cursor"] == str(first.id)
+
+    second_report = backfill_analytics_patterns(
+        establishment_id=owner.establishment_id,
+        start_after_signal_id=first_payload["next_scan_cursor"],
+        provider_name="fake",
+        provider=FakePatternClassifierProvider(),
+        limit=10,
+    )
+    second_payload = backfill_report_to_dict(second_report)
+
+    assert [signal["signal_id"] for signal in second_payload["signals"]] == [
+        str(second.id),
+        str(third.id),
+    ]
+    assert second_payload["signals"][0]["outcome"] == "succeeded"
+    assert second_payload["metrics"]["remaining_signal_ids"] == []
 
 
 def test_configured_provider_rejects_injected_fake_before_any_mutation(settings, monkeypatch):
@@ -404,3 +494,38 @@ def test_report_json_is_safe_and_duplicate_guard_option_is_reported(settings):
     assert "raw_text" not in serialized
     assert "location_text" not in serialized
     assert "expected_action" not in serialized
+
+
+def test_payload_safety_ignores_text_values_and_detects_forbidden_keys():
+    assert (
+        provider_payload_safety_errors(
+            [
+                {
+                    "summary": "commentaire immediate authorisation",
+                    "items": [{"label": "commentaire"}],
+                }
+            ]
+        )
+        == []
+    )
+
+    assert provider_payload_safety_errors(
+        [{"allowed": [{"nested": {"raw_text": "secret"}}], "author": "forbidden"}]
+    ) == ["author", "raw_text"]
+
+
+def test_backfill_payload_safety_status_reports_forbidden_payload_keys(settings):
+    settings.DEBUG = True
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    create_signal_for_membership(owner)
+
+    report = backfill_analytics_patterns(
+        establishment_id=owner.establishment_id,
+        provider_name="fake",
+        provider=UnsafeInputPayloadProvider(),
+        limit=10,
+    )
+    payload = backfill_report_to_dict(report)
+
+    assert payload["payload_safety_status"] == "fail"
+    assert payload["payload_safety_errors"] == ["raw_text"]

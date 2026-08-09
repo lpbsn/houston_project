@@ -26,6 +26,7 @@ from houston.analytics.classifier import (
     get_pattern_classifier_provider,
 )
 from houston.analytics.models import OperationalPattern, SignalPatternAssignment
+from houston.analytics.payload_safety import provider_payload_safety_errors
 from houston.analytics.retry_policy import analytics_pattern_task_retry_policy
 from houston.analytics.services import (
     DUPLICATE_GUARD_SHORTLIST_STRATEGY,
@@ -320,7 +321,9 @@ def _simulate_selected_signals(
             )
         )
 
-    payload_errors = _payload_safety_errors(provider.calls + provider.duplicate_guard_calls)
+    payload_errors = provider_payload_safety_errors(
+        provider.calls + provider.duplicate_guard_calls
+    )
     _assert_no_new_processing_assignments(
         selected_signal_ids=selected_signal_ids,
         initial_processing_signal_ids=initial_processing_signal_ids,
@@ -694,22 +697,6 @@ def _assert_no_new_processing_assignments(
     ).exclude(signal_id__in=initial_processing_signal_ids).count()
     if processing_count:
         raise RuntimeError("Analytics backfill simulation left processing assignments.")
-
-
-def _payload_safety_errors(payloads: list[dict[str, Any]]) -> list[str]:
-    serialized = json.dumps(payloads, ensure_ascii=False)
-    forbidden_tokens = (
-        "raw_text",
-        "media",
-        "comment",
-        "action_plan",
-        "author",
-        "submitted_at",
-        "location_text",
-        "routing_status",
-        "expected_action",
-    )
-    return [token for token in forbidden_tokens if token in serialized]
 
 
 def _assert_configured_provider_simulation_enabled() -> None:

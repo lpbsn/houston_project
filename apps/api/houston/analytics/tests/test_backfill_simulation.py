@@ -51,6 +51,12 @@ class OpenAIReportedFakeProvider(FakePatternClassifierProvider):
         self.model = "openai-test"
 
 
+class UnsafeInputPayloadProvider(FakePatternClassifierProvider):
+    def classify(self, *, input_payload):
+        input_payload["raw_text"] = "secret"
+        return super().classify(input_payload=input_payload)
+
+
 def create_signal_for_membership(membership, *, title="Issue", status=Signal.Status.OPEN):
     return Signal.objects.create(
         establishment=membership.establishment,
@@ -326,6 +332,22 @@ def test_backfill_report_is_safe_and_tracks_duplicate_guard_option():
     assert "location_text" not in serialized
     assert "expected_action" not in serialized
     assert existing.label in serialized
+
+
+def test_backfill_simulation_payload_safety_status_reports_forbidden_payload_keys():
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    create_signal_for_membership(owner)
+
+    report = simulate_analytics_pattern_backfill(
+        establishment_id=owner.establishment_id,
+        provider_name="fake",
+        provider=UnsafeInputPayloadProvider(),
+        limit=10,
+    )
+    payload = backfill_simulation_report_to_dict(report)
+
+    assert payload["payload_safety_status"] == "fail"
+    assert payload["payload_safety_errors"] == ["raw_text"]
 
 
 def test_configured_simulation_reports_mode_and_effective_provider(settings, monkeypatch):
