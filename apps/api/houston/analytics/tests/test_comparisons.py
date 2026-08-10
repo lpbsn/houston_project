@@ -13,6 +13,7 @@ from houston.analytics.comparisons import (
 )
 from houston.analytics.exceptions import AnalyticsValidationError
 from houston.analytics.models import SignalPatternAssignment
+from houston.analytics.recurrence import RECURRENCE_STATUS_COMPUTED
 from houston.analytics.services import create_operational_pattern
 from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.signals.models import Signal
@@ -251,7 +252,7 @@ def test_relative_change_is_ratio_and_previous_zero_is_undefined():
     )
 
 
-def test_none_metric_values_are_not_applicable_and_recurrence_is_neutral():
+def test_none_metric_values_are_not_applicable_and_recurrence_is_computed():
     owner = build_membership(role=EstablishmentMembership.Role.OWNER)
     period_start = timezone.now()
     period_end = period_start + timedelta(days=7)
@@ -270,13 +271,65 @@ def test_none_metric_values_are_not_applicable_and_recurrence_is_neutral():
         result.median_resolution_seconds.relative_change_status
         == RELATIVE_CHANGE_NOT_APPLICABLE
     )
-    assert result.recurring_patterns_count.current_value is None
-    assert result.recurring_patterns_count.previous_value is None
+    assert result.recurring_patterns_count.current_value == 0
+    assert result.recurring_patterns_count.previous_value == 0
+    assert result.recurring_patterns_count.absolute_delta == 0
+    assert result.recurring_patterns_count.relative_change is None
     assert (
         result.recurring_patterns_count.relative_change_status
-        == RELATIVE_CHANGE_NOT_APPLICABLE
+        == RELATIVE_CHANGE_UNDEFINED_PREVIOUS_ZERO
     )
-    assert result.recurrence_status == "not_computed_until_ticket_16"
+    assert result.recurrence_status == RECURRENCE_STATUS_COMPUTED
+
+
+def test_recurring_patterns_are_compared_per_period_with_period_end_as_of():
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    current_pattern = create_pattern(owner, label="Current recurring")
+    previous_pattern = create_pattern(owner, label="Previous recurring")
+    period_start = timezone.now()
+    period_end = period_start + timedelta(days=7)
+
+    for index, created_at in enumerate(
+        [
+            period_end - timedelta(days=20),
+            period_end - timedelta(days=19),
+            period_end - timedelta(days=1),
+        ]
+    ):
+        signal = create_signal(
+            owner,
+            title=f"Current recurring {index}",
+            created_at=created_at,
+        )
+        assign_signal(signal, current_pattern)
+    for index, created_at in enumerate(
+        [
+            period_start - timedelta(days=20),
+            period_start - timedelta(days=19),
+            period_start - timedelta(days=1),
+        ]
+    ):
+        signal = create_signal(
+            owner,
+            title=f"Previous recurring {index}",
+            created_at=created_at,
+        )
+        assign_signal(signal, previous_pattern)
+
+    result = get_analytics_kpi_comparison(
+        owner.user,
+        period_start=period_start,
+        period_end=period_end,
+    )
+
+    assert result.current_kpis.recurring_patterns_count == 1
+    assert result.previous_kpis.recurring_patterns_count == 1
+    assert result.recurring_patterns_count.current_value == 1
+    assert result.recurring_patterns_count.previous_value == 1
+    assert result.recurring_patterns_count.absolute_delta == 0
+    assert result.recurring_patterns_count.relative_change == 0
+    assert result.current_kpis.recurrence_window.window_end == period_end
+    assert result.previous_kpis.recurrence_window.window_end == period_start
 
 
 def test_current_and_previous_resolution_medians_support_even_and_odd_counts():

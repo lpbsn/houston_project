@@ -18,6 +18,7 @@ from houston.analytics.pattern_list import (
     PATTERN_LIST_CURSOR_VERSION,
     list_analytics_patterns,
 )
+from houston.analytics.recurrence import RECURRENCE_STATUS_COMPUTED
 from houston.analytics.services import create_operational_pattern
 from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.signals.models import Signal
@@ -517,7 +518,7 @@ def test_pattern_list_recalculates_historical_periods_from_current_assignment_st
     assert [item.pattern_id for item in after.items] == [pattern.id]
 
 
-def test_pattern_list_validates_page_size_and_keeps_recurrence_neutral():
+def test_pattern_list_validates_page_size_and_reports_computed_recurrence():
     owner = build_membership(role=EstablishmentMembership.Role.OWNER)
     start = timezone.now()
     end = start + timedelta(days=1)
@@ -532,4 +533,117 @@ def test_pattern_list_validates_page_size_and_keeps_recurrence_neutral():
         period_end=end,
     )
 
-    assert result.recurrence_status == "not_computed_until_ticket_16"
+    assert result.recurrence_status == RECURRENCE_STATUS_COMPUTED
+
+
+def test_pattern_list_sorts_recurrent_patterns_first_before_pagination():
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    recurring = create_pattern(owner, label="Recurring")
+    frequent = create_pattern(owner, label="Frequent non recurrent")
+    start = timezone.now()
+    end = start + timedelta(days=7)
+
+    for index, created_at in enumerate(
+        [
+            end - timedelta(days=20),
+            end - timedelta(days=19),
+            start + timedelta(hours=1),
+        ]
+    ):
+        add_signal(owner, recurring, title=f"Recurring {index}", created_at=created_at)
+    for index in range(4):
+        add_signal(
+            owner,
+            frequent,
+            title=f"Frequent {index}",
+            created_at=start + timedelta(minutes=index),
+        )
+
+    result = list_analytics_patterns(
+        owner.user,
+        period_start=start,
+        period_end=end,
+        page_size=1,
+    )
+
+    assert result.items[0].pattern_id == recurring.id
+    assert result.items[0].is_recurrent is True
+    assert result.items[0].occurrence_count_30d == 3
+    assert result.has_more
+
+
+def test_pattern_list_zero_fills_visible_pattern_without_recent_recurrence_occurrences():
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    pattern = create_pattern(owner, label="Old visible")
+    end = timezone.now()
+    start = end - timedelta(days=90)
+    add_signal(
+        owner,
+        pattern,
+        title="Old occurrence",
+        created_at=end - timedelta(days=60),
+    )
+
+    item = list_analytics_patterns(
+        owner.user,
+        period_start=start,
+        period_end=end,
+    ).items[0]
+
+    assert item.pattern_id == pattern.id
+    assert item.signal_count == 1
+    assert item.is_recurrent is False
+    assert item.occurrence_count_30d == 0
+    assert item.distinct_day_count_30d == 0
+
+
+def test_pattern_list_excludes_recurrent_pattern_absent_from_current_ui_period():
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    pattern = create_pattern(owner, label="Recent but outside UI")
+    end = timezone.now()
+    start = end - timedelta(days=7)
+    for index, created_at in enumerate(
+        [
+            end - timedelta(days=20),
+            end - timedelta(days=19),
+            end - timedelta(days=8),
+        ]
+    ):
+        add_signal(owner, pattern, title=f"Outside {index}", created_at=created_at)
+
+    result = list_analytics_patterns(
+        owner.user,
+        period_start=start,
+        period_end=end,
+    )
+
+    assert result.items == ()
+
+
+def test_pattern_list_cursor_rejects_v1_after_recurrence_sort_change():
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    start = timezone.now()
+    end = start + timedelta(days=1)
+    payload = {
+        "version": "analytics_pattern_list_v1",
+        "context": {
+            "user_id": str(owner.user_id),
+            "period_start": start.isoformat(),
+            "period_end": end.isoformat(),
+            "organization_id": None,
+            "establishment_id": None,
+            "page_size": 50,
+        },
+        "sort": {},
+    }
+    cursor = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+
+    with pytest.raises(AnalyticsValidationError) as exc_info:
+        list_analytics_patterns(
+            owner.user,
+            period_start=start,
+            period_end=end,
+            cursor=cursor,
+        )
+
+    assert exc_info.value.code == "analytics_pattern_list_cursor_invalid"

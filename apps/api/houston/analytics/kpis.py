@@ -16,14 +16,18 @@ from django.utils import timezone
 from houston.accounts.models import User
 from houston.analytics.exceptions import AnalyticsValidationError
 from houston.analytics.models import SignalPatternAssignment
+from houston.analytics.recurrence import (
+    RECURRENCE_STATUS_COMPUTED,
+    AnalyticsRecurrenceWindow,
+    build_recurrence_window,
+    recurrent_patterns_count_for_contributors,
+)
 from houston.analytics.selectors import (
     analytics_actionable_signals_queryset,
     analytics_default_signals_queryset,
     analytics_resolution_time_signals_queryset,
 )
 from houston.signals.models import Signal
-
-RECURRENCE_STATUS_NOT_COMPUTED = "not_computed_until_ticket_16"
 
 
 @dataclass(frozen=True)
@@ -53,7 +57,8 @@ class AnalyticsKPIResult:
     invalid_resolution_duration_count: int
     business_assignment_coverage: BusinessAssignmentCoverage
     technical_classification_state: TechnicalClassificationState
-    recurring_patterns_count: int | None
+    recurring_patterns_count: int
+    recurrence_window: AnalyticsRecurrenceWindow
     recurrence_status: str
 
 
@@ -74,8 +79,14 @@ def get_analytics_kpis(
     establishment_id=None,
     period_start: datetime | None = None,
     period_end: datetime | None = None,
+    recurrence_as_of: datetime | None = None,
 ) -> AnalyticsKPIResult:
     _validate_period(period_start=period_start, period_end=period_end)
+    recurrence_as_of = _resolve_recurrence_as_of(
+        period_end=period_end,
+        recurrence_as_of=recurrence_as_of,
+    )
+    recurrence_window = build_recurrence_window(recurrence_as_of)
 
     population = _filter_created_period(
         analytics_default_signals_queryset(
@@ -92,6 +103,9 @@ def get_analytics_kpis(
         signal_id__in=population.values("id")
     )
     signals_analyzed_count = assignments.filter(pattern__isnull=False).count()
+    contributor_pattern_ids = (
+        assignments.filter(pattern__isnull=False).values("pattern_id").distinct()
+    )
     technical_state = _technical_classification_state(
         assignments=assignments,
         total_count=population_count,
@@ -107,11 +121,13 @@ def get_analytics_kpis(
         period_end=period_end,
     ).count()
 
-    operational_patterns_count = (
-        assignments.filter(pattern__isnull=False)
-        .values("pattern_id")
-        .distinct()
-        .count()
+    operational_patterns_count = contributor_pattern_ids.count()
+    recurring_patterns_count = recurrent_patterns_count_for_contributors(
+        user,
+        as_of=recurrence_as_of,
+        contributor_pattern_ids=contributor_pattern_ids,
+        organization_id=organization_id,
+        establishment_id=establishment_id,
     )
 
     resolution_stats = _resolution_time_stats(
@@ -142,8 +158,9 @@ def get_analytics_kpis(
             ),
         ),
         technical_classification_state=technical_state,
-        recurring_patterns_count=None,
-        recurrence_status=RECURRENCE_STATUS_NOT_COMPUTED,
+        recurring_patterns_count=recurring_patterns_count,
+        recurrence_window=recurrence_window,
+        recurrence_status=RECURRENCE_STATUS_COMPUTED,
     )
 
 
@@ -166,6 +183,25 @@ def _validate_period(
             "period_start must be before period_end.",
             code="analytics_period_invalid",
         )
+
+
+def _resolve_recurrence_as_of(
+    *,
+    period_end: datetime | None,
+    recurrence_as_of: datetime | None,
+) -> datetime:
+    resolved = recurrence_as_of or period_end
+    if resolved is None:
+        raise AnalyticsValidationError(
+            "recurrence_as_of or period_end is required for analytics recurrence.",
+            code="analytics_recurrence_as_of_required",
+        )
+    if timezone.is_naive(resolved):
+        raise AnalyticsValidationError(
+            "recurrence_as_of must be timezone-aware.",
+            code="analytics_recurrence_as_of_naive",
+        )
+    return resolved
 
 
 def _filter_created_period(

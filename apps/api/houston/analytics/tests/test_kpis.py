@@ -6,11 +6,9 @@ import pytest
 from django.utils import timezone
 
 from houston.analytics.exceptions import AnalyticsValidationError
-from houston.analytics.kpis import (
-    RECURRENCE_STATUS_NOT_COMPUTED,
-    get_analytics_kpis,
-)
+from houston.analytics.kpis import get_analytics_kpis
 from houston.analytics.models import SignalPatternAssignment
+from houston.analytics.recurrence import RECURRENCE_STATUS_COMPUTED
 from houston.analytics.services import create_operational_pattern
 from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.signals.models import Signal
@@ -98,6 +96,12 @@ def set_signal_times(signal, *, created_at=None, resolved_at=None):
     return signal
 
 
+def get_kpis(user, **kwargs):
+    if "period_end" not in kwargs and "recurrence_as_of" not in kwargs:
+        kwargs["recurrence_as_of"] = timezone.now()
+    return get_analytics_kpis(user, **kwargs)
+
+
 def test_kpi_population_coverage_and_technical_breakdown_share_denominator():
     owner = build_membership(role=EstablishmentMembership.Role.OWNER)
     pattern = create_pattern(owner, label="Water leak")
@@ -129,7 +133,7 @@ def test_kpi_population_coverage_and_technical_breakdown_share_denominator():
     assign_signal(canceled, pattern)
     assign_signal(merged, pattern)
 
-    result = get_analytics_kpis(owner.user)
+    result = get_kpis(owner.user)
     breakdown = result.technical_classification_state.technical_state_breakdown
 
     assert result.analytics_signal_population_count == 5
@@ -167,7 +171,7 @@ def test_business_coverage_is_separate_from_technical_success():
         source=SignalPatternAssignment.AssignmentSource.OWNER_CORRECTION,
     )
 
-    result = get_analytics_kpis(owner.user)
+    result = get_kpis(owner.user)
 
     assert result.analytics_signal_population_count == 2
     assert result.signals_analyzed_count == 2
@@ -182,7 +186,7 @@ def test_actionable_counts_open_and_in_progress_but_not_interesting():
     create_signal(owner, status=Signal.Status.IN_PROGRESS, title="In progress")
     create_signal(owner, status=Signal.Status.INTERESTING, title="Interesting")
 
-    result = get_analytics_kpis(owner.user)
+    result = get_kpis(owner.user)
 
     assert result.analytics_signal_population_count == 3
     assert result.actionable_signals_count == 2
@@ -210,7 +214,7 @@ def test_patterns_are_counted_only_through_readable_default_population():
     assign_signal(hidden_same_pattern, shared_pattern)
     assign_signal(hidden_other_pattern, hidden_only_pattern)
 
-    result = get_analytics_kpis(owner.user)
+    result = get_kpis(owner.user)
 
     assert result.analytics_signal_population_count == 1
     assert result.signals_analyzed_count == 1
@@ -248,7 +252,7 @@ def test_manager_scope_preserves_business_unit_and_unassigned_visibility():
         routing_status=Signal.RoutingStatus.UNASSIGNED,
     )
 
-    result = get_analytics_kpis(manager.user)
+    result = get_kpis(manager.user)
 
     assert result.analytics_signal_population_count == 2
     assert result.actionable_signals_count == 2
@@ -278,7 +282,7 @@ def test_resolution_median_counts_only_valid_durations_and_reports_invalids():
         resolved_at=now - timedelta(minutes=1),
     )
 
-    result = get_analytics_kpis(owner.user)
+    result = get_kpis(owner.user)
 
     assert result.resolution_time_signal_count == 2
     assert result.invalid_resolution_duration_count == 1
@@ -309,7 +313,7 @@ def test_resolution_median_with_odd_valid_duration_count_returns_middle_value():
         resolved_at=now - timedelta(hours=1),
     )
 
-    result = get_analytics_kpis(owner.user)
+    result = get_kpis(owner.user)
 
     assert result.resolution_time_signal_count == 3
     assert result.invalid_resolution_duration_count == 0
@@ -322,7 +326,7 @@ def test_resolution_median_is_none_without_valid_duration():
     now = timezone.now()
     set_signal_times(signal, created_at=now, resolved_at=now - timedelta(minutes=1))
 
-    result = get_analytics_kpis(owner.user)
+    result = get_kpis(owner.user)
 
     assert result.resolution_time_signal_count == 0
     assert result.invalid_resolution_duration_count == 1
@@ -361,7 +365,7 @@ def test_period_filters_volumes_by_created_at_and_resolution_by_resolved_at():
         resolved_at=end + timedelta(seconds=1),
     )
 
-    result = get_analytics_kpis(owner.user, period_start=start, period_end=end)
+    result = get_kpis(owner.user, period_start=start, period_end=end)
 
     assert result.analytics_signal_population_count == 2
     assert result.actionable_signals_count == 1
@@ -406,7 +410,7 @@ def test_single_period_bound_filters_created_and_resolved_timestamps(
         key: start if value == "start" else end
         for key, value in period_kwargs.items()
     }
-    result = get_analytics_kpis(owner.user, **resolved_kwargs)
+    result = get_kpis(owner.user, **resolved_kwargs)
 
     assert result.analytics_signal_population_count == expected_count
     assert result.resolution_time_signal_count == expected_count
@@ -425,10 +429,45 @@ def test_period_validation_rejects_naive_and_empty_intervals():
     assert invalid_exc.value.code == "analytics_period_invalid"
 
 
-def test_recurring_patterns_kpi_is_explicitly_not_computed_until_ticket_16():
+def test_recurring_patterns_kpi_is_computed_from_period_contributor_patterns():
     owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    pattern = create_pattern(owner, label="Recurring")
+    start = timezone.now()
+    end = start + timedelta(days=7)
+    for index, created_at in enumerate(
+        [
+            end - timedelta(days=20),
+            end - timedelta(days=19),
+            end - timedelta(days=1),
+        ]
+    ):
+        signal = create_signal(owner, title=f"Recurring {index}", created_at=created_at)
+        assign_signal(signal, pattern)
 
-    result = get_analytics_kpis(owner.user)
+    result = get_kpis(owner.user, period_start=start, period_end=end)
 
-    assert result.recurring_patterns_count is None
-    assert result.recurrence_status == RECURRENCE_STATUS_NOT_COMPUTED
+    assert result.recurring_patterns_count == 1
+    assert result.recurrence_status == RECURRENCE_STATUS_COMPUTED
+    assert result.recurrence_window.window_start == end - timedelta(days=30)
+    assert result.recurrence_window.window_end == end
+
+
+def test_recurring_patterns_kpi_excludes_recurrent_patterns_absent_from_ui_period():
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    pattern = create_pattern(owner, label="Outside UI recurring")
+    end = timezone.now()
+    start = end - timedelta(days=7)
+    for index, created_at in enumerate(
+        [
+            end - timedelta(days=20),
+            end - timedelta(days=19),
+            end - timedelta(days=8),
+        ]
+    ):
+        signal = create_signal(owner, title=f"Outside {index}", created_at=created_at)
+        assign_signal(signal, pattern)
+
+    result = get_kpis(owner.user, period_start=start, period_end=end)
+
+    assert result.operational_patterns_count == 0
+    assert result.recurring_patterns_count == 0
