@@ -43,6 +43,20 @@ class AnalyticsKPIComparisonResult:
     recurrence_status: str
 
 
+def build_adjacent_comparison_periods(
+    *,
+    period_start: datetime,
+    period_end: datetime,
+) -> tuple[AnalyticsComparisonPeriod, AnalyticsComparisonPeriod]:
+    _validate_comparison_period(period_start=period_start, period_end=period_end)
+    duration = period_end - period_start
+    previous_start = period_start - duration
+    return (
+        AnalyticsComparisonPeriod(period_start=period_start, period_end=period_end),
+        AnalyticsComparisonPeriod(period_start=previous_start, period_end=period_start),
+    )
+
+
 def get_analytics_kpi_comparison(
     user: User | None,
     *,
@@ -56,53 +70,48 @@ def get_analytics_kpi_comparison(
     Period membership uses Ticket 13 timestamp rules, but each period is recalculated
     from the current Signal, assignment, and pattern state.
     """
-    _validate_comparison_period(period_start=period_start, period_end=period_end)
-    duration = period_end - period_start
-    previous_start = period_start - duration
+    current_period, previous_period = build_adjacent_comparison_periods(
+        period_start=period_start,
+        period_end=period_end,
+    )
 
     current_kpis = get_analytics_kpis(
         user,
         organization_id=organization_id,
         establishment_id=establishment_id,
-        period_start=period_start,
-        period_end=period_end,
+        period_start=current_period.period_start,
+        period_end=current_period.period_end,
     )
     previous_kpis = get_analytics_kpis(
         user,
         organization_id=organization_id,
         establishment_id=establishment_id,
-        period_start=previous_start,
-        period_end=period_start,
+        period_start=previous_period.period_start,
+        period_end=previous_period.period_end,
     )
 
     return AnalyticsKPIComparisonResult(
-        current_period=AnalyticsComparisonPeriod(
-            period_start=period_start,
-            period_end=period_end,
-        ),
-        previous_period=AnalyticsComparisonPeriod(
-            period_start=previous_start,
-            period_end=period_start,
-        ),
+        current_period=current_period,
+        previous_period=previous_period,
         current_kpis=current_kpis,
         previous_kpis=previous_kpis,
-        signals_analyzed_count=_compare_values(
+        signals_analyzed_count=compare_metric_values(
             current=current_kpis.signals_analyzed_count,
             previous=previous_kpis.signals_analyzed_count,
         ),
-        operational_patterns_count=_compare_values(
+        operational_patterns_count=compare_metric_values(
             current=current_kpis.operational_patterns_count,
             previous=previous_kpis.operational_patterns_count,
         ),
-        actionable_signals_count=_compare_values(
+        actionable_signals_count=compare_metric_values(
             current=current_kpis.actionable_signals_count,
             previous=previous_kpis.actionable_signals_count,
         ),
-        median_resolution_seconds=_compare_values(
+        median_resolution_seconds=compare_metric_values(
             current=current_kpis.median_resolution_seconds,
             previous=previous_kpis.median_resolution_seconds,
         ),
-        recurring_patterns_count=_compare_values(
+        recurring_patterns_count=compare_metric_values(
             current=current_kpis.recurring_patterns_count,
             previous=previous_kpis.recurring_patterns_count,
         ),
@@ -136,7 +145,7 @@ def _validate_comparison_period(
         )
 
 
-def _compare_values(
+def compare_metric_values(
     *,
     current: int | float | None,
     previous: int | float | None,
