@@ -9,8 +9,10 @@ from typing import Any
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils import timezone
 
+from houston.accounts.models import User
 from houston.ai.models import AIUsageLog
 from houston.analytics.classifier import (
     ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION,
@@ -30,20 +32,25 @@ from houston.analytics.classifier import (
 from houston.analytics.exceptions import AnalyticsValidationError
 from houston.analytics.labels import normalize_pattern_label
 from houston.analytics.models import (
+    PATTERN_ISSUE_COMMENT_MAX_LENGTH,
     PATTERN_LABEL_MAX_LENGTH,
     OperationalPattern,
+    PatternIssueReport,
     PatternLifecycleEvent,
     SignalPatternAssignment,
 )
 from houston.analytics.permissions import (
+    analytics_signal_scope_q_for_membership,
     can_correct_operational_patterns,
     can_correct_signal_pattern_assignment,
+    empty_signal_scope_q,
 )
 from houston.analytics.signature import (
     build_signal_pattern_payload,
     build_signal_pattern_signature,
 )
-from houston.establishments.models import EstablishmentMembership
+from houston.analytics.status_matrix import default_analytics_signal_q
+from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.organizations.models import Organization
 from houston.signals.models import Signal
 
@@ -52,6 +59,13 @@ OWNER_CORRECTION_CLASSIFIER_VERSION = "owner_correction_v1"
 OWNER_CORRECTION_LOCK_ORDER = (
     "Analytics classification locks Signal, then SignalPatternAssignment, then "
     "OperationalPattern. Owner merge/move services use the same order."
+)
+PATTERN_ISSUE_REPORT_TYPE_WRONG_PATTERN = "wrong_pattern"
+PATTERN_ISSUE_REPORT_ROLES = frozenset(
+    {
+        EstablishmentMembership.Role.DIRECTOR,
+        EstablishmentMembership.Role.MANAGER,
+    }
 )
 
 
@@ -176,6 +190,97 @@ def create_operational_pattern(
     event.save()
 
     return pattern
+
+
+def report_pattern_assignment_issue(
+    user: User | None,
+    *,
+    signal_id,
+    pattern_id,
+    reason: str = PATTERN_ISSUE_REPORT_TYPE_WRONG_PATTERN,
+    comment: str = "",
+) -> PatternIssueReport:
+    if not _has_pattern_issue_report_role(user):
+        raise AnalyticsValidationError(
+            "Director or Manager permission is required to report pattern issues.",
+            code="analytics_pattern_issue_permission_denied",
+        )
+
+    parsed_signal_id = _parse_pattern_issue_uuid(
+        signal_id,
+        code="analytics_pattern_issue_target_not_found",
+    )
+    parsed_pattern_id = _parse_pattern_issue_uuid(
+        pattern_id,
+        code="analytics_pattern_issue_target_not_found",
+    )
+    normalized_reason = _normalize_pattern_issue_reason(reason)
+    normalized_comment = _normalize_pattern_issue_comment(comment)
+
+    with transaction.atomic():
+        memberships = _lock_pattern_issue_reporter_memberships(user)
+        if not memberships:
+            raise AnalyticsValidationError(
+                "Director or Manager permission is required to report pattern issues.",
+                code="analytics_pattern_issue_permission_denied",
+            )
+
+        signal_scope = _signal_scope_for_pattern_issue_memberships(memberships)
+        locked_signal = (
+            Signal.objects.select_for_update(of=("self",))
+            .select_related("establishment", "establishment__organization")
+            .filter(signal_scope & default_analytics_signal_q(), id=parsed_signal_id)
+            .first()
+        )
+        if locked_signal is None:
+            raise AnalyticsValidationError(
+                "Analytics pattern issue target was not found.",
+                code="analytics_pattern_issue_target_not_found",
+            )
+
+        reporter_memberships = _pattern_issue_memberships_for_signal(
+            memberships=memberships,
+            signal=locked_signal,
+        )
+        if not reporter_memberships:
+            raise AnalyticsValidationError(
+                "Analytics pattern issue target was not found.",
+                code="analytics_pattern_issue_target_not_found",
+            )
+        reporter_membership = reporter_memberships[0]
+
+        assignment = (
+            SignalPatternAssignment.objects.select_for_update(of=("self",))
+            .select_related("pattern")
+            .filter(signal=locked_signal)
+            .first()
+        )
+        if assignment is None or assignment.pattern_id is None:
+            raise AnalyticsValidationError(
+                "Signal does not have a pattern assignment.",
+                code="analytics_pattern_assignment_missing",
+            )
+        if assignment.pattern_id != parsed_pattern_id:
+            raise AnalyticsValidationError(
+                "Signal is no longer assigned to this pattern.",
+                code="analytics_pattern_assignment_mismatch",
+            )
+
+        report = PatternIssueReport(
+            pattern=assignment.pattern,
+            organization=assignment.pattern.organization,
+            signal=locked_signal,
+            reported_by_membership=reporter_membership,
+            report_type=normalized_reason,
+            comment=normalized_comment,
+            status=PatternIssueReport.Status.OPEN,
+        )
+        try:
+            report.full_clean(validate_unique=False, validate_constraints=False)
+        except ValidationError as exc:
+            raise AnalyticsValidationError(str(exc)) from exc
+        report.save()
+        return report
 
 
 @transaction.atomic
@@ -589,6 +694,124 @@ def split_operational_pattern_to_new(
             moved_assignments=move_result.moved_assignments,
             correction_id=correction_id,
         )
+
+
+def _has_pattern_issue_report_role(user: User | None) -> bool:
+    if user is None or user.status != User.Status.ACTIVE:
+        return False
+    return EstablishmentMembership.objects.filter(
+        user_id=user.id,
+        user__status=User.Status.ACTIVE,
+        role__in=PATTERN_ISSUE_REPORT_ROLES,
+        status=EstablishmentMembership.Status.ACTIVE,
+        establishment__status=Establishment.Status.ACTIVE,
+        establishment__organization__status=Organization.Status.ACTIVE,
+    ).exists()
+
+
+def _lock_pattern_issue_reporter_memberships(
+    user: User | None,
+) -> list[EstablishmentMembership]:
+    if user is None or user.status != User.Status.ACTIVE:
+        return []
+    memberships = list(
+        EstablishmentMembership.objects.select_for_update(of=("self",))
+        .select_related("user", "establishment", "establishment__organization")
+        .filter(
+            user_id=user.id,
+            user__status=User.Status.ACTIVE,
+            role__in=PATTERN_ISSUE_REPORT_ROLES,
+            status=EstablishmentMembership.Status.ACTIVE,
+            establishment__status=Establishment.Status.ACTIVE,
+            establishment__organization__status=Organization.Status.ACTIVE,
+        )
+    )
+    return _sort_pattern_issue_reporter_memberships(memberships)
+
+
+def _sort_pattern_issue_reporter_memberships(
+    memberships: list[EstablishmentMembership],
+) -> list[EstablishmentMembership]:
+    role_rank = {
+        EstablishmentMembership.Role.DIRECTOR: 0,
+        EstablishmentMembership.Role.MANAGER: 1,
+    }
+    return sorted(
+        memberships,
+        key=lambda membership: (
+            role_rank.get(membership.role, 99),
+            str(membership.establishment_id),
+            str(membership.id),
+        ),
+    )
+
+
+def _signal_scope_for_pattern_issue_memberships(
+    memberships: list[EstablishmentMembership],
+) -> Q:
+    scope_q = empty_signal_scope_q()
+    for membership in memberships:
+        scope_q |= analytics_signal_scope_q_for_membership(membership)
+    return scope_q
+
+
+def _pattern_issue_memberships_for_signal(
+    *,
+    memberships: list[EstablishmentMembership],
+    signal: Signal,
+) -> list[EstablishmentMembership]:
+    authorizing = [
+        membership
+        for membership in memberships
+        if Signal.objects.filter(
+            analytics_signal_scope_q_for_membership(membership)
+            & default_analytics_signal_q(),
+            id=signal.id,
+        ).exists()
+    ]
+    return _sort_pattern_issue_reporter_memberships(authorizing)
+
+
+def _parse_pattern_issue_uuid(value, *, code: str) -> uuid.UUID:
+    try:
+        return uuid.UUID(str(value))
+    except (TypeError, ValueError) as exc:
+        raise AnalyticsValidationError(
+            "Analytics pattern issue target was not found.",
+            code=code,
+        ) from exc
+
+
+def _normalize_pattern_issue_reason(reason: str) -> str:
+    if not isinstance(reason, str):
+        raise AnalyticsValidationError(
+            "Pattern issue report type is invalid.",
+            code="analytics_pattern_issue_reason_invalid",
+        )
+    normalized = (reason or "").strip()
+    if normalized != PATTERN_ISSUE_REPORT_TYPE_WRONG_PATTERN:
+        raise AnalyticsValidationError(
+            "Pattern issue report type is invalid.",
+            code="analytics_pattern_issue_reason_invalid",
+        )
+    return normalized
+
+
+def _normalize_pattern_issue_comment(comment: str | None) -> str:
+    if comment is None:
+        return ""
+    if not isinstance(comment, str):
+        raise AnalyticsValidationError(
+            "Pattern issue comment is invalid.",
+            code="analytics_pattern_issue_comment_invalid",
+        )
+    normalized = comment.strip()
+    if len(normalized) > PATTERN_ISSUE_COMMENT_MAX_LENGTH:
+        raise AnalyticsValidationError(
+            f"Pattern issue comment must be at most {PATTERN_ISSUE_COMMENT_MAX_LENGTH} characters.",
+            code="analytics_pattern_issue_comment_too_long",
+        )
+    return normalized
 
 
 def _terminal_merge_precheck(
