@@ -7,6 +7,7 @@ from datetime import timedelta
 import pytest
 from django.utils import timezone
 
+from houston.analytics import pattern_signals as pattern_signals_module
 from houston.analytics.exceptions import AnalyticsValidationError
 from houston.analytics.models import SignalPatternAssignment
 from houston.analytics.pattern_signals import (
@@ -454,6 +455,48 @@ def test_pattern_signals_cursor_rejects_invalid_incomplete_or_unknown_version():
                 cursor=cursor,
             )
         assert exc_info.value.code == "analytics_pattern_signals_cursor_invalid"
+
+
+def test_pattern_signals_cursor_rejects_naive_created_at_before_pagination(monkeypatch):
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    pattern = create_pattern(owner, label="Naive signal cursor")
+    start = timezone.now()
+    end = start + timedelta(days=1)
+    payload = {
+        "version": PATTERN_SIGNALS_CURSOR_VERSION,
+        "context": {
+            "user_id": str(owner.user_id),
+            "pattern_id": str(pattern.id),
+            "period_start": start.isoformat(),
+            "period_end": end.isoformat(),
+            "organization_id": None,
+            "establishment_id": None,
+            "page_size": 50,
+        },
+        "sort": {
+            "created_at": "2026-01-01T12:00:00",
+            "signal_id": str(pattern.id),
+        },
+    }
+    cursor = base64.urlsafe_b64encode(
+        json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+    ).decode().rstrip("=")
+
+    def fail_if_paginated(*_args, **_kwargs):
+        raise AssertionError("pagination should not run for an invalid cursor")
+
+    monkeypatch.setattr(pattern_signals_module, "_apply_cursor", fail_if_paginated)
+
+    with pytest.raises(AnalyticsValidationError) as exc_info:
+        list_analytics_pattern_signals(
+            owner.user,
+            pattern_id=pattern.id,
+            period_start=start,
+            period_end=end,
+            cursor=cursor,
+        )
+
+    assert exc_info.value.code == "analytics_pattern_signals_cursor_invalid"
 
 
 @pytest.mark.parametrize("page_size", [0, MAX_PATTERN_SIGNALS_PAGE_SIZE + 1])

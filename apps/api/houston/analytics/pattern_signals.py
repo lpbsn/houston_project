@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from django.db.models import Q, QuerySet
+from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from houston.accounts.models import User
@@ -278,7 +279,7 @@ def _parse_cursor(
             raise ValueError
         sort = payload["sort"]
         created_at = parse_datetime(sort["created_at"])
-        if created_at is None:
+        if created_at is None or timezone.is_naive(created_at):
             raise ValueError
         return _PatternSignalsCursor(
             created_at=created_at,

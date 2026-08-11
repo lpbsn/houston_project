@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from django.db.models import BooleanField, Case, Count, Max, Q, QuerySet, Value, When
+from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from houston.accounts.models import User
@@ -446,7 +447,7 @@ def _parse_cursor(
             raise ValueError
         sort = payload["sort"]
         last_seen_at = parse_datetime(sort["last_seen_at"])
-        if last_seen_at is None:
+        if last_seen_at is None or timezone.is_naive(last_seen_at):
             raise ValueError
         if not isinstance(sort["is_recurrent"], bool):
             raise ValueError

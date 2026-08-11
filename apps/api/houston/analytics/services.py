@@ -783,6 +783,11 @@ def _parse_pattern_issue_uuid(value, *, code: str) -> uuid.UUID:
 
 
 def _normalize_pattern_issue_reason(reason: str) -> str:
+    if not isinstance(reason, str):
+        raise AnalyticsValidationError(
+            "Pattern issue report type is invalid.",
+            code="analytics_pattern_issue_reason_invalid",
+        )
     normalized = (reason or "").strip()
     if normalized != PATTERN_ISSUE_REPORT_TYPE_WRONG_PATTERN:
         raise AnalyticsValidationError(

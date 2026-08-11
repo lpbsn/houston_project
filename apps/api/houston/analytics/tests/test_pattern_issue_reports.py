@@ -449,6 +449,15 @@ def test_reason_and_comment_validation():
         pattern_id=pattern.id,
         reason="duplicate",
     )
+    before_count = PatternIssueReport.objects.count()
+    assert_report_error(
+        "analytics_pattern_issue_reason_invalid",
+        user=director.user,
+        signal_id=signal.id,
+        pattern_id=pattern.id,
+        reason=123,
+    )
+    assert PatternIssueReport.objects.count() == before_count
     assert_report_error(
         "analytics_pattern_issue_comment_too_long",
         user=director.user,

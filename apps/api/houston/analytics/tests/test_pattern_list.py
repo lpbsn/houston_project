@@ -7,6 +7,7 @@ from datetime import timedelta
 import pytest
 from django.utils import timezone
 
+from houston.analytics import pattern_list as pattern_list_module
 from houston.analytics.comparisons import (
     RELATIVE_CHANGE_COMPUTED,
     RELATIVE_CHANGE_UNDEFINED_PREVIOUS_ZERO,
@@ -454,6 +455,50 @@ def test_pattern_list_cursor_rejects_invalid_or_unknown_version():
             period_end=end,
             cursor=cursor,
         )
+
+
+def test_pattern_list_cursor_rejects_naive_last_seen_at_before_pagination(monkeypatch):
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    pattern = create_pattern(owner, label="Naive cursor")
+    start = timezone.now()
+    end = start + timedelta(days=1)
+    payload = {
+        "version": PATTERN_LIST_CURSOR_VERSION,
+        "context": {
+            "user_id": str(owner.user_id),
+            "period_start": start.isoformat(),
+            "period_end": end.isoformat(),
+            "recurrence_as_of": end.isoformat(),
+            "organization_id": None,
+            "establishment_id": None,
+            "page_size": 50,
+        },
+        "sort": {
+            "is_recurrent": False,
+            "signal_count": 1,
+            "last_seen_at": "2026-01-01T12:00:00",
+            "normalized_label": pattern.normalized_label,
+            "pattern_id": str(pattern.id),
+        },
+    }
+    cursor = base64.urlsafe_b64encode(
+        json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+    ).decode().rstrip("=")
+
+    def fail_if_paginated(*_args, **_kwargs):
+        raise AssertionError("pagination should not run for an invalid cursor")
+
+    monkeypatch.setattr(pattern_list_module, "_apply_cursor", fail_if_paginated)
+
+    with pytest.raises(AnalyticsValidationError) as exc_info:
+        list_analytics_patterns(
+            owner.user,
+            period_start=start,
+            period_end=end,
+            cursor=cursor,
+        )
+
+    assert exc_info.value.code == "analytics_pattern_list_cursor_invalid"
 
 
 def test_pattern_list_recalculates_after_dataset_change_between_pages():
