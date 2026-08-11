@@ -26,6 +26,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/analytics/dashboard/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_analytics_dashboard_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/patterns/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_analytics_patterns_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/patterns/{pattern_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_analytics_pattern_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/patterns/{pattern_id}/signals/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_analytics_pattern_signals_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/bootstrap/": {
         parameters: {
             query?: never;
@@ -2699,6 +2763,215 @@ export interface components {
             active: boolean;
             is_generic: boolean;
         };
+        AnalyticsBusinessAssignmentCoverage: {
+            total_count: number;
+            with_pattern_count: number;
+            without_pattern_count: number;
+            /** Format: double */
+            coverage_rate: number | null;
+        };
+        AnalyticsDashboardResponse: {
+            current_period: components["schemas"]["AnalyticsPeriod"];
+            previous_period: components["schemas"]["AnalyticsPeriod"];
+            current_kpis: components["schemas"]["AnalyticsKPIResult"];
+            previous_kpis: components["schemas"]["AnalyticsKPIResult"];
+            signals_analyzed_count: components["schemas"]["AnalyticsMetricComparison"];
+            operational_patterns_count: components["schemas"]["AnalyticsMetricComparison"];
+            actionable_signals_count: components["schemas"]["AnalyticsMetricComparison"];
+            median_resolution_seconds: components["schemas"]["AnalyticsMetricComparison"];
+            recurring_patterns_count: components["schemas"]["AnalyticsMetricComparison"];
+            recurrence_status: string;
+        };
+        AnalyticsKPIResult: {
+            analytics_signal_population_count: number;
+            signals_analyzed_count: number;
+            operational_patterns_count: number;
+            actionable_signals_count: number;
+            /** Format: double */
+            median_resolution_seconds: number | null;
+            resolution_time_signal_count: number;
+            invalid_resolution_duration_count: number;
+            business_assignment_coverage: components["schemas"]["AnalyticsBusinessAssignmentCoverage"];
+            technical_classification_state: components["schemas"]["AnalyticsTechnicalClassificationState"];
+            recurring_patterns_count: number;
+            recurrence_window: components["schemas"]["AnalyticsRecurrenceWindow"];
+            recurrence_status: string;
+        };
+        AnalyticsMetricComparison: {
+            /** Format: double */
+            current_value: number | null;
+            /** Format: double */
+            previous_value: number | null;
+            /** Format: double */
+            absolute_delta: number | null;
+            /** Format: double */
+            relative_change: number | null;
+            relative_change_status: string;
+        };
+        AnalyticsPatternBusinessUnitDistributionBucket: {
+            /** Format: uuid */
+            business_unit_id: string | null;
+            name: string;
+            signal_count: number;
+        };
+        AnalyticsPatternDetailMetrics: {
+            signal_count: number;
+            previous_signal_count: number;
+            signal_count_comparison: components["schemas"]["AnalyticsMetricComparison"];
+            actionable_signal_count: number;
+            /** Format: date-time */
+            last_seen_at: string;
+            establishment_count: number;
+        };
+        AnalyticsPatternDetailResponse: {
+            identity: components["schemas"]["AnalyticsPatternIdentity"];
+            current_period: components["schemas"]["AnalyticsPeriod"];
+            previous_period: components["schemas"]["AnalyticsPeriod"];
+            metrics: components["schemas"]["AnalyticsPatternDetailMetrics"];
+            is_recurrent: boolean;
+            occurrence_count_30d: number;
+            distinct_day_count_30d: number;
+            recurrence_window: components["schemas"]["AnalyticsRecurrenceWindow"];
+            recurrence_status: string;
+            trend_timezone: string;
+            trend: components["schemas"]["AnalyticsPatternTrendBucket"][];
+            status_distribution: components["schemas"]["AnalyticsPatternStatusDistributionBucket"][];
+            establishments: components["schemas"]["AnalyticsPatternEstablishmentDistributionBucket"][];
+            establishment_bucket_count: number;
+            establishment_other_signal_count: number;
+            responsible_business_units: components["schemas"]["AnalyticsPatternBusinessUnitDistributionBucket"][];
+            business_unit_bucket_count: number;
+            business_unit_other_signal_count: number;
+            drilldown_context: components["schemas"]["AnalyticsPatternDrilldownContext"];
+        };
+        AnalyticsPatternDrilldownContext: {
+            /** Format: uuid */
+            pattern_id: string;
+            /** Format: date-time */
+            period_start: string;
+            /** Format: date-time */
+            period_end: string;
+            /** Format: uuid */
+            organization_id: string | null;
+            /** Format: uuid */
+            establishment_id: string | null;
+        };
+        AnalyticsPatternEstablishmentDistributionBucket: {
+            /** Format: uuid */
+            establishment_id: string;
+            name: string;
+            signal_count: number;
+        };
+        AnalyticsPatternEstablishmentSummary: {
+            /** Format: uuid */
+            establishment_id: string;
+            name: string;
+            signal_count: number;
+        };
+        AnalyticsPatternIdentity: {
+            /** Format: uuid */
+            pattern_id: string;
+            label: string;
+            status: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            merged_into_pattern_id: string | null;
+        };
+        AnalyticsPatternListItem: {
+            /** Format: uuid */
+            pattern_id: string;
+            label: string;
+            normalized_label: string;
+            status: string;
+            signal_count: number;
+            previous_signal_count: number;
+            signal_count_comparison: components["schemas"]["AnalyticsMetricComparison"];
+            /** Format: date-time */
+            last_seen_at: string;
+            actionable_signal_count: number;
+            establishment_count: number;
+            establishments: components["schemas"]["AnalyticsPatternEstablishmentSummary"][];
+            is_recurrent: boolean;
+            occurrence_count_30d: number;
+            distinct_day_count_30d: number;
+            recurrence_window: components["schemas"]["AnalyticsRecurrenceWindow"];
+            recurrence_status: string;
+        };
+        AnalyticsPatternListResponse: {
+            current_period: components["schemas"]["AnalyticsPeriod"];
+            previous_period: components["schemas"]["AnalyticsPeriod"];
+            items: components["schemas"]["AnalyticsPatternListItem"][];
+            total_count: number;
+            page_size: number;
+            has_more: boolean;
+            next_cursor: string | null;
+            recurrence_window: components["schemas"]["AnalyticsRecurrenceWindow"];
+            recurrence_status: string;
+        };
+        AnalyticsPatternSignalItem: {
+            /** Format: uuid */
+            signal_id: string;
+            title: string;
+            structured_summary: string;
+            status: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            resolved_at: string | null;
+            establishment: components["schemas"]["AnalyticsSignalEstablishmentRef"];
+            responsible_business_unit: components["schemas"]["AnalyticsSignalBusinessUnitRef"] | null;
+        };
+        AnalyticsPatternSignalsResponse: {
+            period: components["schemas"]["AnalyticsPeriod"];
+            items: components["schemas"]["AnalyticsPatternSignalItem"][];
+            page_size: number;
+            has_more: boolean;
+            next_cursor: string | null;
+        };
+        AnalyticsPatternStatusDistributionBucket: {
+            status: string;
+            signal_count: number;
+        };
+        AnalyticsPatternTrendBucket: {
+            /** Format: date */
+            bucket_date: string;
+            /** Format: date-time */
+            bucket_start: string;
+            /** Format: date-time */
+            bucket_end: string;
+            signal_count: number;
+        };
+        AnalyticsPeriod: {
+            /** Format: date-time */
+            period_start: string;
+            /** Format: date-time */
+            period_end: string;
+        };
+        AnalyticsRecurrenceWindow: {
+            /** Format: date-time */
+            window_start: string;
+            /** Format: date-time */
+            window_end: string;
+        };
+        AnalyticsSignalBusinessUnitRef: {
+            /** Format: uuid */
+            id: string;
+            specific_name: string;
+        };
+        AnalyticsSignalEstablishmentRef: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        AnalyticsTechnicalClassificationState: {
+            total_count: number;
+            technical_state_breakdown: {
+                [key: string]: number;
+            };
+            technical_terminal_success_count: number;
+            technical_pending_or_error_count: number;
+        };
         ApiErrorResponse: {
             code: string;
             detail: string;
@@ -4253,6 +4526,224 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    v1_analytics_dashboard_retrieve: {
+        parameters: {
+            query: {
+                establishment_id?: string;
+                organization_id?: string;
+                period_end: string;
+                period_start: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsDashboardResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_analytics_patterns_list: {
+        parameters: {
+            query: {
+                cursor?: string;
+                establishment_id?: string;
+                organization_id?: string;
+                /** @description Page size, default 50, maximum 100. */
+                page_size?: number;
+                period_end: string;
+                period_start: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsPatternListResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_analytics_pattern_retrieve: {
+        parameters: {
+            query: {
+                establishment_id?: string;
+                organization_id?: string;
+                period_end: string;
+                period_start: string;
+            };
+            header?: never;
+            path: {
+                pattern_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsPatternDetailResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_analytics_pattern_signals_list: {
+        parameters: {
+            query: {
+                cursor?: string;
+                establishment_id?: string;
+                organization_id?: string;
+                /** @description Page size, default 50, maximum 100. */
+                page_size?: number;
+                period_end: string;
+                period_start: string;
+            };
+            header?: never;
+            path: {
+                pattern_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsPatternSignalsResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
