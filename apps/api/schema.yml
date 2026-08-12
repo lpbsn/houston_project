@@ -335,6 +335,195 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/analytics/patterns/{pattern_id}/merge/:
+    post:
+      operationId: v1_analytics_pattern_merge
+      parameters:
+      - in: path
+        name: pattern_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - analytics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternMergeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternMergeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternMergeRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsOwnerGovernanceResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/analytics/patterns/{pattern_id}/move-signals/:
+    post:
+      operationId: v1_analytics_pattern_move_signals
+      parameters:
+      - in: path
+        name: pattern_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - analytics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternMoveSignalsRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternMoveSignalsRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternMoveSignalsRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsOwnerGovernanceResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/analytics/patterns/{pattern_id}/rename/:
+    post:
+      operationId: v1_analytics_pattern_rename
+      parameters:
+      - in: path
+        name: pattern_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - analytics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternRenameRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternRenameRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternRenameRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsOwnerGovernanceResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/analytics/patterns/{pattern_id}/signals/:
     get:
       operationId: v1_analytics_pattern_signals_list
@@ -406,6 +595,132 @@ paths:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/analytics/patterns/{pattern_id}/split-to-existing/:
+    post:
+      operationId: v1_analytics_pattern_split_to_existing
+      parameters:
+      - in: path
+        name: pattern_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - analytics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternSplitToExistingRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternSplitToExistingRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternSplitToExistingRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsOwnerGovernanceResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/analytics/patterns/{pattern_id}/split-to-new/:
+    post:
+      operationId: v1_analytics_pattern_split_to_new
+      parameters:
+      - in: path
+        name: pattern_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - analytics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternSplitToNewRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternSplitToNewRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternSplitToNewRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsOwnerGovernanceResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
           content:
             application/json:
               schema:
@@ -9029,6 +9344,46 @@ components:
       - previous_value
       - relative_change
       - relative_change_status
+    AnalyticsOwnerGovernancePatternRef:
+      type: object
+      properties:
+        pattern_id:
+          type: string
+          format: uuid
+        label:
+          type: string
+        normalized_label:
+          type: string
+        status:
+          type: string
+        merged_into_pattern_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - label
+      - merged_into_pattern_id
+      - normalized_label
+      - pattern_id
+      - status
+    AnalyticsOwnerGovernanceResponse:
+      type: object
+      properties:
+        source_pattern:
+          $ref: '#/components/schemas/AnalyticsOwnerGovernancePatternRef'
+        target_pattern:
+          allOf:
+          - $ref: '#/components/schemas/AnalyticsOwnerGovernancePatternRef'
+          nullable: true
+        moved_signal_count:
+          type: integer
+        target_created:
+          type: boolean
+      required:
+      - moved_signal_count
+      - source_pattern
+      - target_created
+      - target_pattern
     AnalyticsPatternBusinessUnitDistributionBucket:
       type: object
       properties:
@@ -9303,6 +9658,35 @@ components:
       - recurrence_status
       - recurrence_window
       - total_count
+    AnalyticsPatternMergeRequest:
+      type: object
+      properties:
+        target_pattern_id:
+          type: string
+          format: uuid
+      required:
+      - target_pattern_id
+    AnalyticsPatternMoveSignalsRequest:
+      type: object
+      properties:
+        target_pattern_id:
+          type: string
+          format: uuid
+        signal_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - signal_ids
+      - target_pattern_id
+    AnalyticsPatternRenameRequest:
+      type: object
+      properties:
+        label:
+          type: string
+      required:
+      - label
     AnalyticsPatternSignalItem:
       type: object
       properties:
@@ -9359,6 +9743,33 @@ components:
       - next_cursor
       - page_size
       - period
+    AnalyticsPatternSplitToExistingRequest:
+      type: object
+      properties:
+        target_pattern_id:
+          type: string
+          format: uuid
+        signal_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - signal_ids
+      - target_pattern_id
+    AnalyticsPatternSplitToNewRequest:
+      type: object
+      properties:
+        label:
+          type: string
+        signal_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - label
+      - signal_ids
     AnalyticsPatternStatusDistributionBucket:
       type: object
       properties:

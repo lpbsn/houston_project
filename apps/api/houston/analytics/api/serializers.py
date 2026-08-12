@@ -200,3 +200,48 @@ class AnalyticsPatternSignalsResponseSerializer(serializers.Serializer):
     page_size = serializers.IntegerField()
     has_more = serializers.BooleanField()
     next_cursor = serializers.CharField(allow_null=True)
+
+
+class AnalyticsPatternRenameRequestSerializer(serializers.Serializer):
+    label = serializers.CharField(allow_blank=True)
+
+
+class AnalyticsPatternMergeRequestSerializer(serializers.Serializer):
+    target_pattern_id = serializers.UUIDField()
+
+
+class AnalyticsPatternMoveSignalsRequestSerializer(serializers.Serializer):
+    target_pattern_id = serializers.UUIDField()
+    signal_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        allow_empty=True,
+    )
+
+
+class AnalyticsPatternSplitToExistingRequestSerializer(
+    AnalyticsPatternMoveSignalsRequestSerializer
+):
+    pass
+
+
+class AnalyticsPatternSplitToNewRequestSerializer(serializers.Serializer):
+    label = serializers.CharField(allow_blank=True)
+    signal_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        allow_empty=True,
+    )
+
+
+class AnalyticsOwnerGovernancePatternRefSerializer(serializers.Serializer):
+    pattern_id = serializers.UUIDField()
+    label = serializers.CharField()
+    normalized_label = serializers.CharField()
+    status = serializers.CharField()
+    merged_into_pattern_id = serializers.UUIDField(allow_null=True)
+
+
+class AnalyticsOwnerGovernanceResponseSerializer(serializers.Serializer):
+    source_pattern = AnalyticsOwnerGovernancePatternRefSerializer()
+    target_pattern = AnalyticsOwnerGovernancePatternRefSerializer(allow_null=True)
+    moved_signal_count = serializers.IntegerField()
+    target_created = serializers.BooleanField()

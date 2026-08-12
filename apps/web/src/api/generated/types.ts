@@ -74,6 +74,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/analytics/patterns/{pattern_id}/merge/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_analytics_pattern_merge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/patterns/{pattern_id}/move-signals/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_analytics_pattern_move_signals"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/patterns/{pattern_id}/rename/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_analytics_pattern_rename"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/analytics/patterns/{pattern_id}/signals/": {
         parameters: {
             query?: never;
@@ -84,6 +132,38 @@ export interface paths {
         get: operations["v1_analytics_pattern_signals_list"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/patterns/{pattern_id}/split-to-existing/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_analytics_pattern_split_to_existing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/patterns/{pattern_id}/split-to-new/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_analytics_pattern_split_to_new"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2808,6 +2888,21 @@ export interface components {
             relative_change: number | null;
             relative_change_status: string;
         };
+        AnalyticsOwnerGovernancePatternRef: {
+            /** Format: uuid */
+            pattern_id: string;
+            label: string;
+            normalized_label: string;
+            status: string;
+            /** Format: uuid */
+            merged_into_pattern_id: string | null;
+        };
+        AnalyticsOwnerGovernanceResponse: {
+            source_pattern: components["schemas"]["AnalyticsOwnerGovernancePatternRef"];
+            target_pattern: components["schemas"]["AnalyticsOwnerGovernancePatternRef"] | null;
+            moved_signal_count: number;
+            target_created: boolean;
+        };
         AnalyticsPatternBusinessUnitDistributionBucket: {
             /** Format: uuid */
             business_unit_id: string | null;
@@ -2909,6 +3004,18 @@ export interface components {
             recurrence_window: components["schemas"]["AnalyticsRecurrenceWindow"];
             recurrence_status: string;
         };
+        AnalyticsPatternMergeRequest: {
+            /** Format: uuid */
+            target_pattern_id: string;
+        };
+        AnalyticsPatternMoveSignalsRequest: {
+            /** Format: uuid */
+            target_pattern_id: string;
+            signal_ids: string[];
+        };
+        AnalyticsPatternRenameRequest: {
+            label: string;
+        };
         AnalyticsPatternSignalItem: {
             /** Format: uuid */
             signal_id: string;
@@ -2928,6 +3035,15 @@ export interface components {
             page_size: number;
             has_more: boolean;
             next_cursor: string | null;
+        };
+        AnalyticsPatternSplitToExistingRequest: {
+            /** Format: uuid */
+            target_pattern_id: string;
+            signal_ids: string[];
+        };
+        AnalyticsPatternSplitToNewRequest: {
+            label: string;
+            signal_ids: string[];
         };
         AnalyticsPatternStatusDistributionBucket: {
             status: string;
@@ -4687,6 +4803,207 @@ export interface operations {
             };
         };
     };
+    v1_analytics_pattern_merge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pattern_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalyticsPatternMergeRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AnalyticsPatternMergeRequest"];
+                "multipart/form-data": components["schemas"]["AnalyticsPatternMergeRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsOwnerGovernanceResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_analytics_pattern_move_signals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pattern_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalyticsPatternMoveSignalsRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AnalyticsPatternMoveSignalsRequest"];
+                "multipart/form-data": components["schemas"]["AnalyticsPatternMoveSignalsRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsOwnerGovernanceResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_analytics_pattern_rename: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pattern_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalyticsPatternRenameRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AnalyticsPatternRenameRequest"];
+                "multipart/form-data": components["schemas"]["AnalyticsPatternRenameRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsOwnerGovernanceResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     v1_analytics_pattern_signals_list: {
         parameters: {
             query: {
@@ -4739,6 +5056,140 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_analytics_pattern_split_to_existing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pattern_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalyticsPatternSplitToExistingRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AnalyticsPatternSplitToExistingRequest"];
+                "multipart/form-data": components["schemas"]["AnalyticsPatternSplitToExistingRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsOwnerGovernanceResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_analytics_pattern_split_to_new: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pattern_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalyticsPatternSplitToNewRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AnalyticsPatternSplitToNewRequest"];
+                "multipart/form-data": components["schemas"]["AnalyticsPatternSplitToNewRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsOwnerGovernanceResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
