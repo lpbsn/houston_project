@@ -382,6 +382,48 @@ describe('AnalyticsPage', () => {
     expect(screen.getByText('Attente ou erreur 5')).toBeTruthy()
   })
 
+  it('renders period presets as a global Analytics control, outside Motifs filters', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-12T10:30:00.000Z'))
+    setDashboardQuery({ data: dashboard() })
+    setPatternsQuery()
+    setFilterOptionsQuery()
+    authState.current = {
+      bootstrap: bootstrap('manager'),
+      isBootstrapping: false,
+      isReady: true,
+    }
+
+    render(createElement(AnalyticsPage))
+
+    expect(screen.getByText('Période Analytics')).toBeTruthy()
+    expect(
+      screen.getByText('Contrôle global appliqué aux KPIs et à la liste des motifs.'),
+    ).toBeTruthy()
+    expect(screen.getByText('Filtres appliqués uniquement à la liste des motifs.')).toBeTruthy()
+    expect(screen.queryByText('Période')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '7 jours' }))
+
+    const params = new URLSearchParams(window.location.search)
+    expect(params.get('period_start')).toBe('2026-08-05T10:30:00.000Z')
+    expect(params.get('period_end')).toBe('2026-08-12T10:30:00.000Z')
+    expect(dashboardQueryMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        periodStart: '2026-08-05T10:30:00.000Z',
+        periodEnd: '2026-08-12T10:30:00.000Z',
+      }),
+      expect.objectContaining({ enabled: true }),
+    )
+    expect(patternsQueryMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        periodStart: '2026-08-05T10:30:00.000Z',
+        periodEnd: '2026-08-12T10:30:00.000Z',
+      }),
+      expect.objectContaining({ enabled: true }),
+    )
+  })
+
   it('renders an empty state when the backend population is zero', () => {
     setDashboardQuery({
       data: dashboard({

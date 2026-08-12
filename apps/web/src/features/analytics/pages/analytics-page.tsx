@@ -353,6 +353,40 @@ function toggleString(values: string[], value: string): string[] {
     : [...values, value].sort()
 }
 
+function AnalyticsGlobalPeriodControls({
+  state,
+  onStateChange,
+}: {
+  state: AnalyticsUrlState
+  onStateChange: (state: AnalyticsUrlState, options?: { replace?: boolean }) => void
+}) {
+  return (
+    <TerrainCard className="p-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-[#1a1a1a]">Période Analytics</p>
+          <p className={cn('mt-1 text-xs leading-5', terrain.muted)}>
+            Contrôle global appliqué aux KPIs et à la liste des motifs.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2" aria-label="Période Analytics">
+          {PERIOD_PRESETS.map((preset) => (
+            <Button
+              key={preset.days}
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onStateChange(buildPresetState(state, preset.days))}
+            >
+              {preset.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+    </TerrainCard>
+  )
+}
+
 function AnalyticsPatternFilters({
   state,
   onStateChange,
@@ -383,7 +417,7 @@ function AnalyticsPatternFilters({
         </p>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-[1.2fr_1fr_1fr]">
+      <div className="mt-4 grid gap-3 lg:grid-cols-[1.2fr_1fr]">
         <label className="flex flex-col gap-1 text-xs font-semibold text-[#555]">
           Recherche motif
           <AnalyticsPatternSearchInput
@@ -392,23 +426,6 @@ function AnalyticsPatternFilters({
             onStateChange={onStateChange}
           />
         </label>
-
-        <div className="flex flex-col gap-1">
-          <span className="text-xs font-semibold text-[#555]">Période</span>
-          <div className="flex flex-wrap gap-2">
-            {PERIOD_PRESETS.map((preset) => (
-              <Button
-                key={preset.days}
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onStateChange(buildPresetState(state, preset.days))}
-              >
-                {preset.label}
-              </Button>
-            ))}
-          </div>
-        </div>
 
         <label className="flex flex-col gap-1 text-xs font-semibold text-[#555]">
           Récurrence
@@ -816,6 +833,11 @@ export function AnalyticsPage() {
             technicalPendingOrErrorCount={
               currentKpis.technical_classification_state.technical_pending_or_error_count
             }
+          />
+
+          <AnalyticsGlobalPeriodControls
+            state={analyticsState}
+            onStateChange={updateAnalyticsState}
           />
 
           <AnalyticsPatternFilters

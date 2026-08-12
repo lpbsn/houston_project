@@ -14,6 +14,7 @@ import {
   AnalyticsApiError,
   analyticsQueryKeys,
   fetchAnalyticsDashboard,
+  fetchAnalyticsPatternFilterOptions,
   fetchAnalyticsPatterns,
   type AnalyticsDashboardResponse,
 } from './api'
@@ -273,5 +274,49 @@ describe('analytics api', () => {
       }),
     )
     expect(getMock.mock.calls[0]?.[1]?.params?.query).not.toHaveProperty('establishment_id')
+  })
+
+  it('fetches pattern filter options through the generated endpoint contract', async () => {
+    getMock.mockResolvedValue({
+      data: {
+        establishments: [],
+        responsible_business_units: [],
+        includes_unassigned: false,
+      },
+      error: undefined,
+      response: { ok: true, status: 200 } as Response,
+    })
+
+    await fetchAnalyticsPatternFilterOptions({
+      periodStart: '2026-07-13T10:30:00.000Z',
+      periodEnd: '2026-08-12T10:30:00.000Z',
+      organizationId: '11111111-1111-4111-8111-111111111111',
+      establishmentIds: [
+        '22222222-2222-4222-8222-222222222222',
+        '44444444-4444-4444-8444-444444444444',
+      ],
+      q: 'ignored for options',
+      recurrence: 'recurrent',
+      responsibleBusinessUnitIds: ['33333333-3333-4333-8333-333333333333'],
+      responsibleBusinessUnitUnassigned: true,
+      signalStatuses: ['open'],
+    })
+
+    expect(getMock).toHaveBeenCalledWith(
+      '/api/v1/analytics/pattern-filter-options/',
+      expect.objectContaining({
+        params: {
+          query: {
+            organization_id: '11111111-1111-4111-8111-111111111111',
+            establishment_ids:
+              '22222222-2222-4222-8222-222222222222,44444444-4444-4444-8444-444444444444',
+          },
+        },
+        headers: { Authorization: 'Bearer test-token' },
+      }),
+    )
+    expect(getMock.mock.calls[0]?.[1]?.params?.query).not.toHaveProperty('establishment_id')
+    expect(getMock.mock.calls[0]?.[1]?.params?.query).not.toHaveProperty('q')
+    expect(getMock.mock.calls[0]?.[1]?.params?.query).not.toHaveProperty('recurrence')
   })
 })

@@ -13,20 +13,8 @@ export type AnalyticsPatternListResponse =
   components['schemas']['AnalyticsPatternListResponse']
 export type AnalyticsPatternListItem =
   components['schemas']['AnalyticsPatternListItem']
-
-export type AnalyticsPatternFilterOptionsResponse = {
-  establishments: Array<{
-    establishment_id: string
-    name: string
-  }>
-  responsible_business_units: Array<{
-    business_unit_id: string | null
-    name: string
-    establishment_id: string | null
-    is_unassigned: boolean
-  }>
-  includes_unassigned: boolean
-}
+export type AnalyticsPatternFilterOptionsResponse =
+  components['schemas']['AnalyticsPatternFilterOptionsResponse']
 
 export const analyticsQueryKeys = {
   all: ['analytics'] as const,
@@ -176,7 +164,7 @@ export async function fetchAnalyticsPatterns(
     (accessToken) =>
       apiClient.GET('/api/v1/analytics/patterns/', {
         params: {
-          query: buildPatternListQuery(state, options) as never,
+          query: buildPatternListQuery(state, options),
         },
         headers: getAuthHeaders(accessToken),
       }),
@@ -191,13 +179,12 @@ export async function fetchAnalyticsPatternFilterOptions(
 ): Promise<AnalyticsPatternFilterOptionsResponse> {
   const result = await withAuthRetry(
     (accessToken) =>
-      // The path is generated after the Ticket 27 schema regeneration.
-      apiClient.GET('/api/v1/analytics/pattern-filter-options/' as never, {
+      apiClient.GET('/api/v1/analytics/pattern-filter-options/', {
         params: {
           query: buildPatternFilterOptionsQuery(state),
         },
         headers: getAuthHeaders(accessToken),
-      } as never),
+      }),
     { refreshable: true },
   )
 
