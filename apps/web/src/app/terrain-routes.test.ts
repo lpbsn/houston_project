@@ -45,6 +45,7 @@ describe('usesTerrainShell', () => {
     expect(usesTerrainShell({ kind: 'static', path: '/action-plans' })).toBe(true)
     expect(usesTerrainShell({ kind: 'static', path: '/notifications-center' })).toBe(true)
     expect(usesTerrainShell({ kind: 'static', path: '/execution/upcoming' })).toBe(true)
+    expect(usesTerrainShell({ kind: 'static', path: '/analytics' })).toBe(true)
   })
 
   it('returns false for non-terrain routes', () => {
@@ -214,6 +215,16 @@ describe('getTerrainRouteConfig', () => {
     })
   })
 
+  it('configures analytics route as a minimal detail route', () => {
+    expect(getTerrainRouteConfig({ kind: 'static', path: '/analytics' })).toEqual({
+      topbarVariant: 'detail',
+      title: 'Analyse',
+      backPath: '/general',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    })
+  })
+
   it('configures signal detail without bottom nav', () => {
     expect(getTerrainRouteConfig({ kind: 'signal-detail', signalId: 'x' })).toEqual({
       topbarVariant: 'detail',
@@ -299,6 +310,7 @@ describe('getTerrainContentKey', () => {
     )
     expect(getTerrainContentKey({ kind: 'static', path: '/chat' })).toBe('chat')
     expect(getTerrainContentKey({ kind: 'static', path: '/general' })).toBe('general')
+    expect(getTerrainContentKey({ kind: 'static', path: '/analytics' })).toBe('analytics')
     expect(getTerrainContentKey({ kind: 'static', path: '/general/switch-establishment' })).toBe(
       'general-switch-establishment',
     )
@@ -368,6 +380,7 @@ describe('isProtectedRoute', () => {
       '/select-establishment',
       '/no-establishment',
       '/organization',
+      '/analytics',
     ] as const) {
       expect(isProtectedRoute({ kind: 'static', path })).toBe(true)
     }
@@ -417,6 +430,10 @@ describe('requiresActiveMembership', () => {
     ] as const) {
       expect(requiresActiveMembership({ kind: 'static', path })).toBe(true)
     }
+  })
+
+  it('does not require a selected active establishment for analytics', () => {
+    expect(requiresActiveMembership({ kind: 'static', path: '/analytics' })).toBe(false)
   })
 
   it('returns true for operational detail routes', () => {

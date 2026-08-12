@@ -52,6 +52,13 @@ describe('parseAppRoute', () => {
     })
   })
 
+  it('parses analytics route', () => {
+    expect(parseAppRoute('/analytics')).toEqual({
+      kind: 'static',
+      path: '/analytics',
+    })
+  })
+
   it('parses team member detail route', () => {
     expect(parseAppRoute('/team/member-123')).toEqual({
       kind: 'team-member-detail',
@@ -178,6 +185,7 @@ describe('getAppRouteKey', () => {
   it('builds stable readable keys for static routes', () => {
     expect(getAppRouteKey({ kind: 'static', path: '/reporting' })).toBe('static:/reporting')
     expect(getAppRouteKey({ kind: 'static', path: '/chat' })).toBe('static:/chat')
+    expect(getAppRouteKey({ kind: 'static', path: '/analytics' })).toBe('static:/analytics')
   })
 
   it('includes only route-identifying fields for detail routes', () => {

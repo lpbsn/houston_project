@@ -9,6 +9,7 @@ const LAZY_EXPORTS = [
   'LazyExecutionFeedPage',
   'LazyExecutionUpcomingPage',
   'LazyChatPage',
+  'LazyAnalyticsPage',
   'LazyChatConversationPage',
   'LazyProfilePage',
   'LazyProfileSwitchEstablishmentPage',
@@ -37,6 +38,7 @@ describe('lazy-terrain-pages', () => {
       import('@/features/signals/pages/signal-feed-page'),
       import('@/features/execution/pages/execution-feed-page'),
       import('@/features/chat/pages/chat-page'),
+      import('@/features/analytics/pages/analytics-page'),
       import('@/features/action-plans/pages/action-plan-hub-page'),
     ])
 

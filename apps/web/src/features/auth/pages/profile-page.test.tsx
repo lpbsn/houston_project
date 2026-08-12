@@ -4,7 +4,12 @@ import { createElement } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { BootstrapResponse } from '@/features/auth/types'
+
 import { ProfilePage } from './profile-page'
+
+type ProfileBootstrapMock = Pick<BootstrapResponse, 'permission_hints'> &
+  Partial<Omit<BootstrapResponse, 'permission_hints'>>
 
 const onNavigate = vi.fn()
 const onSignOut = vi.fn()
@@ -22,6 +27,15 @@ const { authState } = vi.hoisted(() => ({
         status: 'active',
       },
       bootstrap: {
+        authenticated: true,
+        user: {
+          first_name: 'Marie',
+          last_name: 'Renaud',
+          email: 'marie@example.com',
+        },
+        memberships: [],
+        active_membership: null,
+        pending_onboarding_memberships: [],
         permission_hints: {
           chat_available: false,
           can_create_action_plan: false,
@@ -33,7 +47,7 @@ const { authState } = vi.hoisted(() => ({
           can_manage_organization: false,
           can_create_establishment: false,
         },
-      },
+      } as ProfileBootstrapMock,
       memberships: [
         {
           id: 'member-1',
@@ -419,6 +433,119 @@ describe('ProfilePage', () => {
     expect(screen.getByText('Marie Renaud')).toBeTruthy()
     expect(screen.getByText('Directeur · Le Palais Nancy')).toBeTruthy()
     expect(screen.getAllByText('DIRECTEUR').length).toBeGreaterThan(0)
+  })
+
+  it('shows Analytics navigation for an active Analytics membership', () => {
+    authState.current = {
+      ...authState.current,
+      bootstrap: {
+        ...authState.current.bootstrap,
+        memberships: [
+          {
+            id: 'member-analytics',
+            establishment_id: 'est-analytics',
+            establishment_name: 'Le Palais Nancy',
+            organization_id: 'org-1',
+            organization_name: 'Org',
+            role: 'director',
+            status: 'active',
+            scopes: [],
+            scope_summary: { business_unit_count: 0 },
+          },
+        ],
+      },
+    }
+
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Analyse.*Indicateurs opérationnels/i }))
+    expect(onNavigate).toHaveBeenCalledWith('/analytics')
+  })
+
+  it('hides Analytics navigation for Staff-only users', () => {
+    authState.current = {
+      ...authState.current,
+      activeMembership: {
+        ...authState.current.activeMembership,
+        role: 'staff',
+      },
+      bootstrap: {
+        ...authState.current.bootstrap,
+        memberships: [
+          {
+            id: 'member-staff',
+            establishment_id: 'est-staff',
+            establishment_name: 'Le Palais Nancy',
+            organization_id: 'org-1',
+            organization_name: 'Org',
+            role: 'staff',
+            status: 'active',
+            scopes: [],
+            scope_summary: { business_unit_count: 0 },
+          },
+        ],
+      },
+    }
+
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    expect(screen.queryByRole('button', { name: /Analyse.*Indicateurs opérationnels/i })).toBeNull()
+  })
+
+  it('shows Analytics when the active membership is Staff but another active membership can access it', () => {
+    authState.current = {
+      ...authState.current,
+      activeMembership: {
+        ...authState.current.activeMembership,
+        role: 'staff',
+      },
+      bootstrap: {
+        ...authState.current.bootstrap,
+        memberships: [
+          {
+            id: 'member-staff',
+            establishment_id: 'est-staff',
+            establishment_name: 'Le Palais Nancy',
+            organization_id: 'org-1',
+            organization_name: 'Org',
+            role: 'staff',
+            status: 'active',
+            scopes: [],
+            scope_summary: { business_unit_count: 0 },
+          },
+          {
+            id: 'member-manager',
+            establishment_id: 'est-manager',
+            establishment_name: 'Le Palais Lyon',
+            organization_id: 'org-1',
+            organization_name: 'Org',
+            role: 'manager',
+            status: 'active',
+            scopes: [],
+            scope_summary: { business_unit_count: 0 },
+          },
+        ],
+      },
+    }
+
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    expect(screen.getByRole('button', { name: /Analyse.*Indicateurs opérationnels/i })).toBeTruthy()
   })
 
   it('updates notification preferences through the global toggle', () => {

@@ -1,0 +1,125 @@
+import type { ComponentType } from 'react'
+import { BarChart3, CirclePlay, Eye, MessageCircle, Plus, Settings } from 'lucide-react'
+
+import type { TerrainNavPath } from '@/app/terrain-routes'
+import type { AppPath } from '@/app/app-routes'
+import type { BootstrapResponse } from '@/features/auth/types'
+
+export type SharedNavigationItemId =
+  | 'new-observation'
+  | 'observations'
+  | 'execution'
+  | 'chat'
+  | 'analytics'
+  | 'general'
+
+export type SharedNavigationVisibility = 'always' | 'chat' | 'analytics'
+
+export type SharedNavigationItem = {
+  id: SharedNavigationItemId
+  path: AppPath
+  label: string
+  icon: ComponentType<{ className?: string }>
+  activePaths: AppPath[]
+  visibility: SharedNavigationVisibility
+  isPrimary?: boolean
+  mobileBottom: boolean
+}
+
+export type BottomMobileNavigationItem = SharedNavigationItem & {
+  path: TerrainNavPath
+}
+
+const ANALYTICS_ROLES = new Set(['owner', 'director', 'manager'])
+
+export const SHARED_NAVIGATION_ITEMS: SharedNavigationItem[] = [
+  {
+    id: 'observations',
+    path: '/signals',
+    label: 'Observations',
+    icon: Eye,
+    activePaths: ['/signals'],
+    visibility: 'always',
+    mobileBottom: true,
+  },
+  {
+    id: 'execution',
+    path: '/execution',
+    label: 'Exécution',
+    icon: CirclePlay,
+    activePaths: ['/execution', '/execution/upcoming'],
+    visibility: 'always',
+    mobileBottom: true,
+  },
+  {
+    id: 'new-observation',
+    path: '/reporting',
+    label: 'Nouvelle observation',
+    icon: Plus,
+    activePaths: ['/reporting'],
+    visibility: 'always',
+    isPrimary: true,
+    mobileBottom: true,
+  },
+  {
+    id: 'chat',
+    path: '/chat',
+    label: 'Chat',
+    icon: MessageCircle,
+    activePaths: ['/chat'],
+    visibility: 'chat',
+    mobileBottom: true,
+  },
+  {
+    id: 'analytics',
+    path: '/analytics',
+    label: 'Analyse',
+    icon: BarChart3,
+    activePaths: ['/analytics'],
+    visibility: 'analytics',
+    mobileBottom: false,
+  },
+  {
+    id: 'general',
+    path: '/general',
+    label: 'Général',
+    icon: Settings,
+    activePaths: ['/general'],
+    visibility: 'always',
+    mobileBottom: true,
+  },
+]
+
+export function canShowAnalyticsNavigation(
+  bootstrap: BootstrapResponse | null | undefined,
+): boolean {
+  return (bootstrap?.memberships ?? []).some(
+    (membership) => membership.status === 'active' && ANALYTICS_ROLES.has(membership.role),
+  )
+}
+
+export function resolveSharedNavigationItems(options: {
+  bootstrap?: BootstrapResponse | null
+  showChat: boolean
+}): SharedNavigationItem[] {
+  const showAnalytics = canShowAnalyticsNavigation(options.bootstrap)
+
+  return SHARED_NAVIGATION_ITEMS.filter((item) => {
+    if (item.visibility === 'chat') {
+      return options.showChat
+    }
+    if (item.visibility === 'analytics') {
+      return showAnalytics
+    }
+    return true
+  })
+}
+
+export function resolveBottomMobileNavigationItems(options: {
+  showChat: boolean
+}): BottomMobileNavigationItem[] {
+  return resolveSharedNavigationItems({ showChat: options.showChat, bootstrap: null }).filter(
+    (item): item is BottomMobileNavigationItem =>
+      item.mobileBottom && item.path !== '/analytics',
+  )
+}

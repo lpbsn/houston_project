@@ -8,6 +8,7 @@ import {
   LazyActionPlanExecutionEditPage,
   LazyActionPlanHubPage,
   LazyActionPlanTemplateDetailPage,
+  LazyAnalyticsPage,
   LazyChatConversationPage,
   LazyChatPage,
   LazyChatRealtimeProvider,
@@ -402,6 +403,10 @@ function App() {
       return (
         <LazyChatPage onOpenConversation={(conversationId) => navigate(`/chat/${conversationId}`)} />
       )
+    }
+
+    if (route.path === '/analytics') {
+      return <LazyAnalyticsPage />
     }
 
     if (route.path === '/general/switch-establishment') {

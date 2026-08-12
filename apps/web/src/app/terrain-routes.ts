@@ -45,6 +45,7 @@ const OPERATIONAL_STATIC_PATHS = new Set<string>([
 
 const PROTECTED_STATIC_PATHS = new Set<string>([
   ...OPERATIONAL_STATIC_PATHS,
+  '/analytics',
   '/organization',
   '/pending-onboarding',
   '/onboarding',
@@ -141,6 +142,9 @@ export function usesTerrainShell(route: AppRoute): boolean {
     return true
   }
   if (route.kind === 'static' && TERRAIN_HUB_PATHS.has(route.path)) {
+    return true
+  }
+  if (route.kind === 'static' && route.path === '/analytics') {
     return true
   }
   if (route.kind === 'static' && route.path === '/execution/upcoming') {
@@ -269,6 +273,16 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       pageTitle: 'Général',
       showBottomNav: true,
       activeNavPath: '/general',
+      mainScroll: 'auto',
+    }
+  }
+
+  if (route.kind === 'static' && route.path === '/analytics') {
+    return {
+      topbarVariant: 'detail',
+      title: 'Analyse',
+      backPath: '/general',
+      showBottomNav: false,
       mainScroll: 'auto',
     }
   }
@@ -444,6 +458,8 @@ export function getTerrainContentKey(route: AppRoute): string {
         return 'chat'
       case '/general':
         return 'general'
+      case '/analytics':
+        return 'analytics'
       case '/action-plans':
         return 'action-plans-hub'
       case '/team':

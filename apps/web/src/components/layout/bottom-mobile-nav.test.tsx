@@ -62,4 +62,12 @@ describe('BottomMobileNav', () => {
     expect(signalsLink.className).toContain('min-h-11')
     expect(signalsLink.className).toContain('min-w-11')
   })
+
+  it('keeps Analytics out of the compact mobile nav', () => {
+    render(
+      <BottomMobileNav activePath="/signals" navigate={vi.fn()} />,
+    )
+
+    expect(screen.queryByRole('link', { name: 'Analyse' })).toBeNull()
+  })
 })
