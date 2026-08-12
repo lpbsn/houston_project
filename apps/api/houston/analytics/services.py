@@ -119,6 +119,12 @@ class PatternSplitResult:
 
 
 @dataclass(frozen=True)
+class PatternMergeResult:
+    source_pattern: OperationalPattern
+    moved_signal_count: int
+
+
+@dataclass(frozen=True)
 class OwnerGovernancePatternRef:
     pattern_id: uuid.UUID
     label: str
@@ -335,7 +341,6 @@ def merge_operational_patterns_for_owner(
 ) -> OwnerGovernanceResult:
     source = _resolve_governable_pattern_for_user(user, source_pattern_id)
     target = _resolve_governable_pattern_for_user(user, target_pattern_id)
-    moved_signal_count = SignalPatternAssignment.objects.filter(pattern=source).count()
     actor_membership = _resolve_owner_governance_membership(
         user=user,
         organization=source.organization,
@@ -347,9 +352,9 @@ def merge_operational_patterns_for_owner(
         occurred_at=occurred_at,
     )
     return OwnerGovernanceResult(
-        source_pattern=_owner_governance_pattern_ref(merged),
+        source_pattern=_owner_governance_pattern_ref(merged.source_pattern),
         target_pattern=_owner_governance_pattern_ref(target),
-        moved_signal_count=moved_signal_count,
+        moved_signal_count=merged.moved_signal_count,
     )
 
 
@@ -539,7 +544,7 @@ def merge_operational_patterns(
     source_pattern: OperationalPattern,
     target_pattern: OperationalPattern,
     occurred_at=None,
-) -> OperationalPattern:
+) -> PatternMergeResult:
     occurred_at = occurred_at or timezone.now()
     prechecked = _terminal_merge_precheck(
         actor_membership=actor_membership,
@@ -547,7 +552,7 @@ def merge_operational_patterns(
         target_pattern=target_pattern,
     )
     if prechecked is not None:
-        return prechecked
+        return PatternMergeResult(source_pattern=prechecked, moved_signal_count=0)
 
     source_id = source_pattern.id
     target_id = target_pattern.id
@@ -643,7 +648,10 @@ def merge_operational_patterns(
             correction_id=correction_id,
             moved_signal_ids=moved_signal_ids,
         )
-        return source
+        return PatternMergeResult(
+            source_pattern=source,
+            moved_signal_count=len(moved_signal_ids),
+        )
 
 
 def move_signals_between_patterns(
