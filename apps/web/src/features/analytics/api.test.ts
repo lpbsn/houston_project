@@ -1,0 +1,212 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const getMock = vi.fn()
+
+vi.mock('@/api/client', () => ({
+  apiClient: {
+    GET: (...args: unknown[]) => getMock(...args),
+  },
+  withAuthRetry: async (callback: (token: string) => Promise<unknown>) =>
+    callback('test-token'),
+}))
+
+import {
+  AnalyticsApiError,
+  analyticsQueryKeys,
+  fetchAnalyticsDashboard,
+  type AnalyticsDashboardResponse,
+} from './api'
+
+const dashboardResponse = {
+  current_period: {
+    period_start: '2026-07-13T10:30:00.000Z',
+    period_end: '2026-08-12T10:30:00.000Z',
+  },
+  previous_period: {
+    period_start: '2026-06-13T10:30:00.000Z',
+    period_end: '2026-07-13T10:30:00.000Z',
+  },
+  current_kpis: {
+    analytics_signal_population_count: 0,
+    signals_analyzed_count: 0,
+    operational_patterns_count: 0,
+    actionable_signals_count: 0,
+    median_resolution_seconds: null,
+    resolution_time_signal_count: 0,
+    invalid_resolution_duration_count: 0,
+    business_assignment_coverage: {
+      total_count: 0,
+      with_pattern_count: 0,
+      without_pattern_count: 0,
+      coverage_rate: null,
+    },
+    technical_classification_state: {
+      total_count: 0,
+      technical_state_breakdown: {},
+      technical_terminal_success_count: 0,
+      technical_pending_or_error_count: 0,
+    },
+    recurring_patterns_count: 0,
+    recurrence_window: {
+      window_start: '2026-07-13T10:30:00.000Z',
+      window_end: '2026-08-12T10:30:00.000Z',
+    },
+    recurrence_status: 'computed',
+  },
+  previous_kpis: {
+    analytics_signal_population_count: 0,
+    signals_analyzed_count: 0,
+    operational_patterns_count: 0,
+    actionable_signals_count: 0,
+    median_resolution_seconds: null,
+    resolution_time_signal_count: 0,
+    invalid_resolution_duration_count: 0,
+    business_assignment_coverage: {
+      total_count: 0,
+      with_pattern_count: 0,
+      without_pattern_count: 0,
+      coverage_rate: null,
+    },
+    technical_classification_state: {
+      total_count: 0,
+      technical_state_breakdown: {},
+      technical_terminal_success_count: 0,
+      technical_pending_or_error_count: 0,
+    },
+    recurring_patterns_count: 0,
+    recurrence_window: {
+      window_start: '2026-06-13T10:30:00.000Z',
+      window_end: '2026-07-13T10:30:00.000Z',
+    },
+    recurrence_status: 'computed',
+  },
+  signals_analyzed_count: {
+    current_value: 0,
+    previous_value: 0,
+    absolute_delta: 0,
+    relative_change: null,
+    relative_change_status: 'undefined_previous_zero',
+  },
+  operational_patterns_count: {
+    current_value: 0,
+    previous_value: 0,
+    absolute_delta: 0,
+    relative_change: null,
+    relative_change_status: 'undefined_previous_zero',
+  },
+  actionable_signals_count: {
+    current_value: 0,
+    previous_value: 0,
+    absolute_delta: 0,
+    relative_change: null,
+    relative_change_status: 'undefined_previous_zero',
+  },
+  median_resolution_seconds: {
+    current_value: null,
+    previous_value: null,
+    absolute_delta: null,
+    relative_change: null,
+    relative_change_status: 'not_applicable',
+  },
+  recurring_patterns_count: {
+    current_value: 0,
+    previous_value: 0,
+    absolute_delta: 0,
+    relative_change: null,
+    relative_change_status: 'undefined_previous_zero',
+  },
+  recurrence_status: 'computed',
+} satisfies AnalyticsDashboardResponse
+
+describe('analytics api', () => {
+  beforeEach(() => {
+    getMock.mockReset()
+    getMock.mockResolvedValue({
+      data: dashboardResponse,
+      error: undefined,
+      response: { ok: true, status: 200 } as Response,
+    })
+  })
+
+  it('fetches the dashboard with the resolved analytics URL state only', async () => {
+    await fetchAnalyticsDashboard({
+      periodStart: '2026-07-13T10:30:00.000Z',
+      periodEnd: '2026-08-12T10:30:00.000Z',
+      organizationId: '11111111-1111-4111-8111-111111111111',
+    })
+
+    expect(getMock).toHaveBeenCalledWith(
+      '/api/v1/analytics/dashboard/',
+      expect.objectContaining({
+        params: {
+          query: {
+            period_start: '2026-07-13T10:30:00.000Z',
+            period_end: '2026-08-12T10:30:00.000Z',
+            organization_id: '11111111-1111-4111-8111-111111111111',
+          },
+        },
+        headers: { Authorization: 'Bearer test-token' },
+      }),
+    )
+    expect(getMock.mock.calls[0]?.[1]?.params?.query).not.toHaveProperty('establishment_id')
+  })
+
+  it('omits organization_id when it is absent', async () => {
+    await fetchAnalyticsDashboard({
+      periodStart: '2026-07-13T10:30:00.000Z',
+      periodEnd: '2026-08-12T10:30:00.000Z',
+      organizationId: null,
+    })
+
+    expect(getMock.mock.calls[0]?.[1]?.params?.query).toEqual({
+      period_start: '2026-07-13T10:30:00.000Z',
+      period_end: '2026-08-12T10:30:00.000Z',
+    })
+  })
+
+  it('maps dashboard API errors', async () => {
+    getMock.mockResolvedValue({
+      data: undefined,
+      error: { detail: 'Période invalide.', code: 'analytics_period_invalid' },
+      response: { ok: false, status: 400 } as Response,
+    })
+
+    await expect(
+      fetchAnalyticsDashboard({
+        periodStart: '2026-07-13T10:30:00.000Z',
+        periodEnd: '2026-08-12T10:30:00.000Z',
+        organizationId: null,
+      }),
+    ).rejects.toMatchObject({
+      code: 'analytics_period_invalid',
+      detail: 'Période invalide.',
+      status: 400,
+    })
+
+    await expect(
+      fetchAnalyticsDashboard({
+        periodStart: '2026-07-13T10:30:00.000Z',
+        periodEnd: '2026-08-12T10:30:00.000Z',
+        organizationId: null,
+      }),
+    ).rejects.toBeInstanceOf(AnalyticsApiError)
+  })
+
+  it('keeps dashboard query keys stable from URL state', () => {
+    expect(
+      analyticsQueryKeys.dashboard({
+        periodStart: '2026-07-13T10:30:00.000Z',
+        periodEnd: '2026-08-12T10:30:00.000Z',
+        organizationId: null,
+      }),
+    ).toEqual([
+      'analytics',
+      'dashboard',
+      {
+        periodStart: '2026-07-13T10:30:00.000Z',
+        periodEnd: '2026-08-12T10:30:00.000Z',
+        organizationId: null,
+      },
+    ])
+  })
+})
