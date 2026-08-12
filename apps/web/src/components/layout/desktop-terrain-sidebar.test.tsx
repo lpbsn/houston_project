@@ -105,4 +105,19 @@ describe('DesktopTerrainSidebar', () => {
     expect(within(sidebar).queryByRole('link', { name: 'Analyse' })).toBeNull()
     expect(within(sidebar).getByRole('link', { name: 'Chat' })).toBeTruthy()
   })
+
+  it('shows French role labels in the footer context line', () => {
+    render(
+      <DesktopTerrainSidebar
+        activePath="/general"
+        bootstrap={bootstrap([membership({ role: 'owner' })])}
+        navigate={vi.fn()}
+        showChat={false}
+      />,
+    )
+
+    const sidebar = screen.getByLabelText('Navigation principale')
+    expect(within(sidebar).getByText('Propriétaire · Spore Paris')).toBeTruthy()
+    expect(within(sidebar).queryByText(/Owner/)).toBeNull()
+  })
 })

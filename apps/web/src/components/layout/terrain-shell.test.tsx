@@ -173,4 +173,25 @@ describe('TerrainShell', () => {
     const bottomNav = screen.getByRole('navigation', { name: 'Navigation terrain' })
     expect(bottomNav.className).toContain('lg:hidden')
   })
+
+  it('scopes toast and processing overlays to the content column beside the sidebar', () => {
+    renderTerrainShell('auto', {
+      bootstrap: bootstrap([membership({ role: 'manager' })]),
+      desktopActivePath: '/analytics',
+    })
+
+    const shell = screen.getByRole('main').closest('[data-terrain-shell-root]')
+    const sidebar = screen.getByLabelText('Navigation principale')
+    const contentColumn = screen.getByRole('main').parentElement
+    const overlayHost = contentColumn?.querySelector('.pointer-events-none.absolute')
+
+    expect(shell).toBeTruthy()
+    expect(contentColumn?.className).toContain('relative')
+    expect(overlayHost).toBeTruthy()
+    expect(contentColumn?.contains(overlayHost)).toBe(true)
+    expect(sidebar.contains(overlayHost)).toBe(false)
+    expect(shell?.contains(sidebar)).toBe(true)
+    expect(contentColumn?.parentElement).toBe(shell)
+    expect(sidebar.parentElement).toBe(shell)
+  })
 })

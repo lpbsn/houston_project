@@ -1,6 +1,7 @@
 import type { AppPath } from '@/app/app-routes'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
 import { resolveDesktopNavigation } from '@/features/navigation/lib/shared-navigation'
+import { formatMembershipRoleDisplay } from '@/lib/display-names'
 import { cn } from '@/lib/utils'
 
 type DesktopTerrainSidebarProps = {
@@ -9,13 +10,6 @@ type DesktopTerrainSidebarProps = {
   className?: string
   navigate: (pathname: string, options?: { replace?: boolean }) => void
   showChat: boolean
-}
-
-const ROLE_LABELS: Record<string, string> = {
-  owner: 'Owner',
-  director: 'Directeur',
-  manager: 'Manager',
-  staff: 'Staff',
 }
 
 function buildUserInitials(user: BootstrapResponse['user'] | null | undefined): string {
@@ -47,7 +41,7 @@ function buildContextLabel(membership: Membership | null | undefined): string {
     return 'Vue multi-établissement'
   }
 
-  const roleLabel = ROLE_LABELS[membership.role] ?? membership.role
+  const roleLabel = formatMembershipRoleDisplay(membership.role)
   const establishmentName = membership.establishment_name?.trim()
 
   return establishmentName ? `${roleLabel} · ${establishmentName}` : roleLabel

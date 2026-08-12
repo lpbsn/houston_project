@@ -742,6 +742,12 @@ function App() {
 
   if (usesTerrainShell(route)) {
     const terrainConfig = getTerrainRouteConfig(route)
+    const terrainBackPath =
+      route.kind === 'static' &&
+      route.path === '/analytics' &&
+      !auth.hasOperationalAccess
+        ? (getAuthenticatedLandingPath(auth.bootstrap) ?? '/login')
+        : terrainConfig.backPath
     return wrapTerrainWithOperationalRealtime(
       wrapTerrainWithChatRealtime(
         <TerrainShell
@@ -763,9 +769,7 @@ function App() {
                 pageTitle={terrainConfig.pageTitle}
                 detailTitleLayout={terrainConfig.detailTitleLayout}
                 showBottomBorder={resolveTerrainTopbarShowBottomBorder(route, terrainConfig)}
-                onBack={
-                  terrainConfig.backPath ? () => navigate(terrainConfig.backPath!) : undefined
-                }
+                onBack={terrainBackPath ? () => navigate(terrainBackPath) : undefined}
                 trailing={terrainTopbarTrailing}
               />
             )

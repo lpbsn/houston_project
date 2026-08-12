@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
 import { createElement } from 'react'
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AppRoute } from '@/app/app-routes'
+import { getAuthenticatedLandingPath } from '@/features/auth/lib/authenticated-landing'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
 
 const navigate = vi.fn()
@@ -70,6 +71,10 @@ vi.mock('@/components/layout/pwa-update-banner', () => ({
   PwaUpdateBanner: () => null,
 }))
 
+vi.mock('@/features/notifications/components/notification-center', () => ({
+  NotificationCenter: () => null,
+}))
+
 vi.mock('@/components/layout/network-status-banner', () => ({
   NetworkStatusBanner: () => null,
 }))
@@ -115,21 +120,27 @@ vi.mock('framer-motion', () => ({
 
 import App from './App'
 
-function membership(id: string, establishmentId: string): Membership {
+function membership(
+  id: string,
+  establishmentId: string,
+  role: Membership['role'] = 'director',
+): Membership {
   return {
     id,
     establishment_id: establishmentId,
     establishment_name: `Spore ${establishmentId}`,
     organization_id: 'org-1',
     organization_name: 'Spore',
-    role: 'director',
+    role,
     status: 'active',
     scopes: [],
     scope_summary: { business_unit_count: 0 },
   }
 }
 
-function bootstrapWithoutActiveMembership(): BootstrapResponse {
+function bootstrapWithoutActiveMembership(
+  overrides: Partial<BootstrapResponse> = {},
+): BootstrapResponse {
   const memberships = [membership('membership-1', 'est-1'), membership('membership-2', 'est-2')]
   return {
     authenticated: true,
@@ -155,6 +166,17 @@ function bootstrapWithoutActiveMembership(): BootstrapResponse {
       can_manage_organization: false,
       can_create_establishment: false,
     },
+    ...overrides,
+  }
+}
+
+function bootstrapWithActiveMembership(): BootstrapResponse {
+  const active = membership('membership-1', 'est-1')
+  return {
+    ...bootstrapWithoutActiveMembership({
+      memberships: [active],
+      active_membership: active,
+    }),
   }
 }
 
@@ -185,5 +207,60 @@ describe('App terrain active membership routing', () => {
     await waitFor(() => {
       expect(navigate).toHaveBeenCalledWith('/select-establishment', { replace: true })
     })
+  })
+
+  it('sends analytics Back to /general when operational access is available', () => {
+    const bootstrap = bootstrapWithActiveMembership()
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+
+    render(createElement(App))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retour' }))
+
+    expect(navigate).toHaveBeenCalledWith('/general')
+  })
+
+  it('sends analytics Back to authenticated landing without active membership', () => {
+    const bootstrap = bootstrapWithoutActiveMembership()
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = false
+
+    render(createElement(App))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retour' }))
+
+    expect(navigate).toHaveBeenCalledWith(getAuthenticatedLandingPath(bootstrap))
+    expect(navigate).toHaveBeenCalledWith('/select-establishment')
+    expect(navigate).not.toHaveBeenCalledWith('/general')
+  })
+
+  it('sends analytics Back to organization landing for org managers without selection', () => {
+    const bootstrap = bootstrapWithoutActiveMembership({
+      permission_hints: {
+        chat_available: false,
+        can_create_action_plan: false,
+        can_create_catalog_action_plan: false,
+        can_view_action_plan_catalog: false,
+        can_invite: false,
+        can_manage_runtime_config: false,
+        can_view_team: false,
+        can_manage_organization: true,
+        can_create_establishment: true,
+      },
+    })
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = false
+
+    render(createElement(App))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retour' }))
+
+    expect(navigate).toHaveBeenCalledWith(getAuthenticatedLandingPath(bootstrap))
+    expect(navigate).toHaveBeenCalledWith('/organization')
+    expect(navigate).not.toHaveBeenCalledWith('/general')
   })
 })

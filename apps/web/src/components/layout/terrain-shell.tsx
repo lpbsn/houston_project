@@ -55,10 +55,6 @@ export function TerrainShell({
       data-terrain-shell-root
       className="fixed inset-x-0 top-0 mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-[#F5F4F0] lg:inset-0 lg:max-w-none lg:flex-row"
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-50 flex flex-col gap-2 px-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
-        <ObservationProcessingBanner navigate={navigate} />
-        <SuccessToastHost />
-      </div>
       <DesktopTerrainSidebar
         activePath={desktopActivePath}
         bootstrap={bootstrap}
@@ -66,7 +62,11 @@ export function TerrainShell({
         navigate={navigate}
         showChat={showChatNav}
       />
-      <div className="flex min-h-0 flex-1 flex-col bg-[#F5F4F0]">
+      <div className="relative flex min-h-0 flex-1 flex-col bg-[#F5F4F0]">
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-50 flex flex-col gap-2 px-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
+          <ObservationProcessingBanner navigate={navigate} />
+          <SuccessToastHost />
+        </div>
         <div className="shrink-0">{topbar}</div>
         {updateBanner ? <div className="shrink-0">{updateBanner}</div> : null}
         <NetworkStatusBanner isOnline={isOnline} />
