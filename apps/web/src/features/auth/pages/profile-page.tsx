@@ -1,5 +1,5 @@
 import { type ComponentType } from 'react'
-import { ArrowLeftRight, Building2, ChevronRight, Download, Library, Users } from 'lucide-react'
+import { ArrowLeftRight, BarChart3, Building2, ChevronRight, Download, Library, Users } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import {
@@ -20,6 +20,7 @@ import {
 import { canSwitchEstablishment } from '@/features/auth/lib/establishment-switch'
 import { toRoleEnum } from '@/features/auth/lib/role'
 import type { RoleEnum } from '@/features/auth/types'
+import { canShowAnalyticsNavigation } from '@/features/navigation/lib/shared-navigation'
 import {
   useNotificationPreferencesQuery,
   useUpdateNotificationPreferencesMutation,
@@ -165,6 +166,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
     canViewActionPlanCatalogFromBootstrapHints(permissionHints) ||
     canCreateCatalogActionPlanFromBootstrapHints(permissionHints)
   const canShowStaffActionPlansNav = canShowActionPlansNav && !canAccessManagement
+  const canShowAnalyticsNav = canShowAnalyticsNavigation(bootstrap)
   const displayName = buildDisplayName(firstName, lastName, identityLabel)
   const initials = buildInitials(firstName, lastName, identityLabel)
   const roleEstablishmentLine = buildRoleEstablishmentLine(
@@ -287,6 +289,19 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
           ) : null}
         </TerrainCard>
       </div>
+
+      {canShowAnalyticsNav ? (
+        <div className="space-y-2">
+          <TerrainSectionLabel>Analyse</TerrainSectionLabel>
+          <ProfileManagementNavCard
+            icon={BarChart3}
+            iconClassName="bg-[#E8F7F0] text-[#114660]"
+            title="Analyse"
+            subtitle="Indicateurs opérationnels"
+            onClick={() => onNavigate?.('/analytics')}
+          />
+        </div>
+      ) : null}
 
       {canManageOrganization || showEstablishmentAdmin ? (
         <div className="space-y-2">

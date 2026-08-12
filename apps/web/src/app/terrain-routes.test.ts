@@ -45,6 +45,7 @@ describe('usesTerrainShell', () => {
     expect(usesTerrainShell({ kind: 'static', path: '/action-plans' })).toBe(true)
     expect(usesTerrainShell({ kind: 'static', path: '/notifications-center' })).toBe(true)
     expect(usesTerrainShell({ kind: 'static', path: '/execution/upcoming' })).toBe(true)
+    expect(usesTerrainShell({ kind: 'static', path: '/analytics' })).toBe(true)
   })
 
   it('returns false for non-terrain routes', () => {
@@ -64,6 +65,7 @@ describe('getTerrainRouteConfig', () => {
       topbarVariant: 'hub',
       showBottomNav: true,
       activeNavPath: '/reporting',
+      desktopActivePath: '/reporting',
       mainScroll: 'hidden',
     })
 
@@ -72,6 +74,7 @@ describe('getTerrainRouteConfig', () => {
       pageTitle: 'Observations',
       showBottomNav: true,
       activeNavPath: '/signals',
+      desktopActivePath: '/signals',
       mainScroll: 'hidden',
     })
 
@@ -80,6 +83,7 @@ describe('getTerrainRouteConfig', () => {
       pageTitle: 'Exécution',
       showBottomNav: true,
       activeNavPath: '/execution',
+      desktopActivePath: '/execution',
       mainScroll: 'hidden',
     })
 
@@ -89,6 +93,7 @@ describe('getTerrainRouteConfig', () => {
       backPath: '/execution',
       showBottomNav: false,
       activeNavPath: '/execution',
+      desktopActivePath: '/execution',
       mainScroll: 'hidden',
       showTopbarBottomBorder: false,
     })
@@ -98,6 +103,7 @@ describe('getTerrainRouteConfig', () => {
       pageTitle: 'Discussions',
       showBottomNav: true,
       activeNavPath: '/chat',
+      desktopActivePath: '/chat',
       mainScroll: 'hidden',
     })
 
@@ -106,6 +112,7 @@ describe('getTerrainRouteConfig', () => {
       pageTitle: 'Général',
       showBottomNav: true,
       activeNavPath: '/general',
+      desktopActivePath: '/general',
       mainScroll: 'auto',
     })
   })
@@ -116,6 +123,7 @@ describe('getTerrainRouteConfig', () => {
       title: 'Équipe',
       backPath: '/general',
       showBottomNav: false,
+      desktopActivePath: '/general',
       mainScroll: 'auto',
     })
   })
@@ -126,6 +134,7 @@ describe('getTerrainRouteConfig', () => {
       title: 'Notifications',
       backPath: '/general',
       showBottomNav: false,
+      desktopActivePath: '/general',
       mainScroll: 'auto',
     })
   })
@@ -136,6 +145,7 @@ describe('getTerrainRouteConfig', () => {
       title: 'Inviter un membre',
       backPath: '/team',
       showBottomNav: false,
+      desktopActivePath: '/general',
       mainScroll: 'auto',
     })
   })
@@ -148,6 +158,7 @@ describe('getTerrainRouteConfig', () => {
       title: "Changer d'établissement",
       backPath: '/general',
       showBottomNav: false,
+      desktopActivePath: '/general',
       mainScroll: 'auto',
     })
   })
@@ -158,6 +169,7 @@ describe('getTerrainRouteConfig', () => {
       title: 'Bibliothèque',
       backPath: '/general',
       showBottomNav: false,
+      desktopActivePath: '/general',
       mainScroll: 'auto',
     })
     expect(
@@ -167,6 +179,7 @@ describe('getTerrainRouteConfig', () => {
       title: "Plan d'action",
       backPath: '/execution',
       showBottomNav: false,
+      desktopActivePath: '/execution',
       mainScroll: 'auto',
     })
     expect(getTerrainRouteConfig({ kind: 'action-plan-create', origin: 'library' })).toEqual({
@@ -174,6 +187,7 @@ describe('getTerrainRouteConfig', () => {
       title: "Plan d'action",
       backPath: '/action-plans',
       showBottomNav: false,
+      desktopActivePath: '/general',
       mainScroll: 'auto',
     })
     expect(getTerrainRouteConfig({ kind: 'action-plan-create', origin: 'execution' })).toEqual({
@@ -181,6 +195,7 @@ describe('getTerrainRouteConfig', () => {
       title: "Plan d'action",
       backPath: '/execution',
       showBottomNav: false,
+      desktopActivePath: '/execution',
       mainScroll: 'auto',
     })
     expect(
@@ -190,6 +205,7 @@ describe('getTerrainRouteConfig', () => {
       title: 'Détail du plan',
       backPath: '/action-plans',
       showBottomNav: false,
+      desktopActivePath: '/general',
       mainScroll: 'auto',
     })
     expect(
@@ -199,6 +215,7 @@ describe('getTerrainRouteConfig', () => {
       title: 'Modifier le plan',
       backPath: '/action-plans/plan-1',
       showBottomNav: false,
+      desktopActivePath: '/general',
       mainScroll: 'auto',
       hideTopbar: true,
     })
@@ -209,8 +226,20 @@ describe('getTerrainRouteConfig', () => {
       title: 'Modifier le plan',
       backPath: '/action-plans/executions/exec-1',
       showBottomNav: false,
+      desktopActivePath: '/execution',
       mainScroll: 'auto',
       hideTopbar: true,
+    })
+  })
+
+  it('configures analytics route as a minimal detail route', () => {
+    expect(getTerrainRouteConfig({ kind: 'static', path: '/analytics' })).toEqual({
+      topbarVariant: 'detail',
+      title: 'Analyse',
+      backPath: '/general',
+      showBottomNav: false,
+      desktopActivePath: '/analytics',
+      mainScroll: 'auto',
     })
   })
 
@@ -220,6 +249,7 @@ describe('getTerrainRouteConfig', () => {
       title: 'Observation',
       backPath: '/signals',
       showBottomNav: false,
+      desktopActivePath: '/signals',
       mainScroll: 'auto',
     })
   })
@@ -232,6 +262,7 @@ describe('getTerrainRouteConfig', () => {
       title: "Plan d'action",
       backPath: '/signals/sig-1',
       showBottomNav: false,
+      desktopActivePath: '/signals',
       mainScroll: 'auto',
     })
   })
@@ -244,8 +275,69 @@ describe('getTerrainRouteConfig', () => {
       title: 'Conversation',
       backPath: '/chat',
       showBottomNav: false,
+      desktopActivePath: '/chat',
       mainScroll: 'hidden',
     })
+  })
+
+  it('keeps desktop sidebar active on detail routes using their real parent sections', () => {
+    expect(getTerrainRouteConfig({ kind: 'signal-detail', signalId: 'sig-1' })).toMatchObject({
+      backPath: '/signals',
+      desktopActivePath: '/signals',
+    })
+    expect(
+      getTerrainRouteConfig({ kind: 'signal-action-create', signalId: 'sig-1' }),
+    ).toMatchObject({
+      backPath: '/signals/sig-1',
+      desktopActivePath: '/signals',
+    })
+    expect(
+      getTerrainRouteConfig({ kind: 'chat-conversation-detail', conversationId: 'conv-1' }),
+    ).toMatchObject({
+      backPath: '/chat',
+      desktopActivePath: '/chat',
+    })
+    expect(
+      getTerrainRouteConfig({ kind: 'action-plan-create', origin: 'execution' }),
+    ).toMatchObject({
+      backPath: '/execution',
+      desktopActivePath: '/execution',
+    })
+    expect(
+      getTerrainRouteConfig({ kind: 'action-plan-execution-detail', executionId: 'exec-1' }),
+    ).toMatchObject({
+      backPath: '/execution',
+      desktopActivePath: '/execution',
+    })
+    expect(
+      getTerrainRouteConfig({ kind: 'action-plan-execution-edit', executionId: 'exec-1' }),
+    ).toMatchObject({
+      backPath: '/action-plans/executions/exec-1',
+      desktopActivePath: '/execution',
+    })
+    expect(
+      getTerrainRouteConfig({ kind: 'action-plan-create', origin: 'library' }),
+    ).toMatchObject({
+      backPath: '/action-plans',
+      desktopActivePath: '/general',
+    })
+    expect(
+      getTerrainRouteConfig({ kind: 'action-plan-template-detail', actionPlanId: 'plan-1' }),
+    ).toMatchObject({
+      backPath: '/action-plans',
+      desktopActivePath: '/general',
+    })
+    expect(
+      getTerrainRouteConfig({ kind: 'action-plan-template-edit', actionPlanId: 'plan-1' }),
+    ).toMatchObject({
+      backPath: '/action-plans/plan-1',
+      desktopActivePath: '/general',
+    })
+    expect(getTerrainRouteConfig({ kind: 'team-member-detail', membershipId: 'member-1' }))
+      .toMatchObject({
+        backPath: '/team',
+        desktopActivePath: '/general',
+      })
   })
 
   it('throws for non-terrain routes', () => {
@@ -299,6 +391,7 @@ describe('getTerrainContentKey', () => {
     )
     expect(getTerrainContentKey({ kind: 'static', path: '/chat' })).toBe('chat')
     expect(getTerrainContentKey({ kind: 'static', path: '/general' })).toBe('general')
+    expect(getTerrainContentKey({ kind: 'static', path: '/analytics' })).toBe('analytics')
     expect(getTerrainContentKey({ kind: 'static', path: '/general/switch-establishment' })).toBe(
       'general-switch-establishment',
     )
@@ -368,6 +461,7 @@ describe('isProtectedRoute', () => {
       '/select-establishment',
       '/no-establishment',
       '/organization',
+      '/analytics',
     ] as const) {
       expect(isProtectedRoute({ kind: 'static', path })).toBe(true)
     }
@@ -417,6 +511,10 @@ describe('requiresActiveMembership', () => {
     ] as const) {
       expect(requiresActiveMembership({ kind: 'static', path })).toBe(true)
     }
+  })
+
+  it('does not require a selected active establishment for analytics', () => {
+    expect(requiresActiveMembership({ kind: 'static', path: '/analytics' })).toBe(false)
   })
 
   it('returns true for operational detail routes', () => {

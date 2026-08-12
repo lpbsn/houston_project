@@ -1,14 +1,7 @@
-import type { ComponentType } from 'react'
-import {
-  CirclePlay,
-  Eye,
-  MessageCircle,
-  Plus,
-  Settings,
-} from 'lucide-react'
 import { motion, useReducedMotion } from 'framer-motion'
 
 import type { TerrainNavPath } from '@/app/terrain-routes'
+import { resolveBottomMobileNavigationItems } from '@/features/navigation/lib/shared-navigation'
 import { terrainTapProps } from '@/lib/terrain-motion'
 import { terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -20,21 +13,6 @@ type BottomMobileNavProps = {
   showChat?: boolean
   chatHasUnread?: boolean
 }
-
-type NavItem = {
-  path: TerrainNavPath
-  label: string
-  icon: ComponentType<{ className?: string }>
-  isPrimary?: boolean
-}
-
-const NAV_ITEMS: NavItem[] = [
-  { path: '/signals', label: 'Observations', icon: Eye },
-  { path: '/execution', label: 'Exécution', icon: CirclePlay },
-  { path: '/reporting', label: '', icon: Plus, isPrimary: true },
-  { path: '/chat', label: 'Chat', icon: MessageCircle },
-  { path: '/general', label: 'Général', icon: Settings },
-]
 
 const MotionA = motion.a
 
@@ -48,7 +26,7 @@ export function BottomMobileNav({
   const shouldReduceMotion = useReducedMotion()
   const tapProps = terrainTapProps(shouldReduceMotion)
   const NavLink = shouldReduceMotion ? 'a' : MotionA
-  const visibleItems = NAV_ITEMS.filter((item) => item.path !== '/chat' || showChat)
+  const visibleItems = resolveBottomMobileNavigationItems({ showChat })
   const columnCount = visibleItems.length
 
   return (

@@ -8,6 +8,7 @@ import {
   LazyActionPlanExecutionEditPage,
   LazyActionPlanHubPage,
   LazyActionPlanTemplateDetailPage,
+  LazyAnalyticsPage,
   LazyChatConversationPage,
   LazyChatPage,
   LazyChatRealtimeProvider,
@@ -404,6 +405,10 @@ function App() {
       )
     }
 
+    if (route.path === '/analytics') {
+      return <LazyAnalyticsPage />
+    }
+
     if (route.path === '/general/switch-establishment') {
       return <LazyProfileSwitchEstablishmentPage onNavigate={navigate} />
     }
@@ -713,6 +718,8 @@ function App() {
           contentKey="not-found"
           showBottomNav={true}
           activeNavPath="/reporting"
+          bootstrap={auth.bootstrap}
+          desktopActivePath="/reporting"
           mainScroll="auto"
           navigate={navigate}
           showChatNav={showChatNav}
@@ -735,12 +742,20 @@ function App() {
 
   if (usesTerrainShell(route)) {
     const terrainConfig = getTerrainRouteConfig(route)
+    const terrainBackPath =
+      route.kind === 'static' &&
+      route.path === '/analytics' &&
+      !auth.hasOperationalAccess
+        ? (getAuthenticatedLandingPath(auth.bootstrap) ?? '/login')
+        : terrainConfig.backPath
     return wrapTerrainWithOperationalRealtime(
       wrapTerrainWithChatRealtime(
         <TerrainShell
           contentKey={getTerrainContentKey(route)}
           showBottomNav={terrainConfig.showBottomNav}
           activeNavPath={terrainConfig.activeNavPath}
+          bootstrap={auth.bootstrap}
+          desktopActivePath={terrainConfig.desktopActivePath ?? terrainConfig.activeNavPath}
           mainScroll={terrainConfig.mainScroll}
           navigate={navigate}
           showChatNav={showChatNav}
@@ -754,9 +769,7 @@ function App() {
                 pageTitle={terrainConfig.pageTitle}
                 detailTitleLayout={terrainConfig.detailTitleLayout}
                 showBottomBorder={resolveTerrainTopbarShowBottomBorder(route, terrainConfig)}
-                onBack={
-                  terrainConfig.backPath ? () => navigate(terrainConfig.backPath!) : undefined
-                }
+                onBack={terrainBackPath ? () => navigate(terrainBackPath) : undefined}
                 trailing={terrainTopbarTrailing}
               />
             )

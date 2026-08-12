@@ -36,6 +36,12 @@ export const LazyChatPage = lazy(() =>
   })),
 )
 
+export const LazyAnalyticsPage = lazy(() =>
+  import('@/features/analytics/pages/analytics-page').then((module) => ({
+    default: module.AnalyticsPage,
+  })),
+)
+
 export const LazyChatConversationPage = lazy(() =>
   import('@/features/chat/pages/chat-conversation-page').then((module) => ({
     default: module.ChatConversationPage,
