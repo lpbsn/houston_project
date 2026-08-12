@@ -1,4 +1,4 @@
-import type { AppRoute } from '@/app/app-routes'
+import type { AppPath, AppRoute } from '@/app/app-routes'
 
 export type { AppRoute } from '@/app/app-routes'
 
@@ -22,6 +22,7 @@ export type TerrainRouteConfig = {
   backPath?: string
   showBottomNav: boolean
   activeNavPath?: TerrainNavPath
+  desktopActivePath?: AppPath
   mainScroll?: TerrainMainScroll
   showTopbarBottomBorder?: boolean
   hideTopbar?: boolean
@@ -172,6 +173,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       title: 'Observation',
       backPath: '/signals',
       showBottomNav: false,
+      desktopActivePath: '/signals',
       mainScroll: 'auto',
     }
   }
@@ -182,6 +184,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       title: "Plan d'action",
       backPath: `/signals/${route.signalId}`,
       showBottomNav: false,
+      desktopActivePath: '/signals',
       mainScroll: 'auto',
     }
   }
@@ -192,6 +195,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       title: "Plan d'action",
       backPath: route.origin === 'execution' ? '/execution' : '/action-plans',
       showBottomNav: false,
+      desktopActivePath: route.origin === 'execution' ? '/execution' : '/general',
       mainScroll: 'auto',
     }
   }
@@ -202,6 +206,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       title: 'Conversation',
       backPath: '/chat',
       showBottomNav: false,
+      desktopActivePath: '/chat',
       mainScroll: 'hidden',
     }
   }
@@ -211,6 +216,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       topbarVariant: 'detail',
       backPath: '/team',
       showBottomNav: false,
+      desktopActivePath: '/general',
       mainScroll: 'auto',
       hideTopbar: true,
     }
@@ -221,6 +227,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       topbarVariant: 'hub',
       showBottomNav: true,
       activeNavPath: '/reporting',
+      desktopActivePath: '/reporting',
       mainScroll: 'hidden',
     }
   }
@@ -231,6 +238,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       pageTitle: 'Observations',
       showBottomNav: true,
       activeNavPath: '/signals',
+      desktopActivePath: '/signals',
       mainScroll: 'hidden',
     }
   }
@@ -241,6 +249,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       pageTitle: 'Exécution',
       showBottomNav: true,
       activeNavPath: '/execution',
+      desktopActivePath: '/execution',
       mainScroll: 'hidden',
     }
   }
@@ -252,6 +261,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       backPath: '/execution',
       showBottomNav: false,
       activeNavPath: '/execution',
+      desktopActivePath: '/execution',
       mainScroll: 'hidden',
       showTopbarBottomBorder: false,
     }
@@ -263,6 +273,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       pageTitle: 'Discussions',
       showBottomNav: true,
       activeNavPath: '/chat',
+      desktopActivePath: '/chat',
       mainScroll: 'hidden',
     }
   }
@@ -273,6 +284,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       pageTitle: 'Général',
       showBottomNav: true,
       activeNavPath: '/general',
+      desktopActivePath: '/general',
       mainScroll: 'auto',
     }
   }
@@ -283,6 +295,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       title: 'Analyse',
       backPath: '/general',
       showBottomNav: false,
+      desktopActivePath: '/analytics',
       mainScroll: 'auto',
     }
   }
@@ -293,6 +306,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       title: 'Équipe',
       backPath: '/general',
       showBottomNav: false,
+      desktopActivePath: '/general',
       mainScroll: 'auto',
     }
   }
@@ -303,6 +317,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       title: 'Notifications',
       backPath: '/general',
       showBottomNav: false,
+      desktopActivePath: '/general',
       mainScroll: 'auto',
     }
   }
@@ -313,6 +328,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       title: 'Inviter un membre',
       backPath: '/team',
       showBottomNav: false,
+      desktopActivePath: '/general',
       mainScroll: 'auto',
     }
   }
@@ -323,6 +339,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       title: "Changer d'établissement",
       backPath: '/general',
       showBottomNav: false,
+      desktopActivePath: '/general',
       mainScroll: 'auto',
     }
   }
@@ -332,6 +349,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       topbarVariant: 'detail',
       hideTopbar: true,
       showBottomNav: false,
+      desktopActivePath: '/general',
       mainScroll: 'auto',
     }
   }
@@ -342,6 +360,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       title: 'Bibliothèque',
       backPath: '/general',
       showBottomNav: false,
+      desktopActivePath: '/general',
       mainScroll: 'auto',
     }
   }
@@ -352,6 +371,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       title: 'Détail du plan',
       backPath: '/action-plans',
       showBottomNav: false,
+      desktopActivePath: '/general',
       mainScroll: 'auto',
     }
   }
@@ -362,6 +382,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       title: 'Modifier le plan',
       backPath: `/action-plans/${route.actionPlanId}`,
       showBottomNav: false,
+      desktopActivePath: '/general',
       mainScroll: 'auto',
       hideTopbar: true,
     }
@@ -373,6 +394,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       title: "Plan d'action",
       backPath: '/execution',
       showBottomNav: false,
+      desktopActivePath: '/execution',
       mainScroll: 'auto',
     }
   }
@@ -383,6 +405,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       title: 'Modifier le plan',
       backPath: `/action-plans/executions/${route.executionId}`,
       showBottomNav: false,
+      desktopActivePath: '/execution',
       mainScroll: 'auto',
       hideTopbar: true,
     }

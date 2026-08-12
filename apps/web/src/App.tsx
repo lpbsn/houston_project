@@ -718,6 +718,8 @@ function App() {
           contentKey="not-found"
           showBottomNav={true}
           activeNavPath="/reporting"
+          bootstrap={auth.bootstrap}
+          desktopActivePath="/reporting"
           mainScroll="auto"
           navigate={navigate}
           showChatNav={showChatNav}
@@ -746,6 +748,8 @@ function App() {
           contentKey={getTerrainContentKey(route)}
           showBottomNav={terrainConfig.showBottomNav}
           activeNavPath={terrainConfig.activeNavPath}
+          bootstrap={auth.bootstrap}
+          desktopActivePath={terrainConfig.desktopActivePath ?? terrainConfig.activeNavPath}
           mainScroll={terrainConfig.mainScroll}
           navigate={navigate}
           showChatNav={showChatNav}

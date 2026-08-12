@@ -47,10 +47,10 @@ export function TerrainTopbar({
         className={cn(
           'shrink-0 bg-white',
           showBottomBorder && 'border-b border-[#E8E6DF]',
-          'pt-[max(0.75rem,env(safe-area-inset-top))] pb-1.5',
+          'pt-[max(0.75rem,env(safe-area-inset-top))] pb-1.5 lg:pt-0 lg:pb-0',
         )}
       >
-        <div className="flex h-14 items-center justify-between gap-3 px-3">
+        <div className="flex h-14 items-center justify-between gap-3 px-3 lg:h-16 lg:px-6">
           {pageTitle ? (
             <h1 className="min-w-0 flex-1 truncate text-left text-2xl font-semibold leading-tight text-[#1a1a1a]">
               {pageTitle}
@@ -70,11 +70,11 @@ export function TerrainTopbar({
         className={cn(
           'shrink-0 bg-white',
           showBottomBorder && 'border-b border-[#E8E6DF]',
-          'pt-[max(0.75rem,env(safe-area-inset-top))] pb-3',
+          'pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 lg:pt-0 lg:pb-0',
         )}
       >
-        <div className="px-4">
-          <div className="flex items-start justify-between gap-3">
+        <div className="px-4 lg:px-6">
+          <div className="flex items-start justify-between gap-3 lg:min-h-16 lg:items-center">
             <div className="min-w-0 flex-1">
               {onBack ? (
                 <Button
@@ -101,12 +101,12 @@ export function TerrainTopbar({
   return (
     <header
       className={cn(
-        'shrink-0 bg-white',
-        showBottomBorder && 'border-b border-[#E8E6DF]',
-        'pt-[max(0.75rem,env(safe-area-inset-top))] pb-3',
-      )}
+          'shrink-0 bg-white',
+          showBottomBorder && 'border-b border-[#E8E6DF]',
+          'pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 lg:pt-0 lg:pb-0',
+        )}
     >
-      <div className="flex items-center justify-between gap-3 px-4">
+      <div className="flex items-center justify-between gap-3 px-4 lg:h-16 lg:px-6">
         {onBack ? (
           <Button
             type="button"
