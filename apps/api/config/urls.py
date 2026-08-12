@@ -19,6 +19,7 @@ urlpatterns = [
     path("api/v1/", include("houston.realtime.api.urls")),
     path("api/v1/", include("houston.comments.api.urls")),
     path("api/v1/", include("houston.notifications.api.urls")),
+    path("api/v1/", include("houston.analytics.api.urls")),
 ]
 
 if settings.HOUSTON_ENABLE_API_DOCS:

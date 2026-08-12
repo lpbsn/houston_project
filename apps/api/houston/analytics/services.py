@@ -43,6 +43,7 @@ from houston.analytics.permissions import (
     analytics_signal_scope_q_for_membership,
     can_correct_operational_patterns,
     can_correct_signal_pattern_assignment,
+    can_govern_operational_patterns,
     empty_signal_scope_q,
 )
 from houston.analytics.signature import (
@@ -115,6 +116,29 @@ class PatternSplitResult:
     target_created: bool
     moved_assignments: tuple[SignalPatternAssignment, ...]
     correction_id: str
+
+
+@dataclass(frozen=True)
+class PatternMergeResult:
+    source_pattern: OperationalPattern
+    moved_signal_count: int
+
+
+@dataclass(frozen=True)
+class OwnerGovernancePatternRef:
+    pattern_id: uuid.UUID
+    label: str
+    normalized_label: str
+    status: str
+    merged_into_pattern_id: uuid.UUID | None
+
+
+@dataclass(frozen=True)
+class OwnerGovernanceResult:
+    source_pattern: OwnerGovernancePatternRef
+    target_pattern: OwnerGovernancePatternRef | None = None
+    moved_signal_count: int = 0
+    target_created: bool = False
 
 
 class PatternClassificationObsoleteAttempt(Exception):
@@ -283,6 +307,165 @@ def report_pattern_assignment_issue(
         return report
 
 
+def can_govern_any_operational_patterns(user: User | None) -> bool:
+    return bool(_owner_governance_memberships_for_user(user))
+
+
+def rename_operational_pattern_for_owner(
+    user: User | None,
+    *,
+    pattern_id,
+    label: str,
+    occurred_at=None,
+) -> OwnerGovernanceResult:
+    source = _resolve_governable_pattern_for_user(user, pattern_id)
+    actor_membership = _resolve_owner_governance_membership(
+        user=user,
+        organization=source.organization,
+    )
+    renamed = rename_operational_pattern(
+        actor_membership=actor_membership,
+        pattern=source,
+        label=label,
+        occurred_at=occurred_at,
+    )
+    return OwnerGovernanceResult(source_pattern=_owner_governance_pattern_ref(renamed))
+
+
+def merge_operational_patterns_for_owner(
+    user: User | None,
+    *,
+    source_pattern_id,
+    target_pattern_id,
+    occurred_at=None,
+) -> OwnerGovernanceResult:
+    source = _resolve_governable_pattern_for_user(user, source_pattern_id)
+    target = _resolve_governable_pattern_for_user(user, target_pattern_id)
+    actor_membership = _resolve_owner_governance_membership(
+        user=user,
+        organization=source.organization,
+    )
+    merged = merge_operational_patterns(
+        actor_membership=actor_membership,
+        source_pattern=source,
+        target_pattern=target,
+        occurred_at=occurred_at,
+    )
+    return OwnerGovernanceResult(
+        source_pattern=_owner_governance_pattern_ref(merged.source_pattern),
+        target_pattern=_owner_governance_pattern_ref(target),
+        moved_signal_count=merged.moved_signal_count,
+    )
+
+
+def move_signals_between_patterns_for_owner(
+    user: User | None,
+    *,
+    source_pattern_id,
+    target_pattern_id,
+    signal_ids,
+    occurred_at=None,
+) -> OwnerGovernanceResult:
+    source = _resolve_governable_pattern_for_user(user, source_pattern_id)
+    target = _resolve_governable_pattern_for_user(user, target_pattern_id)
+    _require_owner_governance_signals_in_organization(
+        signal_ids,
+        organization=source.organization,
+    )
+    actor_membership = _resolve_owner_governance_membership(
+        user=user,
+        organization=source.organization,
+    )
+    moved = move_signals_between_patterns(
+        actor_membership=actor_membership,
+        source_pattern=source,
+        target_pattern=target,
+        signal_ids=signal_ids,
+        occurred_at=occurred_at,
+    )
+    source.refresh_from_db()
+    target.refresh_from_db()
+    return OwnerGovernanceResult(
+        source_pattern=_owner_governance_pattern_ref(source),
+        target_pattern=_owner_governance_pattern_ref(target),
+        moved_signal_count=len(moved),
+    )
+
+
+def split_operational_pattern_to_existing_for_owner(
+    user: User | None,
+    *,
+    source_pattern_id,
+    target_pattern_id,
+    signal_ids,
+    occurred_at=None,
+) -> OwnerGovernanceResult:
+    source = _resolve_governable_pattern_for_user(user, source_pattern_id)
+    target = _resolve_governable_pattern_for_user(user, target_pattern_id)
+    _require_owner_governance_signals_in_organization(
+        signal_ids,
+        organization=source.organization,
+    )
+    actor_membership = _resolve_owner_governance_membership(
+        user=user,
+        organization=source.organization,
+    )
+    split = split_operational_pattern_to_existing(
+        actor_membership=actor_membership,
+        source_pattern=source,
+        target_pattern=target,
+        signal_ids=signal_ids,
+        occurred_at=occurred_at,
+    )
+    split.source_pattern.refresh_from_db()
+    split.target_pattern.refresh_from_db()
+    return OwnerGovernanceResult(
+        source_pattern=_owner_governance_pattern_ref(split.source_pattern),
+        target_pattern=_owner_governance_pattern_ref(split.target_pattern),
+        moved_signal_count=len(split.moved_assignments),
+        target_created=split.target_created,
+    )
+
+
+def split_operational_pattern_to_new_for_owner(
+    user: User | None,
+    *,
+    source_pattern_id,
+    label: str,
+    signal_ids,
+    occurred_at=None,
+) -> OwnerGovernanceResult:
+    source = _resolve_governable_pattern_for_user(user, source_pattern_id)
+    _require_owner_governance_signals_in_organization(
+        signal_ids,
+        organization=source.organization,
+    )
+    actor_membership = _resolve_owner_governance_membership(
+        user=user,
+        organization=source.organization,
+    )
+    split = split_operational_pattern_to_new(
+        actor_membership=actor_membership,
+        source_pattern=source,
+        label=label,
+        signal_ids=signal_ids,
+        occurred_at=occurred_at,
+    )
+    split.source_pattern.refresh_from_db()
+    if split.target_pattern is not None:
+        split.target_pattern.refresh_from_db()
+    return OwnerGovernanceResult(
+        source_pattern=_owner_governance_pattern_ref(split.source_pattern),
+        target_pattern=(
+            _owner_governance_pattern_ref(split.target_pattern)
+            if split.target_pattern is not None
+            else None
+        ),
+        moved_signal_count=len(split.moved_assignments),
+        target_created=split.target_created,
+    )
+
+
 @transaction.atomic
 def rename_operational_pattern(
     *,
@@ -361,7 +544,7 @@ def merge_operational_patterns(
     source_pattern: OperationalPattern,
     target_pattern: OperationalPattern,
     occurred_at=None,
-) -> OperationalPattern:
+) -> PatternMergeResult:
     occurred_at = occurred_at or timezone.now()
     prechecked = _terminal_merge_precheck(
         actor_membership=actor_membership,
@@ -369,7 +552,7 @@ def merge_operational_patterns(
         target_pattern=target_pattern,
     )
     if prechecked is not None:
-        return prechecked
+        return PatternMergeResult(source_pattern=prechecked, moved_signal_count=0)
 
     source_id = source_pattern.id
     target_id = target_pattern.id
@@ -465,7 +648,10 @@ def merge_operational_patterns(
             correction_id=correction_id,
             moved_signal_ids=moved_signal_ids,
         )
-        return source
+        return PatternMergeResult(
+            source_pattern=source,
+            moved_signal_count=len(moved_signal_ids),
+        )
 
 
 def move_signals_between_patterns(
@@ -812,6 +998,125 @@ def _normalize_pattern_issue_comment(comment: str | None) -> str:
             code="analytics_pattern_issue_comment_too_long",
         )
     return normalized
+
+
+def _owner_governance_memberships_for_user(
+    user: User | None,
+) -> list[EstablishmentMembership]:
+    if user is None or user.status != User.Status.ACTIVE:
+        return []
+    memberships = (
+        EstablishmentMembership.objects.select_related(
+            "user",
+            "establishment",
+            "establishment__organization",
+        )
+        .filter(
+            user_id=user.id,
+            role=EstablishmentMembership.Role.OWNER,
+            status=EstablishmentMembership.Status.ACTIVE,
+            establishment__organization__status=Organization.Status.ACTIVE,
+        )
+        .order_by("establishment_id", "id")
+    )
+    return [
+        membership
+        for membership in memberships
+        if can_govern_operational_patterns(
+            membership,
+            organization=membership.establishment.organization,
+        )
+    ]
+
+
+def _resolve_governable_pattern_for_user(
+    user: User | None,
+    pattern_id,
+) -> OperationalPattern:
+    memberships = _owner_governance_memberships_for_user(user)
+    if not memberships:
+        raise AnalyticsValidationError(
+            "Owner permission is required to govern operational patterns.",
+            code="analytics_owner_permission_required",
+        )
+
+    try:
+        parsed_pattern_id = uuid.UUID(str(pattern_id))
+    except (TypeError, ValueError) as exc:
+        raise AnalyticsValidationError(
+            "Operational pattern was not found.",
+            code="analytics_pattern_not_found",
+        ) from exc
+
+    organization_ids = {
+        membership.establishment.organization_id
+        for membership in memberships
+    }
+    pattern = (
+        OperationalPattern.objects.select_related("organization")
+        .filter(id=parsed_pattern_id, organization_id__in=organization_ids)
+        .first()
+    )
+    if pattern is None:
+        raise AnalyticsValidationError(
+            "Operational pattern was not found.",
+            code="analytics_pattern_not_found",
+        )
+    return pattern
+
+
+def _resolve_owner_governance_membership(
+    *,
+    user: User | None,
+    organization: Organization,
+) -> EstablishmentMembership:
+    for membership in _owner_governance_memberships_for_user(user):
+        if can_govern_operational_patterns(membership, organization=organization):
+            return membership
+    raise AnalyticsValidationError(
+        "Owner permission is required to govern operational patterns.",
+        code="analytics_owner_permission_required",
+    )
+
+
+def _require_owner_governance_signals_in_organization(
+    signal_ids,
+    *,
+    organization: Organization,
+) -> None:
+    try:
+        parsed_signal_ids = [uuid.UUID(str(signal_id)) for signal_id in signal_ids]
+    except (TypeError, ValueError, AttributeError) as exc:
+        raise AnalyticsValidationError(
+            "One or more signals were not found.",
+            code="analytics_signal_not_found",
+        ) from exc
+    if not parsed_signal_ids:
+        return
+
+    visible_signal_ids = set(
+        Signal.objects.filter(
+            id__in=parsed_signal_ids,
+            establishment__organization_id=organization.id,
+        ).values_list("id", flat=True)
+    )
+    if any(signal_id not in visible_signal_ids for signal_id in parsed_signal_ids):
+        raise AnalyticsValidationError(
+            "One or more signals were not found.",
+            code="analytics_signal_not_found",
+        )
+
+
+def _owner_governance_pattern_ref(
+    pattern: OperationalPattern,
+) -> OwnerGovernancePatternRef:
+    return OwnerGovernancePatternRef(
+        pattern_id=pattern.id,
+        label=pattern.label,
+        normalized_label=pattern.normalized_label,
+        status=pattern.status,
+        merged_into_pattern_id=pattern.merged_into_id,
+    )
 
 
 def _terminal_merge_precheck(

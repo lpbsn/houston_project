@@ -20,6 +20,7 @@ from houston.analytics.models import (
 )
 from houston.analytics.services import (
     OWNER_CORRECTION_CLASSIFIER_VERSION,
+    PatternMergeResult,
     claim_signal_pattern_classification,
     create_operational_pattern,
     mark_assignment_permanently_failed,
@@ -27,6 +28,7 @@ from houston.analytics.services import (
     mark_assignment_succeeded,
     mark_assignment_temporary_failed,
     merge_operational_patterns,
+    merge_operational_patterns_for_owner,
     move_signals_between_patterns,
     rename_operational_pattern,
 )
@@ -312,12 +314,13 @@ def test_merge_moves_assignments_marks_source_and_journals():
     assign_signal_to_pattern(signal=first, pattern=source)
     assign_signal_to_pattern(signal=second, pattern=source)
 
-    merge_operational_patterns(
+    result = merge_operational_patterns(
         actor_membership=owner,
         source_pattern=source,
         target_pattern=target,
     )
 
+    assert result.moved_signal_count == 2
     source.refresh_from_db()
     assert source.status == OperationalPattern.Status.MERGED
     assert source.merged_into_id == target.id
@@ -360,7 +363,8 @@ def test_merge_terminal_source_noop_or_refusal_before_active_requirement():
         target_pattern=target,
     )
 
-    assert returned.id == source.id
+    assert returned.source_pattern.id == source.id
+    assert returned.moved_signal_count == 0
     assert PatternLifecycleEvent.objects.count() == event_count
     with pytest.raises(AnalyticsValidationError) as exc_info:
         merge_operational_patterns(
@@ -369,6 +373,31 @@ def test_merge_terminal_source_noop_or_refusal_before_active_requirement():
             target_pattern=other,
         )
     assert exc_info.value.code == "analytics_pattern_already_merged"
+
+
+def test_merge_for_owner_uses_merge_moved_count_not_precount():
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    source = create_pattern_for_membership(owner, label="Source")
+    target = create_pattern_for_membership(owner, label="Target")
+    signal = create_signal_for_membership(owner)
+    assign_signal_to_pattern(signal=signal, pattern=source)
+
+    def _noop_merge(**kwargs):
+        return PatternMergeResult(source_pattern=source, moved_signal_count=0)
+
+    with patch.object(
+        analytics_services,
+        "merge_operational_patterns",
+        side_effect=_noop_merge,
+    ):
+        result = merge_operational_patterns_for_owner(
+            owner.user,
+            source_pattern_id=source.id,
+            target_pattern_id=target.id,
+        )
+
+    assert result.moved_signal_count == 0
+    assert SignalPatternAssignment.objects.filter(pattern=source).count() == 1
 
 
 @pytest.mark.parametrize(

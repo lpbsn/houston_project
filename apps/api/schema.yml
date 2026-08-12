@@ -149,6 +149,583 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/analytics/dashboard/:
+    get:
+      operationId: v1_analytics_dashboard_retrieve
+      parameters:
+      - in: query
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: organization_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: period_end
+        schema:
+          type: string
+          format: date-time
+        required: true
+      - in: query
+        name: period_start
+        schema:
+          type: string
+          format: date-time
+        required: true
+      tags:
+      - analytics
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsDashboardResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/analytics/patterns/:
+    get:
+      operationId: v1_analytics_patterns_list
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: organization_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Page size, default 50, maximum 100.
+      - in: query
+        name: period_end
+        schema:
+          type: string
+          format: date-time
+        required: true
+      - in: query
+        name: period_start
+        schema:
+          type: string
+          format: date-time
+        required: true
+      tags:
+      - analytics
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsPatternListResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/analytics/patterns/{pattern_id}/:
+    get:
+      operationId: v1_analytics_pattern_retrieve
+      parameters:
+      - in: query
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: organization_id
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: pattern_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: period_end
+        schema:
+          type: string
+          format: date-time
+        required: true
+      - in: query
+        name: period_start
+        schema:
+          type: string
+          format: date-time
+        required: true
+      tags:
+      - analytics
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsPatternDetailResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/analytics/patterns/{pattern_id}/merge/:
+    post:
+      operationId: v1_analytics_pattern_merge
+      parameters:
+      - in: path
+        name: pattern_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - analytics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternMergeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternMergeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternMergeRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsOwnerGovernanceResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/analytics/patterns/{pattern_id}/move-signals/:
+    post:
+      operationId: v1_analytics_pattern_move_signals
+      parameters:
+      - in: path
+        name: pattern_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - analytics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternMoveSignalsRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternMoveSignalsRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternMoveSignalsRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsOwnerGovernanceResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/analytics/patterns/{pattern_id}/rename/:
+    post:
+      operationId: v1_analytics_pattern_rename
+      parameters:
+      - in: path
+        name: pattern_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - analytics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternRenameRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternRenameRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternRenameRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsOwnerGovernanceResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/analytics/patterns/{pattern_id}/signals/:
+    get:
+      operationId: v1_analytics_pattern_signals_list
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: organization_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Page size, default 50, maximum 100.
+      - in: path
+        name: pattern_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: period_end
+        schema:
+          type: string
+          format: date-time
+        required: true
+      - in: query
+        name: period_start
+        schema:
+          type: string
+          format: date-time
+        required: true
+      tags:
+      - analytics
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsPatternSignalsResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/analytics/patterns/{pattern_id}/split-to-existing/:
+    post:
+      operationId: v1_analytics_pattern_split_to_existing
+      parameters:
+      - in: path
+        name: pattern_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - analytics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternSplitToExistingRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternSplitToExistingRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternSplitToExistingRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsOwnerGovernanceResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/analytics/patterns/{pattern_id}/split-to-new/:
+    post:
+      operationId: v1_analytics_pattern_split_to_new
+      parameters:
+      - in: path
+        name: pattern_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - analytics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternSplitToNewRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternSplitToNewRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternSplitToNewRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsOwnerGovernanceResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/auth/bootstrap/:
     get:
       operationId: v1_auth_bootstrap_retrieve
@@ -8646,6 +9223,646 @@ components:
       - is_generic
       - label
       - source
+    AnalyticsBusinessAssignmentCoverage:
+      type: object
+      properties:
+        total_count:
+          type: integer
+        with_pattern_count:
+          type: integer
+        without_pattern_count:
+          type: integer
+        coverage_rate:
+          type: number
+          format: double
+          nullable: true
+      required:
+      - coverage_rate
+      - total_count
+      - with_pattern_count
+      - without_pattern_count
+    AnalyticsDashboardResponse:
+      type: object
+      properties:
+        current_period:
+          $ref: '#/components/schemas/AnalyticsPeriod'
+        previous_period:
+          $ref: '#/components/schemas/AnalyticsPeriod'
+        current_kpis:
+          $ref: '#/components/schemas/AnalyticsKPIResult'
+        previous_kpis:
+          $ref: '#/components/schemas/AnalyticsKPIResult'
+        signals_analyzed_count:
+          $ref: '#/components/schemas/AnalyticsMetricComparison'
+        operational_patterns_count:
+          $ref: '#/components/schemas/AnalyticsMetricComparison'
+        actionable_signals_count:
+          $ref: '#/components/schemas/AnalyticsMetricComparison'
+        median_resolution_seconds:
+          $ref: '#/components/schemas/AnalyticsMetricComparison'
+        recurring_patterns_count:
+          $ref: '#/components/schemas/AnalyticsMetricComparison'
+        recurrence_status:
+          type: string
+      required:
+      - actionable_signals_count
+      - current_kpis
+      - current_period
+      - median_resolution_seconds
+      - operational_patterns_count
+      - previous_kpis
+      - previous_period
+      - recurrence_status
+      - recurring_patterns_count
+      - signals_analyzed_count
+    AnalyticsKPIResult:
+      type: object
+      properties:
+        analytics_signal_population_count:
+          type: integer
+        signals_analyzed_count:
+          type: integer
+        operational_patterns_count:
+          type: integer
+        actionable_signals_count:
+          type: integer
+        median_resolution_seconds:
+          type: number
+          format: double
+          nullable: true
+        resolution_time_signal_count:
+          type: integer
+        invalid_resolution_duration_count:
+          type: integer
+        business_assignment_coverage:
+          $ref: '#/components/schemas/AnalyticsBusinessAssignmentCoverage'
+        technical_classification_state:
+          $ref: '#/components/schemas/AnalyticsTechnicalClassificationState'
+        recurring_patterns_count:
+          type: integer
+        recurrence_window:
+          $ref: '#/components/schemas/AnalyticsRecurrenceWindow'
+        recurrence_status:
+          type: string
+      required:
+      - actionable_signals_count
+      - analytics_signal_population_count
+      - business_assignment_coverage
+      - invalid_resolution_duration_count
+      - median_resolution_seconds
+      - operational_patterns_count
+      - recurrence_status
+      - recurrence_window
+      - recurring_patterns_count
+      - resolution_time_signal_count
+      - signals_analyzed_count
+      - technical_classification_state
+    AnalyticsMetricComparison:
+      type: object
+      properties:
+        current_value:
+          type: number
+          format: double
+          nullable: true
+        previous_value:
+          type: number
+          format: double
+          nullable: true
+        absolute_delta:
+          type: number
+          format: double
+          nullable: true
+        relative_change:
+          type: number
+          format: double
+          nullable: true
+        relative_change_status:
+          type: string
+      required:
+      - absolute_delta
+      - current_value
+      - previous_value
+      - relative_change
+      - relative_change_status
+    AnalyticsOwnerGovernancePatternRef:
+      type: object
+      properties:
+        pattern_id:
+          type: string
+          format: uuid
+        label:
+          type: string
+        normalized_label:
+          type: string
+        status:
+          type: string
+        merged_into_pattern_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - label
+      - merged_into_pattern_id
+      - normalized_label
+      - pattern_id
+      - status
+    AnalyticsOwnerGovernanceResponse:
+      type: object
+      properties:
+        source_pattern:
+          $ref: '#/components/schemas/AnalyticsOwnerGovernancePatternRef'
+        target_pattern:
+          allOf:
+          - $ref: '#/components/schemas/AnalyticsOwnerGovernancePatternRef'
+          nullable: true
+        moved_signal_count:
+          type: integer
+        target_created:
+          type: boolean
+      required:
+      - moved_signal_count
+      - source_pattern
+      - target_created
+      - target_pattern
+    AnalyticsPatternBusinessUnitDistributionBucket:
+      type: object
+      properties:
+        business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+        signal_count:
+          type: integer
+      required:
+      - business_unit_id
+      - name
+      - signal_count
+    AnalyticsPatternDetailMetrics:
+      type: object
+      properties:
+        signal_count:
+          type: integer
+        previous_signal_count:
+          type: integer
+        signal_count_comparison:
+          $ref: '#/components/schemas/AnalyticsMetricComparison'
+        actionable_signal_count:
+          type: integer
+        last_seen_at:
+          type: string
+          format: date-time
+        establishment_count:
+          type: integer
+      required:
+      - actionable_signal_count
+      - establishment_count
+      - last_seen_at
+      - previous_signal_count
+      - signal_count
+      - signal_count_comparison
+    AnalyticsPatternDetailResponse:
+      type: object
+      properties:
+        identity:
+          $ref: '#/components/schemas/AnalyticsPatternIdentity'
+        current_period:
+          $ref: '#/components/schemas/AnalyticsPeriod'
+        previous_period:
+          $ref: '#/components/schemas/AnalyticsPeriod'
+        metrics:
+          $ref: '#/components/schemas/AnalyticsPatternDetailMetrics'
+        is_recurrent:
+          type: boolean
+        occurrence_count_30d:
+          type: integer
+        distinct_day_count_30d:
+          type: integer
+        recurrence_window:
+          $ref: '#/components/schemas/AnalyticsRecurrenceWindow'
+        recurrence_status:
+          type: string
+        trend_timezone:
+          type: string
+        trend:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsPatternTrendBucket'
+        status_distribution:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsPatternStatusDistributionBucket'
+        establishments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsPatternEstablishmentDistributionBucket'
+        establishment_bucket_count:
+          type: integer
+        establishment_other_signal_count:
+          type: integer
+        responsible_business_units:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsPatternBusinessUnitDistributionBucket'
+        business_unit_bucket_count:
+          type: integer
+        business_unit_other_signal_count:
+          type: integer
+        drilldown_context:
+          $ref: '#/components/schemas/AnalyticsPatternDrilldownContext'
+      required:
+      - business_unit_bucket_count
+      - business_unit_other_signal_count
+      - current_period
+      - distinct_day_count_30d
+      - drilldown_context
+      - establishment_bucket_count
+      - establishment_other_signal_count
+      - establishments
+      - identity
+      - is_recurrent
+      - metrics
+      - occurrence_count_30d
+      - previous_period
+      - recurrence_status
+      - recurrence_window
+      - responsible_business_units
+      - status_distribution
+      - trend
+      - trend_timezone
+    AnalyticsPatternDrilldownContext:
+      type: object
+      properties:
+        pattern_id:
+          type: string
+          format: uuid
+        period_start:
+          type: string
+          format: date-time
+        period_end:
+          type: string
+          format: date-time
+        organization_id:
+          type: string
+          format: uuid
+          nullable: true
+        establishment_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - establishment_id
+      - organization_id
+      - pattern_id
+      - period_end
+      - period_start
+    AnalyticsPatternEstablishmentDistributionBucket:
+      type: object
+      properties:
+        establishment_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        signal_count:
+          type: integer
+      required:
+      - establishment_id
+      - name
+      - signal_count
+    AnalyticsPatternEstablishmentSummary:
+      type: object
+      properties:
+        establishment_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        signal_count:
+          type: integer
+      required:
+      - establishment_id
+      - name
+      - signal_count
+    AnalyticsPatternIdentity:
+      type: object
+      properties:
+        pattern_id:
+          type: string
+          format: uuid
+        label:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        merged_into_pattern_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - created_at
+      - label
+      - merged_into_pattern_id
+      - pattern_id
+      - status
+    AnalyticsPatternListItem:
+      type: object
+      properties:
+        pattern_id:
+          type: string
+          format: uuid
+        label:
+          type: string
+        normalized_label:
+          type: string
+        status:
+          type: string
+        signal_count:
+          type: integer
+        previous_signal_count:
+          type: integer
+        signal_count_comparison:
+          $ref: '#/components/schemas/AnalyticsMetricComparison'
+        last_seen_at:
+          type: string
+          format: date-time
+        actionable_signal_count:
+          type: integer
+        establishment_count:
+          type: integer
+        establishments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsPatternEstablishmentSummary'
+        is_recurrent:
+          type: boolean
+        occurrence_count_30d:
+          type: integer
+        distinct_day_count_30d:
+          type: integer
+        recurrence_window:
+          $ref: '#/components/schemas/AnalyticsRecurrenceWindow'
+        recurrence_status:
+          type: string
+      required:
+      - actionable_signal_count
+      - distinct_day_count_30d
+      - establishment_count
+      - establishments
+      - is_recurrent
+      - label
+      - last_seen_at
+      - normalized_label
+      - occurrence_count_30d
+      - pattern_id
+      - previous_signal_count
+      - recurrence_status
+      - recurrence_window
+      - signal_count
+      - signal_count_comparison
+      - status
+    AnalyticsPatternListResponse:
+      type: object
+      properties:
+        current_period:
+          $ref: '#/components/schemas/AnalyticsPeriod'
+        previous_period:
+          $ref: '#/components/schemas/AnalyticsPeriod'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsPatternListItem'
+        total_count:
+          type: integer
+        page_size:
+          type: integer
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
+        recurrence_window:
+          $ref: '#/components/schemas/AnalyticsRecurrenceWindow'
+        recurrence_status:
+          type: string
+      required:
+      - current_period
+      - has_more
+      - items
+      - next_cursor
+      - page_size
+      - previous_period
+      - recurrence_status
+      - recurrence_window
+      - total_count
+    AnalyticsPatternMergeRequest:
+      type: object
+      properties:
+        target_pattern_id:
+          type: string
+          format: uuid
+      required:
+      - target_pattern_id
+    AnalyticsPatternMoveSignalsRequest:
+      type: object
+      properties:
+        target_pattern_id:
+          type: string
+          format: uuid
+        signal_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - signal_ids
+      - target_pattern_id
+    AnalyticsPatternRenameRequest:
+      type: object
+      properties:
+        label:
+          type: string
+      required:
+      - label
+    AnalyticsPatternSignalItem:
+      type: object
+      properties:
+        signal_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        structured_summary:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+        establishment:
+          $ref: '#/components/schemas/AnalyticsSignalEstablishmentRef'
+        responsible_business_unit:
+          allOf:
+          - $ref: '#/components/schemas/AnalyticsSignalBusinessUnitRef'
+          nullable: true
+      required:
+      - created_at
+      - establishment
+      - resolved_at
+      - responsible_business_unit
+      - signal_id
+      - status
+      - structured_summary
+      - title
+    AnalyticsPatternSignalsResponse:
+      type: object
+      properties:
+        period:
+          $ref: '#/components/schemas/AnalyticsPeriod'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsPatternSignalItem'
+        page_size:
+          type: integer
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
+      required:
+      - has_more
+      - items
+      - next_cursor
+      - page_size
+      - period
+    AnalyticsPatternSplitToExistingRequest:
+      type: object
+      properties:
+        target_pattern_id:
+          type: string
+          format: uuid
+        signal_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - signal_ids
+      - target_pattern_id
+    AnalyticsPatternSplitToNewRequest:
+      type: object
+      properties:
+        label:
+          type: string
+        signal_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - label
+      - signal_ids
+    AnalyticsPatternStatusDistributionBucket:
+      type: object
+      properties:
+        status:
+          type: string
+        signal_count:
+          type: integer
+      required:
+      - signal_count
+      - status
+    AnalyticsPatternTrendBucket:
+      type: object
+      properties:
+        bucket_date:
+          type: string
+          format: date
+        bucket_start:
+          type: string
+          format: date-time
+        bucket_end:
+          type: string
+          format: date-time
+        signal_count:
+          type: integer
+      required:
+      - bucket_date
+      - bucket_end
+      - bucket_start
+      - signal_count
+    AnalyticsPeriod:
+      type: object
+      properties:
+        period_start:
+          type: string
+          format: date-time
+        period_end:
+          type: string
+          format: date-time
+      required:
+      - period_end
+      - period_start
+    AnalyticsRecurrenceWindow:
+      type: object
+      properties:
+        window_start:
+          type: string
+          format: date-time
+        window_end:
+          type: string
+          format: date-time
+      required:
+      - window_end
+      - window_start
+    AnalyticsSignalBusinessUnitRef:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        specific_name:
+          type: string
+      required:
+      - id
+      - specific_name
+    AnalyticsSignalEstablishmentRef:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+      required:
+      - id
+      - name
+    AnalyticsTechnicalClassificationState:
+      type: object
+      properties:
+        total_count:
+          type: integer
+        technical_state_breakdown:
+          type: object
+          additionalProperties:
+            type: integer
+        technical_terminal_success_count:
+          type: integer
+        technical_pending_or_error_count:
+          type: integer
+      required:
+      - technical_pending_or_error_count
+      - technical_state_breakdown
+      - technical_terminal_success_count
+      - total_count
     ApiErrorResponse:
       type: object
       properties:
