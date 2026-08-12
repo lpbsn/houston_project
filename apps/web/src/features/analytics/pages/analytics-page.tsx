@@ -2,12 +2,14 @@ import { BarChart3 } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
+import { useAnalyticsUrlState } from '@/features/analytics/lib/analytics-url-state'
 import { canShowAnalyticsNavigation } from '@/features/navigation/lib/shared-navigation'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 export function AnalyticsPage() {
   const { bootstrap, isBootstrapping, isReady } = useAuth()
+  useAnalyticsUrlState()
   const canAccessAnalytics = canShowAnalyticsNavigation(bootstrap)
 
   if (!isReady || isBootstrapping) {

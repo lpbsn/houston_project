@@ -59,6 +59,17 @@ describe('parseAppRoute', () => {
     })
   })
 
+  it('parses analytics route with query params as the same route', () => {
+    expect(
+      parseAppRoute(
+        '/analytics?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z',
+      ),
+    ).toEqual({
+      kind: 'static',
+      path: '/analytics',
+    })
+  })
+
   it('parses team member detail route', () => {
     expect(parseAppRoute('/team/member-123')).toEqual({
       kind: 'team-member-detail',

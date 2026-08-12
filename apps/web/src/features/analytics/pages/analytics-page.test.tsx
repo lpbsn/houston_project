@@ -44,6 +44,7 @@ describe('AnalyticsPage', () => {
   afterEach(() => {
     cleanup()
     fetchSpy.mockReset()
+    window.history.replaceState(null, '', '/')
     authState.current = {
       bootstrap: null,
       isBootstrapping: false,
@@ -56,6 +57,25 @@ describe('AnalyticsPage', () => {
     vi.stubGlobal('fetch', fetchSpy)
     authState.current = {
       bootstrap: bootstrap('director'),
+      isBootstrapping: false,
+      isReady: true,
+    }
+
+    render(createElement(AnalyticsPage))
+
+    expect(screen.getByText('Analyse opérationnelle')).toBeTruthy()
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('does not crash or fetch when Analytics query params are invalid', () => {
+    vi.stubGlobal('fetch', fetchSpy)
+    window.history.replaceState(
+      null,
+      '',
+      '/analytics?period_start=2026-13-01T00%3A00%3A00Z&establishment_id=ignored',
+    )
+    authState.current = {
+      bootstrap: bootstrap('manager'),
       isBootstrapping: false,
       isReady: true,
     }
