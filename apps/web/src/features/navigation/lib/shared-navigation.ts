@@ -30,6 +30,11 @@ export type BottomMobileNavigationItem = SharedNavigationItem & {
   path: TerrainNavPath
 }
 
+export type DesktopNavigation = {
+  primaryAction: SharedNavigationItem | null
+  navigationItems: SharedNavigationItem[]
+}
+
 const ANALYTICS_ROLES = new Set(['owner', 'director', 'manager'])
 
 export const SHARED_NAVIGATION_ITEMS: SharedNavigationItem[] = [
@@ -113,6 +118,19 @@ export function resolveSharedNavigationItems(options: {
     }
     return true
   })
+}
+
+export function resolveDesktopNavigation(options: {
+  bootstrap?: BootstrapResponse | null
+  showChat: boolean
+}): DesktopNavigation {
+  const items = resolveSharedNavigationItems(options)
+  const primaryAction = items.find((item) => item.id === 'new-observation') ?? null
+
+  return {
+    primaryAction,
+    navigationItems: items.filter((item) => item.id !== 'new-observation'),
+  }
 }
 
 export function resolveBottomMobileNavigationItems(options: {

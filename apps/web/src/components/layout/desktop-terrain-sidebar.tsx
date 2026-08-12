@@ -1,6 +1,6 @@
 import type { AppPath } from '@/app/app-routes'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
-import { resolveSharedNavigationItems } from '@/features/navigation/lib/shared-navigation'
+import { resolveDesktopNavigation } from '@/features/navigation/lib/shared-navigation'
 import { cn } from '@/lib/utils'
 
 type DesktopTerrainSidebarProps = {
@@ -60,9 +60,10 @@ export function DesktopTerrainSidebar({
   navigate,
   showChat,
 }: DesktopTerrainSidebarProps) {
-  const items = resolveSharedNavigationItems({ bootstrap, showChat })
+  const { primaryAction, navigationItems } = resolveDesktopNavigation({ bootstrap, showChat })
   const activeMembership = bootstrap?.active_membership ?? null
   const user = bootstrap?.user ?? null
+  const PrimaryActionIcon = primaryAction?.icon
 
   return (
     <aside
@@ -87,8 +88,34 @@ export function DesktopTerrainSidebar({
         </div>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1 px-3 py-4" aria-label="Sections">
-        {items.map((item) => {
+      <div className="shrink-0 px-3 py-4">
+        {primaryAction ? (
+          <a
+            href={primaryAction.path}
+            aria-current={
+              activePath && primaryAction.activePaths.includes(activePath) ? 'page' : undefined
+            }
+            onClick={(event) => {
+              event.preventDefault()
+              navigate(primaryAction.path)
+            }}
+            className={cn(
+              'flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold transition-colors',
+              activePath && primaryAction.activePaths.includes(activePath)
+                ? 'bg-[#114660] text-white'
+                : 'bg-[#1F7A4D] text-white hover:bg-[#17623D]',
+            )}
+          >
+            {PrimaryActionIcon ? (
+              <PrimaryActionIcon className="h-4 w-4 shrink-0" aria-hidden />
+            ) : null}
+            <span className="truncate">{primaryAction.label}</span>
+          </a>
+        ) : null}
+      </div>
+
+      <nav className="flex flex-1 flex-col gap-1 px-3 pb-4" aria-label="Sections">
+        {navigationItems.map((item) => {
           const Icon = item.icon
           const isActive = activePath ? item.activePaths.includes(activePath) : false
 

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   canShowAnalyticsNavigation,
   resolveBottomMobileNavigationItems,
+  resolveDesktopNavigation,
   resolveSharedNavigationItems,
 } from '@/features/navigation/lib/shared-navigation'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
@@ -107,5 +108,20 @@ describe('shared navigation', () => {
       'general',
     ])
     expect(itemIds).not.toContain('analytics')
+  })
+
+  it('separates the desktop primary action from sidebar navigation items', () => {
+    const payload = bootstrap([membership({ role: 'manager' })])
+    const navigation = resolveDesktopNavigation({ bootstrap: payload, showChat: true })
+
+    expect(navigation.primaryAction?.id).toBe('new-observation')
+    expect(navigation.primaryAction?.path).toBe('/reporting')
+    expect(navigation.navigationItems.map((item) => item.id)).toEqual([
+      'observations',
+      'execution',
+      'chat',
+      'analytics',
+      'general',
+    ])
   })
 })

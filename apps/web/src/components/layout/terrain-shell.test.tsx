@@ -144,6 +144,7 @@ describe('TerrainShell', () => {
 
     expect(screen.getAllByTestId('terrain-topbar')).toHaveLength(1)
     const sidebar = screen.getByLabelText('Navigation principale')
+    expect(within(sidebar).getByRole('link', { name: 'Nouvelle observation' })).toBeTruthy()
     expect(within(sidebar).getByRole('link', { name: 'Analyse' }).getAttribute('aria-current'))
       .toBe('page')
     expect(within(sidebar).queryByRole('link', { name: 'Chat' })).toBeNull()
