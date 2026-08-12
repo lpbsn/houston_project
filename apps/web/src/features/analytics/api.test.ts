@@ -14,6 +14,7 @@ import {
   AnalyticsApiError,
   analyticsQueryKeys,
   fetchAnalyticsDashboard,
+  fetchAnalyticsPatterns,
   type AnalyticsDashboardResponse,
 } from './api'
 
@@ -208,5 +209,69 @@ describe('analytics api', () => {
         organizationId: null,
       },
     ])
+  })
+
+  it('fetches patterns with table filters and no singular establishment_id', async () => {
+    getMock.mockResolvedValue({
+      data: {
+        current_period: {
+          period_start: '2026-07-13T10:30:00.000Z',
+          period_end: '2026-08-12T10:30:00.000Z',
+        },
+        previous_period: {
+          period_start: '2026-06-13T10:30:00.000Z',
+          period_end: '2026-07-13T10:30:00.000Z',
+        },
+        items: [],
+        total_count: 0,
+        page_size: 50,
+        has_more: false,
+        next_cursor: null,
+        recurrence_window: {
+          window_start: '2026-07-13T10:30:00.000Z',
+          window_end: '2026-08-12T10:30:00.000Z',
+        },
+        recurrence_status: 'computed',
+      },
+      error: undefined,
+      response: { ok: true, status: 200 } as Response,
+    })
+
+    await fetchAnalyticsPatterns(
+      {
+        periodStart: '2026-07-13T10:30:00.000Z',
+        periodEnd: '2026-08-12T10:30:00.000Z',
+        organizationId: '11111111-1111-4111-8111-111111111111',
+        establishmentIds: ['22222222-2222-4222-8222-222222222222'],
+        q: 'retard',
+        recurrence: 'recurrent',
+        responsibleBusinessUnitIds: ['33333333-3333-4333-8333-333333333333'],
+        responsibleBusinessUnitUnassigned: true,
+        signalStatuses: ['open', 'archived'],
+      },
+      { cursor: 'cursor-1', pageSize: 25 },
+    )
+
+    expect(getMock).toHaveBeenCalledWith(
+      '/api/v1/analytics/patterns/',
+      expect.objectContaining({
+        params: {
+          query: {
+            period_start: '2026-07-13T10:30:00.000Z',
+            period_end: '2026-08-12T10:30:00.000Z',
+            organization_id: '11111111-1111-4111-8111-111111111111',
+            establishment_ids: '22222222-2222-4222-8222-222222222222',
+            q: 'retard',
+            recurrence: 'recurrent',
+            responsible_business_unit_ids: '33333333-3333-4333-8333-333333333333',
+            responsible_business_unit_unassigned: true,
+            signal_statuses: 'open,archived',
+            cursor: 'cursor-1',
+            page_size: 25,
+          },
+        },
+      }),
+    )
+    expect(getMock.mock.calls[0]?.[1]?.params?.query).not.toHaveProperty('establishment_id')
   })
 })

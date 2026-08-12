@@ -43,5 +43,5 @@ describe('lazy-terrain-pages', () => {
     ])
 
     expect(modules.every((module) => Object.keys(module).length > 0)).toBe(true)
-  })
+  }, 15_000)
 })

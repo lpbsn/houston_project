@@ -140,6 +140,60 @@ def test_recurrence_requires_three_occurrences_and_two_distinct_local_days():
     assert recurrent_ids == [recurring.id]
 
 
+def test_recurrence_accepts_establishment_ids_scope():
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    other_establishment = Establishment.objects.create(
+        name="Other recurrence",
+        organization=owner.establishment.organization,
+        status=Establishment.Status.ACTIVE,
+        timezone="UTC",
+    )
+    other_owner = create_membership(
+        establishment=other_establishment,
+        user=owner.user,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    pattern = create_pattern(owner, label="Multi site recurrence")
+    as_of = timezone.now()
+
+    add_signal(owner, pattern, title="A1", created_at=as_of - timedelta(days=3))
+    add_signal(owner, pattern, title="A2", created_at=as_of - timedelta(days=2))
+    add_signal(other_owner, pattern, title="B1", created_at=as_of - timedelta(days=1))
+
+    all_ids = list(
+        recurrent_pattern_ids_queryset(
+            owner.user,
+            as_of=as_of,
+            establishment_ids=[owner.establishment_id, other_establishment.id],
+        ).values_list("pattern_id", flat=True)
+    )
+    only_other = list(
+        recurrent_pattern_ids_queryset(
+            owner.user,
+            as_of=as_of,
+            establishment_ids=[other_establishment.id],
+        ).values_list("pattern_id", flat=True)
+    )
+
+    assert all_ids == [pattern.id]
+    assert only_other == []
+
+
+def test_recurrence_rejects_singular_and_plural_establishment_scope_together():
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    as_of = timezone.now()
+
+    with pytest.raises(AnalyticsValidationError) as exc_info:
+        recurrent_pattern_ids_queryset(
+            owner.user,
+            as_of=as_of,
+            establishment_id=owner.establishment_id,
+            establishment_ids=[owner.establishment_id],
+        )
+
+    assert exc_info.value.code == "analytics_scope_invalid"
+
+
 def test_recurrence_window_start_is_inclusive_and_end_is_exclusive():
     owner = build_membership(role=EstablishmentMembership.Role.OWNER)
     pattern = create_pattern(owner, label="Boundary")

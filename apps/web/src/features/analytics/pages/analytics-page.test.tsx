@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { createElement } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AnalyticsDashboardResponse } from '@/features/analytics/api'
@@ -9,6 +9,8 @@ import { AnalyticsApiError } from '@/features/analytics/api'
 import { AnalyticsPage } from '@/features/analytics/pages/analytics-page'
 
 const dashboardQueryMock = vi.fn()
+const patternsQueryMock = vi.fn()
+const filterOptionsQueryMock = vi.fn()
 const refetchMock = vi.fn()
 
 const { authState } = vi.hoisted(() => ({
@@ -27,6 +29,9 @@ vi.mock('@/app/auth-provider', () => ({
 
 vi.mock('@/features/analytics/hooks', () => ({
   useAnalyticsDashboardQuery: (...args: unknown[]) => dashboardQueryMock(...args),
+  useAnalyticsPatternsInfiniteQuery: (...args: unknown[]) => patternsQueryMock(...args),
+  useAnalyticsPatternFilterOptionsQuery: (...args: unknown[]) =>
+    filterOptionsQueryMock(...args),
 }))
 
 function bootstrap(roles: string | string[]) {
@@ -140,10 +145,49 @@ function setDashboardQuery(value: ReturnType<typeof dashboardQueryMock>) {
   })
 }
 
+function setPatternsQuery(value: ReturnType<typeof patternsQueryMock> = {}) {
+  patternsQueryMock.mockReturnValue({
+    data: {
+      pages: [
+        {
+          items: [],
+          has_more: false,
+          next_cursor: null,
+        },
+      ],
+    },
+    isLoading: false,
+    isError: false,
+    error: null,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    fetchNextPage: vi.fn(),
+    refetch: vi.fn(),
+    ...value,
+  })
+}
+
+function setFilterOptionsQuery(value: ReturnType<typeof filterOptionsQueryMock> = {}) {
+  filterOptionsQueryMock.mockReturnValue({
+    data: {
+      establishments: [],
+      responsible_business_units: [],
+      includes_unassigned: false,
+    },
+    isLoading: false,
+    isError: false,
+    error: null,
+    ...value,
+  })
+}
+
 describe('AnalyticsPage', () => {
   afterEach(() => {
     cleanup()
+    vi.useRealTimers()
     dashboardQueryMock.mockReset()
+    patternsQueryMock.mockReset()
+    filterOptionsQueryMock.mockReset()
     refetchMock.mockReset()
     window.history.replaceState(null, '', '/')
     authState.current = {
@@ -155,6 +199,8 @@ describe('AnalyticsPage', () => {
 
   it('does not enable the dashboard query for Staff-only users', () => {
     setDashboardQuery({})
+    setPatternsQuery()
+    setFilterOptionsQuery()
     authState.current = {
       bootstrap: bootstrap('staff'),
       isBootstrapping: false,
@@ -170,10 +216,16 @@ describe('AnalyticsPage', () => {
       expect.any(Object),
       expect.objectContaining({ enabled: false }),
     )
+    expect(patternsQueryMock).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ enabled: false }),
+    )
   })
 
   it('enables the dashboard for Analytics memberships, including multi-membership users', () => {
     setDashboardQuery({ data: dashboard() })
+    setPatternsQuery()
+    setFilterOptionsQuery()
     authState.current = {
       bootstrap: bootstrap(['staff', 'manager']),
       isBootstrapping: false,
@@ -191,10 +243,20 @@ describe('AnalyticsPage', () => {
       }),
       expect.objectContaining({ enabled: true }),
     )
+    expect(patternsQueryMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        establishmentIds: [],
+        q: '',
+        recurrence: 'all',
+      }),
+      expect.objectContaining({ enabled: true }),
+    )
   })
 
   it('renders a loading state while the dashboard query is pending', () => {
     setDashboardQuery({ isLoading: true })
+    setPatternsQuery()
+    setFilterOptionsQuery()
     authState.current = {
       bootstrap: bootstrap('director'),
       isBootstrapping: false,
@@ -215,6 +277,8 @@ describe('AnalyticsPage', () => {
         code: 'analytics_period_invalid',
       }),
     })
+    setPatternsQuery()
+    setFilterOptionsQuery()
     authState.current = {
       bootstrap: bootstrap('director'),
       isBootstrapping: false,
@@ -230,6 +294,52 @@ describe('AnalyticsPage', () => {
 
   it('renders dashboard KPI values from API comparison objects without recomputing deltas', () => {
     setDashboardQuery({ data: dashboard() })
+    setPatternsQuery({
+      data: {
+        pages: [
+          {
+            has_more: false,
+            next_cursor: null,
+            items: [
+              {
+                pattern_id: 'pattern-1',
+                label: 'Retard livraison',
+                normalized_label: 'retard-livraison',
+                status: 'active',
+                signal_count: 5,
+                previous_signal_count: 3,
+                signal_count_comparison: {
+                  current_value: 5,
+                  previous_value: 3,
+                  absolute_delta: 2,
+                  relative_change: 0.666,
+                  relative_change_status: 'computed',
+                },
+                last_seen_at: '2026-08-12T08:30:00.000Z',
+                actionable_signal_count: 2,
+                establishment_count: 1,
+                establishments: [
+                  {
+                    establishment_id: 'est-1',
+                    name: 'Spore Marais',
+                    signal_count: 5,
+                  },
+                ],
+                is_recurrent: true,
+                occurrence_count_30d: 4,
+                distinct_day_count_30d: 2,
+                recurrence_window: {
+                  window_start: '2026-07-13T10:30:00.000Z',
+                  window_end: '2026-08-12T10:30:00.000Z',
+                },
+                recurrence_status: 'computed',
+              },
+            ],
+          },
+        ],
+      },
+    })
+    setFilterOptionsQuery()
     authState.current = {
       bootstrap: bootstrap('owner'),
       isBootstrapping: false,
@@ -245,10 +355,14 @@ describe('AnalyticsPage', () => {
     expect(screen.getAllByText(/12,5\s?%\s+vs précédent/).length).toBeGreaterThan(0)
     expect(screen.getAllByText('non comparable').length).toBeGreaterThan(0)
     expect(screen.getByText('2 h')).toBeTruthy()
+    expect(screen.getByText('Retard livraison')).toBeTruthy()
+    expect(screen.getByText('Oui (4/2j)')).toBeTruthy()
   })
 
   it('renders backend classification coverage and technical breakdowns factually', () => {
     setDashboardQuery({ data: dashboard() })
+    setPatternsQuery()
+    setFilterOptionsQuery()
     authState.current = {
       bootstrap: bootstrap('manager'),
       isBootstrapping: false,
@@ -288,6 +402,8 @@ describe('AnalyticsPage', () => {
         }),
       }),
     })
+    setPatternsQuery()
+    setFilterOptionsQuery()
     authState.current = {
       bootstrap: bootstrap('director'),
       isBootstrapping: false,
@@ -306,6 +422,8 @@ describe('AnalyticsPage', () => {
       '/analytics?period_start=2026-13-01T00%3A00%3A00Z&establishment_id=ignored',
     )
     setDashboardQuery({ data: dashboard() })
+    setPatternsQuery()
+    setFilterOptionsQuery()
     authState.current = {
       bootstrap: bootstrap('manager'),
       isBootstrapping: false,
@@ -319,5 +437,41 @@ describe('AnalyticsPage', () => {
       expect.objectContaining({ organizationId: null }),
       expect.objectContaining({ enabled: true }),
     )
+  })
+
+  it('debounces q writes with replace and does not overwrite newer URL state', () => {
+    vi.useFakeTimers()
+    window.history.replaceState(null, '', '/analytics')
+    setDashboardQuery({ data: dashboard() })
+    setPatternsQuery()
+    setFilterOptionsQuery()
+    authState.current = {
+      bootstrap: bootstrap('manager'),
+      isBootstrapping: false,
+      isReady: true,
+    }
+
+    render(createElement(AnalyticsPage))
+
+    const input = screen.getByPlaceholderText('Nom du motif')
+    fireEvent.change(input, { target: { value: 'retard' } })
+    act(() => {
+      window.history.pushState(null, '', '/analytics?q=externe')
+    })
+
+    act(() => {
+      vi.advanceTimersByTime(400)
+    })
+
+    expect(window.location.search).toBe('?q=externe')
+
+    fireEvent.change(screen.getByPlaceholderText('Nom du motif'), {
+      target: { value: 'final' },
+    })
+    act(() => {
+      vi.advanceTimersByTime(400)
+    })
+
+    expect(window.location.search).toContain('q=final')
   })
 })

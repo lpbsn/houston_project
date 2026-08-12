@@ -2,14 +2,25 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock3,
+  Filter,
+  Loader2,
   Repeat2,
   Target,
   TrendingUp,
 } from 'lucide-react'
-import type { ComponentType, SVGProps } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+  type SVGProps,
+} from 'react'
 
 import { useAuth } from '@/app/auth-provider'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   TerrainCard,
   TerrainEmptyState,
@@ -18,8 +29,18 @@ import {
 } from '@/components/ui/terrain'
 import type { AnalyticsMetricComparison } from '@/features/analytics/api'
 import { AnalyticsApiError } from '@/features/analytics/api'
-import { useAnalyticsDashboardQuery } from '@/features/analytics/hooks'
-import { useAnalyticsUrlState } from '@/features/analytics/lib/analytics-url-state'
+import {
+  useAnalyticsDashboardQuery,
+  useAnalyticsPatternFilterOptionsQuery,
+  useAnalyticsPatternsInfiniteQuery,
+} from '@/features/analytics/hooks'
+import {
+  buildAnalyticsPath,
+  useAnalyticsUrlState,
+  type AnalyticsRecurrenceFilter,
+  type AnalyticsSignalStatusFilter,
+  type AnalyticsUrlState,
+} from '@/features/analytics/lib/analytics-url-state'
 import { canShowAnalyticsNavigation } from '@/features/navigation/lib/shared-navigation'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { terrain } from '@/lib/terrain-styles'
@@ -34,6 +55,26 @@ type KpiCardConfig = {
   icon: AnalyticsIcon
   valueFormatter?: (value: number | null) => string
 }
+
+const PERIOD_PRESETS = [
+  { days: 7, label: '7 jours' },
+  { days: 30, label: '30 jours' },
+  { days: 90, label: '90 jours' },
+] as const
+
+const RECURRENCE_OPTIONS: Array<{ value: AnalyticsRecurrenceFilter; label: string }> = [
+  { value: 'all', label: 'Tous' },
+  { value: 'recurrent', label: 'Récurrents' },
+  { value: 'non_recurrent', label: 'Non récurrents' },
+]
+
+const SIGNAL_STATUS_OPTIONS: Array<{ value: AnalyticsSignalStatusFilter; label: string }> = [
+  { value: 'open', label: 'Ouverts' },
+  { value: 'in_progress', label: 'En cours' },
+  { value: 'interesting', label: 'Intéressants' },
+  { value: 'resolved', label: 'Résolus' },
+  { value: 'archived', label: 'Archivés' },
+]
 
 function formatNumber(value: number | null): string {
   if (value == null) {
@@ -95,6 +136,15 @@ function formatPeriodLabel(periodStart: string, periodEnd: string): string {
     year: 'numeric',
   })
   return `${formatter.format(new Date(periodStart))} - ${formatter.format(new Date(periodEnd))}`
+}
+
+function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    month: 'short',
+  }).format(new Date(value))
 }
 
 function formatTechnicalStateLabel(state: string): string {
@@ -286,6 +336,364 @@ function AnalyticsDashboardSkeleton() {
   )
 }
 
+function buildPresetState(state: AnalyticsUrlState, days: number): AnalyticsUrlState {
+  const periodEnd = new Date(state.periodEnd)
+  const periodStart = new Date(periodEnd)
+  periodStart.setUTCDate(periodStart.getUTCDate() - days)
+  return {
+    ...state,
+    periodStart: periodStart.toISOString(),
+    periodEnd: periodEnd.toISOString(),
+  }
+}
+
+function toggleString(values: string[], value: string): string[] {
+  return values.includes(value)
+    ? values.filter((item) => item !== value)
+    : [...values, value].sort()
+}
+
+function AnalyticsPatternFilters({
+  state,
+  onStateChange,
+  filterOptions,
+}: {
+  state: AnalyticsUrlState
+  onStateChange: (state: AnalyticsUrlState, options?: { replace?: boolean }) => void
+  filterOptions:
+    | {
+        establishments: Array<{ establishment_id: string; name: string }>
+        responsible_business_units: Array<{
+          business_unit_id: string | null
+          name: string
+          is_unassigned: boolean
+        }>
+      }
+    | undefined
+}) {
+  return (
+    <TerrainCard className="p-4">
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-[#114660]" aria-hidden />
+          <p className="text-sm font-semibold text-[#1a1a1a]">Motifs</p>
+        </div>
+        <p className={cn('text-xs leading-5', terrain.muted)}>
+          Filtres appliqués uniquement à la liste des motifs.
+        </p>
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-[1.2fr_1fr_1fr]">
+        <label className="flex flex-col gap-1 text-xs font-semibold text-[#555]">
+          Recherche motif
+          <AnalyticsPatternSearchInput
+            key={state.q}
+            state={state}
+            onStateChange={onStateChange}
+          />
+        </label>
+
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-semibold text-[#555]">Période</span>
+          <div className="flex flex-wrap gap-2">
+            {PERIOD_PRESETS.map((preset) => (
+              <Button
+                key={preset.days}
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onStateChange(buildPresetState(state, preset.days))}
+              >
+                {preset.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <label className="flex flex-col gap-1 text-xs font-semibold text-[#555]">
+          Récurrence
+          <select
+            className="h-11 rounded-xl border border-border/70 bg-background/90 px-3 text-sm"
+            value={state.recurrence}
+            onChange={(event) =>
+              onStateChange({
+                ...state,
+                recurrence: event.target.value as AnalyticsRecurrenceFilter,
+              })
+            }
+          >
+            {RECURRENCE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-3">
+        <fieldset className="rounded-xl border border-[#F0EFE9] p-3">
+          <legend className="px-1 text-xs font-semibold text-[#555]">Établissements</legend>
+          <div className="mt-2 flex flex-col gap-2">
+            {(filterOptions?.establishments ?? []).map((option) => (
+              <label key={option.establishment_id} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={state.establishmentIds.includes(option.establishment_id)}
+                  onChange={() =>
+                    onStateChange({
+                      ...state,
+                      establishmentIds: toggleString(
+                        state.establishmentIds,
+                        option.establishment_id,
+                      ),
+                    })
+                  }
+                />
+                {option.name}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="rounded-xl border border-[#F0EFE9] p-3">
+          <legend className="px-1 text-xs font-semibold text-[#555]">BU responsable</legend>
+          <div className="mt-2 flex max-h-40 flex-col gap-2 overflow-y-auto">
+            {(filterOptions?.responsible_business_units ?? []).map((option) => {
+              if (option.is_unassigned) {
+                return (
+                  <label key="unassigned" className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={state.responsibleBusinessUnitUnassigned}
+                      onChange={() =>
+                        onStateChange({
+                          ...state,
+                          responsibleBusinessUnitUnassigned:
+                            !state.responsibleBusinessUnitUnassigned,
+                        })
+                      }
+                    />
+                    {option.name}
+                  </label>
+                )
+              }
+              if (!option.business_unit_id) {
+                return null
+              }
+              return (
+                <label key={option.business_unit_id} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={state.responsibleBusinessUnitIds.includes(option.business_unit_id)}
+                    onChange={() =>
+                      onStateChange({
+                        ...state,
+                        responsibleBusinessUnitIds: toggleString(
+                          state.responsibleBusinessUnitIds,
+                          option.business_unit_id!,
+                        ),
+                      })
+                    }
+                  />
+                  {option.name}
+                </label>
+              )
+            })}
+          </div>
+        </fieldset>
+
+        <fieldset className="rounded-xl border border-[#F0EFE9] p-3">
+          <legend className="px-1 text-xs font-semibold text-[#555]">Statuts Signal</legend>
+          <div className="mt-2 flex flex-col gap-2">
+            {SIGNAL_STATUS_OPTIONS.map((option) => (
+              <label key={option.value} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={state.signalStatuses.includes(option.value)}
+                  onChange={() =>
+                    onStateChange({
+                      ...state,
+                      signalStatuses: toggleString(
+                        state.signalStatuses,
+                        option.value,
+                      ) as AnalyticsSignalStatusFilter[],
+                    })
+                  }
+                />
+                {option.label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      </div>
+    </TerrainCard>
+  )
+}
+
+function AnalyticsPatternSearchInput({
+  state,
+  onStateChange,
+}: {
+  state: AnalyticsUrlState
+  onStateChange: (state: AnalyticsUrlState, options?: { replace?: boolean }) => void
+}) {
+  const [draft, setDraft] = useState(state.q)
+  const debounceRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
+
+  function clearDebounce() {
+    if (debounceRef.current) {
+      window.clearTimeout(debounceRef.current)
+      debounceRef.current = null
+    }
+  }
+
+  function flush(nextValue = draft) {
+    clearDebounce()
+    onStateChange({ ...state, q: nextValue.trim() }, { replace: true })
+  }
+
+  function handleChange(value: string) {
+    setDraft(value)
+    clearDebounce()
+    const scheduledSearch = window.location.search
+    const nextState = { ...state, q: value.trim() }
+    debounceRef.current = window.setTimeout(() => {
+      if (window.location.search !== scheduledSearch) {
+        return
+      }
+      onStateChange(nextState, { replace: true })
+    }, 350)
+  }
+
+  useEffect(() => clearDebounce, [])
+
+  return (
+    <Input
+      value={draft}
+      placeholder="Nom du motif"
+      onBlur={() => flush()}
+      onChange={(event) => handleChange(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          flush()
+        }
+      }}
+    />
+  )
+}
+
+function AnalyticsPatternTable({
+  query,
+}: {
+  query: ReturnType<typeof useAnalyticsPatternsInfiniteQuery>
+}) {
+  const items = useMemo(
+    () => query.data?.pages.flatMap((page) => page.items) ?? [],
+    [query.data],
+  )
+
+  if (query.isLoading) {
+    return (
+      <TerrainCard className="p-4">
+        <div className="flex items-center gap-2 text-sm text-[#555]" role="status">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+        Chargement des motifs...
+        </div>
+      </TerrainCard>
+    )
+  }
+
+  if (query.isError) {
+    return (
+      <TerrainErrorState
+        message={resolveApiErrorMessage(
+          query.error,
+          AnalyticsApiError,
+          'Impossible de charger les motifs.',
+        )}
+        onRetry={() => void query.refetch()}
+      />
+    )
+  }
+
+  if (items.length === 0) {
+    return (
+      <TerrainEmptyState
+        title="Aucun motif visible"
+        description="Aucun motif ne correspond aux filtres de liste sur cette période."
+      />
+    )
+  }
+
+  return (
+    <TerrainCard className="overflow-hidden p-0">
+      <div className="hidden grid-cols-[minmax(180px,1.5fr)_110px_120px_130px_140px_120px_minmax(160px,1fr)] gap-3 border-b border-[#F0EFE9] px-4 py-3 text-xs font-semibold uppercase tracking-[0.04em] text-[#777] lg:grid">
+        <span>Motif</span>
+        <span>Signals</span>
+        <span>Évolution</span>
+        <span>Récurrence</span>
+        <span>Dernière apparition</span>
+        <span>À traiter</span>
+        <span>Établissements</span>
+      </div>
+      <div className="divide-y divide-[#F0EFE9]">
+        {items.map((item) => (
+          <div
+            key={item.pattern_id}
+            className="grid gap-3 px-4 py-4 text-sm lg:grid-cols-[minmax(180px,1.5fr)_110px_120px_130px_140px_120px_minmax(160px,1fr)]"
+          >
+            <div>
+              <p className="font-semibold text-[#1a1a1a]">{item.label}</p>
+              <p className={cn('text-xs', terrain.muted)}>{item.normalized_label}</p>
+            </div>
+            <p>
+              <span className="lg:hidden">Signals: </span>
+              {formatNumber(item.signal_count)}
+            </p>
+            <p>
+              <span className="lg:hidden">Évolution: </span>
+              {formatAbsoluteDelta(item.signal_count_comparison.absolute_delta, formatNumber)}
+            </p>
+            <p>
+              <span className="lg:hidden">Récurrence: </span>
+              {item.is_recurrent ? 'Oui' : 'Non'} ({item.occurrence_count_30d}/
+              {item.distinct_day_count_30d}j)
+            </p>
+            <p>
+              <span className="lg:hidden">Dernière apparition: </span>
+              {formatDateTime(item.last_seen_at)}
+            </p>
+            <p>
+              <span className="lg:hidden">À traiter: </span>
+              {formatNumber(item.actionable_signal_count)}
+            </p>
+            <p className="text-[#555]">
+              <span className="lg:hidden">Établissements: </span>
+              {item.establishments.map((establishment) => establishment.name).join(', ') || '—'}
+              {item.establishment_count > item.establishments.length
+                ? ` +${item.establishment_count - item.establishments.length}`
+                : ''}
+            </p>
+          </div>
+        ))}
+      </div>
+      {query.hasNextPage ? (
+        <div className="border-t border-[#F0EFE9] p-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void query.fetchNextPage()}
+            disabled={query.isFetchingNextPage}
+          >
+            {query.isFetchingNextPage ? 'Chargement...' : 'Charger plus'}
+          </Button>
+        </div>
+      ) : null}
+    </TerrainCard>
+  )
+}
+
 export function AnalyticsPage() {
   const { bootstrap, isBootstrapping, isReady } = useAuth()
   const analyticsState = useAnalyticsUrlState()
@@ -293,6 +701,18 @@ export function AnalyticsPage() {
   const dashboardQuery = useAnalyticsDashboardQuery(analyticsState, {
     enabled: isReady && !isBootstrapping && canAccessAnalytics,
   })
+  const patternsQuery = useAnalyticsPatternsInfiniteQuery(analyticsState, {
+    enabled: isReady && !isBootstrapping && canAccessAnalytics,
+  })
+  const filterOptionsQuery = useAnalyticsPatternFilterOptionsQuery(analyticsState, {
+    enabled: isReady && !isBootstrapping && canAccessAnalytics,
+  })
+
+  function updateAnalyticsState(nextState: AnalyticsUrlState, options?: { replace?: boolean }) {
+    const href = buildAnalyticsPath(nextState)
+    const method = options?.replace ? 'replaceState' : 'pushState'
+    window.history[method](null, '', href)
+  }
 
   if (!isReady || isBootstrapping) {
     return <p className={cn('px-3 py-4 text-sm', terrain.muted)}>Chargement...</p>
@@ -397,6 +817,14 @@ export function AnalyticsPage() {
               currentKpis.technical_classification_state.technical_pending_or_error_count
             }
           />
+
+          <AnalyticsPatternFilters
+            state={analyticsState}
+            onStateChange={updateAnalyticsState}
+            filterOptions={filterOptionsQuery.data}
+          />
+
+          <AnalyticsPatternTable query={patternsQuery} />
 
           <TerrainCard className="p-4">
             <div className="flex items-center gap-2">

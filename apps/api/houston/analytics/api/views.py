@@ -18,6 +18,7 @@ from houston.analytics.api.serializers import (
     AnalyticsDashboardResponseSerializer,
     AnalyticsOwnerGovernanceResponseSerializer,
     AnalyticsPatternDetailResponseSerializer,
+    AnalyticsPatternFilterOptionsResponseSerializer,
     AnalyticsPatternListResponseSerializer,
     AnalyticsPatternMergeRequestSerializer,
     AnalyticsPatternMoveSignalsRequestSerializer,
@@ -33,6 +34,11 @@ from houston.analytics.pattern_detail import get_analytics_pattern_detail
 from houston.analytics.pattern_list import (
     DEFAULT_PATTERN_LIST_PAGE_SIZE,
     MAX_PATTERN_LIST_PAGE_SIZE,
+    PATTERN_LIST_RECURRENCE_ALL,
+    PATTERN_LIST_RECURRENCE_NON_RECURRENT,
+    PATTERN_LIST_RECURRENCE_RECURRENT,
+    PATTERN_LIST_SIGNAL_STATUSES,
+    list_analytics_pattern_filter_options,
     list_analytics_patterns,
 )
 from houston.analytics.pattern_signals import (
@@ -64,6 +70,7 @@ ANALYTICS_READ_BAD_REQUEST_CODES = frozenset(
         "analytics_recurrence_as_of_naive",
         "analytics_pattern_list_page_size_invalid",
         "analytics_pattern_list_cursor_invalid",
+        "analytics_pattern_list_filter_invalid",
         "analytics_pattern_signals_page_size_invalid",
         "analytics_pattern_signals_cursor_invalid",
     }
@@ -215,11 +222,96 @@ def _parse_optional_uuid(query_params, field_name: str) -> uuid.UUID | None:
         ) from exc
 
 
+def _parse_optional_uuid_csv(query_params, field_name: str) -> tuple[uuid.UUID, ...] | None:
+    raw_value = query_params.get(field_name)
+    if raw_value in (None, ""):
+        return None
+    values = []
+    try:
+        for value in str(raw_value).split(","):
+            if not value.strip():
+                continue
+            values.append(uuid.UUID(value.strip()))
+    except ValueError as exc:
+        raise AnalyticsValidationError(
+            f"{field_name} must be a comma-separated list of UUIDs.",
+            code="analytics_pattern_list_filter_invalid",
+        ) from exc
+    return tuple(sorted(set(values), key=str))
+
+
+def _parse_optional_bool(query_params, field_name: str) -> bool:
+    raw_value = query_params.get(field_name)
+    if raw_value in (None, ""):
+        return False
+    normalized = str(raw_value).strip().lower()
+    if normalized in {"1", "true", "yes"}:
+        return True
+    if normalized in {"0", "false", "no"}:
+        return False
+    raise AnalyticsValidationError(
+        f"{field_name} must be a boolean.",
+        code="analytics_pattern_list_filter_invalid",
+    )
+
+
 def _scope_kwargs(query_params) -> dict[str, uuid.UUID | None]:
     return {
         "organization_id": _parse_optional_uuid(query_params, "organization_id"),
         "establishment_id": _parse_optional_uuid(query_params, "establishment_id"),
     }
+
+
+def _pattern_list_kwargs(query_params) -> dict[str, object]:
+    establishment_id = _parse_optional_uuid(query_params, "establishment_id")
+    establishment_ids = _parse_optional_uuid_csv(query_params, "establishment_ids")
+    if establishment_id is not None and establishment_ids is not None:
+        raise AnalyticsValidationError(
+            "Use either establishment_id or establishment_ids, not both.",
+            code="analytics_scope_invalid",
+        )
+    signal_statuses = _parse_csv_strings(query_params, "signal_statuses")
+    invalid_statuses = sorted(
+        status for status in signal_statuses if status not in PATTERN_LIST_SIGNAL_STATUSES
+    )
+    if invalid_statuses:
+        raise AnalyticsValidationError(
+            "signal_statuses contains an invalid analytics status.",
+            code="analytics_pattern_list_filter_invalid",
+        )
+    recurrence = query_params.get("recurrence", PATTERN_LIST_RECURRENCE_ALL)
+    if recurrence not in {
+        PATTERN_LIST_RECURRENCE_ALL,
+        PATTERN_LIST_RECURRENCE_RECURRENT,
+        PATTERN_LIST_RECURRENCE_NON_RECURRENT,
+    }:
+        raise AnalyticsValidationError(
+            "recurrence must be all, recurrent, or non_recurrent.",
+            code="analytics_pattern_list_filter_invalid",
+        )
+    return {
+        "organization_id": _parse_optional_uuid(query_params, "organization_id"),
+        "establishment_id": establishment_id,
+        "establishment_ids": establishment_ids,
+        "q": query_params.get("q"),
+        "recurrence": recurrence,
+        "responsible_business_unit_ids": _parse_optional_uuid_csv(
+            query_params,
+            "responsible_business_unit_ids",
+        ),
+        "responsible_business_unit_unassigned": _parse_optional_bool(
+            query_params,
+            "responsible_business_unit_unassigned",
+        ),
+        "signal_statuses": signal_statuses,
+    }
+
+
+def _parse_csv_strings(query_params, field_name: str) -> tuple[str, ...]:
+    raw_value = query_params.get(field_name)
+    if raw_value in (None, ""):
+        return ()
+    return tuple(sorted({value.strip() for value in str(raw_value).split(",") if value.strip()}))
 
 
 def _dataclass_payload(value: Any) -> Any:
@@ -265,6 +357,28 @@ PERIOD_SCOPE_PARAMETERS = [
     OpenApiParameter(name="establishment_id", required=False, type=OpenApiTypes.UUID),
 ]
 
+PATTERN_LIST_FILTER_PARAMETERS = [
+    OpenApiParameter(name="establishment_ids", required=False, type=str),
+    OpenApiParameter(name="q", required=False, type=str),
+    OpenApiParameter(
+        name="recurrence",
+        required=False,
+        type=str,
+        enum=[
+            PATTERN_LIST_RECURRENCE_ALL,
+            PATTERN_LIST_RECURRENCE_RECURRENT,
+            PATTERN_LIST_RECURRENCE_NON_RECURRENT,
+        ],
+    ),
+    OpenApiParameter(name="responsible_business_unit_ids", required=False, type=str),
+    OpenApiParameter(
+        name="responsible_business_unit_unassigned",
+        required=False,
+        type=bool,
+    ),
+    OpenApiParameter(name="signal_statuses", required=False, type=str),
+]
+
 
 class AnalyticsDashboardView(AnalyticsAPIView):
     @extend_schema(
@@ -298,6 +412,7 @@ class AnalyticsPatternListView(AnalyticsAPIView):
         operation_id="v1_analytics_patterns_list",
         parameters=[
             *PERIOD_SCOPE_PARAMETERS,
+            *PATTERN_LIST_FILTER_PARAMETERS,
             _page_size_param(DEFAULT_PATTERN_LIST_PAGE_SIZE, MAX_PATTERN_LIST_PAGE_SIZE),
             OpenApiParameter(name="cursor", required=False, type=str),
         ],
@@ -317,11 +432,43 @@ class AnalyticsPatternListView(AnalyticsAPIView):
                 period_end=period_end,
                 page_size=request.query_params.get("page_size", DEFAULT_PATTERN_LIST_PAGE_SIZE),
                 cursor=request.query_params.get("cursor"),
-                **_scope_kwargs(request.query_params),
+                **_pattern_list_kwargs(request.query_params),
             )
         except AnalyticsValidationError as exc:
             return _analytics_error_response(exc)
         return Response(AnalyticsPatternListResponseSerializer(_dataclass_payload(result)).data)
+
+
+class AnalyticsPatternFilterOptionsView(AnalyticsAPIView):
+    @extend_schema(
+        tags=["analytics"],
+        operation_id="v1_analytics_pattern_filter_options_retrieve",
+        parameters=[
+            OpenApiParameter(name="organization_id", required=False, type=OpenApiTypes.UUID),
+            OpenApiParameter(name="establishment_id", required=False, type=OpenApiTypes.UUID),
+            OpenApiParameter(name="establishment_ids", required=False, type=str),
+        ],
+        responses={
+            200: AnalyticsPatternFilterOptionsResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def get(self, request):
+        try:
+            kwargs = _pattern_list_kwargs(request.query_params)
+            result = list_analytics_pattern_filter_options(
+                request.user,
+                organization_id=kwargs["organization_id"],
+                establishment_id=kwargs["establishment_id"],
+                establishment_ids=kwargs["establishment_ids"],
+            )
+        except AnalyticsValidationError as exc:
+            return _analytics_error_response(exc)
+        return Response(
+            AnalyticsPatternFilterOptionsResponseSerializer(_dataclass_payload(result)).data
+        )
 
 
 class AnalyticsPatternDetailView(AnalyticsAPIView):

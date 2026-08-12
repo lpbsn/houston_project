@@ -31,6 +31,10 @@ def pattern_list_url(query: str = "") -> str:
     return f"/api/v1/analytics/patterns/{query}"
 
 
+def pattern_filter_options_url(query: str = "") -> str:
+    return f"/api/v1/analytics/pattern-filter-options/{query}"
+
+
 def pattern_detail_url(pattern_id, query: str = "") -> str:
     return f"/api/v1/analytics/patterns/{pattern_id}/{query}"
 
@@ -243,6 +247,37 @@ def test_pattern_list_validation_errors_use_read_api_mapping(api_client):
     assert page_size_response.json()["code"] == "analytics_pattern_list_page_size_invalid"
     assert cursor_response.status_code == 400
     assert cursor_response.json()["code"] == "analytics_pattern_list_cursor_invalid"
+
+
+@pytest.mark.parametrize("status_filter", ["canceled", "merged_into", "open,invalid"])
+def test_pattern_list_rejects_invalid_status_filters(api_client, status_filter):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    start = timezone.now()
+    end = start + timedelta(days=1)
+
+    response = authenticated_get(
+        api_client,
+        owner.user,
+        pattern_list_url(f"{period_query(start, end)}&signal_statuses={status_filter}"),
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "analytics_pattern_list_filter_invalid"
+
+
+def test_pattern_filter_options_returns_accessible_zero_result_options(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    token = login(api_client, user=owner.user)
+
+    response = api_client.get(pattern_filter_options_url(), **auth_headers(token))
+
+    assert response.status_code == 200
+    assert response.json()["establishments"] == [
+        {
+            "establishment_id": str(owner.establishment_id),
+            "name": owner.establishment.name,
+        }
+    ]
 
 
 def test_pattern_signals_validation_errors_use_read_api_mapping(api_client):

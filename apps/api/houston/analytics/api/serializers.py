@@ -100,6 +100,24 @@ class AnalyticsPatternListResponseSerializer(serializers.Serializer):
     recurrence_status = serializers.CharField()
 
 
+class AnalyticsPatternFilterEstablishmentOptionSerializer(serializers.Serializer):
+    establishment_id = serializers.UUIDField()
+    name = serializers.CharField()
+
+
+class AnalyticsPatternFilterBusinessUnitOptionSerializer(serializers.Serializer):
+    business_unit_id = serializers.UUIDField(allow_null=True)
+    name = serializers.CharField()
+    establishment_id = serializers.UUIDField(allow_null=True)
+    is_unassigned = serializers.BooleanField()
+
+
+class AnalyticsPatternFilterOptionsResponseSerializer(serializers.Serializer):
+    establishments = AnalyticsPatternFilterEstablishmentOptionSerializer(many=True)
+    responsible_business_units = AnalyticsPatternFilterBusinessUnitOptionSerializer(many=True)
+    includes_unassigned = serializers.BooleanField()
+
+
 class AnalyticsPatternIdentitySerializer(serializers.Serializer):
     pattern_id = serializers.UUIDField()
     label = serializers.CharField()
