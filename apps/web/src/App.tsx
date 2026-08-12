@@ -7,6 +7,7 @@ import {
   LazyActionPlanExecutionDetailPage,
   LazyActionPlanExecutionEditPage,
   LazyActionPlanHubPage,
+  LazyAnalyticsPatternDetailPage,
   LazyActionPlanTemplateDetailPage,
   LazyAnalyticsPage,
   LazyChatConversationPage,
@@ -76,11 +77,17 @@ import { OnboardingPage } from '@/features/onboarding/pages/onboarding-page'
 import { NotificationCenter } from '@/features/notifications/components/notification-center'
 import { ActionPlanExecutionDetailTopbarTrailing } from '@/features/action-plans/components/action-plan-execution-detail-topbar-trailing'
 import { ActionPlanTemplateDetailTopbarTrailing } from '@/features/action-plans/components/action-plan-template-detail-topbar-trailing'
+import {
+  buildAnalyticsReturnPath,
+  parseAnalyticsUrlState,
+} from '@/features/analytics/lib/analytics-url-state'
+import { useLocationSearch } from '@/lib/location-search'
 
 function App() {
   const shouldReduceMotion = useReducedMotion()
   const auth = useAuth()
   const { route, navigate } = useAppRoute()
+  const locationSearch = useLocationSearch()
 
   const motionProps = shouldReduceMotion
     ? {}
@@ -193,6 +200,13 @@ function App() {
   const executionDetailId =
     route.kind === 'action-plan-execution-detail' ? route.executionId : null
   const staticRoutePath = route.kind === 'static' ? route.path : null
+  const analyticsPatternDetailState = useMemo(
+    () =>
+      route.kind === 'analytics-pattern-detail'
+        ? parseAnalyticsUrlState(locationSearch, { now: new Date() })
+        : null,
+    [locationSearch, route.kind],
+  )
 
   const terrainTopbarTrailing = useMemo(() => {
     if (!establishmentId || !auth.hasOperationalAccess) {
@@ -358,6 +372,16 @@ function App() {
       return <LazyChatConversationPage conversationId={route.conversationId} />
     }
 
+    if (route.kind === 'analytics-pattern-detail') {
+      return (
+        <LazyAnalyticsPatternDetailPage
+          patternId={route.patternId}
+          analyticsState={analyticsPatternDetailState!}
+          onNavigate={navigate}
+        />
+      )
+    }
+
     if (route.path === '/login') {
       return <LoginPage onNavigate={navigate} />
     }
@@ -406,7 +430,7 @@ function App() {
     }
 
     if (route.path === '/analytics') {
-      return <LazyAnalyticsPage />
+      return <LazyAnalyticsPage onNavigate={navigate} />
     }
 
     if (route.path === '/general/switch-establishment') {
@@ -485,6 +509,7 @@ function App() {
     auth.pendingOnboardingMemberships,
     establishmentId,
     handleSignOut,
+    analyticsPatternDetailState,
     navigate,
     route,
   ])
@@ -743,11 +768,13 @@ function App() {
   if (usesTerrainShell(route)) {
     const terrainConfig = getTerrainRouteConfig(route)
     const terrainBackPath =
-      route.kind === 'static' &&
-      route.path === '/analytics' &&
-      !auth.hasOperationalAccess
-        ? (getAuthenticatedLandingPath(auth.bootstrap) ?? '/login')
-        : terrainConfig.backPath
+      route.kind === 'analytics-pattern-detail' && analyticsPatternDetailState
+        ? buildAnalyticsReturnPath(analyticsPatternDetailState)
+        : route.kind === 'static' &&
+            route.path === '/analytics' &&
+            !auth.hasOperationalAccess
+          ? (getAuthenticatedLandingPath(auth.bootstrap) ?? '/login')
+          : terrainConfig.backPath
     return wrapTerrainWithOperationalRealtime(
       wrapTerrainWithChatRealtime(
         <TerrainShell

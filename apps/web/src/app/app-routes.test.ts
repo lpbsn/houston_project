@@ -70,6 +70,17 @@ describe('parseAppRoute', () => {
     })
   })
 
+  it('parses analytics pattern detail routes with query params', () => {
+    expect(
+      parseAppRoute(
+        '/analytics/patterns/pattern-1?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&q=retard',
+      ),
+    ).toEqual({
+      kind: 'analytics-pattern-detail',
+      patternId: 'pattern-1',
+    })
+  })
+
   it('parses team member detail route', () => {
     expect(parseAppRoute('/team/member-123')).toEqual({
       kind: 'team-member-detail',
@@ -205,6 +216,9 @@ describe('getAppRouteKey', () => {
     )
     expect(getAppRouteKey({ kind: 'chat-conversation-detail', conversationId: 'conv-1' })).toBe(
       'chat-conversation-detail:conv-1',
+    )
+    expect(getAppRouteKey({ kind: 'analytics-pattern-detail', patternId: 'pattern-1' })).toBe(
+      'analytics-pattern-detail:pattern-1',
     )
     expect(getAppRouteKey({ kind: 'team-member-detail', membershipId: 'member-1' })).toBe(
       'team-member-detail:member-1',

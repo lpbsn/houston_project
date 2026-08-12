@@ -50,6 +50,7 @@ vi.mock('@/app/lazy-terrain-pages', () => {
     LazyActionPlanHubPage: () => createElement(Page, { name: 'action-plan-hub' }),
     LazyActionPlanTemplateDetailPage: () => createElement(Page, { name: 'template-detail' }),
     LazyAnalyticsPage: () => createElement(Page, { name: 'analytics' }),
+    LazyAnalyticsPatternDetailPage: () => createElement(Page, { name: 'analytics-pattern-detail' }),
     LazyChatConversationPage: () => createElement(Page, { name: 'chat-conversation' }),
     LazyChatPage: () => createElement(Page, { name: 'chat' }),
     LazyChatRealtimeProvider: ({ children }: { children: React.ReactNode }) => children,
@@ -262,5 +263,26 @@ describe('App terrain active membership routing', () => {
     expect(navigate).toHaveBeenCalledWith(getAuthenticatedLandingPath(bootstrap))
     expect(navigate).toHaveBeenCalledWith('/organization')
     expect(navigate).not.toHaveBeenCalledWith('/general')
+  })
+
+  it('sends analytics pattern detail Back to the resolved Analytics URL state', () => {
+    const bootstrap = bootstrapWithoutActiveMembership()
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = false
+    routeState.route = { kind: 'analytics-pattern-detail', patternId: 'pattern-1' }
+    window.history.replaceState(
+      null,
+      '',
+      '/analytics/patterns/pattern-1?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&q=retard&recurrence=recurrent',
+    )
+
+    render(createElement(App))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retour' }))
+
+    expect(navigate).toHaveBeenCalledWith(
+      '/analytics?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&q=retard&recurrence=recurrent',
+    )
   })
 })

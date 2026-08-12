@@ -14,6 +14,7 @@ import {
   AnalyticsApiError,
   analyticsQueryKeys,
   fetchAnalyticsDashboard,
+  fetchAnalyticsPatternDetail,
   fetchAnalyticsPatternFilterOptions,
   fetchAnalyticsPatterns,
   type AnalyticsDashboardResponse,
@@ -316,6 +317,100 @@ describe('analytics api', () => {
       }),
     )
     expect(getMock.mock.calls[0]?.[1]?.params?.query).not.toHaveProperty('establishment_id')
+    expect(getMock.mock.calls[0]?.[1]?.params?.query).not.toHaveProperty('q')
+    expect(getMock.mock.calls[0]?.[1]?.params?.query).not.toHaveProperty('recurrence')
+  })
+
+  it('fetches pattern detail with only endpoint-supported query params', async () => {
+    getMock.mockResolvedValue({
+      data: {
+        identity: {
+          pattern_id: '44444444-4444-4444-8444-444444444444',
+          label: 'Retard livraison',
+          normalized_label: 'retard livraison',
+          status: 'active',
+          created_at: '2026-07-13T10:30:00.000Z',
+          merged_into_pattern_id: null,
+        },
+        current_period: {
+          period_start: '2026-07-13T10:30:00.000Z',
+          period_end: '2026-08-12T10:30:00.000Z',
+        },
+        previous_period: {
+          period_start: '2026-06-13T10:30:00.000Z',
+          period_end: '2026-07-13T10:30:00.000Z',
+        },
+        metrics: {
+          signal_count: 1,
+          previous_signal_count: 0,
+          signal_count_comparison: {
+            current_value: 1,
+            previous_value: 0,
+            absolute_delta: 1,
+            relative_change: null,
+            relative_change_status: 'undefined_previous_zero',
+          },
+          actionable_signal_count: 1,
+          last_seen_at: '2026-08-12T08:30:00.000Z',
+          establishment_count: 1,
+        },
+        is_recurrent: false,
+        occurrence_count_30d: 0,
+        distinct_day_count_30d: 0,
+        recurrence_window: {
+          window_start: '2026-07-13T10:30:00.000Z',
+          window_end: '2026-08-12T10:30:00.000Z',
+        },
+        recurrence_status: 'computed',
+        trend_timezone: 'UTC',
+        trend: [],
+        status_distribution: [],
+        establishments: [],
+        establishment_bucket_count: 0,
+        establishment_other_signal_count: 0,
+        responsible_business_units: [],
+        business_unit_bucket_count: 0,
+        business_unit_other_signal_count: 0,
+        drilldown_context: {
+          pattern_id: '44444444-4444-4444-8444-444444444444',
+          period_start: '2026-07-13T10:30:00.000Z',
+          period_end: '2026-08-12T10:30:00.000Z',
+          organization_id: '11111111-1111-4111-8111-111111111111',
+          establishment_id: null,
+        },
+      },
+      error: undefined,
+      response: { ok: true, status: 200 } as Response,
+    })
+
+    await fetchAnalyticsPatternDetail('44444444-4444-4444-8444-444444444444', {
+      periodStart: '2026-07-13T10:30:00.000Z',
+      periodEnd: '2026-08-12T10:30:00.000Z',
+      organizationId: '11111111-1111-4111-8111-111111111111',
+      establishmentIds: ['22222222-2222-4222-8222-222222222222'],
+      q: 'retard',
+      recurrence: 'recurrent',
+      responsibleBusinessUnitIds: ['33333333-3333-4333-8333-333333333333'],
+      responsibleBusinessUnitUnassigned: true,
+      signalStatuses: ['open'],
+    })
+
+    expect(getMock).toHaveBeenCalledWith(
+      '/api/v1/analytics/patterns/{pattern_id}/',
+      expect.objectContaining({
+        params: {
+          path: { pattern_id: '44444444-4444-4444-8444-444444444444' },
+          query: {
+            period_start: '2026-07-13T10:30:00.000Z',
+            period_end: '2026-08-12T10:30:00.000Z',
+            organization_id: '11111111-1111-4111-8111-111111111111',
+          },
+        },
+        headers: { Authorization: 'Bearer test-token' },
+      }),
+    )
+    expect(getMock.mock.calls[0]?.[1]?.params?.query).not.toHaveProperty('establishment_id')
+    expect(getMock.mock.calls[0]?.[1]?.params?.query).not.toHaveProperty('establishment_ids')
     expect(getMock.mock.calls[0]?.[1]?.params?.query).not.toHaveProperty('q')
     expect(getMock.mock.calls[0]?.[1]?.params?.query).not.toHaveProperty('recurrence')
   })

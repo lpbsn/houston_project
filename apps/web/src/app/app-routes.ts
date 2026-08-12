@@ -42,6 +42,7 @@ export type AppRoute =
   | { kind: 'action-plan-template-edit'; actionPlanId: string }
   | { kind: 'action-plan-execution-detail'; executionId: string }
   | { kind: 'action-plan-execution-edit'; executionId: string }
+  | { kind: 'analytics-pattern-detail'; patternId: string }
   | { kind: 'chat-conversation-detail'; conversationId: string }
   | { kind: 'team-member-detail'; membershipId: string }
   | { kind: 'organization-establishment-detail'; establishmentId: string }
@@ -72,6 +73,8 @@ export function getAppRouteKey(route: AppRoute): string {
       return `action-plan-execution-detail:${route.executionId}`
     case 'action-plan-execution-edit':
       return `action-plan-execution-edit:${route.executionId}`
+    case 'analytics-pattern-detail':
+      return `analytics-pattern-detail:${route.patternId}`
     case 'chat-conversation-detail':
       return `chat-conversation-detail:${route.conversationId}`
     case 'team-member-detail':
@@ -170,6 +173,11 @@ function parseChatConversationId(pathname: string): string | null {
   return match?.[1] ?? null
 }
 
+function parseAnalyticsPatternDetailId(pathname: string): string | null {
+  const match = pathname.match(/^\/analytics\/patterns\/([^/]+)$/)
+  return match?.[1] ?? null
+}
+
 function parseTeamMemberId(pathname: string): string | null {
   const match = pathname.match(/^\/team\/([^/]+)$/)
   const membershipId = match?.[1] ?? null
@@ -210,6 +218,11 @@ export function parseAppRoute(input: string): AppRoute {
   const chatConversationId = parseChatConversationId(pathname)
   if (chatConversationId) {
     return { kind: 'chat-conversation-detail', conversationId: chatConversationId }
+  }
+
+  const analyticsPatternId = parseAnalyticsPatternDetailId(pathname)
+  if (analyticsPatternId) {
+    return { kind: 'analytics-pattern-detail', patternId: analyticsPatternId }
   }
 
   const teamMemberId = parseTeamMemberId(pathname)

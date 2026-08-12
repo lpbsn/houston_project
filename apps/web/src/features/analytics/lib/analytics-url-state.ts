@@ -190,6 +190,17 @@ export function buildAnalyticsReturnPath(state: AnalyticsUrlState): string {
   return buildAnalyticsPath(state)
 }
 
+export function buildAnalyticsPatternDetailPath(
+  patternId: string,
+  state: AnalyticsUrlState,
+): string {
+  const params = buildAnalyticsSearchParams(state)
+  const query = params.toString()
+  return query
+    ? `/analytics/patterns/${encodeURIComponent(patternId)}?${query}`
+    : `/analytics/patterns/${encodeURIComponent(patternId)}`
+}
+
 export function useAnalyticsUrlState(): AnalyticsUrlState {
   const search = useLocationSearch()
 

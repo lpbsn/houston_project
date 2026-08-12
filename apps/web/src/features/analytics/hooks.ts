@@ -3,6 +3,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import {
   analyticsQueryKeys,
   fetchAnalyticsDashboard,
+  fetchAnalyticsPatternDetail,
   fetchAnalyticsPatternFilterOptions,
   fetchAnalyticsPatterns,
 } from './api'
@@ -52,6 +53,18 @@ export function useAnalyticsPatternFilterOptionsQuery(
   return useQuery({
     queryKey: analyticsQueryKeys.patternFilterOptions(state),
     queryFn: () => fetchAnalyticsPatternFilterOptions(state),
+    enabled: options?.enabled ?? true,
+  })
+}
+
+export function useAnalyticsPatternDetailQuery(
+  patternId: string,
+  state: AnalyticsUrlState,
+  options?: UseAnalyticsDashboardQueryOptions,
+) {
+  return useQuery({
+    queryKey: analyticsQueryKeys.patternDetail(patternId, state),
+    queryFn: () => fetchAnalyticsPatternDetail(patternId, state),
     enabled: options?.enabled ?? true,
   })
 }

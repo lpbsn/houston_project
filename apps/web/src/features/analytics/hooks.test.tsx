@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestQueryClient } from '@/test-utils'
 
 const fetchAnalyticsDashboardMock = vi.fn()
+const fetchAnalyticsPatternDetailMock = vi.fn()
 const fetchAnalyticsPatternsMock = vi.fn()
 
 vi.mock('./api', async (importOriginal) => {
@@ -15,12 +16,17 @@ vi.mock('./api', async (importOriginal) => {
   return {
     ...actual,
     fetchAnalyticsDashboard: (...args: unknown[]) => fetchAnalyticsDashboardMock(...args),
+    fetchAnalyticsPatternDetail: (...args: unknown[]) => fetchAnalyticsPatternDetailMock(...args),
     fetchAnalyticsPatterns: (...args: unknown[]) => fetchAnalyticsPatternsMock(...args),
   }
 })
 
 import { analyticsQueryKeys } from './api'
-import { useAnalyticsDashboardQuery, useAnalyticsPatternsInfiniteQuery } from './hooks'
+import {
+  useAnalyticsDashboardQuery,
+  useAnalyticsPatternDetailQuery,
+  useAnalyticsPatternsInfiniteQuery,
+} from './hooks'
 import type { AnalyticsUrlState } from './lib/analytics-url-state'
 
 const state: AnalyticsUrlState = {
@@ -43,6 +49,7 @@ function wrapper({ children }: { children: ReactNode }) {
 describe('useAnalyticsDashboardQuery', () => {
   afterEach(() => {
     fetchAnalyticsDashboardMock.mockReset()
+    fetchAnalyticsPatternDetailMock.mockReset()
     fetchAnalyticsPatternsMock.mockReset()
   })
 
@@ -100,6 +107,55 @@ describe('useAnalyticsDashboardQuery', () => {
     await waitFor(() => {
       expect(fetchAnalyticsDashboardMock).toHaveBeenCalledWith(nextState)
     })
+  })
+})
+
+describe('useAnalyticsPatternDetailQuery', () => {
+  afterEach(() => {
+    fetchAnalyticsPatternDetailMock.mockReset()
+  })
+
+  it('fetches pattern detail with the resolved URL state', async () => {
+    fetchAnalyticsPatternDetailMock.mockResolvedValue({ identity: { label: 'Retard' } })
+
+    const { result } = renderHook(
+      () => useAnalyticsPatternDetailQuery('pattern-1', state),
+      { wrapper },
+    )
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+
+    expect(fetchAnalyticsPatternDetailMock).toHaveBeenCalledWith('pattern-1', state)
+  })
+
+  it('does not fetch pattern detail when disabled', () => {
+    renderHook(() => useAnalyticsPatternDetailQuery('pattern-1', state, { enabled: false }), {
+      wrapper,
+    })
+
+    expect(fetchAnalyticsPatternDetailMock).not.toHaveBeenCalled()
+  })
+
+  it('keys pattern detail only by pattern, period, and organization', () => {
+    expect(
+      analyticsQueryKeys.patternDetail('pattern-1', {
+        ...state,
+        q: 'ignored',
+        recurrence: 'recurrent',
+        establishmentIds: ['22222222-2222-4222-8222-222222222222'],
+      }),
+    ).toEqual([
+      'analytics',
+      'pattern-detail',
+      'pattern-1',
+      {
+        periodStart: '2026-07-13T10:30:00.000Z',
+        periodEnd: '2026-08-12T10:30:00.000Z',
+        organizationId: null,
+      },
+    ])
   })
 })
 

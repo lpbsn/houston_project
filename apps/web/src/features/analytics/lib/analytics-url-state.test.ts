@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildAnalyticsPath,
+  buildAnalyticsPatternDetailPath,
   buildAnalyticsReturnPath,
   buildAnalyticsSearchParams,
   parseAnalyticsUrlState,
@@ -124,5 +125,36 @@ describe('analytics URL state', () => {
       '/analytics?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z',
     )
     expect(buildAnalyticsReturnPath(state)).toBe(buildAnalyticsPath(state))
+  })
+
+  it('builds pattern detail paths with the canonical analytics state', () => {
+    const state = {
+      periodStart: '2026-07-01T00:00:00.000Z',
+      periodEnd: '2026-08-01T00:00:00.000Z',
+      organizationId: ORG_ID,
+      establishmentIds: [EST_ID],
+      q: 'froid',
+      recurrence: 'recurrent' as const,
+      responsibleBusinessUnitIds: [BU_ID],
+      responsibleBusinessUnitUnassigned: true,
+      signalStatuses: ['open' as const],
+    }
+
+    const path = buildAnalyticsPatternDetailPath('pattern/with slash', state)
+    const [pathname, search = ''] = path.split('?')
+    const params = new URLSearchParams(search)
+
+    expect(pathname).toBe('/analytics/patterns/pattern%2Fwith%20slash')
+    expect(params.get('period_start')).toBe('2026-07-01T00:00:00.000Z')
+    expect(params.get('period_end')).toBe('2026-08-01T00:00:00.000Z')
+    expect(params.get('organization_id')).toBe(ORG_ID)
+    expect(params.get('establishment_ids')).toBe(EST_ID)
+    expect(params.get('q')).toBe('froid')
+    expect(params.get('recurrence')).toBe('recurrent')
+    expect(params.get('responsible_business_unit_ids')).toBe(BU_ID)
+    expect(params.get('responsible_business_unit_unassigned')).toBe('true')
+    expect(params.get('signal_statuses')).toBe('open')
+    expect(params.has('return_path')).toBe(false)
+    expect(params.has('establishment_id')).toBe(false)
   })
 })

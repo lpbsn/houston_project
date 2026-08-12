@@ -293,6 +293,7 @@ describe('AnalyticsPage', () => {
   })
 
   it('renders dashboard KPI values from API comparison objects without recomputing deltas', () => {
+    const navigateMock = vi.fn()
     setDashboardQuery({ data: dashboard() })
     setPatternsQuery({
       data: {
@@ -346,7 +347,7 @@ describe('AnalyticsPage', () => {
       isReady: true,
     }
 
-    render(createElement(AnalyticsPage))
+    render(createElement(AnalyticsPage, { onNavigate: navigateMock }))
 
     expect(screen.getByText('Signals analysés')).toBeTruthy()
     expect(screen.getAllByText('8').length).toBeGreaterThan(0)
@@ -357,6 +358,13 @@ describe('AnalyticsPage', () => {
     expect(screen.getByText('2 h')).toBeTruthy()
     expect(screen.getByText('Retard livraison')).toBeTruthy()
     expect(screen.getByText('Oui (4/2j)')).toBeTruthy()
+    const patternLink = screen.getByRole('link', { name: /Retard livraison/ })
+    expect(patternLink.getAttribute('href')).toContain('/analytics/patterns/pattern-1?')
+    expect(patternLink.getAttribute('href')).toContain('period_start=')
+    fireEvent.click(patternLink)
+    expect(navigateMock).toHaveBeenCalledWith(
+      expect.stringContaining('/analytics/patterns/pattern-1?'),
+    )
   })
 
   it('renders backend classification coverage and technical breakdowns factually', () => {

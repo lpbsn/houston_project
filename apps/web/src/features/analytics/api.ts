@@ -15,6 +15,8 @@ export type AnalyticsPatternListItem =
   components['schemas']['AnalyticsPatternListItem']
 export type AnalyticsPatternFilterOptionsResponse =
   components['schemas']['AnalyticsPatternFilterOptionsResponse']
+export type AnalyticsPatternDetailResponse =
+  components['schemas']['AnalyticsPatternDetailResponse']
 
 export const analyticsQueryKeys = {
   all: ['analytics'] as const,
@@ -52,6 +54,17 @@ export const analyticsQueryKeys = {
       {
         organizationId: state.organizationId,
         establishmentIds: state.establishmentIds,
+      },
+    ] as const,
+  patternDetail: (patternId: string, state: AnalyticsUrlState) =>
+    [
+      'analytics',
+      'pattern-detail',
+      patternId,
+      {
+        periodStart: state.periodStart,
+        periodEnd: state.periodEnd,
+        organizationId: state.organizationId,
       },
     ] as const,
 }
@@ -139,6 +152,14 @@ function buildPatternFilterOptionsQuery(state: AnalyticsUrlState) {
   }
 }
 
+function buildPatternDetailQuery(state: AnalyticsUrlState) {
+  return {
+    period_start: state.periodStart,
+    period_end: state.periodEnd,
+    ...(state.organizationId ? { organization_id: state.organizationId } : {}),
+  }
+}
+
 export async function fetchAnalyticsDashboard(
   state: AnalyticsUrlState,
 ): Promise<AnalyticsDashboardResponse> {
@@ -189,4 +210,23 @@ export async function fetchAnalyticsPatternFilterOptions(
   )
 
   return assertAnalyticsData<AnalyticsPatternFilterOptionsResponse>(result)
+}
+
+export async function fetchAnalyticsPatternDetail(
+  patternId: string,
+  state: AnalyticsUrlState,
+): Promise<AnalyticsPatternDetailResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/analytics/patterns/{pattern_id}/', {
+        params: {
+          path: { pattern_id: patternId },
+          query: buildPatternDetailQuery(state),
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  return assertAnalyticsData<AnalyticsPatternDetailResponse>(result)
 }

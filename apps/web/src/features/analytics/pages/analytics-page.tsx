@@ -36,6 +36,7 @@ import {
 } from '@/features/analytics/hooks'
 import {
   buildAnalyticsPath,
+  buildAnalyticsPatternDetailPath,
   useAnalyticsUrlState,
   type AnalyticsRecurrenceFilter,
   type AnalyticsSignalStatusFilter,
@@ -602,8 +603,12 @@ function AnalyticsPatternSearchInput({
 
 function AnalyticsPatternTable({
   query,
+  state,
+  onNavigate,
 }: {
   query: ReturnType<typeof useAnalyticsPatternsInfiniteQuery>
+  state: AnalyticsUrlState
+  onNavigate?: (pathname: string, options?: { replace?: boolean }) => void
 }) {
   const items = useMemo(
     () => query.data?.pages.flatMap((page) => page.items) ?? [],
@@ -655,45 +660,63 @@ function AnalyticsPatternTable({
         <span>Établissements</span>
       </div>
       <div className="divide-y divide-[#F0EFE9]">
-        {items.map((item) => (
-          <div
-            key={item.pattern_id}
-            className="grid gap-3 px-4 py-4 text-sm lg:grid-cols-[minmax(180px,1.5fr)_110px_120px_130px_140px_120px_minmax(160px,1fr)]"
-          >
-            <div>
-              <p className="font-semibold text-[#1a1a1a]">{item.label}</p>
-              <p className={cn('text-xs', terrain.muted)}>{item.normalized_label}</p>
-            </div>
-            <p>
-              <span className="lg:hidden">Signals: </span>
-              {formatNumber(item.signal_count)}
-            </p>
-            <p>
-              <span className="lg:hidden">Évolution: </span>
-              {formatAbsoluteDelta(item.signal_count_comparison.absolute_delta, formatNumber)}
-            </p>
-            <p>
-              <span className="lg:hidden">Récurrence: </span>
-              {item.is_recurrent ? 'Oui' : 'Non'} ({item.occurrence_count_30d}/
-              {item.distinct_day_count_30d}j)
-            </p>
-            <p>
-              <span className="lg:hidden">Dernière apparition: </span>
-              {formatDateTime(item.last_seen_at)}
-            </p>
-            <p>
-              <span className="lg:hidden">À traiter: </span>
-              {formatNumber(item.actionable_signal_count)}
-            </p>
-            <p className="text-[#555]">
-              <span className="lg:hidden">Établissements: </span>
-              {item.establishments.map((establishment) => establishment.name).join(', ') || '—'}
-              {item.establishment_count > item.establishments.length
-                ? ` +${item.establishment_count - item.establishments.length}`
-                : ''}
-            </p>
-          </div>
-        ))}
+        {items.map((item) => {
+          const detailPath = buildAnalyticsPatternDetailPath(item.pattern_id, state)
+
+          return (
+            <a
+              key={item.pattern_id}
+              href={detailPath}
+              className="grid gap-3 px-4 py-4 text-sm transition-colors hover:bg-[#FBFAF7] focus:outline-none focus:ring-2 focus:ring-[#114660] focus:ring-offset-2 lg:grid-cols-[minmax(180px,1.5fr)_110px_120px_130px_140px_120px_minmax(160px,1fr)]"
+              onClick={(event) => {
+                if (
+                  !onNavigate ||
+                  event.metaKey ||
+                  event.ctrlKey ||
+                  event.shiftKey ||
+                  event.altKey
+                ) {
+                  return
+                }
+                event.preventDefault()
+                onNavigate(detailPath)
+              }}
+            >
+              <div>
+                <p className="font-semibold text-[#1a1a1a]">{item.label}</p>
+                <p className={cn('text-xs', terrain.muted)}>{item.normalized_label}</p>
+              </div>
+              <p>
+                <span className="lg:hidden">Signals: </span>
+                {formatNumber(item.signal_count)}
+              </p>
+              <p>
+                <span className="lg:hidden">Évolution: </span>
+                {formatAbsoluteDelta(item.signal_count_comparison.absolute_delta, formatNumber)}
+              </p>
+              <p>
+                <span className="lg:hidden">Récurrence: </span>
+                {item.is_recurrent ? 'Oui' : 'Non'} ({item.occurrence_count_30d}/
+                {item.distinct_day_count_30d}j)
+              </p>
+              <p>
+                <span className="lg:hidden">Dernière apparition: </span>
+                {formatDateTime(item.last_seen_at)}
+              </p>
+              <p>
+                <span className="lg:hidden">À traiter: </span>
+                {formatNumber(item.actionable_signal_count)}
+              </p>
+              <p className="text-[#555]">
+                <span className="lg:hidden">Établissements: </span>
+                {item.establishments.map((establishment) => establishment.name).join(', ') || '—'}
+                {item.establishment_count > item.establishments.length
+                  ? ` +${item.establishment_count - item.establishments.length}`
+                  : ''}
+              </p>
+            </a>
+          )
+        })}
       </div>
       {query.hasNextPage ? (
         <div className="border-t border-[#F0EFE9] p-4">
@@ -711,7 +734,11 @@ function AnalyticsPatternTable({
   )
 }
 
-export function AnalyticsPage() {
+type AnalyticsPageProps = {
+  onNavigate?: (pathname: string, options?: { replace?: boolean }) => void
+}
+
+export function AnalyticsPage({ onNavigate }: AnalyticsPageProps) {
   const { bootstrap, isBootstrapping, isReady } = useAuth()
   const analyticsState = useAnalyticsUrlState()
   const canAccessAnalytics = canShowAnalyticsNavigation(bootstrap)
@@ -846,7 +873,11 @@ export function AnalyticsPage() {
             filterOptions={filterOptionsQuery.data}
           />
 
-          <AnalyticsPatternTable query={patternsQuery} />
+          <AnalyticsPatternTable
+            query={patternsQuery}
+            state={analyticsState}
+            onNavigate={onNavigate}
+          />
 
           <TerrainCard className="p-4">
             <div className="flex items-center gap-2">
