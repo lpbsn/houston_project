@@ -219,6 +219,18 @@ export function buildAnalyticsSignalDetailPath(
     : `/signals/${encodeURIComponent(signalId)}`
 }
 
+export function buildAnalyticsSignalActionCreatePath(
+  signalId: string,
+  options: { patternId: string; state: AnalyticsUrlState },
+): string {
+  const params = buildAnalyticsSearchParams(options.state)
+  params.set(ANALYTICS_PATTERN_ID_PARAM, options.patternId)
+  const query = params.toString()
+  return query
+    ? `/signals/${encodeURIComponent(signalId)}/plan?${query}`
+    : `/signals/${encodeURIComponent(signalId)}/plan`
+}
+
 export function parseAnalyticsSignalReturnContext(
   search: string,
   options: { now: Date },

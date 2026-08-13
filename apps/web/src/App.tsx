@@ -80,6 +80,7 @@ import { ActionPlanTemplateDetailTopbarTrailing } from '@/features/action-plans/
 import {
   buildAnalyticsPatternDetailPath,
   buildAnalyticsReturnPath,
+  buildAnalyticsSignalDetailPath,
   parseAnalyticsSignalReturnContext,
   parseAnalyticsUrlState,
 } from '@/features/analytics/lib/analytics-url-state'
@@ -211,7 +212,7 @@ function App() {
   )
   const analyticsSignalReturnContext = useMemo(
     () =>
-      route.kind === 'signal-detail'
+      route.kind === 'signal-detail' || route.kind === 'signal-action-create'
         ? parseAnalyticsSignalReturnContext(locationSearch, { now: new Date() })
         : null,
     [locationSearch, route.kind],
@@ -327,11 +328,17 @@ function App() {
     }
 
     if (route.kind === 'signal-action-create') {
+      const backPath = analyticsSignalReturnContext
+        ? buildAnalyticsSignalDetailPath(route.signalId, {
+            patternId: analyticsSignalReturnContext.patternId,
+            state: analyticsSignalReturnContext.state,
+          })
+        : `/signals/${route.signalId}`
       return (
         <LazyActionPlanCreatePage
           mode="signal-linked"
           signalId={route.signalId}
-          backPath={`/signals/${route.signalId}`}
+          backPath={backPath}
         />
       )
     }
@@ -519,6 +526,7 @@ function App() {
     establishmentId,
     handleSignOut,
     analyticsPatternDetailState,
+    analyticsSignalReturnContext,
     navigate,
     route,
   ])

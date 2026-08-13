@@ -1,11 +1,16 @@
 import { LoaderCircle } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainErrorState } from '@/components/ui/terrain'
 import { readCurrentDetailDeepLink } from '@/features/comments/lib/detail-deep-link'
+import {
+  buildAnalyticsSignalActionCreatePath,
+  parseAnalyticsSignalReturnContext,
+} from '@/features/analytics/lib/analytics-url-state'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { CommentSection } from '@/features/comments/components/comment-section'
+import { useLocationSearch } from '@/lib/location-search'
 import { cn } from '@/lib/utils'
 
 import { SignalDetailPhotoSection } from '../components/signal-detail-photo-section'
@@ -50,6 +55,11 @@ function formatDescriptionContent(structuredSummary: string): string {
 export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps) {
   const auth = useAuth()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
+  const locationSearch = useLocationSearch()
+  const analyticsSignalReturnContext = useMemo(
+    () => parseAnalyticsSignalReturnContext(locationSearch, { now: new Date() }),
+    [locationSearch],
+  )
 
   const initialDeepLink = readCurrentDetailDeepLink()
   const [activeTab, setActiveTab] = useState<SignalDetailTab>(
@@ -97,6 +107,12 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
   const canQualifyRouting = shouldShowSignalQualifyRouting(signal.permission_hints)
   const resolutionRequest = signal.resolution_request
   const resolutionRequestEvents = resolutionRequestEventsFromDetail(signal)
+  const createActionPlanPath = analyticsSignalReturnContext
+    ? buildAnalyticsSignalActionCreatePath(signalId, {
+        patternId: analyticsSignalReturnContext.patternId,
+        state: analyticsSignalReturnContext.state,
+      })
+    : `/signals/${signalId}/plan`
 
   async function handleCreateResolutionRequest() {
     setRequestActionError(null)
@@ -254,7 +270,7 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
           {activeTab === 'details' && showCreateActionPlan ? (
             <SignalDetailStickyFooter
               className="lg:col-start-2 lg:top-4 lg:bottom-auto lg:mt-0 lg:rounded-2xl lg:border lg:border-[#E8E6DF] lg:bg-white lg:p-4 lg:shadow-none"
-              onCreateActionPlan={() => onNavigate(`/signals/${signalId}/plan`)}
+              onCreateActionPlan={() => onNavigate(createActionPlanPath)}
             />
           ) : null}
         </div>

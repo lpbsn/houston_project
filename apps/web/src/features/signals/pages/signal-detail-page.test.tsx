@@ -345,6 +345,42 @@ describe('SignalDetailPage tabs', () => {
     expect(screen.queryByRole('button', { name: "+ Plan d'action" })).toBeNull()
   })
 
+  it('preserves Analytics context when opening Signal-linked Plan creation', () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/signals/signal-1?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&q=retard&recurrence=recurrent&analytics_pattern_id=44444444-4444-4444-8444-444444444444',
+    )
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({
+        permission_hints: {
+          can_pin: false,
+          can_mark_interesting: false,
+          can_archive: false,
+          can_cancel: false,
+          can_resolve: false,
+          can_create_linked_action_plan: true,
+          can_qualify_routing: false,
+          can_request_resolution: false,
+          can_approve_resolution_request: false,
+          can_reject_resolution_request: false,
+          can_cancel_resolution_request: false,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: "+ Plan d'action" }))
+
+    expect(navigate).toHaveBeenCalledWith(
+      '/signals/signal-1/plan?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&q=retard&recurrence=recurrent&analytics_pattern_id=44444444-4444-4444-8444-444444444444',
+    )
+  })
+
   it('wires qualify CTA to the qualification hook from detail', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,

@@ -25,9 +25,11 @@ type ActionPlanTemplateDetailStickyFooterProps = {
   onOpenExecutionPanel: () => void
   onCloseExecutionPanel: () => void
   onLaunchExecution: () => void
+  className?: string
 }
 
 export function ActionPlanTemplateDetailStickyFooter({
+  className,
   hints,
   executionPanelOpen,
   canUse,
@@ -40,7 +42,7 @@ export function ActionPlanTemplateDetailStickyFooter({
 }: ActionPlanTemplateDetailStickyFooterProps) {
   if (executionPanelOpen) {
     return (
-      <TerrainStickyFooter>
+      <TerrainStickyFooter className={className}>
         <div className="flex gap-2">
           <Button
             type="button"
@@ -71,7 +73,7 @@ export function ActionPlanTemplateDetailStickyFooter({
   }
 
   return (
-    <TerrainStickyFooter className="flex flex-col gap-2">
+    <TerrainStickyFooter className={cn('flex flex-col gap-2', className)}>
       <Button
         type="button"
         className={cn('h-11 w-full rounded-full', catalogPrimaryButtonClassName)}

@@ -360,13 +360,15 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
     expect(screen.queryByRole('button', { name: 'Marquer terminé' })).toBeNull()
   })
 
-  it('renders sticky footer as direct child of page without constraining wrapper', () => {
+  it('renders a single lifecycle footer inside the responsive desktop panel', () => {
     renderPage()
 
     const footer = screen.getByTestId('execution-validation-actions')
     expect(footer.tagName).toBe('FOOTER')
-    expect(footer.parentElement?.classList.contains('flex')).toBe(true)
-    expect(footer.parentElement?.classList.contains('min-h-full')).toBe(true)
+    expect(screen.getAllByTestId('execution-validation-actions')).toHaveLength(1)
+    expect(footer.className).toContain('lg:col-start-2')
+    expect(footer.className).not.toContain('lg:row-start')
+    expect(footer.parentElement?.className).not.toContain('px-3')
   })
 
   it('renders a flat task list without pole section headers', () => {
@@ -557,6 +559,45 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Voir l’observation liée' }))
 
     expect(navigateMock).toHaveBeenCalledWith('/signals/signal-42')
+  })
+
+  it('preserves Analytics context when opening the linked Signal from execution detail', () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/action-plans/executions/exec-1?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&q=retard&recurrence=recurrent&analytics_pattern_id=44444444-4444-4444-8444-444444444444',
+    )
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildExecution({
+        signal_summary: {
+          id: 'signal-42',
+          title: 'Fuite terrasse',
+          status: 'open',
+          affected_business_unit_id: null,
+          affected_business_unit_key: null,
+          affected_business_unit_label: null,
+          responsible_business_unit_id: null,
+          responsible_business_unit_key: null,
+          responsible_business_unit_label: null,
+          activity_subject_id: null,
+          activity_subject_normalized_name: null,
+          activity_subject_label: null,
+          location_text: 'Terrasse',
+        },
+      }),
+      error: null,
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Voir l’observation liée' }))
+
+    expect(navigateMock).toHaveBeenCalledWith(
+      '/signals/signal-42?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&q=retard&recurrence=recurrent&analytics_pattern_id=44444444-4444-4444-8444-444444444444',
+    )
   })
 })
 

@@ -44,7 +44,8 @@ vi.mock('@/app/auth-provider', () => ({
 vi.mock('@/app/lazy-terrain-pages', () => {
   const Page = ({ name }: { name: string }) => createElement('div', null, name)
   return {
-    LazyActionPlanCreatePage: () => createElement(Page, { name: 'action-plan-create' }),
+    LazyActionPlanCreatePage: ({ backPath }: { backPath?: string }) =>
+      createElement('div', { 'data-testid': 'action-plan-create', 'data-back-path': backPath }, 'action-plan-create'),
     LazyActionPlanExecutionDetailPage: () => createElement(Page, { name: 'execution-detail' }),
     LazyActionPlanExecutionEditPage: () => createElement(Page, { name: 'execution-edit' }),
     LazyActionPlanHubPage: () => createElement(Page, { name: 'action-plan-hub' }),
@@ -326,5 +327,49 @@ describe('App terrain active membership routing', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retour' }))
 
     expect(navigate).toHaveBeenCalledWith('/signals')
+  })
+
+  it('passes Analytics Signal context as the Plan creation back path', () => {
+    const bootstrap = bootstrapWithActiveMembership()
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = {
+      kind: 'signal-action-create',
+      signalId: '55555555-5555-4555-8555-555555555555',
+    }
+    window.history.replaceState(
+      null,
+      '',
+      '/signals/55555555-5555-4555-8555-555555555555/plan?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&q=retard&recurrence=recurrent&analytics_pattern_id=44444444-4444-4444-8444-444444444444',
+    )
+
+    render(createElement(App))
+
+    expect(screen.getByTestId('action-plan-create').getAttribute('data-back-path')).toBe(
+      '/signals/55555555-5555-4555-8555-555555555555?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&q=retard&recurrence=recurrent&analytics_pattern_id=44444444-4444-4444-8444-444444444444',
+    )
+  })
+
+  it('keeps direct Signal Plan creation back path without Analytics context', () => {
+    const bootstrap = bootstrapWithActiveMembership()
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = {
+      kind: 'signal-action-create',
+      signalId: '55555555-5555-4555-8555-555555555555',
+    }
+    window.history.replaceState(
+      null,
+      '',
+      '/signals/55555555-5555-4555-8555-555555555555/plan',
+    )
+
+    render(createElement(App))
+
+    expect(screen.getByTestId('action-plan-create').getAttribute('data-back-path')).toBe(
+      '/signals/55555555-5555-4555-8555-555555555555',
+    )
   })
 })

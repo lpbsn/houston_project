@@ -161,11 +161,16 @@ describe('ActionPlanTemplateDetailPage', () => {
     const headerCard = screen.getByRole('heading', { name: 'Plan catalogue' }).parentElement
     const deactivateButton = screen.getByRole('button', { name: 'Désactiver' })
     const executionButton = screen.getByRole('button', { name: 'Exécution' })
+    const footer = executionButton.closest('footer')
 
     expect(headerCard).toBeTruthy()
     expect(headerCard!.contains(deactivateButton)).toBe(true)
     expect(deactivateButton.closest('footer')).toBeNull()
-    expect(executionButton.closest('footer')).toBeTruthy()
+    expect(footer).toBeTruthy()
+    expect(footer?.className).toContain('lg:col-start-2')
+    expect(footer?.className).not.toContain('lg:row-start')
+    expect(footer?.parentElement?.className).not.toContain('px-3')
+    expect(screen.getAllByRole('button', { name: 'Exécution' })).toHaveLength(1)
     expect(executionButton.className).toContain('bg-[#114660]')
     expect(screen.queryByRole('button', { name: 'Activer' })).toBeNull()
     expect(screen.queryByText('Activer dans la bibliothèque')).toBeNull()

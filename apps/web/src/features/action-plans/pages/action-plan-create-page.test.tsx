@@ -1014,6 +1014,25 @@ describe('ActionPlanCreatePage', () => {
     expect(createMutateAsync).not.toHaveBeenCalled()
   })
 
+  it('keeps Signal-linked create return path and a single primary action in the desktop panel', () => {
+    renderPage({
+      mode: 'signal-linked',
+      signalId: 'sig-1',
+      backPath:
+        '/signals/sig-1?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&q=retard&analytics_pattern_id=44444444-4444-4444-8444-444444444444',
+    })
+
+    const createButtons = screen.getAllByRole('button', { name: 'Créer le plan d’action' })
+    expect(createButtons).toHaveLength(1)
+    const footer = createButtons[0]?.closest('footer')
+    const form = footer?.closest('form')
+    expect(footer?.className).toContain('lg:col-start-2')
+    expect(footer?.className).not.toContain('lg:row-start')
+    expect(footer?.parentElement?.className).not.toContain('px-3')
+    expect(form).toBeTruthy()
+    expect(form!.contains(screen.getAllByRole('textbox')[0]!)).toBe(true)
+  })
+
   it('shows warning when linked signal has a pending resolution request', () => {
     signalDetailQueryMock.mockReturnValue({
       isLoading: false,
