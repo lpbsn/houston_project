@@ -4,6 +4,8 @@ import { createElement } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { AnalyticsSignalReturnContext } from '@/features/analytics/lib/analytics-url-state'
+
 import type { SignalDetail } from '../types'
 
 import { SignalDetailPage } from './signal-detail-page'
@@ -149,11 +151,12 @@ vi.mock('../components/signal-qualify-routing-sheet', () => ({
   SignalQualifyRoutingSheet: SignalQualifyRoutingSheetMock,
 }))
 
-function renderPage() {
+function renderPage(options: { analyticsSignalReturnContext?: AnalyticsSignalReturnContext | null } = {}) {
   return render(
     createElement(SignalDetailPage, {
       signalId: 'signal-1',
       onNavigate: navigate,
+      analyticsSignalReturnContext: options.analyticsSignalReturnContext,
     }),
   )
 }
@@ -346,11 +349,6 @@ describe('SignalDetailPage tabs', () => {
   })
 
   it('preserves Analytics context when opening Signal-linked Plan creation', () => {
-    window.history.replaceState(
-      null,
-      '',
-      '/signals/signal-1?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&q=retard&recurrence=recurrent&analytics_pattern_id=44444444-4444-4444-8444-444444444444',
-    )
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -372,7 +370,22 @@ describe('SignalDetailPage tabs', () => {
       refetch: vi.fn(),
     })
 
-    renderPage()
+    renderPage({
+      analyticsSignalReturnContext: {
+        patternId: '44444444-4444-4444-8444-444444444444',
+        state: {
+          periodStart: '2026-07-01T00:00:00.000Z',
+          periodEnd: '2026-08-01T00:00:00.000Z',
+          organizationId: null,
+          establishmentIds: [],
+          q: 'retard',
+          recurrence: 'recurrent',
+          responsibleBusinessUnitIds: [],
+          responsibleBusinessUnitUnassigned: false,
+          signalStatuses: [],
+        },
+      },
+    })
 
     fireEvent.click(screen.getByRole('button', { name: "+ Plan d'action" }))
 

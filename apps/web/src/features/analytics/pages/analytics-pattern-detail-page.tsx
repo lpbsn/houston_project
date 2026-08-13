@@ -518,13 +518,24 @@ function PatternSignalsSection({
       ) : null}
 
       {items.length > 0 ? (
-        <div className="mt-4 divide-y divide-[#F0EFE9] overflow-hidden rounded-xl border border-[#F0EFE9]">
+        <div
+          className="mt-4 divide-y divide-[#F0EFE9] overflow-hidden rounded-xl border border-[#F0EFE9]"
+          data-testid="analytics-pattern-signals-list"
+        >
+          <div className="hidden grid-cols-[minmax(180px,1fr)_120px_150px_150px_minmax(180px,auto)] gap-3 border-b border-[#F0EFE9] bg-[#FBFAF7] px-4 py-3 text-xs font-semibold uppercase tracking-[0.04em] text-[#777] lg:grid">
+            <span>Signal</span>
+            <span>Statut</span>
+            <span>Établissement</span>
+            <span>BU</span>
+            <span>Action</span>
+          </div>
           {items.map((item) => {
             const canReport = canShowIssueReportAction(item)
             return (
               <div
                 key={item.signal_id}
-                className="grid gap-3 px-4 py-3 text-sm transition-colors hover:bg-[#FBFAF7] md:grid-cols-[minmax(180px,1fr)_120px_150px_150px_auto]"
+                data-testid="analytics-pattern-signal-row"
+                className="grid min-w-0 gap-3 px-4 py-3 text-sm transition-colors hover:bg-[#FBFAF7] lg:grid-cols-[minmax(180px,1fr)_120px_150px_150px_minmax(180px,auto)]"
               >
                 <button
                   type="button"
@@ -532,36 +543,52 @@ function PatternSignalsSection({
                   disabled={openingSignalId === item.signal_id}
                   onClick={() => onOpenSignal(item)}
                 >
-                  <span className="block font-semibold text-[#1a1a1a]">{item.title}</span>
+                  <span className="block break-words font-semibold text-[#1a1a1a]">
+                    {item.title}
+                  </span>
                   <span className={cn('mt-1 block text-xs leading-5', terrain.muted)}>
                     {item.structured_summary}
                   </span>
                 </button>
-                <span>
-                  <span className="md:hidden">Statut: </span>
-                  {formatStatusLabel(item.status)}
-                </span>
-                <span className="text-[#555]">
-                  <span className="md:hidden">Établissement: </span>
-                  {item.establishment.name}
-                </span>
-                <span className="text-[#555]">
-                  <span className="md:hidden">BU: </span>
-                  {item.responsible_business_unit?.specific_name ?? 'Non assigné'}
-                </span>
+                <dl className="grid min-w-0 gap-2 sm:grid-cols-3 lg:contents">
+                  <div className="min-w-0 rounded-lg bg-[#FBFAF7] px-3 py-2 lg:bg-transparent lg:p-0">
+                    <dt className={cn('text-[11px] font-semibold uppercase tracking-[0.04em] lg:hidden', terrain.muted)}>
+                      Statut
+                    </dt>
+                    <dd className="mt-1 text-[#1a1a1a] lg:mt-0">
+                      {formatStatusLabel(item.status)}
+                    </dd>
+                  </div>
+                  <div className="min-w-0 rounded-lg bg-[#FBFAF7] px-3 py-2 lg:bg-transparent lg:p-0">
+                    <dt className={cn('text-[11px] font-semibold uppercase tracking-[0.04em] lg:hidden', terrain.muted)}>
+                      Établissement
+                    </dt>
+                    <dd className="mt-1 break-words text-[#555] lg:mt-0">
+                      {item.establishment.name}
+                    </dd>
+                  </div>
+                  <div className="min-w-0 rounded-lg bg-[#FBFAF7] px-3 py-2 lg:bg-transparent lg:p-0">
+                    <dt className={cn('text-[11px] font-semibold uppercase tracking-[0.04em] lg:hidden', terrain.muted)}>
+                      BU
+                    </dt>
+                    <dd className="mt-1 break-words text-[#555] lg:mt-0">
+                      {item.responsible_business_unit?.specific_name ?? 'Non assigné'}
+                    </dd>
+                  </div>
+                </dl>
                 {canReport ? (
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="justify-self-start text-[#8A5A00] hover:text-[#8A5A00]"
+                    className="min-h-11 w-full justify-start text-[#8A5A00] hover:text-[#8A5A00] sm:w-auto lg:min-h-9 lg:justify-self-start"
                     onClick={() => onReportIssue(item)}
                   >
                     <Flag className="mr-2 h-4 w-4" aria-hidden />
                     Signaler un regroupement incorrect
                   </Button>
                 ) : null}
-                <span className={cn('text-xs md:col-span-5', terrain.muted)}>
+                <span className={cn('min-w-0 break-words text-xs lg:col-span-5', terrain.muted)}>
                   Créé {formatDateTime(item.created_at)}
                   {item.resolved_at ? ` · Résolu ${formatDateTime(item.resolved_at)}` : ''}
                   {openingSignalId === item.signal_id ? ' · Ouverture...' : ''}
@@ -719,7 +746,7 @@ function OwnerGovernancePanel({
             </p>
           ) : null}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap lg:justify-end">
           <Button type="button" variant="outline" size="sm" onClick={() => onOpenAction('rename')}>
             <Pencil className="mr-2 h-4 w-4" aria-hidden />
             Renommer
@@ -745,6 +772,7 @@ function OwnerGovernancePanel({
             type="button"
             variant="outline"
             size="sm"
+            className="col-span-2 sm:col-span-1"
             onClick={() => onOpenAction('split-new')}
           >
             <Scissors className="mr-2 h-4 w-4" aria-hidden />

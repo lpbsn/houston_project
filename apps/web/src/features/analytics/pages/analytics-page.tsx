@@ -370,13 +370,14 @@ function AnalyticsGlobalPeriodControls({
             Contrôle global appliqué aux KPIs et à la liste des motifs.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2" aria-label="Période Analytics">
+        <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap" aria-label="Période Analytics">
           {PERIOD_PRESETS.map((preset) => (
             <Button
               key={preset.days}
               type="button"
               variant="outline"
               size="sm"
+              className="min-h-11 px-2 sm:min-h-9 sm:px-3"
               onClick={() => onStateChange(buildPresetState(state, preset.days))}
             >
               {preset.label}
@@ -450,13 +451,17 @@ function AnalyticsPatternFilters({
       </div>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-3">
-        <fieldset className="rounded-xl border border-[#F0EFE9] p-3">
+        <fieldset className="min-w-0 rounded-xl border border-[#F0EFE9] p-3">
           <legend className="px-1 text-xs font-semibold text-[#555]">Établissements</legend>
-          <div className="mt-2 flex flex-col gap-2">
+          <div className="mt-2 grid max-h-48 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:max-h-44 lg:grid-cols-1">
             {(filterOptions?.establishments ?? []).map((option) => (
-              <label key={option.establishment_id} className="flex items-center gap-2 text-sm">
+              <label
+                key={option.establishment_id}
+                className="flex min-h-10 min-w-0 items-center gap-2 rounded-lg px-1 text-sm"
+              >
                 <input
                   type="checkbox"
+                  className="h-4 w-4 shrink-0"
                   checked={state.establishmentIds.includes(option.establishment_id)}
                   onChange={() =>
                     onStateChange({
@@ -468,21 +473,25 @@ function AnalyticsPatternFilters({
                     })
                   }
                 />
-                {option.name}
+                <span className="min-w-0 break-words">{option.name}</span>
               </label>
             ))}
           </div>
         </fieldset>
 
-        <fieldset className="rounded-xl border border-[#F0EFE9] p-3">
+        <fieldset className="min-w-0 rounded-xl border border-[#F0EFE9] p-3">
           <legend className="px-1 text-xs font-semibold text-[#555]">BU responsable</legend>
-          <div className="mt-2 flex max-h-40 flex-col gap-2 overflow-y-auto">
+          <div className="mt-2 grid max-h-48 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:max-h-44 lg:grid-cols-1">
             {(filterOptions?.responsible_business_units ?? []).map((option) => {
               if (option.is_unassigned) {
                 return (
-                  <label key="unassigned" className="flex items-center gap-2 text-sm">
+                  <label
+                    key="unassigned"
+                    className="flex min-h-10 min-w-0 items-center gap-2 rounded-lg px-1 text-sm"
+                  >
                     <input
                       type="checkbox"
+                      className="h-4 w-4 shrink-0"
                       checked={state.responsibleBusinessUnitUnassigned}
                       onChange={() =>
                         onStateChange({
@@ -492,7 +501,7 @@ function AnalyticsPatternFilters({
                         })
                       }
                     />
-                    {option.name}
+                    <span className="min-w-0 break-words">{option.name}</span>
                   </label>
                 )
               }
@@ -500,9 +509,13 @@ function AnalyticsPatternFilters({
                 return null
               }
               return (
-                <label key={option.business_unit_id} className="flex items-center gap-2 text-sm">
+                <label
+                  key={option.business_unit_id}
+                  className="flex min-h-10 min-w-0 items-center gap-2 rounded-lg px-1 text-sm"
+                >
                   <input
                     type="checkbox"
+                    className="h-4 w-4 shrink-0"
                     checked={state.responsibleBusinessUnitIds.includes(option.business_unit_id)}
                     onChange={() =>
                       onStateChange({
@@ -514,20 +527,24 @@ function AnalyticsPatternFilters({
                       })
                     }
                   />
-                  {option.name}
+                  <span className="min-w-0 break-words">{option.name}</span>
                 </label>
               )
             })}
           </div>
         </fieldset>
 
-        <fieldset className="rounded-xl border border-[#F0EFE9] p-3">
+        <fieldset className="min-w-0 rounded-xl border border-[#F0EFE9] p-3">
           <legend className="px-1 text-xs font-semibold text-[#555]">Statuts Signal</legend>
-          <div className="mt-2 flex flex-col gap-2">
+          <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
             {SIGNAL_STATUS_OPTIONS.map((option) => (
-              <label key={option.value} className="flex items-center gap-2 text-sm">
+              <label
+                key={option.value}
+                className="flex min-h-10 min-w-0 items-center gap-2 rounded-lg px-1 text-sm"
+              >
                 <input
                   type="checkbox"
+                  className="h-4 w-4 shrink-0"
                   checked={state.signalStatuses.includes(option.value)}
                   onChange={() =>
                     onStateChange({
@@ -539,7 +556,7 @@ function AnalyticsPatternFilters({
                     })
                   }
                 />
-                {option.label}
+                <span className="min-w-0 break-words">{option.label}</span>
               </label>
             ))}
           </div>
@@ -619,8 +636,8 @@ function AnalyticsPatternTable({
     return (
       <TerrainCard className="p-4">
         <div className="flex items-center gap-2 text-sm text-[#555]" role="status">
-        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-        Chargement des motifs...
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          Chargement des motifs...
         </div>
       </TerrainCard>
     )
@@ -659,7 +676,7 @@ function AnalyticsPatternTable({
         <span>À traiter</span>
         <span>Établissements</span>
       </div>
-      <div className="divide-y divide-[#F0EFE9]">
+      <div className="divide-y divide-[#F0EFE9]" data-testid="analytics-pattern-list">
         {items.map((item) => {
           const detailPath = buildAnalyticsPatternDetailPath(item.pattern_id, state)
 
@@ -667,7 +684,8 @@ function AnalyticsPatternTable({
             <a
               key={item.pattern_id}
               href={detailPath}
-              className="grid gap-3 px-4 py-4 text-sm transition-colors hover:bg-[#FBFAF7] focus:outline-none focus:ring-2 focus:ring-[#114660] focus:ring-offset-2 lg:grid-cols-[minmax(180px,1.5fr)_110px_120px_130px_140px_120px_minmax(160px,1fr)]"
+              data-testid="analytics-pattern-row"
+              className="grid min-w-0 gap-3 px-4 py-4 text-sm transition-colors hover:bg-[#FBFAF7] focus:outline-none focus:ring-2 focus:ring-[#114660] focus:ring-offset-2 lg:grid-cols-[minmax(180px,1.5fr)_110px_120px_130px_140px_120px_minmax(160px,1fr)]"
               onClick={(event) => {
                 if (
                   !onNavigate ||
@@ -682,38 +700,64 @@ function AnalyticsPatternTable({
                 onNavigate(detailPath)
               }}
             >
-              <div>
-                <p className="font-semibold text-[#1a1a1a]">{item.label}</p>
-                <p className={cn('text-xs', terrain.muted)}>{item.normalized_label}</p>
+              <div className="min-w-0">
+                <p className="break-words font-semibold text-[#1a1a1a]">{item.label}</p>
+                <p className={cn('break-words text-xs', terrain.muted)}>
+                  {item.normalized_label}
+                </p>
               </div>
-              <p>
-                <span className="lg:hidden">Signals: </span>
-                {formatNumber(item.signal_count)}
-              </p>
-              <p>
-                <span className="lg:hidden">Évolution: </span>
-                {formatAbsoluteDelta(item.signal_count_comparison.absolute_delta, formatNumber)}
-              </p>
-              <p>
-                <span className="lg:hidden">Récurrence: </span>
-                {item.is_recurrent ? 'Oui' : 'Non'} ({item.occurrence_count_30d}/
-                {item.distinct_day_count_30d}j)
-              </p>
-              <p>
-                <span className="lg:hidden">Dernière apparition: </span>
-                {formatDateTime(item.last_seen_at)}
-              </p>
-              <p>
-                <span className="lg:hidden">À traiter: </span>
-                {formatNumber(item.actionable_signal_count)}
-              </p>
-              <p className="text-[#555]">
-                <span className="lg:hidden">Établissements: </span>
-                {item.establishments.map((establishment) => establishment.name).join(', ') || '—'}
-                {item.establishment_count > item.establishments.length
-                  ? ` +${item.establishment_count - item.establishments.length}`
-                  : ''}
-              </p>
+              <dl className="grid min-w-0 gap-2 sm:grid-cols-2 lg:contents">
+                <div className="min-w-0 rounded-lg bg-[#FBFAF7] px-3 py-2 lg:bg-transparent lg:p-0">
+                  <dt className={cn('text-[11px] font-semibold uppercase tracking-[0.04em] lg:hidden', terrain.muted)}>
+                    Signals
+                  </dt>
+                  <dd className="mt-1 font-semibold text-[#1a1a1a] lg:mt-0">
+                    {formatNumber(item.signal_count)}
+                  </dd>
+                </div>
+                <div className="min-w-0 rounded-lg bg-[#FBFAF7] px-3 py-2 lg:bg-transparent lg:p-0">
+                  <dt className={cn('text-[11px] font-semibold uppercase tracking-[0.04em] lg:hidden', terrain.muted)}>
+                    Évolution
+                  </dt>
+                  <dd className="mt-1 text-[#1a1a1a] lg:mt-0">
+                    {formatAbsoluteDelta(item.signal_count_comparison.absolute_delta, formatNumber)}
+                  </dd>
+                </div>
+                <div className="min-w-0 rounded-lg bg-[#FBFAF7] px-3 py-2 lg:bg-transparent lg:p-0">
+                  <dt className={cn('text-[11px] font-semibold uppercase tracking-[0.04em] lg:hidden', terrain.muted)}>
+                    Récurrence
+                  </dt>
+                  <dd className="mt-1 text-[#1a1a1a] lg:mt-0">
+                    {item.is_recurrent ? 'Oui' : 'Non'} ({item.occurrence_count_30d}/
+                    {item.distinct_day_count_30d}j)
+                  </dd>
+                </div>
+                <div className="min-w-0 rounded-lg bg-[#FBFAF7] px-3 py-2 lg:bg-transparent lg:p-0">
+                  <dt className={cn('text-[11px] font-semibold uppercase tracking-[0.04em] lg:hidden', terrain.muted)}>
+                    Dernière apparition
+                  </dt>
+                  <dd className="mt-1 text-[#1a1a1a] lg:mt-0">{formatDateTime(item.last_seen_at)}</dd>
+                </div>
+                <div className="min-w-0 rounded-lg bg-[#FBFAF7] px-3 py-2 lg:bg-transparent lg:p-0">
+                  <dt className={cn('text-[11px] font-semibold uppercase tracking-[0.04em] lg:hidden', terrain.muted)}>
+                    À traiter
+                  </dt>
+                  <dd className="mt-1 text-[#1a1a1a] lg:mt-0">
+                    {formatNumber(item.actionable_signal_count)}
+                  </dd>
+                </div>
+                <div className="min-w-0 rounded-lg bg-[#FBFAF7] px-3 py-2 lg:bg-transparent lg:p-0">
+                  <dt className={cn('text-[11px] font-semibold uppercase tracking-[0.04em] lg:hidden', terrain.muted)}>
+                    Établissements
+                  </dt>
+                  <dd className="mt-1 break-words text-[#555] lg:mt-0">
+                    {item.establishments.map((establishment) => establishment.name).join(', ') || '—'}
+                    {item.establishment_count > item.establishments.length
+                      ? ` +${item.establishment_count - item.establishments.length}`
+                      : ''}
+                  </dd>
+                </div>
+              </dl>
             </a>
           )
         })}

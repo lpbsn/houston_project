@@ -324,7 +324,13 @@ function App() {
     }
 
     if (route.kind === 'signal-detail') {
-      return <LazySignalDetailPage signalId={route.signalId} onNavigate={navigate} />
+      return (
+        <LazySignalDetailPage
+          signalId={route.signalId}
+          onNavigate={navigate}
+          analyticsSignalReturnContext={analyticsSignalReturnContext}
+        />
+      )
     }
 
     if (route.kind === 'signal-action-create') {

@@ -43,6 +43,37 @@ vi.mock('@/app/auth-provider', () => ({
 
 vi.mock('@/app/lazy-terrain-pages', () => {
   const Page = ({ name }: { name: string }) => createElement('div', null, name)
+  const buildSignalPlanPath = (
+    signalId: string,
+    context?: {
+      patternId: string
+      state: {
+        periodStart: string
+        periodEnd: string
+        organizationId: string | null
+        q: string
+        recurrence: string
+      }
+    } | null,
+  ) => {
+    if (!context) {
+      return `/signals/${signalId}/plan`
+    }
+    const params = new URLSearchParams()
+    params.set('period_start', context.state.periodStart)
+    params.set('period_end', context.state.periodEnd)
+    if (context.state.organizationId) {
+      params.set('organization_id', context.state.organizationId)
+    }
+    if (context.state.q) {
+      params.set('q', context.state.q)
+    }
+    if (context.state.recurrence !== 'all') {
+      params.set('recurrence', context.state.recurrence)
+    }
+    params.set('analytics_pattern_id', context.patternId)
+    return `/signals/${signalId}/plan?${params.toString()}`
+  }
   return {
     LazyActionPlanCreatePage: ({ backPath }: { backPath?: string }) =>
       createElement('div', { 'data-testid': 'action-plan-create', 'data-back-path': backPath }, 'action-plan-create'),
@@ -62,7 +93,30 @@ vi.mock('@/app/lazy-terrain-pages', () => {
     LazyProfilePage: () => createElement(Page, { name: 'profile' }),
     LazyProfileSwitchEstablishmentPage: () => createElement(Page, { name: 'switch-establishment' }),
     LazyReportPage: () => createElement(Page, { name: 'reporting' }),
-    LazySignalDetailPage: () => createElement(Page, { name: 'signal-detail' }),
+    LazySignalDetailPage: ({
+      signalId,
+      analyticsSignalReturnContext,
+    }: {
+      signalId: string
+      analyticsSignalReturnContext?: {
+        patternId: string
+        state: {
+          periodStart: string
+          periodEnd: string
+          organizationId: string | null
+          q: string
+          recurrence: string
+        }
+      } | null
+    }) =>
+      createElement(
+        'div',
+        {
+          'data-testid': 'signal-detail',
+          'data-plan-path': buildSignalPlanPath(signalId, analyticsSignalReturnContext),
+        },
+        'signal-detail',
+      ),
     LazySignalFeedPage: () => createElement(Page, { name: 'signals' }),
     LazyTeamMemberDetailPage: () => createElement(Page, { name: 'team-member' }),
     LazyTeamPage: () => createElement(Page, { name: 'team' }),
@@ -309,6 +363,44 @@ describe('App terrain active membership routing', () => {
     expect(navigate).toHaveBeenCalledWith(
       '/analytics/patterns/44444444-4444-4444-8444-444444444444?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&q=retard&recurrence=recurrent',
     )
+  })
+
+  it('shares one stable default Analytics period between Signal Back and Plan creation links', () => {
+    const bootstrap = bootstrapWithActiveMembership()
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = {
+      kind: 'signal-detail',
+      signalId: '55555555-5555-4555-8555-555555555555',
+    }
+    window.history.replaceState(
+      null,
+      '',
+      '/signals/55555555-5555-4555-8555-555555555555?analytics_pattern_id=44444444-4444-4444-8444-444444444444',
+    )
+
+    const rendered = render(createElement(App))
+
+    const planPath = screen.getByTestId('signal-detail').getAttribute('data-plan-path') ?? ''
+    fireEvent.click(screen.getByRole('button', { name: 'Retour' }))
+    const backPath = navigate.mock.calls[0]?.[0] as string
+    const backParams = new URL(backPath, 'https://spore.test').searchParams
+    const planParams = new URL(planPath, 'https://spore.test').searchParams
+
+    expect(planParams.get('period_start')).toBe(backParams.get('period_start'))
+    expect(planParams.get('period_end')).toBe(backParams.get('period_end'))
+    expect(planParams.get('analytics_pattern_id')).toBe(
+      '44444444-4444-4444-8444-444444444444',
+    )
+
+    rendered.rerender(createElement(App))
+
+    const rerenderedPlanPath =
+      screen.getByTestId('signal-detail').getAttribute('data-plan-path') ?? ''
+    const rerenderedPlanParams = new URL(rerenderedPlanPath, 'https://spore.test').searchParams
+    expect(rerenderedPlanParams.get('period_start')).toBe(planParams.get('period_start'))
+    expect(rerenderedPlanParams.get('period_end')).toBe(planParams.get('period_end'))
   })
 
   it('keeps direct Signal Back on the Signal feed without Analytics context', () => {

@@ -358,7 +358,13 @@ describe('AnalyticsPage', () => {
     expect(screen.getByText('2 h')).toBeTruthy()
     expect(screen.getByText('Retard livraison')).toBeTruthy()
     expect(screen.getByText('Oui (4/2j)')).toBeTruthy()
+    expect(screen.getAllByTestId('analytics-pattern-row')).toHaveLength(1)
     const patternLink = screen.getByRole('link', { name: /Retard livraison/ })
+    expect(screen.getAllByRole('link', { name: /Retard livraison/ })).toHaveLength(1)
+    expect(patternLink.className).toContain('lg:grid-cols-')
+    expect(screen.getByTestId('analytics-pattern-list').parentElement?.className).toContain(
+      'overflow-hidden',
+    )
     expect(patternLink.getAttribute('href')).toContain('/analytics/patterns/pattern-1?')
     expect(patternLink.getAttribute('href')).toContain('period_start=')
     fireEvent.click(patternLink)
@@ -408,6 +414,7 @@ describe('AnalyticsPage', () => {
     expect(
       screen.getByText('Contrôle global appliqué aux KPIs et à la liste des motifs.'),
     ).toBeTruthy()
+    expect(screen.getByRole('button', { name: '7 jours' }).className).toContain('min-h-11')
     expect(screen.getByText('Filtres appliqués uniquement à la liste des motifs.')).toBeTruthy()
     expect(screen.queryByText('Période')).toBeNull()
 

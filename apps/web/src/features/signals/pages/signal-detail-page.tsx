@@ -1,16 +1,15 @@
 import { LoaderCircle } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 
 import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainErrorState } from '@/components/ui/terrain'
 import { readCurrentDetailDeepLink } from '@/features/comments/lib/detail-deep-link'
 import {
   buildAnalyticsSignalActionCreatePath,
-  parseAnalyticsSignalReturnContext,
+  type AnalyticsSignalReturnContext,
 } from '@/features/analytics/lib/analytics-url-state'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { CommentSection } from '@/features/comments/components/comment-section'
-import { useLocationSearch } from '@/lib/location-search'
 import { cn } from '@/lib/utils'
 
 import { SignalDetailPhotoSection } from '../components/signal-detail-photo-section'
@@ -45,6 +44,7 @@ import { SIGNAL_IN_PROGRESS_RESOLVE_VIA_ACTION_PLAN_HINT } from '../lib/signal-f
 type SignalDetailPageProps = {
   signalId: string
   onNavigate: (pathname: string, options?: { replace?: boolean }) => void
+  analyticsSignalReturnContext?: AnalyticsSignalReturnContext | null
 }
 
 function formatDescriptionContent(structuredSummary: string): string {
@@ -52,14 +52,13 @@ function formatDescriptionContent(structuredSummary: string): string {
   return trimmed.length > 0 ? trimmed : 'Description indisponible.'
 }
 
-export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps) {
+export function SignalDetailPage({
+  signalId,
+  onNavigate,
+  analyticsSignalReturnContext = null,
+}: SignalDetailPageProps) {
   const auth = useAuth()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
-  const locationSearch = useLocationSearch()
-  const analyticsSignalReturnContext = useMemo(
-    () => parseAnalyticsSignalReturnContext(locationSearch, { now: new Date() }),
-    [locationSearch],
-  )
 
   const initialDeepLink = readCurrentDetailDeepLink()
   const [activeTab, setActiveTab] = useState<SignalDetailTab>(

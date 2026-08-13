@@ -463,6 +463,14 @@ describe('AnalyticsPatternDetailPage', () => {
     expect(screen.getByText('BU responsables')).toBeTruthy()
     expect(screen.getByText('Signals du motif')).toBeTruthy()
     expect(screen.getByText('Signal retard')).toBeTruthy()
+    expect(screen.getAllByTestId('analytics-pattern-signal-row')).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: /Signal retard/ })).toHaveLength(1)
+    expect(screen.getByTestId('analytics-pattern-signals-list').className).toContain(
+      'overflow-hidden',
+    )
+    expect(screen.getByTestId('analytics-pattern-signal-row').className).toContain(
+      'lg:grid-cols-',
+    )
     expect(patternSignalsQueryMock).toHaveBeenCalledWith(
       'pattern-1',
       analyticsState,
@@ -511,6 +519,11 @@ describe('AnalyticsPatternDetailPage', () => {
 
     expect(screen.getByText('Gouvernance Owner')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Renommer' })).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'Renommer' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: 'Fusionner' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: 'Déplacer' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: 'Split existant' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: 'Split nouveau' })).toHaveLength(1)
 
     cleanup()
     setDetailQuery({ data: detail() })
