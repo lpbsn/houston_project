@@ -21,6 +21,10 @@ export type AnalyticsPatternSignalsResponse =
   components['schemas']['AnalyticsPatternSignalsResponse']
 export type AnalyticsPatternSignalItem =
   components['schemas']['AnalyticsPatternSignalItem']
+export type AnalyticsPatternIssueReportRequest =
+  components['schemas']['AnalyticsPatternIssueReportRequest']
+export type AnalyticsPatternIssueReportResponse =
+  components['schemas']['AnalyticsPatternIssueReportResponse']
 
 export const analyticsQueryKeys = {
   all: ['analytics'] as const,
@@ -83,6 +87,8 @@ export const analyticsQueryKeys = {
         pageSize: pageSize ?? null,
       },
     ] as const,
+  patternIssueReport: (patternId: string, signalId: string) =>
+    ['analytics', 'pattern-issue-report', patternId, signalId] as const,
 }
 
 export class AnalyticsApiError extends Error {
@@ -278,4 +284,27 @@ export async function fetchAnalyticsPatternSignals(
   )
 
   return assertAnalyticsData<AnalyticsPatternSignalsResponse>(result)
+}
+
+export async function reportAnalyticsPatternIssue(
+  patternId: string,
+  signalId: string,
+  body: AnalyticsPatternIssueReportRequest,
+): Promise<AnalyticsPatternIssueReportResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/analytics/patterns/{pattern_id}/signals/{signal_id}/issue-report/',
+        {
+          params: {
+            path: { pattern_id: patternId, signal_id: signalId },
+          },
+          body,
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  return assertAnalyticsData<AnalyticsPatternIssueReportResponse>(result)
 }

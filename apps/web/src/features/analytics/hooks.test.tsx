@@ -9,6 +9,7 @@ import { createTestQueryClient } from '@/test-utils'
 
 const fetchAnalyticsDashboardMock = vi.fn()
 const fetchAnalyticsPatternDetailMock = vi.fn()
+const reportAnalyticsPatternIssueMock = vi.fn()
 const fetchAnalyticsPatternsMock = vi.fn()
 const fetchAnalyticsPatternSignalsMock = vi.fn()
 
@@ -21,6 +22,8 @@ vi.mock('./api', async (importOriginal) => {
     fetchAnalyticsPatternSignals: (...args: unknown[]) =>
       fetchAnalyticsPatternSignalsMock(...args),
     fetchAnalyticsPatterns: (...args: unknown[]) => fetchAnalyticsPatternsMock(...args),
+    reportAnalyticsPatternIssue: (...args: unknown[]) =>
+      reportAnalyticsPatternIssueMock(...args),
   }
 })
 
@@ -30,6 +33,7 @@ import {
   useAnalyticsPatternDetailQuery,
   useAnalyticsPatternSignalsInfiniteQuery,
   useAnalyticsPatternsInfiniteQuery,
+  useReportAnalyticsPatternIssueMutation,
 } from './hooks'
 import type { AnalyticsUrlState } from './lib/analytics-url-state'
 
@@ -54,6 +58,7 @@ describe('useAnalyticsDashboardQuery', () => {
   afterEach(() => {
     fetchAnalyticsDashboardMock.mockReset()
     fetchAnalyticsPatternDetailMock.mockReset()
+    reportAnalyticsPatternIssueMock.mockReset()
     fetchAnalyticsPatternsMock.mockReset()
     fetchAnalyticsPatternSignalsMock.mockReset()
   })
@@ -287,5 +292,32 @@ describe('useAnalyticsPatternsInfiniteQuery', () => {
         pageSize: 25,
       }),
     ])
+  })
+})
+
+describe('useReportAnalyticsPatternIssueMutation', () => {
+  afterEach(() => {
+    reportAnalyticsPatternIssueMock.mockReset()
+  })
+
+  it('posts reports without automatic retry', async () => {
+    reportAnalyticsPatternIssueMock.mockRejectedValue(new Error('network timeout'))
+
+    const { result } = renderHook(() => useReportAnalyticsPatternIssueMutation(), {
+      wrapper,
+    })
+
+    await expect(
+      result.current.mutateAsync({
+        patternId: 'pattern-1',
+        signalId: 'signal-1',
+        body: {
+          reason: 'wrong_pattern',
+          comment: 'Mauvais motif',
+        },
+      }),
+    ).rejects.toThrow('network timeout')
+
+    expect(reportAnalyticsPatternIssueMock).toHaveBeenCalledTimes(1)
   })
 })

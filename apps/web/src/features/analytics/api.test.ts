@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getMock = vi.fn()
+const postMock = vi.fn()
 
 vi.mock('@/api/client', () => ({
   apiClient: {
     GET: (...args: unknown[]) => getMock(...args),
+    POST: (...args: unknown[]) => postMock(...args),
   },
   withAuthRetry: async (callback: (token: string) => Promise<unknown>) =>
     callback('test-token'),
@@ -18,6 +20,7 @@ import {
   fetchAnalyticsPatternFilterOptions,
   fetchAnalyticsPatternSignals,
   fetchAnalyticsPatterns,
+  reportAnalyticsPatternIssue,
   type AnalyticsDashboardResponse,
 } from './api'
 
@@ -125,6 +128,7 @@ const dashboardResponse = {
 describe('analytics api', () => {
   beforeEach(() => {
     getMock.mockReset()
+    postMock.mockReset()
     getMock.mockResolvedValue({
       data: dashboardResponse,
       error: undefined,
@@ -468,5 +472,47 @@ describe('analytics api', () => {
     expect(getMock.mock.calls[0]?.[1]?.params?.query).not.toHaveProperty('establishment_ids')
     expect(getMock.mock.calls[0]?.[1]?.params?.query).not.toHaveProperty('q')
     expect(getMock.mock.calls[0]?.[1]?.params?.query).not.toHaveProperty('recurrence')
+  })
+
+  it('posts a pattern issue report through the generated endpoint contract', async () => {
+    postMock.mockResolvedValue({
+      data: {
+        report_id: '66666666-6666-4666-8666-666666666666',
+        pattern_id: '44444444-4444-4444-8444-444444444444',
+        signal_id: '55555555-5555-4555-8555-555555555555',
+        status: 'open',
+        report_type: 'wrong_pattern',
+        comment: 'Mauvais motif',
+        created_at: '2026-08-13T10:00:00.000Z',
+      },
+      error: undefined,
+      response: { ok: true, status: 201 } as Response,
+    })
+
+    await reportAnalyticsPatternIssue(
+      '44444444-4444-4444-8444-444444444444',
+      '55555555-5555-4555-8555-555555555555',
+      {
+        reason: 'wrong_pattern',
+        comment: 'Mauvais motif',
+      },
+    )
+
+    expect(postMock).toHaveBeenCalledWith(
+      '/api/v1/analytics/patterns/{pattern_id}/signals/{signal_id}/issue-report/',
+      expect.objectContaining({
+        params: {
+          path: {
+            pattern_id: '44444444-4444-4444-8444-444444444444',
+            signal_id: '55555555-5555-4555-8555-555555555555',
+          },
+        },
+        body: {
+          reason: 'wrong_pattern',
+          comment: 'Mauvais motif',
+        },
+        headers: { Authorization: 'Bearer test-token' },
+      }),
+    )
   })
 })

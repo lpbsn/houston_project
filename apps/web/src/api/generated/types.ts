@@ -154,6 +154,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/analytics/patterns/{pattern_id}/signals/{signal_id}/issue-report/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_analytics_pattern_signal_issue_report_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/analytics/patterns/{pattern_id}/split-to-existing/": {
         parameters: {
             query?: never;
@@ -3007,6 +3023,23 @@ export interface components {
             /** Format: uuid */
             merged_into_pattern_id: string | null;
         };
+        AnalyticsPatternIssueReportRequest: {
+            reason?: components["schemas"]["ReasonEnum"];
+            comment?: string;
+        };
+        AnalyticsPatternIssueReportResponse: {
+            /** Format: uuid */
+            report_id: string;
+            /** Format: uuid */
+            pattern_id: string;
+            /** Format: uuid */
+            signal_id: string | null;
+            status: string;
+            report_type: string;
+            comment: string;
+            /** Format: date-time */
+            created_at: string;
+        };
         AnalyticsPatternListItem: {
             /** Format: uuid */
             pattern_id: string;
@@ -4260,6 +4293,8 @@ export interface components {
             ticket: string;
             expires_in: number;
         };
+        /** @enum {string} */
+        ReasonEnum: "wrong_pattern";
         RegistrationOwnerValidateRequest: {
             invite_code: string;
             first_name: string;
@@ -5143,6 +5178,74 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_analytics_pattern_signal_issue_report_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pattern_id: string;
+                signal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AnalyticsPatternIssueReportRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AnalyticsPatternIssueReportRequest"];
+                "multipart/form-data": components["schemas"]["AnalyticsPatternIssueReportRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsPatternIssueReportResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

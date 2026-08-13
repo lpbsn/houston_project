@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query'
 
 import {
   analyticsQueryKeys,
@@ -7,7 +7,9 @@ import {
   fetchAnalyticsPatternFilterOptions,
   fetchAnalyticsPatternSignals,
   fetchAnalyticsPatterns,
+  reportAnalyticsPatternIssue,
 } from './api'
+import type { AnalyticsPatternIssueReportRequest } from './api'
 import type { AnalyticsUrlState } from './lib/analytics-url-state'
 
 type UseAnalyticsDashboardQueryOptions = {
@@ -90,5 +92,20 @@ export function useAnalyticsPatternSignalsInfiniteQuery(
       return lastPage.next_cursor
     },
     enabled: options?.enabled ?? true,
+  })
+}
+
+export function useReportAnalyticsPatternIssueMutation() {
+  return useMutation({
+    mutationFn: ({
+      patternId,
+      signalId,
+      body,
+    }: {
+      patternId: string
+      signalId: string
+      body: AnalyticsPatternIssueReportRequest
+    }) => reportAnalyticsPatternIssue(patternId, signalId, body),
+    retry: false,
   })
 }

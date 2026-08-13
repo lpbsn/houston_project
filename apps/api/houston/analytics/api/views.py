@@ -19,6 +19,8 @@ from houston.analytics.api.serializers import (
     AnalyticsOwnerGovernanceResponseSerializer,
     AnalyticsPatternDetailResponseSerializer,
     AnalyticsPatternFilterOptionsResponseSerializer,
+    AnalyticsPatternIssueReportRequestSerializer,
+    AnalyticsPatternIssueReportResponseSerializer,
     AnalyticsPatternListResponseSerializer,
     AnalyticsPatternMergeRequestSerializer,
     AnalyticsPatternMoveSignalsRequestSerializer,
@@ -52,6 +54,7 @@ from houston.analytics.services import (
     merge_operational_patterns_for_owner,
     move_signals_between_patterns_for_owner,
     rename_operational_pattern_for_owner,
+    report_pattern_assignment_issue,
     split_operational_pattern_to_existing_for_owner,
     split_operational_pattern_to_new_for_owner,
 )
@@ -99,6 +102,25 @@ ANALYTICS_GOVERNANCE_CONFLICT_CODES = frozenset(
     }
 )
 ANALYTICS_GOVERNANCE_FORBIDDEN_CODES = frozenset({"analytics_owner_permission_required"})
+ANALYTICS_PATTERN_ISSUE_FORBIDDEN_CODES = frozenset(
+    {"analytics_pattern_issue_permission_denied"}
+)
+ANALYTICS_PATTERN_ISSUE_NOT_FOUND_CODES = frozenset(
+    {"analytics_pattern_issue_target_not_found"}
+)
+ANALYTICS_PATTERN_ISSUE_CONFLICT_CODES = frozenset(
+    {
+        "analytics_pattern_assignment_missing",
+        "analytics_pattern_assignment_mismatch",
+    }
+)
+ANALYTICS_PATTERN_ISSUE_BAD_REQUEST_CODES = frozenset(
+    {
+        "analytics_pattern_issue_reason_invalid",
+        "analytics_pattern_issue_comment_invalid",
+        "analytics_pattern_issue_comment_too_long",
+    }
+)
 
 
 class CanAccessAnalytics(permissions.BasePermission):
@@ -165,6 +187,36 @@ def _analytics_governance_error_response(exc: AnalyticsValidationError) -> Respo
         return Response(
             {"code": exc.code, "detail": str(exc) or "Conflict."},
             status=status.HTTP_409_CONFLICT,
+        )
+    return Response(
+        {
+            "code": exc.code or "analytics_validation_error",
+            "detail": str(exc) or "Validation failed.",
+        },
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
+def _analytics_pattern_issue_error_response(exc: AnalyticsValidationError) -> Response:
+    if exc.code in ANALYTICS_PATTERN_ISSUE_FORBIDDEN_CODES:
+        return Response(
+            {"code": exc.code, "detail": str(exc) or "Permission denied."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    if exc.code in ANALYTICS_PATTERN_ISSUE_NOT_FOUND_CODES:
+        return Response(
+            {"code": exc.code, "detail": str(exc) or "Not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    if exc.code in ANALYTICS_PATTERN_ISSUE_CONFLICT_CODES:
+        return Response(
+            {"code": exc.code, "detail": str(exc) or "Conflict."},
+            status=status.HTTP_409_CONFLICT,
+        )
+    if exc.code in ANALYTICS_PATTERN_ISSUE_BAD_REQUEST_CODES:
+        return Response(
+            {"code": exc.code, "detail": str(exc) or "Validation failed."},
+            status=status.HTTP_400_BAD_REQUEST,
         )
     return Response(
         {
@@ -339,6 +391,18 @@ def _serialize_dashboard(result) -> dict:
 
 def _serialize_owner_governance(result) -> dict:
     return _dataclass_payload(result)
+
+
+def _serialize_pattern_issue_report(report) -> dict:
+    return {
+        "report_id": report.id,
+        "pattern_id": report.pattern_id,
+        "signal_id": report.signal_id,
+        "status": report.status,
+        "report_type": report.report_type,
+        "comment": report.comment,
+        "created_at": report.created_at,
+    }
 
 
 def _page_size_param(default: int, maximum: int) -> OpenApiParameter:
@@ -534,6 +598,41 @@ class AnalyticsPatternSignalsView(AnalyticsAPIView):
         except AnalyticsValidationError as exc:
             return _analytics_error_response(exc)
         return Response(AnalyticsPatternSignalsResponseSerializer(_dataclass_payload(result)).data)
+
+
+class AnalyticsPatternIssueReportView(AnalyticsAPIView):
+    @extend_schema(
+        tags=["analytics"],
+        operation_id="v1_analytics_pattern_signal_issue_report_create",
+        request=AnalyticsPatternIssueReportRequestSerializer,
+        responses={
+            201: AnalyticsPatternIssueReportResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+            409: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def post(self, request, pattern_id, signal_id):
+        serializer = AnalyticsPatternIssueReportRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            report = report_pattern_assignment_issue(
+                request.user,
+                pattern_id=pattern_id,
+                signal_id=signal_id,
+                reason=serializer.validated_data.get("reason", "wrong_pattern"),
+                comment=serializer.validated_data.get("comment", ""),
+            )
+        except AnalyticsValidationError as exc:
+            return _analytics_pattern_issue_error_response(exc)
+        return Response(
+            AnalyticsPatternIssueReportResponseSerializer(
+                _serialize_pattern_issue_report(report)
+            ).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class AnalyticsPatternRenameView(AnalyticsOwnerGovernanceAPIView):

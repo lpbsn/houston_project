@@ -13,6 +13,7 @@ import type { AnalyticsUrlState } from '@/features/analytics/lib/analytics-url-s
 
 const detailQueryMock = vi.fn()
 const patternSignalsQueryMock = vi.fn()
+const reportIssueMutationMock = vi.fn()
 const switchEstablishmentMock = vi.fn()
 
 const { authState } = vi.hoisted(() => ({
@@ -33,6 +34,7 @@ vi.mock('@/features/analytics/hooks', () => ({
   useAnalyticsPatternDetailQuery: (...args: unknown[]) => detailQueryMock(...args),
   useAnalyticsPatternSignalsInfiniteQuery: (...args: unknown[]) =>
     patternSignalsQueryMock(...args),
+  useReportAnalyticsPatternIssueMutation: () => reportIssueMutationMock(),
 }))
 
 vi.mock('@/features/auth/api', () => ({
@@ -51,12 +53,15 @@ const analyticsState: AnalyticsUrlState = {
   signalStatuses: ['open'],
 }
 
-function bootstrap(role: string) {
+function bootstrap(
+  role: string,
+  options: { organizationId?: string; establishmentId?: string } = {},
+) {
   const activeMembership = {
     id: `member-${role}`,
-    establishment_id: 'est-1',
+    establishment_id: options.establishmentId ?? 'est-1',
     establishment_name: 'Spore 1',
-    organization_id: 'org-1',
+    organization_id: options.organizationId ?? '11111111-1111-4111-8111-111111111111',
     organization_name: 'Spore',
     role,
     status: 'active',
@@ -158,6 +163,7 @@ function setDetailQuery(value: ReturnType<typeof detailQueryMock> = {}) {
     ...value,
   })
   setPatternSignalsQuery()
+  setReportIssueMutation()
 }
 
 function signals(
@@ -207,11 +213,20 @@ function setPatternSignalsQuery(value: ReturnType<typeof patternSignalsQueryMock
   })
 }
 
+function setReportIssueMutation(value: ReturnType<typeof reportIssueMutationMock> = {}) {
+  reportIssueMutationMock.mockReturnValue({
+    mutateAsync: vi.fn().mockResolvedValue({ report_id: 'report-1' }),
+    isPending: false,
+    ...value,
+  })
+}
+
 describe('AnalyticsPatternDetailPage', () => {
   afterEach(() => {
     cleanup()
     detailQueryMock.mockReset()
     patternSignalsQueryMock.mockReset()
+    reportIssueMutationMock.mockReset()
     switchEstablishmentMock.mockReset()
     authState.current = {
       bootstrap: null,
@@ -287,6 +302,214 @@ describe('AnalyticsPatternDetailPage', () => {
     )
     expect(screen.queryByText(/raw/i)).toBeNull()
     expect(screen.queryByText(/prompt/i)).toBeNull()
+  })
+
+  it('hides the issue report action for Owner-only users', () => {
+    setDetailQuery({ data: detail() })
+    authState.current = {
+      bootstrap: bootstrap('owner'),
+      isBootstrapping: false,
+      isReady: true,
+    }
+
+    render(
+      <AnalyticsPatternDetailPage
+        patternId="pattern-1"
+        analyticsState={analyticsState}
+        onNavigate={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.queryByRole('button', { name: 'Signaler un regroupement incorrect' }),
+    ).toBeNull()
+  })
+
+  it('submits a pattern issue report for a Director in the current organization', async () => {
+    const mutateAsync = vi.fn().mockResolvedValue({ report_id: 'report-1' })
+    setDetailQuery({ data: detail() })
+    setReportIssueMutation({ mutateAsync })
+    authState.current = {
+      bootstrap: bootstrap('director'),
+      isBootstrapping: false,
+      isReady: true,
+    }
+
+    render(
+      <AnalyticsPatternDetailPage
+        patternId="44444444-4444-4444-8444-444444444444"
+        analyticsState={analyticsState}
+        onNavigate={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Signaler un regroupement incorrect' }),
+    )
+    fireEvent.change(screen.getByLabelText('Commentaire optionnel'), {
+      target: { value: 'Mauvais motif' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer' }))
+
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledWith({
+        patternId: '44444444-4444-4444-8444-444444444444',
+        signalId: '55555555-5555-4555-8555-555555555555',
+        body: {
+          reason: 'wrong_pattern',
+          comment: 'Mauvais motif',
+        },
+      })
+    })
+    expect(screen.getByText('Signalement envoyé pour revue.')).toBeTruthy()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('hides the issue report action when Director membership belongs to another known organization', () => {
+    setDetailQuery({ data: detail() })
+    authState.current = {
+      bootstrap: bootstrap('director', {
+        organizationId: '99999999-9999-4999-8999-999999999999',
+      }),
+      isBootstrapping: false,
+      isReady: true,
+    }
+
+    render(
+      <AnalyticsPatternDetailPage
+        patternId="pattern-1"
+        analyticsState={analyticsState}
+        onNavigate={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.queryByRole('button', { name: 'Signaler un regroupement incorrect' }),
+    ).toBeNull()
+  })
+
+  it('uses an approximate Director/Manager hint only when no reliable organization context exists', () => {
+    setDetailQuery({
+      data: detail({
+        drilldown_context: {
+          ...detail().drilldown_context,
+          organization_id: null,
+        },
+      }),
+    })
+    setPatternSignalsQuery({
+      data: {
+        pages: [
+          signals({
+            items: [
+              {
+                ...signals().items[0],
+                establishment: {
+                  id: 'unknown-establishment',
+                  name: 'Spore inconnu',
+                },
+              },
+            ],
+          }),
+        ],
+      },
+    })
+    authState.current = {
+      bootstrap: bootstrap('manager'),
+      isBootstrapping: false,
+      isReady: true,
+    }
+    const stateWithoutOrganization = {
+      ...analyticsState,
+      organizationId: null,
+    }
+
+    render(
+      <AnalyticsPatternDetailPage
+        patternId="pattern-1"
+        analyticsState={stateWithoutOrganization}
+        onNavigate={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.getByRole('button', { name: 'Signaler un regroupement incorrect' }),
+    ).toBeTruthy()
+  })
+
+  it('keeps the report sheet open on error and releases the submit lock', async () => {
+    const mutateAsync = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new AnalyticsApiError({
+          status: 409,
+          detail: 'Signal is no longer assigned to this pattern.',
+          code: 'analytics_pattern_assignment_mismatch',
+        }),
+      )
+      .mockResolvedValueOnce({ report_id: 'report-2' })
+    setDetailQuery({ data: detail() })
+    setReportIssueMutation({ mutateAsync })
+    authState.current = {
+      bootstrap: bootstrap('manager'),
+      isBootstrapping: false,
+      isReady: true,
+    }
+
+    render(
+      <AnalyticsPatternDetailPage
+        patternId="44444444-4444-4444-8444-444444444444"
+        analyticsState={analyticsState}
+        onNavigate={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Signaler un regroupement incorrect' }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Signal is no longer assigned to this pattern.')).toBeTruthy()
+    })
+    expect(screen.getByRole('dialog')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer' }))
+
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledTimes(2)
+    })
+    expect(screen.getByText('Signalement envoyé pour revue.')).toBeTruthy()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('blocks two rapid submits before TanStack pending state rerenders', () => {
+    const mutateAsync = vi.fn(() => new Promise(() => undefined))
+    setDetailQuery({ data: detail() })
+    setReportIssueMutation({ mutateAsync, isPending: false })
+    authState.current = {
+      bootstrap: bootstrap('director'),
+      isBootstrapping: false,
+      isReady: true,
+    }
+
+    render(
+      <AnalyticsPatternDetailPage
+        patternId="44444444-4444-4444-8444-444444444444"
+        analyticsState={analyticsState}
+        onNavigate={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Signaler un regroupement incorrect' }),
+    )
+
+    const submitButton = screen.getByRole('button', { name: 'Envoyer' })
+    fireEvent.click(submitButton)
+    fireEvent.click(submitButton)
+
+    expect(mutateAsync).toHaveBeenCalledTimes(1)
   })
 
   it('opens a same-establishment Signal without switching establishment', () => {

@@ -3,17 +3,21 @@ import {
   AlertCircle,
   ArrowLeft,
   Building2,
+  CheckCircle2,
   Clock3,
+  Flag,
   Loader2,
   Repeat2,
   TrendingUp,
 } from 'lucide-react'
-import { useMemo, useState, type ComponentType, type SVGProps } from 'react'
+import { useMemo, useRef, useState, type ComponentType, type SVGProps } from 'react'
 
 import { useAuth } from '@/app/auth-provider'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import {
+  TerrainBottomSheet,
   TerrainCard,
   TerrainEmptyState,
   TerrainErrorState,
@@ -28,6 +32,7 @@ import { AnalyticsApiError } from '@/features/analytics/api'
 import {
   useAnalyticsPatternDetailQuery,
   useAnalyticsPatternSignalsInfiniteQuery,
+  useReportAnalyticsPatternIssueMutation,
 } from '@/features/analytics/hooks'
 import {
   buildAnalyticsSignalDetailPath,
@@ -35,6 +40,7 @@ import {
   type AnalyticsUrlState,
 } from '@/features/analytics/lib/analytics-url-state'
 import { switchEstablishment } from '@/features/auth/api'
+import type { BootstrapResponse, Membership } from '@/features/auth/types'
 import { canShowAnalyticsNavigation } from '@/features/navigation/lib/shared-navigation'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { terrain } from '@/lib/terrain-styles'
@@ -49,6 +55,9 @@ type AnalyticsPatternDetailPageProps = {
 }
 
 const PATTERN_SIGNALS_PAGE_SIZE = 25
+const PATTERN_ISSUE_COMMENT_MAX_LENGTH = 500
+const PATTERN_ISSUE_REASON = 'wrong_pattern' as const
+const PATTERN_ISSUE_REPORT_ROLES = new Set(['director', 'manager'])
 
 function formatNumber(value: number | null): string {
   if (value == null) {
@@ -138,6 +147,58 @@ function formatBackendBucketDate(bucketDate: string): string {
 
 function formatPeriod(start: string, end: string): string {
   return `${formatDate(start)} - ${formatDate(end)}`
+}
+
+function activePatternIssueReporterMemberships(
+  bootstrap: BootstrapResponse | null | undefined,
+): Membership[] {
+  return (
+    bootstrap?.memberships.filter(
+      (membership) =>
+        membership.status === 'active' && PATTERN_ISSUE_REPORT_ROLES.has(membership.role),
+    ) ?? []
+  )
+}
+
+function resolveSignalOrganizationId(
+  bootstrap: BootstrapResponse | null | undefined,
+  establishmentId: string,
+): string | null {
+  return (
+    bootstrap?.memberships.find(
+      (membership) => membership.establishment_id === establishmentId,
+    )?.organization_id ?? null
+  )
+}
+
+function canShowPatternIssueReportAction({
+  bootstrap,
+  data,
+  analyticsState,
+  signal,
+}: {
+  bootstrap: BootstrapResponse | null | undefined
+  data: AnalyticsPatternDetailResponse
+  analyticsState: AnalyticsUrlState
+  signal: AnalyticsPatternSignalItem
+}): boolean {
+  const reporterMemberships = activePatternIssueReporterMemberships(bootstrap)
+  if (reporterMemberships.length === 0) {
+    return false
+  }
+
+  const organizationId =
+    data.drilldown_context.organization_id ??
+    analyticsState.organizationId ??
+    resolveSignalOrganizationId(bootstrap, signal.establishment.id)
+
+  if (!organizationId) {
+    return true
+  }
+
+  return reporterMemberships.some(
+    (membership) => membership.organization_id === organizationId,
+  )
 }
 
 function formatStatusLabel(status: string): string {
@@ -349,11 +410,17 @@ function PatternSignalsSection({
   navigationError,
   openingSignalId,
   onOpenSignal,
+  canShowIssueReportAction,
+  onReportIssue,
+  issueReportSuccess,
 }: {
   query: ReturnType<typeof useAnalyticsPatternSignalsInfiniteQuery>
   navigationError: string | null
   openingSignalId: string | null
   onOpenSignal: (item: AnalyticsPatternSignalItem) => void
+  canShowIssueReportAction: (item: AnalyticsPatternSignalItem) => boolean
+  onReportIssue: (item: AnalyticsPatternSignalItem) => void
+  issueReportSuccess: string | null
 }) {
   const items = useMemo(
     () => query.data?.pages.flatMap((page) => page.items) ?? [],
@@ -372,6 +439,16 @@ function PatternSignalsSection({
       {navigationError ? (
         <p className="mt-3 rounded-xl border border-[#F0D9C8] bg-[#FFF7EF] px-3 py-2 text-sm text-[#8A5A00]">
           {navigationError}
+        </p>
+      ) : null}
+
+      {issueReportSuccess ? (
+        <p
+          className="mt-3 flex items-center gap-2 rounded-xl border border-[#D8EADA] bg-[#F3FAF5] px-3 py-2 text-sm text-[#24614B]"
+          role="status"
+        >
+          <CheckCircle2 className="h-4 w-4" aria-hidden />
+          {issueReportSuccess}
         </p>
       ) : null}
 
@@ -400,39 +477,56 @@ function PatternSignalsSection({
 
       {items.length > 0 ? (
         <div className="mt-4 divide-y divide-[#F0EFE9] overflow-hidden rounded-xl border border-[#F0EFE9]">
-          {items.map((item) => (
-            <button
-              key={item.signal_id}
-              type="button"
-              className="grid w-full gap-2 px-4 py-3 text-left text-sm transition-colors hover:bg-[#FBFAF7] focus:outline-none focus:ring-2 focus:ring-[#114660] focus:ring-offset-2 md:grid-cols-[minmax(180px,1fr)_120px_150px_150px]"
-              disabled={openingSignalId === item.signal_id}
-              onClick={() => onOpenSignal(item)}
-            >
-              <span className="min-w-0">
-                <span className="block font-semibold text-[#1a1a1a]">{item.title}</span>
-                <span className={cn('mt-1 block text-xs leading-5', terrain.muted)}>
-                  {item.structured_summary}
+          {items.map((item) => {
+            const canReport = canShowIssueReportAction(item)
+            return (
+              <div
+                key={item.signal_id}
+                className="grid gap-3 px-4 py-3 text-sm transition-colors hover:bg-[#FBFAF7] md:grid-cols-[minmax(180px,1fr)_120px_150px_150px_auto]"
+              >
+                <button
+                  type="button"
+                  className="min-w-0 text-left focus:outline-none focus:ring-2 focus:ring-[#114660] focus:ring-offset-2"
+                  disabled={openingSignalId === item.signal_id}
+                  onClick={() => onOpenSignal(item)}
+                >
+                  <span className="block font-semibold text-[#1a1a1a]">{item.title}</span>
+                  <span className={cn('mt-1 block text-xs leading-5', terrain.muted)}>
+                    {item.structured_summary}
+                  </span>
+                </button>
+                <span>
+                  <span className="md:hidden">Statut: </span>
+                  {formatStatusLabel(item.status)}
                 </span>
-              </span>
-              <span>
-                <span className="md:hidden">Statut: </span>
-                {formatStatusLabel(item.status)}
-              </span>
-              <span className="text-[#555]">
-                <span className="md:hidden">Établissement: </span>
-                {item.establishment.name}
-              </span>
-              <span className="text-[#555]">
-                <span className="md:hidden">BU: </span>
-                {item.responsible_business_unit?.specific_name ?? 'Non assigné'}
-              </span>
-              <span className={cn('md:col-span-4 text-xs', terrain.muted)}>
-                Créé {formatDateTime(item.created_at)}
-                {item.resolved_at ? ` · Résolu ${formatDateTime(item.resolved_at)}` : ''}
-                {openingSignalId === item.signal_id ? ' · Ouverture...' : ''}
-              </span>
-            </button>
-          ))}
+                <span className="text-[#555]">
+                  <span className="md:hidden">Établissement: </span>
+                  {item.establishment.name}
+                </span>
+                <span className="text-[#555]">
+                  <span className="md:hidden">BU: </span>
+                  {item.responsible_business_unit?.specific_name ?? 'Non assigné'}
+                </span>
+                {canReport ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="justify-self-start text-[#8A5A00] hover:text-[#8A5A00]"
+                    onClick={() => onReportIssue(item)}
+                  >
+                    <Flag className="mr-2 h-4 w-4" aria-hidden />
+                    Signaler un regroupement incorrect
+                  </Button>
+                ) : null}
+                <span className={cn('text-xs md:col-span-5', terrain.muted)}>
+                  Créé {formatDateTime(item.created_at)}
+                  {item.resolved_at ? ` · Résolu ${formatDateTime(item.resolved_at)}` : ''}
+                  {openingSignalId === item.signal_id ? ' · Ouverture...' : ''}
+                </span>
+              </div>
+            )
+          })}
         </div>
       ) : null}
 
@@ -452,6 +546,92 @@ function PatternSignalsSection({
   )
 }
 
+function PatternIssueReportSheet({
+  signal,
+  comment,
+  error,
+  isPending,
+  onCommentChange,
+  onClose,
+  onSubmit,
+}: {
+  signal: AnalyticsPatternSignalItem | null
+  comment: string
+  error: string | null
+  isPending: boolean
+  onCommentChange: (value: string) => void
+  onClose: () => void
+  onSubmit: () => void
+}) {
+  const remainingCharacters = PATTERN_ISSUE_COMMENT_MAX_LENGTH - comment.length
+
+  return (
+    <TerrainBottomSheet
+      title="Signaler un regroupement incorrect"
+      open={Boolean(signal)}
+      onClose={onClose}
+      dismissible={!isPending}
+      footer={
+        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={isPending}
+          >
+            Annuler
+          </Button>
+          <Button
+            type="button"
+            onClick={onSubmit}
+            disabled={isPending || remainingCharacters < 0}
+          >
+            {isPending ? 'Envoi...' : 'Envoyer'}
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <p className={cn('text-sm leading-6', terrain.muted)}>
+          Le signalement crée une demande de revue. Il ne corrige pas automatiquement le motif
+          ni les Signals associés.
+        </p>
+        {signal ? (
+          <div className="rounded-xl border border-[#F0EFE9] bg-[#FBFAF7] px-3 py-2 text-sm">
+            <p className="font-semibold text-[#1a1a1a]">{signal.title}</p>
+            <p className={cn('mt-1 text-xs leading-5', terrain.muted)}>
+              {signal.establishment.name}
+            </p>
+          </div>
+        ) : null}
+        <label className="block space-y-2">
+          <span className="text-sm font-semibold text-[#1a1a1a]">Commentaire optionnel</span>
+          <Textarea
+            value={comment}
+            maxLength={PATTERN_ISSUE_COMMENT_MAX_LENGTH + 1}
+            onChange={(event) => onCommentChange(event.target.value)}
+            disabled={isPending}
+            placeholder="Ajouter un contexte utile pour la revue"
+          />
+        </label>
+        <div className="flex items-center justify-between gap-3 text-xs">
+          <span className={terrain.muted}>
+            Motif du signalement : regroupement incorrect.
+          </span>
+          <span className={remainingCharacters < 0 ? 'text-[#B42318]' : terrain.muted}>
+            {comment.length}/{PATTERN_ISSUE_COMMENT_MAX_LENGTH}
+          </span>
+        </div>
+        {error ? (
+          <p className="rounded-xl border border-[#F0D9C8] bg-[#FFF7EF] px-3 py-2 text-sm text-[#8A5A00]">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    </TerrainBottomSheet>
+  )
+}
+
 function AnalyticsPatternDetailContent({
   data,
   onBack,
@@ -459,6 +639,9 @@ function AnalyticsPatternDetailContent({
   signalNavigationError,
   openingSignalId,
   onOpenSignal,
+  canShowIssueReportAction,
+  onReportIssue,
+  issueReportSuccess,
 }: {
   data: AnalyticsPatternDetailResponse
   onBack: () => void
@@ -466,6 +649,9 @@ function AnalyticsPatternDetailContent({
   signalNavigationError: string | null
   openingSignalId: string | null
   onOpenSignal: (item: AnalyticsPatternSignalItem) => void
+  canShowIssueReportAction: (item: AnalyticsPatternSignalItem) => boolean
+  onReportIssue: (item: AnalyticsPatternSignalItem) => void
+  issueReportSuccess: string | null
 }) {
   return (
     <>
@@ -595,6 +781,9 @@ function AnalyticsPatternDetailContent({
         navigationError={signalNavigationError}
         openingSignalId={openingSignalId}
         onOpenSignal={onOpenSignal}
+        canShowIssueReportAction={canShowIssueReportAction}
+        onReportIssue={onReportIssue}
+        issueReportSuccess={issueReportSuccess}
       />
     </>
   )
@@ -609,6 +798,11 @@ export function AnalyticsPatternDetailPage({
   const canAccessAnalytics = canShowAnalyticsNavigation(bootstrap)
   const [signalNavigationError, setSignalNavigationError] = useState<string | null>(null)
   const [openingSignalId, setOpeningSignalId] = useState<string | null>(null)
+  const [reportSignal, setReportSignal] = useState<AnalyticsPatternSignalItem | null>(null)
+  const [reportComment, setReportComment] = useState('')
+  const [reportError, setReportError] = useState<string | null>(null)
+  const [reportSuccess, setReportSuccess] = useState<string | null>(null)
+  const issueReportSubmitLockedRef = useRef(false)
   const activeEstablishmentId = bootstrap?.active_membership?.establishment_id ?? null
   const detailQuery = useAnalyticsPatternDetailQuery(patternId, analyticsState, {
     enabled: isReady && !isBootstrapping && canAccessAnalytics,
@@ -617,6 +811,7 @@ export function AnalyticsPatternDetailPage({
     enabled: isReady && !isBootstrapping && canAccessAnalytics && Boolean(detailQuery.data),
     pageSize: PATTERN_SIGNALS_PAGE_SIZE,
   })
+  const issueReportMutation = useReportAnalyticsPatternIssueMutation()
   const backPath = buildAnalyticsReturnPath(analyticsState)
 
   function navigateBack() {
@@ -641,6 +836,57 @@ export function AnalyticsPatternDetailPage({
       )
     } finally {
       setOpeningSignalId(null)
+    }
+  }
+
+  function openIssueReport(item: AnalyticsPatternSignalItem) {
+    setReportSignal(item)
+    setReportComment('')
+    setReportError(null)
+    setReportSuccess(null)
+  }
+
+  function closeIssueReport() {
+    if (issueReportMutation.isPending) {
+      return
+    }
+    setReportSignal(null)
+    setReportComment('')
+    setReportError(null)
+  }
+
+  async function submitIssueReport() {
+    if (
+      !reportSignal ||
+      issueReportMutation.isPending ||
+      issueReportSubmitLockedRef.current
+    ) {
+      return
+    }
+    issueReportSubmitLockedRef.current = true
+    setReportError(null)
+    try {
+      await issueReportMutation.mutateAsync({
+        patternId,
+        signalId: reportSignal.signal_id,
+        body: {
+          reason: PATTERN_ISSUE_REASON,
+          comment: reportComment,
+        },
+      })
+      setReportSuccess('Signalement envoyé pour revue.')
+      setReportSignal(null)
+      setReportComment('')
+    } catch (error) {
+      setReportError(
+        resolveApiErrorMessage(
+          error,
+          AnalyticsApiError,
+          'Impossible d’envoyer ce signalement.',
+        ),
+      )
+    } finally {
+      issueReportSubmitLockedRef.current = false
     }
   }
 
@@ -683,14 +929,35 @@ export function AnalyticsPatternDetailPage({
       ) : null}
 
       {detailQuery.data ? (
-        <AnalyticsPatternDetailContent
-          data={detailQuery.data}
-          onBack={navigateBack}
-          patternSignalsQuery={patternSignalsQuery}
-          signalNavigationError={signalNavigationError}
-          openingSignalId={openingSignalId}
-          onOpenSignal={(item) => void openSignal(item)}
-        />
+        <>
+          <AnalyticsPatternDetailContent
+            data={detailQuery.data}
+            onBack={navigateBack}
+            patternSignalsQuery={patternSignalsQuery}
+            signalNavigationError={signalNavigationError}
+            openingSignalId={openingSignalId}
+            onOpenSignal={(item) => void openSignal(item)}
+            canShowIssueReportAction={(item) =>
+              canShowPatternIssueReportAction({
+                bootstrap,
+                data: detailQuery.data,
+                analyticsState,
+                signal: item,
+              })
+            }
+            onReportIssue={openIssueReport}
+            issueReportSuccess={reportSuccess}
+          />
+          <PatternIssueReportSheet
+            signal={reportSignal}
+            comment={reportComment}
+            error={reportError}
+            isPending={issueReportMutation.isPending}
+            onCommentChange={setReportComment}
+            onClose={closeIssueReport}
+            onSubmit={() => void submitIssueReport()}
+          />
+        </>
       ) : null}
     </div>
   )
