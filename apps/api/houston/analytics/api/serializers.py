@@ -304,3 +304,10 @@ class AnalyticsOwnerGovernanceResponseSerializer(serializers.Serializer):
     target_pattern = AnalyticsOwnerGovernancePatternRefSerializer(allow_null=True)
     moved_signal_count = serializers.IntegerField()
     target_created = serializers.BooleanField()
+
+
+class AnalyticsOwnerGovernanceTargetListResponseSerializer(serializers.Serializer):
+    items = AnalyticsOwnerGovernancePatternRefSerializer(many=True)
+    page_size = serializers.IntegerField()
+    has_more = serializers.BooleanField()
+    next_cursor = serializers.CharField(allow_null=True)

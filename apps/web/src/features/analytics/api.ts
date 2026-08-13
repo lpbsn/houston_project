@@ -25,6 +25,22 @@ export type AnalyticsPatternIssueReportRequest =
   components['schemas']['AnalyticsPatternIssueReportRequest']
 export type AnalyticsPatternIssueReportResponse =
   components['schemas']['AnalyticsPatternIssueReportResponse']
+export type AnalyticsOwnerGovernancePatternRef =
+  components['schemas']['AnalyticsOwnerGovernancePatternRef']
+export type AnalyticsOwnerGovernanceResponse =
+  components['schemas']['AnalyticsOwnerGovernanceResponse']
+export type AnalyticsOwnerGovernanceTargetListResponse =
+  components['schemas']['AnalyticsOwnerGovernanceTargetListResponse']
+export type AnalyticsPatternRenameRequest =
+  components['schemas']['AnalyticsPatternRenameRequest']
+export type AnalyticsPatternMergeRequest =
+  components['schemas']['AnalyticsPatternMergeRequest']
+export type AnalyticsPatternMoveSignalsRequest =
+  components['schemas']['AnalyticsPatternMoveSignalsRequest']
+export type AnalyticsPatternSplitToExistingRequest =
+  components['schemas']['AnalyticsPatternSplitToExistingRequest']
+export type AnalyticsPatternSplitToNewRequest =
+  components['schemas']['AnalyticsPatternSplitToNewRequest']
 
 export const analyticsQueryKeys = {
   all: ['analytics'] as const,
@@ -89,6 +105,16 @@ export const analyticsQueryKeys = {
     ] as const,
   patternIssueReport: (patternId: string, signalId: string) =>
     ['analytics', 'pattern-issue-report', patternId, signalId] as const,
+  governanceTargets: (patternId: string, options?: { q?: string; pageSize?: number }) =>
+    [
+      'analytics',
+      'governance-targets',
+      patternId,
+      {
+        q: options?.q?.trim() ?? '',
+        pageSize: options?.pageSize ?? null,
+      },
+    ] as const,
 }
 
 export class AnalyticsApiError extends Error {
@@ -190,6 +216,18 @@ function buildPatternSignalsQuery(
     period_start: state.periodStart,
     period_end: state.periodEnd,
     ...(state.organizationId ? { organization_id: state.organizationId } : {}),
+    ...(options.cursor ? { cursor: options.cursor } : {}),
+    ...(options.pageSize ? { page_size: options.pageSize } : {}),
+  }
+}
+
+function buildGovernanceTargetsQuery(options: {
+  q?: string
+  cursor?: string
+  pageSize?: number
+}) {
+  return {
+    ...(options.q?.trim() ? { q: options.q.trim() } : {}),
     ...(options.cursor ? { cursor: options.cursor } : {}),
     ...(options.pageSize ? { page_size: options.pageSize } : {}),
   }
@@ -307,4 +345,108 @@ export async function reportAnalyticsPatternIssue(
   )
 
   return assertAnalyticsData<AnalyticsPatternIssueReportResponse>(result)
+}
+
+export async function fetchAnalyticsPatternGovernanceTargets(
+  patternId: string,
+  options: { q?: string; cursor?: string; pageSize?: number } = {},
+): Promise<AnalyticsOwnerGovernanceTargetListResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/analytics/patterns/{pattern_id}/governance-targets/', {
+        params: {
+          path: { pattern_id: patternId },
+          query: buildGovernanceTargetsQuery(options),
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  return assertAnalyticsData<AnalyticsOwnerGovernanceTargetListResponse>(result)
+}
+
+export async function renameAnalyticsPattern(
+  patternId: string,
+  body: AnalyticsPatternRenameRequest,
+): Promise<AnalyticsOwnerGovernanceResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/analytics/patterns/{pattern_id}/rename/', {
+        params: { path: { pattern_id: patternId } },
+        body,
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  return assertAnalyticsData<AnalyticsOwnerGovernanceResponse>(result)
+}
+
+export async function mergeAnalyticsPatterns(
+  patternId: string,
+  body: AnalyticsPatternMergeRequest,
+): Promise<AnalyticsOwnerGovernanceResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/analytics/patterns/{pattern_id}/merge/', {
+        params: { path: { pattern_id: patternId } },
+        body,
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  return assertAnalyticsData<AnalyticsOwnerGovernanceResponse>(result)
+}
+
+export async function moveAnalyticsPatternSignals(
+  patternId: string,
+  body: AnalyticsPatternMoveSignalsRequest,
+): Promise<AnalyticsOwnerGovernanceResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/analytics/patterns/{pattern_id}/move-signals/', {
+        params: { path: { pattern_id: patternId } },
+        body,
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  return assertAnalyticsData<AnalyticsOwnerGovernanceResponse>(result)
+}
+
+export async function splitAnalyticsPatternToExisting(
+  patternId: string,
+  body: AnalyticsPatternSplitToExistingRequest,
+): Promise<AnalyticsOwnerGovernanceResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/analytics/patterns/{pattern_id}/split-to-existing/', {
+        params: { path: { pattern_id: patternId } },
+        body,
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  return assertAnalyticsData<AnalyticsOwnerGovernanceResponse>(result)
+}
+
+export async function splitAnalyticsPatternToNew(
+  patternId: string,
+  body: AnalyticsPatternSplitToNewRequest,
+): Promise<AnalyticsOwnerGovernanceResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/analytics/patterns/{pattern_id}/split-to-new/', {
+        params: { path: { pattern_id: patternId } },
+        body,
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  return assertAnalyticsData<AnalyticsOwnerGovernanceResponse>(result)
 }

@@ -14,9 +14,15 @@ import type { AnalyticsUrlState } from '@/features/analytics/lib/analytics-url-s
 const detailQueryMock = vi.fn()
 const patternSignalsQueryMock = vi.fn()
 const reportIssueMutationMock = vi.fn()
+const governanceTargetsQueryMock = vi.fn()
+const renameMutationMock = vi.fn()
+const mergeMutationMock = vi.fn()
+const moveMutationMock = vi.fn()
+const splitExistingMutationMock = vi.fn()
+const splitNewMutationMock = vi.fn()
 const switchEstablishmentMock = vi.fn()
 
-const { authState } = vi.hoisted(() => ({
+const { authState, notifySuccessMock, queryClientMock } = vi.hoisted(() => ({
   authState: {
     current: {
       bootstrap: null,
@@ -24,17 +30,36 @@ const { authState } = vi.hoisted(() => ({
       isReady: true,
     },
   },
+  notifySuccessMock: vi.fn(),
+  queryClientMock: {
+    invalidateQueries: vi.fn().mockResolvedValue(undefined),
+  },
 }))
 
 vi.mock('@/app/auth-provider', () => ({
   useAuth: () => authState.current,
 }))
 
+vi.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => queryClientMock,
+}))
+
+vi.mock('@/lib/success-toast', () => ({
+  notifySuccess: notifySuccessMock,
+}))
+
 vi.mock('@/features/analytics/hooks', () => ({
   useAnalyticsPatternDetailQuery: (...args: unknown[]) => detailQueryMock(...args),
   useAnalyticsPatternSignalsInfiniteQuery: (...args: unknown[]) =>
     patternSignalsQueryMock(...args),
+  useAnalyticsPatternGovernanceTargetsInfiniteQuery: (...args: unknown[]) =>
+    governanceTargetsQueryMock(...args),
   useReportAnalyticsPatternIssueMutation: () => reportIssueMutationMock(),
+  useRenameAnalyticsPatternMutation: () => renameMutationMock(),
+  useMergeAnalyticsPatternsMutation: () => mergeMutationMock(),
+  useMoveAnalyticsPatternSignalsMutation: () => moveMutationMock(),
+  useSplitAnalyticsPatternToExistingMutation: () => splitExistingMutationMock(),
+  useSplitAnalyticsPatternToNewMutation: () => splitNewMutationMock(),
 }))
 
 vi.mock('@/features/auth/api', () => ({
@@ -163,7 +188,9 @@ function setDetailQuery(value: ReturnType<typeof detailQueryMock> = {}) {
     ...value,
   })
   setPatternSignalsQuery()
+  setGovernanceTargetsQuery()
   setReportIssueMutation()
+  setOwnerGovernanceMutations()
 }
 
 function signals(
@@ -213,11 +240,144 @@ function setPatternSignalsQuery(value: ReturnType<typeof patternSignalsQueryMock
   })
 }
 
+function setGovernanceTargetsQuery(value: ReturnType<typeof governanceTargetsQueryMock> = {}) {
+  governanceTargetsQueryMock.mockReturnValue({
+    data: {
+      pages: [
+        {
+          items: [
+            {
+              pattern_id: '77777777-7777-4777-8777-777777777777',
+              label: 'Motif cible',
+              normalized_label: 'motif cible',
+              status: 'active',
+              merged_into_pattern_id: null,
+            },
+          ],
+          page_size: 20,
+          has_more: false,
+          next_cursor: null,
+        },
+      ],
+    },
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+    hasNextPage: false,
+    fetchNextPage: vi.fn(),
+    isFetchingNextPage: false,
+    ...value,
+  })
+}
+
 function setReportIssueMutation(value: ReturnType<typeof reportIssueMutationMock> = {}) {
   reportIssueMutationMock.mockReturnValue({
     mutateAsync: vi.fn().mockResolvedValue({ report_id: 'report-1' }),
     isPending: false,
     ...value,
+  })
+}
+
+function setOwnerGovernanceMutations() {
+  renameMutationMock.mockReturnValue({
+    mutateAsync: vi.fn().mockResolvedValue({
+      source_pattern: {
+        pattern_id: '44444444-4444-4444-8444-444444444444',
+        label: 'Nouveau motif',
+        normalized_label: 'nouveau motif',
+        status: 'active',
+        merged_into_pattern_id: null,
+      },
+      target_pattern: null,
+      moved_signal_count: 0,
+      target_created: false,
+    }),
+    isPending: false,
+  })
+  mergeMutationMock.mockReturnValue({
+    mutateAsync: vi.fn().mockResolvedValue({
+      source_pattern: {
+        pattern_id: '44444444-4444-4444-8444-444444444444',
+        label: 'Retard livraison',
+        normalized_label: 'retard livraison',
+        status: 'merged',
+        merged_into_pattern_id: '77777777-7777-4777-8777-777777777777',
+      },
+      target_pattern: {
+        pattern_id: '77777777-7777-4777-8777-777777777777',
+        label: 'Motif cible',
+        normalized_label: 'motif cible',
+        status: 'active',
+        merged_into_pattern_id: null,
+      },
+      moved_signal_count: 2,
+      target_created: false,
+    }),
+    isPending: false,
+  })
+  moveMutationMock.mockReturnValue({
+    mutateAsync: vi.fn().mockResolvedValue({
+      source_pattern: {
+        pattern_id: '44444444-4444-4444-8444-444444444444',
+        label: 'Retard livraison',
+        normalized_label: 'retard livraison',
+        status: 'active',
+        merged_into_pattern_id: null,
+      },
+      target_pattern: {
+        pattern_id: '77777777-7777-4777-8777-777777777777',
+        label: 'Motif cible',
+        normalized_label: 'motif cible',
+        status: 'active',
+        merged_into_pattern_id: null,
+      },
+      moved_signal_count: 1,
+      target_created: false,
+    }),
+    isPending: false,
+  })
+  splitExistingMutationMock.mockReturnValue({
+    mutateAsync: vi.fn().mockResolvedValue({
+      source_pattern: {
+        pattern_id: '44444444-4444-4444-8444-444444444444',
+        label: 'Retard livraison',
+        normalized_label: 'retard livraison',
+        status: 'active',
+        merged_into_pattern_id: null,
+      },
+      target_pattern: {
+        pattern_id: '77777777-7777-4777-8777-777777777777',
+        label: 'Motif cible',
+        normalized_label: 'motif cible',
+        status: 'active',
+        merged_into_pattern_id: null,
+      },
+      moved_signal_count: 1,
+      target_created: false,
+    }),
+    isPending: false,
+  })
+  splitNewMutationMock.mockReturnValue({
+    mutateAsync: vi.fn().mockResolvedValue({
+      source_pattern: {
+        pattern_id: '44444444-4444-4444-8444-444444444444',
+        label: 'Retard livraison',
+        normalized_label: 'retard livraison',
+        status: 'active',
+        merged_into_pattern_id: null,
+      },
+      target_pattern: {
+        pattern_id: '88888888-8888-4888-8888-888888888888',
+        label: 'Nouveau split',
+        normalized_label: 'nouveau split',
+        status: 'active',
+        merged_into_pattern_id: null,
+      },
+      moved_signal_count: 1,
+      target_created: true,
+    }),
+    isPending: false,
   })
 }
 
@@ -227,6 +387,14 @@ describe('AnalyticsPatternDetailPage', () => {
     detailQueryMock.mockReset()
     patternSignalsQueryMock.mockReset()
     reportIssueMutationMock.mockReset()
+    governanceTargetsQueryMock.mockReset()
+    renameMutationMock.mockReset()
+    mergeMutationMock.mockReset()
+    moveMutationMock.mockReset()
+    splitExistingMutationMock.mockReset()
+    splitNewMutationMock.mockReset()
+    notifySuccessMock.mockClear()
+    queryClientMock.invalidateQueries.mockClear()
     switchEstablishmentMock.mockReset()
     authState.current = {
       bootstrap: null,
@@ -323,6 +491,94 @@ describe('AnalyticsPatternDetailPage', () => {
     expect(
       screen.queryByRole('button', { name: 'Signaler un regroupement incorrect' }),
     ).toBeNull()
+  })
+
+  it('shows Owner governance for active Owner memberships only', () => {
+    setDetailQuery({ data: detail() })
+    authState.current = {
+      bootstrap: bootstrap('owner'),
+      isBootstrapping: false,
+      isReady: true,
+    }
+
+    render(
+      <AnalyticsPatternDetailPage
+        patternId="pattern-1"
+        analyticsState={analyticsState}
+        onNavigate={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('Gouvernance Owner')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Renommer' })).toBeTruthy()
+
+    cleanup()
+    setDetailQuery({ data: detail() })
+    authState.current = {
+      bootstrap: bootstrap('director'),
+      isBootstrapping: false,
+      isReady: true,
+    }
+
+    render(
+      <AnalyticsPatternDetailPage
+        patternId="pattern-1"
+        analyticsState={analyticsState}
+        onNavigate={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByText('Gouvernance Owner')).toBeNull()
+  })
+
+  it('does not use organization_id from the URL as a reliable Owner gating source', () => {
+    setDetailQuery({ data: detail() })
+    authState.current = {
+      bootstrap: bootstrap('owner', {
+        organizationId: '99999999-9999-4999-8999-999999999999',
+      }),
+      isBootstrapping: false,
+      isReady: true,
+    }
+
+    render(
+      <AnalyticsPatternDetailPage
+        patternId="pattern-1"
+        analyticsState={analyticsState}
+        onNavigate={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('Gouvernance Owner')).toBeTruthy()
+  })
+
+  it('loads governance targets with an infinite query when choosing a target', () => {
+    setDetailQuery({ data: detail() })
+    authState.current = {
+      bootstrap: bootstrap('owner'),
+      isBootstrapping: false,
+      isReady: true,
+    }
+
+    render(
+      <AnalyticsPatternDetailPage
+        patternId="pattern-1"
+        analyticsState={analyticsState}
+        onNavigate={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fusionner' }))
+
+    expect(governanceTargetsQueryMock).toHaveBeenLastCalledWith(
+      'pattern-1',
+      expect.objectContaining({
+        enabled: true,
+        pageSize: 20,
+        q: '',
+      }),
+    )
+    expect(screen.getByRole('button', { name: /Motif cible/ })).toBeTruthy()
   })
 
   it('submits a pattern issue report for a Director in the current organization', async () => {
@@ -510,6 +766,258 @@ describe('AnalyticsPatternDetailPage', () => {
     fireEvent.click(submitButton)
 
     expect(mutateAsync).toHaveBeenCalledTimes(1)
+  })
+
+  it('submits rename through Owner governance and keeps the user on the source detail', async () => {
+    const mutateAsync = vi.fn().mockResolvedValue({
+      source_pattern: {
+        pattern_id: '44444444-4444-4444-8444-444444444444',
+        label: 'Nouveau motif',
+        normalized_label: 'nouveau motif',
+        status: 'active',
+        merged_into_pattern_id: null,
+      },
+      target_pattern: null,
+      moved_signal_count: 0,
+      target_created: false,
+    })
+    setDetailQuery({ data: detail() })
+    setOwnerGovernanceMutations()
+    renameMutationMock.mockReturnValue({ mutateAsync, isPending: false })
+    authState.current = {
+      bootstrap: bootstrap('owner'),
+      isBootstrapping: false,
+      isReady: true,
+    }
+    const navigate = vi.fn()
+
+    render(
+      <AnalyticsPatternDetailPage
+        patternId="44444444-4444-4444-8444-444444444444"
+        analyticsState={analyticsState}
+        onNavigate={navigate}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Renommer' }))
+    fireEvent.change(screen.getByLabelText('Nouveau libellé'), {
+      target: { value: 'Nouveau motif' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }))
+
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledWith({
+        patternId: '44444444-4444-4444-8444-444444444444',
+        body: { label: 'Nouveau motif' },
+      })
+    })
+    expect(navigate).not.toHaveBeenCalled()
+    expect(screen.getByText('Motif renommé en “Nouveau motif”.')).toBeTruthy()
+  })
+
+  it('navigates to the merge target before invalidating the source as inactive', async () => {
+    const mutateAsync = vi.fn().mockResolvedValue({
+      source_pattern: {
+        pattern_id: '44444444-4444-4444-8444-444444444444',
+        label: 'Retard livraison',
+        normalized_label: 'retard livraison',
+        status: 'merged',
+        merged_into_pattern_id: '77777777-7777-4777-8777-777777777777',
+      },
+      target_pattern: {
+        pattern_id: '77777777-7777-4777-8777-777777777777',
+        label: 'Motif cible',
+        normalized_label: 'motif cible',
+        status: 'active',
+        merged_into_pattern_id: null,
+      },
+      moved_signal_count: 2,
+      target_created: false,
+    })
+    setDetailQuery({ data: detail() })
+    setOwnerGovernanceMutations()
+    mergeMutationMock.mockReturnValue({ mutateAsync, isPending: false })
+    authState.current = {
+      bootstrap: bootstrap('owner'),
+      isBootstrapping: false,
+      isReady: true,
+    }
+    const navigate = vi.fn()
+
+    render(
+      <AnalyticsPatternDetailPage
+        patternId="44444444-4444-4444-8444-444444444444"
+        analyticsState={analyticsState}
+        onNavigate={navigate}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fusionner' }))
+    fireEvent.click(screen.getByRole('button', { name: /Motif cible/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }))
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith(
+        expect.stringContaining('/analytics/patterns/77777777-7777-4777-8777-777777777777?'),
+        { replace: true },
+      )
+    })
+    expect(notifySuccessMock).toHaveBeenCalledWith({
+      message: 'Fusion appliquée : 2 Signal(s) déplacé(s).',
+      kind: 'updated',
+    })
+    expect(queryClientMock.invalidateQueries).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: expect.arrayContaining(['analytics', 'pattern-detail']),
+        type: 'inactive',
+      }),
+    )
+  })
+
+  it('submits move with selected loaded Signals and blocks rapid double-submit', async () => {
+    const mutateAsync = vi.fn(() => new Promise(() => undefined))
+    setDetailQuery({ data: detail() })
+    setOwnerGovernanceMutations()
+    moveMutationMock.mockReturnValue({ mutateAsync, isPending: false })
+    authState.current = {
+      bootstrap: bootstrap('owner'),
+      isBootstrapping: false,
+      isReady: true,
+    }
+
+    render(
+      <AnalyticsPatternDetailPage
+        patternId="44444444-4444-4444-8444-444444444444"
+        analyticsState={analyticsState}
+        onNavigate={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Déplacer' }))
+    fireEvent.click(screen.getByRole('button', { name: /Motif cible/ }))
+    fireEvent.click(screen.getByLabelText(/Signal retard/))
+    const submit = screen.getByRole('button', { name: 'Confirmer' })
+    fireEvent.click(submit)
+    fireEvent.click(submit)
+
+    expect(mutateAsync).toHaveBeenCalledTimes(1)
+    expect(mutateAsync).toHaveBeenCalledWith({
+      patternId: '44444444-4444-4444-8444-444444444444',
+      body: {
+        target_pattern_id: '77777777-7777-4777-8777-777777777777',
+        signal_ids: ['55555555-5555-4555-8555-555555555555'],
+      },
+    })
+  })
+
+  it('submits split to existing with selected loaded Signals and target pattern', async () => {
+    const mutateAsync = vi.fn().mockResolvedValue({
+      source_pattern: {
+        pattern_id: '44444444-4444-4444-8444-444444444444',
+        label: 'Retard livraison',
+        normalized_label: 'retard livraison',
+        status: 'active',
+        merged_into_pattern_id: null,
+      },
+      target_pattern: {
+        pattern_id: '77777777-7777-4777-8777-777777777777',
+        label: 'Motif cible',
+        normalized_label: 'motif cible',
+        status: 'active',
+        merged_into_pattern_id: null,
+      },
+      moved_signal_count: 1,
+      target_created: false,
+    })
+    setDetailQuery({ data: detail() })
+    setOwnerGovernanceMutations()
+    splitExistingMutationMock.mockReturnValue({ mutateAsync, isPending: false })
+    authState.current = {
+      bootstrap: bootstrap('owner'),
+      isBootstrapping: false,
+      isReady: true,
+    }
+
+    render(
+      <AnalyticsPatternDetailPage
+        patternId="44444444-4444-4444-8444-444444444444"
+        analyticsState={analyticsState}
+        onNavigate={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Split existant' }))
+    fireEvent.click(screen.getByRole('button', { name: /Motif cible/ }))
+    fireEvent.click(screen.getByLabelText(/Signal retard/))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }))
+
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledWith({
+        patternId: '44444444-4444-4444-8444-444444444444',
+        body: {
+          target_pattern_id: '77777777-7777-4777-8777-777777777777',
+          signal_ids: ['55555555-5555-4555-8555-555555555555'],
+        },
+      })
+    })
+  })
+
+  it('submits split to new and navigates to the created target with analytics context', async () => {
+    const mutateAsync = vi.fn().mockResolvedValue({
+      source_pattern: {
+        pattern_id: '44444444-4444-4444-8444-444444444444',
+        label: 'Retard livraison',
+        normalized_label: 'retard livraison',
+        status: 'active',
+        merged_into_pattern_id: null,
+      },
+      target_pattern: {
+        pattern_id: '88888888-8888-4888-8888-888888888888',
+        label: 'Nouveau split',
+        normalized_label: 'nouveau split',
+        status: 'active',
+        merged_into_pattern_id: null,
+      },
+      moved_signal_count: 1,
+      target_created: true,
+    })
+    setDetailQuery({ data: detail() })
+    setOwnerGovernanceMutations()
+    splitNewMutationMock.mockReturnValue({ mutateAsync, isPending: false })
+    authState.current = {
+      bootstrap: bootstrap('owner'),
+      isBootstrapping: false,
+      isReady: true,
+    }
+    const navigate = vi.fn()
+
+    render(
+      <AnalyticsPatternDetailPage
+        patternId="44444444-4444-4444-8444-444444444444"
+        analyticsState={analyticsState}
+        onNavigate={navigate}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Split nouveau' }))
+    fireEvent.change(screen.getByLabelText('Libellé du nouveau motif'), {
+      target: { value: 'Nouveau split' },
+    })
+    fireEvent.click(screen.getByLabelText(/Signal retard/))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }))
+
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledWith({
+        patternId: '44444444-4444-4444-8444-444444444444',
+        body: {
+          label: 'Nouveau split',
+          signal_ids: ['55555555-5555-4555-8555-555555555555'],
+        },
+      })
+    })
+    expect(navigate).toHaveBeenCalledWith(
+      expect.stringContaining('/analytics/patterns/88888888-8888-4888-8888-888888888888?'),
+    )
   })
 
   it('opens a same-establishment Signal without switching establishment', () => {

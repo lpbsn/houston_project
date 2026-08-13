@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import json
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -68,6 +70,10 @@ PATTERN_ISSUE_REPORT_ROLES = frozenset(
         EstablishmentMembership.Role.MANAGER,
     }
 )
+OWNER_GOVERNANCE_TARGETS_CURSOR_VERSION = "analytics_owner_governance_targets_v1"
+DEFAULT_OWNER_GOVERNANCE_TARGETS_PAGE_SIZE = 20
+MAX_OWNER_GOVERNANCE_TARGETS_PAGE_SIZE = 50
+MAX_OWNER_GOVERNANCE_TARGETS_SEARCH_LENGTH = 100
 
 
 class PatternClassificationRetryableError(Exception):
@@ -139,6 +145,20 @@ class OwnerGovernanceResult:
     target_pattern: OwnerGovernancePatternRef | None = None
     moved_signal_count: int = 0
     target_created: bool = False
+
+
+@dataclass(frozen=True)
+class OwnerGovernanceTargetListResult:
+    items: tuple[OwnerGovernancePatternRef, ...]
+    page_size: int
+    has_more: bool
+    next_cursor: str | None
+
+
+@dataclass(frozen=True)
+class _OwnerGovernanceTargetsCursor:
+    normalized_label: str
+    pattern_id: uuid.UUID
 
 
 class PatternClassificationObsoleteAttempt(Exception):
@@ -309,6 +329,63 @@ def report_pattern_assignment_issue(
 
 def can_govern_any_operational_patterns(user: User | None) -> bool:
     return bool(_owner_governance_memberships_for_user(user))
+
+
+def list_owner_governance_pattern_targets(
+    user: User | None,
+    *,
+    source_pattern_id,
+    q: str = "",
+    page_size: int = DEFAULT_OWNER_GOVERNANCE_TARGETS_PAGE_SIZE,
+    cursor: str | None = None,
+) -> OwnerGovernanceTargetListResult:
+    source = _resolve_governable_pattern_for_user(user, source_pattern_id)
+    _resolve_owner_governance_membership(user=user, organization=source.organization)
+    validated_page_size = _validate_owner_governance_targets_page_size(page_size)
+    normalized_q = _normalize_owner_governance_targets_search(q)
+    context = _owner_governance_targets_cursor_context(
+        user=user,
+        source_pattern_id=source.id,
+        q=normalized_q,
+        page_size=validated_page_size,
+    )
+    parsed_cursor = _parse_owner_governance_targets_cursor(
+        cursor,
+        expected_context=context,
+    )
+
+    queryset = (
+        OperationalPattern.objects.filter(
+            organization_id=source.organization_id,
+            status=OperationalPattern.Status.ACTIVE,
+            merged_into__isnull=True,
+        )
+        .exclude(id=source.id)
+        .order_by("normalized_label", "id")
+    )
+    if normalized_q:
+        normalized_label_query = normalize_pattern_label(normalized_q)
+        queryset = queryset.filter(
+            Q(label__icontains=normalized_q)
+            | Q(normalized_label__icontains=normalized_label_query)
+        )
+    queryset = _apply_owner_governance_targets_cursor(queryset, parsed_cursor)
+    rows = list(queryset[: validated_page_size + 1])
+    has_more = len(rows) > validated_page_size
+    served_rows = rows[:validated_page_size]
+    items = tuple(_owner_governance_pattern_ref(pattern) for pattern in served_rows)
+    next_cursor = None
+    if has_more and items:
+        next_cursor = _encode_owner_governance_targets_cursor(
+            context=context,
+            item=items[-1],
+        )
+    return OwnerGovernanceTargetListResult(
+        items=items,
+        page_size=validated_page_size,
+        has_more=has_more,
+        next_cursor=next_cursor,
+    )
 
 
 def rename_operational_pattern_for_owner(
@@ -1117,6 +1194,108 @@ def _owner_governance_pattern_ref(
         status=pattern.status,
         merged_into_pattern_id=pattern.merged_into_id,
     )
+
+
+def _validate_owner_governance_targets_page_size(page_size: int) -> int:
+    try:
+        parsed = int(page_size)
+    except (TypeError, ValueError) as exc:
+        raise AnalyticsValidationError(
+            "page_size must be an integer.",
+            code="analytics_owner_governance_targets_page_size_invalid",
+        ) from exc
+    if parsed < 1 or parsed > MAX_OWNER_GOVERNANCE_TARGETS_PAGE_SIZE:
+        raise AnalyticsValidationError(
+            f"page_size must be between 1 and {MAX_OWNER_GOVERNANCE_TARGETS_PAGE_SIZE}.",
+            code="analytics_owner_governance_targets_page_size_invalid",
+        )
+    return parsed
+
+
+def _normalize_owner_governance_targets_search(q: str) -> str:
+    normalized = str(q or "").strip()
+    if len(normalized) > MAX_OWNER_GOVERNANCE_TARGETS_SEARCH_LENGTH:
+        raise AnalyticsValidationError(
+            "q is too long.",
+            code="analytics_owner_governance_targets_filter_invalid",
+        )
+    return normalized
+
+
+def _apply_owner_governance_targets_cursor(
+    queryset,
+    cursor: _OwnerGovernanceTargetsCursor | None,
+):
+    if cursor is None:
+        return queryset
+    return queryset.filter(
+        Q(normalized_label__gt=cursor.normalized_label)
+        | Q(normalized_label=cursor.normalized_label, id__gt=cursor.pattern_id)
+    )
+
+
+def _owner_governance_targets_cursor_context(
+    *,
+    user: User | None,
+    source_pattern_id: uuid.UUID,
+    q: str,
+    page_size: int,
+) -> dict[str, object]:
+    return {
+        "user_id": str(user.id) if user is not None else None,
+        "source_pattern_id": str(source_pattern_id),
+        "q": q,
+        "page_size": page_size,
+    }
+
+
+def _encode_owner_governance_targets_cursor(
+    *,
+    context: dict[str, object],
+    item: OwnerGovernancePatternRef,
+) -> str:
+    payload = {
+        "version": OWNER_GOVERNANCE_TARGETS_CURSOR_VERSION,
+        "context": context,
+        "sort": {
+            "normalized_label": item.normalized_label,
+            "pattern_id": str(item.pattern_id),
+        },
+    }
+    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+    return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
+
+
+def _parse_owner_governance_targets_cursor(
+    raw: str | None,
+    *,
+    expected_context: dict[str, object],
+) -> _OwnerGovernanceTargetsCursor | None:
+    if not raw:
+        return None
+    padding = "=" * (-len(raw) % 4)
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(f"{raw}{padding}").decode())
+        if payload.get("version") != OWNER_GOVERNANCE_TARGETS_CURSOR_VERSION:
+            raise ValueError
+        if payload.get("context") != expected_context:
+            raise ValueError
+        sort = payload["sort"]
+        return _OwnerGovernanceTargetsCursor(
+            normalized_label=str(sort["normalized_label"]),
+            pattern_id=uuid.UUID(str(sort["pattern_id"])),
+        )
+    except (
+        KeyError,
+        TypeError,
+        ValueError,
+        json.JSONDecodeError,
+        UnicodeDecodeError,
+    ) as exc:
+        raise AnalyticsValidationError(
+            "Invalid analytics owner governance targets cursor.",
+            code="analytics_owner_governance_targets_cursor_invalid",
+        ) from exc
 
 
 def _terminal_merge_precheck(

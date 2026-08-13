@@ -410,6 +410,64 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/analytics/patterns/{pattern_id}/governance-targets/:
+    get:
+      operationId: v1_analytics_pattern_governance_targets_list
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Page size, default 20, maximum 50.
+      - in: path
+        name: pattern_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: q
+        schema:
+          type: string
+      tags:
+      - analytics
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsOwnerGovernanceTargetListResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/analytics/patterns/{pattern_id}/merge/:
     post:
       operationId: v1_analytics_pattern_merge
@@ -9527,6 +9585,25 @@ components:
       - source_pattern
       - target_created
       - target_pattern
+    AnalyticsOwnerGovernanceTargetListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsOwnerGovernancePatternRef'
+        page_size:
+          type: integer
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
+      required:
+      - has_more
+      - items
+      - next_cursor
+      - page_size
     AnalyticsPatternBusinessUnitDistributionBucket:
       type: object
       properties:

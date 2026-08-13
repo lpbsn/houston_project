@@ -12,6 +12,12 @@ const fetchAnalyticsPatternDetailMock = vi.fn()
 const reportAnalyticsPatternIssueMock = vi.fn()
 const fetchAnalyticsPatternsMock = vi.fn()
 const fetchAnalyticsPatternSignalsMock = vi.fn()
+const fetchAnalyticsPatternGovernanceTargetsMock = vi.fn()
+const renameAnalyticsPatternMock = vi.fn()
+const mergeAnalyticsPatternsMock = vi.fn()
+const moveAnalyticsPatternSignalsMock = vi.fn()
+const splitAnalyticsPatternToExistingMock = vi.fn()
+const splitAnalyticsPatternToNewMock = vi.fn()
 
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
@@ -21,7 +27,17 @@ vi.mock('./api', async (importOriginal) => {
     fetchAnalyticsPatternDetail: (...args: unknown[]) => fetchAnalyticsPatternDetailMock(...args),
     fetchAnalyticsPatternSignals: (...args: unknown[]) =>
       fetchAnalyticsPatternSignalsMock(...args),
+    fetchAnalyticsPatternGovernanceTargets: (...args: unknown[]) =>
+      fetchAnalyticsPatternGovernanceTargetsMock(...args),
     fetchAnalyticsPatterns: (...args: unknown[]) => fetchAnalyticsPatternsMock(...args),
+    renameAnalyticsPattern: (...args: unknown[]) => renameAnalyticsPatternMock(...args),
+    mergeAnalyticsPatterns: (...args: unknown[]) => mergeAnalyticsPatternsMock(...args),
+    moveAnalyticsPatternSignals: (...args: unknown[]) =>
+      moveAnalyticsPatternSignalsMock(...args),
+    splitAnalyticsPatternToExisting: (...args: unknown[]) =>
+      splitAnalyticsPatternToExistingMock(...args),
+    splitAnalyticsPatternToNew: (...args: unknown[]) =>
+      splitAnalyticsPatternToNewMock(...args),
     reportAnalyticsPatternIssue: (...args: unknown[]) =>
       reportAnalyticsPatternIssueMock(...args),
   }
@@ -30,10 +46,16 @@ vi.mock('./api', async (importOriginal) => {
 import { analyticsQueryKeys } from './api'
 import {
   useAnalyticsDashboardQuery,
+  useAnalyticsPatternGovernanceTargetsInfiniteQuery,
   useAnalyticsPatternDetailQuery,
   useAnalyticsPatternSignalsInfiniteQuery,
   useAnalyticsPatternsInfiniteQuery,
+  useMergeAnalyticsPatternsMutation,
+  useMoveAnalyticsPatternSignalsMutation,
+  useRenameAnalyticsPatternMutation,
   useReportAnalyticsPatternIssueMutation,
+  useSplitAnalyticsPatternToExistingMutation,
+  useSplitAnalyticsPatternToNewMutation,
 } from './hooks'
 import type { AnalyticsUrlState } from './lib/analytics-url-state'
 
@@ -61,6 +83,12 @@ describe('useAnalyticsDashboardQuery', () => {
     reportAnalyticsPatternIssueMock.mockReset()
     fetchAnalyticsPatternsMock.mockReset()
     fetchAnalyticsPatternSignalsMock.mockReset()
+    fetchAnalyticsPatternGovernanceTargetsMock.mockReset()
+    renameAnalyticsPatternMock.mockReset()
+    mergeAnalyticsPatternsMock.mockReset()
+    moveAnalyticsPatternSignalsMock.mockReset()
+    splitAnalyticsPatternToExistingMock.mockReset()
+    splitAnalyticsPatternToNewMock.mockReset()
   })
 
   it('fetches the dashboard with the resolved URL state', async () => {
@@ -295,6 +323,78 @@ describe('useAnalyticsPatternsInfiniteQuery', () => {
   })
 })
 
+describe('useAnalyticsPatternGovernanceTargetsInfiniteQuery', () => {
+  afterEach(() => {
+    fetchAnalyticsPatternGovernanceTargetsMock.mockReset()
+  })
+
+  it('uses backend cursors as page params and keys search/page size only', async () => {
+    fetchAnalyticsPatternGovernanceTargetsMock
+      .mockResolvedValueOnce({
+        items: [],
+        has_more: true,
+        next_cursor: 'cursor-1',
+      })
+      .mockResolvedValueOnce({
+        items: [],
+        has_more: false,
+        next_cursor: null,
+      })
+
+    const { result } = renderHook(
+      () =>
+        useAnalyticsPatternGovernanceTargetsInfiniteQuery('pattern-1', {
+          q: 'retard',
+          pageSize: 20,
+        }),
+      { wrapper },
+    )
+
+    await waitFor(() => {
+      expect(result.current.hasNextPage).toBe(true)
+    })
+
+    await result.current.fetchNextPage()
+
+    expect(fetchAnalyticsPatternGovernanceTargetsMock).toHaveBeenNthCalledWith(1, 'pattern-1', {
+      cursor: undefined,
+      pageSize: 20,
+      q: 'retard',
+    })
+    expect(fetchAnalyticsPatternGovernanceTargetsMock).toHaveBeenNthCalledWith(2, 'pattern-1', {
+      cursor: 'cursor-1',
+      pageSize: 20,
+      q: 'retard',
+    })
+    expect(
+      analyticsQueryKeys.governanceTargets('pattern-1', {
+        q: 'retard',
+        pageSize: 20,
+      }),
+    ).toEqual([
+      'analytics',
+      'governance-targets',
+      'pattern-1',
+      {
+        q: 'retard',
+        pageSize: 20,
+      },
+    ])
+  })
+
+  it('does not fetch governance targets when disabled', () => {
+    renderHook(
+      () =>
+        useAnalyticsPatternGovernanceTargetsInfiniteQuery('pattern-1', {
+          enabled: false,
+        }),
+      { wrapper },
+    )
+
+    expect(fetchAnalyticsPatternGovernanceTargetsMock).not.toHaveBeenCalled()
+  })
+})
+
 describe('useReportAnalyticsPatternIssueMutation', () => {
   afterEach(() => {
     reportAnalyticsPatternIssueMock.mockReset()
@@ -319,5 +419,78 @@ describe('useReportAnalyticsPatternIssueMutation', () => {
     ).rejects.toThrow('network timeout')
 
     expect(reportAnalyticsPatternIssueMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('owner governance mutations', () => {
+  afterEach(() => {
+    renameAnalyticsPatternMock.mockReset()
+    mergeAnalyticsPatternsMock.mockReset()
+    moveAnalyticsPatternSignalsMock.mockReset()
+    splitAnalyticsPatternToExistingMock.mockReset()
+    splitAnalyticsPatternToNewMock.mockReset()
+  })
+
+  it('disables automatic retry for owner governance POSTs', async () => {
+    renameAnalyticsPatternMock.mockRejectedValue(new Error('network timeout'))
+    mergeAnalyticsPatternsMock.mockRejectedValue(new Error('network timeout'))
+    moveAnalyticsPatternSignalsMock.mockRejectedValue(new Error('network timeout'))
+    splitAnalyticsPatternToExistingMock.mockRejectedValue(new Error('network timeout'))
+    splitAnalyticsPatternToNewMock.mockRejectedValue(new Error('network timeout'))
+
+    const { result: rename } = renderHook(() => useRenameAnalyticsPatternMutation(), {
+      wrapper,
+    })
+    const { result: merge } = renderHook(() => useMergeAnalyticsPatternsMutation(), {
+      wrapper,
+    })
+    const { result: move } = renderHook(() => useMoveAnalyticsPatternSignalsMutation(), {
+      wrapper,
+    })
+    const { result: splitExisting } = renderHook(
+      () => useSplitAnalyticsPatternToExistingMutation(),
+      { wrapper },
+    )
+    const { result: splitNew } = renderHook(
+      () => useSplitAnalyticsPatternToNewMutation(),
+      { wrapper },
+    )
+
+    await expect(
+      rename.current.mutateAsync({
+        patternId: 'pattern-1',
+        body: { label: 'New' },
+      }),
+    ).rejects.toThrow('network timeout')
+    await expect(
+      merge.current.mutateAsync({
+        patternId: 'pattern-1',
+        body: { target_pattern_id: 'pattern-2' },
+      }),
+    ).rejects.toThrow('network timeout')
+    await expect(
+      move.current.mutateAsync({
+        patternId: 'pattern-1',
+        body: { target_pattern_id: 'pattern-2', signal_ids: ['signal-1'] },
+      }),
+    ).rejects.toThrow('network timeout')
+    await expect(
+      splitExisting.current.mutateAsync({
+        patternId: 'pattern-1',
+        body: { target_pattern_id: 'pattern-2', signal_ids: ['signal-1'] },
+      }),
+    ).rejects.toThrow('network timeout')
+    await expect(
+      splitNew.current.mutateAsync({
+        patternId: 'pattern-1',
+        body: { label: 'Split', signal_ids: ['signal-1'] },
+      }),
+    ).rejects.toThrow('network timeout')
+
+    expect(renameAnalyticsPatternMock).toHaveBeenCalledTimes(1)
+    expect(mergeAnalyticsPatternsMock).toHaveBeenCalledTimes(1)
+    expect(moveAnalyticsPatternSignalsMock).toHaveBeenCalledTimes(1)
+    expect(splitAnalyticsPatternToExistingMock).toHaveBeenCalledTimes(1)
+    expect(splitAnalyticsPatternToNewMock).toHaveBeenCalledTimes(1)
   })
 })

@@ -17,6 +17,7 @@ from houston.accounts.authentication import BearerAccessTokenAuthentication
 from houston.analytics.api.serializers import (
     AnalyticsDashboardResponseSerializer,
     AnalyticsOwnerGovernanceResponseSerializer,
+    AnalyticsOwnerGovernanceTargetListResponseSerializer,
     AnalyticsPatternDetailResponseSerializer,
     AnalyticsPatternFilterOptionsResponseSerializer,
     AnalyticsPatternIssueReportRequestSerializer,
@@ -50,7 +51,10 @@ from houston.analytics.pattern_signals import (
 )
 from houston.analytics.permissions import can_read_analytics
 from houston.analytics.services import (
+    DEFAULT_OWNER_GOVERNANCE_TARGETS_PAGE_SIZE,
+    MAX_OWNER_GOVERNANCE_TARGETS_PAGE_SIZE,
     can_govern_any_operational_patterns,
+    list_owner_governance_pattern_targets,
     merge_operational_patterns_for_owner,
     move_signals_between_patterns_for_owner,
     rename_operational_pattern_for_owner,
@@ -632,6 +636,47 @@ class AnalyticsPatternIssueReportView(AnalyticsAPIView):
                 _serialize_pattern_issue_report(report)
             ).data,
             status=status.HTTP_201_CREATED,
+        )
+
+
+class AnalyticsPatternGovernanceTargetsView(AnalyticsOwnerGovernanceAPIView):
+    @extend_schema(
+        tags=["analytics"],
+        operation_id="v1_analytics_pattern_governance_targets_list",
+        parameters=[
+            OpenApiParameter(name="q", required=False, type=str),
+            _page_size_param(
+                DEFAULT_OWNER_GOVERNANCE_TARGETS_PAGE_SIZE,
+                MAX_OWNER_GOVERNANCE_TARGETS_PAGE_SIZE,
+            ),
+            OpenApiParameter(name="cursor", required=False, type=str),
+        ],
+        responses={
+            200: AnalyticsOwnerGovernanceTargetListResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def get(self, request, pattern_id):
+        try:
+            result = list_owner_governance_pattern_targets(
+                request.user,
+                source_pattern_id=pattern_id,
+                q=request.query_params.get("q", ""),
+                page_size=request.query_params.get(
+                    "page_size",
+                    DEFAULT_OWNER_GOVERNANCE_TARGETS_PAGE_SIZE,
+                ),
+                cursor=request.query_params.get("cursor"),
+            )
+        except AnalyticsValidationError as exc:
+            return _analytics_governance_error_response(exc)
+        return Response(
+            AnalyticsOwnerGovernanceTargetListResponseSerializer(
+                _dataclass_payload(result)
+            ).data
         )
 
 

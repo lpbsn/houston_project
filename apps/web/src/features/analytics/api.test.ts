@@ -16,11 +16,17 @@ import {
   AnalyticsApiError,
   analyticsQueryKeys,
   fetchAnalyticsDashboard,
+  fetchAnalyticsPatternGovernanceTargets,
   fetchAnalyticsPatternDetail,
   fetchAnalyticsPatternFilterOptions,
   fetchAnalyticsPatternSignals,
   fetchAnalyticsPatterns,
+  mergeAnalyticsPatterns,
+  moveAnalyticsPatternSignals,
+  renameAnalyticsPattern,
   reportAnalyticsPatternIssue,
+  splitAnalyticsPatternToExisting,
+  splitAnalyticsPatternToNew,
   type AnalyticsDashboardResponse,
 } from './api'
 
@@ -512,6 +518,127 @@ describe('analytics api', () => {
           comment: 'Mauvais motif',
         },
         headers: { Authorization: 'Bearer test-token' },
+      }),
+    )
+  })
+
+  it('fetches owner governance targets through the generated paginated endpoint', async () => {
+    getMock.mockResolvedValue({
+      data: {
+        items: [],
+        page_size: 20,
+        has_more: false,
+        next_cursor: null,
+      },
+      error: undefined,
+      response: { ok: true, status: 200 } as Response,
+    })
+
+    await fetchAnalyticsPatternGovernanceTargets(
+      '44444444-4444-4444-8444-444444444444',
+      {
+        q: 'retard',
+        cursor: 'cursor-1',
+        pageSize: 20,
+      },
+    )
+
+    expect(getMock).toHaveBeenCalledWith(
+      '/api/v1/analytics/patterns/{pattern_id}/governance-targets/',
+      expect.objectContaining({
+        params: {
+          path: { pattern_id: '44444444-4444-4444-8444-444444444444' },
+          query: {
+            q: 'retard',
+            cursor: 'cursor-1',
+            page_size: 20,
+          },
+        },
+        headers: { Authorization: 'Bearer test-token' },
+      }),
+    )
+  })
+
+  it('posts owner governance mutations through generated endpoint contracts', async () => {
+    postMock.mockResolvedValue({
+      data: {
+        source_pattern: {
+          pattern_id: '44444444-4444-4444-8444-444444444444',
+          label: 'Source',
+          normalized_label: 'source',
+          status: 'active',
+          merged_into_pattern_id: null,
+        },
+        target_pattern: null,
+        moved_signal_count: 0,
+        target_created: false,
+      },
+      error: undefined,
+      response: { ok: true, status: 200 } as Response,
+    })
+
+    await renameAnalyticsPattern('44444444-4444-4444-8444-444444444444', {
+      label: 'Nouveau',
+    })
+    await mergeAnalyticsPatterns('44444444-4444-4444-8444-444444444444', {
+      target_pattern_id: '77777777-7777-4777-8777-777777777777',
+    })
+    await moveAnalyticsPatternSignals('44444444-4444-4444-8444-444444444444', {
+      target_pattern_id: '77777777-7777-4777-8777-777777777777',
+      signal_ids: ['55555555-5555-4555-8555-555555555555'],
+    })
+    await splitAnalyticsPatternToExisting('44444444-4444-4444-8444-444444444444', {
+      target_pattern_id: '77777777-7777-4777-8777-777777777777',
+      signal_ids: ['55555555-5555-4555-8555-555555555555'],
+    })
+    await splitAnalyticsPatternToNew('44444444-4444-4444-8444-444444444444', {
+      label: 'Nouveau split',
+      signal_ids: ['55555555-5555-4555-8555-555555555555'],
+    })
+
+    expect(postMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/analytics/patterns/{pattern_id}/rename/',
+      expect.objectContaining({
+        params: { path: { pattern_id: '44444444-4444-4444-8444-444444444444' } },
+        body: { label: 'Nouveau' },
+      }),
+    )
+    expect(postMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/analytics/patterns/{pattern_id}/merge/',
+      expect.objectContaining({
+        body: { target_pattern_id: '77777777-7777-4777-8777-777777777777' },
+      }),
+    )
+    expect(postMock).toHaveBeenNthCalledWith(
+      3,
+      '/api/v1/analytics/patterns/{pattern_id}/move-signals/',
+      expect.objectContaining({
+        body: {
+          target_pattern_id: '77777777-7777-4777-8777-777777777777',
+          signal_ids: ['55555555-5555-4555-8555-555555555555'],
+        },
+      }),
+    )
+    expect(postMock).toHaveBeenNthCalledWith(
+      4,
+      '/api/v1/analytics/patterns/{pattern_id}/split-to-existing/',
+      expect.objectContaining({
+        body: {
+          target_pattern_id: '77777777-7777-4777-8777-777777777777',
+          signal_ids: ['55555555-5555-4555-8555-555555555555'],
+        },
+      }),
+    )
+    expect(postMock).toHaveBeenNthCalledWith(
+      5,
+      '/api/v1/analytics/patterns/{pattern_id}/split-to-new/',
+      expect.objectContaining({
+        body: {
+          label: 'Nouveau split',
+          signal_ids: ['55555555-5555-4555-8555-555555555555'],
+        },
       }),
     )
   })

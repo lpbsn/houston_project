@@ -6,15 +6,21 @@ import {
   CheckCircle2,
   Clock3,
   Flag,
+  GitMerge,
   Loader2,
+  MoveRight,
+  Pencil,
   Repeat2,
+  Scissors,
   TrendingUp,
 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useMemo, useRef, useState, type ComponentType, type SVGProps } from 'react'
 
 import { useAuth } from '@/app/auth-provider'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import {
   TerrainBottomSheet,
@@ -25,16 +31,25 @@ import {
 } from '@/components/ui/terrain'
 import type {
   AnalyticsMetricComparison,
+  AnalyticsOwnerGovernancePatternRef,
+  AnalyticsOwnerGovernanceResponse,
   AnalyticsPatternDetailResponse,
   AnalyticsPatternSignalItem,
 } from '@/features/analytics/api'
-import { AnalyticsApiError } from '@/features/analytics/api'
+import { AnalyticsApiError, analyticsQueryKeys } from '@/features/analytics/api'
 import {
+  useAnalyticsPatternGovernanceTargetsInfiniteQuery,
   useAnalyticsPatternDetailQuery,
   useAnalyticsPatternSignalsInfiniteQuery,
+  useMergeAnalyticsPatternsMutation,
+  useMoveAnalyticsPatternSignalsMutation,
+  useRenameAnalyticsPatternMutation,
   useReportAnalyticsPatternIssueMutation,
+  useSplitAnalyticsPatternToExistingMutation,
+  useSplitAnalyticsPatternToNewMutation,
 } from '@/features/analytics/hooks'
 import {
+  buildAnalyticsPatternDetailPath,
   buildAnalyticsSignalDetailPath,
   buildAnalyticsReturnPath,
   type AnalyticsUrlState,
@@ -43,6 +58,7 @@ import { switchEstablishment } from '@/features/auth/api'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
 import { canShowAnalyticsNavigation } from '@/features/navigation/lib/shared-navigation'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { notifySuccess } from '@/lib/success-toast'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -55,9 +71,18 @@ type AnalyticsPatternDetailPageProps = {
 }
 
 const PATTERN_SIGNALS_PAGE_SIZE = 25
+const GOVERNANCE_TARGETS_PAGE_SIZE = 20
 const PATTERN_ISSUE_COMMENT_MAX_LENGTH = 500
 const PATTERN_ISSUE_REASON = 'wrong_pattern' as const
 const PATTERN_ISSUE_REPORT_ROLES = new Set(['director', 'manager'])
+const OWNER_GOVERNANCE_ROLE = 'owner'
+
+type OwnerGovernanceAction =
+  | 'rename'
+  | 'merge'
+  | 'move'
+  | 'split-existing'
+  | 'split-new'
 
 function formatNumber(value: number | null): string {
   if (value == null) {
@@ -158,6 +183,23 @@ function activePatternIssueReporterMemberships(
         membership.status === 'active' && PATTERN_ISSUE_REPORT_ROLES.has(membership.role),
     ) ?? []
   )
+}
+
+function activeOwnerGovernanceMemberships(
+  bootstrap: BootstrapResponse | null | undefined,
+): Membership[] {
+  return (
+    bootstrap?.memberships.filter(
+      (membership) =>
+        membership.status === 'active' && membership.role === OWNER_GOVERNANCE_ROLE,
+    ) ?? []
+  )
+}
+
+function canShowOwnerGovernanceActions(
+  bootstrap: BootstrapResponse | null | undefined,
+): boolean {
+  return activeOwnerGovernanceMemberships(bootstrap).length > 0
 }
 
 function resolveSignalOrganizationId(
@@ -632,6 +674,360 @@ function PatternIssueReportSheet({
   )
 }
 
+function loadedPatternSignalItems(
+  query: ReturnType<typeof useAnalyticsPatternSignalsInfiniteQuery>,
+): AnalyticsPatternSignalItem[] {
+  return query.data?.pages.flatMap((page) => page.items) ?? []
+}
+
+function OwnerGovernancePanel({
+  patternLabel,
+  canShow,
+  selectedSignalCount,
+  success,
+  onOpenAction,
+}: {
+  patternLabel: string
+  canShow: boolean
+  selectedSignalCount: number
+  success: string | null
+  onOpenAction: (action: OwnerGovernanceAction) => void
+}) {
+  if (!canShow) {
+    return null
+  }
+
+  return (
+    <TerrainCard className="border-[#F0D9C8] bg-[#FFFDF9] p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-[#1a1a1a]">Gouvernance Owner</p>
+          <p className={cn('mt-1 text-xs leading-5', terrain.muted)}>
+            Corrections manuelles du motif “{patternLabel}”. Ces actions ne traitent pas les
+            signalements ouverts.
+          </p>
+          <p className={cn('mt-2 text-xs', terrain.muted)}>
+            Signals sélectionnés : {formatNumber(selectedSignalCount)}
+          </p>
+          {success ? (
+            <p
+              className="mt-3 flex items-center gap-2 rounded-xl border border-[#D8EADA] bg-[#F3FAF5] px-3 py-2 text-sm text-[#24614B]"
+              role="status"
+            >
+              <CheckCircle2 className="h-4 w-4" aria-hidden />
+              {success}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => onOpenAction('rename')}>
+            <Pencil className="mr-2 h-4 w-4" aria-hidden />
+            Renommer
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => onOpenAction('merge')}>
+            <GitMerge className="mr-2 h-4 w-4" aria-hidden />
+            Fusionner
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => onOpenAction('move')}>
+            <MoveRight className="mr-2 h-4 w-4" aria-hidden />
+            Déplacer
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onOpenAction('split-existing')}
+          >
+            <Scissors className="mr-2 h-4 w-4" aria-hidden />
+            Split existant
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onOpenAction('split-new')}
+          >
+            <Scissors className="mr-2 h-4 w-4" aria-hidden />
+            Split nouveau
+          </Button>
+        </div>
+      </div>
+    </TerrainCard>
+  )
+}
+
+function GovernanceTargetPicker({
+  query,
+  selectedTargetId,
+  onSelectTarget,
+}: {
+  query: ReturnType<typeof useAnalyticsPatternGovernanceTargetsInfiniteQuery>
+  selectedTargetId: string
+  onSelectTarget: (pattern: AnalyticsOwnerGovernancePatternRef) => void
+}) {
+  const items = useMemo(
+    () => query.data?.pages.flatMap((page) => page.items) ?? [],
+    [query.data],
+  )
+
+  if (query.isLoading) {
+    return (
+      <p className="flex items-center gap-2 text-sm text-[#555]" role="status">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+        Recherche des motifs...
+      </p>
+    )
+  }
+
+  if (query.isError) {
+    return (
+      <TerrainErrorState
+        message={resolveApiErrorMessage(
+          query.error,
+          AnalyticsApiError,
+          'Impossible de charger les motifs cibles.',
+        )}
+        onRetry={() => void query.refetch()}
+      />
+    )
+  }
+
+  if (items.length === 0) {
+    return <TerrainEmptyState title="Aucun motif cible disponible" />
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-[#F0EFE9] p-2">
+        {items.map((item) => {
+          const selected = selectedTargetId === item.pattern_id
+          return (
+            <button
+              key={item.pattern_id}
+              type="button"
+              className={cn(
+                'w-full rounded-xl border px-3 py-2 text-left text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#114660] focus:ring-offset-2',
+                selected
+                  ? 'border-[#114660] bg-[#E8F7F0]'
+                  : 'border-[#F0EFE9] bg-white hover:bg-[#FBFAF7]',
+              )}
+              aria-pressed={selected}
+              onClick={() => onSelectTarget(item)}
+            >
+              <span className="block font-semibold text-[#1a1a1a]">{item.label}</span>
+              <span className={cn('text-xs', terrain.muted)}>{item.normalized_label}</span>
+            </button>
+          )
+        })}
+      </div>
+      {query.hasNextPage ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void query.fetchNextPage()}
+          disabled={query.isFetchingNextPage}
+        >
+          {query.isFetchingNextPage ? 'Chargement...' : 'Charger plus de motifs'}
+        </Button>
+      ) : null}
+    </div>
+  )
+}
+
+function GovernanceSignalSelector({
+  signals,
+  selectedSignalIds,
+  onToggleSignal,
+}: {
+  signals: AnalyticsPatternSignalItem[]
+  selectedSignalIds: string[]
+  onToggleSignal: (signalId: string) => void
+}) {
+  if (signals.length === 0) {
+    return <TerrainEmptyState title="Aucun Signal chargé à sélectionner" />
+  }
+
+  return (
+    <div className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-[#F0EFE9] p-2">
+      {signals.map((signal) => (
+        <label
+          key={signal.signal_id}
+          className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#F0EFE9] bg-white px-3 py-2 text-sm"
+        >
+          <input
+            type="checkbox"
+            className="mt-1 h-4 w-4 rounded border-[#D8D3C7]"
+            checked={selectedSignalIds.includes(signal.signal_id)}
+            onChange={() => onToggleSignal(signal.signal_id)}
+          />
+          <span className="min-w-0">
+            <span className="block font-semibold text-[#1a1a1a]">{signal.title}</span>
+            <span className={cn('block text-xs leading-5', terrain.muted)}>
+              {signal.establishment.name} · {formatStatusLabel(signal.status)}
+            </span>
+          </span>
+        </label>
+      ))}
+    </div>
+  )
+}
+
+function OwnerGovernanceSheet({
+  action,
+  patternLabel,
+  renameLabel,
+  splitLabel,
+  targetSearch,
+  selectedTargetId,
+  selectedSignalIds,
+  loadedSignals,
+  targetQuery,
+  error,
+  success,
+  isPending,
+  onRenameLabelChange,
+  onSplitLabelChange,
+  onTargetSearchChange,
+  onSelectTarget,
+  onToggleSignal,
+  onClose,
+  onSubmit,
+}: {
+  action: OwnerGovernanceAction | null
+  patternLabel: string
+  renameLabel: string
+  splitLabel: string
+  targetSearch: string
+  selectedTargetId: string
+  selectedSignalIds: string[]
+  loadedSignals: AnalyticsPatternSignalItem[]
+  targetQuery: ReturnType<typeof useAnalyticsPatternGovernanceTargetsInfiniteQuery>
+  error: string | null
+  success: string | null
+  isPending: boolean
+  onRenameLabelChange: (value: string) => void
+  onSplitLabelChange: (value: string) => void
+  onTargetSearchChange: (value: string) => void
+  onSelectTarget: (pattern: AnalyticsOwnerGovernancePatternRef) => void
+  onToggleSignal: (signalId: string) => void
+  onClose: () => void
+  onSubmit: () => void
+}) {
+  const requiresTarget = action === 'merge' || action === 'move' || action === 'split-existing'
+  const requiresSignals =
+    action === 'move' || action === 'split-existing' || action === 'split-new'
+  const canSubmit =
+    Boolean(action) &&
+    !isPending &&
+    (action !== 'rename' || renameLabel.trim().length > 0) &&
+    (action !== 'split-new' || splitLabel.trim().length > 0) &&
+    (!requiresTarget || Boolean(selectedTargetId)) &&
+    (!requiresSignals || selectedSignalIds.length > 0)
+
+  const titleByAction: Record<OwnerGovernanceAction, string> = {
+    rename: 'Renommer le motif',
+    merge: 'Fusionner le motif',
+    move: 'Déplacer des Signals',
+    'split-existing': 'Séparer vers un motif existant',
+    'split-new': 'Séparer vers un nouveau motif',
+  }
+
+  return (
+    <TerrainBottomSheet
+      title={action ? titleByAction[action] : 'Gouvernance Owner'}
+      open={Boolean(action)}
+      onClose={onClose}
+      dismissible={!isPending}
+      footer={
+        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
+            Annuler
+          </Button>
+          <Button type="button" onClick={onSubmit} disabled={!canSubmit}>
+            {isPending ? 'Application...' : 'Confirmer'}
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <p className={cn('text-sm leading-6', terrain.muted)}>
+          Action Owner sur “{patternLabel}”. Le backend vérifie les permissions,
+          assignments courants et conflits éventuels.
+        </p>
+
+        {action === 'rename' ? (
+          <label className="block space-y-2">
+            <span className="text-sm font-semibold text-[#1a1a1a]">Nouveau libellé</span>
+            <Input
+              value={renameLabel}
+              onChange={(event) => onRenameLabelChange(event.target.value)}
+              disabled={isPending}
+            />
+          </label>
+        ) : null}
+
+        {action === 'split-new' ? (
+          <label className="block space-y-2">
+            <span className="text-sm font-semibold text-[#1a1a1a]">Libellé du nouveau motif</span>
+            <Input
+              value={splitLabel}
+              onChange={(event) => onSplitLabelChange(event.target.value)}
+              disabled={isPending}
+            />
+          </label>
+        ) : null}
+
+        {requiresTarget ? (
+          <div className="space-y-3">
+            <label className="block space-y-2">
+              <span className="text-sm font-semibold text-[#1a1a1a]">Motif cible</span>
+              <Input
+                value={targetSearch}
+                onChange={(event) => onTargetSearchChange(event.target.value)}
+                disabled={isPending}
+                placeholder="Rechercher un motif cible"
+              />
+            </label>
+            <GovernanceTargetPicker
+              query={targetQuery}
+              selectedTargetId={selectedTargetId}
+              onSelectTarget={onSelectTarget}
+            />
+          </div>
+        ) : null}
+
+        {requiresSignals ? (
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-[#1a1a1a]">Signals chargés</p>
+            <GovernanceSignalSelector
+              signals={loadedSignals}
+              selectedSignalIds={selectedSignalIds}
+              onToggleSignal={onToggleSignal}
+            />
+          </div>
+        ) : null}
+
+        {success ? (
+          <p
+            className="flex items-center gap-2 rounded-xl border border-[#D8EADA] bg-[#F3FAF5] px-3 py-2 text-sm text-[#24614B]"
+            role="status"
+          >
+            <CheckCircle2 className="h-4 w-4" aria-hidden />
+            {success}
+          </p>
+        ) : null}
+
+        {error ? (
+          <p className="rounded-xl border border-[#F0D9C8] bg-[#FFF7EF] px-3 py-2 text-sm text-[#8A5A00]">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    </TerrainBottomSheet>
+  )
+}
+
 function AnalyticsPatternDetailContent({
   data,
   onBack,
@@ -642,6 +1038,10 @@ function AnalyticsPatternDetailContent({
   canShowIssueReportAction,
   onReportIssue,
   issueReportSuccess,
+  canShowOwnerGovernance,
+  selectedGovernanceSignalIds,
+  governanceSuccess,
+  onOpenGovernanceAction,
 }: {
   data: AnalyticsPatternDetailResponse
   onBack: () => void
@@ -652,6 +1052,10 @@ function AnalyticsPatternDetailContent({
   canShowIssueReportAction: (item: AnalyticsPatternSignalItem) => boolean
   onReportIssue: (item: AnalyticsPatternSignalItem) => void
   issueReportSuccess: string | null
+  canShowOwnerGovernance: boolean
+  selectedGovernanceSignalIds: string[]
+  governanceSuccess: string | null
+  onOpenGovernanceAction: (action: OwnerGovernanceAction) => void
 }) {
   return (
     <>
@@ -678,6 +1082,14 @@ function AnalyticsPatternDetailContent({
           Retour aux motifs
         </Button>
       </div>
+
+      <OwnerGovernancePanel
+        patternLabel={data.identity.label}
+        canShow={canShowOwnerGovernance}
+        selectedSignalCount={selectedGovernanceSignalIds.length}
+        success={governanceSuccess}
+        onOpenAction={onOpenGovernanceAction}
+      />
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
@@ -794,15 +1206,27 @@ export function AnalyticsPatternDetailPage({
   analyticsState,
   onNavigate,
 }: AnalyticsPatternDetailPageProps) {
+  const queryClient = useQueryClient()
   const { bootstrap, isBootstrapping, isReady } = useAuth()
   const canAccessAnalytics = canShowAnalyticsNavigation(bootstrap)
+  const canShowOwnerGovernance = canShowOwnerGovernanceActions(bootstrap)
   const [signalNavigationError, setSignalNavigationError] = useState<string | null>(null)
   const [openingSignalId, setOpeningSignalId] = useState<string | null>(null)
   const [reportSignal, setReportSignal] = useState<AnalyticsPatternSignalItem | null>(null)
   const [reportComment, setReportComment] = useState('')
   const [reportError, setReportError] = useState<string | null>(null)
   const [reportSuccess, setReportSuccess] = useState<string | null>(null)
+  const [governanceAction, setGovernanceAction] = useState<OwnerGovernanceAction | null>(null)
+  const [governanceRenameLabel, setGovernanceRenameLabel] = useState('')
+  const [governanceSplitLabel, setGovernanceSplitLabel] = useState('')
+  const [governanceTargetSearch, setGovernanceTargetSearch] = useState('')
+  const [governanceSelectedTarget, setGovernanceSelectedTarget] =
+    useState<AnalyticsOwnerGovernancePatternRef | null>(null)
+  const [governanceSelectedSignalIds, setGovernanceSelectedSignalIds] = useState<string[]>([])
+  const [governanceError, setGovernanceError] = useState<string | null>(null)
+  const [governanceSuccess, setGovernanceSuccess] = useState<string | null>(null)
   const issueReportSubmitLockedRef = useRef(false)
+  const governanceSubmitLockedRef = useRef(false)
   const activeEstablishmentId = bootstrap?.active_membership?.establishment_id ?? null
   const detailQuery = useAnalyticsPatternDetailQuery(patternId, analyticsState, {
     enabled: isReady && !isBootstrapping && canAccessAnalytics,
@@ -811,8 +1235,32 @@ export function AnalyticsPatternDetailPage({
     enabled: isReady && !isBootstrapping && canAccessAnalytics && Boolean(detailQuery.data),
     pageSize: PATTERN_SIGNALS_PAGE_SIZE,
   })
+  const governanceTargetsQuery = useAnalyticsPatternGovernanceTargetsInfiniteQuery(patternId, {
+    enabled:
+      isReady &&
+      !isBootstrapping &&
+      canAccessAnalytics &&
+      canShowOwnerGovernance &&
+      Boolean(governanceAction) &&
+      governanceAction !== 'rename' &&
+      governanceAction !== 'split-new',
+    q: governanceTargetSearch,
+    pageSize: GOVERNANCE_TARGETS_PAGE_SIZE,
+  })
   const issueReportMutation = useReportAnalyticsPatternIssueMutation()
+  const renameMutation = useRenameAnalyticsPatternMutation()
+  const mergeMutation = useMergeAnalyticsPatternsMutation()
+  const moveMutation = useMoveAnalyticsPatternSignalsMutation()
+  const splitExistingMutation = useSplitAnalyticsPatternToExistingMutation()
+  const splitNewMutation = useSplitAnalyticsPatternToNewMutation()
   const backPath = buildAnalyticsReturnPath(analyticsState)
+  const loadedSignals = loadedPatternSignalItems(patternSignalsQuery)
+  const governanceIsPending =
+    renameMutation.isPending ||
+    mergeMutation.isPending ||
+    moveMutation.isPending ||
+    splitExistingMutation.isPending ||
+    splitNewMutation.isPending
 
   function navigateBack() {
     onNavigate(backPath)
@@ -844,6 +1292,195 @@ export function AnalyticsPatternDetailPage({
     setReportComment('')
     setReportError(null)
     setReportSuccess(null)
+  }
+
+  function openGovernanceAction(action: OwnerGovernanceAction) {
+    const label = detailQuery.data?.identity.label ?? ''
+    setGovernanceAction(action)
+    setGovernanceRenameLabel(label)
+    setGovernanceSplitLabel('')
+    setGovernanceTargetSearch('')
+    setGovernanceSelectedTarget(null)
+    setGovernanceSelectedSignalIds([])
+    setGovernanceError(null)
+    setGovernanceSuccess(null)
+  }
+
+  function closeGovernanceSheet() {
+    if (governanceIsPending) {
+      return
+    }
+    setGovernanceAction(null)
+    setGovernanceError(null)
+    setGovernanceSuccess(null)
+    setGovernanceSelectedTarget(null)
+    setGovernanceSelectedSignalIds([])
+    setGovernanceTargetSearch('')
+  }
+
+  function toggleGovernanceSignal(signalId: string) {
+    setGovernanceSelectedSignalIds((current) =>
+      current.includes(signalId)
+        ? current.filter((candidate) => candidate !== signalId)
+        : [...current, signalId],
+    )
+  }
+
+  function ownerGovernanceErrorMessage(error: unknown) {
+    return resolveApiErrorMessage(
+      error,
+      AnalyticsApiError,
+      'Impossible d’appliquer cette correction Owner.',
+    )
+  }
+
+  async function invalidateRenameGovernanceQueries() {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: analyticsQueryKeys.patternDetail(patternId, analyticsState),
+      }),
+      queryClient.invalidateQueries({ queryKey: ['analytics', 'patterns'] }),
+    ])
+  }
+
+  async function invalidateStructuralGovernanceQueries(
+    result: AnalyticsOwnerGovernanceResponse,
+    options: { includeSourceActive?: boolean } = {},
+  ) {
+    const targetPatternId = result.target_pattern?.pattern_id
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['analytics', 'dashboard'] }),
+      queryClient.invalidateQueries({ queryKey: ['analytics', 'patterns'] }),
+      queryClient.invalidateQueries({
+        queryKey: analyticsQueryKeys.patternDetail(patternId, analyticsState),
+        type: options.includeSourceActive === false ? 'inactive' : 'all',
+      }),
+      queryClient.invalidateQueries({
+        queryKey: analyticsQueryKeys.patternSignals(
+          patternId,
+          analyticsState,
+          PATTERN_SIGNALS_PAGE_SIZE,
+        ),
+        type: options.includeSourceActive === false ? 'inactive' : 'all',
+      }),
+      targetPatternId
+        ? queryClient.invalidateQueries({
+            queryKey: analyticsQueryKeys.patternDetail(targetPatternId, analyticsState),
+          })
+        : Promise.resolve(),
+      targetPatternId
+        ? queryClient.invalidateQueries({
+            queryKey: analyticsQueryKeys.patternSignals(
+              targetPatternId,
+              analyticsState,
+              PATTERN_SIGNALS_PAGE_SIZE,
+            ),
+          })
+        : Promise.resolve(),
+    ])
+  }
+
+  async function submitGovernanceAction() {
+    if (!governanceAction || governanceIsPending || governanceSubmitLockedRef.current) {
+      return
+    }
+    governanceSubmitLockedRef.current = true
+    setGovernanceError(null)
+    setGovernanceSuccess(null)
+    try {
+      if (governanceAction === 'rename') {
+        const result = await renameMutation.mutateAsync({
+          patternId,
+          body: { label: governanceRenameLabel },
+        })
+        await invalidateRenameGovernanceQueries()
+        setGovernanceSuccess(`Motif renommé en “${result.source_pattern.label}”.`)
+        setGovernanceAction(null)
+        return
+      }
+
+      if (governanceAction === 'merge') {
+        if (!governanceSelectedTarget) {
+          return
+        }
+        const result = await mergeMutation.mutateAsync({
+          patternId,
+          body: { target_pattern_id: governanceSelectedTarget.pattern_id },
+        })
+        const targetPatternId = result.target_pattern?.pattern_id
+        notifySuccess({
+          message: `Fusion appliquée : ${formatNumber(result.moved_signal_count)} Signal(s) déplacé(s).`,
+          kind: 'updated',
+        })
+        if (targetPatternId) {
+          onNavigate(buildAnalyticsPatternDetailPath(targetPatternId, analyticsState), {
+            replace: true,
+          })
+        }
+        await invalidateStructuralGovernanceQueries(result, { includeSourceActive: false })
+        setGovernanceAction(null)
+        return
+      }
+
+      if (governanceAction === 'move') {
+        if (!governanceSelectedTarget || governanceSelectedSignalIds.length === 0) {
+          return
+        }
+        const result = await moveMutation.mutateAsync({
+          patternId,
+          body: {
+            target_pattern_id: governanceSelectedTarget.pattern_id,
+            signal_ids: governanceSelectedSignalIds,
+          },
+        })
+        await invalidateStructuralGovernanceQueries(result)
+        setGovernanceSelectedSignalIds([])
+        setGovernanceSuccess(`${formatNumber(result.moved_signal_count)} Signal(s) déplacé(s).`)
+        setGovernanceAction(null)
+        return
+      }
+
+      if (governanceAction === 'split-existing') {
+        if (!governanceSelectedTarget || governanceSelectedSignalIds.length === 0) {
+          return
+        }
+        const result = await splitExistingMutation.mutateAsync({
+          patternId,
+          body: {
+            target_pattern_id: governanceSelectedTarget.pattern_id,
+            signal_ids: governanceSelectedSignalIds,
+          },
+        })
+        await invalidateStructuralGovernanceQueries(result)
+        setGovernanceSelectedSignalIds([])
+        setGovernanceSuccess(`${formatNumber(result.moved_signal_count)} Signal(s) séparé(s).`)
+        setGovernanceAction(null)
+        return
+      }
+
+      if (governanceAction === 'split-new') {
+        if (governanceSelectedSignalIds.length === 0) {
+          return
+        }
+        const result = await splitNewMutation.mutateAsync({
+          patternId,
+          body: {
+            label: governanceSplitLabel,
+            signal_ids: governanceSelectedSignalIds,
+          },
+        })
+        const targetPatternId = result.target_pattern?.pattern_id
+        await invalidateStructuralGovernanceQueries(result)
+        setGovernanceAction(null)
+        if (targetPatternId) {
+          onNavigate(buildAnalyticsPatternDetailPath(targetPatternId, analyticsState))
+        }
+      }
+    } catch (error) {
+      setGovernanceError(ownerGovernanceErrorMessage(error))
+    } finally {
+      governanceSubmitLockedRef.current = false
+    }
   }
 
   function closeIssueReport() {
@@ -947,6 +1584,34 @@ export function AnalyticsPatternDetailPage({
             }
             onReportIssue={openIssueReport}
             issueReportSuccess={reportSuccess}
+            canShowOwnerGovernance={canShowOwnerGovernance}
+            selectedGovernanceSignalIds={governanceSelectedSignalIds}
+            governanceSuccess={governanceSuccess}
+            onOpenGovernanceAction={openGovernanceAction}
+          />
+          <OwnerGovernanceSheet
+            action={governanceAction}
+            patternLabel={detailQuery.data.identity.label}
+            renameLabel={governanceRenameLabel}
+            splitLabel={governanceSplitLabel}
+            targetSearch={governanceTargetSearch}
+            selectedTargetId={governanceSelectedTarget?.pattern_id ?? ''}
+            selectedSignalIds={governanceSelectedSignalIds}
+            loadedSignals={loadedSignals}
+            targetQuery={governanceTargetsQuery}
+            error={governanceError}
+            success={governanceSuccess}
+            isPending={governanceIsPending}
+            onRenameLabelChange={setGovernanceRenameLabel}
+            onSplitLabelChange={setGovernanceSplitLabel}
+            onTargetSearchChange={(value) => {
+              setGovernanceTargetSearch(value)
+              setGovernanceSelectedTarget(null)
+            }}
+            onSelectTarget={setGovernanceSelectedTarget}
+            onToggleSignal={toggleGovernanceSignal}
+            onClose={closeGovernanceSheet}
+            onSubmit={() => void submitGovernanceAction()}
           />
           <PatternIssueReportSheet
             signal={reportSignal}

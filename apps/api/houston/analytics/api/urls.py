@@ -6,6 +6,7 @@ from houston.analytics.api.views import (
     AnalyticsDashboardView,
     AnalyticsPatternDetailView,
     AnalyticsPatternFilterOptionsView,
+    AnalyticsPatternGovernanceTargetsView,
     AnalyticsPatternIssueReportView,
     AnalyticsPatternListView,
     AnalyticsPatternMergeView,
@@ -38,6 +39,11 @@ urlpatterns = [
         "analytics/patterns/<uuid:pattern_id>/signals/<uuid:signal_id>/issue-report/",
         AnalyticsPatternIssueReportView.as_view(),
         name="analytics-pattern-signal-issue-report",
+    ),
+    path(
+        "analytics/patterns/<uuid:pattern_id>/governance-targets/",
+        AnalyticsPatternGovernanceTargetsView.as_view(),
+        name="analytics-pattern-governance-targets",
     ),
     path(
         "analytics/patterns/<uuid:pattern_id>/rename/",
