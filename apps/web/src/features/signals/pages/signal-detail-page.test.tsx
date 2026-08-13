@@ -241,6 +241,41 @@ describe('SignalDetailPage tabs', () => {
     expect(CommentSectionMock).not.toHaveBeenCalled()
   })
 
+  it('renders one responsive details layout without duplicate fetches or actions', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({
+        permission_hints: {
+          can_pin: false,
+          can_mark_interesting: false,
+          can_archive: false,
+          can_cancel: false,
+          can_resolve: false,
+          can_create_linked_action_plan: true,
+          can_qualify_routing: false,
+          can_request_resolution: false,
+          can_approve_resolution_request: false,
+          can_reject_resolution_request: false,
+          can_cancel_resolution_request: false,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    const detailsPanel = screen.getByTestId('signal-detail-details-panel')
+    expect(detailsPanel.className).toContain('lg:grid')
+    expect(detailsPanel.className).toContain(
+      'lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]',
+    )
+    expect(detailsPanel.querySelector('.lg\\:row-start-2')).toBeNull()
+    expect(screen.getAllByRole('button', { name: "+ Plan d'action" })).toHaveLength(1)
+    expect(detailQueryMock).toHaveBeenCalledTimes(1)
+    expect(CommentSectionMock).not.toHaveBeenCalled()
+  })
+
   it('mounts CommentSection on first click on Commentaires', () => {
     renderPage()
 
@@ -277,7 +312,7 @@ describe('SignalDetailPage tabs', () => {
     )
   })
 
-  it('shows sticky footer only on Détails tab', () => {
+  it('shows one create plan action only on Détails tab', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -301,7 +336,9 @@ describe('SignalDetailPage tabs', () => {
 
     renderPage()
 
-    expect(screen.getByRole('button', { name: "+ Plan d'action" })).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: "+ Plan d'action" })).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: "+ Plan d'action" }))
+    expect(navigate).toHaveBeenCalledWith('/signals/signal-1/plan')
 
     fireEvent.click(getCommentsTab())
 

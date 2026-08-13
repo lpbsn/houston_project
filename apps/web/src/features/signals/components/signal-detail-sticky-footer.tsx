@@ -5,11 +5,15 @@ import { cn } from '@/lib/utils'
 
 type SignalDetailStickyFooterProps = {
   onCreateActionPlan: () => void
+  className?: string
 }
 
-export function SignalDetailStickyFooter({ onCreateActionPlan }: SignalDetailStickyFooterProps) {
+export function SignalDetailStickyFooter({
+  className,
+  onCreateActionPlan,
+}: SignalDetailStickyFooterProps) {
   return (
-    <TerrainStickyFooter className="flex flex-col gap-2">
+    <TerrainStickyFooter className={cn('flex flex-col gap-2', className)}>
       <Button
         type="button"
         className={cn(
