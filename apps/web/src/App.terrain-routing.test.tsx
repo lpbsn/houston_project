@@ -285,4 +285,46 @@ describe('App terrain active membership routing', () => {
       '/analytics?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&q=retard&recurrence=recurrent',
     )
   })
+
+  it('sends Signal Back to the Analytics pattern detail when Analytics context is present', () => {
+    const bootstrap = bootstrapWithActiveMembership()
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = {
+      kind: 'signal-detail',
+      signalId: '55555555-5555-4555-8555-555555555555',
+    }
+    window.history.replaceState(
+      null,
+      '',
+      '/signals/55555555-5555-4555-8555-555555555555?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&q=retard&recurrence=recurrent&analytics_pattern_id=44444444-4444-4444-8444-444444444444',
+    )
+
+    render(createElement(App))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retour' }))
+
+    expect(navigate).toHaveBeenCalledWith(
+      '/analytics/patterns/44444444-4444-4444-8444-444444444444?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&q=retard&recurrence=recurrent',
+    )
+  })
+
+  it('keeps direct Signal Back on the Signal feed without Analytics context', () => {
+    const bootstrap = bootstrapWithActiveMembership()
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = {
+      kind: 'signal-detail',
+      signalId: '55555555-5555-4555-8555-555555555555',
+    }
+    window.history.replaceState(null, '', '/signals/55555555-5555-4555-8555-555555555555')
+
+    render(createElement(App))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retour' }))
+
+    expect(navigate).toHaveBeenCalledWith('/signals')
+  })
 })

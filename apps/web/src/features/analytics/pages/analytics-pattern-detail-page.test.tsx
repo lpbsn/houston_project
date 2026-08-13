@@ -1,14 +1,19 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { AnalyticsPatternDetailResponse } from '@/features/analytics/api'
+import type {
+  AnalyticsPatternDetailResponse,
+  AnalyticsPatternSignalsResponse,
+} from '@/features/analytics/api'
 import { AnalyticsApiError } from '@/features/analytics/api'
 import { AnalyticsPatternDetailPage } from '@/features/analytics/pages/analytics-pattern-detail-page'
 import type { AnalyticsUrlState } from '@/features/analytics/lib/analytics-url-state'
 
 const detailQueryMock = vi.fn()
+const patternSignalsQueryMock = vi.fn()
+const switchEstablishmentMock = vi.fn()
 
 const { authState } = vi.hoisted(() => ({
   authState: {
@@ -26,6 +31,12 @@ vi.mock('@/app/auth-provider', () => ({
 
 vi.mock('@/features/analytics/hooks', () => ({
   useAnalyticsPatternDetailQuery: (...args: unknown[]) => detailQueryMock(...args),
+  useAnalyticsPatternSignalsInfiniteQuery: (...args: unknown[]) =>
+    patternSignalsQueryMock(...args),
+}))
+
+vi.mock('@/features/auth/api', () => ({
+  switchEstablishment: (...args: unknown[]) => switchEstablishmentMock(...args),
 }))
 
 const analyticsState: AnalyticsUrlState = {
@@ -41,20 +52,21 @@ const analyticsState: AnalyticsUrlState = {
 }
 
 function bootstrap(role: string) {
+  const activeMembership = {
+    id: `member-${role}`,
+    establishment_id: 'est-1',
+    establishment_name: 'Spore 1',
+    organization_id: 'org-1',
+    organization_name: 'Spore',
+    role,
+    status: 'active',
+    scopes: [],
+    scope_summary: { business_unit_count: 0 },
+  }
+
   return {
-    memberships: [
-      {
-        id: `member-${role}`,
-        establishment_id: 'est-1',
-        establishment_name: 'Spore 1',
-        organization_id: 'org-1',
-        organization_name: 'Spore',
-        role,
-        status: 'active',
-        scopes: [],
-        scope_summary: { business_unit_count: 0 },
-      },
-    ],
+    active_membership: activeMembership,
+    memberships: [activeMembership],
   }
 }
 
@@ -145,12 +157,62 @@ function setDetailQuery(value: ReturnType<typeof detailQueryMock> = {}) {
     refetch: vi.fn(),
     ...value,
   })
+  setPatternSignalsQuery()
+}
+
+function signals(
+  overrides: Partial<AnalyticsPatternSignalsResponse> = {},
+): AnalyticsPatternSignalsResponse {
+  return {
+    period: {
+      period_start: '2026-07-01T00:00:00.000Z',
+      period_end: '2026-08-01T00:00:00.000Z',
+    },
+    items: [
+      {
+        signal_id: '55555555-5555-4555-8555-555555555555',
+        title: 'Signal retard',
+        structured_summary: 'Livraison arrivée en retard.',
+        status: 'open',
+        created_at: '2026-07-31T08:30:00.000Z',
+        resolved_at: null,
+        establishment: {
+          id: 'est-1',
+          name: 'Spore 1',
+        },
+        responsible_business_unit: {
+          id: '33333333-3333-4333-8333-333333333333',
+          specific_name: 'Cuisine',
+        },
+      },
+    ],
+    page_size: 25,
+    has_more: false,
+    next_cursor: null,
+    ...overrides,
+  }
+}
+
+function setPatternSignalsQuery(value: ReturnType<typeof patternSignalsQueryMock> = {}) {
+  patternSignalsQueryMock.mockReturnValue({
+    data: { pages: [signals()] },
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+    hasNextPage: false,
+    fetchNextPage: vi.fn(),
+    isFetchingNextPage: false,
+    ...value,
+  })
 }
 
 describe('AnalyticsPatternDetailPage', () => {
   afterEach(() => {
     cleanup()
     detailQueryMock.mockReset()
+    patternSignalsQueryMock.mockReset()
+    switchEstablishmentMock.mockReset()
     authState.current = {
       bootstrap: null,
       isBootstrapping: false,
@@ -178,6 +240,11 @@ describe('AnalyticsPatternDetailPage', () => {
       screen.getByText('Analytics est disponible pour les propriétaires, directeurs et managers.'),
     ).toBeTruthy()
     expect(detailQueryMock).toHaveBeenCalledWith(
+      'pattern-1',
+      analyticsState,
+      expect.objectContaining({ enabled: false }),
+    )
+    expect(patternSignalsQueryMock).toHaveBeenCalledWith(
       'pattern-1',
       analyticsState,
       expect.objectContaining({ enabled: false }),
@@ -211,8 +278,128 @@ describe('AnalyticsPatternDetailPage', () => {
     expect(screen.getByText('Distribution par statut')).toBeTruthy()
     expect(screen.getByText('Établissements concernés')).toBeTruthy()
     expect(screen.getByText('BU responsables')).toBeTruthy()
+    expect(screen.getByText('Signals du motif')).toBeTruthy()
+    expect(screen.getByText('Signal retard')).toBeTruthy()
+    expect(patternSignalsQueryMock).toHaveBeenCalledWith(
+      'pattern-1',
+      analyticsState,
+      expect.objectContaining({ enabled: true, pageSize: 25 }),
+    )
     expect(screen.queryByText(/raw/i)).toBeNull()
     expect(screen.queryByText(/prompt/i)).toBeNull()
+  })
+
+  it('opens a same-establishment Signal without switching establishment', () => {
+    const navigate = vi.fn()
+    setDetailQuery({ data: detail() })
+    authState.current = {
+      bootstrap: bootstrap('owner'),
+      isBootstrapping: false,
+      isReady: true,
+    }
+
+    render(
+      <AnalyticsPatternDetailPage
+        patternId="44444444-4444-4444-8444-444444444444"
+        analyticsState={analyticsState}
+        onNavigate={navigate}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Signal retard/ }))
+
+    expect(switchEstablishmentMock).not.toHaveBeenCalled()
+    expect(navigate).toHaveBeenCalledWith(
+      '/signals/55555555-5555-4555-8555-555555555555?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&organization_id=11111111-1111-4111-8111-111111111111&establishment_ids=22222222-2222-4222-8222-222222222222&q=retard&recurrence=recurrent&responsible_business_unit_ids=33333333-3333-4333-8333-333333333333&responsible_business_unit_unassigned=true&signal_statuses=open&analytics_pattern_id=44444444-4444-4444-8444-444444444444',
+    )
+  })
+
+  it('switches establishment before opening a Signal from another establishment', async () => {
+    const navigate = vi.fn()
+    switchEstablishmentMock.mockResolvedValue({})
+    setDetailQuery({ data: detail() })
+    setPatternSignalsQuery({
+      data: {
+        pages: [
+          signals({
+            items: [
+              {
+                ...signals().items[0],
+                establishment: {
+                  id: 'est-2',
+                  name: 'Spore 2',
+                },
+              },
+            ],
+          }),
+        ],
+      },
+    })
+    authState.current = {
+      bootstrap: bootstrap('manager'),
+      isBootstrapping: false,
+      isReady: true,
+    }
+
+    render(
+      <AnalyticsPatternDetailPage
+        patternId="44444444-4444-4444-8444-444444444444"
+        analyticsState={analyticsState}
+        onNavigate={navigate}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Signal retard/ }))
+
+    await waitFor(() => {
+      expect(switchEstablishmentMock).toHaveBeenCalledWith({ establishment_id: 'est-2' })
+    })
+    expect(navigate).toHaveBeenCalledWith(
+      expect.stringContaining('/signals/55555555-5555-4555-8555-555555555555?'),
+    )
+  })
+
+  it('does not navigate when establishment switch fails', async () => {
+    const navigate = vi.fn()
+    switchEstablishmentMock.mockRejectedValue(new Error('Switch failed'))
+    setDetailQuery({ data: detail() })
+    setPatternSignalsQuery({
+      data: {
+        pages: [
+          signals({
+            items: [
+              {
+                ...signals().items[0],
+                establishment: {
+                  id: 'est-2',
+                  name: 'Spore 2',
+                },
+              },
+            ],
+          }),
+        ],
+      },
+    })
+    authState.current = {
+      bootstrap: bootstrap('director'),
+      isBootstrapping: false,
+      isReady: true,
+    }
+
+    render(
+      <AnalyticsPatternDetailPage
+        patternId="44444444-4444-4444-8444-444444444444"
+        analyticsState={analyticsState}
+        onNavigate={navigate}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Signal retard/ }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Switch failed')).toBeTruthy()
+    })
+    expect(navigate).not.toHaveBeenCalled()
   })
 
   it('uses the backend bucket civil date for trend labels', () => {

@@ -5,6 +5,8 @@ import {
   buildAnalyticsPatternDetailPath,
   buildAnalyticsReturnPath,
   buildAnalyticsSearchParams,
+  buildAnalyticsSignalDetailPath,
+  parseAnalyticsSignalReturnContext,
   parseAnalyticsUrlState,
 } from '@/features/analytics/lib/analytics-url-state'
 
@@ -156,5 +158,47 @@ describe('analytics URL state', () => {
     expect(params.get('signal_statuses')).toBe('open')
     expect(params.has('return_path')).toBe(false)
     expect(params.has('establishment_id')).toBe(false)
+  })
+
+  it('builds and parses Signal detail paths with Analytics return context only', () => {
+    const state = {
+      periodStart: '2026-07-01T00:00:00.000Z',
+      periodEnd: '2026-08-01T00:00:00.000Z',
+      organizationId: ORG_ID,
+      establishmentIds: [EST_ID],
+      q: 'froid',
+      recurrence: 'recurrent' as const,
+      responsibleBusinessUnitIds: [BU_ID],
+      responsibleBusinessUnitUnassigned: true,
+      signalStatuses: ['open' as const],
+    }
+
+    const path = buildAnalyticsSignalDetailPath('signal/with slash', {
+      patternId: '44444444-4444-4444-8444-444444444444',
+      state,
+    })
+    const [pathname, search = ''] = path.split('?')
+    const params = new URLSearchParams(search)
+
+    expect(pathname).toBe('/signals/signal%2Fwith%20slash')
+    expect(params.get('analytics_pattern_id')).toBe('44444444-4444-4444-8444-444444444444')
+    expect(params.get('period_start')).toBe('2026-07-01T00:00:00.000Z')
+    expect(params.get('period_end')).toBe('2026-08-01T00:00:00.000Z')
+    expect(params.get('establishment_ids')).toBe(EST_ID)
+    expect(params.get('q')).toBe('froid')
+    expect(params.has('return_path')).toBe(false)
+    expect(params.has('signal_establishment_id')).toBe(false)
+    expect(params.has('establishment_id')).toBe(false)
+
+    expect(parseAnalyticsSignalReturnContext(search, { now: NOW })).toEqual({
+      patternId: '44444444-4444-4444-8444-444444444444',
+      state,
+    })
+  })
+
+  it('ignores invalid Analytics Signal return context', () => {
+    expect(
+      parseAnalyticsSignalReturnContext('?analytics_pattern_id=not-a-uuid', { now: NOW }),
+    ).toBeNull()
   })
 })

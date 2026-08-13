@@ -17,6 +17,10 @@ export type AnalyticsPatternFilterOptionsResponse =
   components['schemas']['AnalyticsPatternFilterOptionsResponse']
 export type AnalyticsPatternDetailResponse =
   components['schemas']['AnalyticsPatternDetailResponse']
+export type AnalyticsPatternSignalsResponse =
+  components['schemas']['AnalyticsPatternSignalsResponse']
+export type AnalyticsPatternSignalItem =
+  components['schemas']['AnalyticsPatternSignalItem']
 
 export const analyticsQueryKeys = {
   all: ['analytics'] as const,
@@ -65,6 +69,18 @@ export const analyticsQueryKeys = {
         periodStart: state.periodStart,
         periodEnd: state.periodEnd,
         organizationId: state.organizationId,
+      },
+    ] as const,
+  patternSignals: (patternId: string, state: AnalyticsUrlState, pageSize?: number) =>
+    [
+      'analytics',
+      'pattern-signals',
+      patternId,
+      {
+        periodStart: state.periodStart,
+        periodEnd: state.periodEnd,
+        organizationId: state.organizationId,
+        pageSize: pageSize ?? null,
       },
     ] as const,
 }
@@ -160,6 +176,19 @@ function buildPatternDetailQuery(state: AnalyticsUrlState) {
   }
 }
 
+function buildPatternSignalsQuery(
+  state: AnalyticsUrlState,
+  options: { cursor?: string; pageSize?: number } = {},
+) {
+  return {
+    period_start: state.periodStart,
+    period_end: state.periodEnd,
+    ...(state.organizationId ? { organization_id: state.organizationId } : {}),
+    ...(options.cursor ? { cursor: options.cursor } : {}),
+    ...(options.pageSize ? { page_size: options.pageSize } : {}),
+  }
+}
+
 export async function fetchAnalyticsDashboard(
   state: AnalyticsUrlState,
 ): Promise<AnalyticsDashboardResponse> {
@@ -229,4 +258,24 @@ export async function fetchAnalyticsPatternDetail(
   )
 
   return assertAnalyticsData<AnalyticsPatternDetailResponse>(result)
+}
+
+export async function fetchAnalyticsPatternSignals(
+  patternId: string,
+  state: AnalyticsUrlState,
+  options: { cursor?: string; pageSize?: number } = {},
+): Promise<AnalyticsPatternSignalsResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/analytics/patterns/{pattern_id}/signals/', {
+        params: {
+          path: { pattern_id: patternId },
+          query: buildPatternSignalsQuery(state, options),
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  return assertAnalyticsData<AnalyticsPatternSignalsResponse>(result)
 }

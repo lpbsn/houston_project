@@ -5,6 +5,7 @@ import {
   fetchAnalyticsDashboard,
   fetchAnalyticsPatternDetail,
   fetchAnalyticsPatternFilterOptions,
+  fetchAnalyticsPatternSignals,
   fetchAnalyticsPatterns,
 } from './api'
 import type { AnalyticsUrlState } from './lib/analytics-url-state'
@@ -65,6 +66,29 @@ export function useAnalyticsPatternDetailQuery(
   return useQuery({
     queryKey: analyticsQueryKeys.patternDetail(patternId, state),
     queryFn: () => fetchAnalyticsPatternDetail(patternId, state),
+    enabled: options?.enabled ?? true,
+  })
+}
+
+export function useAnalyticsPatternSignalsInfiniteQuery(
+  patternId: string,
+  state: AnalyticsUrlState,
+  options?: UseAnalyticsDashboardQueryOptions & { pageSize?: number },
+) {
+  return useInfiniteQuery({
+    queryKey: analyticsQueryKeys.patternSignals(patternId, state, options?.pageSize),
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) =>
+      fetchAnalyticsPatternSignals(patternId, state, {
+        cursor: pageParam,
+        pageSize: options?.pageSize,
+      }),
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.has_more || !lastPage.next_cursor) {
+        return undefined
+      }
+      return lastPage.next_cursor
+    },
     enabled: options?.enabled ?? true,
   })
 }

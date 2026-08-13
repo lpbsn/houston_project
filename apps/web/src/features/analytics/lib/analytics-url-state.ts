@@ -12,6 +12,7 @@ export const ANALYTICS_RESPONSIBLE_BUSINESS_UNIT_IDS_PARAM = 'responsible_busine
 export const ANALYTICS_RESPONSIBLE_BUSINESS_UNIT_UNASSIGNED_PARAM =
   'responsible_business_unit_unassigned'
 export const ANALYTICS_SIGNAL_STATUSES_PARAM = 'signal_statuses'
+export const ANALYTICS_PATTERN_ID_PARAM = 'analytics_pattern_id'
 export const ANALYTICS_DEFAULT_PERIOD_DAYS = 30
 
 export const ANALYTICS_RECURRENCE_VALUES = ['all', 'recurrent', 'non_recurrent'] as const
@@ -36,6 +37,11 @@ export type AnalyticsUrlState = {
   responsibleBusinessUnitIds: string[]
   responsibleBusinessUnitUnassigned: boolean
   signalStatuses: AnalyticsSignalStatusFilter[]
+}
+
+export type AnalyticsSignalReturnContext = {
+  patternId: string
+  state: AnalyticsUrlState
 }
 
 const UUID_PATTERN =
@@ -199,6 +205,34 @@ export function buildAnalyticsPatternDetailPath(
   return query
     ? `/analytics/patterns/${encodeURIComponent(patternId)}?${query}`
     : `/analytics/patterns/${encodeURIComponent(patternId)}`
+}
+
+export function buildAnalyticsSignalDetailPath(
+  signalId: string,
+  options: { patternId: string; state: AnalyticsUrlState },
+): string {
+  const params = buildAnalyticsSearchParams(options.state)
+  params.set(ANALYTICS_PATTERN_ID_PARAM, options.patternId)
+  const query = params.toString()
+  return query
+    ? `/signals/${encodeURIComponent(signalId)}?${query}`
+    : `/signals/${encodeURIComponent(signalId)}`
+}
+
+export function parseAnalyticsSignalReturnContext(
+  search: string,
+  options: { now: Date },
+): AnalyticsSignalReturnContext | null {
+  const params = parseSearchParams(search)
+  const patternId = params.get(ANALYTICS_PATTERN_ID_PARAM)?.trim() ?? null
+  if (!isValidUuid(patternId)) {
+    return null
+  }
+
+  return {
+    patternId,
+    state: parseAnalyticsUrlState(search, options),
+  }
 }
 
 export function useAnalyticsUrlState(): AnalyticsUrlState {

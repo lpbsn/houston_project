@@ -78,7 +78,9 @@ import { NotificationCenter } from '@/features/notifications/components/notifica
 import { ActionPlanExecutionDetailTopbarTrailing } from '@/features/action-plans/components/action-plan-execution-detail-topbar-trailing'
 import { ActionPlanTemplateDetailTopbarTrailing } from '@/features/action-plans/components/action-plan-template-detail-topbar-trailing'
 import {
+  buildAnalyticsPatternDetailPath,
   buildAnalyticsReturnPath,
+  parseAnalyticsSignalReturnContext,
   parseAnalyticsUrlState,
 } from '@/features/analytics/lib/analytics-url-state'
 import { useLocationSearch } from '@/lib/location-search'
@@ -204,6 +206,13 @@ function App() {
     () =>
       route.kind === 'analytics-pattern-detail'
         ? parseAnalyticsUrlState(locationSearch, { now: new Date() })
+        : null,
+    [locationSearch, route.kind],
+  )
+  const analyticsSignalReturnContext = useMemo(
+    () =>
+      route.kind === 'signal-detail'
+        ? parseAnalyticsSignalReturnContext(locationSearch, { now: new Date() })
         : null,
     [locationSearch, route.kind],
   )
@@ -767,14 +776,21 @@ function App() {
 
   if (usesTerrainShell(route)) {
     const terrainConfig = getTerrainRouteConfig(route)
-    const terrainBackPath =
-      route.kind === 'analytics-pattern-detail' && analyticsPatternDetailState
-        ? buildAnalyticsReturnPath(analyticsPatternDetailState)
-        : route.kind === 'static' &&
-            route.path === '/analytics' &&
-            !auth.hasOperationalAccess
-          ? (getAuthenticatedLandingPath(auth.bootstrap) ?? '/login')
-          : terrainConfig.backPath
+    let terrainBackPath = terrainConfig.backPath
+    if (route.kind === 'signal-detail' && analyticsSignalReturnContext) {
+      terrainBackPath = buildAnalyticsPatternDetailPath(
+        analyticsSignalReturnContext.patternId,
+        analyticsSignalReturnContext.state,
+      )
+    } else if (route.kind === 'analytics-pattern-detail' && analyticsPatternDetailState) {
+      terrainBackPath = buildAnalyticsReturnPath(analyticsPatternDetailState)
+    } else if (
+      route.kind === 'static' &&
+      route.path === '/analytics' &&
+      !auth.hasOperationalAccess
+    ) {
+      terrainBackPath = getAuthenticatedLandingPath(auth.bootstrap) ?? '/login'
+    }
     return wrapTerrainWithOperationalRealtime(
       wrapTerrainWithChatRealtime(
         <TerrainShell

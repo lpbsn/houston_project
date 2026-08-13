@@ -4,10 +4,11 @@ import {
   ArrowLeft,
   Building2,
   Clock3,
+  Loader2,
   Repeat2,
   TrendingUp,
 } from 'lucide-react'
-import type { ComponentType, SVGProps } from 'react'
+import { useMemo, useState, type ComponentType, type SVGProps } from 'react'
 
 import { useAuth } from '@/app/auth-provider'
 import { Badge } from '@/components/ui/badge'
@@ -21,13 +22,19 @@ import {
 import type {
   AnalyticsMetricComparison,
   AnalyticsPatternDetailResponse,
+  AnalyticsPatternSignalItem,
 } from '@/features/analytics/api'
 import { AnalyticsApiError } from '@/features/analytics/api'
-import { useAnalyticsPatternDetailQuery } from '@/features/analytics/hooks'
 import {
+  useAnalyticsPatternDetailQuery,
+  useAnalyticsPatternSignalsInfiniteQuery,
+} from '@/features/analytics/hooks'
+import {
+  buildAnalyticsSignalDetailPath,
   buildAnalyticsReturnPath,
   type AnalyticsUrlState,
 } from '@/features/analytics/lib/analytics-url-state'
+import { switchEstablishment } from '@/features/auth/api'
 import { canShowAnalyticsNavigation } from '@/features/navigation/lib/shared-navigation'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { terrain } from '@/lib/terrain-styles'
@@ -40,6 +47,8 @@ type AnalyticsPatternDetailPageProps = {
   analyticsState: AnalyticsUrlState
   onNavigate: (pathname: string, options?: { replace?: boolean }) => void
 }
+
+const PATTERN_SIGNALS_PAGE_SIZE = 25
 
 function formatNumber(value: number | null): string {
   if (value == null) {
@@ -335,12 +344,128 @@ function DistributionList({
   )
 }
 
+function PatternSignalsSection({
+  query,
+  navigationError,
+  openingSignalId,
+  onOpenSignal,
+}: {
+  query: ReturnType<typeof useAnalyticsPatternSignalsInfiniteQuery>
+  navigationError: string | null
+  openingSignalId: string | null
+  onOpenSignal: (item: AnalyticsPatternSignalItem) => void
+}) {
+  const items = useMemo(
+    () => query.data?.pages.flatMap((page) => page.items) ?? [],
+    [query.data],
+  )
+
+  return (
+    <TerrainCard className="p-4">
+      <div className="flex flex-col gap-1">
+        <p className="text-sm font-semibold text-[#1a1a1a]">Signals du motif</p>
+        <p className={cn('text-xs leading-5', terrain.muted)}>
+          Liste paginée backend, limitée au payload Analytics safe.
+        </p>
+      </div>
+
+      {navigationError ? (
+        <p className="mt-3 rounded-xl border border-[#F0D9C8] bg-[#FFF7EF] px-3 py-2 text-sm text-[#8A5A00]">
+          {navigationError}
+        </p>
+      ) : null}
+
+      {query.isLoading ? (
+        <div className="mt-4 flex items-center gap-2 text-sm text-[#555]" role="status">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          Chargement des Signals...
+        </div>
+      ) : null}
+
+      {query.isError ? (
+        <TerrainErrorState
+          className="mt-4"
+          message={resolveApiErrorMessage(
+            query.error,
+            AnalyticsApiError,
+            'Impossible de charger les Signals du motif.',
+          )}
+          onRetry={() => void query.refetch()}
+        />
+      ) : null}
+
+      {!query.isLoading && !query.isError && items.length === 0 ? (
+        <TerrainEmptyState title="Aucun Signal visible" className="mt-4" />
+      ) : null}
+
+      {items.length > 0 ? (
+        <div className="mt-4 divide-y divide-[#F0EFE9] overflow-hidden rounded-xl border border-[#F0EFE9]">
+          {items.map((item) => (
+            <button
+              key={item.signal_id}
+              type="button"
+              className="grid w-full gap-2 px-4 py-3 text-left text-sm transition-colors hover:bg-[#FBFAF7] focus:outline-none focus:ring-2 focus:ring-[#114660] focus:ring-offset-2 md:grid-cols-[minmax(180px,1fr)_120px_150px_150px]"
+              disabled={openingSignalId === item.signal_id}
+              onClick={() => onOpenSignal(item)}
+            >
+              <span className="min-w-0">
+                <span className="block font-semibold text-[#1a1a1a]">{item.title}</span>
+                <span className={cn('mt-1 block text-xs leading-5', terrain.muted)}>
+                  {item.structured_summary}
+                </span>
+              </span>
+              <span>
+                <span className="md:hidden">Statut: </span>
+                {formatStatusLabel(item.status)}
+              </span>
+              <span className="text-[#555]">
+                <span className="md:hidden">Établissement: </span>
+                {item.establishment.name}
+              </span>
+              <span className="text-[#555]">
+                <span className="md:hidden">BU: </span>
+                {item.responsible_business_unit?.specific_name ?? 'Non assigné'}
+              </span>
+              <span className={cn('md:col-span-4 text-xs', terrain.muted)}>
+                Créé {formatDateTime(item.created_at)}
+                {item.resolved_at ? ` · Résolu ${formatDateTime(item.resolved_at)}` : ''}
+                {openingSignalId === item.signal_id ? ' · Ouverture...' : ''}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {query.hasNextPage ? (
+        <div className="mt-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void query.fetchNextPage()}
+            disabled={query.isFetchingNextPage}
+          >
+            {query.isFetchingNextPage ? 'Chargement...' : 'Charger plus'}
+          </Button>
+        </div>
+      ) : null}
+    </TerrainCard>
+  )
+}
+
 function AnalyticsPatternDetailContent({
   data,
   onBack,
+  patternSignalsQuery,
+  signalNavigationError,
+  openingSignalId,
+  onOpenSignal,
 }: {
   data: AnalyticsPatternDetailResponse
   onBack: () => void
+  patternSignalsQuery: ReturnType<typeof useAnalyticsPatternSignalsInfiniteQuery>
+  signalNavigationError: string | null
+  openingSignalId: string | null
+  onOpenSignal: (item: AnalyticsPatternSignalItem) => void
 }) {
   return (
     <>
@@ -464,6 +589,13 @@ function AnalyticsPatternDetailContent({
         bucketCount={data.business_unit_bucket_count}
         otherSignalCount={data.business_unit_other_signal_count}
       />
+
+      <PatternSignalsSection
+        query={patternSignalsQuery}
+        navigationError={signalNavigationError}
+        openingSignalId={openingSignalId}
+        onOpenSignal={onOpenSignal}
+      />
     </>
   )
 }
@@ -475,13 +607,41 @@ export function AnalyticsPatternDetailPage({
 }: AnalyticsPatternDetailPageProps) {
   const { bootstrap, isBootstrapping, isReady } = useAuth()
   const canAccessAnalytics = canShowAnalyticsNavigation(bootstrap)
+  const [signalNavigationError, setSignalNavigationError] = useState<string | null>(null)
+  const [openingSignalId, setOpeningSignalId] = useState<string | null>(null)
+  const activeEstablishmentId = bootstrap?.active_membership?.establishment_id ?? null
   const detailQuery = useAnalyticsPatternDetailQuery(patternId, analyticsState, {
     enabled: isReady && !isBootstrapping && canAccessAnalytics,
+  })
+  const patternSignalsQuery = useAnalyticsPatternSignalsInfiniteQuery(patternId, analyticsState, {
+    enabled: isReady && !isBootstrapping && canAccessAnalytics && Boolean(detailQuery.data),
+    pageSize: PATTERN_SIGNALS_PAGE_SIZE,
   })
   const backPath = buildAnalyticsReturnPath(analyticsState)
 
   function navigateBack() {
     onNavigate(backPath)
+  }
+
+  async function openSignal(item: AnalyticsPatternSignalItem) {
+    const path = buildAnalyticsSignalDetailPath(item.signal_id, {
+      patternId,
+      state: analyticsState,
+    })
+    setSignalNavigationError(null)
+    setOpeningSignalId(item.signal_id)
+    try {
+      if (activeEstablishmentId !== item.establishment.id) {
+        await switchEstablishment({ establishment_id: item.establishment.id })
+      }
+      onNavigate(path)
+    } catch (error) {
+      setSignalNavigationError(
+        error instanceof Error ? error.message : 'Impossible d’ouvrir ce Signal.',
+      )
+    } finally {
+      setOpeningSignalId(null)
+    }
   }
 
   if (!isReady || isBootstrapping) {
@@ -523,7 +683,14 @@ export function AnalyticsPatternDetailPage({
       ) : null}
 
       {detailQuery.data ? (
-        <AnalyticsPatternDetailContent data={detailQuery.data} onBack={navigateBack} />
+        <AnalyticsPatternDetailContent
+          data={detailQuery.data}
+          onBack={navigateBack}
+          patternSignalsQuery={patternSignalsQuery}
+          signalNavigationError={signalNavigationError}
+          openingSignalId={openingSignalId}
+          onOpenSignal={(item) => void openSignal(item)}
+        />
       ) : null}
     </div>
   )
