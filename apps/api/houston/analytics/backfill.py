@@ -12,6 +12,10 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 
+from houston.analytics.backfill_selection import (
+    normalize_backfill_signal_ids,
+    select_explicit_backfill_signal_ids,
+)
 from houston.analytics.backfill_simulation import CapturingBackfillPatternClassifierProvider
 from houston.analytics.classifier import (
     ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION,
@@ -111,9 +115,9 @@ def backfill_analytics_patterns(
     max_limit = int(getattr(settings, "HOUSTON_ANALYTICS_PATTERN_BACKFILL_MAX_LIMIT", 500))
     effective_limit = _effective_limit(limit=limit, max_limit=max_limit)
     scope = _scope(organization_id=organization_id, establishment_id=establishment_id)
-    normalized_signal_ids = _normalize_signal_ids(signal_ids)
+    normalized_signal_ids = normalize_backfill_signal_ids(signal_ids)
     if normalized_signal_ids:
-        selected_signal_ids, exclusions, next_scan_cursor = _explicit_signal_ids(
+        selected_signal_ids, exclusions, next_scan_cursor = select_explicit_backfill_signal_ids(
             signal_ids=normalized_signal_ids,
             scope=scope,
             limit=effective_limit,
@@ -567,38 +571,6 @@ def _scan_signal_ids(
     )
     next_cursor = str(ids[-1]) if ids else ""
     return ids, exclusions, input_cursor, next_cursor
-
-
-def _explicit_signal_ids(
-    *,
-    signal_ids: list[uuid.UUID],
-    scope: dict[str, str | None],
-    limit: int,
-) -> tuple[list[uuid.UUID], dict[str, int], str]:
-    unique_ids = sorted(set(signal_ids))
-    if len(unique_ids) > limit:
-        raise ValueError(
-            f"signal-id count must be less than or equal to the effective limit ({limit})"
-        )
-    scoped = _scoped_signals(scope=scope)
-    signals = list(scoped.filter(id__in=unique_ids).order_by("created_at", "id"))
-    found_ids = {signal.id for signal in signals}
-    missing = [str(signal_id) for signal_id in unique_ids if signal_id not in found_ids]
-    if missing:
-        raise ValueError(
-            "signal-id values were not found in the selected scope: "
-            + ", ".join(sorted(missing))
-        )
-    merged = [str(signal.id) for signal in signals if signal.merged_into_id is not None]
-    if merged:
-        raise ValueError("merged signals cannot be backfilled explicitly: " + ", ".join(merged))
-    return [signal.id for signal in signals], {"merged": 0}, ""
-
-
-def _normalize_signal_ids(signal_ids) -> list[uuid.UUID]:
-    if not signal_ids:
-        return []
-    return [uuid.UUID(str(signal_id)) for signal_id in signal_ids]
 
 
 def _scoped_signals(*, scope: dict[str, str | None]):

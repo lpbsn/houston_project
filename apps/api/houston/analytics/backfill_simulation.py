@@ -14,6 +14,10 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from houston.analytics.backfill_selection import (
+    normalize_backfill_signal_ids,
+    select_explicit_backfill_signal_ids,
+)
 from houston.analytics.classifier import (
     ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION,
     ANALYTICS_PATTERN_DUPLICATE_GUARD_SCHEMA_VERSION,
@@ -158,6 +162,7 @@ class BackfillSimulationReport:
     schema_version: str
     duplicate_guard_enabled: bool
     scope: dict[str, str | None]
+    mode: str
     order: tuple[str, ...]
     default_limit: int
     effective_limit: int
@@ -175,6 +180,7 @@ def simulate_analytics_pattern_backfill(
     organization_id: uuid.UUID | str | None = None,
     establishment_id: uuid.UUID | str | None = None,
     start_after_signal_id: uuid.UUID | str | None = None,
+    signal_ids=None,
     limit: int | None = None,
     provider_name: str = "fake",
     provider: PatternClassifierProvider | None = None,
@@ -201,11 +207,23 @@ def simulate_analytics_pattern_backfill(
         organization_id=organization_id,
         establishment_id=establishment_id,
     )
-    selected_signal_ids, exclusions, cursor = _selected_signal_ids(
-        scope=scope,
-        start_after_signal_id=start_after_signal_id,
-        limit=effective_limit,
-    )
+    normalized_signal_ids = normalize_backfill_signal_ids(signal_ids)
+    if normalized_signal_ids:
+        if start_after_signal_id:
+            raise ValueError("signal-id cannot be combined with start-after-signal-id")
+        selected_signal_ids, exclusions, cursor = select_explicit_backfill_signal_ids(
+            signal_ids=normalized_signal_ids,
+            scope=scope,
+            limit=effective_limit,
+        )
+        mode = "explicit_signal_ids"
+    else:
+        selected_signal_ids, exclusions, cursor = _selected_signal_ids(
+            scope=scope,
+            start_after_signal_id=start_after_signal_id,
+            limit=effective_limit,
+        )
+        mode = "scan"
     capturing_provider = CapturingBackfillPatternClassifierProvider(selected_provider)
 
     with transaction.atomic():
@@ -216,6 +234,7 @@ def simulate_analytics_pattern_backfill(
             selected_signal_ids=selected_signal_ids,
             exclusions=exclusions,
             cursor=cursor,
+            mode=mode,
             effective_limit=effective_limit,
             max_limit=max_limit,
             duplicate_guard_enabled=duplicate_guard_enabled,
@@ -250,6 +269,7 @@ def backfill_simulation_report_to_dict(report: BackfillSimulationReport) -> dict
             "max_candidates": settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MAX_CANDIDATES,
         },
         "scope": report.scope,
+        "mode": report.mode,
         "order": list(report.order),
         "default_limit": report.default_limit,
         "effective_limit": report.effective_limit,
@@ -299,6 +319,7 @@ def _simulate_selected_signals(
     selected_signal_ids: list[uuid.UUID],
     exclusions: dict[str, int],
     cursor: str,
+    mode: str,
     effective_limit: int,
     max_limit: int,
     duplicate_guard_enabled: bool,
@@ -337,6 +358,7 @@ def _simulate_selected_signals(
         schema_version=ANALYTICS_PATTERN_SCHEMA_VERSION,
         duplicate_guard_enabled=duplicate_guard_enabled,
         scope=scope,
+        mode=mode,
         order=("created_at", "id"),
         default_limit=BACKFILL_SIMULATION_DEFAULT_LIMIT,
         effective_limit=effective_limit,
