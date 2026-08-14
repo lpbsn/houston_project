@@ -51,12 +51,18 @@ def test_analytics_pattern_corpus_is_valid_and_has_seed_size():
         "housekeeping_rooms",
         "safety_public_areas",
         "frontdesk_guest_flow",
+        "gym_operations",
+        "concert_event",
+        "shopping_mall",
+        "coworking_living_space",
+        "retail_store_holdout",
+        "cinema_museum_holdout",
     ]
     signal_count = sum(
         len(get_analytics_pattern_scenario(scenario_id)["signals"])
         for scenario_id in scenario_ids
     )
-    assert 30 <= signal_count <= 50
+    assert 60 <= signal_count <= 80
 
 
 def test_analytics_pattern_corpus_validation_rejects_forbidden_data():
@@ -85,7 +91,6 @@ def test_analytics_pattern_corpus_validation_rejects_forbidden_data():
                 "initial_patterns": [],
                 "fake_responses": {
                     "s1": {
-                        "result_type": "new_pattern",
                         "canonical_label": "Pattern",
                     }
                 },
@@ -135,11 +140,9 @@ def test_analytics_pattern_corpus_validation_rejects_invalid_pairs():
                 "initial_patterns": [],
                 "fake_responses": {
                     "s1": {
-                        "result_type": "new_pattern",
                         "canonical_label": "Pattern",
                     },
                     "s2": {
-                        "result_type": "new_pattern",
                         "canonical_label": "Other Pattern",
                     },
                 },
@@ -232,6 +235,37 @@ def test_eval_compares_duplicate_guard_against_isolated_baseline():
     hf_07 = next(result for result in scenario.signal_results if result.ref == "hf_07")
     assert hf_07.assigned_pattern_key == "water_leak"
     assert hf_07.duplicate_guard_decision == "reused"
+    assert hf_07.duplicate_guard_reason_code == "same_phenomenon"
+
+
+def test_eval_report_exposes_duplicate_guard_reason_code_distribution():
+    report = evaluate_analytics_pattern_corpus(
+        scenario_ids=["hotel_facilities"],
+        provider_name="fake",
+    )
+
+    payload = analytics_pattern_corpus_eval_report_to_dict(report)
+    hf_01 = next(
+        signal
+        for signal in payload["scenarios"][0]["signals"]
+        if signal["ref"] == "hf_01"
+    )
+    hf_07 = next(
+        signal
+        for signal in payload["scenarios"][0]["signals"]
+        if signal["ref"] == "hf_07"
+    )
+
+    assert hf_01["duplicate_guard_reason"] == "exact_semantic_alias"
+    assert hf_01["duplicate_guard_reason_code"] is None
+    assert hf_07["duplicate_guard_decision"] == "reused"
+    assert hf_07["duplicate_guard_reason_code"] == "same_phenomenon"
+    assert payload["scenarios"][0]["metrics"][
+        "duplicate_guard_reason_code_distribution"
+    ] == {"same_phenomenon": 1}
+    assert payload["metrics"]["duplicate_guard_reason_code_distribution"] == {
+        "same_phenomenon": 1
+    }
 
 
 def test_eval_case_id_selects_complete_scenario_without_orphan_pairs():
@@ -592,7 +626,6 @@ def test_expected_pattern_key_metrics_detect_unnecessary_new_pattern():
     signal = create_signal_for_membership(membership)
     provider = FakePatternClassifierProvider(
         payload={
-            "result_type": "new_pattern",
             "canonical_label": "Unexpected Fresh Pattern",
         }
     )

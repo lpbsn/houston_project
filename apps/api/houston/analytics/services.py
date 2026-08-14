@@ -181,6 +181,8 @@ class PatternDuplicateGuardCandidate:
     id: uuid.UUID
     label: str
     normalized_label: str
+    semantic_label: str
+    normalized_semantic_label: str
     score: float
 
 
@@ -189,6 +191,7 @@ class PatternDuplicateGuardDecision:
     action: str
     pattern_id: uuid.UUID | None = None
     reason: str = ""
+    reason_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -201,11 +204,18 @@ class PatternClassifierPatternResolution:
     )
 
 
+@dataclass(frozen=True)
+class PatternExactAliasResolution:
+    status: str
+    pattern: OperationalPattern | None = None
+
+
 @transaction.atomic
 def create_operational_pattern(
     *,
     organization: Organization,
     label: str,
+    semantic_label: str = "",
     created_by_membership: EstablishmentMembership | None = None,
     occurred_at=None,
     metadata_safe: dict[str, Any] | None = None,
@@ -213,6 +223,7 @@ def create_operational_pattern(
     pattern = OperationalPattern(
         organization=organization,
         label=label,
+        semantic_label=semantic_label or label,
         created_by_membership=created_by_membership,
     )
     try:
@@ -2180,12 +2191,10 @@ def classify_signal_pattern(
         return claim.assignment
 
     assert claim.attempt_count is not None
-    candidates = _active_pattern_candidates(signal)
     input_payload = {
         "schema_version": ANALYTICS_PATTERN_SCHEMA_VERSION,
         "prompt_version": ANALYTICS_PATTERN_PROMPT_VERSION,
         **build_signal_pattern_payload(signal),
-        "active_patterns": candidates,
     }
 
     provider_started_at = time.monotonic()
@@ -2196,7 +2205,6 @@ def classify_signal_pattern(
         resolution = _prepare_classifier_pattern_resolution(
             signal=signal,
             response=parsed,
-            candidates=candidates,
             provider=provider,
             duplicate_guard_enabled=duplicate_guard_enabled,
         )
@@ -2216,6 +2224,11 @@ def classify_signal_pattern(
             assignment,
             "_analytics_duplicate_guard_reason",
             resolution.duplicate_guard_decision.reason,
+        )
+        setattr(
+            assignment,
+            "_analytics_duplicate_guard_reason_code",
+            resolution.duplicate_guard_decision.reason_code,
         )
         setattr(assignment, "_analytics_claim_status", claim.status)
         setattr(assignment, "_analytics_claim_reason", claim.reason)
@@ -2327,55 +2340,28 @@ def _load_signal_for_pattern_classification(signal_id: uuid.UUID) -> Signal | No
     )
 
 
-def _active_pattern_candidates(signal: Signal) -> list[dict[str, str]]:
-    return [
-        {
-            "id": str(pattern.id),
-            "label": pattern.label,
-            "normalized_label": pattern.normalized_label,
-        }
-        for pattern in OperationalPattern.objects.filter(
-            organization=signal.establishment.organization,
-            status=OperationalPattern.Status.ACTIVE,
-        ).order_by("label", "id")
-    ]
-
-
 def _prepare_classifier_pattern_resolution(
     *,
     signal: Signal,
     response,
-    candidates: list[dict[str, str]],
     provider: PatternClassifierProvider,
     duplicate_guard_enabled: bool,
 ) -> PatternClassifierPatternResolution:
-    if response.result_type == "existing_pattern":
-        candidate_ids = {uuid.UUID(candidate["id"]) for candidate in candidates}
-        if response.pattern_id not in candidate_ids:
-            raise PatternClassifierInvalidOutputError(
-                "Classifier selected a pattern outside active candidates.",
-                validation_branch="existing_pattern_outside_candidates",
-            )
-        return PatternClassifierPatternResolution(
-            mode="existing_pattern",
-            pattern_id=response.pattern_id,
-        )
-
     label = _validate_new_pattern_label(signal=signal, label=response.canonical_label)
     normalized = normalize_pattern_label(label)
-    strict_duplicate = _find_active_pattern_by_normalized_label(
+    exact_alias = _resolve_exact_pattern_alias(
         signal=signal,
-        normalized_label=normalized,
+        normalized_semantic_label=normalized,
     )
-    if strict_duplicate is not None:
+    if exact_alias.status == "resolved" and exact_alias.pattern is not None:
         return PatternClassifierPatternResolution(
             mode="reuse_pattern",
             label=label,
-            pattern_id=strict_duplicate.id,
+            pattern_id=exact_alias.pattern.id,
             duplicate_guard_decision=PatternDuplicateGuardDecision(
                 action="skipped",
-                pattern_id=strict_duplicate.id,
-                reason="strict_duplicate",
+                pattern_id=exact_alias.pattern.id,
+                reason="exact_semantic_alias",
             ),
         )
 
@@ -2456,17 +2442,6 @@ def _resolve_pattern_resolution_for_write(
     signal: Signal,
     resolution: PatternClassifierPatternResolution,
 ) -> OperationalPattern:
-    if resolution.mode == "existing_pattern":
-        if resolution.pattern_id is None:
-            raise PatternClassifierInvalidOutputError(
-                "Pattern resolution missing target.",
-                validation_branch="pattern_resolution_missing_target",
-            )
-        pattern = OperationalPattern.objects.select_for_update().get(
-            pk=resolution.pattern_id
-        )
-        return _resolve_active_pattern_target(signal=signal, pattern=pattern)
-
     if resolution.mode == "reuse_pattern":
         if resolution.pattern_id is not None:
             try:
@@ -2488,20 +2463,48 @@ def _resolve_pattern_resolution_for_write(
     return _get_or_create_active_pattern_for_label(signal=signal, label=resolution.label)
 
 
-def _find_active_pattern_by_normalized_label(
+def _resolve_exact_pattern_alias(
     *,
     signal: Signal,
-    normalized_label: str,
-) -> OperationalPattern | None:
-    return (
+    normalized_semantic_label: str,
+) -> PatternExactAliasResolution:
+    active_patterns = list(
         OperationalPattern.objects.filter(
             organization=signal.establishment.organization,
-            normalized_label=normalized_label,
+            normalized_semantic_label=normalized_semantic_label,
             status=OperationalPattern.Status.ACTIVE,
         )
-        .order_by("normalized_label", "label")
-        .first()
+        .order_by("id")[:2]
     )
+    if len(active_patterns) == 1:
+        return PatternExactAliasResolution(status="resolved", pattern=active_patterns[0])
+    if len(active_patterns) > 1:
+        return PatternExactAliasResolution(status="ambiguous")
+
+    merged_patterns = list(
+        OperationalPattern.objects.filter(
+            organization=signal.establishment.organization,
+            normalized_semantic_label=normalized_semantic_label,
+            status=OperationalPattern.Status.MERGED,
+        ).order_by("id")
+    )
+    if not merged_patterns:
+        return PatternExactAliasResolution(status="none")
+
+    targets: dict[uuid.UUID, OperationalPattern] = {}
+    unresolved = False
+    for pattern in merged_patterns:
+        target = _resolve_merged_pattern_chain(signal=signal, pattern=pattern)
+        if target is None:
+            unresolved = True
+            continue
+        targets[target.id] = target
+    if len(targets) == 1 and not unresolved:
+        return PatternExactAliasResolution(
+            status="resolved",
+            pattern=next(iter(targets.values())),
+        )
+    return PatternExactAliasResolution(status="ambiguous")
 
 
 def _duplicate_guard_shortlist(
@@ -2526,7 +2529,7 @@ def _duplicate_guard_shortlist(
         organization=signal.establishment.organization,
         status=OperationalPattern.Status.ACTIVE,
     ):
-        candidate_tokens = _normalized_tokens(pattern.label)
+        candidate_tokens = _normalized_tokens(pattern.semantic_label)
         if not candidate_tokens:
             continue
         score = len(source_tokens & candidate_tokens) / len(candidate_tokens)
@@ -2536,6 +2539,8 @@ def _duplicate_guard_shortlist(
                     id=pattern.id,
                     label=pattern.label,
                     normalized_label=pattern.normalized_label,
+                    semantic_label=pattern.semantic_label,
+                    normalized_semantic_label=pattern.normalized_semantic_label,
                     score=score,
                 )
             )
@@ -2543,8 +2548,9 @@ def _duplicate_guard_shortlist(
     candidates.sort(
         key=lambda candidate: (
             -candidate.score,
-            candidate.normalized_label,
-            candidate.label,
+            candidate.normalized_semantic_label,
+            candidate.semantic_label,
+            candidate.id,
         )
     )
     return candidates[:max_candidates]
@@ -2597,6 +2603,8 @@ def _assess_duplicate_guard_best_effort(
                 "id": str(candidate.id),
                 "label": candidate.label,
                 "normalized_label": candidate.normalized_label,
+                "semantic_label": candidate.semantic_label,
+                "normalized_semantic_label": candidate.normalized_semantic_label,
             }
             for candidate in shortlist
         ],
@@ -2638,6 +2646,7 @@ def _assess_duplicate_guard_best_effort(
             return PatternDuplicateGuardDecision(
                 action="reused",
                 pattern_id=parsed.pattern_id,
+                reason_code=parsed.reason_code,
             )
 
         _write_duplicate_guard_usage_log(
@@ -2651,7 +2660,10 @@ def _assess_duplicate_guard_best_effort(
             output_tokens=response.output_tokens,
             total_tokens=response.total_tokens,
         )
-        return PatternDuplicateGuardDecision(action="created")
+        return PatternDuplicateGuardDecision(
+            action="created",
+            reason_code=parsed.reason_code,
+        )
     except PatternClassifierError as exc:
         _write_duplicate_guard_usage_log(
             signal=signal,
@@ -2700,7 +2712,7 @@ def _resolve_active_pattern_target(
         OperationalPattern.objects.select_for_update()
         .filter(
             organization=signal.establishment.organization,
-            normalized_label=pattern.normalized_label,
+            normalized_semantic_label=pattern.normalized_semantic_label,
             status=OperationalPattern.Status.ACTIVE,
         )
         .first()
@@ -2751,12 +2763,6 @@ def _validate_new_pattern_label(*, signal: Signal, label: str) -> str:
             "New pattern label is too long.",
             validation_branch="new_pattern_label_too_long",
         )
-    if normalized == normalize_pattern_label(signal.title):
-        raise PatternClassifierInvalidOutputError(
-            "New pattern label copies the signal title.",
-            validation_branch="new_pattern_label_copies_signal_title",
-        )
-
     forbidden_labels = [signal.establishment.name]
     for business_unit in (
         signal.affected_business_unit,
@@ -2766,7 +2772,7 @@ def _validate_new_pattern_label(*, signal: Signal, label: str) -> str:
             forbidden_labels.append(business_unit.specific_name)
     for forbidden_label in forbidden_labels:
         forbidden = normalize_pattern_label(forbidden_label)
-        if forbidden and forbidden in normalized:
+        if forbidden and forbidden == normalized:
             raise PatternClassifierInvalidOutputError(
                 "New pattern label includes establishment or business unit context.",
                 validation_branch="new_pattern_label_includes_context",
@@ -2786,19 +2792,15 @@ def _get_or_create_active_pattern_for_label(
             return create_operational_pattern(
                 organization=signal.establishment.organization,
                 label=label,
+                semantic_label=label,
             )
     except IntegrityError:
-        pattern = (
-            OperationalPattern.objects.filter(
-                organization=signal.establishment.organization,
-                normalized_label=normalized,
-                status=OperationalPattern.Status.ACTIVE,
-            )
-            .order_by("id")
-            .first()
+        exact_alias = _resolve_exact_pattern_alias(
+            signal=signal,
+            normalized_semantic_label=normalized,
         )
-        if pattern is not None:
-            return pattern
+        if exact_alias.status == "resolved" and exact_alias.pattern is not None:
+            return exact_alias.pattern
         raise PatternClassifierInvalidOutputError(
             "Concurrent pattern creation lost target.",
             validation_branch="concurrent_pattern_creation_lost_target",

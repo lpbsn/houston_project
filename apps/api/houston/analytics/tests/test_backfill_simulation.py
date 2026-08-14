@@ -61,13 +61,7 @@ class UnsafeInputPayloadProvider(FakePatternClassifierProvider):
 
 class InvalidOutputProvider(FakePatternClassifierProvider):
     def __init__(self):
-        super().__init__(
-            payload={
-                "result_type": "new_pattern",
-                "pattern_id": None,
-                "canonical_label": "",
-            }
-        )
+        super().__init__(payload={"canonical_label": ""})
 
 
 def create_signal_for_membership(membership, *, title="Issue", status=Signal.Status.OPEN):

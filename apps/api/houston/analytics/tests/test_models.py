@@ -47,6 +47,8 @@ def test_create_operational_pattern_calculates_normalized_label_and_event():
     )
 
     assert pattern.normalized_label == "guest bathroom"
+    assert pattern.semantic_label == "  Guest   Bathroom  "
+    assert pattern.normalized_semantic_label == "guest bathroom"
     event = pattern.lifecycle_events.get()
     assert event.event_type == PatternLifecycleEvent.EventType.CREATED
     assert event.organization == pattern.organization
@@ -77,6 +79,8 @@ def test_save_update_fields_refreshes_normalized_label():
 
     pattern.refresh_from_db()
     assert pattern.normalized_label == "lobby spill"
+    assert pattern.semantic_label == "Guest Bathroom"
+    assert pattern.normalized_semantic_label == "guest bathroom"
 
 
 def test_active_pattern_normalized_label_is_unique_within_organization():
@@ -88,6 +92,23 @@ def test_active_pattern_normalized_label_is_unique_within_organization():
         OperationalPattern.objects.create(
             organization=organization,
             label="  guest   bathroom ",
+        )
+
+
+def test_active_pattern_normalized_semantic_label_is_unique_within_organization():
+    membership = build_membership()
+    organization = membership.establishment.organization
+    OperationalPattern.objects.create(
+        organization=organization,
+        label="Guest Bathroom",
+        semantic_label="Bathroom leak",
+    )
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        OperationalPattern.objects.create(
+            organization=organization,
+            label="Other display label",
+            semantic_label=" bathroom   leak ",
         )
 
 

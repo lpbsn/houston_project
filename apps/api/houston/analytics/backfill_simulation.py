@@ -146,6 +146,7 @@ class BackfillSignalSimulationResult:
     duplicate_guard_call_count: int
     duplicate_guard_decision: str
     duplicate_guard_reason: str
+    duplicate_guard_reason_code: str | None
     assigned_existing_pattern_id: str
     assigned_existing_pattern_label: str
     assigned_existing_pattern_normalized_label: str
@@ -401,6 +402,11 @@ def _simulate_signal(
     duplicate_calls_after = len(provider.duplicate_guard_calls)
     duplicate_guard_decision = getattr(assignment, "_analytics_duplicate_guard_decision", "")
     duplicate_guard_reason = getattr(assignment, "_analytics_duplicate_guard_reason", "")
+    duplicate_guard_reason_code = getattr(
+        assignment,
+        "_analytics_duplicate_guard_reason_code",
+        None,
+    )
     pattern = assignment.pattern if assignment is not None else None
     is_simulated_pattern = pattern is not None and pattern.id not in initial_pattern_ids
     return BackfillSignalSimulationResult(
@@ -419,6 +425,7 @@ def _simulate_signal(
         duplicate_guard_call_count=duplicate_calls_after - duplicate_calls_before,
         duplicate_guard_decision=duplicate_guard_decision,
         duplicate_guard_reason=duplicate_guard_reason,
+        duplicate_guard_reason_code=duplicate_guard_reason_code,
         assigned_existing_pattern_id=str(pattern.id)
         if pattern is not None and not is_simulated_pattern
         else "",
@@ -613,6 +620,7 @@ def _signal_result_to_dict(result: BackfillSignalSimulationResult) -> dict[str, 
         "duplicate_guard_call_count": result.duplicate_guard_call_count,
         "duplicate_guard_decision": result.duplicate_guard_decision,
         "duplicate_guard_reason": result.duplicate_guard_reason,
+        "duplicate_guard_reason_code": result.duplicate_guard_reason_code,
         "assigned_existing_pattern_id": result.assigned_existing_pattern_id,
         "assigned_existing_pattern_label": result.assigned_existing_pattern_label,
         "assigned_existing_pattern_normalized_label": (

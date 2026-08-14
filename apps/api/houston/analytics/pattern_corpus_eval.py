@@ -68,6 +68,8 @@ class CorpusSignalResult:
     error_code: str = ""
     provider_call_count: int = 0
     duplicate_guard_decision: str = ""
+    duplicate_guard_reason: str = ""
+    duplicate_guard_reason_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -130,20 +132,8 @@ class CorpusFakePatternClassifierProvider(FakePatternClassifierProvider):
 
     def classify(self, *, input_payload: dict[str, Any]) -> PatternClassifierProviderResponse:
         self.calls.append(input_payload)
-        if self._response["result_type"] == "existing_pattern":
-            pattern_key = self._response["pattern_key"]
-            return PatternClassifierProviderResponse(
-                payload={
-                    "result_type": "existing_pattern",
-                    "pattern_id": str(self._pattern_ids_by_key[pattern_key]),
-                },
-                model=self.model,
-            )
         return PatternClassifierProviderResponse(
-            payload={
-                "result_type": "new_pattern",
-                "canonical_label": self._response["canonical_label"],
-            },
+            payload={"canonical_label": self._response["canonical_label"]},
             model=self.model,
         )
 
@@ -162,6 +152,7 @@ class CorpusFakePatternClassifierProvider(FakePatternClassifierProvider):
                 payload={
                     "result_type": "reuse_existing_pattern",
                     "pattern_id": str(self._pattern_ids_by_key[pattern_key]),
+                    "reason_code": response.get("reason_code", "same_phenomenon"),
                 },
                 model=self.model,
             )
@@ -169,6 +160,7 @@ class CorpusFakePatternClassifierProvider(FakePatternClassifierProvider):
             payload={
                 "result_type": "create_new_pattern",
                 "pattern_id": None,
+                "reason_code": response.get("reason_code", "ambiguous"),
             },
             model=self.model,
         )
@@ -260,6 +252,8 @@ def analytics_pattern_corpus_eval_report_to_dict(
                         "error_code": signal.error_code,
                         "provider_call_count": signal.provider_call_count,
                         "duplicate_guard_decision": signal.duplicate_guard_decision,
+                        "duplicate_guard_reason": signal.duplicate_guard_reason,
+                        "duplicate_guard_reason_code": signal.duplicate_guard_reason_code,
                     }
                     for signal in scenario.signal_results
                 ],
@@ -699,6 +693,16 @@ def _build_signal_result(
             "_analytics_duplicate_guard_decision",
             "",
         ),
+        duplicate_guard_reason=getattr(
+            assignment,
+            "_analytics_duplicate_guard_reason",
+            "",
+        ),
+        duplicate_guard_reason_code=getattr(
+            assignment,
+            "_analytics_duplicate_guard_reason_code",
+            None,
+        ),
     )
 
 
@@ -812,6 +816,9 @@ def _scenario_metrics(
         "duplicate_guard_created_count": guard_created,
         "duplicate_guard_skipped_count": guard_skipped,
         "duplicate_guard_fallback_count": guard_fallback,
+        "duplicate_guard_reason_code_distribution": (
+            _duplicate_guard_reason_code_distribution(signal_results)
+        ),
     }
 
 
@@ -915,7 +922,34 @@ def _combine_metrics(
             scenario.metrics["duplicate_guard_fallback_count"]
             for scenario in scenario_results
         ),
+        "duplicate_guard_reason_code_distribution": _combine_reason_code_distributions(
+            scenario.metrics["duplicate_guard_reason_code_distribution"]
+            for scenario in scenario_results
+        ),
     }
+
+
+def _duplicate_guard_reason_code_distribution(
+    signal_results: tuple[CorpusSignalResult, ...],
+) -> dict[str, int]:
+    distribution: dict[str, int] = {}
+    for result in signal_results:
+        if result.duplicate_guard_reason_code is None:
+            continue
+        distribution[result.duplicate_guard_reason_code] = (
+            distribution.get(result.duplicate_guard_reason_code, 0) + 1
+        )
+    return distribution
+
+
+def _combine_reason_code_distributions(
+    distributions,
+) -> dict[str, int]:
+    combined: dict[str, int] = {}
+    for distribution in distributions:
+        for reason_code, count in distribution.items():
+            combined[reason_code] = combined.get(reason_code, 0) + count
+    return combined
 
 
 def _rate_metric(

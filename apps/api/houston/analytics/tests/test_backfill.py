@@ -51,11 +51,7 @@ class MixedProvider:
         self.calls += 1
         if self.calls == 1:
             return PatternClassifierProviderResponse(
-                payload={
-                    "result_type": "new_pattern",
-                    "pattern_id": None,
-                    "canonical_label": "Operational backfill issue",
-                },
+                payload={"canonical_label": "Operational backfill issue"},
                 model=self.model,
             )
         raise RuntimeError("unexpected provider failure")
@@ -79,11 +75,7 @@ class SuccessFailureSuccessProvider:
         if self.calls == 2:
             raise PatternClassifierTimeoutError("middle provider timeout")
         return PatternClassifierProviderResponse(
-            payload={
-                "result_type": "new_pattern",
-                "pattern_id": None,
-                "canonical_label": f"Operational backfill issue {self.calls}",
-            },
+            payload={"canonical_label": f"Operational backfill issue {self.calls}"},
             model=self.model,
         )
 
@@ -105,19 +97,11 @@ class InvalidThenSuccessProvider:
         self.calls += 1
         if self.calls == 1:
             return PatternClassifierProviderResponse(
-                payload={
-                    "result_type": "new_pattern",
-                    "pattern_id": None,
-                    "canonical_label": "",
-                },
+                payload={"canonical_label": ""},
                 model=self.model,
             )
         return PatternClassifierProviderResponse(
-            payload={
-                "result_type": "new_pattern",
-                "pattern_id": None,
-                "canonical_label": "Recovered operational issue",
-            },
+            payload={"canonical_label": "Recovered operational issue"},
             model=self.model,
         )
 
@@ -135,11 +119,7 @@ class UnsafeInputPayloadProvider:
     def classify(self, *, input_payload):
         input_payload["raw_text"] = "secret"
         return PatternClassifierProviderResponse(
-            payload={
-                "result_type": "new_pattern",
-                "pattern_id": None,
-                "canonical_label": "Unsafe payload issue",
-            },
+            payload={"canonical_label": "Unsafe payload issue"},
             model=self.model,
         )
 
@@ -311,7 +291,7 @@ def test_remaining_signal_ids_only_include_replayable_non_terminal_outcomes(sett
         limit=10,
     )
     permanent_provider = FakePatternClassifierProvider(
-        payload={"result_type": "new_pattern", "pattern_id": None, "canonical_label": ""},
+        payload={"canonical_label": ""},
     )
     permanent_report = backfill_analytics_patterns(
         signal_ids=[processing_signal.id, permanent_signal.id],
