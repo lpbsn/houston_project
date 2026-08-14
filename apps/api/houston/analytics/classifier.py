@@ -33,9 +33,16 @@ class PatternClassifierTimeoutError(PatternClassifierError):
 class PatternClassifierInvalidOutputError(PatternClassifierError):
     error_code = "invalid_structured_output"
 
-    def __init__(self, message: str, *, payload: dict[str, Any] | None = None):
+    def __init__(
+        self,
+        message: str,
+        *,
+        payload: dict[str, Any] | None = None,
+        validation_branch: str = "unknown_invalid_output",
+    ):
         super().__init__(message)
         self.payload = payload or {}
+        self.validation_branch = validation_branch
 
 
 class PatternClassifierSchemaError(PatternClassifierError):
@@ -161,11 +168,17 @@ class OpenAIPatternClassifierProvider:
         self.last_provider_request_id = getattr(response, "id", "") or ""
         content = response.choices[0].message.content if response.choices else None
         if not content:
-            raise PatternClassifierInvalidOutputError("OpenAI returned an empty response.")
+            raise PatternClassifierInvalidOutputError(
+                "OpenAI returned an empty response.",
+                validation_branch="provider_empty_response",
+            )
         try:
             payload = json.loads(content)
         except json.JSONDecodeError as exc:
-            raise PatternClassifierInvalidOutputError("OpenAI returned invalid JSON.") from exc
+            raise PatternClassifierInvalidOutputError(
+                "OpenAI returned invalid JSON.",
+                validation_branch="provider_invalid_json",
+            ) from exc
 
         usage = getattr(response, "usage", None)
         return PatternClassifierProviderResponse(
@@ -216,11 +229,17 @@ class OpenAIPatternClassifierProvider:
         self.last_provider_request_id = getattr(response, "id", "") or ""
         content = response.choices[0].message.content if response.choices else None
         if not content:
-            raise PatternClassifierInvalidOutputError("OpenAI returned an empty response.")
+            raise PatternClassifierInvalidOutputError(
+                "OpenAI returned an empty response.",
+                validation_branch="duplicate_guard_provider_empty_response",
+            )
         try:
             payload = json.loads(content)
         except json.JSONDecodeError as exc:
-            raise PatternClassifierInvalidOutputError("OpenAI returned invalid JSON.") from exc
+            raise PatternClassifierInvalidOutputError(
+                "OpenAI returned invalid JSON.",
+                validation_branch="duplicate_guard_provider_invalid_json",
+            ) from exc
 
         usage = getattr(response, "usage", None)
         return PatternClassifierProviderResponse(
@@ -286,6 +305,7 @@ def parse_pattern_classifier_response(payload: dict[str, Any]) -> PatternClassif
             raise PatternClassifierInvalidOutputError(
                 "existing_pattern response must include only pattern_id.",
                 payload=payload,
+                validation_branch="existing_pattern_shape_invalid",
             )
         try:
             parsed_pattern_id = uuid.UUID(str(pattern_id))
@@ -293,6 +313,7 @@ def parse_pattern_classifier_response(payload: dict[str, Any]) -> PatternClassif
             raise PatternClassifierInvalidOutputError(
                 "existing_pattern response has invalid pattern_id.",
                 payload=payload,
+                validation_branch="existing_pattern_id_invalid",
             ) from exc
         return PatternClassifierResponse(
             result_type="existing_pattern",
@@ -304,6 +325,7 @@ def parse_pattern_classifier_response(payload: dict[str, Any]) -> PatternClassif
             raise PatternClassifierInvalidOutputError(
                 "new_pattern response must include only canonical_label.",
                 payload=payload,
+                validation_branch="new_pattern_shape_invalid",
             )
         return PatternClassifierResponse(
             result_type="new_pattern",
@@ -313,6 +335,7 @@ def parse_pattern_classifier_response(payload: dict[str, Any]) -> PatternClassif
     raise PatternClassifierInvalidOutputError(
         "Pattern classifier response must be discriminated.",
         payload=payload,
+        validation_branch="classifier_response_discriminator_invalid",
     )
 
 
@@ -327,6 +350,7 @@ def parse_pattern_duplicate_guard_response(
             raise PatternClassifierInvalidOutputError(
                 "create_new_pattern response must not include pattern_id.",
                 payload=payload,
+                validation_branch="duplicate_guard_create_new_shape_invalid",
             )
         return PatternDuplicateGuardResponse(result_type="create_new_pattern")
 
@@ -335,6 +359,7 @@ def parse_pattern_duplicate_guard_response(
             raise PatternClassifierInvalidOutputError(
                 "reuse_existing_pattern response must include pattern_id.",
                 payload=payload,
+                validation_branch="duplicate_guard_reuse_existing_shape_invalid",
             )
         try:
             parsed_pattern_id = uuid.UUID(str(pattern_id))
@@ -342,6 +367,7 @@ def parse_pattern_duplicate_guard_response(
             raise PatternClassifierInvalidOutputError(
                 "reuse_existing_pattern response has invalid pattern_id.",
                 payload=payload,
+                validation_branch="duplicate_guard_pattern_id_invalid",
             ) from exc
         return PatternDuplicateGuardResponse(
             result_type="reuse_existing_pattern",
@@ -351,6 +377,7 @@ def parse_pattern_duplicate_guard_response(
     raise PatternClassifierInvalidOutputError(
         "Pattern duplicate guard response must be discriminated.",
         payload=payload,
+        validation_branch="duplicate_guard_response_discriminator_invalid",
     )
 
 

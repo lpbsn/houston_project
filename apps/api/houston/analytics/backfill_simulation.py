@@ -141,6 +141,7 @@ class BackfillSignalSimulationResult:
     final_assignment_status: str
     final_assignment_source: str
     final_error_code: str
+    final_validation_branch: str
     provider_call_count: int
     duplicate_guard_call_count: int
     duplicate_guard_decision: str
@@ -389,10 +390,12 @@ def _simulate_signal(
     )
     classify_calls_before = len(provider.calls)
     duplicate_calls_before = len(provider.duplicate_guard_calls)
-    claim_decisions, claim_reasons, assignment, outcome = _run_classification_to_terminal_state(
-        signal=signal,
-        provider=provider,
-        duplicate_guard_enabled=duplicate_guard_enabled,
+    claim_decisions, claim_reasons, assignment, outcome, validation_branch = (
+        _run_classification_attempt(
+            signal=signal,
+            provider=provider,
+            duplicate_guard_enabled=duplicate_guard_enabled,
+        )
     )
     classify_calls_after = len(provider.calls)
     duplicate_calls_after = len(provider.duplicate_guard_calls)
@@ -411,6 +414,7 @@ def _simulate_signal(
         final_assignment_status=assignment.classification_status if assignment else "missing",
         final_assignment_source=assignment.assignment_source if assignment else "",
         final_error_code=assignment.last_error_code if assignment else "",
+        final_validation_branch=validation_branch,
         provider_call_count=classify_calls_after - classify_calls_before,
         duplicate_guard_call_count=duplicate_calls_after - duplicate_calls_before,
         duplicate_guard_decision=duplicate_guard_decision,
@@ -433,57 +437,53 @@ def _simulate_signal(
     )
 
 
-def _run_classification_to_terminal_state(
+def _run_classification_attempt(
     *,
     signal: Signal,
     provider: CapturingBackfillPatternClassifierProvider,
     duplicate_guard_enabled: bool,
-) -> tuple[list[str], list[str], SignalPatternAssignment | None, str]:
-    retries = 0
-    claim_decisions: list[str] = []
-    claim_reasons: list[str] = []
-    while True:
-        try:
-            assignment = classify_signal_pattern(
-                signal.id,
-                provider=provider,
-                duplicate_guard_enabled=duplicate_guard_enabled,
-            )
-            claim_status = getattr(assignment, "_analytics_claim_status", "no_assignment")
-            claim_reason = getattr(assignment, "_analytics_claim_reason", "")
-            claim_decisions.append(claim_status)
-            claim_reasons.append(claim_reason)
-            return (
-                claim_decisions,
-                claim_reasons,
-                assignment,
-                _outcome_from_assignment(
-                    assignment=assignment,
-                    claim_status=claim_status,
-                    claim_reason=claim_reason,
-                ),
-            )
-        except PatternClassificationRetryableError as exc:
-            claim_decisions.append("claimed")
-            claim_reasons.append("retryable_error")
-            signal.refresh_from_db()
-            retry_policy = analytics_pattern_task_retry_policy()
-            finalization = finalize_retryable_pattern_classification_error(
-                signal=signal,
-                exc=exc,
-                retries=retries,
-                max_retries=retry_policy.max_retries,
-                retry_delay_seconds=retry_policy.retry_delay_seconds,
-            )
-            if finalization.outcome == "retry":
-                retries += 1
-                continue
-            return (
-                claim_decisions,
-                claim_reasons,
-                finalization.assignment,
-                finalization.outcome,
-            )
+) -> tuple[list[str], list[str], SignalPatternAssignment | None, str, str]:
+    try:
+        assignment = classify_signal_pattern(
+            signal.id,
+            provider=provider,
+            duplicate_guard_enabled=duplicate_guard_enabled,
+        )
+        claim_status = getattr(assignment, "_analytics_claim_status", "no_assignment")
+        claim_reason = getattr(assignment, "_analytics_claim_reason", "")
+        return (
+            [claim_status],
+            [claim_reason],
+            assignment,
+            _outcome_from_assignment(
+                assignment=assignment,
+                claim_status=claim_status,
+                claim_reason=claim_reason,
+            ),
+            "",
+        )
+    except PatternClassificationRetryableError as exc:
+        signal.refresh_from_db()
+        retry_policy = analytics_pattern_task_retry_policy()
+        finalization = finalize_retryable_pattern_classification_error(
+            signal=signal,
+            exc=exc,
+            retries=0,
+            max_retries=retry_policy.max_retries,
+            retry_delay_seconds=retry_policy.retry_delay_seconds,
+        )
+        outcome = (
+            SignalPatternAssignment.ClassificationStatus.TEMPORARY_FAILED
+            if finalization.outcome == "retry"
+            else finalization.outcome
+        )
+        return (
+            ["claimed"],
+            ["retryable_error"],
+            finalization.assignment,
+            outcome,
+            exc.validation_branch,
+        )
 
 
 def _outcome_from_assignment(
@@ -608,6 +608,7 @@ def _signal_result_to_dict(result: BackfillSignalSimulationResult) -> dict[str, 
         "final_assignment_status": result.final_assignment_status,
         "final_assignment_source": result.final_assignment_source,
         "final_error_code": result.final_error_code,
+        "final_validation_branch": result.final_validation_branch,
         "provider_call_count": result.provider_call_count,
         "duplicate_guard_call_count": result.duplicate_guard_call_count,
         "duplicate_guard_decision": result.duplicate_guard_decision,

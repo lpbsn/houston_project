@@ -86,6 +86,7 @@ class PatternClassificationRetryableError(Exception):
         pending_signature: str,
         pending_classifier_version: str,
         error_code: str,
+        validation_branch: str = "",
     ):
         super().__init__(message)
         self.signal_id = signal_id
@@ -93,6 +94,7 @@ class PatternClassificationRetryableError(Exception):
         self.pending_signature = pending_signature
         self.pending_classifier_version = pending_classifier_version
         self.error_code = error_code
+        self.validation_branch = validation_branch
 
 
 @dataclass(frozen=True)
@@ -2110,6 +2112,21 @@ def claim_signal_pattern_classification(
             reason="recent_processing",
         )
 
+    if (
+        assignment.classification_status
+        == SignalPatternAssignment.ClassificationStatus.TEMPORARY_FAILED
+        and assignment.pending_signature == signature
+        and assignment.pending_classifier_version == classifier_version
+        and assignment.next_retry_at is not None
+        and assignment.next_retry_at > now
+    ):
+        return PatternClassificationClaimResult(
+            status="already_processing",
+            attempt_count=assignment.attempt_count,
+            assignment=assignment,
+            reason="retry_not_due",
+        )
+
     assignment.classification_status = SignalPatternAssignment.ClassificationStatus.PROCESSING
     assignment.pending_signature = signature
     assignment.pending_classifier_version = classifier_version
@@ -2172,6 +2189,7 @@ def classify_signal_pattern(
     }
 
     provider_started_at = time.monotonic()
+    provider_response = None
     try:
         provider_response = provider.classify(input_payload=input_payload)
         parsed = parse_pattern_classifier_response(provider_response.payload)
@@ -2234,6 +2252,31 @@ def classify_signal_pattern(
             pending_signature=signature,
             pending_classifier_version=classifier_version,
             error_code=exc.error_code,
+        ) from exc
+    except PatternClassifierInvalidOutputError as exc:
+        error_context = _invalid_output_error_context(exc=exc, provider=provider)
+        _write_analytics_usage_log(
+            signal=signal,
+            provider=provider.provider,
+            model=(provider_response.model if provider_response is not None else "")
+            or getattr(provider, "model", ""),
+            status=AIUsageLog.Status.FAILED,
+            latency_ms=_elapsed_ms(provider_started_at),
+            correlation_id=uuid.uuid4(),
+            error_code=exc.error_code,
+            error_context=error_context,
+            input_tokens=provider_response.input_tokens if provider_response else None,
+            output_tokens=provider_response.output_tokens if provider_response else None,
+            total_tokens=provider_response.total_tokens if provider_response else None,
+        )
+        raise PatternClassificationRetryableError(
+            str(exc),
+            signal_id=signal.id,
+            attempt_count=claim.attempt_count,
+            pending_signature=signature,
+            pending_classifier_version=classifier_version,
+            error_code=exc.error_code,
+            validation_branch=exc.validation_branch,
         ) from exc
     except (PatternClassifierError, AnalyticsValidationError) as exc:
         error_code = getattr(exc, "error_code", None) or getattr(exc, "code", None)
@@ -2311,6 +2354,7 @@ def _prepare_classifier_pattern_resolution(
         if response.pattern_id not in candidate_ids:
             raise PatternClassifierInvalidOutputError(
                 "Classifier selected a pattern outside active candidates.",
+                validation_branch="existing_pattern_outside_candidates",
             )
         return PatternClassifierPatternResolution(
             mode="existing_pattern",
@@ -2414,7 +2458,10 @@ def _resolve_pattern_resolution_for_write(
 ) -> OperationalPattern:
     if resolution.mode == "existing_pattern":
         if resolution.pattern_id is None:
-            raise PatternClassifierInvalidOutputError("Pattern resolution missing target.")
+            raise PatternClassifierInvalidOutputError(
+                "Pattern resolution missing target.",
+                validation_branch="pattern_resolution_missing_target",
+            )
         pattern = OperationalPattern.objects.select_for_update().get(
             pk=resolution.pattern_id
         )
@@ -2661,7 +2708,10 @@ def _resolve_active_pattern_target(
     if active is not None:
         return active
 
-    raise PatternClassifierInvalidOutputError("No active target pattern could be resolved.")
+    raise PatternClassifierInvalidOutputError(
+        "No active target pattern could be resolved.",
+        validation_branch="no_active_target_pattern",
+    )
 
 
 def _resolve_merged_pattern_chain(
@@ -2691,12 +2741,21 @@ def _resolve_merged_pattern_chain(
 def _validate_new_pattern_label(*, signal: Signal, label: str) -> str:
     normalized = normalize_pattern_label(label)
     if not normalized:
-        raise PatternClassifierInvalidOutputError("New pattern label is empty.")
+        raise PatternClassifierInvalidOutputError(
+            "New pattern label is empty.",
+            validation_branch="new_pattern_label_empty",
+        )
     cleaned = label.strip()
     if len(cleaned) > PATTERN_LABEL_MAX_LENGTH:
-        raise PatternClassifierInvalidOutputError("New pattern label is too long.")
+        raise PatternClassifierInvalidOutputError(
+            "New pattern label is too long.",
+            validation_branch="new_pattern_label_too_long",
+        )
     if normalized == normalize_pattern_label(signal.title):
-        raise PatternClassifierInvalidOutputError("New pattern label copies the signal title.")
+        raise PatternClassifierInvalidOutputError(
+            "New pattern label copies the signal title.",
+            validation_branch="new_pattern_label_copies_signal_title",
+        )
 
     forbidden_labels = [signal.establishment.name]
     for business_unit in (
@@ -2709,7 +2768,8 @@ def _validate_new_pattern_label(*, signal: Signal, label: str) -> str:
         forbidden = normalize_pattern_label(forbidden_label)
         if forbidden and forbidden in normalized:
             raise PatternClassifierInvalidOutputError(
-                "New pattern label includes establishment or business unit context."
+                "New pattern label includes establishment or business unit context.",
+                validation_branch="new_pattern_label_includes_context",
             )
 
     return cleaned
@@ -2739,7 +2799,10 @@ def _get_or_create_active_pattern_for_label(
         )
         if pattern is not None:
             return pattern
-        raise PatternClassifierInvalidOutputError("Concurrent pattern creation lost target.")
+        raise PatternClassifierInvalidOutputError(
+            "Concurrent pattern creation lost target.",
+            validation_branch="concurrent_pattern_creation_lost_target",
+        )
 
 
 def _write_analytics_usage_log(
@@ -2751,6 +2814,7 @@ def _write_analytics_usage_log(
     latency_ms: int,
     correlation_id: uuid.UUID,
     error_code: str = "",
+    error_context: dict[str, Any] | None = None,
     input_tokens: int | None = None,
     output_tokens: int | None = None,
     total_tokens: int | None = None,
@@ -2767,10 +2831,28 @@ def _write_analytics_usage_log(
         output_tokens=output_tokens,
         total_tokens=total_tokens,
         error_code=error_code,
-        error_context={},
+        error_context=error_context or {},
         correlation_id=correlation_id,
         establishment=signal.establishment,
     )
+
+
+def _invalid_output_error_context(
+    *,
+    exc: PatternClassifierInvalidOutputError,
+    provider: PatternClassifierProvider,
+) -> dict[str, str]:
+    context = {
+        "phase": "analytics_pattern_classification",
+        "validation_branch": exc.validation_branch,
+    }
+    response_format_mode = getattr(provider, "last_response_format_mode", "")
+    if response_format_mode:
+        context["response_format_mode"] = str(response_format_mode)[:80]
+    provider_request_id = getattr(provider, "last_provider_request_id", "")
+    if provider_request_id:
+        context["provider_request_id"] = str(provider_request_id)[:200]
+    return context
 
 
 def _write_duplicate_guard_usage_log(

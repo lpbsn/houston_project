@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import threading
 from datetime import timedelta
 from types import SimpleNamespace
@@ -647,16 +648,19 @@ def test_duplicate_guard_shortlist_uses_stable_functional_tie_break(settings):
 
 
 @pytest.mark.parametrize(
-    "label",
+    ("label", "expected_branch"),
     [
-        "",
-        "Clim en panne",
-        "Establishment",
-        "Bar",
-        "x" * 256,
+        ("", "new_pattern_label_empty"),
+        ("Clim en panne", "new_pattern_label_copies_signal_title"),
+        ("Establishment", "new_pattern_label_includes_context"),
+        ("Bar", "new_pattern_label_includes_context"),
+        ("x" * 256, "new_pattern_label_too_long"),
     ],
 )
-def test_new_pattern_rejects_invalid_canonical_label(label):
+def test_new_pattern_invalid_canonical_label_is_retryable_with_safe_diagnostic(
+    label,
+    expected_branch,
+):
     membership = build_membership()
     membership.establishment.name = "Establishment"
     membership.establishment.save(update_fields=["name", "updated_at"])
@@ -665,12 +669,23 @@ def test_new_pattern_rejects_invalid_canonical_label(label):
         payload={"result_type": "new_pattern", "canonical_label": label}
     )
 
-    assignment = classify_signal_pattern(signal.id, provider=provider)
+    with pytest.raises(PatternClassificationRetryableError) as exc_info:
+        classify_signal_pattern(signal.id, provider=provider)
 
+    assert exc_info.value.error_code == "invalid_structured_output"
+    assert exc_info.value.validation_branch == expected_branch
+    assignment = SignalPatternAssignment.objects.get(signal=signal)
     assert assignment.classification_status == (
-        SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED
+        SignalPatternAssignment.ClassificationStatus.PROCESSING
     )
     assert assignment.pattern is None
+    log = AIUsageLog.objects.get(ai_domain=AIUsageLog.Domain.ANALYTICS_PATTERN)
+    assert log.status == AIUsageLog.Status.FAILED
+    assert log.error_code == "invalid_structured_output"
+    assert log.error_context["validation_branch"] == expected_branch
+    serialized_context = json.dumps(log.error_context, sort_keys=True)
+    assert "payload" not in serialized_context
+    assert "raw_text" not in serialized_context
 
 
 def test_concurrent_new_pattern_creation_reloads_existing_label_after_integrity_error():
@@ -694,7 +709,7 @@ def test_concurrent_new_pattern_creation_reloads_existing_label_after_integrity_
 
 
 def test_ambiguous_response_is_refused():
-    with pytest.raises(PatternClassifierInvalidOutputError):
+    with pytest.raises(PatternClassifierInvalidOutputError) as exc_info:
         parse_pattern_classifier_response(
             {
                 "result_type": "existing_pattern",
@@ -702,9 +717,10 @@ def test_ambiguous_response_is_refused():
                 "canonical_label": "Label",
             }
         )
+    assert exc_info.value.validation_branch == "existing_pattern_shape_invalid"
 
 
-def test_unknown_candidate_pattern_is_permanently_failed():
+def test_unknown_candidate_pattern_is_retryable_with_safe_diagnostic():
     membership = build_membership()
     signal = create_signal_for_membership(membership)
     other = build_membership()
@@ -716,10 +732,14 @@ def test_unknown_candidate_pattern_is_permanently_failed():
         payload={"result_type": "existing_pattern", "pattern_id": str(other_pattern.id)}
     )
 
-    assignment = classify_signal_pattern(signal.id, provider=provider)
+    with pytest.raises(PatternClassificationRetryableError) as exc_info:
+        classify_signal_pattern(signal.id, provider=provider)
 
+    assert exc_info.value.error_code == "invalid_structured_output"
+    assert exc_info.value.validation_branch == "existing_pattern_outside_candidates"
+    assignment = SignalPatternAssignment.objects.get(signal=signal)
     assert assignment.classification_status == (
-        SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED
+        SignalPatternAssignment.ClassificationStatus.PROCESSING
     )
     assert assignment.pattern is None
 

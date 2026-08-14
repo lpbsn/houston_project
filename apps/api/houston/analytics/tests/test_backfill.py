@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 from io import StringIO
 
 import pytest
@@ -82,6 +83,40 @@ class SuccessFailureSuccessProvider:
                 "result_type": "new_pattern",
                 "pattern_id": None,
                 "canonical_label": f"Operational backfill issue {self.calls}",
+            },
+            model=self.model,
+        )
+
+    def assess_duplicate(self, *, input_payload):
+        return PatternClassifierProviderResponse(
+            payload={"result_type": "create_new_pattern", "pattern_id": None},
+            model=self.model,
+        )
+
+
+class InvalidThenSuccessProvider:
+    provider = "fake"
+    model = "fake"
+
+    def __init__(self):
+        self.calls = 0
+
+    def classify(self, *, input_payload):
+        self.calls += 1
+        if self.calls == 1:
+            return PatternClassifierProviderResponse(
+                payload={
+                    "result_type": "new_pattern",
+                    "pattern_id": None,
+                    "canonical_label": "",
+                },
+                model=self.model,
+            )
+        return PatternClassifierProviderResponse(
+            payload={
+                "result_type": "new_pattern",
+                "pattern_id": None,
+                "canonical_label": "Recovered operational issue",
             },
             model=self.model,
         )
@@ -291,8 +326,13 @@ def test_remaining_signal_ids_only_include_replayable_non_terminal_outcomes(sett
     assert temp_payload["metrics"]["remaining_signal_ids"] == [str(temp_signal.id)]
     assert temp_payload["metrics"]["remaining_by_reason"] == {"temporary_failed": 1}
     assert str(processing_signal.id) in permanent_payload["metrics"]["remaining_signal_ids"]
-    assert str(permanent_signal.id) not in permanent_payload["metrics"]["remaining_signal_ids"]
-    assert permanent_payload["metrics"]["terminal_outcomes"] == {"permanently_failed": 1}
+    assert str(permanent_signal.id) in permanent_payload["metrics"]["remaining_signal_ids"]
+    assert permanent_payload["metrics"]["terminal_outcomes"] == {}
+    assert permanent_payload["signals"][1]["outcome"] == "temporary_failed"
+    assert permanent_payload["signals"][1]["final_error_code"] == "invalid_structured_output"
+    assert permanent_payload["signals"][1]["final_validation_branch"] == (
+        "new_pattern_label_empty"
+    )
 
 
 def test_owner_correction_is_protected_until_signature_changes(settings):
@@ -348,6 +388,13 @@ def test_retryable_replays_use_attempt_count_until_retry_exhausted(settings):
             limit=10,
         )
         outcomes.append(backfill_report_to_dict(report)["signals"][0]["outcome"])
+        assignment = SignalPatternAssignment.objects.get(signal=signal)
+        if (
+            assignment.classification_status
+            == SignalPatternAssignment.ClassificationStatus.TEMPORARY_FAILED
+        ):
+            assignment.next_retry_at = timezone.now() - timedelta(seconds=1)
+            assignment.save(update_fields=["next_retry_at", "updated_at"])
 
     assert outcomes == [
         "temporary_failed",
@@ -358,6 +405,67 @@ def test_retryable_replays_use_attempt_count_until_retry_exhausted(settings):
     final_payload = backfill_report_to_dict(report)
     assert final_payload["metrics"]["remaining_signal_ids"] == []
     assert final_payload["metrics"]["terminal_outcomes"] == {"retry_exhausted": 1}
+
+
+def test_invalid_output_backfill_retries_only_after_next_retry_at(settings):
+    settings.DEBUG = True
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = create_signal_for_membership(owner)
+    provider = InvalidThenSuccessProvider()
+
+    first = backfill_analytics_patterns(
+        signal_ids=[signal.id],
+        provider_name="fake",
+        provider=provider,
+        limit=10,
+    )
+    first_payload = backfill_report_to_dict(first)
+
+    assert first_payload["signals"][0]["outcome"] == "temporary_failed"
+    assert first_payload["signals"][0]["final_error_code"] == "invalid_structured_output"
+    assert first_payload["signals"][0]["final_validation_branch"] == "new_pattern_label_empty"
+    assignment = SignalPatternAssignment.objects.get(signal=signal)
+    assert (
+        assignment.classification_status
+        == SignalPatternAssignment.ClassificationStatus.TEMPORARY_FAILED
+    )
+    assert assignment.next_retry_at is not None
+    assert provider.calls == 1
+    log = AIUsageLog.objects.get(ai_domain=AIUsageLog.Domain.ANALYTICS_PATTERN)
+    assert log.status == AIUsageLog.Status.FAILED
+    assert log.error_context["validation_branch"] == "new_pattern_label_empty"
+
+    before_retry = backfill_analytics_patterns(
+        signal_ids=[signal.id],
+        provider_name="fake",
+        provider=provider,
+        limit=10,
+    )
+    before_retry_payload = backfill_report_to_dict(before_retry)
+
+    assert before_retry_payload["signals"][0]["outcome"] == "already_processing"
+    assert before_retry_payload["signals"][0]["claim_reasons"] == ["retry_not_due"]
+    assert provider.calls == 1
+
+    assignment.next_retry_at = timezone.now() - timedelta(seconds=1)
+    assignment.save(update_fields=["next_retry_at", "updated_at"])
+    after_retry = backfill_analytics_patterns(
+        signal_ids=[signal.id],
+        provider_name="fake",
+        provider=provider,
+        limit=10,
+    )
+    after_retry_payload = backfill_report_to_dict(after_retry)
+
+    assert after_retry_payload["signals"][0]["outcome"] == "succeeded"
+    assert provider.calls == 2
+    assignment.refresh_from_db()
+    assert (
+        assignment.classification_status
+        == SignalPatternAssignment.ClassificationStatus.SUCCEEDED
+    )
+    assert assignment.attempt_count == 2
+    assert assignment.pattern.label == "Recovered operational issue"
 
 
 def test_fail_on_error_does_not_rollback_successful_signals(settings, monkeypatch):
@@ -423,6 +531,9 @@ def test_scan_cursor_stops_before_middle_batch_failure_and_resume_replays(settin
     assert first_payload["metrics"]["remaining_signal_ids"] == [str(second.id)]
     assert first_payload["next_scan_cursor"] == str(first.id)
 
+    assignment = SignalPatternAssignment.objects.get(signal=second)
+    assignment.next_retry_at = timezone.now() - timedelta(seconds=1)
+    assignment.save(update_fields=["next_retry_at", "updated_at"])
     second_report = backfill_analytics_patterns(
         establishment_id=owner.establishment_id,
         start_after_signal_id=first_payload["next_scan_cursor"],

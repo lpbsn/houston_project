@@ -19,7 +19,6 @@ from houston.analytics.backfill_simulation import (
 )
 from houston.analytics.classifier import (
     FakePatternClassifierProvider,
-    PatternClassifierInvalidOutputError,
     PatternClassifierTimeoutError,
     classifier_version_for_provider,
 )
@@ -29,7 +28,10 @@ from houston.analytics.models import (
     SignalPatternAssignment,
 )
 from houston.analytics.services import (
+    PatternClassificationRetryableError,
+    classify_signal_pattern,
     create_operational_pattern,
+    finalize_retryable_pattern_classification_error,
     mark_assignment_processing,
     mark_assignment_succeeded,
     move_signals_between_patterns,
@@ -55,6 +57,17 @@ class UnsafeInputPayloadProvider(FakePatternClassifierProvider):
     def classify(self, *, input_payload):
         input_payload["raw_text"] = "secret"
         return super().classify(input_payload=input_payload)
+
+
+class InvalidOutputProvider(FakePatternClassifierProvider):
+    def __init__(self):
+        super().__init__(
+            payload={
+                "result_type": "new_pattern",
+                "pattern_id": None,
+                "canonical_label": "",
+            }
+        )
 
 
 def create_signal_for_membership(membership, *, title="Issue", status=Signal.Status.OPEN):
@@ -336,8 +349,9 @@ def test_backfill_retryable_errors_finalize_without_persisting_processing():
     )
     payload = backfill_simulation_report_to_dict(report)
 
-    assert payload["metrics"]["outcomes"] == {"retry_exhausted": 1}
+    assert payload["metrics"]["outcomes"] == {"temporary_failed": 1}
     assert payload["metrics"]["technical_error_count"] == 1
+    assert payload["signals"][0]["final_error_code"] == "provider_timeout"
     assert not hasattr(signal, "pattern_assignment")
 
 
@@ -378,15 +392,13 @@ def test_backfill_simulation_and_real_backfill_share_task_retry_policy(
     assert backfill_payload["metrics"]["provider_calls"]["classification_count"] == 1
 
 
-def test_backfill_permanent_provider_errors_report_failure_without_persisting_processing():
+def test_backfill_invalid_provider_output_is_retryable_without_persisting_processing():
     owner = build_membership(role=EstablishmentMembership.Role.OWNER)
     signal = create_signal_for_membership(owner)
     before_patterns = OperationalPattern.objects.count()
     before_events = PatternLifecycleEvent.objects.count()
     before_logs = AIUsageLog.objects.count()
-    provider = FakePatternClassifierProvider(
-        exc=PatternClassifierInvalidOutputError("invalid structured output"),
-    )
+    provider = InvalidOutputProvider()
 
     report = simulate_analytics_pattern_backfill(
         establishment_id=owner.establishment_id,
@@ -396,9 +408,11 @@ def test_backfill_permanent_provider_errors_report_failure_without_persisting_pr
     )
     payload = backfill_simulation_report_to_dict(report)
 
-    assert payload["metrics"]["outcomes"] == {"permanently_failed": 1}
+    assert payload["metrics"]["outcomes"] == {"temporary_failed": 1}
     assert payload["metrics"]["technical_error_count"] == 1
+    assert payload["metrics"]["provider_calls"]["classification_count"] == 1
     assert payload["signals"][0]["final_error_code"] == "invalid_structured_output"
+    assert payload["signals"][0]["final_validation_branch"] == "new_pattern_label_empty"
     assert not SignalPatternAssignment.objects.filter(
         signal=signal,
         classification_status=SignalPatternAssignment.ClassificationStatus.PROCESSING,
@@ -407,6 +421,58 @@ def test_backfill_permanent_provider_errors_report_failure_without_persisting_pr
     assert OperationalPattern.objects.count() == before_patterns
     assert PatternLifecycleEvent.objects.count() == before_events
     assert AIUsageLog.objects.count() == before_logs
+
+
+def test_invalid_output_attempt_semantics_match_runtime_backfill_and_simulation(settings):
+    settings.DEBUG = True
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    runtime_signal = create_signal_for_membership(owner, title="Runtime")
+    backfill_signal = create_signal_for_membership(owner, title="Backfill")
+    simulation_signal = create_signal_for_membership(owner, title="Simulation")
+
+    with pytest.raises(PatternClassificationRetryableError) as exc_info:
+        classify_signal_pattern(runtime_signal.id, provider=InvalidOutputProvider())
+    runtime_signal.refresh_from_db()
+    runtime_finalization = finalize_retryable_pattern_classification_error(
+        signal=runtime_signal,
+        exc=exc_info.value,
+        retries=0,
+        max_retries=classify_signal_pattern_task.max_retries or 0,
+        retry_delay_seconds=classify_signal_pattern_task.default_retry_delay or 0,
+    )
+
+    backfill_report = backfill_analytics_patterns(
+        signal_ids=[backfill_signal.id],
+        provider_name="fake",
+        provider=InvalidOutputProvider(),
+        limit=10,
+    )
+    simulation_report = simulate_analytics_pattern_backfill(
+        signal_ids=[simulation_signal.id],
+        provider_name="fake",
+        provider=InvalidOutputProvider(),
+        limit=10,
+    )
+    backfill_payload = backfill_report_to_dict(backfill_report)
+    simulation_payload = backfill_simulation_report_to_dict(simulation_report)
+
+    assert runtime_finalization.outcome == "retry"
+    assert (
+        runtime_finalization.assignment.classification_status
+        == SignalPatternAssignment.ClassificationStatus.TEMPORARY_FAILED
+    )
+    assert exc_info.value.validation_branch == "new_pattern_label_empty"
+    assert backfill_payload["signals"][0]["outcome"] == "temporary_failed"
+    assert simulation_payload["signals"][0]["outcome"] == "temporary_failed"
+    assert backfill_payload["signals"][0]["final_validation_branch"] == (
+        "new_pattern_label_empty"
+    )
+    assert simulation_payload["signals"][0]["final_validation_branch"] == (
+        "new_pattern_label_empty"
+    )
+    assert backfill_payload["metrics"]["provider_calls"]["classification_count"] == 1
+    assert simulation_payload["metrics"]["provider_calls"]["classification_count"] == 1
+    assert not SignalPatternAssignment.objects.filter(signal=simulation_signal).exists()
 
 
 def test_backfill_report_is_safe_and_tracks_duplicate_guard_option():
