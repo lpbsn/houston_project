@@ -745,10 +745,12 @@ def test_duplicate_guard_parser_rejects_invalid_reason_code_contract(
 def test_duplicate_guard_prompt_covers_specialization_without_using_score_as_decision():
     prompt = _duplicate_guard_system_prompt()
 
-    assert "Examine tous les candidats" in prompt
+    assert "Examine tous les candidats de la shortlist" in prompt
     assert "meilleur candidat compatible" in prompt
     assert "Ignore les candidats incompatibles" in prompt
     assert "frontière de processus explicite empêche le reuse" in prompt
+    assert "vraie frontière de workflow" in prompt
+    assert "Item/SKU, fixture, credential medium" in prompt
     assert "sous-type d'objet ou d'équipement" in prompt
     assert "credential" in prompt
     assert "état spécifique compatible avec le fault/anomaly" in prompt
@@ -761,11 +763,13 @@ def test_duplicate_guard_prompt_covers_specialization_without_using_score_as_dec
     assert "processus" in prompt
     assert "cause explicitement connue" in prompt
     assert "vrai comportement ou" in prompt
-    assert "frontière de processus ou d'étape" in prompt
+    assert "dysfonctionnement réellement incompatible" in prompt
+    assert "vraie frontière de workflow, de processus ou d'étape" in prompt
     assert "vraie incertitude opérationnelle" in prompt
     assert "ne suffit pas à produire ambiguous" in prompt
     assert "token_overlap_v1 sert uniquement à retrouver des candidats" in prompt
     assert "ne décide" in prompt
+    assert "différence descriptive n'est une frontière analytique" in prompt
 
 
 def test_duplicate_guard_default_threshold_includes_quarter_score_candidate(settings):

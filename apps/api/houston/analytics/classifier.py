@@ -7,10 +7,10 @@ from typing import Any, Protocol
 
 from django.conf import settings
 
-ANALYTICS_PATTERN_PROMPT_VERSION = "analytics_pattern_v2"
+ANALYTICS_PATTERN_PROMPT_VERSION = "analytics_pattern_v2.1"
 ANALYTICS_PATTERN_SCHEMA_VERSION = "analytics_pattern_v2"
 ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION = (
-    "analytics_pattern_duplicate_guard_v1"
+    "analytics_pattern_duplicate_guard_v2"
 )
 ANALYTICS_PATTERN_DUPLICATE_GUARD_SCHEMA_VERSION = (
     "analytics_pattern_duplicate_guard_v1"
@@ -477,9 +477,15 @@ Règles:
 - Retourne un canonical_label court qui nomme le phénomène opérationnel.
 - Fais converger les formulations différentes du même phénomène vers une formulation
   canonique commune.
+- Si deux Signals partagent le même workflow, la même failure family et la même
+  unité analytique managériale, tends vers un canonical_label commun.
+- Des symptômes wording différents du même phénomène ne doivent pas automatiquement
+  produire des labels distincts.
 - Ne fusionne pas des phénomènes dont la différence change l'interprétation managériale.
-- Retire seulement les détails incidents: instance/numéro, localisation, SKU ou
-  variante locale, et wording propre au Signal.
+- Retire les détails incidents: instance/numéro, localisation, credential medium,
+  item/SKU ou variante locale, et wording propre au Signal.
+- Conserve ces détails seulement s'ils changent réellement le workflow, le failure
+  mode ou l'interprétation management.
 - Conserve l'objet ou la famille d'équipement si cela distingue le phénomène, le
   failure mode ou le processus opérationnel.
 - Conserve les précisions de processus, étape, état, environnement ou cause
@@ -500,14 +506,22 @@ Tu vérifies si un nouveau libellé de motif Analytics est un doublon sémantiqu
 Réponds uniquement avec le JSON strict demandé.
 
 Règles:
-- Examine tous les candidats avant de créer un nouveau motif.
+- Examine tous les candidats de la shortlist avant de créer un nouveau motif.
 - Si au moins un candidat représente correctement la même unité analytique
   managériale, choisis le meilleur candidat compatible.
 - Ignore les candidats incompatibles; ne crée pas simplement parce qu'un autre
   candidat de la shortlist est imparfait.
-- Avant reuse_existing_pattern, vérifie qu'aucune différence opérationnelle
-  explicite ne serait masquée: processus distinct, étape réellement distincte,
-  failure mode distinct, état opérationnel incompatible ou cause connue distincte.
+- Une différence descriptive n'est une frontière analytique que si elle change
+  réellement le workflow/process/handoff, le failure mode, l'état opérationnel
+  ou une cause explicitement connue.
+- Avant reuse_existing_pattern, vérifie qu'aucune de ces différences opérationnelles
+  explicites ne serait masquée.
+- Avant reason_code=different_process_or_stage, identifie une vraie frontière de
+  workflow. Item/SKU, fixture, credential medium, localisation ou wording dans le
+  même workflow ne suffisent pas.
+- Avant reason_code=different_failure_mode, identifie un comportement ou
+  dysfonctionnement réellement incompatible. Une formulation plus spécifique, un
+  sous-type ou un état compatible avec le même fault ne suffit pas.
 - Une frontière de processus explicite empêche le reuse: stock cuisine/dry
   ingredients et stock bar/beverage sont distincts si leurs flux opérationnels
   sont distincts.
@@ -527,9 +541,9 @@ Règles:
 - Crée aussi un nouveau motif si la généralisation masquerait plusieurs problèmes
   distincts pour l'analyse management.
 - reason_code=different_failure_mode doit correspondre à un vrai comportement ou
-  mode de défaillance différent, pas à une spécialisation seule.
-- reason_code=different_process_or_stage doit être utilisé lorsqu'une vraie
-  frontière de processus ou d'étape explique la séparation.
+  mode de défaillance incompatible, pas à une spécialisation seule.
+- reason_code=different_process_or_stage doit être utilisé seulement lorsqu'une
+  vraie frontière de workflow, de processus ou d'étape explique la séparation.
 - Le score token_overlap_v1 sert uniquement à retrouver des candidats; ne décide
   jamais du reuse à partir du score seul.
 - reason_code=ambiguous signifie qu'après examen de tous les candidats il existe
