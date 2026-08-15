@@ -5,11 +5,11 @@ from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
 
-from houston.analytics.pattern_retrieval_spike import PROJECTION_PHENOMENON_V1
 from houston.analytics.pattern_resolver_spike import (
     evaluate_analytics_pattern_resolver_spike,
     format_resolver_spike_report,
 )
+from houston.analytics.pattern_retrieval_spike import PROJECTION_PHENOMENON_V1
 from houston.testing.analytics_pattern_corpus import list_analytics_pattern_scenario_ids
 
 

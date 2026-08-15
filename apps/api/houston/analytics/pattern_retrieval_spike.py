@@ -194,7 +194,10 @@ def build_signal_projection_text(
     return "\n".join(part.strip() for part in parts if part and str(part).strip())
 
 
-def cosine_similarity(left: list[float] | tuple[float, ...], right: list[float] | tuple[float, ...]) -> float:
+def cosine_similarity(
+    left: list[float] | tuple[float, ...],
+    right: list[float] | tuple[float, ...],
+) -> float:
     if len(left) != len(right):
         raise ValueError("Embedding dimensions must match.")
     dot = 0.0

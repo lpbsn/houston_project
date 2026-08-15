@@ -14,8 +14,8 @@ from houston.analytics.pattern_architecture_d_spike import (
     evaluate_architecture_d_spike,
 )
 from houston.analytics.pattern_retrieval_spike import (
-    FakeHashEmbeddingProvider,
     PROJECTION_PHENOMENON_V1,
+    FakeHashEmbeddingProvider,
 )
 
 pytestmark = pytest.mark.django_db
@@ -52,8 +52,8 @@ def test_semantic_shortlist_uses_phenomenon_projection_not_canonical_label_alone
     )
     from django.utils import timezone
 
-    from houston.testing.factories import build_membership
     from houston.signals.models import Signal
+    from houston.testing.factories import build_membership
     from houston.testing.taxonomy import create_activity_subject, create_business_unit
 
     membership = build_membership()

@@ -20,14 +20,14 @@ from django.conf import settings
 from houston.analytics.labels import normalize_pattern_label
 from houston.analytics.pattern_retrieval_spike import (
     DEFAULT_EMBEDDING_MODEL,
+    K_VALUES,
+    PROJECTION_PHENOMENON_V1,
+    STABLE_FAIL_PAIRS,
     EmbeddingProvider,
     EmbeddingProviderError,
     FakeHashEmbeddingProvider,
     IndexedAlias,
-    K_VALUES,
     OpenAIEmbeddingProvider,
-    PROJECTION_PHENOMENON_V1,
-    STABLE_FAIL_PAIRS,
     _rank_terminals,
     build_signal_projection_text,
 )
@@ -310,8 +310,11 @@ def evaluate_analytics_pattern_resolver_spike(
 def format_resolver_spike_report(payload: dict[str, Any]) -> str:
     lines = [
         "Analytics pattern resolver spike (Phase 1)",
-        f"schema={payload['schema_version']} projection={payload['frozen_from_phase0']['projection']} "
-        f"K={payload['frozen_from_phase0']['k']}",
+        (
+            f"schema={payload['schema_version']} "
+            f"projection={payload['frozen_from_phase0']['projection']} "
+            f"K={payload['frozen_from_phase0']['k']}"
+        ),
         f"resolver_model={payload['resolver_model']}",
         "",
     ]

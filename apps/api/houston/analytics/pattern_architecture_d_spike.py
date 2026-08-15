@@ -28,12 +28,12 @@ from houston.analytics.pattern_corpus_eval import (
 from houston.analytics.pattern_retrieval_spike import (
     ANALYTICS_PATTERN_RETRIEVAL_SPIKE_OPT_IN_ENV,
     DEFAULT_EMBEDDING_MODEL,
+    PROJECTION_PHENOMENON_V1,
+    STABLE_FAIL_PAIRS,
     EmbeddingProvider,
     FakeHashEmbeddingProvider,
     IndexedAlias,
     OpenAIEmbeddingProvider,
-    PROJECTION_PHENOMENON_V1,
-    STABLE_FAIL_PAIRS,
     _rank_terminals,
     evaluate_analytics_pattern_retrieval_spike,
 )

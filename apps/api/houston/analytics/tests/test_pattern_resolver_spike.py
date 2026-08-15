@@ -8,9 +8,8 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 
 from houston.analytics.pattern_resolver_spike import (
-    FakeResolverProvider,
-    parse_resolver_decision,
     evaluate_analytics_pattern_resolver_spike,
+    parse_resolver_decision,
 )
 
 pytestmark = pytest.mark.django_db
