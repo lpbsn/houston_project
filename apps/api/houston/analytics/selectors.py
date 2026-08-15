@@ -17,6 +17,7 @@ from houston.analytics.status_matrix import (
 )
 from houston.establishments.membership_scope import membership_scope_prefetch
 from houston.establishments.models import Establishment, EstablishmentMembership
+from houston.establishments.role_constants import ADMIN_ROLES
 from houston.organizations.models import Organization
 from houston.signals.models import Signal
 
@@ -166,9 +167,26 @@ def _analytics_signal_scope_q_for_user(
     if establishment_ids is not None:
         memberships = memberships.filter(establishment_id__in=establishment_ids)
 
-    scope_q = empty_signal_scope_q()
+    admin_establishment_ids = []
+    membership_scopes = []
     for membership in memberships:
-        scope_q |= analytics_signal_scope_q_for_membership(membership)
+        if membership.role in ADMIN_ROLES:
+            admin_establishment_ids.append(membership.establishment_id)
+        else:
+            membership_scopes.append(analytics_signal_scope_q_for_membership(membership))
+    if admin_establishment_ids:
+        membership_scopes.append(
+            Q(
+                establishment_id__in=admin_establishment_ids,
+                establishment__status=Establishment.Status.ACTIVE,
+                establishment__organization__status=Organization.Status.ACTIVE,
+            )
+        )
+    if not membership_scopes:
+        return empty_signal_scope_q()
+    scope_q = membership_scopes[0]
+    for membership_scope in membership_scopes[1:]:
+        scope_q |= membership_scope
     return scope_q
 
 
