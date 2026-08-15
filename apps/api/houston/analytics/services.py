@@ -17,8 +17,6 @@ from django.utils import timezone
 from houston.accounts.models import User
 from houston.ai.models import AIUsageLog
 from houston.analytics.classifier import (
-    ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION,
-    ANALYTICS_PATTERN_DUPLICATE_GUARD_SCHEMA_VERSION,
     ANALYTICS_PATTERN_PROMPT_VERSION,
     ANALYTICS_PATTERN_SCHEMA_VERSION,
     PatternClassifierError,
@@ -29,7 +27,6 @@ from houston.analytics.classifier import (
     classifier_version_for_provider,
     get_pattern_classifier_provider,
     parse_pattern_classifier_response,
-    parse_pattern_duplicate_guard_response,
 )
 from houston.analytics.exceptions import AnalyticsValidationError
 from houston.analytics.labels import normalize_pattern_label
@@ -40,6 +37,26 @@ from houston.analytics.models import (
     PatternIssueReport,
     PatternLifecycleEvent,
     SignalPatternAssignment,
+)
+from houston.analytics.pattern_alias import (
+    PatternExactAliasResolution as PatternExactAliasResolution,
+)
+from houston.analytics.pattern_alias import (
+    _resolve_active_pattern_target,
+    _resolve_exact_pattern_alias,
+)
+from houston.analytics.pattern_guard import (
+    PatternDuplicateGuardDecision,
+    _assess_duplicate_guard_best_effort,
+)
+from houston.analytics.pattern_shortlist import (
+    DUPLICATE_GUARD_SHORTLIST_STRATEGY as DUPLICATE_GUARD_SHORTLIST_STRATEGY,
+)
+from houston.analytics.pattern_shortlist import (
+    PatternDuplicateGuardCandidate as PatternDuplicateGuardCandidate,
+)
+from houston.analytics.pattern_shortlist import (
+    _duplicate_guard_shortlist,
 )
 from houston.analytics.permissions import (
     analytics_signal_scope_q_for_membership,
@@ -57,7 +74,6 @@ from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.organizations.models import Organization
 from houston.signals.models import Signal
 
-DUPLICATE_GUARD_SHORTLIST_STRATEGY = "token_overlap_v1"
 OWNER_CORRECTION_CLASSIFIER_VERSION = "owner_correction_v1"
 OWNER_CORRECTION_LOCK_ORDER = (
     "Analytics classification locks Signal, then SignalPatternAssignment, then "
@@ -177,24 +193,6 @@ def _is_obsolete_assignment_error(exc: AnalyticsValidationError) -> bool:
 
 
 @dataclass(frozen=True)
-class PatternDuplicateGuardCandidate:
-    id: uuid.UUID
-    label: str
-    normalized_label: str
-    semantic_label: str
-    normalized_semantic_label: str
-    score: float
-
-
-@dataclass(frozen=True)
-class PatternDuplicateGuardDecision:
-    action: str
-    pattern_id: uuid.UUID | None = None
-    reason: str = ""
-    reason_code: str | None = None
-
-
-@dataclass(frozen=True)
 class PatternClassifierPatternResolution:
     mode: str
     label: str = ""
@@ -202,12 +200,7 @@ class PatternClassifierPatternResolution:
     duplicate_guard_decision: PatternDuplicateGuardDecision = field(
         default_factory=lambda: PatternDuplicateGuardDecision(action="skipped")
     )
-
-
-@dataclass(frozen=True)
-class PatternExactAliasResolution:
-    status: str
-    pattern: OperationalPattern | None = None
+    shortlist_metrics: dict[str, int] = field(default_factory=dict)
 
 
 @transaction.atomic
@@ -2230,6 +2223,8 @@ def classify_signal_pattern(
             "_analytics_duplicate_guard_reason_code",
             resolution.duplicate_guard_decision.reason_code,
         )
+        for metric_name, metric_value in resolution.shortlist_metrics.items():
+            setattr(assignment, f"_analytics_{metric_name}", metric_value)
         setattr(assignment, "_analytics_claim_status", claim.status)
         setattr(assignment, "_analytics_claim_reason", claim.reason)
         _write_analytics_usage_log(
@@ -2239,6 +2234,7 @@ def classify_signal_pattern(
             status=AIUsageLog.Status.SUCCEEDED,
             latency_ms=_elapsed_ms(provider_started_at),
             correlation_id=uuid.uuid4(),
+            error_context=resolution.shortlist_metrics,
             input_tokens=provider_response.input_tokens,
             output_tokens=provider_response.output_tokens,
             total_tokens=provider_response.total_tokens,
@@ -2370,6 +2366,7 @@ def _prepare_classifier_pattern_resolution(
         if duplicate_guard_enabled
         else []
     )
+    shortlist_metrics = getattr(shortlist, "metrics", {})
     if not shortlist:
         return PatternClassifierPatternResolution(
             mode="create_pattern",
@@ -2378,6 +2375,7 @@ def _prepare_classifier_pattern_resolution(
                 action="skipped",
                 reason="no_candidates" if duplicate_guard_enabled else "disabled",
             ),
+            shortlist_metrics=shortlist_metrics,
         )
 
     decision = _assess_duplicate_guard_best_effort(
@@ -2385,6 +2383,7 @@ def _prepare_classifier_pattern_resolution(
         provider=provider,
         canonical_label=label,
         shortlist=shortlist,
+        shortlist_metrics=shortlist_metrics,
     )
     if decision.action == "reused" and decision.pattern_id is not None:
         return PatternClassifierPatternResolution(
@@ -2392,12 +2391,14 @@ def _prepare_classifier_pattern_resolution(
             label=label,
             pattern_id=decision.pattern_id,
             duplicate_guard_decision=decision,
+            shortlist_metrics=shortlist_metrics,
         )
 
     return PatternClassifierPatternResolution(
         mode="create_pattern",
         label=label,
         duplicate_guard_decision=decision,
+        shortlist_metrics=shortlist_metrics,
     )
 
 
@@ -2461,293 +2462,6 @@ def _resolve_pattern_resolution_for_write(
                 pass
 
     return _get_or_create_active_pattern_for_label(signal=signal, label=resolution.label)
-
-
-def _resolve_exact_pattern_alias(
-    *,
-    signal: Signal,
-    normalized_semantic_label: str,
-) -> PatternExactAliasResolution:
-    active_patterns = list(
-        OperationalPattern.objects.filter(
-            organization=signal.establishment.organization,
-            normalized_semantic_label=normalized_semantic_label,
-            status=OperationalPattern.Status.ACTIVE,
-        )
-        .order_by("id")[:2]
-    )
-    if len(active_patterns) == 1:
-        return PatternExactAliasResolution(status="resolved", pattern=active_patterns[0])
-    if len(active_patterns) > 1:
-        return PatternExactAliasResolution(status="ambiguous")
-
-    merged_patterns = list(
-        OperationalPattern.objects.filter(
-            organization=signal.establishment.organization,
-            normalized_semantic_label=normalized_semantic_label,
-            status=OperationalPattern.Status.MERGED,
-        ).order_by("id")
-    )
-    if not merged_patterns:
-        return PatternExactAliasResolution(status="none")
-
-    targets: dict[uuid.UUID, OperationalPattern] = {}
-    unresolved = False
-    for pattern in merged_patterns:
-        target = _resolve_merged_pattern_chain(signal=signal, pattern=pattern)
-        if target is None:
-            unresolved = True
-            continue
-        targets[target.id] = target
-    if len(targets) == 1 and not unresolved:
-        return PatternExactAliasResolution(
-            status="resolved",
-            pattern=next(iter(targets.values())),
-        )
-    return PatternExactAliasResolution(status="ambiguous")
-
-
-def _duplicate_guard_shortlist(
-    *,
-    signal: Signal,
-    canonical_label: str,
-) -> list[PatternDuplicateGuardCandidate]:
-    min_score = settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE
-    max_candidates = settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MAX_CANDIDATES
-    if max_candidates <= 0:
-        return []
-
-    source_tokens = _duplicate_guard_source_tokens(
-        signal=signal,
-        canonical_label=canonical_label,
-    )
-    if not source_tokens:
-        return []
-
-    candidates: list[PatternDuplicateGuardCandidate] = []
-    for pattern in OperationalPattern.objects.filter(
-        organization=signal.establishment.organization,
-        status=OperationalPattern.Status.ACTIVE,
-    ):
-        candidate_tokens = _normalized_tokens(pattern.semantic_label)
-        if not candidate_tokens:
-            continue
-        score = len(source_tokens & candidate_tokens) / len(candidate_tokens)
-        if score >= min_score:
-            candidates.append(
-                PatternDuplicateGuardCandidate(
-                    id=pattern.id,
-                    label=pattern.label,
-                    normalized_label=pattern.normalized_label,
-                    semantic_label=pattern.semantic_label,
-                    normalized_semantic_label=pattern.normalized_semantic_label,
-                    score=score,
-                )
-            )
-
-    candidates.sort(
-        key=lambda candidate: (
-            -candidate.score,
-            candidate.normalized_semantic_label,
-            candidate.semantic_label,
-            candidate.id,
-        )
-    )
-    return candidates[:max_candidates]
-
-
-def _duplicate_guard_source_tokens(
-    *,
-    signal: Signal,
-    canonical_label: str,
-) -> set[str]:
-    activity_subject = signal.activity_subject.label if signal.activity_subject_id else ""
-    operational_unit = signal.operational_unit.label if signal.operational_unit_id else ""
-    return _normalized_tokens(
-        " ".join(
-            [
-                canonical_label,
-                signal.title,
-                signal.structured_summary,
-                signal.issue_focus,
-                activity_subject,
-                operational_unit,
-            ]
-        )
-    )
-
-
-def _normalized_tokens(value: str) -> set[str]:
-    return {
-        token
-        for token in normalize_pattern_label(value).split()
-        if len(token) >= 3
-    }
-
-
-def _assess_duplicate_guard_best_effort(
-    *,
-    signal: Signal,
-    provider: PatternClassifierProvider,
-    canonical_label: str,
-    shortlist: list[PatternDuplicateGuardCandidate],
-) -> PatternDuplicateGuardDecision:
-    shortlist_ids = {candidate.id for candidate in shortlist}
-    input_payload = {
-        "schema_version": ANALYTICS_PATTERN_DUPLICATE_GUARD_SCHEMA_VERSION,
-        "prompt_version": ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION,
-        "signal": _duplicate_guard_signal_payload(signal),
-        "canonical_label": canonical_label,
-        "candidate_patterns": [
-            {
-                "id": str(candidate.id),
-                "label": candidate.label,
-                "normalized_label": candidate.normalized_label,
-                "semantic_label": candidate.semantic_label,
-                "normalized_semantic_label": candidate.normalized_semantic_label,
-            }
-            for candidate in shortlist
-        ],
-    }
-
-    started_at = time.monotonic()
-    try:
-        response = provider.assess_duplicate(input_payload=input_payload)
-        parsed = parse_pattern_duplicate_guard_response(response.payload)
-        if parsed.result_type == "reuse_existing_pattern":
-            if parsed.pattern_id not in shortlist_ids:
-                _write_duplicate_guard_usage_log(
-                    signal=signal,
-                    provider=provider.provider,
-                    model=response.model or getattr(provider, "model", ""),
-                    status=AIUsageLog.Status.FAILED,
-                    latency_ms=_elapsed_ms(started_at),
-                    correlation_id=uuid.uuid4(),
-                    error_code="duplicate_guard_pattern_outside_shortlist",
-                    input_tokens=response.input_tokens,
-                    output_tokens=response.output_tokens,
-                    total_tokens=response.total_tokens,
-                )
-                return PatternDuplicateGuardDecision(
-                    action="fallback",
-                    reason="outside_shortlist",
-                )
-            _write_duplicate_guard_usage_log(
-                signal=signal,
-                provider=provider.provider,
-                model=response.model or getattr(provider, "model", ""),
-                status=AIUsageLog.Status.SUCCEEDED,
-                latency_ms=_elapsed_ms(started_at),
-                correlation_id=uuid.uuid4(),
-                input_tokens=response.input_tokens,
-                output_tokens=response.output_tokens,
-                total_tokens=response.total_tokens,
-            )
-            return PatternDuplicateGuardDecision(
-                action="reused",
-                pattern_id=parsed.pattern_id,
-                reason_code=parsed.reason_code,
-            )
-
-        _write_duplicate_guard_usage_log(
-            signal=signal,
-            provider=provider.provider,
-            model=response.model or getattr(provider, "model", ""),
-            status=AIUsageLog.Status.SUCCEEDED,
-            latency_ms=_elapsed_ms(started_at),
-            correlation_id=uuid.uuid4(),
-            input_tokens=response.input_tokens,
-            output_tokens=response.output_tokens,
-            total_tokens=response.total_tokens,
-        )
-        return PatternDuplicateGuardDecision(
-            action="created",
-            reason_code=parsed.reason_code,
-        )
-    except PatternClassifierError as exc:
-        _write_duplicate_guard_usage_log(
-            signal=signal,
-            provider=provider.provider,
-            model=getattr(provider, "model", ""),
-            status=AIUsageLog.Status.FAILED,
-            latency_ms=_elapsed_ms(started_at),
-            correlation_id=uuid.uuid4(),
-            error_code=getattr(exc, "error_code", "duplicate_guard_error"),
-        )
-        return PatternDuplicateGuardDecision(
-            action="fallback",
-            reason=getattr(exc, "error_code", "duplicate_guard_error"),
-        )
-
-
-def _duplicate_guard_signal_payload(signal: Signal) -> dict[str, Any]:
-    activity_subject = signal.activity_subject.label if signal.activity_subject_id else ""
-    operational_unit = signal.operational_unit.label if signal.operational_unit_id else ""
-    return {
-        "title": signal.title,
-        "structured_summary": signal.structured_summary,
-        "issue_focus": signal.issue_focus,
-        "activity_subject": activity_subject,
-        "operational_unit": operational_unit,
-    }
-
-
-def _resolve_active_pattern_target(
-    *,
-    signal: Signal,
-    pattern: OperationalPattern,
-) -> OperationalPattern:
-    if (
-        pattern.organization_id == signal.establishment.organization_id
-        and pattern.status == OperationalPattern.Status.ACTIVE
-    ):
-        return pattern
-
-    if pattern.status == OperationalPattern.Status.MERGED:
-        target = _resolve_merged_pattern_chain(signal=signal, pattern=pattern)
-        if target is not None:
-            return target
-
-    active = (
-        OperationalPattern.objects.select_for_update()
-        .filter(
-            organization=signal.establishment.organization,
-            normalized_semantic_label=pattern.normalized_semantic_label,
-            status=OperationalPattern.Status.ACTIVE,
-        )
-        .first()
-    )
-    if active is not None:
-        return active
-
-    raise PatternClassifierInvalidOutputError(
-        "No active target pattern could be resolved.",
-        validation_branch="no_active_target_pattern",
-    )
-
-
-def _resolve_merged_pattern_chain(
-    *,
-    signal: Signal,
-    pattern: OperationalPattern,
-) -> OperationalPattern | None:
-    seen = {pattern.id}
-    current = pattern
-    for _ in range(5):
-        if current.merged_into_id is None:
-            return None
-        target = OperationalPattern.objects.select_for_update().get(pk=current.merged_into_id)
-        if target.id in seen:
-            return None
-        seen.add(target.id)
-        if target.organization_id != signal.establishment.organization_id:
-            return None
-        if target.status == OperationalPattern.Status.ACTIVE:
-            return target
-        if target.status != OperationalPattern.Status.MERGED:
-            return None
-        current = target
-    return None
 
 
 def _validate_new_pattern_label(*, signal: Signal, label: str) -> str:
@@ -2855,37 +2569,6 @@ def _invalid_output_error_context(
     if provider_request_id:
         context["provider_request_id"] = str(provider_request_id)[:200]
     return context
-
-
-def _write_duplicate_guard_usage_log(
-    *,
-    signal: Signal,
-    provider: str,
-    model: str,
-    status: str,
-    latency_ms: int,
-    correlation_id: uuid.UUID,
-    error_code: str = "",
-    input_tokens: int | None = None,
-    output_tokens: int | None = None,
-    total_tokens: int | None = None,
-) -> None:
-    AIUsageLog.objects.create(
-        ai_domain=AIUsageLog.Domain.ANALYTICS_PATTERN,
-        provider=provider,
-        model=model or "",
-        prompt_version=ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION,
-        schema_version=ANALYTICS_PATTERN_DUPLICATE_GUARD_SCHEMA_VERSION,
-        status=status,
-        latency_ms=latency_ms,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
-        total_tokens=total_tokens,
-        error_code=error_code,
-        error_context={"phase": "analytics_pattern_duplicate_guard"},
-        correlation_id=correlation_id,
-        establishment=signal.establishment,
-    )
 
 
 def _elapsed_ms(started_at: float) -> int:

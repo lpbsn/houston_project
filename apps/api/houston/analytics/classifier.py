@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from dataclasses import dataclass
 from typing import Any, Protocol
 
 from django.conf import settings
+
+# gpt-5-mini rejects non-default temperature; omit it for the alias and dated snapshots.
+_GPT5_MINI_MODEL_RE = re.compile(r"^gpt-5-mini(?:-\d{4}-\d{2}-\d{2})?$")
 
 ANALYTICS_PATTERN_PROMPT_VERSION = "analytics_pattern_v2.1"
 ANALYTICS_PATTERN_SCHEMA_VERSION = "analytics_pattern_v2"
@@ -140,6 +144,9 @@ class OpenAIPatternClassifierProvider:
         )
         return self._client
 
+    def _sampling_kwargs(self) -> dict[str, float]:
+        return _openai_sampling_kwargs(self.model)
+
     def classify(self, *, input_payload: dict[str, Any]) -> PatternClassifierProviderResponse:
         if not self.api_key:
             raise PatternClassifierUnavailableError("OpenAI API key is not configured.")
@@ -157,7 +164,7 @@ class OpenAIPatternClassifierProvider:
                     {"role": "user", "content": json.dumps(input_payload, ensure_ascii=False)},
                 ],
                 response_format=openai_strict_response_format(),
-                temperature=0.0,
+                **self._sampling_kwargs(),
             )
         except APITimeoutError as exc:
             raise PatternClassifierTimeoutError("OpenAI request timed out.") from exc
@@ -218,7 +225,7 @@ class OpenAIPatternClassifierProvider:
                     {"role": "user", "content": json.dumps(input_payload, ensure_ascii=False)},
                 ],
                 response_format=openai_duplicate_guard_response_format(),
-                temperature=0.0,
+                **self._sampling_kwargs(),
             )
         except APITimeoutError as exc:
             raise PatternClassifierTimeoutError("OpenAI request timed out.") from exc
@@ -461,6 +468,12 @@ def _duplicate_guard_payload_with_default_reason_code(
     if payload.get("result_type") == "reuse_existing_pattern":
         return {**payload, "reason_code": "same_phenomenon"}
     return {**payload, "reason_code": "ambiguous"}
+
+
+def _openai_sampling_kwargs(model: str) -> dict[str, float]:
+    if _GPT5_MINI_MODEL_RE.fullmatch((model or "").strip()):
+        return {}
+    return {"temperature": 0.0}
 
 
 def _is_invalid_response_format_schema_error(exc: BaseException) -> bool:

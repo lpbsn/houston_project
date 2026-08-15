@@ -8,12 +8,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from django.db import IntegrityError, close_old_connections, connection, connections
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from houston.ai.models import AIUsageLog
 from houston.analytics.classifier import (
     ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION,
     ANALYTICS_PATTERN_DUPLICATE_GUARD_SCHEMA_VERSION,
+    ANALYTICS_PATTERN_PROMPT_VERSION,
     DUPLICATE_GUARD_REASON_CODES,
     FakePatternClassifierProvider,
     OpenAIPatternClassifierProvider,
@@ -26,10 +28,10 @@ from houston.analytics.classifier import (
 )
 from houston.analytics.exceptions import AnalyticsValidationError
 from houston.analytics.models import OperationalPattern, SignalPatternAssignment
+from houston.analytics.pattern_shortlist import _duplicate_guard_shortlist
 from houston.analytics.scheduling import schedule_reclassification_if_signature_changed
 from houston.analytics.services import (
     PatternClassificationRetryableError,
-    _duplicate_guard_shortlist,
     claim_signal_pattern_classification,
     classify_signal_pattern,
     create_operational_pattern,
@@ -454,7 +456,10 @@ def test_duplicate_guard_reuses_shortlisted_active_pattern(settings):
         prompt_version=ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION
     )
     assert guard_log.schema_version == ANALYTICS_PATTERN_DUPLICATE_GUARD_SCHEMA_VERSION
-    assert guard_log.error_context == {"phase": "analytics_pattern_duplicate_guard"}
+    assert guard_log.error_context["phase"] == "analytics_pattern_duplicate_guard"
+    assert guard_log.error_context["patterns_scanned"] == 1
+    assert guard_log.error_context["shortlist_size"] == 1
+    assert guard_log.error_context["shortlist_elapsed_ms"] >= 0
 
 
 def test_duplicate_guard_shortlist_empty_creates_without_guard_call(settings):
@@ -477,6 +482,12 @@ def test_duplicate_guard_shortlist_empty_creates_without_guard_call(settings):
     assert AIUsageLog.objects.filter(
         prompt_version=ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION
     ).count() == 0
+    classifier_log = AIUsageLog.objects.get(
+        prompt_version=ANALYTICS_PATTERN_PROMPT_VERSION,
+    )
+    assert classifier_log.error_context["patterns_scanned"] == 1
+    assert classifier_log.error_context["shortlist_size"] == 0
+    assert classifier_log.error_context["shortlist_elapsed_ms"] >= 0
 
 
 def test_duplicate_guard_invalid_output_falls_back_to_create(settings):
@@ -660,6 +671,33 @@ def test_duplicate_guard_shortlist_uses_stable_functional_tie_break(settings):
         "Climate alpha",
         "Climate beta",
     ]
+
+
+def test_duplicate_guard_shortlist_golden_members_order_scores_and_scan_metrics(settings):
+    settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE = 0.25
+    settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MAX_CANDIDATES = 5
+    membership = build_membership()
+    signal = create_signal_for_membership(membership, title="Climate unit offline")
+    exact = create_pattern_for_signal(signal, label="Climate outage")
+    lexical_tie = create_pattern_for_signal(signal, label="Equipment climate")
+    partial = create_pattern_for_signal(signal, label="Climate equipment failure")
+    create_pattern_for_signal(signal, label="Unrelated linen shortage")
+
+    with CaptureQueriesContext(connection) as queries:
+        shortlist = _duplicate_guard_shortlist(
+            signal=signal,
+            canonical_label="Climate equipment outage",
+        )
+
+    assert [(candidate.id, candidate.score) for candidate in shortlist] == [
+        (exact.id, 1.0),
+        (lexical_tie.id, 1.0),
+        (partial.id, 2 / 3),
+    ]
+    assert shortlist.metrics["patterns_scanned"] == 4
+    assert shortlist.metrics["shortlist_size"] == 3
+    assert shortlist.metrics["shortlist_elapsed_ms"] >= 0
+    assert all("COUNT(" not in query["sql"].upper() for query in queries)
 
 
 def test_duplicate_guard_structured_output_requires_closed_reason_code():
@@ -1168,3 +1206,83 @@ def test_openai_pattern_provider_uses_strict_json_response_format():
     call_kwargs = create.call_args.kwargs
     assert call_kwargs["response_format"]["type"] == "json_schema"
     assert call_kwargs["response_format"]["json_schema"]["strict"] is True
+
+
+def _mock_openai_create_client(*, content: str) -> tuple[MagicMock, SimpleNamespace]:
+    create = MagicMock(
+        return_value=SimpleNamespace(
+            id="response-id",
+            choices=[SimpleNamespace(message=SimpleNamespace(content=content))],
+            usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1, total_tokens=2),
+        )
+    )
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    return create, client
+
+
+@pytest.mark.allow_openai_pattern_classify
+@pytest.mark.parametrize(
+    ("model", "expect_temperature"),
+    [
+        ("gpt-4.1-mini", True),
+        ("gpt-5-mini", False),
+        ("gpt-5-mini-2025-08-07", False),
+    ],
+)
+def test_openai_pattern_provider_sampling_kwargs_for_classify(model, expect_temperature):
+    provider = OpenAIPatternClassifierProvider(
+        api_key="test-key",
+        model=model,
+        timeout_seconds=1,
+        max_retries=0,
+    )
+    create, client = _mock_openai_create_client(
+        content='{"canonical_label":"Défaillance climatisation"}'
+    )
+    provider._client = client
+
+    provider.classify(input_payload={"signal": {}})
+
+    call_kwargs = create.call_args.kwargs
+    assert call_kwargs["response_format"]["json_schema"]["strict"] is True
+    if expect_temperature:
+        assert call_kwargs["temperature"] == 0.0
+    else:
+        assert "temperature" not in call_kwargs
+
+
+@pytest.mark.allow_openai_pattern_classify
+@pytest.mark.parametrize(
+    ("model", "expect_temperature"),
+    [
+        ("gpt-4.1-mini", True),
+        ("gpt-5-mini", False),
+        ("gpt-5-mini-2025-08-07", False),
+    ],
+)
+def test_openai_pattern_provider_sampling_kwargs_for_assess_duplicate(
+    model,
+    expect_temperature,
+):
+    provider = OpenAIPatternClassifierProvider(
+        api_key="test-key",
+        model=model,
+        timeout_seconds=1,
+        max_retries=0,
+    )
+    create, client = _mock_openai_create_client(
+        content=(
+            '{"result_type":"create_new_pattern","pattern_id":null,'
+            '"reason_code":"ambiguous"}'
+        )
+    )
+    provider._client = client
+
+    provider.assess_duplicate(input_payload={"signal": {}})
+
+    call_kwargs = create.call_args.kwargs
+    assert call_kwargs["response_format"]["json_schema"]["strict"] is True
+    if expect_temperature:
+        assert call_kwargs["temperature"] == 0.0
+    else:
+        assert "temperature" not in call_kwargs
