@@ -9,6 +9,7 @@ from django.db.models import (
     DurationField,
     ExpressionWrapper,
     F,
+    Q,
     QuerySet,
 )
 from django.utils import timezone
@@ -23,10 +24,10 @@ from houston.analytics.recurrence import (
     recurrent_patterns_count_for_contributors,
 )
 from houston.analytics.selectors import (
-    analytics_actionable_signals_queryset,
-    analytics_default_signals_queryset,
-    analytics_resolution_time_signals_queryset,
+    AnalyticsReadScope,
+    resolve_analytics_read_scope,
 )
+from houston.analytics.status_matrix import actionable_signal_q
 from houston.signals.models import Signal
 
 
@@ -80,6 +81,7 @@ def get_analytics_kpis(
     period_start: datetime | None = None,
     period_end: datetime | None = None,
     recurrence_as_of: datetime | None = None,
+    _read_scope: AnalyticsReadScope | None = None,
 ) -> AnalyticsKPIResult:
     _validate_period(period_start=period_start, period_end=period_end)
     recurrence_as_of = _resolve_recurrence_as_of(
@@ -87,53 +89,53 @@ def get_analytics_kpis(
         recurrence_as_of=recurrence_as_of,
     )
     recurrence_window = build_recurrence_window(recurrence_as_of)
+    read_scope = _read_scope or resolve_analytics_read_scope(
+        user,
+        organization_id=organization_id,
+        establishment_id=establishment_id,
+    )
 
     population = _filter_created_period(
-        analytics_default_signals_queryset(
-            user,
-            organization_id=organization_id,
-            establishment_id=establishment_id,
-        ),
+        read_scope.default_signals_queryset(),
         period_start=period_start,
         period_end=period_end,
     )
-    population_count = population.count()
+    population_stats = population.aggregate(
+        population_count=Count("id", distinct=True),
+        actionable_count=Count(
+            "id",
+            filter=actionable_signal_q(),
+            distinct=True,
+        ),
+    )
+    population_count = int(population_stats["population_count"])
 
     assignments = SignalPatternAssignment.objects.filter(
         signal_id__in=population.values("id")
     )
-    signals_analyzed_count = assignments.filter(pattern__isnull=False).count()
+    assignment_stats = _assignment_stats(assignments)
+    signals_analyzed_count = assignment_stats["signals_analyzed_count"]
     contributor_pattern_ids = (
         assignments.filter(pattern__isnull=False).values("pattern_id").distinct()
     )
     technical_state = _technical_classification_state(
-        assignments=assignments,
+        assignment_stats=assignment_stats,
         total_count=population_count,
     )
 
-    actionable_count = _filter_created_period(
-        analytics_actionable_signals_queryset(
-            user,
-            organization_id=organization_id,
-            establishment_id=establishment_id,
-        ),
-        period_start=period_start,
-        period_end=period_end,
-    ).count()
-
-    operational_patterns_count = contributor_pattern_ids.count()
+    actionable_count = int(population_stats["actionable_count"])
+    operational_patterns_count = assignment_stats["operational_patterns_count"]
     recurring_patterns_count = recurrent_patterns_count_for_contributors(
         user,
         as_of=recurrence_as_of,
         contributor_pattern_ids=contributor_pattern_ids,
         organization_id=organization_id,
         establishment_id=establishment_id,
+        _read_scope=read_scope,
     )
 
     resolution_stats = _resolution_time_stats(
-        user,
-        organization_id=organization_id,
-        establishment_id=establishment_id,
+        read_scope,
         period_start=period_start,
         period_end=period_end,
     )
@@ -232,24 +234,27 @@ def _filter_resolved_period(
 
 def _technical_classification_state(
     *,
-    assignments: QuerySet[SignalPatternAssignment],
+    assignment_stats: dict[str, int],
     total_count: int,
 ) -> TechnicalClassificationState:
     breakdown = {
-        "missing_assignment": 0,
-        SignalPatternAssignment.ClassificationStatus.NOT_STARTED: 0,
-        SignalPatternAssignment.ClassificationStatus.PROCESSING: 0,
-        SignalPatternAssignment.ClassificationStatus.TEMPORARY_FAILED: 0,
-        SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED: 0,
-        SignalPatternAssignment.ClassificationStatus.SUCCEEDED: 0,
+        "missing_assignment": total_count - assignment_stats["assignment_count"],
+        SignalPatternAssignment.ClassificationStatus.NOT_STARTED: assignment_stats[
+            "not_started_count"
+        ],
+        SignalPatternAssignment.ClassificationStatus.PROCESSING: assignment_stats[
+            "processing_count"
+        ],
+        SignalPatternAssignment.ClassificationStatus.TEMPORARY_FAILED: assignment_stats[
+            "temporary_failed_count"
+        ],
+        SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED: assignment_stats[
+            "permanently_failed_count"
+        ],
+        SignalPatternAssignment.ClassificationStatus.SUCCEEDED: assignment_stats[
+            "succeeded_count"
+        ],
     }
-    status_counts = assignments.values("classification_status").annotate(count=Count("id"))
-    assignment_count = 0
-    for row in status_counts:
-        count = int(row["count"])
-        breakdown[row["classification_status"]] = count
-        assignment_count += count
-    breakdown["missing_assignment"] = total_count - assignment_count
 
     success_count = breakdown[SignalPatternAssignment.ClassificationStatus.SUCCEEDED]
     return TechnicalClassificationState(
@@ -260,41 +265,98 @@ def _technical_classification_state(
     )
 
 
+def _assignment_stats(
+    assignments: QuerySet[SignalPatternAssignment],
+) -> dict[str, int]:
+    raw = assignments.aggregate(
+        assignment_count=Count("id"),
+        signals_analyzed_count=Count(
+            "id",
+            filter=Q(pattern_id__isnull=False),
+        ),
+        operational_patterns_count=Count("pattern_id", distinct=True),
+        not_started_count=Count(
+            "id",
+            filter=Q(
+                classification_status=(
+                    SignalPatternAssignment.ClassificationStatus.NOT_STARTED
+                )
+            ),
+        ),
+        processing_count=Count(
+            "id",
+            filter=Q(
+                classification_status=(
+                    SignalPatternAssignment.ClassificationStatus.PROCESSING
+                )
+            ),
+        ),
+        temporary_failed_count=Count(
+            "id",
+            filter=Q(
+                classification_status=(
+                    SignalPatternAssignment.ClassificationStatus.TEMPORARY_FAILED
+                )
+            ),
+        ),
+        permanently_failed_count=Count(
+            "id",
+            filter=Q(
+                classification_status=(
+                    SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED
+                )
+            ),
+        ),
+        succeeded_count=Count(
+            "id",
+            filter=Q(
+                classification_status=(
+                    SignalPatternAssignment.ClassificationStatus.SUCCEEDED
+                )
+            ),
+        ),
+    )
+    return {key: int(value) for key, value in raw.items()}
+
+
 def _resolution_time_stats(
-    user: User | None,
+    read_scope: AnalyticsReadScope,
     *,
-    organization_id,
-    establishment_id,
     period_start: datetime | None,
     period_end: datetime | None,
 ) -> dict[str, int | float | None]:
     resolution_queryset = _filter_resolved_period(
-        analytics_resolution_time_signals_queryset(
-            user,
-            organization_id=organization_id,
-            establishment_id=establishment_id,
-        ),
+        read_scope.resolution_time_signals_queryset(),
         period_start=period_start,
         period_end=period_end,
     )
-    invalid_count = resolution_queryset.filter(resolved_at__lt=F("created_at")).count()
-    valid_queryset = resolution_queryset.filter(resolved_at__gte=F("created_at"))
-    valid_count = valid_queryset.count()
-    median_duration = None
-    if valid_count:
-        median_duration = valid_queryset.annotate(
-            resolution_duration=ExpressionWrapper(
-                F("resolved_at") - F("created_at"),
-                output_field=DurationField(),
-            )
-        ).aggregate(
-            median=PercentileCont("resolution_duration", percentile=0.5),
-        )["median"]
+    stats = resolution_queryset.annotate(
+        resolution_duration=ExpressionWrapper(
+            F("resolved_at") - F("created_at"),
+            output_field=DurationField(),
+        )
+    ).aggregate(
+        invalid_count=Count(
+            "id",
+            filter=Q(resolved_at__lt=F("created_at")),
+            distinct=True,
+        ),
+        valid_count=Count(
+            "id",
+            filter=Q(resolved_at__gte=F("created_at")),
+            distinct=True,
+        ),
+        median=PercentileCont(
+            "resolution_duration",
+            percentile=0.5,
+            filter=Q(resolved_at__gte=F("created_at")),
+        ),
+    )
 
     return {
-        "resolution_time_signal_count": valid_count,
-        "invalid_resolution_duration_count": invalid_count,
-        "median_resolution_seconds": _duration_seconds(median_duration),
+        "resolution_time_signal_count": int(stats["valid_count"]),
+        "invalid_resolution_duration_count": int(stats["invalid_count"]),
+        "median_resolution_seconds": _duration_seconds(stats["median"]),
     }
 
 

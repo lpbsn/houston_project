@@ -8,6 +8,7 @@ from django.utils import timezone
 from houston.accounts.models import User
 from houston.analytics.exceptions import AnalyticsValidationError
 from houston.analytics.kpis import AnalyticsKPIResult, get_analytics_kpis
+from houston.analytics.selectors import resolve_analytics_read_scope
 
 RELATIVE_CHANGE_COMPUTED = "computed"
 RELATIVE_CHANGE_NOT_APPLICABLE = "not_applicable"
@@ -74,6 +75,11 @@ def get_analytics_kpi_comparison(
         period_start=period_start,
         period_end=period_end,
     )
+    read_scope = resolve_analytics_read_scope(
+        user,
+        organization_id=organization_id,
+        establishment_id=establishment_id,
+    )
 
     current_kpis = get_analytics_kpis(
         user,
@@ -81,6 +87,7 @@ def get_analytics_kpi_comparison(
         establishment_id=establishment_id,
         period_start=current_period.period_start,
         period_end=current_period.period_end,
+        _read_scope=read_scope,
     )
     previous_kpis = get_analytics_kpis(
         user,
@@ -88,6 +95,7 @@ def get_analytics_kpi_comparison(
         establishment_id=establishment_id,
         period_start=previous_period.period_start,
         period_end=previous_period.period_end,
+        _read_scope=read_scope,
     )
 
     return AnalyticsKPIComparisonResult(

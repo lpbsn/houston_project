@@ -24,10 +24,7 @@ from houston.analytics.recurrence import (
     build_recurrence_window,
     recurrence_stats_for_visible_pattern_ids,
 )
-from houston.analytics.selectors import (
-    analytics_actionable_signals_queryset,
-    analytics_default_signals_queryset,
-)
+from houston.analytics.selectors import resolve_analytics_read_scope
 from houston.establishments.models import DEFAULT_ESTABLISHMENT_TIMEZONE, Establishment
 from houston.signals.models import Signal
 
@@ -133,16 +130,17 @@ def get_analytics_pattern_detail(
         period_end=period_end,
     )
     parsed_pattern_id = _parse_pattern_id(pattern_id)
+    read_scope = resolve_analytics_read_scope(
+        user,
+        organization_id=organization_id,
+        establishment_id=establishment_id,
+    )
     current_signals = _filter_created_period(
-        analytics_default_signals_queryset(
-            user,
-            organization_id=organization_id,
-            establishment_id=establishment_id,
-        ),
+        read_scope.default_signals_queryset(),
         period=current_period,
     )
-    pattern_row = _current_pattern_row(current_signals, pattern_id=parsed_pattern_id)
-    if pattern_row is None:
+    pattern_rows = _current_pattern_rows(current_signals, pattern_id=parsed_pattern_id)
+    if not pattern_rows:
         raise AnalyticsValidationError(
             "Analytics pattern was not found.",
             code="analytics_pattern_not_found",
@@ -151,22 +149,14 @@ def get_analytics_pattern_detail(
     pattern_ids = [parsed_pattern_id]
     previous_signal_count = _pattern_count_for_signals(
         _filter_created_period(
-            analytics_default_signals_queryset(
-                user,
-                organization_id=organization_id,
-                establishment_id=establishment_id,
-            ),
+            read_scope.default_signals_queryset(),
             period=previous_period,
         ),
         pattern_id=parsed_pattern_id,
     )
     actionable_signal_count = _pattern_count_for_signals(
         _filter_created_period(
-            analytics_actionable_signals_queryset(
-                user,
-                organization_id=organization_id,
-                establishment_id=establishment_id,
-            ),
+            read_scope.actionable_signals_queryset(),
             period=current_period,
         ),
         pattern_id=parsed_pattern_id,
@@ -177,6 +167,7 @@ def get_analytics_pattern_detail(
         visible_pattern_ids=pattern_ids,
         organization_id=organization_id,
         establishment_id=establishment_id,
+        _read_scope=read_scope,
     )[parsed_pattern_id]
     recurrence_window = build_recurrence_window(current_period.period_end)
     trend_timezone = _resolve_trend_timezone_name(
@@ -185,10 +176,7 @@ def get_analytics_pattern_detail(
         establishment_id=establishment_id,
     )
     trend_tz = ZoneInfo(trend_timezone)
-    status_distribution = _status_distribution(
-        current_signals,
-        pattern_id=parsed_pattern_id,
-    )
+    status_distribution = _status_distribution_from_rows(pattern_rows)
     establishment_bucket_count, establishments, establishment_other_signal_count = (
         _establishment_distribution(current_signals, pattern_id=parsed_pattern_id)
     )
@@ -198,7 +186,9 @@ def get_analytics_pattern_detail(
             pattern_id=parsed_pattern_id,
         )
     )
-    signal_count = int(pattern_row["signal_count"])
+    pattern_row = pattern_rows[0]
+    signal_count = sum(int(row["signal_count"]) for row in pattern_rows)
+    last_seen_at = max(row["last_seen_at"] for row in pattern_rows)
 
     return AnalyticsPatternDetailResult(
         identity=AnalyticsPatternIdentity(
@@ -218,7 +208,7 @@ def get_analytics_pattern_detail(
                 previous=previous_signal_count,
             ),
             actionable_signal_count=actionable_signal_count,
-            last_seen_at=pattern_row["last_seen_at"],
+            last_seen_at=last_seen_at,
             establishment_count=establishment_bucket_count,
         ),
         is_recurrent=recurrence.is_recurrent,
@@ -271,8 +261,12 @@ def _filter_created_period(
     )
 
 
-def _current_pattern_row(queryset: QuerySet[Signal], *, pattern_id: uuid.UUID):
-    return (
+def _current_pattern_rows(
+    queryset: QuerySet[Signal],
+    *,
+    pattern_id: uuid.UUID,
+):
+    return list(
         SignalPatternAssignment.objects.filter(
             signal_id__in=queryset.values("id"),
             pattern_id=pattern_id,
@@ -282,13 +276,13 @@ def _current_pattern_row(queryset: QuerySet[Signal], *, pattern_id: uuid.UUID):
             "pattern__status",
             "pattern__created_at",
             "pattern__merged_into_id",
+            "signal__status",
         )
         .annotate(
             signal_count=Count("signal_id", distinct=True),
             last_seen_at=Max("signal__created_at"),
         )
-        .order_by("pattern_id")
-        .first()
+        .order_by("signal__status")
     )
 
 
@@ -393,19 +387,9 @@ def _iter_daily_buckets(
         bucket_date = next_date
 
 
-def _status_distribution(
-    queryset: QuerySet[Signal],
-    *,
-    pattern_id: uuid.UUID,
+def _status_distribution_from_rows(
+    rows,
 ) -> tuple[AnalyticsPatternStatusDistributionBucket, ...]:
-    rows = (
-        SignalPatternAssignment.objects.filter(
-            signal_id__in=queryset.values("id"),
-            pattern_id=pattern_id,
-        )
-        .values("signal__status")
-        .annotate(signal_count=Count("signal_id", distinct=True))
-    )
     counts = {row["signal__status"]: int(row["signal_count"]) for row in rows}
     return tuple(
         AnalyticsPatternStatusDistributionBucket(

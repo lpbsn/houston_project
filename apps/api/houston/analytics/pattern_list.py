@@ -27,10 +27,7 @@ from houston.analytics.recurrence import (
     recurrence_stats_for_visible_pattern_ids,
     recurrent_pattern_ids_queryset,
 )
-from houston.analytics.selectors import (
-    analytics_actionable_signals_queryset,
-    analytics_default_signals_queryset,
-)
+from houston.analytics.selectors import resolve_analytics_read_scope
 from houston.establishments.membership_scope import (
     membership_business_unit_scope_ids,
     membership_scope_prefetch,
@@ -177,14 +174,15 @@ def list_analytics_patterns(
         page_size=validated_page_size,
     )
     parsed_cursor = _parse_cursor(cursor, expected_context=context)
+    read_scope = resolve_analytics_read_scope(
+        user,
+        organization_id=organization_id,
+        establishment_id=establishment_id,
+        establishment_ids=filters["establishment_ids"],
+    )
 
     current_signals = _filter_created_period(
-        analytics_default_signals_queryset(
-            user,
-            organization_id=organization_id,
-            establishment_id=establishment_id,
-            establishment_ids=filters["establishment_ids"],
-        ),
+        read_scope.default_signals_queryset(),
         period=current_period,
     )
     current_signals = _apply_signal_filters(current_signals, filters)
@@ -194,6 +192,7 @@ def list_analytics_patterns(
         organization_id=organization_id,
         establishment_id=establishment_id,
         establishment_ids=filters["establishment_ids"],
+        _read_scope=read_scope,
     )
     current_rows = _current_pattern_rows(
         current_signals,
@@ -201,7 +200,12 @@ def list_analytics_patterns(
         q=filters["q"],
         recurrence=filters["recurrence"],
     )
-    total_count = current_rows.count()
+    total_count = _pattern_total_count(
+        current_signals,
+        recurrent_ids=recurrent_ids,
+        q=filters["q"],
+        recurrence=filters["recurrence"],
+    )
     page_queryset = _apply_cursor(current_rows, parsed_cursor)
     page_rows = list(page_queryset[: validated_page_size + 1])
     has_more = len(page_rows) > validated_page_size
@@ -210,12 +214,7 @@ def list_analytics_patterns(
 
     previous_counts = _pattern_counts_for_signals(
         _filter_created_period(
-            analytics_default_signals_queryset(
-                user,
-                organization_id=organization_id,
-                establishment_id=establishment_id,
-                establishment_ids=filters["establishment_ids"],
-            ),
+            read_scope.default_signals_queryset(),
             period=previous_period,
         ),
         filters,
@@ -223,12 +222,7 @@ def list_analytics_patterns(
     )
     actionable_counts = _pattern_counts_for_signals(
         _filter_created_period(
-            analytics_actionable_signals_queryset(
-                user,
-                organization_id=organization_id,
-                establishment_id=establishment_id,
-                establishment_ids=filters["establishment_ids"],
-            ),
+            read_scope.actionable_signals_queryset(),
             period=current_period,
         ),
         filters,
@@ -245,6 +239,7 @@ def list_analytics_patterns(
         organization_id=organization_id,
         establishment_id=establishment_id,
         establishment_ids=filters["establishment_ids"],
+        _read_scope=read_scope,
     )
 
     items = tuple(
@@ -402,17 +397,7 @@ def _current_pattern_rows(
     q: str,
     recurrence: str,
 ):
-    assignments = (
-        SignalPatternAssignment.objects.filter(
-            signal_id__in=queryset.values("id"),
-            pattern_id__isnull=False,
-        )
-    )
-    if q:
-        assignments = assignments.filter(
-            Q(pattern__label__icontains=q)
-            | Q(pattern__normalized_label__icontains=q)
-        )
+    assignments = _pattern_assignments_for_signals(queryset, q=q)
     rows = (
         assignments
         .annotate(
@@ -445,6 +430,42 @@ def _current_pattern_rows(
         "pattern__normalized_label",
         "pattern_id",
     )
+
+
+def _pattern_total_count(
+    queryset: QuerySet[Signal],
+    *,
+    recurrent_ids,
+    q: str,
+    recurrence: str,
+) -> int:
+    assignments = _pattern_assignments_for_signals(queryset, q=q)
+    if recurrence == PATTERN_LIST_RECURRENCE_RECURRENT:
+        assignments = assignments.filter(pattern_id__in=recurrent_ids)
+    elif recurrence == PATTERN_LIST_RECURRENCE_NON_RECURRENT:
+        assignments = assignments.exclude(pattern_id__in=recurrent_ids)
+    return int(
+        assignments.aggregate(total_count=Count("pattern_id", distinct=True))[
+            "total_count"
+        ]
+    )
+
+
+def _pattern_assignments_for_signals(
+    queryset: QuerySet[Signal],
+    *,
+    q: str,
+) -> QuerySet[SignalPatternAssignment]:
+    assignments = SignalPatternAssignment.objects.filter(
+        signal_id__in=queryset.values("id"),
+        pattern_id__isnull=False,
+    )
+    if q:
+        assignments = assignments.filter(
+            Q(pattern__label__icontains=q)
+            | Q(pattern__normalized_label__icontains=q)
+        )
+    return assignments
 
 
 def _apply_cursor(queryset, cursor: _PatternListCursor | None):

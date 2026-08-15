@@ -15,6 +15,7 @@ from houston.analytics.selectors import (
     analytics_readable_assignments_queryset,
     analytics_readable_patterns_queryset,
     analytics_readable_signals_queryset,
+    resolve_analytics_read_scope,
 )
 from houston.analytics.services import create_operational_pattern
 from houston.establishments.models import Establishment, EstablishmentMembership
@@ -154,6 +155,36 @@ def test_owner_and_director_read_only_their_active_establishments():
     assert list(analytics_readable_signals_queryset(director.user)) == [director_signal]
 
 
+def test_resolved_scope_reuses_owner_and_director_multi_establishment_access():
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    second_establishment = Establishment.objects.create(
+        name="Second establishment",
+        organization=owner.establishment.organization,
+        status=Establishment.Status.ACTIVE,
+        timezone="UTC",
+    )
+    director = create_membership(
+        establishment=second_establishment,
+        user=owner.user,
+        role=EstablishmentMembership.Role.DIRECTOR,
+    )
+    owner_signal = create_signal(owner, title="Owner signal")
+    director_signal = create_signal(director, title="Director signal")
+    outsider = build_membership(role=EstablishmentMembership.Role.OWNER)
+    hidden_signal = create_signal(outsider, title="Hidden signal")
+
+    read_scope = resolve_analytics_read_scope(owner.user)
+
+    expected_ids = {owner_signal.id, director_signal.id}
+    assert set(
+        read_scope.readable_signals_queryset().values_list("id", flat=True)
+    ) == expected_ids
+    assert set(
+        read_scope.default_signals_queryset().values_list("id", flat=True)
+    ) == expected_ids
+    assert hidden_signal.id not in expected_ids
+
+
 def test_manager_scope_uses_business_units_and_unassigned_visibility():
     manager = build_membership(role=EstablishmentMembership.Role.MANAGER)
     in_scope_bu = create_business_unit(establishment=manager.establishment, key="bar")
@@ -188,6 +219,89 @@ def test_manager_scope_uses_business_units_and_unassigned_visibility():
 
     assert readable_titles == {in_scope.title, unassigned.title}
     assert out_of_scope.title not in readable_titles
+
+
+def test_resolved_scope_keeps_each_manager_membership_business_unit_constraints():
+    first_manager = build_membership(role=EstablishmentMembership.Role.MANAGER)
+    second_establishment = Establishment.objects.create(
+        name="Second establishment",
+        organization=first_manager.establishment.organization,
+        status=Establishment.Status.ACTIVE,
+        timezone="UTC",
+    )
+    second_manager = create_membership(
+        establishment=second_establishment,
+        user=first_manager.user,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    first_in_scope_bu = create_business_unit(
+        establishment=first_manager.establishment,
+        key="first-in-scope",
+    )
+    first_hidden_bu = create_business_unit(
+        establishment=first_manager.establishment,
+        key="first-hidden",
+    )
+    second_in_scope_bu = create_business_unit(
+        establishment=second_establishment,
+        key="second-in-scope",
+    )
+    second_hidden_bu = create_business_unit(
+        establishment=second_establishment,
+        key="second-hidden",
+    )
+    create_membership_with_business_unit_scope(
+        membership=first_manager,
+        business_unit=first_in_scope_bu,
+    )
+    create_membership_with_business_unit_scope(
+        membership=second_manager,
+        business_unit=second_in_scope_bu,
+    )
+    visible_first = create_signal(
+        first_manager,
+        title="Visible first",
+        affected_business_unit=first_in_scope_bu,
+        responsible_business_unit=first_in_scope_bu,
+    )
+    hidden_first = create_signal(
+        first_manager,
+        title="Hidden first",
+        affected_business_unit=first_hidden_bu,
+        responsible_business_unit=first_hidden_bu,
+    )
+    visible_second = create_signal(
+        second_manager,
+        title="Visible second",
+        affected_business_unit=second_in_scope_bu,
+        responsible_business_unit=second_in_scope_bu,
+    )
+    hidden_second = create_signal(
+        second_manager,
+        title="Hidden second",
+        affected_business_unit=second_hidden_bu,
+        responsible_business_unit=second_hidden_bu,
+    )
+    unassigned_second = create_signal(
+        second_manager,
+        title="Unassigned second",
+        affected_business_unit=second_hidden_bu,
+        responsible_business_unit=second_hidden_bu,
+        routing_status=Signal.RoutingStatus.UNASSIGNED,
+    )
+
+    read_scope = resolve_analytics_read_scope(first_manager.user)
+    readable_ids = set(
+        read_scope.readable_signals_queryset().values_list("id", flat=True)
+    )
+
+    assert readable_ids == {
+        visible_first.id,
+        visible_second.id,
+        unassigned_second.id,
+    }
+    assert hidden_first.id not in readable_ids
+    assert hidden_second.id not in readable_ids
 
 
 def test_manager_without_scope_reads_unassigned_but_not_resolved_business_unit_signal():

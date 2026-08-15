@@ -1,5 +1,5 @@
 {
-  "schema_version": "analytics_capacity_ticket_35_results_v1",
+  "schema_version": "analytics_capacity_results_v2",
   "measured_at": "2026-08-15",
   "environment": {
     "platform": "Linux aarch64 via OrbStack",
@@ -91,6 +91,86 @@
       "pattern_drilldown_30d_page1": {"p50_ms": 269.3, "p95_ms": 312.0, "queries": 7},
       "pattern_drilldown_30d_page2": {"p50_ms": 280.2, "p95_ms": 504.5, "queries": 7}
     }
+  },
+  "t36": {
+    "capacity_validated": false,
+    "method": {
+      "profile": "target",
+      "seed": 35,
+      "dataset_reused_between_runs": true,
+      "runs_per_retained_batch": 3,
+      "summary_statistic": "median across three run-level p95 and diagnostic sql_total_ms values",
+      "cold_start_note": "baseline run 1 followed a full reseed; runs 2 and 3 were warm and the three-run median limits the influence of that isolated cold measurement",
+      "target_database_size": "1589 MB"
+    },
+    "baseline_median": {
+      "dashboard_7d": {"p95_ms": 5817.4, "sql_total_ms": 5203.5, "queries": 37},
+      "dashboard_30d": {"p95_ms": 5697.6, "sql_total_ms": 5435.3, "queries": 37},
+      "dashboard_90d": {"p95_ms": 7338.3, "sql_total_ms": 6609.1, "queries": 37},
+      "patterns_7d_page1": {"p95_ms": 3124.0, "sql_total_ms": 2955.8, "queries": 19},
+      "patterns_30d_page1": {"p95_ms": 3821.5, "sql_total_ms": 3744.7, "queries": 19},
+      "patterns_90d_page1": {"p95_ms": 5657.8, "sql_total_ms": 4937.7, "queries": 19},
+      "patterns_30d_page2": {"p95_ms": 8787.2, "sql_total_ms": 8425.8, "queries": 19},
+      "patterns_30d_recurrent": {"p95_ms": 6599.5, "sql_total_ms": 6398.0, "queries": 19},
+      "patterns_30d_filtered": {"p95_ms": 264.3, "sql_total_ms": 129.4, "queries": 13},
+      "patterns_30d_search": {"p95_ms": 2869.2, "sql_total_ms": 2600.8, "queries": 19},
+      "pattern_filter_options": {"p95_ms": 33.2, "sql_total_ms": 4.6, "queries": 7},
+      "pattern_detail_30d": {"p95_ms": 1552.0, "sql_total_ms": 1313.7, "queries": 20},
+      "pattern_detail_90d": {"p95_ms": 1809.6, "sql_total_ms": 1632.2, "queries": 20},
+      "pattern_drilldown_30d_page1": {"p95_ms": 359.9, "sql_total_ms": 303.1, "queries": 7},
+      "pattern_drilldown_30d_page2": {"p95_ms": 350.6, "sql_total_ms": 282.3, "queries": 7}
+    },
+    "final_median": {
+      "dashboard_7d": {"p95_ms": 3318.7, "sql_total_ms": 3162.5, "queries": 13},
+      "dashboard_30d": {"p95_ms": 3590.2, "sql_total_ms": 3435.4, "queries": 13},
+      "dashboard_90d": {"p95_ms": 4757.8, "sql_total_ms": 4575.1, "queries": 13},
+      "patterns_7d_page1": {"p95_ms": 2613.1, "sql_total_ms": 2423.1, "queries": 11},
+      "patterns_30d_page1": {"p95_ms": 3032.0, "sql_total_ms": 2809.8, "queries": 11},
+      "patterns_90d_page1": {"p95_ms": 4465.9, "sql_total_ms": 4257.9, "queries": 11},
+      "patterns_30d_page2": {"p95_ms": 8511.7, "sql_total_ms": 7582.0, "queries": 11},
+      "patterns_30d_recurrent": {"p95_ms": 5246.9, "sql_total_ms": 4994.0, "queries": 11},
+      "patterns_30d_filtered": {"p95_ms": 98.8, "sql_total_ms": 64.4, "queries": 7},
+      "patterns_30d_search": {"p95_ms": 1985.3, "sql_total_ms": 1846.9, "queries": 11},
+      "pattern_filter_options": {"p95_ms": 29.7, "sql_total_ms": 4.6, "queries": 7},
+      "pattern_detail_30d": {"p95_ms": 1260.1, "sql_total_ms": 1061.5, "queries": 13},
+      "pattern_detail_90d": {"p95_ms": 1419.8, "sql_total_ms": 1357.6, "queries": 13},
+      "pattern_drilldown_30d_page1": {"p95_ms": 358.9, "sql_total_ms": 273.8, "queries": 7},
+      "pattern_drilldown_30d_page2": {"p95_ms": 301.0, "sql_total_ms": 266.1, "queries": 7}
+    },
+    "retained_batches": [
+      {
+        "change": "resolve and reuse one immutable RBAC read scope per analytics read path",
+        "evidence": "query fan-out fell from 37 to 23 on dashboard, 19 to 11 on list, and 20 to 14 on detail without a stable SQL or p95 regression"
+      },
+      {
+        "change": "consolidate compatible dashboard population, assignment, classification, actionable, and resolution aggregates",
+        "evidence": "dashboard query count fell from 23 to 13; median p95 fell 37.0% at 30 days and 35.2% at 90 days"
+      },
+      {
+        "change": "use a dedicated COUNT(DISTINCT pattern_id) for pattern-list total_count",
+        "evidence": "median p95 fell 20.7% on page 1 and 20.5% for recurrent patterns; page 2 improved only 3.1% and remains aggregation-bound"
+      },
+      {
+        "change": "derive pattern identity, current count, last occurrence, and status distribution from one grouped detail query",
+        "evidence": "detail query count fell from 14 to 13; median p95 fell 18.8% at 30 days and 21.5% at 90 days"
+      }
+    ],
+    "rejected_experiments": [
+      {
+        "change": "combine previous-period and current actionable detail counts in one conditional aggregate",
+        "reason": "the first isolated run regressed detail 30-day p95 from about 1.37 s to 2.39 s and sql_total_ms from about 1.2 s to 2.19 s despite reducing query count"
+      }
+    ],
+    "deferred_experiments": [
+      {
+        "change": "rewrite timezone-aware recurrence COUNT(DISTINCT) aggregates",
+        "reason": "EXPLAIN shows the distinct-day sort costs only about 10-15 ms while repeated scope, assignment, and join scans account for most of the 63% dashboard and 85% recurrent-list SQL share; an isolated equivalent rewrite has no plausible material gain"
+      },
+      {
+        "change": "pre-aggregate or cache pattern-list and recurrence reads",
+        "reason": "page 2 remains dominated by an approximately 6.6 s plan touching 1.74 million shared blocks; this requires an explicit architecture and invalidation decision outside T36"
+      }
+    ]
   },
   "token_overlap_v1_target": [
     {"patterns": 100, "p50_ms": 2.4, "p95_ms": 2.7, "python_peak_bytes": 111617},

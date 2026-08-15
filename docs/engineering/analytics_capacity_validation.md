@@ -1,4 +1,4 @@
-# Ticket 35 — Validation capacité/performance Analytics
+# Validation capacité/performance Analytics
 
 Date de mesure : 2026-08-15.
 
@@ -20,6 +20,81 @@ Les mesures structurées durables sont dans
 [`analytics_capacity_results.json`](analytics_capacity_results.json). Les rapports
 diagnostiques complets avec SQL et plans `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`
 sont générés localement sous `.artifacts/analytics-capacity-eval/`.
+
+## T36 — Réduction des lectures redondantes
+
+T36 réutilise exactement le profil cible, le seed 35 et la matrice T35. Le dataset
+de 100 établissements, 1 000 000 de Signals et 5 000 Patterns a été seedé une fois,
+puis réutilisé pour tous les lots. Chaque baseline et chaque état conservé a été
+mesuré trois fois. Les chiffres ci-dessous sont les médianes des p95 de run et des
+`sql_total_ms` diagnostiques; le premier run de baseline, exécuté juste après le
+reseed, était nettement plus froid que les deux suivants.
+
+Lots conservés :
+
+- un scope RBAC immuable est maintenant résolu une fois par read path et partagé
+  entre les querysets default, actionable, résolution et récurrence. Les branches
+  Manager restent séparées par établissement et conservent leurs contraintes
+  business-unit/non assigné;
+- le dashboard consolide population/actionable, assignments/classification et les
+  trois lectures de durée de résolution;
+- la liste calcule `total_count` avec un `COUNT(DISTINCT pattern_id)` dédié sans
+  reproduire le groupement, les annotations et le tri de la page;
+- le détail dérive identité, compte courant, dernière occurrence et distribution
+  de statuts d’une même agrégation groupée.
+
+Gains médians baseline T36 → état final :
+
+- dashboard 30 jours : p95 5 697,6 → 3 590,2 ms (**-37,0 %**),
+  SQL 5 435,3 → 3 435,4 ms, 37 → 13 queries;
+- dashboard 90 jours : p95 7 338,3 → 4 757,8 ms (**-35,2 %**),
+  SQL 6 609,1 → 4 575,1 ms, 37 → 13 queries;
+- liste 30 jours page 1 : p95 3 821,5 → 3 032,0 ms (**-20,7 %**),
+  SQL 3 744,7 → 2 809,8 ms, 19 → 11 queries;
+- liste 30 jours page 2 : p95 8 787,2 → 8 511,7 ms (**-3,1 %**),
+  SQL 8 425,8 → 7 582,0 ms, 19 → 11 queries;
+- liste récurrents : p95 6 599,5 → 5 246,9 ms (**-20,5 %**),
+  SQL 6 398,0 → 4 994,0 ms, 19 → 11 queries;
+- recherche Patterns : p95 2 869,2 → 1 985,3 ms (**-30,8 %**);
+- détail 30 jours : p95 1 552,0 → 1 260,1 ms (**-18,8 %**),
+  SQL 1 313,7 → 1 061,5 ms, 20 → 13 queries;
+- détail 90 jours : p95 1 809,6 → 1 419,8 ms (**-21,5 %**),
+  SQL 1 632,2 → 1 357,6 ms, 20 → 13 queries.
+
+Les gardes non ciblées restent cohérentes avec la variance locale : filter options
+33,2 → 29,7 ms p95; drilldown page 1 359,9 → 358,9 ms avec un temps SQL médian
+303,1 → 273,8 ms. Les p95 isolés proches ou au-dessus de +10 % n’ont pas été
+rejetés automatiquement : un troisième run et les temps SQL/plans ont été utilisés
+pour distinguer les outliers des régressions reproductibles.
+
+Les plans confirment les effets qui ne ressortent pas du query count seul :
+
+- le count de page 1 passe d’environ 1 327 à 476 ms et de 475 000 à 92 000
+  blocs partagés;
+- le plan dominant de page 2 reste à environ 6,6 s et 1,74 million de blocs
+  partagés : la pagination keyset ne supprime pas l’agrégation et le tri globaux;
+- les plans détail stables restent autour de 153–161 ms à 30 jours, avec environ
+  59 600 blocs lus. Les pics p95 du premier run RBAC ne se reproduisent pas et ne
+  correspondent pas à une hausse des buffers;
+- la sous-expérience détail rejetée avait au contraire un plan à 1 577 ms et un
+  spill de 4 696 blocs temporaires lus / 8 375 écrits.
+
+Une sous-expérience a été rejetée : fusionner previous count et actionable current
+du détail dans une agrégation conditionnelle a réduit le query count, mais le
+premier run isolé a fait passer le détail 30 jours d’environ 1,37 s à 2,39 s p95 et
+le SQL d’environ 1,2 s à 2,19 s. Les deux requêtes sélectives ont été restaurées.
+
+Le verdict capacité reste **non validé** : la page 2 recalcule toujours l’agrégat et
+le tri globaux (8,51 s p95 médian), et la récurrence timezone-aware reste calculée
+à la lecture (5,25 s pour la liste récurrente). Dans le run final, les requêtes
+portant la récurrence représentent environ 63 % du SQL dashboard 30 jours et 85 %
+du SQL de la liste récurrente. Toutefois, le tri des 39 108 lignes de récurrence
+ne coûte qu’environ 10–15 ms : les scans répétés du scope, des assignments et des
+jointures dominent. Remplacer isolément les `COUNT(DISTINCT ...)` n’apporterait donc
+pas de gain plausible et n’a pas été expérimenté. Une amélioration substantielle
+supplémentaire demanderait de supprimer ces scans via une pré-agrégation ou un
+cache explicitement justifié; T36 n’introduit ni index, ni migration, ni
+matérialisation, ni dépendance.
 
 ## Environnement et méthode
 

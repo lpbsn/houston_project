@@ -11,7 +11,7 @@ from django.utils import timezone
 from houston.accounts.models import User
 from houston.analytics.exceptions import AnalyticsValidationError
 from houston.analytics.models import SignalPatternAssignment
-from houston.analytics.selectors import analytics_recurrence_signals_queryset
+from houston.analytics.selectors import AnalyticsReadScope, resolve_analytics_read_scope
 
 RECURRENCE_WINDOW_DAYS = 30
 RECURRENCE_MIN_OCCURRENCES = 3
@@ -51,18 +51,22 @@ def analytics_pattern_recurrence_stats(
     establishment_id=None,
     establishment_ids=None,
     pattern_ids=None,
+    _read_scope: AnalyticsReadScope | None = None,
 ) -> dict[UUID, PatternRecurrenceStats]:
     _validate_establishment_scope(
         establishment_id=establishment_id,
         establishment_ids=establishment_ids,
     )
     window = build_recurrence_window(as_of)
-    rows = _recurrence_rows(
+    read_scope = _read_scope or resolve_analytics_read_scope(
         user,
-        window=window,
         organization_id=organization_id,
         establishment_id=establishment_id,
         establishment_ids=establishment_ids,
+    )
+    rows = _recurrence_rows(
+        read_scope,
+        window=window,
         pattern_ids=pattern_ids,
     )
     return {
@@ -79,6 +83,7 @@ def recurrence_stats_for_visible_pattern_ids(
     organization_id=None,
     establishment_id=None,
     establishment_ids=None,
+    _read_scope: AnalyticsReadScope | None = None,
 ) -> dict[UUID, PatternRecurrenceStats]:
     _validate_establishment_scope(
         establishment_id=establishment_id,
@@ -96,6 +101,7 @@ def recurrence_stats_for_visible_pattern_ids(
         establishment_id=establishment_id,
         establishment_ids=establishment_ids,
         pattern_ids=pattern_ids,
+        _read_scope=_read_scope,
     )
     return {
         pattern_id: sparse.get(pattern_id)
@@ -119,19 +125,23 @@ def recurrent_pattern_ids_queryset(
     establishment_id=None,
     establishment_ids=None,
     pattern_ids=None,
+    _read_scope: AnalyticsReadScope | None = None,
 ) -> QuerySet:
     _validate_establishment_scope(
         establishment_id=establishment_id,
         establishment_ids=establishment_ids,
     )
     window = build_recurrence_window(as_of)
+    read_scope = _read_scope or resolve_analytics_read_scope(
+        user,
+        organization_id=organization_id,
+        establishment_id=establishment_id,
+        establishment_ids=establishment_ids,
+    )
     return (
         _recurrence_rows(
-            user,
+            read_scope,
             window=window,
-            organization_id=organization_id,
-            establishment_id=establishment_id,
-            establishment_ids=establishment_ids,
             pattern_ids=pattern_ids,
         )
         .filter(
@@ -150,6 +160,7 @@ def recurrent_patterns_count_for_contributors(
     organization_id=None,
     establishment_id=None,
     establishment_ids=None,
+    _read_scope: AnalyticsReadScope | None = None,
 ) -> int:
     return (
         recurrent_pattern_ids_queryset(
@@ -159,6 +170,7 @@ def recurrent_patterns_count_for_contributors(
             establishment_id=establishment_id,
             establishment_ids=establishment_ids,
             pattern_ids=contributor_pattern_ids,
+            _read_scope=_read_scope,
         )
         .distinct()
         .count()
@@ -166,20 +178,12 @@ def recurrent_patterns_count_for_contributors(
 
 
 def _recurrence_rows(
-    user: User | None,
+    read_scope: AnalyticsReadScope,
     *,
     window: AnalyticsRecurrenceWindow,
-    organization_id,
-    establishment_id,
-    establishment_ids,
     pattern_ids=None,
 ) -> QuerySet:
-    recurrence_signals = analytics_recurrence_signals_queryset(
-        user,
-        organization_id=organization_id,
-        establishment_id=establishment_id,
-        establishment_ids=establishment_ids,
-    ).filter(
+    recurrence_signals = read_scope.recurrence_signals_queryset().filter(
         created_at__gte=window.window_start,
         created_at__lt=window.window_end,
     )
