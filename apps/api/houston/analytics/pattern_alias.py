@@ -3,6 +3,8 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
+from django.db.models import Q
+
 from houston.analytics.classifier import PatternClassifierInvalidOutputError
 from houston.analytics.models import OperationalPattern
 from houston.signals.models import Signal
@@ -17,12 +19,13 @@ class PatternExactAliasResolution:
 def _resolve_exact_pattern_alias(
     *,
     signal: Signal,
-    normalized_semantic_label: str,
+    normalized_alias: str,
 ) -> PatternExactAliasResolution:
     active_patterns = list(
         OperationalPattern.objects.filter(
+            Q(normalized_semantic_label=normalized_alias)
+            | Q(normalized_label=normalized_alias),
             organization=signal.establishment.organization,
-            normalized_semantic_label=normalized_semantic_label,
             status=OperationalPattern.Status.ACTIVE,
         ).order_by("id")[:2]
     )
@@ -34,7 +37,7 @@ def _resolve_exact_pattern_alias(
     merged_patterns = list(
         OperationalPattern.objects.filter(
             organization=signal.establishment.organization,
-            normalized_semantic_label=normalized_semantic_label,
+            normalized_semantic_label=normalized_alias,
             status=OperationalPattern.Status.MERGED,
         ).order_by("id")
     )

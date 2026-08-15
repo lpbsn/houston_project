@@ -28,6 +28,7 @@ from houston.analytics.classifier import (
 )
 from houston.analytics.exceptions import AnalyticsValidationError
 from houston.analytics.models import OperationalPattern, SignalPatternAssignment
+from houston.analytics.pattern_alias import _resolve_exact_pattern_alias
 from houston.analytics.pattern_shortlist import _duplicate_guard_shortlist
 from houston.analytics.scheduling import schedule_reclassification_if_signature_changed
 from houston.analytics.services import (
@@ -37,6 +38,7 @@ from houston.analytics.services import (
     create_operational_pattern,
     mark_assignment_processing,
     mark_assignment_succeeded,
+    rename_operational_pattern,
 )
 from houston.analytics.signature import (
     build_signal_pattern_payload,
@@ -1005,6 +1007,30 @@ def test_concurrent_new_pattern_creation_reloads_existing_label_after_integrity_
     assert assignment.pattern_id == existing.id
 
 
+def test_classifier_reuses_pattern_by_renamed_display_label():
+    membership = build_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = create_signal_for_membership(membership)
+    pattern = create_pattern_for_signal(signal, label="Equipment leak")
+    rename_operational_pattern(
+        actor_membership=membership,
+        pattern=pattern,
+        label="Bathroom leak",
+    )
+    provider = FakePatternClassifierProvider(payload={"canonical_label": "Bathroom leak"})
+
+    assignment = classify_signal_pattern(
+        signal.id,
+        provider=provider,
+        duplicate_guard_enabled=False,
+    )
+
+    assert assignment.classification_status == (
+        SignalPatternAssignment.ClassificationStatus.SUCCEEDED
+    )
+    assert assignment.pattern_id == pattern.id
+    assert provider.duplicate_guard_calls == []
+
+
 def test_legacy_classifier_shape_is_refused():
     with pytest.raises(PatternClassifierInvalidOutputError) as exc_info:
         parse_pattern_classifier_response(
@@ -1094,6 +1120,29 @@ def test_ambiguous_exact_semantic_alias_falls_through_to_duplicate_guard(setting
 
     assert assignment.pattern_id == second.id
     assert len(provider.duplicate_guard_calls) == 1
+
+
+def test_cross_field_exact_alias_is_ambiguous():
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    create_operational_pattern(
+        organization=signal.establishment.organization,
+        label="First display",
+        semantic_label="Shared alias",
+    )
+    create_operational_pattern(
+        organization=signal.establishment.organization,
+        label="Shared alias",
+        semantic_label="Second semantic",
+    )
+
+    resolution = _resolve_exact_pattern_alias(
+        signal=signal,
+        normalized_alias="shared alias",
+    )
+
+    assert resolution.status == "ambiguous"
+    assert resolution.pattern is None
 
 
 def test_owner_split_can_explicitly_recreate_active_alias_after_merge():

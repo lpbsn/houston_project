@@ -2347,7 +2347,7 @@ def _prepare_classifier_pattern_resolution(
     normalized = normalize_pattern_label(label)
     exact_alias = _resolve_exact_pattern_alias(
         signal=signal,
-        normalized_semantic_label=normalized,
+        normalized_alias=normalized,
     )
     if exact_alias.status == "resolved" and exact_alias.pattern is not None:
         return PatternClassifierPatternResolution(
@@ -2511,7 +2511,7 @@ def _get_or_create_active_pattern_for_label(
     except IntegrityError:
         exact_alias = _resolve_exact_pattern_alias(
             signal=signal,
-            normalized_semantic_label=normalized,
+            normalized_alias=normalized,
         )
         if exact_alias.status == "resolved" and exact_alias.pattern is not None:
             return exact_alias.pattern
