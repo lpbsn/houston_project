@@ -252,83 +252,97 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
     <div className="flex min-h-full flex-col">
       <div
         className={cn(
-          'flex flex-1 flex-col gap-3 px-3 pt-2',
-          showStickyFooter ? 'pb-40' : 'pb-4',
+          'mx-auto flex w-full flex-1 flex-col',
+          'lg:grid lg:max-w-7xl lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)] lg:items-start lg:gap-4 lg:px-6 lg:pt-4 lg:pb-6',
         )}
       >
-        {displayedFeedback ? (
-          <TerrainFeedback
-            variant={displayedFeedback.variant}
-            message={displayedFeedback.message}
-          />
-        ) : null}
-
-        <ActionPlanTemplateDetailHeader
-          plan={plan}
-          showActivate={canShowActionPlanActivate(hints)}
-          showDeactivate={canShowActionPlanDeactivate(hints)}
-          isActivatePending={activateMutation.isPending}
-          isDeactivatePending={deactivateMutation.isPending}
-          onActivate={() => void handleActivate()}
-          onDeactivate={() => void handleDeactivate()}
-        />
-
-        <section className="space-y-2">
-          <TerrainSectionLabel>Tâches</TerrainSectionLabel>
-          {sortedTasks.length === 0 ? (
-            <TerrainCard className="p-0">
-              <p className={cn('px-3 py-4 text-sm', terrain.muted)}>Aucune tâche.</p>
-            </TerrainCard>
-          ) : (
-            <div className="space-y-1">
-              {sortedTasks.map((task) => (
-                <TerrainCard key={task.id} className="p-0">
-                  <ActionPlanTaskReadOnlyRow task={task} />
-                </TerrainCard>
-              ))}
-            </div>
+        <div
+          className={cn(
+            'grid grid-cols-1 gap-3 px-3 pt-2 lg:contents',
+            showStickyFooter ? 'pb-40' : 'pb-4',
           )}
-        </section>
+        >
+          {displayedFeedback ? (
+            <div className="lg:col-span-2">
+              <TerrainFeedback
+                variant={displayedFeedback.variant}
+                message={displayedFeedback.message}
+              />
+            </div>
+          ) : null}
 
-        {executionPanelOpen ? (
-          <div ref={planningFormRootRef}>
-            <ActionPlanEventPlanningForm
-              draft={planningDraft}
-              config={{
-                canEditAssignees: !staffUseMode,
-                canSchedule,
-                staffMode: staffUseMode,
-                showAdvancedChronology: !staffUseMode,
-                hideAssignees: false,
-                staffDisplayName,
-                assigneeActionsEnabled: false,
-              }}
-              establishmentId={establishmentId}
-              pilotBusinessUnitId={plan.pilot_business_unit.id}
-              fieldErrors={planningFieldErrors}
-              onDraftChange={(update) => {
-                setPlanningDraft((previous) =>
-                  typeof update === 'function' ? update(previous) : update,
-                )
-              }}
+          <div className="space-y-3 lg:col-span-2">
+            <ActionPlanTemplateDetailHeader
+              plan={plan}
+              showActivate={canShowActionPlanActivate(hints)}
+              showDeactivate={canShowActionPlanDeactivate(hints)}
+              isActivatePending={activateMutation.isPending}
+              isDeactivatePending={deactivateMutation.isPending}
+              onActivate={() => void handleActivate()}
+              onDeactivate={() => void handleDeactivate()}
             />
           </div>
+
+          <div className="space-y-3 lg:col-start-1">
+            <section className="space-y-2">
+              <TerrainSectionLabel>Tâches</TerrainSectionLabel>
+              {sortedTasks.length === 0 ? (
+                <TerrainCard className="p-0">
+                  <p className={cn('px-3 py-4 text-sm', terrain.muted)}>Aucune tâche.</p>
+                </TerrainCard>
+              ) : (
+                <div className="space-y-1">
+                  {sortedTasks.map((task) => (
+                    <TerrainCard key={task.id} className="p-0">
+                      <ActionPlanTaskReadOnlyRow task={task} />
+                    </TerrainCard>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+
+          {executionPanelOpen ? (
+            <div ref={planningFormRootRef} className="lg:col-start-2">
+              <ActionPlanEventPlanningForm
+                draft={planningDraft}
+                config={{
+                  canEditAssignees: !staffUseMode,
+                  canSchedule,
+                  staffMode: staffUseMode,
+                  showAdvancedChronology: !staffUseMode,
+                  hideAssignees: false,
+                  staffDisplayName,
+                  assigneeActionsEnabled: false,
+                }}
+                establishmentId={establishmentId}
+                pilotBusinessUnitId={plan.pilot_business_unit.id}
+                fieldErrors={planningFieldErrors}
+                onDraftChange={(update) => {
+                  setPlanningDraft((previous) =>
+                    typeof update === 'function' ? update(previous) : update,
+                  )
+                }}
+              />
+            </div>
+          ) : null}
+        </div>
+
+        {showStickyFooter ? (
+          <ActionPlanTemplateDetailStickyFooter
+            className="lg:col-start-2 lg:top-4 lg:bottom-auto lg:mt-0 lg:rounded-2xl lg:border lg:border-[#E8E6DF] lg:bg-white lg:p-4 lg:shadow-none"
+            hints={hints}
+            executionPanelOpen={executionPanelOpen}
+            canUse={canUse}
+            isBusy={isBusy}
+            primaryActionDisabled={primaryActionDisabled}
+            isPrimaryPending={isPrimaryPending}
+            onOpenExecutionPanel={() => setExecutionPanelOpen(true)}
+            onCloseExecutionPanel={resetExecutionPanel}
+            onLaunchExecution={() => void handleLaunchExecution()}
+          />
         ) : null}
       </div>
-
-      {showStickyFooter ? (
-        <ActionPlanTemplateDetailStickyFooter
-          hints={hints}
-          executionPanelOpen={executionPanelOpen}
-          canUse={canUse}
-          isBusy={isBusy}
-          primaryActionDisabled={primaryActionDisabled}
-          isPrimaryPending={isPrimaryPending}
-          onOpenExecutionPanel={() => setExecutionPanelOpen(true)}
-          onCloseExecutionPanel={resetExecutionPanel}
-          onLaunchExecution={() => void handleLaunchExecution()}
-        />
-      ) : null}
     </div>
   )
 }

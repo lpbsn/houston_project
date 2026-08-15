@@ -35,13 +35,13 @@
         {"ref": "hf_07", "title": "Bathroom pipe dripping", "structured_summary": "Water is dripping from a bathroom pipe in a guest room.", "issue_focus": "pipe dripping leak", "activity_subject_key": "plumbing", "operational_unit_key": "floor_2", "affected_business_unit_key": "rooms", "responsible_business_unit_key": "maintenance", "expected_pattern_key": "water_leak"}
       ],
       "fake_responses": {
-        "hf_01": {"result_type": "existing_pattern", "pattern_key": "hvac_outage"},
-        "hf_02": {"result_type": "existing_pattern", "pattern_key": "hvac_outage"},
-        "hf_03": {"result_type": "existing_pattern", "pattern_key": "water_leak"},
-        "hf_04": {"result_type": "existing_pattern", "pattern_key": "water_leak"},
-        "hf_05": {"result_type": "existing_pattern", "pattern_key": "room_access_failure"},
-        "hf_06": {"result_type": "new_pattern", "canonical_label": "Minibar replenishment gap"},
-        "hf_07": {"result_type": "new_pattern", "canonical_label": "Guest area water leak", "duplicate_guard_response": {"result_type": "reuse_existing_pattern", "pattern_key": "water_leak"}}
+        "hf_01": {"canonical_label": "Guest room climate equipment unavailable"},
+        "hf_02": {"canonical_label": "Guest room climate equipment unavailable"},
+        "hf_03": {"canonical_label": "Water leak in guest area"},
+        "hf_04": {"canonical_label": "Water leak in guest area"},
+        "hf_05": {"canonical_label": "Guest room access failure"},
+        "hf_06": {"canonical_label": "Minibar replenishment gap"},
+        "hf_07": {"canonical_label": "Guest area water leak", "duplicate_guard_response": {"result_type": "reuse_existing_pattern", "pattern_key": "water_leak"}}
       },
       "must_link": [["hf_01", "hf_02"], ["hf_03", "hf_04"], ["hf_03", "hf_07"]],
       "must_not_link": [["hf_01", "hf_03"], ["hf_01", "hf_05"], ["hf_03", "hf_06"], ["hf_01", "hf_07"]]
@@ -64,7 +64,7 @@
         {"key": "service_bar", "label": "Service bar"}
       ],
       "initial_patterns": [
-        {"pattern_key": "ingredient_shortage", "label": "Ingredient shortage before service"},
+        {"pattern_key": "ingredient_shortage", "label": "Kitchen ingredient shortage before service"},
         {"pattern_key": "cold_storage_temperature", "label": "Cold storage temperature anomaly"}
       ],
       "signals": [
@@ -72,19 +72,19 @@
         {"ref": "rs_02", "title": "Pasta unavailable for service", "structured_summary": "The kitchen has no remaining pasta for the next service.", "issue_focus": "pasta shortage", "activity_subject_key": "dry_stock", "operational_unit_key": "main_kitchen", "affected_business_unit_key": "restaurant", "responsible_business_unit_key": "kitchen", "expected_pattern_key": "ingredient_shortage"},
         {"ref": "rs_03", "title": "Cold room temperature high", "structured_summary": "The cold room is above the expected temperature range.", "issue_focus": "cold room warm", "activity_subject_key": "cold_storage", "operational_unit_key": "main_kitchen", "affected_business_unit_key": "kitchen", "responsible_business_unit_key": "kitchen", "expected_pattern_key": "cold_storage_temperature"},
         {"ref": "rs_04", "title": "Fridge readings too warm", "structured_summary": "Several fridge readings are too warm for safe storage.", "issue_focus": "fridge temperature high", "activity_subject_key": "cold_storage", "operational_unit_key": "main_kitchen", "affected_business_unit_key": "kitchen", "responsible_business_unit_key": "kitchen", "expected_pattern_key": "cold_storage_temperature"},
-        {"ref": "rs_05", "title": "Mojito syrup missing", "structured_summary": "The bar has no mojito syrup for the evening service.", "issue_focus": "mojito syrup shortage", "activity_subject_key": "bar_stock", "operational_unit_key": "service_bar", "affected_business_unit_key": "bar", "responsible_business_unit_key": "bar", "expected_new_pattern_label": "Syrup stock shortage"},
-        {"ref": "rs_06", "title": "Coffee capsules low", "structured_summary": "Coffee capsules are below the minimum stock level.", "issue_focus": "coffee capsule shortage", "activity_subject_key": "bar_stock", "operational_unit_key": "service_bar", "affected_business_unit_key": "restaurant", "responsible_business_unit_key": "bar", "expected_pattern_key": "ingredient_shortage"}
+        {"ref": "rs_05", "title": "Service bar mojito syrup out of stock", "structured_summary": "The service bar has no mojito syrup for beverage preparation during evening bar service.", "issue_focus": "service bar beverage stock shortage", "activity_subject_key": "bar_stock", "operational_unit_key": "service_bar", "affected_business_unit_key": "bar", "responsible_business_unit_key": "bar", "expected_new_pattern_label": "Service bar beverage stock shortage"},
+        {"ref": "rs_06", "title": "Service bar coffee capsules below minimum", "structured_summary": "Coffee capsules are below the minimum stock level for beverage preparation at the service bar.", "issue_focus": "service bar beverage stock shortage", "activity_subject_key": "bar_stock", "operational_unit_key": "service_bar", "affected_business_unit_key": "restaurant", "responsible_business_unit_key": "bar", "expected_new_pattern_label": "Service bar beverage stock shortage"}
       ],
       "fake_responses": {
-        "rs_01": {"result_type": "existing_pattern", "pattern_key": "ingredient_shortage"},
-        "rs_02": {"result_type": "existing_pattern", "pattern_key": "ingredient_shortage"},
-        "rs_03": {"result_type": "existing_pattern", "pattern_key": "cold_storage_temperature"},
-        "rs_04": {"result_type": "existing_pattern", "pattern_key": "cold_storage_temperature"},
-        "rs_05": {"result_type": "new_pattern", "canonical_label": "Syrup stock shortage"},
-        "rs_06": {"result_type": "existing_pattern", "pattern_key": "ingredient_shortage"}
+        "rs_01": {"canonical_label": "Kitchen ingredient shortage before service"},
+        "rs_02": {"canonical_label": "Kitchen ingredient shortage before service"},
+        "rs_03": {"canonical_label": "Cold storage temperature anomaly"},
+        "rs_04": {"canonical_label": "Cold storage temperature anomaly"},
+        "rs_05": {"canonical_label": "Service bar beverage stock shortage"},
+        "rs_06": {"canonical_label": "Service bar beverage stock shortage"}
       },
-      "must_link": [["rs_01", "rs_02"], ["rs_03", "rs_04"], ["rs_01", "rs_06"]],
-      "must_not_link": [["rs_01", "rs_03"], ["rs_03", "rs_05"], ["rs_05", "rs_06"]]
+      "must_link": [["rs_01", "rs_02"], ["rs_03", "rs_04"], ["rs_05", "rs_06"]],
+      "must_not_link": [["rs_01", "rs_03"], ["rs_03", "rs_05"], ["rs_01", "rs_05"]]
     },
     {
       "id": "housekeeping_rooms",
@@ -116,12 +116,12 @@
         {"ref": "hr_06", "title": "Shampoo bottles missing", "structured_summary": "Shampoo bottles are missing from the room amenity setup.", "issue_focus": "shampoo amenity missing", "activity_subject_key": "amenities", "operational_unit_key": "floor_1", "affected_business_unit_key": "rooms", "responsible_business_unit_key": "housekeeping", "expected_new_pattern_label": "Guest amenity refill gap"}
       ],
       "fake_responses": {
-        "hr_01": {"result_type": "existing_pattern", "pattern_key": "cleaning_delay"},
-        "hr_02": {"result_type": "existing_pattern", "pattern_key": "cleaning_delay"},
-        "hr_03": {"result_type": "existing_pattern", "pattern_key": "linen_shortage"},
-        "hr_04": {"result_type": "existing_pattern", "pattern_key": "linen_shortage"},
-        "hr_05": {"result_type": "new_pattern", "canonical_label": "Guest amenity refill gap"},
-        "hr_06": {"result_type": "new_pattern", "canonical_label": "Guest amenity refill gap"}
+        "hr_01": {"canonical_label": "Room cleaning delay"},
+        "hr_02": {"canonical_label": "Room cleaning delay"},
+        "hr_03": {"canonical_label": "Linen shortage for room setup"},
+        "hr_04": {"canonical_label": "Linen shortage for room setup"},
+        "hr_05": {"canonical_label": "Guest amenity refill gap"},
+        "hr_06": {"canonical_label": "Guest amenity refill gap"}
       },
       "must_link": [["hr_01", "hr_02"], ["hr_03", "hr_04"], ["hr_05", "hr_06"]],
       "must_not_link": [["hr_01", "hr_03"], ["hr_01", "hr_05"], ["hr_03", "hr_05"]]
@@ -152,19 +152,19 @@
         {"ref": "sp_02", "title": "Slippery corridor", "structured_summary": "A corridor section is slippery and should be secured.", "issue_focus": "slippery floor", "activity_subject_key": "floor_safety", "operational_unit_key": "corridor", "affected_business_unit_key": "public_area", "responsible_business_unit_key": "safety", "expected_pattern_key": "slip_hazard"},
         {"ref": "sp_03", "title": "Alarm panel error", "structured_summary": "The fire alarm panel shows a device fault.", "issue_focus": "alarm device fault", "activity_subject_key": "fire_alarm", "operational_unit_key": "corridor", "affected_business_unit_key": "public_area", "responsible_business_unit_key": "maintenance", "expected_pattern_key": "alarm_fault"},
         {"ref": "sp_04", "title": "Detector warning light", "structured_summary": "A detector warning light remains active near the service corridor.", "issue_focus": "detector fault", "activity_subject_key": "fire_alarm", "operational_unit_key": "corridor", "affected_business_unit_key": "public_area", "responsible_business_unit_key": "maintenance", "expected_pattern_key": "alarm_fault"},
-        {"ref": "sp_05", "title": "Lobby light flickers", "structured_summary": "A lobby light is flickering repeatedly.", "issue_focus": "flickering light", "activity_subject_key": "lighting", "operational_unit_key": "lobby", "affected_business_unit_key": "public_area", "responsible_business_unit_key": "maintenance", "expected_new_pattern_label": "Lighting reliability issue"},
-        {"ref": "sp_06", "title": "Corridor light out", "structured_summary": "A corridor light is out and reduces visibility.", "issue_focus": "light outage", "activity_subject_key": "lighting", "operational_unit_key": "corridor", "affected_business_unit_key": "public_area", "responsible_business_unit_key": "maintenance", "expected_new_pattern_label": "Lighting reliability issue"}
+        {"ref": "sp_05", "title": "Lobby light flickers", "structured_summary": "A lobby light is flickering repeatedly.", "issue_focus": "flickering light", "activity_subject_key": "lighting", "operational_unit_key": "lobby", "affected_business_unit_key": "public_area", "responsible_business_unit_key": "maintenance", "expected_new_pattern_label": "Lighting flicker issue"},
+        {"ref": "sp_06", "title": "Corridor light out", "structured_summary": "A corridor light is out and reduces visibility.", "issue_focus": "light outage", "activity_subject_key": "lighting", "operational_unit_key": "corridor", "affected_business_unit_key": "public_area", "responsible_business_unit_key": "maintenance", "expected_new_pattern_label": "Lighting outage"}
       ],
       "fake_responses": {
-        "sp_01": {"result_type": "existing_pattern", "pattern_key": "slip_hazard"},
-        "sp_02": {"result_type": "existing_pattern", "pattern_key": "slip_hazard"},
-        "sp_03": {"result_type": "existing_pattern", "pattern_key": "alarm_fault"},
-        "sp_04": {"result_type": "existing_pattern", "pattern_key": "alarm_fault"},
-        "sp_05": {"result_type": "new_pattern", "canonical_label": "Lighting reliability issue"},
-        "sp_06": {"result_type": "new_pattern", "canonical_label": "Lighting reliability issue"}
+        "sp_01": {"canonical_label": "Slip hazard in public area"},
+        "sp_02": {"canonical_label": "Slip hazard in public area"},
+        "sp_03": {"canonical_label": "Alarm device fault"},
+        "sp_04": {"canonical_label": "Alarm device fault"},
+        "sp_05": {"canonical_label": "Lighting flicker issue"},
+        "sp_06": {"canonical_label": "Lighting outage"}
       },
-      "must_link": [["sp_01", "sp_02"], ["sp_03", "sp_04"], ["sp_05", "sp_06"]],
-      "must_not_link": [["sp_01", "sp_03"], ["sp_01", "sp_05"], ["sp_03", "sp_06"]]
+      "must_link": [["sp_01", "sp_02"], ["sp_03", "sp_04"]],
+      "must_not_link": [["sp_01", "sp_03"], ["sp_01", "sp_05"], ["sp_03", "sp_06"], ["sp_05", "sp_06"]]
     },
     {
       "id": "frontdesk_guest_flow",
@@ -196,15 +196,255 @@
         {"ref": "fg_06", "title": "Airport transfer pending", "structured_summary": "An airport transfer request remains pending close to departure.", "issue_focus": "airport transfer delay", "activity_subject_key": "transport", "operational_unit_key": "reception", "affected_business_unit_key": "concierge", "responsible_business_unit_key": "concierge", "expected_new_pattern_label": "Guest transport request delay"}
       ],
       "fake_responses": {
-        "fg_01": {"result_type": "existing_pattern", "pattern_key": "checkin_queue"},
-        "fg_02": {"result_type": "existing_pattern", "pattern_key": "checkin_queue"},
-        "fg_03": {"result_type": "existing_pattern", "pattern_key": "reservation_system_issue"},
-        "fg_04": {"result_type": "existing_pattern", "pattern_key": "reservation_system_issue"},
-        "fg_05": {"result_type": "new_pattern", "canonical_label": "Guest transport request delay"},
-        "fg_06": {"result_type": "new_pattern", "canonical_label": "Guest transport request delay"}
+        "fg_01": {"canonical_label": "Check-in queue congestion"},
+        "fg_02": {"canonical_label": "Check-in queue congestion"},
+        "fg_03": {"canonical_label": "Reservation system access issue"},
+        "fg_04": {"canonical_label": "Reservation system access issue"},
+        "fg_05": {"canonical_label": "Guest transport request delay"},
+        "fg_06": {"canonical_label": "Guest transport request delay"}
       },
       "must_link": [["fg_01", "fg_02"], ["fg_03", "fg_04"], ["fg_05", "fg_06"]],
       "must_not_link": [["fg_01", "fg_03"], ["fg_01", "fg_05"], ["fg_03", "fg_06"]]
+    },
+    {
+      "id": "gym_operations",
+      "source": "synthetic/anonymized seed",
+      "business_units": [
+        {"key": "fitness_floor", "label": "Fitness floor"},
+        {"key": "frontdesk", "label": "Front desk"},
+        {"key": "maintenance", "label": "Maintenance"}
+      ],
+      "activity_subjects": [
+        {"key": "cardio_equipment", "business_unit_key": "maintenance", "label": "Cardio equipment"},
+        {"key": "member_access", "business_unit_key": "frontdesk", "label": "Member access"},
+        {"key": "reception_flow", "business_unit_key": "frontdesk", "label": "Reception flow"}
+      ],
+      "operational_units": [
+        {"key": "training_floor", "label": "Training floor"},
+        {"key": "entrance", "label": "Entrance"}
+      ],
+      "initial_patterns": [
+        {"pattern_key": "treadmill_belt_slip", "label": "Treadmill belt slipping"},
+        {"pattern_key": "member_checkin_blocked", "label": "Member check-in blocked"}
+      ],
+      "signals": [
+        {"ref": "gym_01", "title": "Treadmill belt slips during run", "structured_summary": "A treadmill belt is slipping while members run on it.", "issue_focus": "treadmill belt slipping", "activity_subject_key": "cardio_equipment", "operational_unit_key": "training_floor", "affected_business_unit_key": "fitness_floor", "responsible_business_unit_key": "maintenance", "expected_pattern_key": "treadmill_belt_slip"},
+        {"ref": "gym_02", "title": "Running machine traction unstable", "structured_summary": "The running belt loses traction during use on another machine.", "issue_focus": "running belt traction slips", "activity_subject_key": "cardio_equipment", "operational_unit_key": "training_floor", "affected_business_unit_key": "fitness_floor", "responsible_business_unit_key": "maintenance", "expected_pattern_key": "treadmill_belt_slip"},
+        {"ref": "gym_03", "title": "Treadmill will not start", "structured_summary": "A treadmill stays powered off and cannot begin a workout.", "issue_focus": "treadmill power failure", "activity_subject_key": "cardio_equipment", "operational_unit_key": "training_floor", "affected_business_unit_key": "fitness_floor", "responsible_business_unit_key": "maintenance", "expected_new_pattern_label": "Treadmill power failure"},
+        {"ref": "gym_04", "title": "Member app scan rejected", "structured_summary": "The member app barcode is rejected at check-in.", "issue_focus": "member app check in rejected", "activity_subject_key": "member_access", "operational_unit_key": "entrance", "affected_business_unit_key": "frontdesk", "responsible_business_unit_key": "frontdesk", "expected_pattern_key": "member_checkin_blocked"},
+        {"ref": "gym_05", "title": "Guest pass QR not accepted", "structured_summary": "A valid guest pass QR code is not accepted at the entrance.", "issue_focus": "guest pass scan blocked", "activity_subject_key": "member_access", "operational_unit_key": "entrance", "affected_business_unit_key": "frontdesk", "responsible_business_unit_key": "frontdesk", "expected_pattern_key": "member_checkin_blocked"},
+        {"ref": "gym_06", "title": "Entry line from unattended desk", "structured_summary": "Members wait at the entrance because the reception desk is not staffed.", "issue_focus": "entry delay unstaffed reception", "activity_subject_key": "reception_flow", "operational_unit_key": "entrance", "affected_business_unit_key": "frontdesk", "responsible_business_unit_key": "frontdesk", "expected_new_pattern_label": "Reception staffing delay"}
+      ],
+      "fake_responses": {
+        "gym_01": {"canonical_label": "Treadmill belt slipping"},
+        "gym_02": {"canonical_label": "Treadmill belt slipping"},
+        "gym_03": {"canonical_label": "Treadmill power failure"},
+        "gym_04": {"canonical_label": "Member check-in blocked"},
+        "gym_05": {"canonical_label": "Member check-in blocked"},
+        "gym_06": {"canonical_label": "Reception staffing delay"}
+      },
+      "must_link": [["gym_01", "gym_02"], ["gym_04", "gym_05"]],
+      "must_not_link": [["gym_01", "gym_03"], ["gym_04", "gym_06"], ["gym_03", "gym_06"]]
+    },
+    {
+      "id": "concert_event",
+      "source": "synthetic/anonymized seed",
+      "business_units": [
+        {"key": "box_office", "label": "Box office"},
+        {"key": "event_ops", "label": "Event operations"},
+        {"key": "technical", "label": "Technical crew"}
+      ],
+      "activity_subjects": [
+        {"key": "ticket_scanner", "business_unit_key": "box_office", "label": "Ticket scanner"},
+        {"key": "entry_screening", "business_unit_key": "event_ops", "label": "Entry screening"},
+        {"key": "stage_audio", "business_unit_key": "technical", "label": "Stage audio"}
+      ],
+      "operational_units": [
+        {"key": "main_gate", "label": "Main gate"},
+        {"key": "stage", "label": "Stage"}
+      ],
+      "initial_patterns": [
+        {"pattern_key": "ticket_scan_validation_failure", "label": "Ticket scan validation failure"},
+        {"pattern_key": "speaker_audio_dropout", "label": "Speaker audio dropout"}
+      ],
+      "signals": [
+        {"ref": "ce_01", "title": "Tickets not scanning", "structured_summary": "Valid ticket QR codes cannot be validated at the main gate.", "issue_focus": "ticket qr validation failure", "activity_subject_key": "ticket_scanner", "operational_unit_key": "main_gate", "affected_business_unit_key": "box_office", "responsible_business_unit_key": "box_office", "expected_pattern_key": "ticket_scan_validation_failure"},
+        {"ref": "ce_02", "title": "Wristband scanner rejects valid pass", "structured_summary": "The scanner rejects valid wristband passes during entry.", "issue_focus": "valid pass scanner rejection", "activity_subject_key": "ticket_scanner", "operational_unit_key": "main_gate", "affected_business_unit_key": "box_office", "responsible_business_unit_key": "box_office", "expected_pattern_key": "ticket_scan_validation_failure"},
+        {"ref": "ce_03", "title": "Scanner battery empty", "structured_summary": "A ticket scanner has no battery and cannot be used.", "issue_focus": "ticket scanner power unavailable", "activity_subject_key": "ticket_scanner", "operational_unit_key": "main_gate", "affected_business_unit_key": "box_office", "responsible_business_unit_key": "technical", "expected_new_pattern_label": "Ticket scanner power failure"},
+        {"ref": "ce_04", "title": "Bag check backing up entry", "structured_summary": "Entry is delayed because bag checks are taking longer than expected.", "issue_focus": "security screening delay", "activity_subject_key": "entry_screening", "operational_unit_key": "main_gate", "affected_business_unit_key": "event_ops", "responsible_business_unit_key": "event_ops", "expected_new_pattern_label": "Entry security screening delay"},
+        {"ref": "ce_05", "title": "Main speakers drop sound", "structured_summary": "The main speakers lose sound intermittently during rehearsal.", "issue_focus": "speaker audio dropout", "activity_subject_key": "stage_audio", "operational_unit_key": "stage", "affected_business_unit_key": "technical", "responsible_business_unit_key": "technical", "expected_pattern_key": "speaker_audio_dropout"},
+        {"ref": "ce_06", "title": "PA cuts out intermittently", "structured_summary": "The public address audio drops out several times.", "issue_focus": "speaker sound dropout", "activity_subject_key": "stage_audio", "operational_unit_key": "stage", "affected_business_unit_key": "technical", "responsible_business_unit_key": "technical", "expected_pattern_key": "speaker_audio_dropout"}
+      ],
+      "fake_responses": {
+        "ce_01": {"canonical_label": "Ticket scan validation failure"},
+        "ce_02": {"canonical_label": "Ticket scan validation failure"},
+        "ce_03": {"canonical_label": "Ticket scanner power failure"},
+        "ce_04": {"canonical_label": "Entry security screening delay"},
+        "ce_05": {"canonical_label": "Speaker audio dropout"},
+        "ce_06": {"canonical_label": "Speaker audio dropout"}
+      },
+      "must_link": [["ce_01", "ce_02"], ["ce_05", "ce_06"]],
+      "must_not_link": [["ce_01", "ce_03"], ["ce_01", "ce_04"], ["ce_03", "ce_04"]]
+    },
+    {
+      "id": "shopping_mall",
+      "source": "synthetic/anonymized seed",
+      "business_units": [
+        {"key": "guest_services", "label": "Guest services"},
+        {"key": "maintenance", "label": "Maintenance"},
+        {"key": "parking", "label": "Parking operations"}
+      ],
+      "activity_subjects": [
+        {"key": "escalator", "business_unit_key": "maintenance", "label": "Escalator"},
+        {"key": "parking_payment", "business_unit_key": "parking", "label": "Parking payment"},
+        {"key": "parking_exit", "business_unit_key": "parking", "label": "Parking exit"}
+      ],
+      "operational_units": [
+        {"key": "atrium", "label": "Atrium"},
+        {"key": "car_park", "label": "Car park"}
+      ],
+      "initial_patterns": [
+        {"pattern_key": "escalator_unavailable", "label": "Escalator unavailable"},
+        {"pattern_key": "parking_payment_failure", "label": "Parking payment terminal unavailable"}
+      ],
+      "signals": [
+        {"ref": "sm_01", "title": "Escalator stopped near atrium", "structured_summary": "An escalator is stopped and unavailable for visitors.", "issue_focus": "escalator stopped", "activity_subject_key": "escalator", "operational_unit_key": "atrium", "affected_business_unit_key": "guest_services", "responsible_business_unit_key": "maintenance", "expected_pattern_key": "escalator_unavailable"},
+        {"ref": "sm_02", "title": "Moving stairs out of service", "structured_summary": "The moving stairs are out of service between levels.", "issue_focus": "escalator out of service", "activity_subject_key": "escalator", "operational_unit_key": "atrium", "affected_business_unit_key": "guest_services", "responsible_business_unit_key": "maintenance", "expected_pattern_key": "escalator_unavailable"},
+        {"ref": "sm_03", "title": "Escalator handrail jerks", "structured_summary": "The escalator handrail jerks while the steps keep moving.", "issue_focus": "escalator handrail fault", "activity_subject_key": "escalator", "operational_unit_key": "atrium", "affected_business_unit_key": "guest_services", "responsible_business_unit_key": "maintenance", "expected_new_pattern_label": "Escalator handrail fault"},
+        {"ref": "sm_04", "title": "Parking kiosk card reader offline", "structured_summary": "The parking payment kiosk cannot take card payments.", "issue_focus": "parking payment card reader offline", "activity_subject_key": "parking_payment", "operational_unit_key": "car_park", "affected_business_unit_key": "parking", "responsible_business_unit_key": "parking", "expected_pattern_key": "parking_payment_failure"},
+        {"ref": "sm_05", "title": "Exit pay station cannot charge", "structured_summary": "The exit pay station cannot process payment before drivers leave.", "issue_focus": "parking pay station payment failure", "activity_subject_key": "parking_payment", "operational_unit_key": "car_park", "affected_business_unit_key": "parking", "responsible_business_unit_key": "parking", "expected_pattern_key": "parking_payment_failure"},
+        {"ref": "sm_06", "title": "Exit barrier arm stuck", "structured_summary": "Cars queue because the parking exit barrier arm is stuck closed.", "issue_focus": "parking barrier stuck", "activity_subject_key": "parking_exit", "operational_unit_key": "car_park", "affected_business_unit_key": "parking", "responsible_business_unit_key": "maintenance", "expected_new_pattern_label": "Parking barrier stuck"}
+      ],
+      "fake_responses": {
+        "sm_01": {"canonical_label": "Escalator unavailable"},
+        "sm_02": {"canonical_label": "Escalator unavailable"},
+        "sm_03": {"canonical_label": "Escalator handrail fault"},
+        "sm_04": {"canonical_label": "Parking payment terminal unavailable"},
+        "sm_05": {"canonical_label": "Parking payment terminal unavailable"},
+        "sm_06": {"canonical_label": "Parking barrier stuck"}
+      },
+      "must_link": [["sm_01", "sm_02"], ["sm_04", "sm_05"]],
+      "must_not_link": [["sm_01", "sm_03"], ["sm_04", "sm_06"], ["sm_03", "sm_06"]]
+    },
+    {
+      "id": "coworking_living_space",
+      "source": "synthetic/anonymized seed",
+      "business_units": [
+        {"key": "community", "label": "Community team"},
+        {"key": "it", "label": "IT support"},
+        {"key": "facilities", "label": "Facilities"}
+      ],
+      "activity_subjects": [
+        {"key": "meeting_display", "business_unit_key": "it", "label": "Meeting room display"},
+        {"key": "network", "business_unit_key": "it", "label": "Network"},
+        {"key": "access_control", "business_unit_key": "facilities", "label": "Access control"}
+      ],
+      "operational_units": [
+        {"key": "meeting_rooms", "label": "Meeting rooms"},
+        {"key": "main_entrance", "label": "Main entrance"}
+      ],
+      "initial_patterns": [
+        {"pattern_key": "meeting_display_connection_failure", "label": "Meeting display connection failure"},
+        {"pattern_key": "access_badge_entry_failure", "label": "Access badge entry failure"}
+      ],
+      "signals": [
+        {"ref": "cw_01", "title": "Room screen will not connect", "structured_summary": "A meeting room screen will not connect to a laptop.", "issue_focus": "meeting display connection failure", "activity_subject_key": "meeting_display", "operational_unit_key": "meeting_rooms", "affected_business_unit_key": "community", "responsible_business_unit_key": "it", "expected_pattern_key": "meeting_display_connection_failure"},
+        {"ref": "cw_02", "title": "Wireless presentation unavailable", "structured_summary": "Wireless presentation cannot connect to the room display.", "issue_focus": "screen sharing connection failure", "activity_subject_key": "meeting_display", "operational_unit_key": "meeting_rooms", "affected_business_unit_key": "community", "responsible_business_unit_key": "it", "expected_pattern_key": "meeting_display_connection_failure"},
+        {"ref": "cw_03", "title": "Meeting room Wi-Fi slow", "structured_summary": "The meeting room network is slow even though the display works.", "issue_focus": "meeting room network slowdown", "activity_subject_key": "network", "operational_unit_key": "meeting_rooms", "affected_business_unit_key": "community", "responsible_business_unit_key": "it", "expected_new_pattern_label": "Meeting room network slowdown"},
+        {"ref": "cw_04", "title": "Badge does not open door", "structured_summary": "A valid access badge does not open the entrance door.", "issue_focus": "access badge entry failure", "activity_subject_key": "access_control", "operational_unit_key": "main_entrance", "affected_business_unit_key": "community", "responsible_business_unit_key": "facilities", "expected_pattern_key": "access_badge_entry_failure"},
+        {"ref": "cw_05", "title": "Mobile key rejected at entry", "structured_summary": "The mobile key is rejected at the main entrance reader.", "issue_focus": "mobile credential entry failure", "activity_subject_key": "access_control", "operational_unit_key": "main_entrance", "affected_business_unit_key": "community", "responsible_business_unit_key": "facilities", "expected_pattern_key": "access_badge_entry_failure"},
+        {"ref": "cw_06", "title": "Visitors waiting for host approval", "structured_summary": "Visitors wait because host approval is not being handled at reception.", "issue_focus": "visitor host approval delay", "activity_subject_key": "access_control", "operational_unit_key": "main_entrance", "affected_business_unit_key": "community", "responsible_business_unit_key": "community", "expected_new_pattern_label": "Visitor host approval delay"}
+      ],
+      "fake_responses": {
+        "cw_01": {"canonical_label": "Meeting display connection failure"},
+        "cw_02": {"canonical_label": "Meeting display connection failure"},
+        "cw_03": {"canonical_label": "Meeting room network slowdown"},
+        "cw_04": {"canonical_label": "Access badge entry failure"},
+        "cw_05": {"canonical_label": "Access badge entry failure"},
+        "cw_06": {"canonical_label": "Visitor host approval delay"}
+      },
+      "must_link": [["cw_01", "cw_02"], ["cw_04", "cw_05"]],
+      "must_not_link": [["cw_01", "cw_03"], ["cw_04", "cw_06"], ["cw_03", "cw_06"]]
+    },
+    {
+      "id": "retail_store_holdout",
+      "source": "synthetic/anonymized holdout",
+      "business_units": [
+        {"key": "checkout", "label": "Checkout"},
+        {"key": "floor_team", "label": "Floor team"},
+        {"key": "stockroom", "label": "Stockroom"}
+      ],
+      "activity_subjects": [
+        {"key": "payment_terminal", "business_unit_key": "checkout", "label": "Payment terminal"},
+        {"key": "checkout_hardware", "business_unit_key": "checkout", "label": "Checkout hardware"},
+        {"key": "shelf_stock", "business_unit_key": "floor_team", "label": "Shelf stock"}
+      ],
+      "operational_units": [
+        {"key": "cashwrap", "label": "Cashwrap"},
+        {"key": "sales_floor", "label": "Sales floor"}
+      ],
+      "initial_patterns": [
+        {"pattern_key": "card_payment_terminal_unavailable", "label": "Card payment terminal unavailable"},
+        {"pattern_key": "shelf_replenishment_gap", "label": "Shelf replenishment gap"}
+      ],
+      "signals": [
+        {"ref": "rt_01", "title": "Card terminal offline at checkout", "structured_summary": "A checkout card terminal is offline and cannot complete card payments.", "issue_focus": "card payment terminal unavailable", "activity_subject_key": "payment_terminal", "operational_unit_key": "cashwrap", "affected_business_unit_key": "checkout", "responsible_business_unit_key": "checkout", "expected_pattern_key": "card_payment_terminal_unavailable"},
+        {"ref": "rt_02", "title": "PIN pad offline", "structured_summary": "The PIN pad is offline and cannot complete card payments.", "issue_focus": "pin pad card payment unavailable", "activity_subject_key": "payment_terminal", "operational_unit_key": "cashwrap", "affected_business_unit_key": "checkout", "responsible_business_unit_key": "checkout", "expected_pattern_key": "card_payment_terminal_unavailable"},
+        {"ref": "rt_03", "title": "Receipt printer jammed", "structured_summary": "The checkout receipt printer is jammed while payment still works.", "issue_focus": "receipt printer jam", "activity_subject_key": "checkout_hardware", "operational_unit_key": "cashwrap", "affected_business_unit_key": "checkout", "responsible_business_unit_key": "checkout", "expected_new_pattern_label": "Checkout receipt printer jam"},
+        {"ref": "rt_04", "title": "Cereal shelf empty", "structured_summary": "The cereal shelf is empty while stock remains in the back room.", "issue_focus": "shelf replenishment gap", "activity_subject_key": "shelf_stock", "operational_unit_key": "sales_floor", "affected_business_unit_key": "floor_team", "responsible_business_unit_key": "stockroom", "expected_pattern_key": "shelf_replenishment_gap"},
+        {"ref": "rt_05", "title": "Promotional endcap not refilled", "structured_summary": "The promotional endcap is empty and needs replenishment from stock.", "issue_focus": "display replenishment gap", "activity_subject_key": "shelf_stock", "operational_unit_key": "sales_floor", "affected_business_unit_key": "floor_team", "responsible_business_unit_key": "stockroom", "expected_pattern_key": "shelf_replenishment_gap"},
+        {"ref": "rt_06", "title": "Checkout queue from short staffing", "structured_summary": "The checkout queue is long because too few cashiers are open.", "issue_focus": "checkout staffing delay", "activity_subject_key": "payment_terminal", "operational_unit_key": "cashwrap", "affected_business_unit_key": "checkout", "responsible_business_unit_key": "checkout", "expected_new_pattern_label": "Checkout staffing delay"}
+      ],
+      "fake_responses": {
+        "rt_01": {"canonical_label": "Card payment terminal unavailable"},
+        "rt_02": {"canonical_label": "Card payment terminal unavailable"},
+        "rt_03": {"canonical_label": "Checkout receipt printer jam"},
+        "rt_04": {"canonical_label": "Shelf replenishment gap"},
+        "rt_05": {"canonical_label": "Shelf replenishment gap"},
+        "rt_06": {"canonical_label": "Checkout staffing delay"}
+      },
+      "must_link": [["rt_01", "rt_02"], ["rt_04", "rt_05"]],
+      "must_not_link": [["rt_01", "rt_03"], ["rt_01", "rt_06"], ["rt_03", "rt_06"]]
+    },
+    {
+      "id": "cinema_museum_holdout",
+      "source": "synthetic/anonymized holdout",
+      "business_units": [
+        {"key": "visitor_services", "label": "Visitor services"},
+        {"key": "technical", "label": "Technical team"},
+        {"key": "exhibits", "label": "Exhibits"}
+      ],
+      "activity_subjects": [
+        {"key": "projection", "business_unit_key": "technical", "label": "Projection"},
+        {"key": "interactive_display", "business_unit_key": "exhibits", "label": "Interactive display"},
+        {"key": "ticket_kiosk", "business_unit_key": "visitor_services", "label": "Ticket kiosk"}
+      ],
+      "operational_units": [
+        {"key": "screen_one", "label": "Screen one"},
+        {"key": "gallery", "label": "Gallery"}
+      ],
+      "initial_patterns": [
+        {"pattern_key": "projection_image_instability", "label": "Projection image instability"},
+        {"pattern_key": "interactive_display_unavailable", "label": "Interactive display unavailable"}
+      ],
+      "signals": [
+        {"ref": "cm_01", "title": "Projector image flickers", "structured_summary": "The projected image flickers during playback.", "issue_focus": "projection image flicker", "activity_subject_key": "projection", "operational_unit_key": "screen_one", "affected_business_unit_key": "visitor_services", "responsible_business_unit_key": "technical", "expected_pattern_key": "projection_image_instability"},
+        {"ref": "cm_02", "title": "Screen projection unstable", "structured_summary": "The projection image is unstable during the session.", "issue_focus": "unstable projection image", "activity_subject_key": "projection", "operational_unit_key": "screen_one", "affected_business_unit_key": "visitor_services", "responsible_business_unit_key": "technical", "expected_pattern_key": "projection_image_instability"},
+        {"ref": "cm_03", "title": "Projector has no image", "structured_summary": "The projector is on but no image is displayed.", "issue_focus": "projection image outage", "activity_subject_key": "projection", "operational_unit_key": "screen_one", "affected_business_unit_key": "visitor_services", "responsible_business_unit_key": "technical", "expected_new_pattern_label": "Projection image outage"},
+        {"ref": "cm_04", "title": "Touchscreen exhibit frozen", "structured_summary": "A touchscreen exhibit is frozen and visitors cannot use it.", "issue_focus": "interactive display unavailable", "activity_subject_key": "interactive_display", "operational_unit_key": "gallery", "affected_business_unit_key": "exhibits", "responsible_business_unit_key": "exhibits", "expected_pattern_key": "interactive_display_unavailable"},
+        {"ref": "cm_05", "title": "Interactive panel not responding", "structured_summary": "The interactive panel does not respond to visitor input.", "issue_focus": "interactive panel unavailable", "activity_subject_key": "interactive_display", "operational_unit_key": "gallery", "affected_business_unit_key": "exhibits", "responsible_business_unit_key": "exhibits", "expected_pattern_key": "interactive_display_unavailable"},
+        {"ref": "cm_06", "title": "Ticket kiosk paper empty", "structured_summary": "The ticket kiosk cannot print because paper is empty.", "issue_focus": "ticket kiosk paper depletion", "activity_subject_key": "ticket_kiosk", "operational_unit_key": "gallery", "affected_business_unit_key": "visitor_services", "responsible_business_unit_key": "visitor_services", "expected_new_pattern_label": "Ticket kiosk paper depletion"}
+      ],
+      "fake_responses": {
+        "cm_01": {"canonical_label": "Projection image instability"},
+        "cm_02": {"canonical_label": "Projection image instability"},
+        "cm_03": {"canonical_label": "Projection image outage"},
+        "cm_04": {"canonical_label": "Interactive display unavailable"},
+        "cm_05": {"canonical_label": "Interactive display unavailable"},
+        "cm_06": {"canonical_label": "Ticket kiosk paper depletion"}
+      },
+      "must_link": [["cm_01", "cm_02"], ["cm_04", "cm_05"]],
+      "must_not_link": [["cm_01", "cm_03"], ["cm_04", "cm_06"], ["cm_03", "cm_06"]]
     }
   ]
 }

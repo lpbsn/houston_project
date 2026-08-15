@@ -42,6 +42,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/analytics/pattern-filter-options/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_analytics_pattern_filter_options_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/analytics/patterns/": {
         parameters: {
             query?: never;
@@ -66,6 +82,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["v1_analytics_pattern_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/patterns/{pattern_id}/governance-targets/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_analytics_pattern_governance_targets_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -132,6 +164,22 @@ export interface paths {
         get: operations["v1_analytics_pattern_signals_list"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/patterns/{pattern_id}/signals/{signal_id}/issue-report/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_analytics_pattern_signal_issue_report_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2903,6 +2951,12 @@ export interface components {
             moved_signal_count: number;
             target_created: boolean;
         };
+        AnalyticsOwnerGovernanceTargetListResponse: {
+            items: components["schemas"]["AnalyticsOwnerGovernancePatternRef"][];
+            page_size: number;
+            has_more: boolean;
+            next_cursor: string | null;
+        };
         AnalyticsPatternBusinessUnitDistributionBucket: {
             /** Format: uuid */
             business_unit_id: string | null;
@@ -2963,6 +3017,24 @@ export interface components {
             name: string;
             signal_count: number;
         };
+        AnalyticsPatternFilterBusinessUnitOption: {
+            /** Format: uuid */
+            business_unit_id: string | null;
+            name: string;
+            /** Format: uuid */
+            establishment_id: string | null;
+            is_unassigned: boolean;
+        };
+        AnalyticsPatternFilterEstablishmentOption: {
+            /** Format: uuid */
+            establishment_id: string;
+            name: string;
+        };
+        AnalyticsPatternFilterOptionsResponse: {
+            establishments: components["schemas"]["AnalyticsPatternFilterEstablishmentOption"][];
+            responsible_business_units: components["schemas"]["AnalyticsPatternFilterBusinessUnitOption"][];
+            includes_unassigned: boolean;
+        };
         AnalyticsPatternIdentity: {
             /** Format: uuid */
             pattern_id: string;
@@ -2972,6 +3044,23 @@ export interface components {
             created_at: string;
             /** Format: uuid */
             merged_into_pattern_id: string | null;
+        };
+        AnalyticsPatternIssueReportRequest: {
+            reason?: components["schemas"]["ReasonEnum"];
+            comment?: string;
+        };
+        AnalyticsPatternIssueReportResponse: {
+            /** Format: uuid */
+            report_id: string;
+            /** Format: uuid */
+            pattern_id: string;
+            /** Format: uuid */
+            signal_id: string | null;
+            status: string;
+            report_type: string;
+            comment: string;
+            /** Format: date-time */
+            created_at: string;
         };
         AnalyticsPatternListItem: {
             /** Format: uuid */
@@ -4226,6 +4315,8 @@ export interface components {
             ticket: string;
             expires_in: number;
         };
+        /** @enum {string} */
+        ReasonEnum: "wrong_pattern";
         RegistrationOwnerValidateRequest: {
             invite_code: string;
             first_name: string;
@@ -4694,16 +4785,69 @@ export interface operations {
             };
         };
     };
+    v1_analytics_pattern_filter_options_retrieve: {
+        parameters: {
+            query?: {
+                establishment_id?: string;
+                establishment_ids?: string;
+                organization_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsPatternFilterOptionsResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     v1_analytics_patterns_list: {
         parameters: {
             query: {
                 cursor?: string;
                 establishment_id?: string;
+                establishment_ids?: string;
                 organization_id?: string;
                 /** @description Page size, default 50, maximum 100. */
                 page_size?: number;
                 period_end: string;
                 period_start: string;
+                q?: string;
+                recurrence?: "all" | "non_recurrent" | "recurrent";
+                responsible_business_unit_ids?: string;
+                responsible_business_unit_unassigned?: boolean;
+                signal_statuses?: string;
             };
             header?: never;
             path?: never;
@@ -4767,6 +4911,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnalyticsPatternDetailResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_analytics_pattern_governance_targets_list: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                /** @description Page size, default 20, maximum 50. */
+                page_size?: number;
+                q?: string;
+            };
+            header?: never;
+            path: {
+                pattern_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsOwnerGovernanceTargetListResponse"];
                 };
             };
             400: {
@@ -5056,6 +5258,74 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_analytics_pattern_signal_issue_report_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pattern_id: string;
+                signal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AnalyticsPatternIssueReportRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AnalyticsPatternIssueReportRequest"];
+                "multipart/form-data": components["schemas"]["AnalyticsPatternIssueReportRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsPatternIssueReportResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

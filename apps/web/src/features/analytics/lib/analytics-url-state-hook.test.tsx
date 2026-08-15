@@ -44,6 +44,12 @@ describe('useAnalyticsUrlState', () => {
       periodStart: '2026-07-13T11:30:00.000Z',
       periodEnd: '2026-08-12T11:30:00.000Z',
       organizationId: ORG_ID,
+      establishmentIds: [],
+      q: '',
+      recurrence: 'all',
+      responsibleBusinessUnitIds: [],
+      responsibleBusinessUnitUnassigned: false,
+      signalStatuses: [],
     })
   })
 })

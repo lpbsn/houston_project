@@ -43,6 +43,15 @@ class OperationalPattern(BaseModel):
         editable=False,
         blank=True,
     )
+    semantic_label = models.CharField(
+        max_length=PATTERN_LABEL_MAX_LENGTH,
+        blank=True,
+    )
+    normalized_semantic_label = models.CharField(
+        max_length=PATTERN_LABEL_MAX_LENGTH,
+        editable=False,
+        blank=True,
+    )
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
@@ -70,6 +79,10 @@ class OperationalPattern(BaseModel):
                 fields=["organization", "normalized_label"],
                 name="pattern_org_label_idx",
             ),
+            models.Index(
+                fields=["organization", "normalized_semantic_label"],
+                name="pattern_org_sem_label_idx",
+            ),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -77,9 +90,18 @@ class OperationalPattern(BaseModel):
                 condition=Q(status=PATTERN_STATUS_ACTIVE),
                 name="analytics_pattern_active_label_uniq",
             ),
+            models.UniqueConstraint(
+                fields=["organization", "normalized_semantic_label"],
+                condition=Q(status=PATTERN_STATUS_ACTIVE),
+                name="analytics_pattern_active_sem_label_uniq",
+            ),
             models.CheckConstraint(
                 condition=~Q(normalized_label=""),
                 name="analytics_pattern_norm_label_nonempty",
+            ),
+            models.CheckConstraint(
+                condition=~Q(normalized_semantic_label=""),
+                name="analytics_pattern_norm_sem_label_nonempty",
             ),
             models.CheckConstraint(
                 condition=(
@@ -95,11 +117,16 @@ class OperationalPattern(BaseModel):
 
     def clean(self) -> None:
         super().clean()
+        if not self.semantic_label:
+            self.semantic_label = self.label
         self.normalized_label = normalize_pattern_label(self.label)
+        self.normalized_semantic_label = normalize_pattern_label(self.semantic_label)
         errors: dict[str, str] = {}
 
         if not self.normalized_label:
             errors["label"] = "Pattern label cannot be blank."
+        if not self.normalized_semantic_label:
+            errors["semantic_label"] = "Pattern semantic label cannot be blank."
 
         if self.status == self.Status.MERGED:
             if self.merged_into_id is None:
@@ -130,10 +157,15 @@ class OperationalPattern(BaseModel):
             raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
+        if not self.semantic_label:
+            self.semantic_label = self.label
         self.normalized_label = normalize_pattern_label(self.label)
+        self.normalized_semantic_label = normalize_pattern_label(self.semantic_label)
         update_fields = kwargs.get("update_fields")
         if update_fields is not None and "label" in update_fields:
             kwargs["update_fields"] = {*update_fields, "normalized_label"}
+        if update_fields is not None and "semantic_label" in update_fields:
+            kwargs["update_fields"] = {*kwargs["update_fields"], "normalized_semantic_label"}
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:

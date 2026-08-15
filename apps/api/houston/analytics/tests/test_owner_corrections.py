@@ -165,6 +165,8 @@ def test_rename_normalizes_detects_active_collision_and_journals():
     pattern.refresh_from_db()
     assert pattern.label == "Bathroom leak"
     assert pattern.normalized_label == "bathroom leak"
+    assert pattern.semantic_label == "Leak"
+    assert pattern.normalized_semantic_label == "leak"
     event = PatternLifecycleEvent.objects.get(
         pattern=pattern,
         event_type=PatternLifecycleEvent.EventType.RENAMED,

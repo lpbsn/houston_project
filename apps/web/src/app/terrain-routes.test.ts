@@ -57,6 +57,12 @@ describe('usesTerrainShell', () => {
   it('returns true for install app route', () => {
     expect(usesTerrainShell({ kind: 'static', path: '/install-app' })).toBe(true)
   })
+
+  it('returns true for analytics pattern detail', () => {
+    expect(usesTerrainShell({ kind: 'analytics-pattern-detail', patternId: 'pattern-1' })).toBe(
+      true,
+    )
+  })
 })
 
 describe('getTerrainRouteConfig', () => {
@@ -243,6 +249,18 @@ describe('getTerrainRouteConfig', () => {
     })
   })
 
+  it('configures analytics pattern detail with Analytics active on desktop', () => {
+    expect(getTerrainRouteConfig({ kind: 'analytics-pattern-detail', patternId: 'pattern-1' }))
+      .toEqual({
+        topbarVariant: 'detail',
+        title: 'Motif Analytics',
+        backPath: '/analytics',
+        showBottomNav: false,
+        desktopActivePath: '/analytics',
+        mainScroll: 'auto',
+      })
+  })
+
   it('configures signal detail without bottom nav', () => {
     expect(getTerrainRouteConfig({ kind: 'signal-detail', signalId: 'x' })).toEqual({
       topbarVariant: 'detail',
@@ -338,6 +356,11 @@ describe('getTerrainRouteConfig', () => {
         backPath: '/team',
         desktopActivePath: '/general',
       })
+    expect(getTerrainRouteConfig({ kind: 'analytics-pattern-detail', patternId: 'pattern-1' }))
+      .toMatchObject({
+        backPath: '/analytics',
+        desktopActivePath: '/analytics',
+      })
   })
 
   it('throws for non-terrain routes', () => {
@@ -401,6 +424,12 @@ describe('getTerrainContentKey', () => {
       'notifications-center',
     )
     expect(getTerrainContentKey({ kind: 'static', path: '/team/invite' })).toBe('team-invite')
+  })
+
+  it('includes pattern id for analytics detail routes', () => {
+    expect(getTerrainContentKey({ kind: 'analytics-pattern-detail', patternId: 'pattern-1' })).toBe(
+      'analytics-pattern-detail-pattern-1',
+    )
   })
 
   it('includes signal id for detail routes', () => {
@@ -471,6 +500,9 @@ describe('isProtectedRoute', () => {
         establishmentId: 'est-1',
       }),
     ).toBe(true)
+    expect(isProtectedRoute({ kind: 'analytics-pattern-detail', patternId: 'pattern-1' })).toBe(
+      true,
+    )
   })
 
   it('returns true for operational detail routes', () => {
@@ -515,6 +547,8 @@ describe('requiresActiveMembership', () => {
 
   it('does not require a selected active establishment for analytics', () => {
     expect(requiresActiveMembership({ kind: 'static', path: '/analytics' })).toBe(false)
+    expect(requiresActiveMembership({ kind: 'analytics-pattern-detail', patternId: 'pattern-1' }))
+      .toBe(false)
   })
 
   it('returns true for operational detail routes', () => {

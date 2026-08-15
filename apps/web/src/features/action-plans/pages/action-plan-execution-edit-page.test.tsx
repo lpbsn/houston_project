@@ -204,9 +204,17 @@ describe('ActionPlanExecutionEditPage guards', () => {
   it('renders edit form when update is allowed for in_progress execution', async () => {
     render(createElement(ActionPlanExecutionEditPage, { executionId: 'exec-1' }))
 
-    expect(
-      await screen.findByRole('button', { name: 'Enregistrer les modifications' }),
-    ).toBeTruthy()
+    const saveButtons = await screen.findAllByRole('button', {
+      name: 'Enregistrer les modifications',
+    })
+    expect(saveButtons).toHaveLength(1)
+    const footer = saveButtons[0]?.closest('footer')
+    const form = footer?.closest('form')
+    expect(footer?.className).toContain('lg:col-start-2')
+    expect(footer?.className).not.toContain('lg:row-start')
+    expect(footer?.parentElement?.className).not.toContain('px-3')
+    expect(form).toBeTruthy()
+    expect(form!.contains(screen.getAllByRole('textbox')[0]!)).toBe(true)
   })
 
   it('keeps local draft edits when detail refetch returns a newer updated_at', async () => {

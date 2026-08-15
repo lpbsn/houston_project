@@ -4,6 +4,10 @@ import { useState } from 'react'
 import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainErrorState } from '@/components/ui/terrain'
 import { readCurrentDetailDeepLink } from '@/features/comments/lib/detail-deep-link'
+import {
+  buildAnalyticsSignalActionCreatePath,
+  type AnalyticsSignalReturnContext,
+} from '@/features/analytics/lib/analytics-url-state'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { CommentSection } from '@/features/comments/components/comment-section'
 import { cn } from '@/lib/utils'
@@ -40,6 +44,7 @@ import { SIGNAL_IN_PROGRESS_RESOLVE_VIA_ACTION_PLAN_HINT } from '../lib/signal-f
 type SignalDetailPageProps = {
   signalId: string
   onNavigate: (pathname: string, options?: { replace?: boolean }) => void
+  analyticsSignalReturnContext?: AnalyticsSignalReturnContext | null
 }
 
 function formatDescriptionContent(structuredSummary: string): string {
@@ -47,7 +52,11 @@ function formatDescriptionContent(structuredSummary: string): string {
   return trimmed.length > 0 ? trimmed : 'Description indisponible.'
 }
 
-export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps) {
+export function SignalDetailPage({
+  signalId,
+  onNavigate,
+  analyticsSignalReturnContext = null,
+}: SignalDetailPageProps) {
   const auth = useAuth()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
 
@@ -93,11 +102,16 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
 
   const signal = detailQuery.data
   const reporterName = signal.source_context.reporter_display_name?.trim()
-  const showStickyCreateActionFooter = shouldShowSignalCreateActionPlan(signal.permission_hints)
+  const showCreateActionPlan = shouldShowSignalCreateActionPlan(signal.permission_hints)
   const canQualifyRouting = shouldShowSignalQualifyRouting(signal.permission_hints)
-  const showStickyFooter = activeTab === 'details' && showStickyCreateActionFooter
   const resolutionRequest = signal.resolution_request
   const resolutionRequestEvents = resolutionRequestEventsFromDetail(signal)
+  const createActionPlanPath = analyticsSignalReturnContext
+    ? buildAnalyticsSignalActionCreatePath(signalId, {
+        patternId: analyticsSignalReturnContext.patternId,
+        state: analyticsSignalReturnContext.state,
+      })
+    : `/signals/${signalId}/plan`
 
   async function handleCreateResolutionRequest() {
     setRequestActionError(null)
@@ -155,32 +169,38 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
 
   return (
     <div className="flex min-h-full flex-col">
-      <div className="px-3 pt-2">
+      <div className="px-3 pt-2 lg:px-6">
         <SignalDetailTabs activeTab={activeTab} onChange={handleTabChange} />
       </div>
 
       <div
         className={cn(
-          'flex flex-1 flex-col gap-2.5 px-3 pt-2',
-          showStickyFooter ? 'pb-40' : 'pb-4',
+          'mx-auto flex w-full flex-1 flex-col gap-2.5 px-3 pt-2 pb-4',
+          'lg:max-w-7xl lg:gap-4 lg:px-6 lg:pt-4 lg:pb-6',
         )}
       >
         <div
           role="tabpanel"
           id="signal-detail-panel-details"
           aria-labelledby="signal-detail-tab-details"
-          className={cn('flex flex-col gap-2.5', activeTab !== 'details' && 'hidden')}
+          data-testid="signal-detail-details-panel"
+          className={cn(
+            'flex flex-col gap-2.5 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] lg:items-start lg:gap-4',
+            activeTab !== 'details' && 'hidden',
+          )}
         >
-          <TerrainCard>
-            <h2 className="text-[17px] font-semibold leading-snug text-[#1a1a1a]">{signal.title}</h2>
+          <TerrainCard className="lg:col-span-2 lg:p-5">
+            <h2 className="text-[17px] font-semibold leading-snug text-[#1a1a1a] lg:text-2xl">
+              {signal.title}
+            </h2>
             <div className="mt-2 flex flex-wrap gap-1.5">
               <SignalStatusBadge status={signal.status} variant="detail" />
             </div>
-            <p className="mt-2 text-[11px] text-[#aaa]">
+            <p className="mt-2 text-[11px] text-[#aaa] lg:text-xs">
               il y a {formatSignalRelativeTime(signal.last_activity_at)}
             </p>
             {(reporterName || signal.aggregation_count > 0) ? (
-              <div className="mt-3 flex items-center justify-between gap-2 text-[11px] text-[#aaa]">
+              <div className="mt-3 flex items-center justify-between gap-2 text-[11px] text-[#aaa] lg:text-xs">
                 <span className="min-w-0 truncate">
                   {reporterName ? `Rapportée par ${reporterName}` : '\u00a0'}
                 </span>
@@ -193,50 +213,65 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
             ) : null}
           </TerrainCard>
 
-          <SignalDetailClassificationSection
-            signal={signal}
-            canQualify={canQualifyRouting}
-            isQualifyOpening={qualifySheet.opening}
-            qualifyErrorMessage={!qualifySheet.open ? qualifySheet.errorMessage : null}
-            onQualify={() => void qualifySheet.openForSignal(signal.id)}
-          />
+          <div className="lg:col-start-1">
+            <SignalDetailClassificationSection
+              signal={signal}
+              canQualify={canQualifyRouting}
+              isQualifyOpening={qualifySheet.opening}
+              qualifyErrorMessage={!qualifySheet.open ? qualifySheet.errorMessage : null}
+              onQualify={() => void qualifySheet.openForSignal(signal.id)}
+            />
+          </div>
 
-          <TerrainCard>
+          <TerrainCard className="lg:col-start-1">
             <SignalDetailLabel>Description</SignalDetailLabel>
             <p className="mt-2 text-[13px] leading-relaxed text-[#1a1a1a]">
               {formatDescriptionContent(signal.structured_summary)}
             </p>
           </TerrainCard>
 
-          <SignalResolutionRequestSection
-            events={resolutionRequestEvents}
-            permissionHints={signal.permission_hints}
-            pendingRequestId={resolutionRequest?.id ?? null}
-            errorMessage={requestActionError}
-            isCreatePending={createRequestMutation.isPending}
-            isCancelPending={cancelRequestMutation.isPending}
-            isApprovePending={approveRequestMutation.isPending}
-            isRejectPending={rejectRequestMutation.isPending}
-            onCreate={() => void handleCreateResolutionRequest()}
-            onCancel={() => void handleCancelResolutionRequest()}
-            onApprove={() => void handleApproveResolutionRequest()}
-            onReject={() => void handleRejectResolutionRequest()}
-          />
+          <div className="lg:col-start-2">
+            <SignalResolutionRequestSection
+              events={resolutionRequestEvents}
+              permissionHints={signal.permission_hints}
+              pendingRequestId={resolutionRequest?.id ?? null}
+              errorMessage={requestActionError}
+              isCreatePending={createRequestMutation.isPending}
+              isCancelPending={cancelRequestMutation.isPending}
+              isApprovePending={approveRequestMutation.isPending}
+              isRejectPending={rejectRequestMutation.isPending}
+              onCreate={() => void handleCreateResolutionRequest()}
+              onCancel={() => void handleCancelResolutionRequest()}
+              onApprove={() => void handleApproveResolutionRequest()}
+              onReject={() => void handleRejectResolutionRequest()}
+            />
+          </div>
 
-          <SignalDetailPhotoSection mediaItems={signal.media_items ?? []} />
+          <div className="lg:col-start-1">
+            <SignalDetailPhotoSection mediaItems={signal.media_items ?? []} />
+          </div>
 
           {signal.status === 'in_progress' ? (
-            <TerrainCard>
+            <TerrainCard className="lg:col-start-1">
               <p className="text-[13px] leading-relaxed text-[#7D7B75]">
                 {SIGNAL_IN_PROGRESS_RESOLVE_VIA_ACTION_PLAN_HINT}
               </p>
             </TerrainCard>
           ) : null}
 
-          <SignalLinkedActionPlansSection
-            executions={signal.linked_action_plan_executions}
-            onSelect={(executionId) => onNavigate(`/action-plans/executions/${executionId}`)}
-          />
+          <div className="lg:col-start-2">
+            <SignalLinkedActionPlansSection
+              executions={signal.linked_action_plan_executions}
+              onSelect={(executionId) => onNavigate(`/action-plans/executions/${executionId}`)}
+            />
+          </div>
+
+          {activeTab === 'details' && showCreateActionPlan ? (
+            <SignalDetailStickyFooter
+              className="lg:col-start-2 lg:top-4 lg:bottom-auto lg:mt-0 lg:rounded-2xl lg:border lg:border-[#E8E6DF] lg:bg-white lg:p-4 lg:shadow-none"
+              onCreateActionPlan={() => onNavigate(createActionPlanPath)}
+            />
+          ) : null}
         </div>
 
         {hasOpenedComments && establishmentId ? (
@@ -255,12 +290,6 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
           </div>
         ) : null}
       </div>
-
-      {showStickyFooter ? (
-        <SignalDetailStickyFooter
-          onCreateActionPlan={() => onNavigate(`/signals/${signalId}/plan`)}
-        />
-      ) : null}
 
       {establishmentId && qualifySheet.open && qualifySheet.signal ? (
         <SignalQualifyRoutingSheet

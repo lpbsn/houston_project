@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import threading
 from datetime import timedelta
 from types import SimpleNamespace
@@ -7,35 +8,43 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from django.db import IntegrityError, close_old_connections, connection, connections
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from houston.ai.models import AIUsageLog
 from houston.analytics.classifier import (
     ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION,
     ANALYTICS_PATTERN_DUPLICATE_GUARD_SCHEMA_VERSION,
+    ANALYTICS_PATTERN_PROMPT_VERSION,
+    DUPLICATE_GUARD_REASON_CODES,
     FakePatternClassifierProvider,
     OpenAIPatternClassifierProvider,
     PatternClassifierInvalidOutputError,
     PatternClassifierTimeoutError,
+    _duplicate_guard_system_prompt,
+    openai_duplicate_guard_response_format,
     parse_pattern_classifier_response,
+    parse_pattern_duplicate_guard_response,
 )
 from houston.analytics.exceptions import AnalyticsValidationError
 from houston.analytics.models import OperationalPattern, SignalPatternAssignment
+from houston.analytics.pattern_alias import _resolve_exact_pattern_alias
+from houston.analytics.pattern_shortlist import _duplicate_guard_shortlist
 from houston.analytics.scheduling import schedule_reclassification_if_signature_changed
 from houston.analytics.services import (
     PatternClassificationRetryableError,
-    _duplicate_guard_shortlist,
     claim_signal_pattern_classification,
     classify_signal_pattern,
     create_operational_pattern,
     mark_assignment_processing,
     mark_assignment_succeeded,
+    rename_operational_pattern,
 )
 from houston.analytics.signature import (
     build_signal_pattern_payload,
     build_signal_pattern_signature,
 )
-from houston.establishments.models import OperationalUnit
+from houston.establishments.models import EstablishmentMembership, OperationalUnit
 from houston.establishments.tests.taxonomy_helpers import (
     create_activity_subject,
     create_business_unit,
@@ -348,12 +357,13 @@ def test_concurrent_claim_allows_one_processing_attempt(settings):
     assert SignalPatternAssignment.objects.get(signal=signal).attempt_count == 1
 
 
-def test_classify_attaches_existing_active_candidate():
+def test_classify_reuses_existing_active_semantic_alias_without_duplicate_guard():
     membership = build_membership()
     signal = create_signal_for_membership(membership)
     pattern = create_pattern_for_signal(signal)
     provider = FakePatternClassifierProvider(
-        payload={"result_type": "existing_pattern", "pattern_id": str(pattern.id)}
+        payload={"canonical_label": pattern.semantic_label},
+        duplicate_guard_payload={"result_type": "create_new_pattern", "pattern_id": None},
     )
 
     assignment = classify_signal_pattern(signal.id, provider=provider)
@@ -362,6 +372,8 @@ def test_classify_attaches_existing_active_candidate():
         SignalPatternAssignment.ClassificationStatus.SUCCEEDED
     )
     assert assignment.pattern_id == pattern.id
+    assert provider.calls[0].get("active_patterns") is None
+    assert provider.duplicate_guard_calls == []
     assert AIUsageLog.objects.filter(ai_domain=AIUsageLog.Domain.ANALYTICS_PATTERN).count() == 1
 
 
@@ -378,7 +390,7 @@ def test_classify_merged_signal_noops_without_provider_call():
         last_activity_at=timezone.now(),
     )
     provider = FakePatternClassifierProvider(
-        payload={"result_type": "new_pattern", "canonical_label": "Défaillance climatisation"}
+        payload={"canonical_label": "Défaillance climatisation"}
     )
 
     assignment = classify_signal_pattern(source.id, provider=provider)
@@ -392,7 +404,7 @@ def test_classify_creates_new_canonical_pattern():
     membership = build_membership()
     signal = create_signal_for_membership(membership)
     provider = FakePatternClassifierProvider(
-        payload={"result_type": "new_pattern", "canonical_label": "Défaillance climatisation"}
+        payload={"canonical_label": "Défaillance climatisation"}
     )
 
     assignment = classify_signal_pattern(signal.id, provider=provider)
@@ -408,7 +420,7 @@ def test_new_pattern_strict_duplicate_reuses_without_duplicate_guard():
     signal = create_signal_for_membership(membership)
     existing = create_pattern_for_signal(signal, label="Défaillance climatisation")
     provider = FakePatternClassifierProvider(
-        payload={"result_type": "new_pattern", "canonical_label": "défaillance climatisation"},
+        payload={"canonical_label": "défaillance climatisation"},
         duplicate_guard_payload={"result_type": "create_new_pattern", "pattern_id": None},
     )
 
@@ -426,7 +438,7 @@ def test_duplicate_guard_reuses_shortlisted_active_pattern(settings):
     signal = create_signal_for_membership(membership, title="Climate unit offline")
     existing = create_pattern_for_signal(signal, label="Climate equipment failure")
     provider = FakePatternClassifierProvider(
-        payload={"result_type": "new_pattern", "canonical_label": "Climate equipment outage"},
+        payload={"canonical_label": "Climate equipment outage"},
         duplicate_guard_payload={
             "result_type": "reuse_existing_pattern",
             "pattern_id": str(existing.id),
@@ -438,6 +450,7 @@ def test_duplicate_guard_reuses_shortlisted_active_pattern(settings):
     assert assignment.pattern_id == existing.id
     assert len(provider.duplicate_guard_calls) == 1
     assert getattr(assignment, "_analytics_duplicate_guard_decision") == "reused"
+    assert getattr(assignment, "_analytics_duplicate_guard_reason_code") == "same_phenomenon"
     serialized_guard_payload = str(provider.duplicate_guard_calls[0])
     assert "Bar" not in serialized_guard_payload
     assert "Maintenance" not in serialized_guard_payload
@@ -445,7 +458,10 @@ def test_duplicate_guard_reuses_shortlisted_active_pattern(settings):
         prompt_version=ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION
     )
     assert guard_log.schema_version == ANALYTICS_PATTERN_DUPLICATE_GUARD_SCHEMA_VERSION
-    assert guard_log.error_context == {"phase": "analytics_pattern_duplicate_guard"}
+    assert guard_log.error_context["phase"] == "analytics_pattern_duplicate_guard"
+    assert guard_log.error_context["patterns_scanned"] == 1
+    assert guard_log.error_context["shortlist_size"] == 1
+    assert guard_log.error_context["shortlist_elapsed_ms"] >= 0
 
 
 def test_duplicate_guard_shortlist_empty_creates_without_guard_call(settings):
@@ -454,7 +470,7 @@ def test_duplicate_guard_shortlist_empty_creates_without_guard_call(settings):
     signal = create_signal_for_membership(membership, title="Climate unit offline")
     create_pattern_for_signal(signal, label="Unrelated linen shortage")
     provider = FakePatternClassifierProvider(
-        payload={"result_type": "new_pattern", "canonical_label": "Climate equipment outage"},
+        payload={"canonical_label": "Climate equipment outage"},
         duplicate_guard_payload={"result_type": "create_new_pattern", "pattern_id": None},
     )
 
@@ -463,9 +479,17 @@ def test_duplicate_guard_shortlist_empty_creates_without_guard_call(settings):
     assert assignment.pattern.label == "Climate equipment outage"
     assert provider.duplicate_guard_calls == []
     assert getattr(assignment, "_analytics_duplicate_guard_decision") == "skipped"
+    assert getattr(assignment, "_analytics_duplicate_guard_reason") == "no_candidates"
+    assert getattr(assignment, "_analytics_duplicate_guard_reason_code") is None
     assert AIUsageLog.objects.filter(
         prompt_version=ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION
     ).count() == 0
+    classifier_log = AIUsageLog.objects.get(
+        prompt_version=ANALYTICS_PATTERN_PROMPT_VERSION,
+    )
+    assert classifier_log.error_context["patterns_scanned"] == 1
+    assert classifier_log.error_context["shortlist_size"] == 0
+    assert classifier_log.error_context["shortlist_elapsed_ms"] >= 0
 
 
 def test_duplicate_guard_invalid_output_falls_back_to_create(settings):
@@ -474,7 +498,7 @@ def test_duplicate_guard_invalid_output_falls_back_to_create(settings):
     signal = create_signal_for_membership(membership, title="Climate unit offline")
     create_pattern_for_signal(signal, label="Climate equipment failure")
     provider = FakePatternClassifierProvider(
-        payload={"result_type": "new_pattern", "canonical_label": "Climate equipment outage"},
+        payload={"canonical_label": "Climate equipment outage"},
         duplicate_guard_payload={
             "result_type": "reuse_existing_pattern",
             "pattern_id": str(membership.id),
@@ -485,6 +509,8 @@ def test_duplicate_guard_invalid_output_falls_back_to_create(settings):
 
     assert assignment.pattern.label == "Climate equipment outage"
     assert getattr(assignment, "_analytics_duplicate_guard_decision") == "fallback"
+    assert getattr(assignment, "_analytics_duplicate_guard_reason") == "outside_shortlist"
+    assert getattr(assignment, "_analytics_duplicate_guard_reason_code") is None
     guard_log = AIUsageLog.objects.get(
         prompt_version=ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION
     )
@@ -498,7 +524,7 @@ def test_duplicate_guard_timeout_falls_back_without_retry(settings):
     signal = create_signal_for_membership(membership, title="Climate unit offline")
     create_pattern_for_signal(signal, label="Climate equipment failure")
     provider = FakePatternClassifierProvider(
-        payload={"result_type": "new_pattern", "canonical_label": "Climate equipment outage"},
+        payload={"canonical_label": "Climate equipment outage"},
         duplicate_guard_exc=PatternClassifierTimeoutError("timeout"),
     )
 
@@ -509,6 +535,8 @@ def test_duplicate_guard_timeout_falls_back_without_retry(settings):
     )
     assert assignment.pattern.label == "Climate equipment outage"
     assert getattr(assignment, "_analytics_duplicate_guard_decision") == "fallback"
+    assert getattr(assignment, "_analytics_duplicate_guard_reason") == "provider_timeout"
+    assert getattr(assignment, "_analytics_duplicate_guard_reason_code") is None
     guard_log = AIUsageLog.objects.get(
         prompt_version=ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION
     )
@@ -530,7 +558,7 @@ def test_duplicate_guard_call_happens_outside_transaction(settings):
             return super().assess_duplicate(input_payload=input_payload)
 
     provider = RecordingProvider(
-        payload={"result_type": "new_pattern", "canonical_label": "Climate equipment outage"},
+        payload={"canonical_label": "Climate equipment outage"},
         duplicate_guard_payload={
             "result_type": "reuse_existing_pattern",
             "pattern_id": str(existing.id),
@@ -554,7 +582,7 @@ def test_obsolete_attempt_cannot_leave_orphan_pattern(settings):
             return super().assess_duplicate(input_payload=input_payload)
 
     provider = ObsoletingProvider(
-        payload={"result_type": "new_pattern", "canonical_label": "Climate equipment outage"},
+        payload={"canonical_label": "Climate equipment outage"},
         duplicate_guard_payload={"result_type": "create_new_pattern", "pattern_id": None},
     )
     before_patterns = OperationalPattern.objects.count()
@@ -583,7 +611,7 @@ def test_duplicate_guard_reuse_resolves_merged_candidate_chain(settings):
             return super().assess_duplicate(input_payload=input_payload)
 
     provider = MergingProvider(
-        payload={"result_type": "new_pattern", "canonical_label": "Climate equipment outage"},
+        payload={"canonical_label": "Climate equipment outage"},
         duplicate_guard_payload={
             "result_type": "reuse_existing_pattern",
             "pattern_id": str(candidate.id),
@@ -593,6 +621,7 @@ def test_duplicate_guard_reuse_resolves_merged_candidate_chain(settings):
     assignment = classify_signal_pattern(signal.id, provider=provider)
 
     assert assignment.pattern_id == target.id
+    assert getattr(assignment, "_analytics_duplicate_guard_reason_code") == "same_phenomenon"
 
 
 def test_duplicate_guard_reuse_with_merged_cycle_falls_back_to_create(settings):
@@ -615,7 +644,7 @@ def test_duplicate_guard_reuse_with_merged_cycle_falls_back_to_create(settings):
             return super().assess_duplicate(input_payload=input_payload)
 
     provider = CyclingProvider(
-        payload={"result_type": "new_pattern", "canonical_label": "Climate equipment outage"},
+        payload={"canonical_label": "Climate equipment outage"},
         duplicate_guard_payload={
             "result_type": "reuse_existing_pattern",
             "pattern_id": str(first.id),
@@ -646,31 +675,316 @@ def test_duplicate_guard_shortlist_uses_stable_functional_tie_break(settings):
     ]
 
 
+def test_duplicate_guard_shortlist_golden_members_order_scores_and_scan_metrics(settings):
+    settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE = 0.25
+    settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MAX_CANDIDATES = 5
+    membership = build_membership()
+    signal = create_signal_for_membership(membership, title="Climate unit offline")
+    exact = create_pattern_for_signal(signal, label="Climate outage")
+    lexical_tie = create_pattern_for_signal(signal, label="Equipment climate")
+    partial = create_pattern_for_signal(signal, label="Climate equipment failure")
+    create_pattern_for_signal(signal, label="Unrelated linen shortage")
+
+    with CaptureQueriesContext(connection) as queries:
+        shortlist = _duplicate_guard_shortlist(
+            signal=signal,
+            canonical_label="Climate equipment outage",
+        )
+
+    assert [(candidate.id, candidate.score) for candidate in shortlist] == [
+        (exact.id, 1.0),
+        (lexical_tie.id, 1.0),
+        (partial.id, 2 / 3),
+    ]
+    assert shortlist.metrics["patterns_scanned"] == 4
+    assert shortlist.metrics["shortlist_size"] == 3
+    assert shortlist.metrics["shortlist_elapsed_ms"] >= 0
+    assert all("COUNT(" not in query["sql"].upper() for query in queries)
+
+
+def test_duplicate_guard_structured_output_requires_closed_reason_code():
+    schema = openai_duplicate_guard_response_format()["json_schema"]["schema"]
+
+    assert "reason_code" in schema["required"]
+    assert schema["properties"]["reason_code"]["enum"] == list(
+        DUPLICATE_GUARD_REASON_CODES
+    )
+
+
 @pytest.mark.parametrize(
-    "label",
+    "reason_code",
+    DUPLICATE_GUARD_REASON_CODES,
+)
+def test_duplicate_guard_parser_accepts_reason_codes(reason_code):
+    pattern_id = "00000000-0000-0000-0000-000000000001"
+    payload = (
+        {
+            "result_type": "reuse_existing_pattern",
+            "pattern_id": pattern_id,
+            "reason_code": reason_code,
+        }
+        if reason_code == "same_phenomenon"
+        else {
+            "result_type": "create_new_pattern",
+            "pattern_id": None,
+            "reason_code": reason_code,
+        }
+    )
+
+    parsed = parse_pattern_duplicate_guard_response(payload)
+
+    assert parsed.reason_code == reason_code
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected_branch"),
     [
-        "",
-        "Clim en panne",
-        "Establishment",
-        "Bar",
-        "x" * 256,
+        (
+            {
+                "result_type": "create_new_pattern",
+                "pattern_id": None,
+            },
+            "duplicate_guard_reason_code_invalid",
+        ),
+        (
+            {
+                "result_type": "create_new_pattern",
+                "pattern_id": None,
+                "reason_code": "not_valid",
+            },
+            "duplicate_guard_reason_code_invalid",
+        ),
+        (
+            {
+                "result_type": "reuse_existing_pattern",
+                "pattern_id": "00000000-0000-0000-0000-000000000001",
+                "reason_code": "different_failure_mode",
+            },
+            "duplicate_guard_reuse_reason_code_invalid",
+        ),
+        (
+            {
+                "result_type": "create_new_pattern",
+                "pattern_id": None,
+                "reason_code": "same_phenomenon",
+            },
+            "duplicate_guard_create_reason_code_invalid",
+        ),
     ],
 )
-def test_new_pattern_rejects_invalid_canonical_label(label):
+def test_duplicate_guard_parser_rejects_invalid_reason_code_contract(
+    payload,
+    expected_branch,
+):
+    with pytest.raises(PatternClassifierInvalidOutputError) as exc_info:
+        parse_pattern_duplicate_guard_response(payload)
+
+    assert exc_info.value.validation_branch == expected_branch
+
+
+def test_duplicate_guard_prompt_covers_specialization_without_using_score_as_decision():
+    prompt = _duplicate_guard_system_prompt()
+
+    assert "Examine tous les candidats de la shortlist" in prompt
+    assert "meilleur candidat compatible" in prompt
+    assert "Ignore les candidats incompatibles" in prompt
+    assert "frontière de processus explicite empêche le reuse" in prompt
+    assert "vraie frontière de workflow" in prompt
+    assert "Item/SKU, fixture, credential medium" in prompt
+    assert "sous-type d'objet ou d'équipement" in prompt
+    assert "credential" in prompt
+    assert "état spécifique compatible avec le fault/anomaly" in prompt
+    assert "plus spécifique" in prompt
+    assert "même unité" in prompt
+    assert "analytique managériale" in prompt
+    assert "candidat plus général" in prompt
+    assert "vraie différence opérationnelle positive" in prompt
+    assert "failure mode" in prompt
+    assert "processus" in prompt
+    assert "cause explicitement connue" in prompt
+    assert "vrai comportement ou" in prompt
+    assert "dysfonctionnement réellement incompatible" in prompt
+    assert "vraie frontière de workflow, de processus ou d'étape" in prompt
+    assert "vraie incertitude opérationnelle" in prompt
+    assert "ne suffit pas à produire ambiguous" in prompt
+    assert "token_overlap_v1 sert uniquement à retrouver des candidats" in prompt
+    assert "ne décide" in prompt
+    assert "différence descriptive n'est une frontière analytique" in prompt
+
+
+def test_duplicate_guard_default_threshold_includes_quarter_score_candidate(settings):
+    assert settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE == 0.25
+    membership = build_membership()
+    signal = create_signal_for_membership(
+        membership,
+        title="Slippery floor in corridor",
+    )
+    create_pattern_for_signal(signal, label="Wet floor slip hazard")
+
+    shortlist = _duplicate_guard_shortlist(
+        signal=signal,
+        canonical_label="slippery floor in corridor",
+    )
+
+    assert [(candidate.label, candidate.score) for candidate in shortlist] == [
+        ("Wet floor slip hazard", 0.25),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("canonical_label", "candidate_label", "signal_title"),
+    [
+        (
+            "pin pad offline",
+            "Card payment terminal unavailable",
+            "PIN pad offline for card payments",
+        ),
+        (
+            "fridge temperature too high for safe storage",
+            "Cold storage temperature anomaly",
+            "Fridge readings too warm",
+        ),
+        (
+            "pipe dripping leak",
+            "Water leak in guest area",
+            "Bathroom pipe dripping",
+        ),
+        (
+            "mobile credential rejection at access control",
+            "Access badge entry failure",
+            "Mobile key rejected at entry",
+        ),
+    ],
+)
+def test_duplicate_guard_can_reuse_contextual_or_specialized_candidate(
+    settings,
+    canonical_label,
+    candidate_label,
+    signal_title,
+):
+    settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE = 0.25
+    membership = build_membership()
+    signal = create_signal_for_membership(membership, title=signal_title)
+    existing = create_pattern_for_signal(signal, label=candidate_label)
+    provider = FakePatternClassifierProvider(
+        payload={"canonical_label": canonical_label},
+        duplicate_guard_payload={
+            "result_type": "reuse_existing_pattern",
+            "pattern_id": str(existing.id),
+        },
+    )
+
+    assignment = classify_signal_pattern(signal.id, provider=provider)
+
+    assert assignment.pattern_id == existing.id
+    assert getattr(assignment, "_analytics_duplicate_guard_decision") == "reused"
+    assert getattr(assignment, "_analytics_duplicate_guard_reason_code") == "same_phenomenon"
+    assert len(provider.duplicate_guard_calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("canonical_label", "candidate_label", "signal_title", "reason_code"),
+    [
+        (
+            "ticket scanner battery empty",
+            "Ticket scan validation failure",
+            "Ticket scanner battery empty",
+            "different_failure_mode",
+        ),
+        (
+            "security screening delay due to bag check",
+            "Ticket scan entry delay",
+            "Bag checks slowing venue entry",
+            "different_process_or_stage",
+        ),
+        (
+            "fridge warm because door seal torn",
+            "fridge warm from overloaded shelf",
+            "Fridge too warm due to torn door seal",
+            "different_known_cause",
+        ),
+    ],
+)
+def test_duplicate_guard_can_create_for_real_operational_difference(
+    settings,
+    canonical_label,
+    candidate_label,
+    signal_title,
+    reason_code,
+):
+    settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE = 0.25
+    membership = build_membership()
+    signal = create_signal_for_membership(membership, title=signal_title)
+    existing = create_pattern_for_signal(signal, label=candidate_label)
+    provider = FakePatternClassifierProvider(
+        payload={"canonical_label": canonical_label},
+        duplicate_guard_payload={
+            "result_type": "create_new_pattern",
+            "pattern_id": None,
+            "reason_code": reason_code,
+        },
+    )
+
+    assignment = classify_signal_pattern(signal.id, provider=provider)
+
+    assert assignment.pattern_id != existing.id
+    assert assignment.pattern.label == canonical_label
+    assert getattr(assignment, "_analytics_duplicate_guard_decision") == "created"
+    assert getattr(assignment, "_analytics_duplicate_guard_reason_code") == reason_code
+    assert len(provider.duplicate_guard_calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("label", "expected_branch"),
+    [
+        ("", "new_pattern_label_empty"),
+        ("Establishment", "new_pattern_label_includes_context"),
+        ("Bar", "new_pattern_label_includes_context"),
+        ("x" * 256, "new_pattern_label_too_long"),
+    ],
+)
+def test_new_pattern_invalid_canonical_label_is_retryable_with_safe_diagnostic(
+    label,
+    expected_branch,
+):
     membership = build_membership()
     membership.establishment.name = "Establishment"
     membership.establishment.save(update_fields=["name", "updated_at"])
     signal = create_signal_for_membership(membership)
     provider = FakePatternClassifierProvider(
-        payload={"result_type": "new_pattern", "canonical_label": label}
+        payload={"canonical_label": label}
     )
+
+    with pytest.raises(PatternClassificationRetryableError) as exc_info:
+        classify_signal_pattern(signal.id, provider=provider)
+
+    assert exc_info.value.error_code == "invalid_structured_output"
+    assert exc_info.value.validation_branch == expected_branch
+    assignment = SignalPatternAssignment.objects.get(signal=signal)
+    assert assignment.classification_status == (
+        SignalPatternAssignment.ClassificationStatus.PROCESSING
+    )
+    assert assignment.pattern is None
+    log = AIUsageLog.objects.get(ai_domain=AIUsageLog.Domain.ANALYTICS_PATTERN)
+    assert log.status == AIUsageLog.Status.FAILED
+    assert log.error_code == "invalid_structured_output"
+    assert log.error_context["validation_branch"] == expected_branch
+    serialized_context = json.dumps(log.error_context, sort_keys=True)
+    assert "payload" not in serialized_context
+    assert "raw_text" not in serialized_context
+
+
+def test_canonical_label_can_match_signal_title_when_valid():
+    membership = build_membership()
+    signal = create_signal_for_membership(membership, title="Clim en panne")
+    provider = FakePatternClassifierProvider(payload={"canonical_label": "Clim en panne"})
 
     assignment = classify_signal_pattern(signal.id, provider=provider)
 
     assert assignment.classification_status == (
-        SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED
+        SignalPatternAssignment.ClassificationStatus.SUCCEEDED
     )
-    assert assignment.pattern is None
+    assert assignment.pattern.label == "Clim en panne"
 
 
 def test_concurrent_new_pattern_creation_reloads_existing_label_after_integrity_error():
@@ -678,7 +992,7 @@ def test_concurrent_new_pattern_creation_reloads_existing_label_after_integrity_
     signal = create_signal_for_membership(membership)
     existing = create_pattern_for_signal(signal, label="Défaillance climatisation")
     provider = FakePatternClassifierProvider(
-        payload={"result_type": "new_pattern", "canonical_label": "défaillance climatisation"}
+        payload={"canonical_label": "défaillance climatisation"}
     )
 
     with patch(
@@ -693,8 +1007,32 @@ def test_concurrent_new_pattern_creation_reloads_existing_label_after_integrity_
     assert assignment.pattern_id == existing.id
 
 
-def test_ambiguous_response_is_refused():
-    with pytest.raises(PatternClassifierInvalidOutputError):
+def test_classifier_reuses_pattern_by_renamed_display_label():
+    membership = build_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = create_signal_for_membership(membership)
+    pattern = create_pattern_for_signal(signal, label="Equipment leak")
+    rename_operational_pattern(
+        actor_membership=membership,
+        pattern=pattern,
+        label="Bathroom leak",
+    )
+    provider = FakePatternClassifierProvider(payload={"canonical_label": "Bathroom leak"})
+
+    assignment = classify_signal_pattern(
+        signal.id,
+        provider=provider,
+        duplicate_guard_enabled=False,
+    )
+
+    assert assignment.classification_status == (
+        SignalPatternAssignment.ClassificationStatus.SUCCEEDED
+    )
+    assert assignment.pattern_id == pattern.id
+    assert provider.duplicate_guard_calls == []
+
+
+def test_legacy_classifier_shape_is_refused():
+    with pytest.raises(PatternClassifierInvalidOutputError) as exc_info:
         parse_pattern_classifier_response(
             {
                 "result_type": "existing_pattern",
@@ -702,56 +1040,135 @@ def test_ambiguous_response_is_refused():
                 "canonical_label": "Label",
             }
         )
+    assert exc_info.value.validation_branch == "classifier_response_shape_invalid"
 
 
-def test_unknown_candidate_pattern_is_permanently_failed():
+def test_merged_semantic_alias_is_followed_to_active_target_without_duplicate_guard():
     membership = build_membership()
     signal = create_signal_for_membership(membership)
-    other = build_membership()
-    other_pattern = create_operational_pattern(
-        organization=other.establishment.organization,
-        label="Other",
+    source = create_pattern_for_signal(signal, label="Climate equipment failure")
+    target = create_pattern_for_signal(signal, label="Climate equipment target")
+    OperationalPattern.objects.filter(pk=source.pk).update(
+        status=OperationalPattern.Status.MERGED,
+        merged_into=target,
     )
     provider = FakePatternClassifierProvider(
-        payload={"result_type": "existing_pattern", "pattern_id": str(other_pattern.id)}
+        payload={"canonical_label": "Climate equipment failure"},
+        duplicate_guard_payload={"result_type": "create_new_pattern", "pattern_id": None},
     )
 
     assignment = classify_signal_pattern(signal.id, provider=provider)
 
-    assert assignment.classification_status == (
-        SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED
-    )
-    assert assignment.pattern is None
+    assert assignment.pattern_id == target.id
+    assert provider.duplicate_guard_calls == []
 
 
-def test_merged_pattern_is_followed_to_active_target():
+def test_merged_semantic_alias_chain_is_followed_to_terminal_active_target():
     membership = build_membership()
     signal = create_signal_for_membership(membership)
-    target = create_pattern_for_signal(signal, label="Canonical")
-    merged = OperationalPattern.objects.create(
-        organization=signal.establishment.organization,
-        label="Merged",
+    first = create_pattern_for_signal(signal, label="Climate equipment failure")
+    middle = create_pattern_for_signal(signal, label="Climate equipment middle")
+    target = create_pattern_for_signal(signal, label="Climate equipment target")
+    OperationalPattern.objects.filter(pk=first.pk).update(
+        status=OperationalPattern.Status.MERGED,
+        merged_into=middle,
+    )
+    OperationalPattern.objects.filter(pk=middle.pk).update(
         status=OperationalPattern.Status.MERGED,
         merged_into=target,
     )
-    candidates = [
-        {
-            "id": str(merged.id),
-            "label": merged.label,
-            "normalized_label": merged.normalized_label,
-        }
-    ]
+    provider = FakePatternClassifierProvider(
+        payload={"canonical_label": "Climate equipment failure"},
+        duplicate_guard_payload={"result_type": "create_new_pattern", "pattern_id": None},
+    )
 
-    with patch(
-        "houston.analytics.services._active_pattern_candidates",
-        return_value=candidates,
-    ):
-        provider = FakePatternClassifierProvider(
-            payload={"result_type": "existing_pattern", "pattern_id": str(merged.id)}
-        )
-        assignment = classify_signal_pattern(signal.id, provider=provider)
+    assignment = classify_signal_pattern(signal.id, provider=provider)
 
     assert assignment.pattern_id == target.id
+    assert provider.duplicate_guard_calls == []
+
+
+def test_ambiguous_exact_semantic_alias_falls_through_to_duplicate_guard(settings):
+    settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE = 0.1
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    first = create_pattern_for_signal(signal, label="Shared first target")
+    second = create_pattern_for_signal(signal, label="Shared second target")
+    first_alias = create_pattern_for_signal(signal, label="Shared alias one")
+    second_alias = create_pattern_for_signal(signal, label="Shared alias two")
+    OperationalPattern.objects.filter(pk=first_alias.pk).update(
+        status=OperationalPattern.Status.MERGED,
+        merged_into=first,
+        semantic_label="Shared alias",
+        normalized_semantic_label="shared alias",
+    )
+    OperationalPattern.objects.filter(pk=second_alias.pk).update(
+        status=OperationalPattern.Status.MERGED,
+        merged_into=second,
+        semantic_label="Shared alias",
+        normalized_semantic_label="shared alias",
+    )
+    provider = FakePatternClassifierProvider(
+        payload={"canonical_label": "Shared alias"},
+        duplicate_guard_payload={
+            "result_type": "reuse_existing_pattern",
+            "pattern_id": str(second.id),
+        },
+    )
+
+    assignment = classify_signal_pattern(signal.id, provider=provider)
+
+    assert assignment.pattern_id == second.id
+    assert len(provider.duplicate_guard_calls) == 1
+
+
+def test_cross_field_exact_alias_is_ambiguous():
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    create_operational_pattern(
+        organization=signal.establishment.organization,
+        label="First display",
+        semantic_label="Shared alias",
+    )
+    create_operational_pattern(
+        organization=signal.establishment.organization,
+        label="Shared alias",
+        semantic_label="Second semantic",
+    )
+
+    resolution = _resolve_exact_pattern_alias(
+        signal=signal,
+        normalized_alias="shared alias",
+    )
+
+    assert resolution.status == "ambiguous"
+    assert resolution.pattern is None
+
+
+def test_owner_split_can_explicitly_recreate_active_alias_after_merge():
+    membership = build_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = create_signal_for_membership(membership)
+    source = create_pattern_for_signal(signal, label="Shared alias")
+    merged_target = create_pattern_for_signal(signal, label="Merged target")
+    OperationalPattern.objects.filter(pk=source.pk).update(
+        status=OperationalPattern.Status.MERGED,
+        merged_into=merged_target,
+    )
+    owner_active = create_operational_pattern(
+        organization=signal.establishment.organization,
+        label="Shared alias restored",
+        semantic_label="Shared alias",
+        created_by_membership=membership,
+    )
+    provider = FakePatternClassifierProvider(
+        payload={"canonical_label": "Shared alias"},
+        duplicate_guard_payload={"result_type": "create_new_pattern", "pattern_id": None},
+    )
+
+    assignment = classify_signal_pattern(signal.id, provider=provider)
+
+    assert assignment.pattern_id == owner_active.id
+    assert provider.duplicate_guard_calls == []
 
 
 def test_retryable_provider_error_raises_without_finalizing():
@@ -795,7 +1212,7 @@ def test_ai_usage_log_written_only_when_provider_called():
     signal = create_signal_for_membership(membership)
     pattern = create_pattern_for_signal(signal)
     provider = FakePatternClassifierProvider(
-        payload={"result_type": "existing_pattern", "pattern_id": str(pattern.id)}
+        payload={"canonical_label": pattern.semantic_label}
     )
     classify_signal_pattern(signal.id, provider=provider)
 
@@ -820,8 +1237,7 @@ def test_openai_pattern_provider_uses_strict_json_response_format():
             choices=[
                 SimpleNamespace(
                     message=SimpleNamespace(
-                        content='{"result_type":"new_pattern","pattern_id":null,'
-                        '"canonical_label":"Défaillance climatisation"}'
+                        content='{"canonical_label":"Défaillance climatisation"}'
                     )
                 )
             ],
@@ -832,10 +1248,90 @@ def test_openai_pattern_provider_uses_strict_json_response_format():
         chat=SimpleNamespace(completions=SimpleNamespace(create=create))
     )
 
-    response = provider.classify(input_payload={"signal": {}, "active_patterns": []})
+    response = provider.classify(input_payload={"signal": {}})
 
-    assert response.payload["result_type"] == "new_pattern"
+    assert response.payload["canonical_label"] == "Défaillance climatisation"
     assert response.input_tokens == 3
     call_kwargs = create.call_args.kwargs
     assert call_kwargs["response_format"]["type"] == "json_schema"
     assert call_kwargs["response_format"]["json_schema"]["strict"] is True
+
+
+def _mock_openai_create_client(*, content: str) -> tuple[MagicMock, SimpleNamespace]:
+    create = MagicMock(
+        return_value=SimpleNamespace(
+            id="response-id",
+            choices=[SimpleNamespace(message=SimpleNamespace(content=content))],
+            usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1, total_tokens=2),
+        )
+    )
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    return create, client
+
+
+@pytest.mark.allow_openai_pattern_classify
+@pytest.mark.parametrize(
+    ("model", "expect_temperature"),
+    [
+        ("gpt-4.1-mini", True),
+        ("gpt-5-mini", False),
+        ("gpt-5-mini-2025-08-07", False),
+    ],
+)
+def test_openai_pattern_provider_sampling_kwargs_for_classify(model, expect_temperature):
+    provider = OpenAIPatternClassifierProvider(
+        api_key="test-key",
+        model=model,
+        timeout_seconds=1,
+        max_retries=0,
+    )
+    create, client = _mock_openai_create_client(
+        content='{"canonical_label":"Défaillance climatisation"}'
+    )
+    provider._client = client
+
+    provider.classify(input_payload={"signal": {}})
+
+    call_kwargs = create.call_args.kwargs
+    assert call_kwargs["response_format"]["json_schema"]["strict"] is True
+    if expect_temperature:
+        assert call_kwargs["temperature"] == 0.0
+    else:
+        assert "temperature" not in call_kwargs
+
+
+@pytest.mark.allow_openai_pattern_classify
+@pytest.mark.parametrize(
+    ("model", "expect_temperature"),
+    [
+        ("gpt-4.1-mini", True),
+        ("gpt-5-mini", False),
+        ("gpt-5-mini-2025-08-07", False),
+    ],
+)
+def test_openai_pattern_provider_sampling_kwargs_for_assess_duplicate(
+    model,
+    expect_temperature,
+):
+    provider = OpenAIPatternClassifierProvider(
+        api_key="test-key",
+        model=model,
+        timeout_seconds=1,
+        max_retries=0,
+    )
+    create, client = _mock_openai_create_client(
+        content=(
+            '{"result_type":"create_new_pattern","pattern_id":null,'
+            '"reason_code":"ambiguous"}'
+        )
+    )
+    provider._client = client
+
+    provider.assess_duplicate(input_payload={"signal": {}})
+
+    call_kwargs = create.call_args.kwargs
+    assert call_kwargs["response_format"]["json_schema"]["strict"] is True
+    if expect_temperature:
+        assert call_kwargs["temperature"] == 0.0
+    else:
+        assert "temperature" not in call_kwargs

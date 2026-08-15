@@ -42,6 +42,12 @@ export const LazyAnalyticsPage = lazy(() =>
   })),
 )
 
+export const LazyAnalyticsPatternDetailPage = lazy(() =>
+  import('@/features/analytics/pages/analytics-pattern-detail-page').then((module) => ({
+    default: module.AnalyticsPatternDetailPage,
+  })),
+)
+
 export const LazyChatConversationPage = lazy(() =>
   import('@/features/chat/pages/chat-conversation-page').then((module) => ({
     default: module.ChatConversationPage,

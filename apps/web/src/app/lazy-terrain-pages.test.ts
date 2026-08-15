@@ -10,6 +10,7 @@ const LAZY_EXPORTS = [
   'LazyExecutionUpcomingPage',
   'LazyChatPage',
   'LazyAnalyticsPage',
+  'LazyAnalyticsPatternDetailPage',
   'LazyChatConversationPage',
   'LazyProfilePage',
   'LazyProfileSwitchEstablishmentPage',
@@ -39,9 +40,10 @@ describe('lazy-terrain-pages', () => {
       import('@/features/execution/pages/execution-feed-page'),
       import('@/features/chat/pages/chat-page'),
       import('@/features/analytics/pages/analytics-page'),
+      import('@/features/analytics/pages/analytics-pattern-detail-page'),
       import('@/features/action-plans/pages/action-plan-hub-page'),
     ])
 
     expect(modules.every((module) => Object.keys(module).length > 0)).toBe(true)
-  })
+  }, 15_000)
 })

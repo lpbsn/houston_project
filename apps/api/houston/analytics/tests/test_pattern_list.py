@@ -17,6 +17,7 @@ from houston.analytics.models import SignalPatternAssignment
 from houston.analytics.pattern_list import (
     MAX_PATTERN_LIST_ESTABLISHMENTS,
     PATTERN_LIST_CURSOR_VERSION,
+    list_analytics_pattern_filter_options,
     list_analytics_patterns,
 )
 from houston.analytics.recurrence import RECURRENCE_STATUS_COMPUTED
@@ -471,6 +472,12 @@ def test_pattern_list_cursor_rejects_naive_last_seen_at_before_pagination(monkey
             "recurrence_as_of": end.isoformat(),
             "organization_id": None,
             "establishment_id": None,
+            "establishment_ids": [],
+            "q": "",
+            "recurrence": "all",
+            "responsible_business_unit_ids": [],
+            "responsible_business_unit_unassigned": False,
+            "signal_statuses": [],
             "page_size": 50,
         },
         "sort": {
@@ -692,3 +699,228 @@ def test_pattern_list_cursor_rejects_v1_after_recurrence_sort_change():
         )
 
     assert exc_info.value.code == "analytics_pattern_list_cursor_invalid"
+
+
+def test_pattern_list_filters_current_previous_actionable_and_summaries():
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    business_unit = create_business_unit(
+        establishment=owner.establishment,
+        key="maintenance",
+        label="Maintenance",
+    )
+    other_business_unit = create_business_unit(
+        establishment=owner.establishment,
+        key="restaurant",
+        label="Restaurant",
+    )
+    pattern = create_pattern(owner, label="Cold room")
+    other_pattern = create_pattern(owner, label="Music")
+    start = timezone.now()
+    end = start + timedelta(days=7)
+    previous_start = start - timedelta(days=7)
+
+    add_signal(
+        owner,
+        pattern,
+        title="Previous maintenance",
+        created_at=previous_start + timedelta(hours=1),
+        responsible_business_unit=business_unit,
+        status=Signal.Status.OPEN,
+    )
+    add_signal(
+        owner,
+        pattern,
+        title="Current maintenance",
+        created_at=start + timedelta(hours=1),
+        responsible_business_unit=business_unit,
+        status=Signal.Status.OPEN,
+    )
+    add_signal(
+        owner,
+        pattern,
+        title="Wrong status",
+        created_at=start + timedelta(hours=2),
+        responsible_business_unit=business_unit,
+        status=Signal.Status.RESOLVED,
+    )
+    add_signal(
+        owner,
+        pattern,
+        title="Wrong BU",
+        created_at=start + timedelta(hours=3),
+        responsible_business_unit=other_business_unit,
+        status=Signal.Status.OPEN,
+    )
+    add_signal(
+        owner,
+        other_pattern,
+        title="Other label",
+        created_at=start + timedelta(hours=4),
+        responsible_business_unit=business_unit,
+        status=Signal.Status.OPEN,
+    )
+
+    result = list_analytics_patterns(
+        owner.user,
+        period_start=start,
+        period_end=end,
+        q="cold",
+        responsible_business_unit_ids=[business_unit.id],
+        signal_statuses=[Signal.Status.OPEN],
+    )
+
+    assert [item.pattern_id for item in result.items] == [pattern.id]
+    item = result.items[0]
+    assert item.signal_count == 1
+    assert item.previous_signal_count == 1
+    assert item.actionable_signal_count == 1
+    assert item.establishment_count == 1
+
+
+def test_pattern_list_filters_unassigned_responsible_business_unit_without_pseudo_uuid():
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    business_unit = create_business_unit(
+        establishment=owner.establishment,
+        key="maintenance",
+        label="Maintenance",
+    )
+    pattern = create_pattern(owner, label="Unassigned")
+    start = timezone.now()
+    end = start + timedelta(days=1)
+    add_signal(
+        owner,
+        pattern,
+        title="Assigned",
+        created_at=start + timedelta(hours=1),
+        responsible_business_unit=business_unit,
+    )
+    add_signal(
+        owner,
+        pattern,
+        title="Unassigned",
+        created_at=start + timedelta(hours=2),
+        responsible_business_unit=None,
+    )
+
+    result = list_analytics_patterns(
+        owner.user,
+        period_start=start,
+        period_end=end,
+        responsible_business_unit_unassigned=True,
+    )
+
+    assert result.items[0].signal_count == 1
+
+
+def test_pattern_list_recurrence_uses_establishment_ids_scope_only():
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    other_establishment = Establishment.objects.create(
+        name="Other same org",
+        organization=owner.establishment.organization,
+        status=Establishment.Status.ACTIVE,
+        timezone="UTC",
+    )
+    other_owner = create_membership(
+        establishment=other_establishment,
+        user=owner.user,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    pattern = create_pattern(owner, label="Scoped recurrence")
+    start = timezone.now()
+    end = start + timedelta(days=7)
+
+    add_signal(owner, pattern, title="A1", created_at=end - timedelta(days=3))
+    add_signal(owner, pattern, title="A2", created_at=end - timedelta(days=2))
+    add_signal(other_owner, pattern, title="B1", created_at=end - timedelta(days=1))
+
+    both = list_analytics_patterns(
+        owner.user,
+        period_start=start,
+        period_end=end,
+        establishment_ids=[owner.establishment_id, other_establishment.id],
+        recurrence="recurrent",
+    )
+    only_other = list_analytics_patterns(
+        owner.user,
+        period_start=start,
+        period_end=end,
+        establishment_ids=[other_establishment.id],
+        recurrence="recurrent",
+    )
+
+    assert [item.pattern_id for item in both.items] == [pattern.id]
+    assert only_other.items == ()
+
+
+@pytest.mark.parametrize(
+    "statuses",
+    [["canceled"], ["merged_into"], ["open", "invalid"]],
+)
+def test_pattern_list_rejects_invalid_signal_status_filters(statuses):
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    start = timezone.now()
+    end = start + timedelta(days=1)
+
+    with pytest.raises(AnalyticsValidationError) as exc_info:
+        list_analytics_patterns(
+            owner.user,
+            period_start=start,
+            period_end=end,
+            signal_statuses=statuses,
+        )
+
+    assert exc_info.value.code == "analytics_pattern_list_filter_invalid"
+
+
+def test_pattern_filter_options_include_accessible_zero_result_buckets():
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    business_unit = create_business_unit(
+        establishment=owner.establishment,
+        key="maintenance",
+        label="Maintenance",
+    )
+
+    options = list_analytics_pattern_filter_options(owner.user)
+
+    assert [option.establishment_id for option in options.establishments] == [
+        owner.establishment_id
+    ]
+    assert business_unit.id in {
+        option.business_unit_id
+        for option in options.responsible_business_units
+        if not option.is_unassigned
+    }
+    assert any(option.is_unassigned for option in options.responsible_business_units)
+
+
+def test_manager_filter_options_respect_business_unit_scope_and_unassigned():
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    allowed = create_business_unit(
+        establishment=owner.establishment,
+        key="maintenance",
+        label="Maintenance",
+    )
+    denied = create_business_unit(
+        establishment=owner.establishment,
+        key="restaurant",
+        label="Restaurant",
+    )
+    manager = create_membership(
+        establishment=owner.establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    create_membership_with_business_unit_scope(
+        membership=manager,
+        business_unit=allowed,
+    )
+
+    options = list_analytics_pattern_filter_options(manager.user)
+    business_unit_ids = {
+        option.business_unit_id
+        for option in options.responsible_business_units
+        if not option.is_unassigned
+    }
+
+    assert allowed.id in business_unit_ids
+    assert denied.id not in business_unit_ids
+    assert any(option.is_unassigned for option in options.responsible_business_units)

@@ -12,6 +12,10 @@ import { ActionLinkedSignalCard } from '@/features/action-plans/components/actio
 import { ActionLinkedSignalStrip } from '@/features/action-plans/components/action-linked-signal-strip'
 import { CommentSection } from '@/features/comments/components/comment-section'
 import {
+  buildAnalyticsSignalDetailPath,
+  parseAnalyticsSignalReturnContext,
+} from '@/features/analytics/lib/analytics-url-state'
+import {
   parseDetailDeepLink,
   readCurrentDetailDeepLink,
   useLocationSearch,
@@ -149,6 +153,19 @@ function ActionPlanExecutionDetailPageContent({
   const isOverdue = isActionPlanExecutionOverdue(execution.end_at, isTerminal)
   const permissionHints = execution.permission_hints
   const signalSummary = execution.signal_summary
+  const analyticsSignalReturnContext = useMemo(
+    () => parseAnalyticsSignalReturnContext(locationSearch, { now: new Date() }),
+    [locationSearch],
+  )
+  const signalSummaryPath =
+    signalSummary && analyticsSignalReturnContext
+      ? buildAnalyticsSignalDetailPath(signalSummary.id, {
+          patternId: analyticsSignalReturnContext.patternId,
+          state: analyticsSignalReturnContext.state,
+        })
+      : signalSummary
+        ? `/signals/${signalSummary.id}`
+        : null
   const canShowLifecycleFooter =
     permissionHints.can_mark_done ||
     permissionHints.can_validate ||
@@ -347,7 +364,7 @@ function ActionPlanExecutionDetailPageContent({
           <ActionLinkedSignalCard
             title={signalSummary.title}
             locationText={signalSummary.location_text || null}
-            onPress={() => navigate(`/signals/${signalSummary.id}`)}
+            onPress={() => signalSummaryPath && navigate(signalSummaryPath)}
           />
         </ActionLinkedSignalStrip>
       ) : null}
@@ -358,51 +375,89 @@ function ActionPlanExecutionDetailPageContent({
 
       <div
         className={cn(
-          'flex flex-1 flex-col gap-2.5 px-3 pt-2',
-          showStickyFooter ? 'pb-40' : 'pb-4',
+          'mx-auto flex w-full flex-1 flex-col',
+          'lg:max-w-7xl lg:px-6 lg:pt-4 lg:pb-6',
         )}
       >
         <div
           role="tabpanel"
           id="execution-detail-panel-details"
           aria-labelledby="execution-detail-tab-details"
-          className={cn('flex flex-col gap-2.5', resolvedActiveTab !== 'details' && 'hidden')}
-        >
-          <ActionPlanExecutionDetailHeader
-            execution={execution}
-            isOverdue={isOverdue}
-            currentMembershipId={activeMembership?.id ?? null}
-          />
-
-          {feedback ? <TerrainFeedback variant={feedback.variant} message={feedback.message} /> : null}
-
-          {execution.task_executions.length === 0 ? (
-            <TerrainEmptyState title="Aucune tâche dans cette exécution." />
-          ) : (
-            <>
-              <TerrainSectionLabel>Tâches par pôle</TerrainSectionLabel>
-              <ActionPlanExecutionDetailPoleSummarySection execution={execution} />
-              {poleSummaries.length > 1 ? (
-                <ActionPlanExecutionTaskFilters
-                  poles={poleSummaries}
-                  selectedPoleId={selectedPoleId}
-                  onSelectedPoleIdChange={setSelectedPoleId}
-                />
-              ) : null}
-              {filteredTasks.length === 0 ? (
-                <TerrainEmptyState title="Aucune tâche pour ce pôle." />
-              ) : (
-                <ActionPlanExecutionTaskList
-                  tasks={filteredTasks}
-                  isTerminal={isTerminal}
-                  isMutationPending={isMutationPending}
-                  onMarkDone={handleTaskMarkDone}
-                  onUnmarkDone={handleTaskMarkPending}
-                  onOpenTaskActions={setTaskActionsTask}
-                />
-              )}
-            </>
+          className={cn(
+            'flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)] lg:items-start lg:gap-4',
+            resolvedActiveTab !== 'details' && 'hidden',
           )}
+        >
+          <div
+            className={cn(
+              'flex flex-col gap-2.5 px-3 pt-2 lg:contents',
+              showStickyFooter ? 'pb-40' : 'pb-4',
+            )}
+          >
+            <div className="lg:col-span-2">
+              <ActionPlanExecutionDetailHeader
+                execution={execution}
+                isOverdue={isOverdue}
+                currentMembershipId={activeMembership?.id ?? null}
+              />
+            </div>
+
+            {feedback ? (
+              <div className="lg:col-span-2">
+                <TerrainFeedback variant={feedback.variant} message={feedback.message} />
+              </div>
+            ) : null}
+
+            <div className="flex flex-col gap-2.5 lg:col-start-1">
+              {execution.task_executions.length === 0 ? (
+                <TerrainEmptyState title="Aucune tâche dans cette exécution." />
+              ) : (
+                <>
+                  <TerrainSectionLabel>Tâches par pôle</TerrainSectionLabel>
+                  <ActionPlanExecutionDetailPoleSummarySection execution={execution} />
+                  {poleSummaries.length > 1 ? (
+                    <ActionPlanExecutionTaskFilters
+                      poles={poleSummaries}
+                      selectedPoleId={selectedPoleId}
+                      onSelectedPoleIdChange={setSelectedPoleId}
+                    />
+                  ) : null}
+                  {filteredTasks.length === 0 ? (
+                    <TerrainEmptyState title="Aucune tâche pour ce pôle." />
+                  ) : (
+                    <ActionPlanExecutionTaskList
+                      tasks={filteredTasks}
+                      isTerminal={isTerminal}
+                      isMutationPending={isMutationPending}
+                      onMarkDone={handleTaskMarkDone}
+                      onUnmarkDone={handleTaskMarkPending}
+                      onOpenTaskActions={setTaskActionsTask}
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {showStickyFooter ? (
+            <ActionPlanExecutionStickyFooter
+              ref={validationActionsRef}
+              className="lg:col-start-2 lg:top-4 lg:bottom-auto lg:mt-0 lg:rounded-2xl lg:border lg:border-[#E8E6DF] lg:bg-white lg:p-4 lg:shadow-none"
+              data-testid="execution-validation-actions"
+              hints={permissionHints}
+              isTerminal={isTerminal}
+              isPending={isMutationPending}
+              mutationErrorMessage={
+                mutationError
+                  ? resolveApiErrorMessage(mutationError, ActionPlansApiError, 'Action impossible.')
+                  : null
+              }
+              onMarkDone={() => void handleMarkDone()}
+              onValidate={() => void handleValidate()}
+              onReopen={() => void handleReopen()}
+              onCancel={() => void handleCancel()}
+            />
+          ) : null}
         </div>
 
         {hasOpenedComments ? (
@@ -410,7 +465,7 @@ function ActionPlanExecutionDetailPageContent({
             role="tabpanel"
             id="execution-detail-panel-comments"
             aria-labelledby="execution-detail-tab-comments"
-            className={cn(resolvedActiveTab !== 'comments' && 'hidden')}
+            className={cn('px-3 pt-2 pb-4 lg:px-0 lg:pt-0', resolvedActiveTab !== 'comments' && 'hidden')}
           >
             <CommentSection
               establishmentId={establishmentId}
@@ -421,25 +476,6 @@ function ActionPlanExecutionDetailPageContent({
           </div>
         ) : null}
       </div>
-
-      {showStickyFooter ? (
-        <ActionPlanExecutionStickyFooter
-          ref={validationActionsRef}
-          data-testid="execution-validation-actions"
-          hints={permissionHints}
-          isTerminal={isTerminal}
-          isPending={isMutationPending}
-          mutationErrorMessage={
-            mutationError
-              ? resolveApiErrorMessage(mutationError, ActionPlansApiError, 'Action impossible.')
-              : null
-          }
-          onMarkDone={() => void handleMarkDone()}
-          onValidate={() => void handleValidate()}
-          onReopen={() => void handleReopen()}
-          onCancel={() => void handleCancel()}
-        />
-      ) : null}
 
       <ActionPlanExecutionTaskActionsSheet
         task={taskActionsTask}

@@ -53,9 +53,18 @@ def split_new_url(pattern_id) -> str:
     return f"/api/v1/analytics/patterns/{pattern_id}/split-to-new/"
 
 
+def governance_targets_url(pattern_id) -> str:
+    return f"/api/v1/analytics/patterns/{pattern_id}/governance-targets/"
+
+
 def authenticated_post(api_client, user, url: str, payload: dict):
     token = login(api_client, user=user)
     return api_client.post(url, payload, format="json", **auth_headers(token))
+
+
+def authenticated_get(api_client, user, url: str):
+    token = login(api_client, user=user)
+    return api_client.get(url, **auth_headers(token))
 
 
 def create_pattern(membership, *, label="Pattern"):
@@ -237,6 +246,137 @@ def test_owner_governance_is_organization_wide_across_establishments(api_client)
     assert assignment.assignment_source == (
         SignalPatternAssignment.AssignmentSource.OWNER_CORRECTION
     )
+
+
+def test_governance_targets_are_owner_only_and_not_analytics_period_scoped(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    source = create_pattern(owner, label="Source")
+    alpha = create_pattern(owner, label="Alpha target")
+    bravo = create_pattern(owner, label="Bravo target")
+    staff = build_api_membership(role=EstablishmentMembership.Role.STAFF)
+
+    staff_response = authenticated_get(
+        api_client,
+        staff.user,
+        governance_targets_url(source.id),
+    )
+    owner_response = authenticated_get(
+        api_client,
+        owner.user,
+        f"{governance_targets_url(source.id)}?page_size=10",
+    )
+
+    assert staff_response.status_code == 403
+    assert owner_response.status_code == 200
+    labels = [item["label"] for item in owner_response.json()["items"]]
+    assert labels == [alpha.label, bravo.label]
+
+
+def test_governance_targets_are_keyset_paginated_with_stable_order(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    source = create_pattern(owner, label="Source")
+    alpha = create_pattern(owner, label="Alpha")
+    bravo = create_pattern(owner, label="Bravo")
+    charlie = create_pattern(owner, label="Charlie")
+
+    first = authenticated_get(
+        api_client,
+        owner.user,
+        f"{governance_targets_url(source.id)}?page_size=2",
+    )
+    assert first.status_code == 200
+    first_body = first.json()
+    assert [item["pattern_id"] for item in first_body["items"]] == [
+        str(alpha.id),
+        str(bravo.id),
+    ]
+    assert first_body["has_more"] is True
+    assert first_body["next_cursor"]
+
+    second = authenticated_get(
+        api_client,
+        owner.user,
+        f"{governance_targets_url(source.id)}?page_size=2&cursor={first_body['next_cursor']}",
+    )
+
+    assert second.status_code == 200
+    second_body = second.json()
+    assert [item["pattern_id"] for item in second_body["items"]] == [str(charlie.id)]
+    assert second_body["has_more"] is False
+    assert second_body["next_cursor"] is None
+
+
+def test_governance_targets_cursor_context_is_validated(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    source = create_pattern(owner, label="Source")
+    create_pattern(owner, label="Alpha")
+    create_pattern(owner, label="Beta")
+
+    first = authenticated_get(
+        api_client,
+        owner.user,
+        f"{governance_targets_url(source.id)}?page_size=1",
+    )
+    cursor = first.json()["next_cursor"]
+
+    response = authenticated_get(
+        api_client,
+        owner.user,
+        f"{governance_targets_url(source.id)}?page_size=1&q=Alpha&cursor={cursor}",
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "analytics_owner_governance_targets_cursor_invalid"
+
+
+def test_governance_targets_hide_cross_organization_source_and_targets(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    other_owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    source = create_pattern(owner, label="Source")
+    create_pattern(owner, label="Same org")
+    other_pattern = create_pattern(other_owner, label="Other org")
+
+    hidden_source = authenticated_get(
+        api_client,
+        owner.user,
+        governance_targets_url(other_pattern.id),
+    )
+    targets = authenticated_get(
+        api_client,
+        owner.user,
+        governance_targets_url(source.id),
+    )
+
+    assert hidden_source.status_code == 404
+    assert hidden_source.json()["code"] == "analytics_pattern_not_found"
+    assert targets.status_code == 200
+    assert str(other_pattern.id) not in str(targets.json())
+
+
+def test_governance_targets_exclude_source_and_inactive_targets(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    source = create_pattern(owner, label="Source")
+    active = create_pattern(owner, label="Active")
+    merged = create_pattern(owner, label="Merged")
+    retired = create_pattern(owner, label="Retired")
+    merged.status = OperationalPattern.Status.MERGED
+    merged.merged_into = active
+    merged.save(update_fields=["status", "merged_into"])
+    retired.status = OperationalPattern.Status.RETIRED
+    retired.save(update_fields=["status"])
+
+    response = authenticated_get(
+        api_client,
+        owner.user,
+        governance_targets_url(source.id),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["pattern_id"] for item in body["items"]] == [str(active.id)]
+    assert str(source.id) not in str(body)
+    assert str(merged.id) not in str(body)
+    assert str(retired.id) not in str(body)
 
 
 def test_cross_organization_pattern_is_not_revealed(api_client):
@@ -541,4 +681,6 @@ def test_openapi_contains_owner_governance_endpoints():
     assert "/api/v1/analytics/patterns/{pattern_id}/move-signals/" in schema_text
     assert "/api/v1/analytics/patterns/{pattern_id}/split-to-existing/" in schema_text
     assert "/api/v1/analytics/patterns/{pattern_id}/split-to-new/" in schema_text
+    assert "/api/v1/analytics/patterns/{pattern_id}/governance-targets/" in schema_text
     assert "AnalyticsOwnerGovernanceResponse:" in schema_text
+    assert "AnalyticsOwnerGovernanceTargetListResponse:" in schema_text

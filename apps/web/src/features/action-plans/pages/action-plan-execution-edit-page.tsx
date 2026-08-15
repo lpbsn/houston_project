@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
+import { startTransition, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 import { useAppRoute } from '@/app/app-routes'
@@ -54,7 +54,7 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
 
   const detailQuery = useActionPlanExecutionDetailQuery(establishmentId, executionId)
   const [form, setForm] = useState<ActionPlanExecutionEditFormValues | null>(null)
-  const formRootRef = useRef<HTMLDivElement>(null)
+  const formRootRef = useRef<HTMLFormElement>(null)
   const lastGuidanceNonceRef = useRef(0)
 
   // Hydrate once on first load. Realtime refetch must not wipe local edits.
@@ -225,10 +225,19 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
     })
   }
 
+  function handleFormSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    void submit(form)
+  }
+
   return (
-    <div className="flex min-h-full flex-col">
-      <div ref={formRootRef} className="space-y-3 px-3 pb-28 pt-2">
-        <TerrainCard className="space-y-3">
+    <form
+      ref={formRootRef}
+      className="flex min-h-full w-full flex-col lg:mx-auto lg:grid lg:max-w-7xl lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)] lg:items-start lg:gap-4 lg:px-6 lg:pt-4 lg:pb-6"
+      onSubmit={handleFormSubmit}
+    >
+      <div className="grid grid-cols-1 gap-3 px-3 pb-28 pt-2 lg:contents">
+        <TerrainCard className="space-y-3 lg:col-start-1">
           <div data-action-plan-field="title">
             <TerrainFieldLabel>Titre</TerrainFieldLabel>
             <Input
@@ -270,7 +279,7 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
         </TerrainCard>
 
         {!staffMode ? (
-          <section className="space-y-2">
+          <section className="space-y-2 lg:col-start-2">
             <TerrainSectionLabel>Options</TerrainSectionLabel>
             <TerrainCard className="divide-y divide-[#E8E6DF] p-0">
               <TerrainSwitch
@@ -283,7 +292,7 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
         ) : null}
 
         {form.treatedTasks.length > 0 ? (
-          <section className="space-y-2">
+          <section className="space-y-2 lg:col-start-1">
             <TerrainSectionLabel>Tâches traitées</TerrainSectionLabel>
             <div className="space-y-2">
               {form.treatedTasks.map((task) => (
@@ -297,43 +306,51 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
           </section>
         ) : null}
 
-        <ActionPlanTaskDraftEditor
-          tasks={form.pendingTasks}
-          establishmentId={establishmentId}
-          pilotBusinessUnitId={form.pilotBusinessUnitId}
-          canDefineCrossPoleTasks={canCrossPole}
-          staffMode={staffMode}
-          businessUnits={visibleBusinessUnits}
-          fieldErrors={fieldErrors}
-          expandAdvancedNonce={guidanceNonce}
-          expandAdvancedTaskIds={expandAdvancedTaskIds}
-          onTasksChange={setPendingTasks}
-          onTaskFieldChange={clearApiFieldError}
-        />
+        <div className="lg:col-start-1">
+          <ActionPlanTaskDraftEditor
+            tasks={form.pendingTasks}
+            establishmentId={establishmentId}
+            pilotBusinessUnitId={form.pilotBusinessUnitId}
+            canDefineCrossPoleTasks={canCrossPole}
+            staffMode={staffMode}
+            businessUnits={visibleBusinessUnits}
+            fieldErrors={fieldErrors}
+            expandAdvancedNonce={guidanceNonce}
+            expandAdvancedTaskIds={expandAdvancedTaskIds}
+            onTasksChange={setPendingTasks}
+            onTaskFieldChange={clearApiFieldError}
+          />
+        </div>
 
-        <ActionPlanEventPlanningForm
-          draft={form.planningDraft}
-          config={{
-            canEditAssignees: !staffMode,
-            canSchedule: false,
-            staffMode,
-            showAdvancedChronology: false,
-            lockChronologyMode: true,
-            lockStart: true,
-            hideAssignees: false,
-            staffDisplayName: auth.bootstrap?.user?.username ?? 'Moi',
-            assigneeActionsEnabled: false,
-          }}
-          establishmentId={establishmentId}
-          pilotBusinessUnitId={form.pilotBusinessUnitId}
-          fieldErrors={fieldErrors}
-          onDraftChange={setPlanningDraft}
-        />
+        <div className="lg:col-start-2">
+          <ActionPlanEventPlanningForm
+            draft={form.planningDraft}
+            config={{
+              canEditAssignees: !staffMode,
+              canSchedule: false,
+              staffMode,
+              showAdvancedChronology: false,
+              lockChronologyMode: true,
+              lockStart: true,
+              hideAssignees: false,
+              staffDisplayName: auth.bootstrap?.user?.username ?? 'Moi',
+              assigneeActionsEnabled: false,
+            }}
+            establishmentId={establishmentId}
+            pilotBusinessUnitId={form.pilotBusinessUnitId}
+            fieldErrors={fieldErrors}
+            onDraftChange={setPlanningDraft}
+          />
+        </div>
 
-        {submitError ? <TerrainFeedback variant="error" message={submitError} /> : null}
+        {submitError ? (
+          <div className="lg:col-span-2">
+            <TerrainFeedback variant="error" message={submitError} />
+          </div>
+        ) : null}
       </div>
 
-      <TerrainStickyFooter>
+      <TerrainStickyFooter className="lg:col-start-2 lg:top-4 lg:bottom-auto lg:mt-0 lg:rounded-2xl lg:border lg:border-[#E8E6DF] lg:bg-white lg:p-4 lg:shadow-none">
         <div className="flex gap-2">
           <Button
             type="button"
@@ -345,19 +362,18 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
             Retour
           </Button>
           <Button
-            type="button"
+            type="submit"
             className={cn(
               'h-11 flex-1 rounded-xl text-white',
               terrainBrandAction.bg,
               terrainBrandAction.hover,
             )}
             disabled={isSubmitting}
-            onClick={() => void submit(form)}
           >
             Enregistrer les modifications
           </Button>
         </div>
       </TerrainStickyFooter>
-    </div>
+    </form>
   )
 }

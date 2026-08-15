@@ -95,6 +95,10 @@ export function isProtectedRoute(route: AppRoute): boolean {
     return true
   }
 
+  if (route.kind === 'analytics-pattern-detail') {
+    return true
+  }
+
   return OPERATIONAL_ROUTE_KINDS.has(route.kind)
 }
 
@@ -104,6 +108,10 @@ export function requiresActiveMembership(route: AppRoute): boolean {
   }
 
   if (route.kind === 'organization-establishment-detail') {
+    return false
+  }
+
+  if (route.kind === 'analytics-pattern-detail') {
     return false
   }
 
@@ -138,6 +146,7 @@ export function usesTerrainShell(route: AppRoute): boolean {
     route.kind === 'action-plan-execution-detail' ||
     route.kind === 'action-plan-execution-edit' ||
     route.kind === 'chat-conversation-detail' ||
+    route.kind === 'analytics-pattern-detail' ||
     route.kind === 'team-member-detail'
   ) {
     return true
@@ -208,6 +217,17 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       showBottomNav: false,
       desktopActivePath: '/chat',
       mainScroll: 'hidden',
+    }
+  }
+
+  if (route.kind === 'analytics-pattern-detail') {
+    return {
+      topbarVariant: 'detail',
+      title: 'Motif Analytics',
+      backPath: '/analytics',
+      showBottomNav: false,
+      desktopActivePath: '/analytics',
+      mainScroll: 'auto',
     }
   }
 
@@ -461,6 +481,10 @@ export function getTerrainContentKey(route: AppRoute): string {
 
   if (route.kind === 'chat-conversation-detail') {
     return `chat-conversation-detail-${route.conversationId}`
+  }
+
+  if (route.kind === 'analytics-pattern-detail') {
+    return `analytics-pattern-detail-${route.patternId}`
   }
 
   if (route.kind === 'team-member-detail') {

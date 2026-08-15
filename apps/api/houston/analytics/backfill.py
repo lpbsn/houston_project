@@ -12,6 +12,10 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 
+from houston.analytics.backfill_selection import (
+    normalize_backfill_signal_ids,
+    select_explicit_backfill_signal_ids,
+)
 from houston.analytics.backfill_simulation import CapturingBackfillPatternClassifierProvider
 from houston.analytics.classifier import (
     ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION,
@@ -53,10 +57,12 @@ class BackfillSignalResult:
     final_assignment_status: str
     final_assignment_source: str
     final_error_code: str
+    final_validation_branch: str
     provider_call_count: int
     duplicate_guard_call_count: int
     duplicate_guard_decision: str
     duplicate_guard_reason: str
+    duplicate_guard_reason_code: str | None
     remaining_reason: str
     assigned_existing_pattern_id: str
     assigned_existing_pattern_label: str
@@ -111,9 +117,9 @@ def backfill_analytics_patterns(
     max_limit = int(getattr(settings, "HOUSTON_ANALYTICS_PATTERN_BACKFILL_MAX_LIMIT", 500))
     effective_limit = _effective_limit(limit=limit, max_limit=max_limit)
     scope = _scope(organization_id=organization_id, establishment_id=establishment_id)
-    normalized_signal_ids = _normalize_signal_ids(signal_ids)
+    normalized_signal_ids = normalize_backfill_signal_ids(signal_ids)
     if normalized_signal_ids:
-        selected_signal_ids, exclusions, next_scan_cursor = _explicit_signal_ids(
+        selected_signal_ids, exclusions, next_scan_cursor = select_explicit_backfill_signal_ids(
             signal_ids=normalized_signal_ids,
             scope=scope,
             limit=effective_limit,
@@ -267,7 +273,7 @@ def _backfill_signal(
     classify_calls_before = len(provider.calls)
     duplicate_calls_before = len(provider.duplicate_guard_calls)
     try:
-        claim_decisions, claim_reasons, assignment, outcome = _run_once(
+        claim_decisions, claim_reasons, assignment, outcome, validation_branch = _run_once(
             signal=signal,
             provider=provider,
             duplicate_guard_enabled=duplicate_guard_enabled,
@@ -278,12 +284,18 @@ def _backfill_signal(
         assignment = _assignment_for_signal(signal)
         outcome = "reported"
         error_code = getattr(exc, "error_code", exc.__class__.__name__)
+        validation_branch = getattr(exc, "validation_branch", "")
     else:
         error_code = assignment.last_error_code if assignment else ""
     classify_calls_after = len(provider.calls)
     duplicate_calls_after = len(provider.duplicate_guard_calls)
     duplicate_guard_decision = getattr(assignment, "_analytics_duplicate_guard_decision", "")
     duplicate_guard_reason = getattr(assignment, "_analytics_duplicate_guard_reason", "")
+    duplicate_guard_reason_code = getattr(
+        assignment,
+        "_analytics_duplicate_guard_reason_code",
+        None,
+    )
     pattern = assignment.pattern if assignment is not None else None
     is_created_pattern = pattern is not None and pattern.id not in initial_pattern_ids
     return BackfillSignalResult(
@@ -297,10 +309,12 @@ def _backfill_signal(
         final_assignment_status=assignment.classification_status if assignment else "missing",
         final_assignment_source=assignment.assignment_source if assignment else "",
         final_error_code=error_code,
+        final_validation_branch=validation_branch,
         provider_call_count=classify_calls_after - classify_calls_before,
         duplicate_guard_call_count=duplicate_calls_after - duplicate_calls_before,
         duplicate_guard_decision=duplicate_guard_decision,
         duplicate_guard_reason=duplicate_guard_reason,
+        duplicate_guard_reason_code=duplicate_guard_reason_code,
         remaining_reason=_remaining_reason(outcome),
         assigned_existing_pattern_id=str(pattern.id)
         if pattern is not None and not is_created_pattern
@@ -324,7 +338,7 @@ def _run_once(
     signal: Signal,
     provider: CapturingBackfillPatternClassifierProvider,
     duplicate_guard_enabled: bool,
-) -> tuple[list[str], list[str], SignalPatternAssignment | None, str]:
+) -> tuple[list[str], list[str], SignalPatternAssignment | None, str, str]:
     try:
         assignment = classify_signal_pattern(
             signal.id,
@@ -342,6 +356,7 @@ def _run_once(
                 claim_status=claim_status,
                 claim_reason=claim_reason,
             ),
+            "",
         )
     except PatternClassificationRetryableError as exc:
         signal.refresh_from_db()
@@ -363,6 +378,7 @@ def _run_once(
             ["retryable_error"],
             finalization.assignment,
             outcome,
+            exc.validation_branch,
         )
 
 
@@ -523,10 +539,12 @@ def _signal_result_to_dict(result: BackfillSignalResult) -> dict[str, Any]:
         "final_assignment_status": result.final_assignment_status,
         "final_assignment_source": result.final_assignment_source,
         "final_error_code": result.final_error_code,
+        "final_validation_branch": result.final_validation_branch,
         "provider_call_count": result.provider_call_count,
         "duplicate_guard_call_count": result.duplicate_guard_call_count,
         "duplicate_guard_decision": result.duplicate_guard_decision,
         "duplicate_guard_reason": result.duplicate_guard_reason,
+        "duplicate_guard_reason_code": result.duplicate_guard_reason_code,
         "remaining_reason": result.remaining_reason,
         "assigned_existing_pattern_id": result.assigned_existing_pattern_id,
         "assigned_existing_pattern_label": result.assigned_existing_pattern_label,
@@ -567,38 +585,6 @@ def _scan_signal_ids(
     )
     next_cursor = str(ids[-1]) if ids else ""
     return ids, exclusions, input_cursor, next_cursor
-
-
-def _explicit_signal_ids(
-    *,
-    signal_ids: list[uuid.UUID],
-    scope: dict[str, str | None],
-    limit: int,
-) -> tuple[list[uuid.UUID], dict[str, int], str]:
-    unique_ids = sorted(set(signal_ids))
-    if len(unique_ids) > limit:
-        raise ValueError(
-            f"signal-id count must be less than or equal to the effective limit ({limit})"
-        )
-    scoped = _scoped_signals(scope=scope)
-    signals = list(scoped.filter(id__in=unique_ids).order_by("created_at", "id"))
-    found_ids = {signal.id for signal in signals}
-    missing = [str(signal_id) for signal_id in unique_ids if signal_id not in found_ids]
-    if missing:
-        raise ValueError(
-            "signal-id values were not found in the selected scope: "
-            + ", ".join(sorted(missing))
-        )
-    merged = [str(signal.id) for signal in signals if signal.merged_into_id is not None]
-    if merged:
-        raise ValueError("merged signals cannot be backfilled explicitly: " + ", ".join(merged))
-    return [signal.id for signal in signals], {"merged": 0}, ""
-
-
-def _normalize_signal_ids(signal_ids) -> list[uuid.UUID]:
-    if not signal_ids:
-        return []
-    return [uuid.UUID(str(signal_id)) for signal_id in signal_ids]
 
 
 def _scoped_signals(*, scope: dict[str, str | None]):

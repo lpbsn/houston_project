@@ -49,14 +49,20 @@ def analytics_pattern_recurrence_stats(
     as_of: datetime,
     organization_id=None,
     establishment_id=None,
+    establishment_ids=None,
     pattern_ids=None,
 ) -> dict[UUID, PatternRecurrenceStats]:
+    _validate_establishment_scope(
+        establishment_id=establishment_id,
+        establishment_ids=establishment_ids,
+    )
     window = build_recurrence_window(as_of)
     rows = _recurrence_rows(
         user,
         window=window,
         organization_id=organization_id,
         establishment_id=establishment_id,
+        establishment_ids=establishment_ids,
         pattern_ids=pattern_ids,
     )
     return {
@@ -72,7 +78,12 @@ def recurrence_stats_for_visible_pattern_ids(
     visible_pattern_ids,
     organization_id=None,
     establishment_id=None,
+    establishment_ids=None,
 ) -> dict[UUID, PatternRecurrenceStats]:
+    _validate_establishment_scope(
+        establishment_id=establishment_id,
+        establishment_ids=establishment_ids,
+    )
     pattern_ids = list(visible_pattern_ids)
     if not pattern_ids:
         return {}
@@ -83,6 +94,7 @@ def recurrence_stats_for_visible_pattern_ids(
         as_of=as_of,
         organization_id=organization_id,
         establishment_id=establishment_id,
+        establishment_ids=establishment_ids,
         pattern_ids=pattern_ids,
     )
     return {
@@ -105,8 +117,13 @@ def recurrent_pattern_ids_queryset(
     as_of: datetime,
     organization_id=None,
     establishment_id=None,
+    establishment_ids=None,
     pattern_ids=None,
 ) -> QuerySet:
+    _validate_establishment_scope(
+        establishment_id=establishment_id,
+        establishment_ids=establishment_ids,
+    )
     window = build_recurrence_window(as_of)
     return (
         _recurrence_rows(
@@ -114,6 +131,7 @@ def recurrent_pattern_ids_queryset(
             window=window,
             organization_id=organization_id,
             establishment_id=establishment_id,
+            establishment_ids=establishment_ids,
             pattern_ids=pattern_ids,
         )
         .filter(
@@ -131,6 +149,7 @@ def recurrent_patterns_count_for_contributors(
     contributor_pattern_ids,
     organization_id=None,
     establishment_id=None,
+    establishment_ids=None,
 ) -> int:
     return (
         recurrent_pattern_ids_queryset(
@@ -138,6 +157,7 @@ def recurrent_patterns_count_for_contributors(
             as_of=as_of,
             organization_id=organization_id,
             establishment_id=establishment_id,
+            establishment_ids=establishment_ids,
             pattern_ids=contributor_pattern_ids,
         )
         .distinct()
@@ -151,12 +171,14 @@ def _recurrence_rows(
     window: AnalyticsRecurrenceWindow,
     organization_id,
     establishment_id,
+    establishment_ids,
     pattern_ids=None,
 ) -> QuerySet:
     recurrence_signals = analytics_recurrence_signals_queryset(
         user,
         organization_id=organization_id,
         establishment_id=establishment_id,
+        establishment_ids=establishment_ids,
     ).filter(
         created_at__gte=window.window_start,
         created_at__lt=window.window_end,
@@ -215,4 +237,12 @@ def _validate_recurrence_as_of(as_of: datetime | None) -> None:
         raise AnalyticsValidationError(
             "as_of must be timezone-aware.",
             code="analytics_recurrence_as_of_naive",
+        )
+
+
+def _validate_establishment_scope(*, establishment_id, establishment_ids) -> None:
+    if establishment_id is not None and establishment_ids is not None:
+        raise AnalyticsValidationError(
+            "Use either establishment_id or establishment_ids, not both.",
+            code="analytics_scope_invalid",
         )

@@ -204,6 +204,53 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/analytics/pattern-filter-options/:
+    get:
+      operationId: v1_analytics_pattern_filter_options_retrieve
+      parameters:
+      - in: query
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: establishment_ids
+        schema:
+          type: string
+      - in: query
+        name: organization_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - analytics
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsPatternFilterOptionsResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/analytics/patterns/:
     get:
       operationId: v1_analytics_patterns_list
@@ -217,6 +264,10 @@ paths:
         schema:
           type: string
           format: uuid
+      - in: query
+        name: establishment_ids
+        schema:
+          type: string
       - in: query
         name: organization_id
         schema:
@@ -239,6 +290,30 @@ paths:
           type: string
           format: date-time
         required: true
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: recurrence
+        schema:
+          type: string
+          enum:
+          - all
+          - non_recurrent
+          - recurrent
+      - in: query
+        name: responsible_business_unit_ids
+        schema:
+          type: string
+      - in: query
+        name: responsible_business_unit_unassigned
+        schema:
+          type: boolean
+      - in: query
+        name: signal_statuses
+        schema:
+          type: string
       tags:
       - analytics
       security:
@@ -310,6 +385,64 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AnalyticsPatternDetailResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/analytics/patterns/{pattern_id}/governance-targets/:
+    get:
+      operationId: v1_analytics_pattern_governance_targets_list
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Page size, default 20, maximum 50.
+      - in: path
+        name: pattern_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: q
+        schema:
+          type: string
+      tags:
+      - analytics
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsOwnerGovernanceTargetListResponse'
           description: ''
         '400':
           content:
@@ -595,6 +728,74 @@ paths:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/analytics/patterns/{pattern_id}/signals/{signal_id}/issue-report/:
+    post:
+      operationId: v1_analytics_pattern_signal_issue_report_create
+      parameters:
+      - in: path
+        name: pattern_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: signal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - analytics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternIssueReportRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternIssueReportRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AnalyticsPatternIssueReportRequest'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsPatternIssueReportResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
           content:
             application/json:
               schema:
@@ -9384,6 +9585,25 @@ components:
       - source_pattern
       - target_created
       - target_pattern
+    AnalyticsOwnerGovernanceTargetListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsOwnerGovernancePatternRef'
+        page_size:
+          type: integer
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
+      required:
+      - has_more
+      - items
+      - next_cursor
+      - page_size
     AnalyticsPatternBusinessUnitDistributionBucket:
       type: object
       properties:
@@ -9545,6 +9765,54 @@ components:
       - establishment_id
       - name
       - signal_count
+    AnalyticsPatternFilterBusinessUnitOption:
+      type: object
+      properties:
+        business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+        establishment_id:
+          type: string
+          format: uuid
+          nullable: true
+        is_unassigned:
+          type: boolean
+      required:
+      - business_unit_id
+      - establishment_id
+      - is_unassigned
+      - name
+    AnalyticsPatternFilterEstablishmentOption:
+      type: object
+      properties:
+        establishment_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+      required:
+      - establishment_id
+      - name
+    AnalyticsPatternFilterOptionsResponse:
+      type: object
+      properties:
+        establishments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsPatternFilterEstablishmentOption'
+        responsible_business_units:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsPatternFilterBusinessUnitOption'
+        includes_unassigned:
+          type: boolean
+      required:
+      - establishments
+      - includes_unassigned
+      - responsible_business_units
     AnalyticsPatternIdentity:
       type: object
       properties:
@@ -9567,6 +9835,44 @@ components:
       - label
       - merged_into_pattern_id
       - pattern_id
+      - status
+    AnalyticsPatternIssueReportRequest:
+      type: object
+      properties:
+        reason:
+          $ref: '#/components/schemas/ReasonEnum'
+        comment:
+          type: string
+          maxLength: 500
+    AnalyticsPatternIssueReportResponse:
+      type: object
+      properties:
+        report_id:
+          type: string
+          format: uuid
+        pattern_id:
+          type: string
+          format: uuid
+        signal_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+        report_type:
+          type: string
+        comment:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - comment
+      - created_at
+      - pattern_id
+      - report_id
+      - report_type
+      - signal_id
       - status
     AnalyticsPatternListItem:
       type: object
@@ -12666,6 +12972,10 @@ components:
       required:
       - expires_in
       - ticket
+    ReasonEnum:
+      type: string
+      enum:
+      - wrong_pattern
     RegistrationOwnerValidateRequest:
       type: object
       properties:

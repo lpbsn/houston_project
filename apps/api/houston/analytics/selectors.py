@@ -26,11 +26,13 @@ def analytics_readable_signals_queryset(
     *,
     organization_id=None,
     establishment_id=None,
+    establishment_ids=None,
 ) -> QuerySet[Signal]:
     scope_q = _analytics_signal_scope_q_for_user(
         user,
         organization_id=organization_id,
         establishment_id=establishment_id,
+        establishment_ids=establishment_ids,
     )
     return Signal.objects.filter(scope_q).distinct()
 
@@ -40,12 +42,14 @@ def analytics_default_signals_queryset(
     *,
     organization_id=None,
     establishment_id=None,
+    establishment_ids=None,
 ) -> QuerySet[Signal]:
     return _analytics_readable_signals_for_status_q(
         user,
         default_analytics_signal_q(),
         organization_id=organization_id,
         establishment_id=establishment_id,
+        establishment_ids=establishment_ids,
     )
 
 
@@ -54,12 +58,14 @@ def analytics_actionable_signals_queryset(
     *,
     organization_id=None,
     establishment_id=None,
+    establishment_ids=None,
 ) -> QuerySet[Signal]:
     return _analytics_readable_signals_for_status_q(
         user,
         actionable_signal_q(),
         organization_id=organization_id,
         establishment_id=establishment_id,
+        establishment_ids=establishment_ids,
     )
 
 
@@ -68,12 +74,14 @@ def analytics_recurrence_signals_queryset(
     *,
     organization_id=None,
     establishment_id=None,
+    establishment_ids=None,
 ) -> QuerySet[Signal]:
     return _analytics_readable_signals_for_status_q(
         user,
         recurrence_signal_q(),
         organization_id=organization_id,
         establishment_id=establishment_id,
+        establishment_ids=establishment_ids,
     )
 
 
@@ -134,6 +142,7 @@ def _analytics_signal_scope_q_for_user(
     *,
     organization_id=None,
     establishment_id=None,
+    establishment_ids=None,
 ) -> Q:
     if user is None or user.status != User.Status.ACTIVE:
         return empty_signal_scope_q()
@@ -154,6 +163,8 @@ def _analytics_signal_scope_q_for_user(
         memberships = memberships.filter(establishment__organization_id=organization_id)
     if establishment_id is not None:
         memberships = memberships.filter(establishment_id=establishment_id)
+    if establishment_ids is not None:
+        memberships = memberships.filter(establishment_id__in=establishment_ids)
 
     scope_q = empty_signal_scope_q()
     for membership in memberships:
@@ -167,10 +178,12 @@ def _analytics_readable_signals_for_status_q(
     *,
     organization_id=None,
     establishment_id=None,
+    establishment_ids=None,
 ) -> QuerySet[Signal]:
     scope_q = _analytics_signal_scope_q_for_user(
         user,
         organization_id=organization_id,
         establishment_id=establishment_id,
+        establishment_ids=establishment_ids,
     )
     return Signal.objects.filter(scope_q & status_q).distinct()

@@ -5,6 +5,9 @@ from django.urls import path
 from houston.analytics.api.views import (
     AnalyticsDashboardView,
     AnalyticsPatternDetailView,
+    AnalyticsPatternFilterOptionsView,
+    AnalyticsPatternGovernanceTargetsView,
+    AnalyticsPatternIssueReportView,
     AnalyticsPatternListView,
     AnalyticsPatternMergeView,
     AnalyticsPatternMoveSignalsView,
@@ -16,6 +19,11 @@ from houston.analytics.api.views import (
 
 urlpatterns = [
     path("analytics/dashboard/", AnalyticsDashboardView.as_view(), name="analytics-dashboard"),
+    path(
+        "analytics/pattern-filter-options/",
+        AnalyticsPatternFilterOptionsView.as_view(),
+        name="analytics-pattern-filter-options",
+    ),
     path("analytics/patterns/", AnalyticsPatternListView.as_view(), name="analytics-pattern-list"),
     path(
         "analytics/patterns/<uuid:pattern_id>/",
@@ -26,6 +34,16 @@ urlpatterns = [
         "analytics/patterns/<uuid:pattern_id>/signals/",
         AnalyticsPatternSignalsView.as_view(),
         name="analytics-pattern-signals",
+    ),
+    path(
+        "analytics/patterns/<uuid:pattern_id>/signals/<uuid:signal_id>/issue-report/",
+        AnalyticsPatternIssueReportView.as_view(),
+        name="analytics-pattern-signal-issue-report",
+    ),
+    path(
+        "analytics/patterns/<uuid:pattern_id>/governance-targets/",
+        AnalyticsPatternGovernanceTargetsView.as_view(),
+        name="analytics-pattern-governance-targets",
     ),
     path(
         "analytics/patterns/<uuid:pattern_id>/rename/",

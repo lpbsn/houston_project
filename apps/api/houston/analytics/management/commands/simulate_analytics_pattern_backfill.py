@@ -23,6 +23,13 @@ class Command(BaseCommand):
         parser.add_argument("--organization-id", default="")
         parser.add_argument("--establishment-id", default="")
         parser.add_argument("--start-after-signal-id", default="")
+        parser.add_argument(
+            "--signal-id",
+            action="append",
+            dest="signal_ids",
+            default=[],
+            help="Signal id to replay explicitly (repeatable).",
+        )
         parser.add_argument("--limit", type=int, default=None)
         parser.add_argument(
             "--provider",
@@ -74,6 +81,10 @@ class Command(BaseCommand):
                 options["start_after_signal_id"],
                 "start-after-signal-id",
             )
+            signal_ids = [
+                _required_uuid(signal_id, "signal-id")
+                for signal_id in options.get("signal_ids", [])
+            ]
             archive_dir = (
                 Path(options["archive_dir"])
                 if options["archive"] and options.get("archive_dir")
@@ -83,6 +94,7 @@ class Command(BaseCommand):
                 organization_id=organization_id,
                 establishment_id=establishment_id,
                 start_after_signal_id=start_after_signal_id,
+                signal_ids=signal_ids,
                 limit=options["limit"],
                 provider_name=options["provider"],
                 duplicate_guard_enabled=options["duplicate_guard"],
@@ -102,6 +114,10 @@ class Command(BaseCommand):
 def _optional_uuid(value: str, label: str) -> uuid.UUID | None:
     if not value:
         return None
+    return _required_uuid(value, label)
+
+
+def _required_uuid(value: str, label: str) -> uuid.UUID:
     try:
         return uuid.UUID(str(value))
     except ValueError as exc:

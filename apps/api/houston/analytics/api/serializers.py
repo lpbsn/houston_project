@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
+
+from houston.analytics.models import PATTERN_ISSUE_COMMENT_MAX_LENGTH
 
 
 class AnalyticsPeriodSerializer(serializers.Serializer):
@@ -98,6 +101,24 @@ class AnalyticsPatternListResponseSerializer(serializers.Serializer):
     next_cursor = serializers.CharField(allow_null=True)
     recurrence_window = AnalyticsRecurrenceWindowSerializer()
     recurrence_status = serializers.CharField()
+
+
+class AnalyticsPatternFilterEstablishmentOptionSerializer(serializers.Serializer):
+    establishment_id = serializers.UUIDField()
+    name = serializers.CharField()
+
+
+class AnalyticsPatternFilterBusinessUnitOptionSerializer(serializers.Serializer):
+    business_unit_id = serializers.UUIDField(allow_null=True)
+    name = serializers.CharField()
+    establishment_id = serializers.UUIDField(allow_null=True)
+    is_unassigned = serializers.BooleanField()
+
+
+class AnalyticsPatternFilterOptionsResponseSerializer(serializers.Serializer):
+    establishments = AnalyticsPatternFilterEstablishmentOptionSerializer(many=True)
+    responsible_business_units = AnalyticsPatternFilterBusinessUnitOptionSerializer(many=True)
+    includes_unassigned = serializers.BooleanField()
 
 
 class AnalyticsPatternIdentitySerializer(serializers.Serializer):
@@ -202,6 +223,44 @@ class AnalyticsPatternSignalsResponseSerializer(serializers.Serializer):
     next_cursor = serializers.CharField(allow_null=True)
 
 
+@extend_schema_field(
+    {
+        "type": "string",
+        "enum": ["wrong_pattern"],
+    }
+)
+class AnalyticsPatternIssueReasonField(serializers.CharField):
+    pass
+
+
+@extend_schema_field(
+    {
+        "type": "string",
+        "maxLength": PATTERN_ISSUE_COMMENT_MAX_LENGTH,
+    }
+)
+class AnalyticsPatternIssueCommentField(serializers.CharField):
+    pass
+
+
+class AnalyticsPatternIssueReportRequestSerializer(serializers.Serializer):
+    reason = AnalyticsPatternIssueReasonField(required=False, allow_blank=True)
+    comment = AnalyticsPatternIssueCommentField(
+        required=False,
+        allow_blank=True,
+    )
+
+
+class AnalyticsPatternIssueReportResponseSerializer(serializers.Serializer):
+    report_id = serializers.UUIDField()
+    pattern_id = serializers.UUIDField()
+    signal_id = serializers.UUIDField(allow_null=True)
+    status = serializers.CharField()
+    report_type = serializers.CharField()
+    comment = serializers.CharField()
+    created_at = serializers.DateTimeField()
+
+
 class AnalyticsPatternRenameRequestSerializer(serializers.Serializer):
     label = serializers.CharField(allow_blank=True)
 
@@ -245,3 +304,10 @@ class AnalyticsOwnerGovernanceResponseSerializer(serializers.Serializer):
     target_pattern = AnalyticsOwnerGovernancePatternRefSerializer(allow_null=True)
     moved_signal_count = serializers.IntegerField()
     target_created = serializers.BooleanField()
+
+
+class AnalyticsOwnerGovernanceTargetListResponseSerializer(serializers.Serializer):
+    items = AnalyticsOwnerGovernancePatternRefSerializer(many=True)
+    page_size = serializers.IntegerField()
+    has_more = serializers.BooleanField()
+    next_cursor = serializers.CharField(allow_null=True)

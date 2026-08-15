@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import json
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -15,8 +17,6 @@ from django.utils import timezone
 from houston.accounts.models import User
 from houston.ai.models import AIUsageLog
 from houston.analytics.classifier import (
-    ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION,
-    ANALYTICS_PATTERN_DUPLICATE_GUARD_SCHEMA_VERSION,
     ANALYTICS_PATTERN_PROMPT_VERSION,
     ANALYTICS_PATTERN_SCHEMA_VERSION,
     PatternClassifierError,
@@ -27,7 +27,6 @@ from houston.analytics.classifier import (
     classifier_version_for_provider,
     get_pattern_classifier_provider,
     parse_pattern_classifier_response,
-    parse_pattern_duplicate_guard_response,
 )
 from houston.analytics.exceptions import AnalyticsValidationError
 from houston.analytics.labels import normalize_pattern_label
@@ -38,6 +37,26 @@ from houston.analytics.models import (
     PatternIssueReport,
     PatternLifecycleEvent,
     SignalPatternAssignment,
+)
+from houston.analytics.pattern_alias import (
+    PatternExactAliasResolution as PatternExactAliasResolution,
+)
+from houston.analytics.pattern_alias import (
+    _resolve_active_pattern_target,
+    _resolve_exact_pattern_alias,
+)
+from houston.analytics.pattern_guard import (
+    PatternDuplicateGuardDecision,
+    _assess_duplicate_guard_best_effort,
+)
+from houston.analytics.pattern_shortlist import (
+    DUPLICATE_GUARD_SHORTLIST_STRATEGY as DUPLICATE_GUARD_SHORTLIST_STRATEGY,
+)
+from houston.analytics.pattern_shortlist import (
+    PatternDuplicateGuardCandidate as PatternDuplicateGuardCandidate,
+)
+from houston.analytics.pattern_shortlist import (
+    _duplicate_guard_shortlist,
 )
 from houston.analytics.permissions import (
     analytics_signal_scope_q_for_membership,
@@ -55,7 +74,6 @@ from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.organizations.models import Organization
 from houston.signals.models import Signal
 
-DUPLICATE_GUARD_SHORTLIST_STRATEGY = "token_overlap_v1"
 OWNER_CORRECTION_CLASSIFIER_VERSION = "owner_correction_v1"
 OWNER_CORRECTION_LOCK_ORDER = (
     "Analytics classification locks Signal, then SignalPatternAssignment, then "
@@ -68,6 +86,10 @@ PATTERN_ISSUE_REPORT_ROLES = frozenset(
         EstablishmentMembership.Role.MANAGER,
     }
 )
+OWNER_GOVERNANCE_TARGETS_CURSOR_VERSION = "analytics_owner_governance_targets_v1"
+DEFAULT_OWNER_GOVERNANCE_TARGETS_PAGE_SIZE = 20
+MAX_OWNER_GOVERNANCE_TARGETS_PAGE_SIZE = 50
+MAX_OWNER_GOVERNANCE_TARGETS_SEARCH_LENGTH = 100
 
 
 class PatternClassificationRetryableError(Exception):
@@ -80,6 +102,7 @@ class PatternClassificationRetryableError(Exception):
         pending_signature: str,
         pending_classifier_version: str,
         error_code: str,
+        validation_branch: str = "",
     ):
         super().__init__(message)
         self.signal_id = signal_id
@@ -87,6 +110,7 @@ class PatternClassificationRetryableError(Exception):
         self.pending_signature = pending_signature
         self.pending_classifier_version = pending_classifier_version
         self.error_code = error_code
+        self.validation_branch = validation_branch
 
 
 @dataclass(frozen=True)
@@ -141,6 +165,20 @@ class OwnerGovernanceResult:
     target_created: bool = False
 
 
+@dataclass(frozen=True)
+class OwnerGovernanceTargetListResult:
+    items: tuple[OwnerGovernancePatternRef, ...]
+    page_size: int
+    has_more: bool
+    next_cursor: str | None
+
+
+@dataclass(frozen=True)
+class _OwnerGovernanceTargetsCursor:
+    normalized_label: str
+    pattern_id: uuid.UUID
+
+
 class PatternClassificationObsoleteAttempt(Exception):
     def __init__(self, assignment: SignalPatternAssignment):
         super().__init__("Analytics pattern classification attempt is obsolete.")
@@ -155,21 +193,6 @@ def _is_obsolete_assignment_error(exc: AnalyticsValidationError) -> bool:
 
 
 @dataclass(frozen=True)
-class PatternDuplicateGuardCandidate:
-    id: uuid.UUID
-    label: str
-    normalized_label: str
-    score: float
-
-
-@dataclass(frozen=True)
-class PatternDuplicateGuardDecision:
-    action: str
-    pattern_id: uuid.UUID | None = None
-    reason: str = ""
-
-
-@dataclass(frozen=True)
 class PatternClassifierPatternResolution:
     mode: str
     label: str = ""
@@ -177,6 +200,7 @@ class PatternClassifierPatternResolution:
     duplicate_guard_decision: PatternDuplicateGuardDecision = field(
         default_factory=lambda: PatternDuplicateGuardDecision(action="skipped")
     )
+    shortlist_metrics: dict[str, int] = field(default_factory=dict)
 
 
 @transaction.atomic
@@ -184,6 +208,7 @@ def create_operational_pattern(
     *,
     organization: Organization,
     label: str,
+    semantic_label: str = "",
     created_by_membership: EstablishmentMembership | None = None,
     occurred_at=None,
     metadata_safe: dict[str, Any] | None = None,
@@ -191,6 +216,7 @@ def create_operational_pattern(
     pattern = OperationalPattern(
         organization=organization,
         label=label,
+        semantic_label=semantic_label or label,
         created_by_membership=created_by_membership,
     )
     try:
@@ -309,6 +335,63 @@ def report_pattern_assignment_issue(
 
 def can_govern_any_operational_patterns(user: User | None) -> bool:
     return bool(_owner_governance_memberships_for_user(user))
+
+
+def list_owner_governance_pattern_targets(
+    user: User | None,
+    *,
+    source_pattern_id,
+    q: str = "",
+    page_size: int = DEFAULT_OWNER_GOVERNANCE_TARGETS_PAGE_SIZE,
+    cursor: str | None = None,
+) -> OwnerGovernanceTargetListResult:
+    source = _resolve_governable_pattern_for_user(user, source_pattern_id)
+    _resolve_owner_governance_membership(user=user, organization=source.organization)
+    validated_page_size = _validate_owner_governance_targets_page_size(page_size)
+    normalized_q = _normalize_owner_governance_targets_search(q)
+    context = _owner_governance_targets_cursor_context(
+        user=user,
+        source_pattern_id=source.id,
+        q=normalized_q,
+        page_size=validated_page_size,
+    )
+    parsed_cursor = _parse_owner_governance_targets_cursor(
+        cursor,
+        expected_context=context,
+    )
+
+    queryset = (
+        OperationalPattern.objects.filter(
+            organization_id=source.organization_id,
+            status=OperationalPattern.Status.ACTIVE,
+            merged_into__isnull=True,
+        )
+        .exclude(id=source.id)
+        .order_by("normalized_label", "id")
+    )
+    if normalized_q:
+        normalized_label_query = normalize_pattern_label(normalized_q)
+        queryset = queryset.filter(
+            Q(label__icontains=normalized_q)
+            | Q(normalized_label__icontains=normalized_label_query)
+        )
+    queryset = _apply_owner_governance_targets_cursor(queryset, parsed_cursor)
+    rows = list(queryset[: validated_page_size + 1])
+    has_more = len(rows) > validated_page_size
+    served_rows = rows[:validated_page_size]
+    items = tuple(_owner_governance_pattern_ref(pattern) for pattern in served_rows)
+    next_cursor = None
+    if has_more and items:
+        next_cursor = _encode_owner_governance_targets_cursor(
+            context=context,
+            item=items[-1],
+        )
+    return OwnerGovernanceTargetListResult(
+        items=items,
+        page_size=validated_page_size,
+        has_more=has_more,
+        next_cursor=next_cursor,
+    )
 
 
 def rename_operational_pattern_for_owner(
@@ -1117,6 +1200,108 @@ def _owner_governance_pattern_ref(
         status=pattern.status,
         merged_into_pattern_id=pattern.merged_into_id,
     )
+
+
+def _validate_owner_governance_targets_page_size(page_size: int) -> int:
+    try:
+        parsed = int(page_size)
+    except (TypeError, ValueError) as exc:
+        raise AnalyticsValidationError(
+            "page_size must be an integer.",
+            code="analytics_owner_governance_targets_page_size_invalid",
+        ) from exc
+    if parsed < 1 or parsed > MAX_OWNER_GOVERNANCE_TARGETS_PAGE_SIZE:
+        raise AnalyticsValidationError(
+            f"page_size must be between 1 and {MAX_OWNER_GOVERNANCE_TARGETS_PAGE_SIZE}.",
+            code="analytics_owner_governance_targets_page_size_invalid",
+        )
+    return parsed
+
+
+def _normalize_owner_governance_targets_search(q: str) -> str:
+    normalized = str(q or "").strip()
+    if len(normalized) > MAX_OWNER_GOVERNANCE_TARGETS_SEARCH_LENGTH:
+        raise AnalyticsValidationError(
+            "q is too long.",
+            code="analytics_owner_governance_targets_filter_invalid",
+        )
+    return normalized
+
+
+def _apply_owner_governance_targets_cursor(
+    queryset,
+    cursor: _OwnerGovernanceTargetsCursor | None,
+):
+    if cursor is None:
+        return queryset
+    return queryset.filter(
+        Q(normalized_label__gt=cursor.normalized_label)
+        | Q(normalized_label=cursor.normalized_label, id__gt=cursor.pattern_id)
+    )
+
+
+def _owner_governance_targets_cursor_context(
+    *,
+    user: User | None,
+    source_pattern_id: uuid.UUID,
+    q: str,
+    page_size: int,
+) -> dict[str, object]:
+    return {
+        "user_id": str(user.id) if user is not None else None,
+        "source_pattern_id": str(source_pattern_id),
+        "q": q,
+        "page_size": page_size,
+    }
+
+
+def _encode_owner_governance_targets_cursor(
+    *,
+    context: dict[str, object],
+    item: OwnerGovernancePatternRef,
+) -> str:
+    payload = {
+        "version": OWNER_GOVERNANCE_TARGETS_CURSOR_VERSION,
+        "context": context,
+        "sort": {
+            "normalized_label": item.normalized_label,
+            "pattern_id": str(item.pattern_id),
+        },
+    }
+    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+    return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
+
+
+def _parse_owner_governance_targets_cursor(
+    raw: str | None,
+    *,
+    expected_context: dict[str, object],
+) -> _OwnerGovernanceTargetsCursor | None:
+    if not raw:
+        return None
+    padding = "=" * (-len(raw) % 4)
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(f"{raw}{padding}").decode())
+        if payload.get("version") != OWNER_GOVERNANCE_TARGETS_CURSOR_VERSION:
+            raise ValueError
+        if payload.get("context") != expected_context:
+            raise ValueError
+        sort = payload["sort"]
+        return _OwnerGovernanceTargetsCursor(
+            normalized_label=str(sort["normalized_label"]),
+            pattern_id=uuid.UUID(str(sort["pattern_id"])),
+        )
+    except (
+        KeyError,
+        TypeError,
+        ValueError,
+        json.JSONDecodeError,
+        UnicodeDecodeError,
+    ) as exc:
+        raise AnalyticsValidationError(
+            "Invalid analytics owner governance targets cursor.",
+            code="analytics_owner_governance_targets_cursor_invalid",
+        ) from exc
 
 
 def _terminal_merge_precheck(
@@ -1931,6 +2116,21 @@ def claim_signal_pattern_classification(
             reason="recent_processing",
         )
 
+    if (
+        assignment.classification_status
+        == SignalPatternAssignment.ClassificationStatus.TEMPORARY_FAILED
+        and assignment.pending_signature == signature
+        and assignment.pending_classifier_version == classifier_version
+        and assignment.next_retry_at is not None
+        and assignment.next_retry_at > now
+    ):
+        return PatternClassificationClaimResult(
+            status="already_processing",
+            attempt_count=assignment.attempt_count,
+            assignment=assignment,
+            reason="retry_not_due",
+        )
+
     assignment.classification_status = SignalPatternAssignment.ClassificationStatus.PROCESSING
     assignment.pending_signature = signature
     assignment.pending_classifier_version = classifier_version
@@ -1984,22 +2184,20 @@ def classify_signal_pattern(
         return claim.assignment
 
     assert claim.attempt_count is not None
-    candidates = _active_pattern_candidates(signal)
     input_payload = {
         "schema_version": ANALYTICS_PATTERN_SCHEMA_VERSION,
         "prompt_version": ANALYTICS_PATTERN_PROMPT_VERSION,
         **build_signal_pattern_payload(signal),
-        "active_patterns": candidates,
     }
 
     provider_started_at = time.monotonic()
+    provider_response = None
     try:
         provider_response = provider.classify(input_payload=input_payload)
         parsed = parse_pattern_classifier_response(provider_response.payload)
         resolution = _prepare_classifier_pattern_resolution(
             signal=signal,
             response=parsed,
-            candidates=candidates,
             provider=provider,
             duplicate_guard_enabled=duplicate_guard_enabled,
         )
@@ -2020,6 +2218,13 @@ def classify_signal_pattern(
             "_analytics_duplicate_guard_reason",
             resolution.duplicate_guard_decision.reason,
         )
+        setattr(
+            assignment,
+            "_analytics_duplicate_guard_reason_code",
+            resolution.duplicate_guard_decision.reason_code,
+        )
+        for metric_name, metric_value in resolution.shortlist_metrics.items():
+            setattr(assignment, f"_analytics_{metric_name}", metric_value)
         setattr(assignment, "_analytics_claim_status", claim.status)
         setattr(assignment, "_analytics_claim_reason", claim.reason)
         _write_analytics_usage_log(
@@ -2029,6 +2234,7 @@ def classify_signal_pattern(
             status=AIUsageLog.Status.SUCCEEDED,
             latency_ms=_elapsed_ms(provider_started_at),
             correlation_id=uuid.uuid4(),
+            error_context=resolution.shortlist_metrics,
             input_tokens=provider_response.input_tokens,
             output_tokens=provider_response.output_tokens,
             total_tokens=provider_response.total_tokens,
@@ -2055,6 +2261,31 @@ def classify_signal_pattern(
             pending_signature=signature,
             pending_classifier_version=classifier_version,
             error_code=exc.error_code,
+        ) from exc
+    except PatternClassifierInvalidOutputError as exc:
+        error_context = _invalid_output_error_context(exc=exc, provider=provider)
+        _write_analytics_usage_log(
+            signal=signal,
+            provider=provider.provider,
+            model=(provider_response.model if provider_response is not None else "")
+            or getattr(provider, "model", ""),
+            status=AIUsageLog.Status.FAILED,
+            latency_ms=_elapsed_ms(provider_started_at),
+            correlation_id=uuid.uuid4(),
+            error_code=exc.error_code,
+            error_context=error_context,
+            input_tokens=provider_response.input_tokens if provider_response else None,
+            output_tokens=provider_response.output_tokens if provider_response else None,
+            total_tokens=provider_response.total_tokens if provider_response else None,
+        )
+        raise PatternClassificationRetryableError(
+            str(exc),
+            signal_id=signal.id,
+            attempt_count=claim.attempt_count,
+            pending_signature=signature,
+            pending_classifier_version=classifier_version,
+            error_code=exc.error_code,
+            validation_branch=exc.validation_branch,
         ) from exc
     except (PatternClassifierError, AnalyticsValidationError) as exc:
         error_code = getattr(exc, "error_code", None) or getattr(exc, "code", None)
@@ -2105,54 +2336,28 @@ def _load_signal_for_pattern_classification(signal_id: uuid.UUID) -> Signal | No
     )
 
 
-def _active_pattern_candidates(signal: Signal) -> list[dict[str, str]]:
-    return [
-        {
-            "id": str(pattern.id),
-            "label": pattern.label,
-            "normalized_label": pattern.normalized_label,
-        }
-        for pattern in OperationalPattern.objects.filter(
-            organization=signal.establishment.organization,
-            status=OperationalPattern.Status.ACTIVE,
-        ).order_by("label", "id")
-    ]
-
-
 def _prepare_classifier_pattern_resolution(
     *,
     signal: Signal,
     response,
-    candidates: list[dict[str, str]],
     provider: PatternClassifierProvider,
     duplicate_guard_enabled: bool,
 ) -> PatternClassifierPatternResolution:
-    if response.result_type == "existing_pattern":
-        candidate_ids = {uuid.UUID(candidate["id"]) for candidate in candidates}
-        if response.pattern_id not in candidate_ids:
-            raise PatternClassifierInvalidOutputError(
-                "Classifier selected a pattern outside active candidates.",
-            )
-        return PatternClassifierPatternResolution(
-            mode="existing_pattern",
-            pattern_id=response.pattern_id,
-        )
-
     label = _validate_new_pattern_label(signal=signal, label=response.canonical_label)
     normalized = normalize_pattern_label(label)
-    strict_duplicate = _find_active_pattern_by_normalized_label(
+    exact_alias = _resolve_exact_pattern_alias(
         signal=signal,
-        normalized_label=normalized,
+        normalized_alias=normalized,
     )
-    if strict_duplicate is not None:
+    if exact_alias.status == "resolved" and exact_alias.pattern is not None:
         return PatternClassifierPatternResolution(
             mode="reuse_pattern",
             label=label,
-            pattern_id=strict_duplicate.id,
+            pattern_id=exact_alias.pattern.id,
             duplicate_guard_decision=PatternDuplicateGuardDecision(
                 action="skipped",
-                pattern_id=strict_duplicate.id,
-                reason="strict_duplicate",
+                pattern_id=exact_alias.pattern.id,
+                reason="exact_semantic_alias",
             ),
         )
 
@@ -2161,6 +2366,7 @@ def _prepare_classifier_pattern_resolution(
         if duplicate_guard_enabled
         else []
     )
+    shortlist_metrics = getattr(shortlist, "metrics", {})
     if not shortlist:
         return PatternClassifierPatternResolution(
             mode="create_pattern",
@@ -2169,6 +2375,7 @@ def _prepare_classifier_pattern_resolution(
                 action="skipped",
                 reason="no_candidates" if duplicate_guard_enabled else "disabled",
             ),
+            shortlist_metrics=shortlist_metrics,
         )
 
     decision = _assess_duplicate_guard_best_effort(
@@ -2176,6 +2383,7 @@ def _prepare_classifier_pattern_resolution(
         provider=provider,
         canonical_label=label,
         shortlist=shortlist,
+        shortlist_metrics=shortlist_metrics,
     )
     if decision.action == "reused" and decision.pattern_id is not None:
         return PatternClassifierPatternResolution(
@@ -2183,12 +2391,14 @@ def _prepare_classifier_pattern_resolution(
             label=label,
             pattern_id=decision.pattern_id,
             duplicate_guard_decision=decision,
+            shortlist_metrics=shortlist_metrics,
         )
 
     return PatternClassifierPatternResolution(
         mode="create_pattern",
         label=label,
         duplicate_guard_decision=decision,
+        shortlist_metrics=shortlist_metrics,
     )
 
 
@@ -2233,14 +2443,6 @@ def _resolve_pattern_resolution_for_write(
     signal: Signal,
     resolution: PatternClassifierPatternResolution,
 ) -> OperationalPattern:
-    if resolution.mode == "existing_pattern":
-        if resolution.pattern_id is None:
-            raise PatternClassifierInvalidOutputError("Pattern resolution missing target.")
-        pattern = OperationalPattern.objects.select_for_update().get(
-            pk=resolution.pattern_id
-        )
-        return _resolve_active_pattern_target(signal=signal, pattern=pattern)
-
     if resolution.mode == "reuse_pattern":
         if resolution.pattern_id is not None:
             try:
@@ -2262,263 +2464,19 @@ def _resolve_pattern_resolution_for_write(
     return _get_or_create_active_pattern_for_label(signal=signal, label=resolution.label)
 
 
-def _find_active_pattern_by_normalized_label(
-    *,
-    signal: Signal,
-    normalized_label: str,
-) -> OperationalPattern | None:
-    return (
-        OperationalPattern.objects.filter(
-            organization=signal.establishment.organization,
-            normalized_label=normalized_label,
-            status=OperationalPattern.Status.ACTIVE,
-        )
-        .order_by("normalized_label", "label")
-        .first()
-    )
-
-
-def _duplicate_guard_shortlist(
-    *,
-    signal: Signal,
-    canonical_label: str,
-) -> list[PatternDuplicateGuardCandidate]:
-    min_score = settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE
-    max_candidates = settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MAX_CANDIDATES
-    if max_candidates <= 0:
-        return []
-
-    source_tokens = _duplicate_guard_source_tokens(
-        signal=signal,
-        canonical_label=canonical_label,
-    )
-    if not source_tokens:
-        return []
-
-    candidates: list[PatternDuplicateGuardCandidate] = []
-    for pattern in OperationalPattern.objects.filter(
-        organization=signal.establishment.organization,
-        status=OperationalPattern.Status.ACTIVE,
-    ):
-        candidate_tokens = _normalized_tokens(pattern.label)
-        if not candidate_tokens:
-            continue
-        score = len(source_tokens & candidate_tokens) / len(candidate_tokens)
-        if score >= min_score:
-            candidates.append(
-                PatternDuplicateGuardCandidate(
-                    id=pattern.id,
-                    label=pattern.label,
-                    normalized_label=pattern.normalized_label,
-                    score=score,
-                )
-            )
-
-    candidates.sort(
-        key=lambda candidate: (
-            -candidate.score,
-            candidate.normalized_label,
-            candidate.label,
-        )
-    )
-    return candidates[:max_candidates]
-
-
-def _duplicate_guard_source_tokens(
-    *,
-    signal: Signal,
-    canonical_label: str,
-) -> set[str]:
-    activity_subject = signal.activity_subject.label if signal.activity_subject_id else ""
-    operational_unit = signal.operational_unit.label if signal.operational_unit_id else ""
-    return _normalized_tokens(
-        " ".join(
-            [
-                canonical_label,
-                signal.title,
-                signal.structured_summary,
-                signal.issue_focus,
-                activity_subject,
-                operational_unit,
-            ]
-        )
-    )
-
-
-def _normalized_tokens(value: str) -> set[str]:
-    return {
-        token
-        for token in normalize_pattern_label(value).split()
-        if len(token) >= 3
-    }
-
-
-def _assess_duplicate_guard_best_effort(
-    *,
-    signal: Signal,
-    provider: PatternClassifierProvider,
-    canonical_label: str,
-    shortlist: list[PatternDuplicateGuardCandidate],
-) -> PatternDuplicateGuardDecision:
-    shortlist_ids = {candidate.id for candidate in shortlist}
-    input_payload = {
-        "schema_version": ANALYTICS_PATTERN_DUPLICATE_GUARD_SCHEMA_VERSION,
-        "prompt_version": ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION,
-        "signal": _duplicate_guard_signal_payload(signal),
-        "canonical_label": canonical_label,
-        "candidate_patterns": [
-            {
-                "id": str(candidate.id),
-                "label": candidate.label,
-                "normalized_label": candidate.normalized_label,
-            }
-            for candidate in shortlist
-        ],
-    }
-
-    started_at = time.monotonic()
-    try:
-        response = provider.assess_duplicate(input_payload=input_payload)
-        parsed = parse_pattern_duplicate_guard_response(response.payload)
-        if parsed.result_type == "reuse_existing_pattern":
-            if parsed.pattern_id not in shortlist_ids:
-                _write_duplicate_guard_usage_log(
-                    signal=signal,
-                    provider=provider.provider,
-                    model=response.model or getattr(provider, "model", ""),
-                    status=AIUsageLog.Status.FAILED,
-                    latency_ms=_elapsed_ms(started_at),
-                    correlation_id=uuid.uuid4(),
-                    error_code="duplicate_guard_pattern_outside_shortlist",
-                    input_tokens=response.input_tokens,
-                    output_tokens=response.output_tokens,
-                    total_tokens=response.total_tokens,
-                )
-                return PatternDuplicateGuardDecision(
-                    action="fallback",
-                    reason="outside_shortlist",
-                )
-            _write_duplicate_guard_usage_log(
-                signal=signal,
-                provider=provider.provider,
-                model=response.model or getattr(provider, "model", ""),
-                status=AIUsageLog.Status.SUCCEEDED,
-                latency_ms=_elapsed_ms(started_at),
-                correlation_id=uuid.uuid4(),
-                input_tokens=response.input_tokens,
-                output_tokens=response.output_tokens,
-                total_tokens=response.total_tokens,
-            )
-            return PatternDuplicateGuardDecision(
-                action="reused",
-                pattern_id=parsed.pattern_id,
-            )
-
-        _write_duplicate_guard_usage_log(
-            signal=signal,
-            provider=provider.provider,
-            model=response.model or getattr(provider, "model", ""),
-            status=AIUsageLog.Status.SUCCEEDED,
-            latency_ms=_elapsed_ms(started_at),
-            correlation_id=uuid.uuid4(),
-            input_tokens=response.input_tokens,
-            output_tokens=response.output_tokens,
-            total_tokens=response.total_tokens,
-        )
-        return PatternDuplicateGuardDecision(action="created")
-    except PatternClassifierError as exc:
-        _write_duplicate_guard_usage_log(
-            signal=signal,
-            provider=provider.provider,
-            model=getattr(provider, "model", ""),
-            status=AIUsageLog.Status.FAILED,
-            latency_ms=_elapsed_ms(started_at),
-            correlation_id=uuid.uuid4(),
-            error_code=getattr(exc, "error_code", "duplicate_guard_error"),
-        )
-        return PatternDuplicateGuardDecision(
-            action="fallback",
-            reason=getattr(exc, "error_code", "duplicate_guard_error"),
-        )
-
-
-def _duplicate_guard_signal_payload(signal: Signal) -> dict[str, Any]:
-    activity_subject = signal.activity_subject.label if signal.activity_subject_id else ""
-    operational_unit = signal.operational_unit.label if signal.operational_unit_id else ""
-    return {
-        "title": signal.title,
-        "structured_summary": signal.structured_summary,
-        "issue_focus": signal.issue_focus,
-        "activity_subject": activity_subject,
-        "operational_unit": operational_unit,
-    }
-
-
-def _resolve_active_pattern_target(
-    *,
-    signal: Signal,
-    pattern: OperationalPattern,
-) -> OperationalPattern:
-    if (
-        pattern.organization_id == signal.establishment.organization_id
-        and pattern.status == OperationalPattern.Status.ACTIVE
-    ):
-        return pattern
-
-    if pattern.status == OperationalPattern.Status.MERGED:
-        target = _resolve_merged_pattern_chain(signal=signal, pattern=pattern)
-        if target is not None:
-            return target
-
-    active = (
-        OperationalPattern.objects.select_for_update()
-        .filter(
-            organization=signal.establishment.organization,
-            normalized_label=pattern.normalized_label,
-            status=OperationalPattern.Status.ACTIVE,
-        )
-        .first()
-    )
-    if active is not None:
-        return active
-
-    raise PatternClassifierInvalidOutputError("No active target pattern could be resolved.")
-
-
-def _resolve_merged_pattern_chain(
-    *,
-    signal: Signal,
-    pattern: OperationalPattern,
-) -> OperationalPattern | None:
-    seen = {pattern.id}
-    current = pattern
-    for _ in range(5):
-        if current.merged_into_id is None:
-            return None
-        target = OperationalPattern.objects.select_for_update().get(pk=current.merged_into_id)
-        if target.id in seen:
-            return None
-        seen.add(target.id)
-        if target.organization_id != signal.establishment.organization_id:
-            return None
-        if target.status == OperationalPattern.Status.ACTIVE:
-            return target
-        if target.status != OperationalPattern.Status.MERGED:
-            return None
-        current = target
-    return None
-
-
 def _validate_new_pattern_label(*, signal: Signal, label: str) -> str:
     normalized = normalize_pattern_label(label)
     if not normalized:
-        raise PatternClassifierInvalidOutputError("New pattern label is empty.")
+        raise PatternClassifierInvalidOutputError(
+            "New pattern label is empty.",
+            validation_branch="new_pattern_label_empty",
+        )
     cleaned = label.strip()
     if len(cleaned) > PATTERN_LABEL_MAX_LENGTH:
-        raise PatternClassifierInvalidOutputError("New pattern label is too long.")
-    if normalized == normalize_pattern_label(signal.title):
-        raise PatternClassifierInvalidOutputError("New pattern label copies the signal title.")
-
+        raise PatternClassifierInvalidOutputError(
+            "New pattern label is too long.",
+            validation_branch="new_pattern_label_too_long",
+        )
     forbidden_labels = [signal.establishment.name]
     for business_unit in (
         signal.affected_business_unit,
@@ -2528,9 +2486,10 @@ def _validate_new_pattern_label(*, signal: Signal, label: str) -> str:
             forbidden_labels.append(business_unit.specific_name)
     for forbidden_label in forbidden_labels:
         forbidden = normalize_pattern_label(forbidden_label)
-        if forbidden and forbidden in normalized:
+        if forbidden and forbidden == normalized:
             raise PatternClassifierInvalidOutputError(
-                "New pattern label includes establishment or business unit context."
+                "New pattern label includes establishment or business unit context.",
+                validation_branch="new_pattern_label_includes_context",
             )
 
     return cleaned
@@ -2547,20 +2506,19 @@ def _get_or_create_active_pattern_for_label(
             return create_operational_pattern(
                 organization=signal.establishment.organization,
                 label=label,
+                semantic_label=label,
             )
     except IntegrityError:
-        pattern = (
-            OperationalPattern.objects.filter(
-                organization=signal.establishment.organization,
-                normalized_label=normalized,
-                status=OperationalPattern.Status.ACTIVE,
-            )
-            .order_by("id")
-            .first()
+        exact_alias = _resolve_exact_pattern_alias(
+            signal=signal,
+            normalized_alias=normalized,
         )
-        if pattern is not None:
-            return pattern
-        raise PatternClassifierInvalidOutputError("Concurrent pattern creation lost target.")
+        if exact_alias.status == "resolved" and exact_alias.pattern is not None:
+            return exact_alias.pattern
+        raise PatternClassifierInvalidOutputError(
+            "Concurrent pattern creation lost target.",
+            validation_branch="concurrent_pattern_creation_lost_target",
+        )
 
 
 def _write_analytics_usage_log(
@@ -2572,6 +2530,7 @@ def _write_analytics_usage_log(
     latency_ms: int,
     correlation_id: uuid.UUID,
     error_code: str = "",
+    error_context: dict[str, Any] | None = None,
     input_tokens: int | None = None,
     output_tokens: int | None = None,
     total_tokens: int | None = None,
@@ -2588,41 +2547,28 @@ def _write_analytics_usage_log(
         output_tokens=output_tokens,
         total_tokens=total_tokens,
         error_code=error_code,
-        error_context={},
+        error_context=error_context or {},
         correlation_id=correlation_id,
         establishment=signal.establishment,
     )
 
 
-def _write_duplicate_guard_usage_log(
+def _invalid_output_error_context(
     *,
-    signal: Signal,
-    provider: str,
-    model: str,
-    status: str,
-    latency_ms: int,
-    correlation_id: uuid.UUID,
-    error_code: str = "",
-    input_tokens: int | None = None,
-    output_tokens: int | None = None,
-    total_tokens: int | None = None,
-) -> None:
-    AIUsageLog.objects.create(
-        ai_domain=AIUsageLog.Domain.ANALYTICS_PATTERN,
-        provider=provider,
-        model=model or "",
-        prompt_version=ANALYTICS_PATTERN_DUPLICATE_GUARD_PROMPT_VERSION,
-        schema_version=ANALYTICS_PATTERN_DUPLICATE_GUARD_SCHEMA_VERSION,
-        status=status,
-        latency_ms=latency_ms,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
-        total_tokens=total_tokens,
-        error_code=error_code,
-        error_context={"phase": "analytics_pattern_duplicate_guard"},
-        correlation_id=correlation_id,
-        establishment=signal.establishment,
-    )
+    exc: PatternClassifierInvalidOutputError,
+    provider: PatternClassifierProvider,
+) -> dict[str, str]:
+    context = {
+        "phase": "analytics_pattern_classification",
+        "validation_branch": exc.validation_branch,
+    }
+    response_format_mode = getattr(provider, "last_response_format_mode", "")
+    if response_format_mode:
+        context["response_format_mode"] = str(response_format_mode)[:80]
+    provider_request_id = getattr(provider, "last_provider_request_id", "")
+    if provider_request_id:
+        context["provider_request_id"] = str(provider_request_id)[:200]
+    return context
 
 
 def _elapsed_ms(started_at: float) -> int:
