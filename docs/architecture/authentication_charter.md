@@ -174,8 +174,10 @@ The frontend must:
 Local Docker + Vite development:
 
 - `VITE_API_BASE_URL` is the explicit API host. When empty, relative `/api` paths plus the Vite proxy remain valid
+- in Web runtime only, when both the page and configured API hostnames are local loopbacks (`localhost` or `127.0.0.1`), the API hostname is aligned with the page hostname so `SameSite=Lax` cookies remain same-site; protocol and port stay configured
 - when using the Vite `/api` proxy, preserve the browser host instead of rewriting it to the internal container hostname
 - configure `HOUSTON_CLIENT_ORIGINS` explicitly for local frontend origins such as `http://localhost:5173` and `http://127.0.0.1:5173`
+- origin allowlisting permits CORS and CSRF origin checks but does not cause browsers to attach cross-site cookies
 - Django `CSRF_TRUSTED_ORIGINS` is derived from the http(s) entries of that list; do not set it separately
 - do not use wildcard client origins for local convenience
 

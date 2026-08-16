@@ -7,6 +7,7 @@ import { getApiBaseUrl, getAppRuntime, resolveApiUrl, resolveWsUrl } from './run
 describe('runtime', () => {
   afterEach(() => {
     vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
   })
 
   it('defaults the runtime to web', () => {
@@ -21,10 +22,47 @@ describe('runtime', () => {
   })
 
   it('treats an empty API base as same-origin', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
     vi.stubEnv('VITE_API_BASE_URL', '')
+    vi.stubGlobal('window', { location: { hostname: '127.0.0.1' } })
 
     expect(getApiBaseUrl()).toBe('')
     expect(resolveApiUrl('/api/v1/auth/csrf/')).toBe('/api/v1/auth/csrf/')
+  })
+
+  it('aligns a localhost API with a 127.0.0.1 web page', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:8000/base/')
+    vi.stubGlobal('window', { location: { hostname: '127.0.0.1' } })
+
+    expect(getApiBaseUrl()).toBe('http://127.0.0.1:8000/base')
+    expect(resolveApiUrl('/api/v1/auth/csrf/')).toBe(
+      'http://127.0.0.1:8000/base/api/v1/auth/csrf/',
+    )
+  })
+
+  it('aligns a 127.0.0.1 API with a localhost web page', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    vi.stubEnv('VITE_API_BASE_URL', 'http://127.0.0.1:8000')
+    vi.stubGlobal('window', { location: { hostname: 'localhost' } })
+
+    expect(getApiBaseUrl()).toBe('http://localhost:8000')
+  })
+
+  it('leaves a remote API unchanged in web runtime', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    vi.stubEnv('VITE_API_BASE_URL', 'https://api.example.test')
+    vi.stubGlobal('window', { location: { hostname: '127.0.0.1' } })
+
+    expect(getApiBaseUrl()).toBe('https://api.example.test')
+  })
+
+  it('leaves a loopback API unchanged in native runtime', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:8000')
+    vi.stubGlobal('window', { location: { hostname: '127.0.0.1' } })
+
+    expect(getApiBaseUrl()).toBe('http://localhost:8000')
   })
 
   it('strips a trailing slash from an absolute API base', () => {
