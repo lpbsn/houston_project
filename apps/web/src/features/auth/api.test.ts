@@ -177,7 +177,7 @@ describe('auth api cache isolation', () => {
     expect(getSuccessToastsSnapshot()).toEqual([])
   })
 
-  it('clears the entire query cache on clearAuthState', () => {
+  it('clears cached frontend auth state on clearAuthState', () => {
     queryClient.setQueryData(['action-plans', 'detail', 'est-a', 'plan-1'], { id: 'plan-1' })
     queryClient.setQueryData(['chat', 'conversations', 'est-a'], { items: [] })
     queryClient.setQueryData(['reporting', 'kpi', 'est-a'], { kpi: 1 })
