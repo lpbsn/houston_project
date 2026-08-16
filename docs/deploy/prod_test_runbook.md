@@ -155,7 +155,7 @@ Local equivalent of a full wipe: `make reset-dev-db` — see [`../engineering/lo
 | Health OK but observations `queued` | Worker logs ; [`smoke_checklist.md`](smoke_checklist.md) § Workers |
 | Blank page / wrong asset | `readonly.sh` ; contract § api-web routing |
 | Deep-link 404 (SPA) | `readonly.sh` `/signals` check |
-| CSRF / login loop | [`railway_variables.md`](railway_variables.md) `CSRF_TRUSTED_ORIGINS` ; [`railway_security.md`](railway_security.md) |
+| CSRF / login loop | [`railway_variables.md`](railway_variables.md) `HOUSTON_CLIENT_ORIGINS` ; [`railway_security.md`](railway_security.md) |
 | Upload 413 / 400 | Contract § Upload limits ; [`smoke_checklist.md`](smoke_checklist.md) § Photo submit guard |
 | Photo submit blocked | [`smoke_checklist.md`](smoke_checklist.md) § Photo submit guard (expected behaviour) |
 | Signal never appears | Worker logs ; grep `observation_pipeline_failed` ; processing-status endpoint |

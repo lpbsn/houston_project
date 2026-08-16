@@ -11,7 +11,7 @@ import {
 } from '@/lib/query-invalidation'
 import { clearSuccessToasts } from '@/lib/success-toast'
 
-import { ensureCsrfToken } from './csrf'
+import { clearCsrfTokenCache, ensureCsrfToken } from './csrf'
 import { clearAccessToken, getAccessToken, setAccessToken } from './session'
 import type {
   AuthResponse,
@@ -290,6 +290,7 @@ let refreshPromise: Promise<string | null> | null = null
 let restorePromise: Promise<string | null> | null = null
 
 export function clearAuthState() {
+  clearCsrfTokenCache()
   clearAccessToken()
   clearAllPlanningSubmissionIntents()
   clearObservationProcessingTrackerOnLogout()
@@ -752,27 +753,23 @@ export async function fetchBusinessUnitTree(
   establishmentId: string,
   options?: { includeInactive?: boolean },
 ): Promise<BusinessUnitTreeResponse> {
-  const csrfToken = await ensureCsrfToken()
-  let path = `/api/v1/establishments/${establishmentId}/business-units/`
-  if (options?.includeInactive) {
-    path += '?include_inactive=true'
-  }
   const result = await withAuthRetry(
     (accessToken) =>
-      fetch(path, {
-        credentials: 'include',
-        headers: {
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-          'X-CSRFToken': csrfToken,
+      apiClient.GET('/api/v1/establishments/{establishment_id}/business-units/', {
+        params: {
+          path: { establishment_id: establishmentId },
+          ...(options?.includeInactive ? { query: { include_inactive: true } } : {}),
         },
-      }).then(async (response) => ({
-        response,
-        data: response.ok ? ((await response.json()) as BusinessUnitTreeResponse) : null,
-      })),
+        headers: accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+            }
+          : undefined,
+      }),
     { refreshable: true },
   )
 
-  if (!result.response.ok || !result.data) {
+  if (result.error || !result.data) {
     throw new AuthApiError('Business unit tree could not be loaded.', result.response.status)
   }
 

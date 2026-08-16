@@ -313,3 +313,22 @@ def test_notification_invalidation_isolated_to_target_membership(api_client):
         await communicator_b.disconnect()
 
     async_to_sync(run)()
+
+
+def test_realtime_ws_rejects_invalid_origin():
+    establishment = create_establishment()
+
+    async def run():
+        communicator = WebsocketCommunicator(
+            application,
+            ws_realtime_path(establishment.id),
+            headers=[
+                (b"host", b"localhost"),
+                (b"origin", b"http://evil.example"),
+            ],
+        )
+        connected, _ = await communicator.connect()
+        assert not connected
+        await communicator.disconnect()
+
+    async_to_sync(run)()

@@ -71,6 +71,7 @@ describe('useChatWebSocket', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
   })
 
   it('fetches ws ticket and authenticates on connect', async () => {
@@ -102,6 +103,25 @@ describe('useChatWebSocket', () => {
     await waitFor(() => {
       expect(result.current.connectionStatus).toBe('connected')
     })
+  })
+
+  it('opens the websocket against the configured API host', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:8000')
+
+    renderHook(() =>
+      useChatWebSocket({
+        establishmentId: 'est-1',
+        enabled: true,
+      }),
+    )
+
+    await waitFor(() => {
+      expect(MockWebSocket.instances[0]).toBeDefined()
+    })
+
+    expect(MockWebSocket.instances[0]?.url).toBe(
+      'ws://localhost:8000/ws/v1/establishments/est-1/chat/',
+    )
   })
 
   it('handles global access.revoked without scheduling reconnect', async () => {

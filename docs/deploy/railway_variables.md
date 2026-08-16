@@ -12,15 +12,15 @@ After generating the public Railway domain for `api-web`:
 
 ```bash
 DJANGO_ALLOWED_HOSTS=<railway-public-domain>,healthcheck.railway.app
-CSRF_TRUSTED_ORIGINS=https://<railway-public-domain>
+HOUSTON_CLIENT_ORIGINS=https://<railway-public-domain>
 ```
 
 | Variable | Example | Notes |
 |---|---|---|
 | `DJANGO_ALLOWED_HOSTS` | `houston-prod-test.up.railway.app,healthcheck.railway.app` | Comma-separated; no spaces. Include `healthcheck.railway.app` so Railway healthchecks do not get `400 DisallowedHost`. |
-| `CSRF_TRUSTED_ORIGINS` | `https://houston-prod-test.up.railway.app` | HTTPS only; match the public origin |
+| `HOUSTON_CLIENT_ORIGINS` | `https://houston-prod-test.up.railway.app` | HTTPS frontend origin(s). Drives CORS, WebSocket Origin, and Django CSRF (http(s) only). Native schemes are Lot 5. |
 
-For multiple domains (e.g. Railway default + custom): add all to `DJANGO_ALLOWED_HOSTS`; add all `https://` origins to `CSRF_TRUSTED_ORIGINS`.
+For multiple domains (e.g. Railway default + custom): add all to `DJANGO_ALLOWED_HOSTS`; add all `https://` frontend origins to `HOUSTON_CLIENT_ORIGINS`.
 
 ---
 
@@ -79,7 +79,7 @@ Forbidden placeholders: `replace-me-for-local-dev`, empty values.
 | Variable / group | `api-web` | `celery-worker` | `celery-beat` |
 |---|---|---|---|
 | `DJANGO_SECRET_KEY`, `DJANGO_DEBUG` | yes | yes | yes |
-| `DJANGO_ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS` | yes | yes | yes |
+| `DJANGO_ALLOWED_HOSTS`, `HOUSTON_CLIENT_ORIGINS` | yes | yes | yes |
 | `POSTGRES_*` | yes | yes | yes |
 | `REDIS_URL`, `CELERY_*`, `HOUSTON_CACHE_REDIS_URL` | yes | yes | yes |
 | Auth salts / `OPENAI_API_KEY` | yes | yes | yes |
@@ -219,7 +219,7 @@ Phase 2 (`CELERY_WORKER_PREFETCH_MULTIPLIER`) is out of scope here.
 1. [ ] All secrets generated and distinct
 2. [ ] `DJANGO_DEBUG=0`
 3. [ ] `DJANGO_ALLOWED_HOSTS` includes public domain + `healthcheck.railway.app`
-4. [ ] `CSRF_TRUSTED_ORIGINS` includes `https://<public-domain>`
+4. [ ] `HOUSTON_CLIENT_ORIGINS` includes `https://<public-domain>`
 5. [ ] `POSTGRES_SSLMODE=require`
 6. [ ] Redis URLs mapped to DBs 0–3
 7. [ ] `make backend-deploy-check` passes locally

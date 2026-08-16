@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { resolveWsUrl } from '@/lib/runtime'
+
 import { issueChatWsTicket } from '../api'
 import type {
   ChatConnectionStatus,
@@ -16,8 +18,7 @@ const RECONNECT_BASE_MS = 1000
 const RECONNECT_MAX_MS = 15000
 
 function buildChatWebSocketUrl(establishmentId: string): string {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${protocol}//${window.location.host}/ws/v1/establishments/${establishmentId}/chat/`
+  return resolveWsUrl(`/ws/v1/establishments/${establishmentId}/chat/`)
 }
 
 function logWsCloseDev(channel: string, event: CloseEvent) {

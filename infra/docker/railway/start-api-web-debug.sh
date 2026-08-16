@@ -16,7 +16,7 @@ cd /app/apps/api
 echo "=== start-api-web-debug: safe env ==="
 echo "DJANGO_DEBUG=${DJANGO_DEBUG:-<unset>}"
 echo "DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-<unset>}"
-echo "CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-<unset>}"
+echo "HOUSTON_CLIENT_ORIGINS=${HOUSTON_CLIENT_ORIGINS:-<unset>}"
 echo "POSTGRES_DB=${POSTGRES_DB:-<unset>}"
 echo "POSTGRES_USER=${POSTGRES_USER:-<unset>}"
 echo "POSTGRES_HOST=${POSTGRES_HOST:-<unset>}"

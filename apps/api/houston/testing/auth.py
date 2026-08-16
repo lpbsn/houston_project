@@ -58,7 +58,9 @@ def assign_business_unit_scope(
 def ensure_csrf(api_client: APIClient) -> str:
     response = api_client.get("/api/v1/auth/csrf/")
     assert response.status_code == 200
-    return api_client.cookies["csrftoken"].value
+    token = response.json()["csrf_token"]
+    assert token
+    return token
 
 
 def login(api_client: APIClient, *, user: User, password: str = TEST_PASSWORD) -> str:

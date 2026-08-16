@@ -31,6 +31,8 @@ Optional scheduler (action plan horizon beat): `make up-scheduler`.
 
 After `.env` changes with stack running: `make recreate-backend` (reloads api/celery env). `make restart-backend` does **not** reload `.env`.
 
+`make web-dev` loads `VITE_*` from the repo-root `.env` (`Vite envDir`). With `VITE_API_BASE_URL=http://localhost:8000`, the browser calls the API on `:8000` directly (CORS via `HOUSTON_CLIENT_ORIGINS`). Leave it empty to keep relative `/api` paths and the Vite proxy.
+
 ## Daily commands
 
 | Task | Command |

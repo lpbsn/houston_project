@@ -7,6 +7,7 @@ import { defineConfig } from 'vitest/config'
 
 // https://vite.dev/config/
 export default defineConfig({
+  envDir: fileURLToPath(new URL('../..', import.meta.url)),
   plugins: [
     react(),
     tailwindcss(),

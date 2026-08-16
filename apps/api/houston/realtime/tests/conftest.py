@@ -120,5 +120,5 @@ def get_realtime_ws_ticket(api_client, *, user, establishment) -> str:
 def default_ws_headers() -> list[tuple[bytes, bytes]]:
     return [
         (b"host", b"localhost"),
-        (b"origin", b"http://localhost"),
+        (b"origin", b"http://localhost:5173"),
     ]

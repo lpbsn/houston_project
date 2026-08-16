@@ -952,7 +952,8 @@ paths:
   /api/v1/auth/csrf/:
     get:
       operationId: v1_auth_csrf_retrieve
-      description: Ensures the Django CSRF cookie exists for subsequent auth mutations.
+      description: Ensures the Django CSRF cookie exists and returns csrf_token for
+        subsequent auth mutations.
       tags:
       - auth
       responses:
@@ -10741,7 +10742,10 @@ components:
       properties:
         detail:
           type: string
+        csrf_token:
+          type: string
       required:
+      - csrf_token
       - detail
     DetailResponse:
       type: object

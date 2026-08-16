@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { clearApiClientAuth, configureApiClientAuth, withAuthRetry } from './client'
+import { clearApiClientAuth, configureApiClientAuth, fetchWithAuthRetry, withAuthRetry } from './client'
 
 describe('withAuthRetry', () => {
   afterEach(() => {
@@ -73,5 +73,41 @@ describe('withAuthRetry', () => {
 
     expect(clearAuth).toHaveBeenCalledTimes(1)
     expect(execute).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('fetchWithAuthRetry', () => {
+  afterEach(() => {
+    clearApiClientAuth()
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+  })
+
+  it('prefixes relative API paths with the configured base URL', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:8000')
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchWithAuthRetry('/api/v1/establishments/est-1/temporary-uploads/', {
+      method: 'POST',
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8000/api/v1/establishments/est-1/temporary-uploads/',
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
+  it('keeps relative paths when no API base is configured', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '')
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchWithAuthRetry('/api/v1/auth/bootstrap/', { method: 'GET' })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/auth/bootstrap/',
+      expect.objectContaining({ method: 'GET' }),
+    )
   })
 })

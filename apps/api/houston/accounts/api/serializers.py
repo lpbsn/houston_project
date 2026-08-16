@@ -25,6 +25,7 @@ class ValidationErrorResponseSerializer(ApiErrorResponseSerializer):
 
 class CsrfResponseSerializer(serializers.Serializer):
     detail = serializers.CharField()
+    csrf_token = serializers.CharField()
 
 
 class LoginRequestSerializer(serializers.Serializer):

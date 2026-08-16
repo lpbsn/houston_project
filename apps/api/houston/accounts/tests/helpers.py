@@ -48,8 +48,9 @@ def ensure_csrf(api_client: APIClient) -> str:
 
     assert response.status_code == 200
     assert "csrftoken" in api_client.cookies
-
-    return api_client.cookies["csrftoken"].value
+    token = response.json()["csrf_token"]
+    assert token
+    return token
 
 
 def auth_headers(csrf_token: str, access_token: str | None = None) -> dict:

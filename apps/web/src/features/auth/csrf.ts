@@ -1,38 +1,24 @@
 import { apiClient } from '@/api/client'
 
-const CSRF_COOKIE_NAME = 'csrftoken'
+let cachedCsrfToken: string | null = null
 
-function readCookie(name: string) {
-  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const match = document.cookie.match(new RegExp(`(?:^|; )${escapedName}=([^;]*)`))
-
-  return match ? decodeURIComponent(match[1]) : null
-}
-
-export function getCsrfToken() {
-  return readCookie(CSRF_COOKIE_NAME)
+export function clearCsrfTokenCache() {
+  cachedCsrfToken = null
 }
 
 export async function ensureCsrfToken() {
-  const currentToken = getCsrfToken()
-
-  if (currentToken) {
-    return currentToken
+  if (cachedCsrfToken) {
+    return cachedCsrfToken
   }
 
-  const { error } = await apiClient.GET('/api/v1/auth/csrf/', {
+  const { data, error } = await apiClient.GET('/api/v1/auth/csrf/', {
     credentials: 'include',
   })
 
-  if (error) {
+  if (error || !data?.csrf_token) {
     throw new Error('Unable to initialize CSRF protection.')
   }
 
-  const refreshedToken = getCsrfToken()
-
-  if (!refreshedToken) {
-    throw new Error('The CSRF cookie was not set by the backend.')
-  }
-
-  return refreshedToken
+  cachedCsrfToken = data.csrf_token
+  return cachedCsrfToken
 }

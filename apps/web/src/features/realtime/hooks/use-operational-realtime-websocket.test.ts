@@ -74,6 +74,7 @@ describe('useOperationalRealtimeWebSocket', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
   })
 
   it('fetches ws ticket and authenticates on connect', async () => {
@@ -105,6 +106,25 @@ describe('useOperationalRealtimeWebSocket', () => {
     await waitFor(() => {
       expect(result.current.connectionStatus).toBe('connected')
     })
+  })
+
+  it('opens the websocket against the configured API host', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:8000')
+
+    renderHook(() =>
+      useOperationalRealtimeWebSocket({
+        establishmentId: 'est-1',
+        enabled: true,
+      }),
+    )
+
+    await waitFor(() => {
+      expect(MockWebSocket.instances[0]).toBeDefined()
+    })
+
+    expect(MockWebSocket.instances[0]?.url).toBe(
+      'ws://localhost:8000/ws/v1/establishments/est-1/realtime/',
+    )
   })
 
   it('schedules reconnect after auth timeout without staying disconnected', async () => {

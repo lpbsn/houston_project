@@ -28,7 +28,10 @@ vi.mock('@/api/client', () => ({
   withAuthRetry: (...args: unknown[]) => withAuthRetryMock(...args),
 }))
 
+const clearCsrfTokenCacheMock = vi.hoisted(() => vi.fn())
+
 vi.mock('./csrf', () => ({
+  clearCsrfTokenCache: () => clearCsrfTokenCacheMock(),
   ensureCsrfToken: vi.fn(async () => 'csrf-token'),
 }))
 
@@ -183,6 +186,7 @@ describe('auth api cache isolation', () => {
 
     clearAuthState()
 
+    expect(clearCsrfTokenCacheMock).toHaveBeenCalledOnce()
     expect(clearAccessTokenMock).toHaveBeenCalledOnce()
     expect(queryClient.getQueryData(['action-plans', 'detail', 'est-a', 'plan-1'])).toBeUndefined()
     expect(queryClient.getQueryData(['chat', 'conversations', 'est-a'])).toBeUndefined()

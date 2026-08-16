@@ -11,7 +11,9 @@ VALID_PRODUCTION_OVERRIDES = {
     "DEBUG": False,
     "SECRET_KEY": "production-secret-key-value-with-sufficient-length-and-entropy",
     "ALLOWED_HOSTS": ["example.railway.app"],
+    "HOUSTON_CLIENT_ORIGINS": ["https://example.railway.app"],
     "CSRF_TRUSTED_ORIGINS": ["https://example.railway.app"],
+    "CORS_ALLOWED_ORIGINS": ["https://example.railway.app"],
     "_HOUSTON_AUTH_TOKEN_PEPPER_ENV": "production-pepper-value-distinct-from-secret",
     "HOUSTON_AUTH_TOKEN_PEPPER": "production-pepper-value-distinct-from-secret",
     "HOUSTON_AUTH_TOKEN_SALT": "production-auth-token-salt",
@@ -46,14 +48,18 @@ def test_production_deploy_check_rejects_local_secret_placeholder(valid_producti
         call_command("check", deploy=True)
 
 
-def test_production_deploy_check_rejects_empty_csrf_origins(valid_production_overrides):
+def test_production_deploy_check_rejects_empty_client_origins(valid_production_overrides):
+    valid_production_overrides["HOUSTON_CLIENT_ORIGINS"] = []
     valid_production_overrides["CSRF_TRUSTED_ORIGINS"] = []
+    valid_production_overrides["CORS_ALLOWED_ORIGINS"] = []
     with override_settings(**valid_production_overrides), pytest.raises(SystemCheckError):
         call_command("check", deploy=True)
 
 
-def test_production_deploy_check_rejects_public_http_csrf_origin(valid_production_overrides):
+def test_production_deploy_check_rejects_public_http_client_origin(valid_production_overrides):
+    valid_production_overrides["HOUSTON_CLIENT_ORIGINS"] = ["http://evil.example.com"]
     valid_production_overrides["CSRF_TRUSTED_ORIGINS"] = ["http://evil.example.com"]
+    valid_production_overrides["CORS_ALLOWED_ORIGINS"] = ["http://evil.example.com"]
     with override_settings(**valid_production_overrides), pytest.raises(SystemCheckError):
         call_command("check", deploy=True)
 
@@ -61,7 +67,9 @@ def test_production_deploy_check_rejects_public_http_csrf_origin(valid_productio
 def test_production_deploy_check_rejects_local_http_csrf_without_exception(
     valid_production_overrides,
 ):
+    valid_production_overrides["HOUSTON_CLIENT_ORIGINS"] = ["http://localhost:8080"]
     valid_production_overrides["CSRF_TRUSTED_ORIGINS"] = ["http://localhost:8080"]
+    valid_production_overrides["CORS_ALLOWED_ORIGINS"] = ["http://localhost:8080"]
     valid_production_overrides["HOUSTON_ALLOW_INSECURE_LOCAL_CSRF_ORIGINS"] = False
     with override_settings(**valid_production_overrides), pytest.raises(SystemCheckError):
         call_command("check", deploy=True)
@@ -69,7 +77,9 @@ def test_production_deploy_check_rejects_local_http_csrf_without_exception(
 
 def test_production_deploy_check_allows_local_http_csrf_with_exception(valid_production_overrides):
     valid_production_overrides["ALLOWED_HOSTS"] = ["localhost", "127.0.0.1", "api", "gateway"]
+    valid_production_overrides["HOUSTON_CLIENT_ORIGINS"] = ["http://localhost:8080"]
     valid_production_overrides["CSRF_TRUSTED_ORIGINS"] = ["http://localhost:8080"]
+    valid_production_overrides["CORS_ALLOWED_ORIGINS"] = ["http://localhost:8080"]
     valid_production_overrides["HOUSTON_ALLOW_INSECURE_LOCAL_CSRF_ORIGINS"] = True
     valid_production_overrides["HOUSTON_ALLOW_LOCAL_ALLOWED_HOSTS"] = True
     with override_settings(**valid_production_overrides):
@@ -110,7 +120,9 @@ def test_production_deploy_check_allows_local_allowed_hosts_with_exception(
 ):
     valid_production_overrides["ALLOWED_HOSTS"] = ["localhost", "127.0.0.1", "api", "gateway"]
     valid_production_overrides["HOUSTON_ALLOW_LOCAL_ALLOWED_HOSTS"] = True
+    valid_production_overrides["HOUSTON_CLIENT_ORIGINS"] = ["http://localhost:8080"]
     valid_production_overrides["CSRF_TRUSTED_ORIGINS"] = ["http://localhost:8080"]
+    valid_production_overrides["CORS_ALLOWED_ORIGINS"] = ["http://localhost:8080"]
     valid_production_overrides["HOUSTON_ALLOW_INSECURE_LOCAL_CSRF_ORIGINS"] = True
     with override_settings(**valid_production_overrides):
         call_command("check", deploy=True)
@@ -120,6 +132,7 @@ def test_debug_mode_skips_production_security_checks():
     with override_settings(
         DEBUG=True,
         SECRET_KEY="replace-me-for-local-dev",
+        HOUSTON_CLIENT_ORIGINS=[],
         CSRF_TRUSTED_ORIGINS=[],
         _HOUSTON_AUTH_TOKEN_PEPPER_ENV="",
         HOUSTON_AUTH_TOKEN_PEPPER="replace-me-for-local-dev",
