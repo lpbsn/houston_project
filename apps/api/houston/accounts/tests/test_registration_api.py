@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from django.conf import settings
 from django.test import override_settings
 from rest_framework.test import APIClient
 
@@ -81,6 +82,21 @@ def test_valid_invite_code_provisions_tenant_owner_and_session(api_client):
     assert after["memberships"] == before["memberships"] + 1
     assert after["onboarding_sessions"] == before["onboarding_sessions"] + 1
     assert after["user_sessions"] == before["user_sessions"] + 1
+
+
+@override_settings(HOUSTON_REGISTRATION_INVITE_CODES=["valid-code"])
+def test_body_registration_skips_csrf_and_does_not_set_refresh_cookie(api_client):
+    payload = registration_payload(
+        email="body.registration@example.com",
+        refresh_token_transport="body",
+    )
+
+    response = api_client.post("/api/v1/auth/register/", payload, format="json")
+
+    assert response.status_code == 201
+    assert response.data["refresh_token"]
+    assert response.data["refresh_token_expires_at"]
+    assert settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME not in response.cookies
 
 
 @override_settings(HOUSTON_REGISTRATION_INVITE_CODES=["valid-code"])

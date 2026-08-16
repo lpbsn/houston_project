@@ -8,6 +8,17 @@ from rest_framework import serializers
 
 from houston.accounts.models import User
 
+REFRESH_TOKEN_TRANSPORT_COOKIE = "cookie"
+REFRESH_TOKEN_TRANSPORT_BODY = "body"
+REFRESH_TOKEN_TRANSPORT_CHOICES = (
+    (REFRESH_TOKEN_TRANSPORT_COOKIE, "Cookie"),
+    (REFRESH_TOKEN_TRANSPORT_BODY, "Body"),
+)
+
+
+class RefreshTokenTransportSerializerMixin(serializers.Serializer):
+    refresh_token_transport = serializers.ChoiceField(choices=REFRESH_TOKEN_TRANSPORT_CHOICES)
+
 
 class DetailResponseSerializer(serializers.Serializer):
     detail = serializers.CharField()
@@ -28,9 +39,40 @@ class CsrfResponseSerializer(serializers.Serializer):
     csrf_token = serializers.CharField()
 
 
-class LoginRequestSerializer(serializers.Serializer):
+class LoginRequestSerializer(RefreshTokenTransportSerializerMixin):
     identifier = serializers.CharField()
     password = serializers.CharField(trim_whitespace=False)
+
+
+class RefreshRequestSerializer(RefreshTokenTransportSerializerMixin):
+    refresh_token = serializers.CharField(required=False, trim_whitespace=False)
+
+    def validate(self, attrs):
+        transport = attrs["refresh_token_transport"]
+        raw_refresh_token = attrs.get("refresh_token")
+        if transport == REFRESH_TOKEN_TRANSPORT_COOKIE and raw_refresh_token is not None:
+            raise serializers.ValidationError(
+                {"refresh_token": "Must not be provided for cookie transport."}
+            )
+        if transport == REFRESH_TOKEN_TRANSPORT_BODY and not raw_refresh_token:
+            raise serializers.ValidationError(
+                {"refresh_token": "This field is required for body transport."}
+            )
+        return attrs
+
+
+class LogoutRequestSerializer(RefreshTokenTransportSerializerMixin):
+    refresh_token = serializers.CharField(required=False, trim_whitespace=False)
+
+    def validate(self, attrs):
+        if (
+            attrs["refresh_token_transport"] == REFRESH_TOKEN_TRANSPORT_COOKIE
+            and attrs.get("refresh_token") is not None
+        ):
+            raise serializers.ValidationError(
+                {"refresh_token": "Must not be provided for cookie transport."}
+            )
+        return attrs
 
 
 class SwitchEstablishmentRequestSerializer(serializers.Serializer):
@@ -117,6 +159,8 @@ class BootstrapResponseSerializer(serializers.Serializer):
 class AuthResponseSerializer(BootstrapResponseSerializer):
     access_token = serializers.CharField()
     access_token_expires_at = serializers.DateTimeField()
+    refresh_token = serializers.CharField(required=False)
+    refresh_token_expires_at = serializers.DateTimeField(required=False)
 
 
 def validate_registration_password_pair(
@@ -188,7 +232,7 @@ class RegistrationOwnerValidateRequestSerializer(serializers.Serializer):
         )
 
 
-class RegistrationRequestSerializer(serializers.Serializer):
+class RegistrationRequestSerializer(RefreshTokenTransportSerializerMixin):
     invite_code = serializers.CharField(trim_whitespace=True)
     first_name = serializers.CharField(trim_whitespace=True)
     last_name = serializers.CharField(trim_whitespace=True)
@@ -252,7 +296,7 @@ class RegistrationResponseSerializer(AuthResponseSerializer):
     onboarding_session_id = serializers.UUIDField()
 
 
-class DirectorInvitationAcceptRequestSerializer(serializers.Serializer):
+class DirectorInvitationAcceptRequestSerializer(RefreshTokenTransportSerializerMixin):
     password = serializers.CharField(trim_whitespace=False)
     password_confirmation = serializers.CharField(trim_whitespace=False)
 

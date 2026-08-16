@@ -182,6 +182,7 @@ def test_refresh_under_limit_returns_200(api_client, active_user):
 
     refresh_response = api_client.post(
         "/api/v1/auth/refresh/",
+        {"refresh_token_transport": "cookie"},
         format="json",
         HTTP_X_CSRFTOKEN=csrf_token,
         **ip_headers,
@@ -207,6 +208,7 @@ def test_refresh_over_limit_returns_429(api_client, active_user):
     for _ in range(3):
         response = api_client.post(
             "/api/v1/auth/refresh/",
+            {"refresh_token_transport": "cookie"},
             format="json",
             HTTP_X_CSRFTOKEN=csrf_token,
             **ip_headers,
@@ -215,6 +217,7 @@ def test_refresh_over_limit_returns_429(api_client, active_user):
 
     response = api_client.post(
         "/api/v1/auth/refresh/",
+        {"refresh_token_transport": "cookie"},
         format="json",
         HTTP_X_CSRFTOKEN=csrf_token,
         **ip_headers,

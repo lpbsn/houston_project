@@ -12,10 +12,20 @@ import {
 import { clearSuccessToasts } from '@/lib/success-toast'
 
 import { clearCsrfTokenCache, ensureCsrfToken } from './csrf'
+import {
+  clearPersistedRefreshToken,
+  getRefreshTokenTransport,
+  persistRefreshFromAuthResponse,
+  prepareLogoutTransport,
+  prepareRefreshTransport,
+  prepareSessionCreationTransport,
+  type PreparedAuthTransport,
+} from './refresh-token-transport'
 import { clearAccessToken, getAccessToken, setAccessToken } from './session'
 import type {
   AuthResponse,
   BootstrapResponse,
+  DirectorInvitationAcceptInput,
   EstablishmentCreateRequest,
   EstablishmentCreateResponse,
   EstablishmentMembershipDetailResponse,
@@ -49,6 +59,8 @@ class AuthApiError extends Error {
     this.code = code
   }
 }
+
+class StaleAuthOperationError extends Error {}
 
 /** Best-effort: never rejects; attempts every planned invalidation. */
 async function settleQueryInvalidations(invalidations: Array<Promise<unknown>>) {
@@ -288,8 +300,14 @@ function buildAuthError(
 
 let refreshPromise: Promise<string | null> | null = null
 let restorePromise: Promise<string | null> | null = null
+let authGeneration = 0
+let authInvalidationGeneration = 0
+let cookieSessionReplacementQueue: Promise<void> = Promise.resolve()
+let bodyAuthCommitQueue: Promise<void> = Promise.resolve()
 
-export function clearAuthState() {
+function clearVolatileAuthState() {
+  authGeneration += 1
+  authInvalidationGeneration += 1
   clearCsrfTokenCache()
   clearAccessToken()
   clearAllPlanningSubmissionIntents()
@@ -299,21 +317,185 @@ export function clearAuthState() {
   clearAuthenticatedQueryCache(queryClient)
 }
 
-async function executeRefresh() {
-  const csrfToken = await ensureCsrfToken()
-  const { data, error, response } = await apiClient.POST('/api/v1/auth/refresh/', {
-    credentials: 'include',
-    headers: {
-      'X-CSRFToken': csrfToken,
+export function clearAuthState() {
+  clearVolatileAuthState()
+  if (getRefreshTokenTransport() === 'body') {
+    void enqueueAuthOperation(
+      bodyAuthCommitQueue,
+      (next) => {
+        bodyAuthCommitQueue = next
+      },
+      clearPersistedRefreshToken,
+    ).catch(() => undefined)
+  }
+}
+
+function buildTransportHeaders(prepared: PreparedAuthTransport, accessToken?: string | null) {
+  const headers: Record<string, string> = {}
+  if (prepared.csrfToken) {
+    headers['X-CSRFToken'] = prepared.csrfToken
+  }
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`
+  }
+  return Object.keys(headers).length > 0 ? headers : undefined
+}
+
+type AuthEnvelope = AuthResponse & {
+  refresh_token?: string
+  refresh_token_expires_at?: string
+}
+
+function enqueueAuthOperation<T>(
+  queue: Promise<void>,
+  updateQueue: (next: Promise<void>) => void,
+  operation: () => Promise<T>,
+) {
+  const result = queue.then(operation, operation)
+  updateQueue(result.then(() => undefined, () => undefined))
+  return result
+}
+
+function beginSessionReplacement() {
+  authGeneration += 1
+  return authGeneration
+}
+
+async function runSessionReplacement<T>(
+  operation: (prepared: PreparedAuthTransport, generation: number) => Promise<T>,
+) {
+  if (getRefreshTokenTransport() === 'body') {
+    const generation = beginSessionReplacement()
+    const prepared = await prepareSessionCreationTransport()
+    return operation(prepared, generation)
+  }
+
+  const invalidationGeneration = authInvalidationGeneration
+  const prepared = await prepareSessionCreationTransport()
+  return enqueueAuthOperation(
+    cookieSessionReplacementQueue,
+    (next) => {
+      cookieSessionReplacementQueue = next
     },
+    async () => {
+      if (invalidationGeneration !== authInvalidationGeneration) {
+        throw new StaleAuthOperationError('The authenticated session is no longer current.')
+      }
+      return operation(prepared, beginSessionReplacement())
+    },
+  )
+}
+
+async function revokeTransientSession(
+  payload: AuthEnvelope,
+  prepared: PreparedAuthTransport,
+) {
+  try {
+    await apiClient.POST('/api/v1/auth/logout/', {
+      body: {
+        refresh_token_transport: prepared.transport,
+        ...(prepared.transport === 'body' && payload.refresh_token
+          ? { refresh_token: payload.refresh_token }
+          : {}),
+      },
+      credentials: prepared.credentials,
+      headers: buildTransportHeaders(prepared, payload.access_token),
+    })
+  } catch {
+    // Best-effort cleanup: local state must still fail closed.
+  }
+}
+
+async function rejectStaleAuthEnvelope(
+  payload: AuthEnvelope,
+  prepared: PreparedAuthTransport,
+  options: { persistedBodyRefresh?: boolean } = {},
+): Promise<never> {
+  if (prepared.transport === 'cookie') {
+    clearVolatileAuthState()
+  }
+  await revokeTransientSession(payload, prepared)
+  if (prepared.transport === 'body' && options.persistedBodyRefresh) {
+    await clearPersistedRefreshToken().catch(() => undefined)
+  }
+  throw new StaleAuthOperationError('The authenticated session is no longer current.')
+}
+
+async function commitCurrentAuthEnvelope(
+  payload: AuthEnvelope,
+  prepared: PreparedAuthTransport,
+  generation: number,
+  options: { purgeNonAuth?: boolean },
+) {
+  if (generation !== authGeneration) {
+    return rejectStaleAuthEnvelope(payload, prepared)
+  }
+
+  try {
+    await persistRefreshFromAuthResponse(payload)
+  } catch (error) {
+    clearVolatileAuthState()
+    await Promise.allSettled([
+      revokeTransientSession(payload, prepared),
+      clearPersistedRefreshToken(),
+    ])
+    throw new Error('The authenticated session could not be persisted.', { cause: error })
+  }
+
+  if (generation !== authGeneration) {
+    return rejectStaleAuthEnvelope(payload, prepared, {
+      persistedBodyRefresh: prepared.transport === 'body',
+    })
+  }
+
+  if (options.purgeNonAuth) {
+    purgeNonAuthQueries(queryClient)
+    clearAllPlanningSubmissionIntents()
+    clearSuccessToasts()
+  }
+  setAccessToken(payload.access_token)
+  hydrateBootstrap(payload)
+}
+
+async function commitAuthEnvelope(
+  payload: AuthEnvelope,
+  prepared: PreparedAuthTransport,
+  options: { expectedGeneration?: number; purgeNonAuth?: boolean } = {},
+) {
+  const generation = options.expectedGeneration ?? authGeneration
+  if (prepared.transport === 'body') {
+    return enqueueAuthOperation(
+      bodyAuthCommitQueue,
+      (next) => {
+        bodyAuthCommitQueue = next
+      },
+      () => commitCurrentAuthEnvelope(payload, prepared, generation, options),
+    )
+  }
+  return commitCurrentAuthEnvelope(payload, prepared, generation, options)
+}
+
+function captureAuthGeneration() {
+  return authGeneration
+}
+
+async function executeRefresh() {
+  const generation = captureAuthGeneration()
+  const prepared = await prepareRefreshTransport()
+  const { data, error, response } = await apiClient.POST('/api/v1/auth/refresh/', {
+    body: {
+      refresh_token_transport: prepared.transport,
+      ...(prepared.refreshToken ? { refresh_token: prepared.refreshToken } : {}),
+    },
+    credentials: prepared.credentials,
+    headers: buildTransportHeaders(prepared),
   })
 
   if (error || !data) {
     throw buildAuthError(response, error, 'Your session could not be refreshed.')
   }
 
-  hydrateBootstrap(data)
-  setAccessToken(data.access_token)
+  await commitAuthEnvelope(data, prepared, { expectedGeneration: generation })
 
   return data
 }
@@ -327,7 +509,10 @@ export async function refreshAccessToken() {
     try {
       const payload = await executeRefresh()
       return payload.access_token
-    } catch {
+    } catch (error) {
+      if (error instanceof StaleAuthOperationError) {
+        return null
+      }
       clearAuthState()
       return null
     } finally {
@@ -359,36 +544,33 @@ export async function restoreSession() {
 }
 
 export async function login(input: LoginRequest) {
-  const csrfToken = await ensureCsrfToken()
-  const { data, error, response } = await apiClient.POST('/api/v1/auth/login/', {
-    body: input,
-    credentials: 'include',
-    headers: {
-      'X-CSRFToken': csrfToken,
-    },
+  return runSessionReplacement(async (prepared, generation) => {
+    const { data, error, response } = await apiClient.POST('/api/v1/auth/login/', {
+      body: {
+        ...input,
+        refresh_token_transport: prepared.transport,
+      },
+      credentials: prepared.credentials,
+      headers: buildTransportHeaders(prepared),
+    })
+
+    if (error || !data) {
+      throw buildAuthError(response, error, 'Sign-in failed.')
+    }
+
+    await commitAuthEnvelope(data, prepared, {
+      expectedGeneration: generation,
+      purgeNonAuth: true,
+    })
+
+    return toBootstrapResponse(data)
   })
-
-  if (error || !data) {
-    throw buildAuthError(response, error, 'Sign-in failed.')
-  }
-
-  purgeNonAuthQueries(queryClient)
-  clearAllPlanningSubmissionIntents()
-  clearSuccessToasts()
-  hydrateBootstrap(data)
-  setAccessToken(data.access_token)
-
-  return data
 }
 
 export async function validateRegistrationOwner(input: RegistrationOwnerValidateRequest) {
-  const csrfToken = await ensureCsrfToken()
   const { error, response } = await apiClient.POST('/api/v1/auth/register/validate-owner/', {
     body: input,
-    credentials: 'include',
-    headers: {
-      'X-CSRFToken': csrfToken,
-    },
+    credentials: 'omit',
   })
 
   if (response.status === 204) {
@@ -408,39 +590,78 @@ export type OnboardingRegistrationInput = Omit<RegistrationRequest, 'establishme
 }
 
 export async function registerOnboarding(input: OnboardingRegistrationInput) {
-  const csrfToken = await ensureCsrfToken()
-  const { data, error, response } = await apiClient.POST('/api/v1/auth/register/', {
-    body: input as RegistrationRequest,
-    credentials: 'include',
-    headers: {
-      'X-CSRFToken': csrfToken,
-    },
+  return runSessionReplacement(async (prepared, generation) => {
+    const { data, error, response } = await apiClient.POST('/api/v1/auth/register/', {
+      body: {
+        ...input,
+        establishment_name: input.establishment_name ?? '',
+        refresh_token_transport: prepared.transport,
+      },
+      credentials: prepared.credentials,
+      headers: buildTransportHeaders(prepared),
+    })
+
+    if (error || !data) {
+      throw buildRegistrationValidationError(
+        response,
+        error,
+        'Registration could not be completed.',
+      )
+    }
+
+    await commitAuthEnvelope(data, prepared, {
+      expectedGeneration: generation,
+      purgeNonAuth: true,
+    })
+
+    return {
+      establishment_id: data.establishment_id,
+      onboarding_session_id: data.onboarding_session_id,
+    } satisfies Pick<RegistrationResponse, 'establishment_id' | 'onboarding_session_id'>
   })
+}
 
-  if (error || !data) {
-    throw buildRegistrationValidationError(
-      response,
-      error,
-      'Registration could not be completed.',
+export async function acceptInvitationSession(
+  token: string,
+  input: DirectorInvitationAcceptInput,
+) {
+  return runSessionReplacement(async (prepared, generation) => {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/invitations/{token}/accept/',
+      {
+        params: {
+          path: { token },
+        },
+        body: {
+          ...input,
+          refresh_token_transport: prepared.transport,
+        },
+        credentials: prepared.credentials,
+        headers: buildTransportHeaders(prepared),
+      },
     )
-  }
 
-  purgeNonAuthQueries(queryClient)
-  clearAllPlanningSubmissionIntents()
-  clearSuccessToasts()
-  hydrateBootstrap(data)
-  setAccessToken(data.access_token)
+    if (error || !data) {
+      throw buildAuthError(response, error, 'Invitation could not be accepted.')
+    }
 
-  return data as RegistrationResponse
+    await commitAuthEnvelope(data, prepared, {
+      expectedGeneration: generation,
+      purgeNonAuth: true,
+    })
+  })
 }
 
 export async function logout() {
-  const csrfToken = await ensureCsrfToken()
+  const accessToken = getAccessToken()
+  const prepared = await prepareLogoutTransport({ hasBearer: Boolean(accessToken) })
   const { error, response } = await apiClient.POST('/api/v1/auth/logout/', {
-    credentials: 'include',
-    headers: {
-      'X-CSRFToken': csrfToken,
+    body: {
+      refresh_token_transport: prepared.transport,
+      ...(prepared.refreshToken ? { refresh_token: prepared.refreshToken } : {}),
     },
+    credentials: prepared.credentials,
+    headers: buildTransportHeaders(prepared, accessToken),
   })
 
   if (error || response.status !== 204) {

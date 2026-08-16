@@ -261,7 +261,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Logs in with an email or username identifier. Requires a valid Django CSRF cookie and X-CSRFToken header. */
+        /** @description Logs in with an email or username identifier. Cookie transport requires Django CSRF and returns the refresh token only as an HttpOnly cookie. Body transport omits cookies and returns the refresh token in JSON. */
         post: operations["v1_auth_login_create"];
         delete?: never;
         options?: never;
@@ -278,7 +278,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Revokes the current session, preferring the bearer access token when available and otherwise falling back to the refresh token cookie. Requires CSRF and clears the houston_refresh_token HttpOnly cookie. */
+        /** @description Revokes the current session, preferring a valid bearer access token. Cookie transport requires CSRF and may fall back to and clear its refresh cookie. Body transport may fall back to its explicit refresh token and never consults or modifies cookies. */
         post: operations["v1_auth_logout_create"];
         delete?: never;
         options?: never;
@@ -312,7 +312,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Rotates the HttpOnly refresh token cookie and issues a new opaque access token. Requires a valid CSRF cookie and X-CSRFToken header. The refresh token is read from the houston_refresh_token HttpOnly cookie. */
+        /** @description Rotates a refresh token and issues a new opaque access token. Cookie transport reads and rotates the HttpOnly cookie and requires CSRF. Body transport reads the explicit request field, returns the rotated token in JSON, and never consults or modifies cookies. */
         post: operations["v1_auth_refresh_create"];
         delete?: never;
         options?: never;
@@ -329,7 +329,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Registers a new owner and provisions an organization, draft establishment, and onboarding session using a valid registration invite code. Requires a valid Django CSRF cookie and X-CSRFToken header. */
+        /** @description Registers a new owner and provisions an organization, draft establishment, and onboarding session using a valid registration invite code. Cookie transport requires Django CSRF; body transport does not use cookies. */
         post: operations["v1_auth_register_create"];
         delete?: never;
         options?: never;
@@ -346,7 +346,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Validates owner registration fields without provisioning any records. Requires a valid Django CSRF cookie and X-CSRFToken header. */
+        /** @description Validates owner registration fields without provisioning any records. */
         post: operations["v1_auth_register_validate_owner_create"];
         delete?: never;
         options?: never;
@@ -1913,7 +1913,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Accepts an establishment invitation, sets the account password, activates the user and membership, and creates an auth session. Owner invitations activate all compatible owner/invited memberships in the same organization. Requires a valid Django CSRF cookie and X-CSRFToken header. */
+        /** @description Accepts an establishment invitation, sets the account password, activates the user and membership, and creates an auth session. Owner invitations activate all compatible owner/invited memberships in the same organization. Cookie transport requires Django CSRF; body transport does not use cookies. */
         post: operations["v1_invitations_accept_create"];
         delete?: never;
         options?: never;
@@ -3203,6 +3203,9 @@ export interface components {
             access_token: string;
             /** Format: date-time */
             access_token_expires_at: string;
+            refresh_token?: string;
+            /** Format: date-time */
+            refresh_token_expires_at?: string;
         };
         BootstrapPermissionHints: {
             chat_available: boolean;
@@ -3410,6 +3413,7 @@ export interface components {
             detail: string;
         };
         DirectorInvitationAcceptRequest: {
+            refresh_token_transport: components["schemas"]["RefreshTokenTransportEnum"];
             password: string;
             password_confirmation: string;
         };
@@ -3423,6 +3427,9 @@ export interface components {
             access_token: string;
             /** Format: date-time */
             access_token_expires_at: string;
+            refresh_token?: string;
+            /** Format: date-time */
+            refresh_token_expires_at?: string;
             /** Format: uuid */
             establishment_id: string;
             /** Format: uuid */
@@ -3778,8 +3785,13 @@ export interface components {
          */
         KindEnum: "execution" | "schedule";
         LoginRequest: {
+            refresh_token_transport: components["schemas"]["RefreshTokenTransportEnum"];
             identifier: string;
             password: string;
+        };
+        LogoutRequest: {
+            refresh_token_transport: components["schemas"]["RefreshTokenTransportEnum"];
+            refresh_token?: string;
         };
         MarkAllNotificationsReadResponse: {
             updated_count: number;
@@ -4318,6 +4330,16 @@ export interface components {
         };
         /** @enum {string} */
         ReasonEnum: "wrong_pattern";
+        RefreshRequest: {
+            refresh_token_transport: components["schemas"]["RefreshTokenTransportEnum"];
+            refresh_token?: string;
+        };
+        /**
+         * @description * `cookie` - Cookie
+         *     * `body` - Body
+         * @enum {string}
+         */
+        RefreshTokenTransportEnum: "cookie" | "body";
         RegistrationOwnerValidateRequest: {
             invite_code: string;
             first_name: string;
@@ -4328,6 +4350,7 @@ export interface components {
             password_confirmation: string;
         };
         RegistrationRequest: {
+            refresh_token_transport: components["schemas"]["RefreshTokenTransportEnum"];
             invite_code: string;
             first_name: string;
             last_name: string;
@@ -4349,6 +4372,9 @@ export interface components {
             access_token: string;
             /** Format: date-time */
             access_token_expires_at: string;
+            refresh_token?: string;
+            /** Format: date-time */
+            refresh_token_expires_at?: string;
             /** Format: uuid */
             establishment_id: string;
             /** Format: uuid */
@@ -5572,9 +5598,15 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LogoutRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["LogoutRequest"];
+                "multipart/form-data": components["schemas"]["LogoutRequest"];
+            };
+        };
         responses: {
-            /** @description Session revoked and refresh cookie cleared. */
+            /** @description Session revoked; cookie cleared only for cookie transport. */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -5647,7 +5679,13 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RefreshRequest"];
+                "multipart/form-data": components["schemas"]["RefreshRequest"];
+            };
+        };
         responses: {
             200: {
                 headers: {

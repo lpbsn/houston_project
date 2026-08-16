@@ -29,6 +29,7 @@ def api_client():
 
 
 def post_accept(api_client: APIClient, csrf_token: str, token: str, payload: dict, **extra_headers):
+    payload = {"refresh_token_transport": "cookie", **payload}
     return api_client.post(
         f"/api/v1/invitations/{token}/accept/",
         payload,
@@ -120,6 +121,27 @@ def test_accept_valid_token_activates_user_and_membership(api_client):
     assert invitation.accepted_at is not None
 
 
+def test_accept_invitation_with_body_transport_skips_csrf_and_sets_no_cookie(api_client):
+    owner = create_user(username="body_invitation_accept_owner")
+    session = create_onboarding_session(actor=owner)
+    invitation_result = invite_director_for_session(session=session, owner=owner)
+
+    response = api_client.post(
+        f"/api/v1/invitations/{invitation_result.invitation_token}/accept/",
+        {
+            "password": REGISTRATION_PASSWORD,
+            "password_confirmation": REGISTRATION_PASSWORD,
+            "refresh_token_transport": "body",
+        },
+        format="json",
+    )
+
+    assert response.status_code == 201
+    assert response.data["refresh_token"]
+    assert response.data["refresh_token_expires_at"]
+    assert settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME not in response.cookies
+
+
 def test_accepted_director_can_log_in_with_password(api_client):
     owner = create_user(username="director_login_after_accept_owner")
     session = create_onboarding_session(actor=owner)
@@ -145,6 +167,7 @@ def test_accepted_director_can_log_in_with_password(api_client):
         {
             "identifier": "director-accept@example.com",
             "password": REGISTRATION_PASSWORD,
+            "refresh_token_transport": "cookie",
         },
         format="json",
         HTTP_X_CSRFTOKEN=login_csrf_token,

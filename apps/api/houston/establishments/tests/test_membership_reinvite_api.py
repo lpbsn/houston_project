@@ -136,6 +136,7 @@ def test_reinvite_revokes_previous_token_and_returns_disabled_email_status(api_c
         {
             "password": "SecurePass123!",
             "password_confirmation": "SecurePass123!",
+            "refresh_token_transport": "cookie",
         },
         format="json",
         HTTP_X_CSRFTOKEN=ensure_csrf(api_client),

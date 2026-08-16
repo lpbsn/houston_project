@@ -57,11 +57,37 @@ describe('withAuthRetry', () => {
     expect(result.response.status).toBe(401)
   })
 
-  it('clears auth when retry still returns 401', async () => {
+  it('does not clear a replacement session when an older refresh becomes stale', async () => {
+    let currentToken = 'stale-token'
     const clearAuth = vi.fn()
     configureApiClientAuth({
-      getAccessToken: () => 'stale-token',
-      refreshAccessToken: vi.fn(async () => 'fresh-token'),
+      getAccessToken: () => currentToken,
+      refreshAccessToken: vi.fn(async () => {
+        currentToken = 'replacement-token'
+        return null
+      }),
+      clearAuth,
+    })
+
+    const execute = vi.fn(async () => ({
+      response: new Response(null, { status: 401 }),
+    }))
+
+    await withAuthRetry(execute)
+
+    expect(clearAuth).not.toHaveBeenCalled()
+    expect(execute).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears auth when retry still returns 401', async () => {
+    let currentToken = 'stale-token'
+    const clearAuth = vi.fn()
+    configureApiClientAuth({
+      getAccessToken: () => currentToken,
+      refreshAccessToken: vi.fn(async () => {
+        currentToken = 'fresh-token'
+        return currentToken
+      }),
       clearAuth,
     })
 
