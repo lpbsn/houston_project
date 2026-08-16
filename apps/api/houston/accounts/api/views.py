@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from django.conf import settings
-from django.middleware.csrf import CsrfViewMiddleware
+from django.middleware.csrf import CsrfViewMiddleware, get_token
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -86,10 +86,18 @@ class CsrfCookieView(APIView):
     @extend_schema(
         tags=["auth"],
         responses=CsrfResponseSerializer,
-        description="Ensures the Django CSRF cookie exists for subsequent auth mutations.",
+        description=(
+            "Ensures the Django CSRF cookie exists and returns csrf_token for "
+            "subsequent auth mutations."
+        ),
     )
     def get(self, request):
-        return Response({"detail": "CSRF cookie set."})
+        return Response(
+            {
+                "detail": "CSRF cookie set.",
+                "csrf_token": get_token(request),
+            }
+        )
 
 
 class LoginView(AuthRateLimitedMixin, APIView):

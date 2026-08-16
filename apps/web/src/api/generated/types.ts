@@ -242,7 +242,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Ensures the Django CSRF cookie exists for subsequent auth mutations. */
+        /** @description Ensures the Django CSRF cookie exists and returns csrf_token for subsequent auth mutations. */
         get: operations["v1_auth_csrf_retrieve"];
         put?: never;
         post?: never;
@@ -3400,6 +3400,7 @@ export interface components {
         };
         CsrfResponse: {
             detail: string;
+            csrf_token: string;
         };
         DetailResponse: {
             detail: string;

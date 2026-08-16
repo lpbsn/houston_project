@@ -81,13 +81,13 @@ def check_production_csrf_origins(app_configs, **kwargs):
     if not _production_gate_active():
         return []
 
-    origins = [origin.strip() for origin in settings.CSRF_TRUSTED_ORIGINS if origin.strip()]
+    origins = [origin.strip() for origin in settings.HOUSTON_CLIENT_ORIGINS if origin.strip()]
     if not origins:
         return [
             _error(
-                "CSRF_TRUSTED_ORIGINS is empty.",
+                "HOUSTON_CLIENT_ORIGINS is empty.",
                 hint=(
-                    "Set CSRF_TRUSTED_ORIGINS to the public HTTPS origin(s), "
+                    "Set HOUSTON_CLIENT_ORIGINS to the public HTTPS origin(s), "
                     "for example https://<railway-domain>."
                 ),
                 check_id="core.E004",
@@ -100,7 +100,7 @@ def check_production_csrf_origins(app_configs, **kwargs):
         if not parsed.scheme or not parsed.netloc:
             errors.append(
                 _error(
-                    f"CSRF_TRUSTED_ORIGINS contains an invalid origin: {origin!r}.",
+                    f"HOUSTON_CLIENT_ORIGINS contains an invalid origin: {origin!r}.",
                     hint="Use full origins such as https://example.railway.app.",
                     check_id="core.E005",
                 )
@@ -116,7 +116,7 @@ def check_production_csrf_origins(app_configs, **kwargs):
                 continue
             errors.append(
                 _error(
-                    f"CSRF_TRUSTED_ORIGINS uses HTTP for local origin {origin!r}.",
+                    f"HOUSTON_CLIENT_ORIGINS uses HTTP for local origin {origin!r}.",
                     hint=(
                         "Use HTTPS in production. For local prod-test only, set "
                         "HOUSTON_ALLOW_INSECURE_LOCAL_CSRF_ORIGINS=1."
@@ -128,7 +128,7 @@ def check_production_csrf_origins(app_configs, **kwargs):
 
         errors.append(
             _error(
-                f"CSRF_TRUSTED_ORIGINS must use HTTPS in production: {origin!r}.",
+                f"HOUSTON_CLIENT_ORIGINS must use HTTPS in production: {origin!r}.",
                 hint=(
                     "Public HTTP origins are forbidden. Use https://<railway-domain> "
                     "or a documented local exception for localhost only."

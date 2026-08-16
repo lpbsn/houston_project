@@ -226,7 +226,7 @@ Railway volumes mount as root; the start script `chown`s the media directory. If
 
 1. Enable Railway Public Networking on `api-web`.
 2. Generate or attach a domain (`*.railway.app` or Railway custom domain).
-3. Set `DJANGO_ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` (see variables doc).
+3. Set `DJANGO_ALLOWED_HOSTS` and `HOUSTON_CLIENT_ORIGINS` (see variables doc).
 
 ---
 

@@ -51,7 +51,7 @@ Set on `api-web`, `celery-worker`, and `celery-beat` unless noted otherwise.
 | `DJANGO_DEBUG` | yes | Must be `0` |
 | `DJANGO_SECRET_KEY` | yes | Strong random secret |
 | `DJANGO_ALLOWED_HOSTS` | yes | Public Railway domain(s) |
-| `CSRF_TRUSTED_ORIGINS` | yes | `https://<railway-domain>` |
+| `HOUSTON_CLIENT_ORIGINS` | yes | `https://<railway-domain>` |
 | `HOUSTON_AUTH_TOKEN_PEPPER` | yes | Explicit, distinct from secret key |
 | `HOUSTON_AUTH_TOKEN_SALT` | yes | Not the dev default |
 | `HOUSTON_CHAT_WS_TICKET_SALT` | yes | Not the dev default |

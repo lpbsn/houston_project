@@ -31,7 +31,17 @@ def env_float(name: str, default: float) -> float:
 SECRET_KEY = env_str("DJANGO_SECRET_KEY", "replace-me-for-local-dev")
 DEBUG = env_bool("DJANGO_DEBUG", default=True)
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
-CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", "")
+HOUSTON_CLIENT_ORIGINS = env_list(
+    "HOUSTON_CLIENT_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173",
+)
+CORS_ALLOWED_ORIGINS = list(HOUSTON_CLIENT_ORIGINS)
+CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = [
+    origin
+    for origin in HOUSTON_CLIENT_ORIGINS
+    if origin.startswith("http://") or origin.startswith("https://")
+]
 
 INSTALLED_APPS = [
     "django.contrib.auth",
@@ -40,6 +50,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "corsheaders",
     "drf_spectacular",
     "channels",
     "houston.core",
@@ -61,6 +72,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",

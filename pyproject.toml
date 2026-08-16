@@ -10,6 +10,7 @@ dependencies = [
     "channels-redis>=4.2,<5",
     "daphne>=4.1,<5",
     "django>=5.2,<5.3",
+    "django-cors-headers>=4.7,<5",
     "djangorestframework>=3.16,<3.17",
     "drf-spectacular>=0.28,<0.29",
     "pydantic>=2.11,<3",

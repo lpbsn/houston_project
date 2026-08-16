@@ -103,7 +103,7 @@ Expiration is timestamp-first:
 
 Required MVP endpoints:
 
-- `GET /api/v1/auth/csrf/`
+- `GET /api/v1/auth/csrf/` — sets the CSRF cookie and returns `csrf_token` in JSON
 - `POST /api/v1/auth/login/`
 - `POST /api/v1/auth/refresh/`
 - `POST /api/v1/auth/logout/`
@@ -167,14 +167,19 @@ Cookie-backed auth mutation endpoints must enforce CSRF:
 The frontend must:
 
 - call `GET /api/v1/auth/csrf/` before login when needed
+- read `csrf_token` from the JSON response (do not read `document.cookie`)
 - send `X-CSRFToken` on login, refresh, and logout
 - keep the refresh token in the HttpOnly cookie only
 
 Local Docker + Vite development:
 
+- `VITE_API_BASE_URL` is the explicit API host. When empty, relative `/api` paths plus the Vite proxy remain valid
+- in Web runtime only, when both the page and configured API hostnames are local loopbacks (`localhost` or `127.0.0.1`), the API hostname is aligned with the page hostname so `SameSite=Lax` cookies remain same-site; protocol and port stay configured
 - when using the Vite `/api` proxy, preserve the browser host instead of rewriting it to the internal container hostname
-- configure `CSRF_TRUSTED_ORIGINS` explicitly for local frontend origins such as `http://localhost:5173` and `http://127.0.0.1:5173`
-- do not use wildcard CSRF trusted origins for local convenience
+- configure `HOUSTON_CLIENT_ORIGINS` explicitly for local frontend origins such as `http://localhost:5173` and `http://127.0.0.1:5173`
+- origin allowlisting permits CORS and CSRF origin checks but does not cause browsers to attach cross-site cookies
+- Django `CSRF_TRUSTED_ORIGINS` is derived from the http(s) entries of that list; do not set it separately
+- do not use wildcard client origins for local convenience
 
 ## 8. Frontend rules
 
@@ -319,8 +324,9 @@ Chat V1 is the first WebSocket surface. It uses a **different auth path** from R
 
 - **Do not use `AuthMiddlewareStack`** or Django session auth for Chat WebSocket.
 - Product WebSocket auth must not depend on session cookies or implicit `scope["user"]` from Django auth middleware.
-- Use `AllowedHostsOriginValidator` (or equivalent Channels origin check) before the consumer.
-- Validate `Origin` / `Host` against `ALLOWED_HOSTS` and frontend dev origins in `CSRF_TRUSTED_ORIGINS`.
+- Use `OriginValidator` against `HOUSTON_CLIENT_ORIGINS` before the consumer.
+- `ALLOWED_HOSTS` validates the HTTP `Host` header only; it is not a browser-origin allowlist.
+- Native origins such as `capacitor://localhost` are added in Lot 5, not here.
 
 ### Ticket-based WebSocket auth (mandatory for Chat V1)
 

@@ -8,7 +8,7 @@ x-api-image: &api_image houston-api:dev
 
 x-api-environment: &api_environment
   DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,api}
-  CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+  HOUSTON_CLIENT_ORIGINS: ${HOUSTON_CLIENT_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
   DJANGO_DEBUG: ${DJANGO_DEBUG:-1}
   DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-replace-me-for-local-dev}
   POSTGRES_DB: ${POSTGRES_DB:-houston}

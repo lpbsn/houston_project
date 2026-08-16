@@ -372,7 +372,7 @@ Ces valeurs sont déjà correctes dans `.env.example` pour Compose (hôtes `post
 | `DJANGO_SECRET_KEY` | Secret Django — remplacez `replace-me-for-local-dev` par une valeur locale |
 | `DJANGO_DEBUG` | `1` en dev |
 | `DJANGO_ALLOWED_HOSTS` | `localhost,127.0.0.1,api` |
-| `CSRF_TRUSTED_ORIGINS` | Doit inclure `http://localhost:5173` et `http://127.0.0.1:5173` |
+| `HOUSTON_CLIENT_ORIGINS` | Doit inclure `http://localhost:5173` et `http://127.0.0.1:5173` (CORS, WS Origin, CSRF http(s)) |
 | `POSTGRES_*` | Identifiants DB (défaut `houston` / `houston`) |
 | `POSTGRES_HOST` | **`postgres`** (nom du service Compose, ne pas mettre `localhost` pour l’API dans Docker) |
 | `REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` | URLs `redis://redis:6379/...` |
@@ -392,7 +392,7 @@ Ces valeurs sont déjà correctes dans `.env.example` pour Compose (hôtes `post
 | `HOUSTON_AI_TRANSCRIPTION_*` | Transcription audio |
 | `HOUSTON_AUTH_THROTTLE_*`, `HOUSTON_CACHE_REDIS_URL` | Throttling auth |
 | `HOUSTON_PRIVATE_MEDIA_ROOT` | Vide = défaut `apps/api/private_media` dans le conteneur |
-| `VITE_API_BASE_URL` | Présent dans `.env.example` ; le client TS utilise `baseUrl: ''` et le **proxy Vite** — utile surtout au service Docker `web` |
+| `VITE_API_BASE_URL` | Lu par Vite (`envDir` = racine du repo) et par le client TS. Local : `http://localhost:8000` (l’API est appelée directement, CORS autorise l’origin Vite). Vide = chemins relatifs / same-origin (prod nginx) |
 
 **Interdit** : secrets ou codes d’invitation dans des variables `VITE_*` ([`README.md`](README.md), règles AGENTS).
 

@@ -28,6 +28,7 @@ Lazy pages: [`lazy-terrain-pages.tsx`](../../apps/web/src/app/lazy-terrain-pages
 ## Server state
 
 - Generated OpenAPI types → API wrappers → TanStack Query hooks
+- HTTP and WebSocket hosts are resolved only in [`apps/web/src/lib/runtime.ts`](../../apps/web/src/lib/runtime.ts) (`VITE_API_BASE_URL`, `VITE_APP_RUNTIME`). Features must not compute the API host.
 - Query key roots: feature-scoped (`signals`, `action-plans`, `chat`, `notifications`, `auth`, …)
 - Establishment switch / login: purge non-`auth` queries (`@/lib/query-invalidation`)
 

@@ -240,7 +240,7 @@ All under `/api/v1/establishments/{establishment_id}/chat/` :
 - Path : `/ws/v1/establishments/{establishment_id}/chat/`
 - Auth : first message `{ "type": "auth", "ticket": "..." }`
 - Send : `{ "type": "message.send", "conversation_id", "client_message_id", "body" }`
-- ASGI : `AllowedHostsOriginValidator` + `URLRouter` ; **no** `AuthMiddlewareStack`
+- ASGI : `OriginValidator(HOUSTON_CLIENT_ORIGINS)` + `URLRouter` ; **no** `AuthMiddlewareStack`
 - Server : Daphne
 
 ### Channel groups
@@ -279,7 +279,7 @@ All under `/api/v1/establishments/{establishment_id}/chat/` :
 Checklist aligned with Chat V1 implementation plan §3.5 — verified **2026-06-09** after Lots 2–6:
 
 - [x] Single active Chat V1 definition (this document + carve-out in [`realtime_domain.md`](realtime_domain.md))
-- [x] WebSocket auth = REST one-time ticket ; no `AuthMiddlewareStack` ; Origin validated (`AllowedHostsOriginValidator`)
+- [x] WebSocket auth = REST one-time ticket ; no `AuthMiddlewareStack` ; Origin validated (`OriginValidator` on `HOUSTON_CLIENT_ORIGINS`)
 - [x] Chat realtime separated from deferred global Signal/Action/Notification invalidation
 - [x] Chat push/sounds/presence-aware notification suppression out of scope (§3); in-app `chat.message.received` handled by Notification domain
 - [x] Minimal unread only ; no read receipts ; unread survives purge (`last_seen_message_id` UUID non-FK + `last_seen_message_created_at`)

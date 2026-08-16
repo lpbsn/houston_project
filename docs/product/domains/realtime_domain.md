@@ -51,7 +51,7 @@ Chat WebSocket delivery must not depend only on conversation groups joined at au
 
 Auth stack for Chat WebSocket :
 
-- `AllowedHostsOriginValidator` + `URLRouter` ;
+- `OriginValidator(HOUSTON_CLIENT_ORIGINS)` + `URLRouter` ;
 - **no** `AuthMiddlewareStack` ;
 - ticket REST one-time in first WS message (see [`authentication_charter.md`](../../architecture/authentication_charter.md)).
 
@@ -283,7 +283,7 @@ Candidate channels (not implemented — historical naming):
 
 Current implementation note (operational realtime):
 
-- `apps/api/config/asgi.py` merges Chat V1 and operational realtime WebSocket routing (`AllowedHostsOriginValidator` + `URLRouter`).
+- `apps/api/config/asgi.py` merges Chat V1 and operational realtime WebSocket routing (`OriginValidator` on `HOUSTON_CLIENT_ORIGINS` + `URLRouter`).
 - Invalidation is establishment-broadcast; access events may target session or membership groups.
 
 ## 10. Frontend Expectations

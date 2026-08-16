@@ -148,7 +148,7 @@ backend-deploy-check:
 	$(API_CMD) 'cd $(API_DIR) && DJANGO_DEBUG=0 \
 	  DJANGO_SECRET_KEY=deploy-check-secret-with-sufficient-length-and-entropy \
 	  DJANGO_ALLOWED_HOSTS=example.railway.app \
-	  CSRF_TRUSTED_ORIGINS=https://example.railway.app \
+	  HOUSTON_CLIENT_ORIGINS=https://example.railway.app \
 	  HOUSTON_AUTH_TOKEN_PEPPER=deploy-check-pepper-distinct \
 	  HOUSTON_AUTH_TOKEN_SALT=deploy-check-auth-salt \
 	  HOUSTON_CHAT_WS_TICKET_SALT=deploy-check-chat-salt \

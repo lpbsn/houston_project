@@ -59,11 +59,13 @@ def switch_establishment(
     )
 
 
-def test_csrf_endpoint_sets_csrf_cookie(api_client):
+def test_csrf_endpoint_sets_csrf_cookie_and_returns_token(api_client):
     response = api_client.get("/api/v1/auth/csrf/")
 
     assert response.status_code == 200
-    assert response.json() == {"detail": "CSRF cookie set."}
+    payload = response.json()
+    assert payload["detail"] == "CSRF cookie set."
+    assert payload["csrf_token"]
     assert "csrftoken" in api_client.cookies
 
 
@@ -139,6 +141,7 @@ def test_login_with_trusted_browser_origin_succeeds_when_proxy_host_differs(
     create_membership(user=active_user)
     csrf_token = ensure_csrf(api_client)
     settings.ALLOWED_HOSTS = ["localhost", "127.0.0.1", "api"]
+    settings.HOUSTON_CLIENT_ORIGINS = ["http://localhost:5173"]
     settings.CSRF_TRUSTED_ORIGINS = ["http://localhost:5173"]
 
     response = login(

@@ -31,6 +31,15 @@ def force_fake_observation_pipeline_provider(settings):
 
 
 @pytest.fixture(autouse=True)
+def client_origins_for_tests(settings):
+    """WS/CORS tests use an explicit client origin list, not ALLOWED_HOSTS."""
+    origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    settings.HOUSTON_CLIENT_ORIGINS = origins
+    settings.CORS_ALLOWED_ORIGINS = list(origins)
+    settings.CSRF_TRUSTED_ORIGINS = list(origins)
+
+
+@pytest.fixture(autouse=True)
 def forbid_live_openai_observation_propose(request, monkeypatch):
     """Fail standard tests if OpenAI propose is invoked accidentally."""
     if request.node.get_closest_marker("openai_observation_smoke"):

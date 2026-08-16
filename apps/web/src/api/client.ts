@@ -1,9 +1,11 @@
 import createClient from 'openapi-fetch'
 
+import { getApiBaseUrl, resolveApiUrl } from '@/lib/runtime'
+
 import type { paths } from "./generated/types"
 
 export const apiClient = createClient<paths>({
-  baseUrl: '',
+  baseUrl: getApiBaseUrl(),
 })
 
 type AuthRuntime = {
@@ -54,6 +56,13 @@ export async function withAuthRetry<TResult extends { response: Response }>(
   return retriedResult
 }
 
+function resolveFetchInput(input: RequestInfo | URL): RequestInfo | URL {
+  if (typeof input === 'string') {
+    return resolveApiUrl(input)
+  }
+  return input
+}
+
 export async function fetchWithAuthRetry(
   input: RequestInfo | URL,
   init: RequestInit,
@@ -65,7 +74,7 @@ export async function fetchWithAuthRetry(
     } else {
       headers.delete('Authorization')
     }
-    const response = await fetch(input, { ...init, headers })
+    const response = await fetch(resolveFetchInput(input), { ...init, headers })
     return { response }
   })
   return result.response

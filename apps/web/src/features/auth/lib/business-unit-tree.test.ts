@@ -1,14 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const withAuthRetryMock = vi.fn()
-const ensureCsrfTokenMock = vi.fn()
+const { withAuthRetryMock, apiClientGetMock } = vi.hoisted(() => ({
+  withAuthRetryMock: vi.fn(),
+  apiClientGetMock: vi.fn(),
+}))
 
 vi.mock('@/api/client', () => ({
   withAuthRetry: (...args: unknown[]) => withAuthRetryMock(...args),
-}))
-
-vi.mock('@/features/auth/csrf', () => ({
-  ensureCsrfToken: () => ensureCsrfTokenMock(),
+  apiClient: {
+    GET: (...args: unknown[]) => apiClientGetMock(...args),
+  },
 }))
 
 import { AuthApiError, businessUnitTreeQueryKey, fetchBusinessUnitTree } from '@/features/auth/api'
@@ -28,53 +29,63 @@ describe('businessUnitTreeQueryKey', () => {
 describe('fetchBusinessUnitTree', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    ensureCsrfTokenMock.mockResolvedValue('csrf-token')
     withAuthRetryMock.mockImplementation(async (execute: (token: string | null) => Promise<unknown>) =>
       execute('access-token'),
     )
+    apiClientGetMock.mockResolvedValue({
+      data: treePayload,
+      error: undefined,
+      response: { status: 200, ok: true },
+    })
   })
 
-  it('loads the tree through withAuthRetry with CSRF, credentials, and bearer auth', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => treePayload,
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
+  it('loads the tree through apiClient with bearer auth', async () => {
     const result = await fetchBusinessUnitTree('est-1')
 
-    expect(ensureCsrfTokenMock).toHaveBeenCalledOnce()
     expect(withAuthRetryMock).toHaveBeenCalledWith(expect.any(Function), { refreshable: true })
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/establishments/est-1/business-units/', {
-      credentials: 'include',
-      headers: {
-        Authorization: 'Bearer access-token',
-        'X-CSRFToken': 'csrf-token',
+    expect(apiClientGetMock).toHaveBeenCalledWith(
+      '/api/v1/establishments/{establishment_id}/business-units/',
+      {
+        params: {
+          path: { establishment_id: 'est-1' },
+        },
+        headers: {
+          Authorization: 'Bearer access-token',
+        },
       },
-    })
+    )
     expect(result).toEqual(treePayload)
+  })
 
-    vi.unstubAllGlobals()
+  it('passes include_inactive when requested', async () => {
+    await fetchBusinessUnitTree('est-1', { includeInactive: true })
+
+    expect(apiClientGetMock).toHaveBeenCalledWith(
+      '/api/v1/establishments/{establishment_id}/business-units/',
+      expect.objectContaining({
+        params: {
+          path: { establishment_id: 'est-1' },
+          query: { include_inactive: true },
+        },
+      }),
+    )
   })
 
   it('throws AuthApiError when the response is not ok', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 403,
-      json: async () => ({}),
+    apiClientGetMock.mockResolvedValue({
+      data: undefined,
+      error: { detail: 'forbidden' },
+      response: { status: 403, ok: false },
     })
-    vi.stubGlobal('fetch', fetchMock)
 
     await expect(fetchBusinessUnitTree('est-1')).rejects.toMatchObject({
       name: 'AuthApiError',
       status: 403,
       message: 'Business unit tree could not be loaded.',
     })
-
-    vi.unstubAllGlobals()
   })
 
-  it('passes the access token from withAuthRetry into the fetch Authorization header', async () => {
+  it('passes the access token from withAuthRetry into the Authorization header', async () => {
     let capturedToken: string | null = null
     withAuthRetryMock.mockImplementationOnce(
       async (execute: (token: string | null) => Promise<unknown>) => {
@@ -83,25 +94,17 @@ describe('fetchBusinessUnitTree', () => {
       },
     )
 
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => treePayload,
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
     await fetchBusinessUnitTree('est-1')
 
     expect(capturedToken).toBe('token-from-retry')
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.any(String),
+    expect(apiClientGetMock).toHaveBeenCalledWith(
+      '/api/v1/establishments/{establishment_id}/business-units/',
       expect.objectContaining({
-        headers: expect.objectContaining({
+        headers: {
           Authorization: 'Bearer token-from-retry',
-        }),
+        },
       }),
     )
-
-    vi.unstubAllGlobals()
   })
 })
 
