@@ -31,7 +31,7 @@ Git is the only history. There is no `archive/` or `audits/` folder in active do
 | [`architecture/authentication_charter.md`](architecture/authentication_charter.md) | Auth rules |
 | [`architecture/api_error_contract.md`](architecture/api_error_contract.md) | API errors |
 | [`engineering/local_development.md`](engineering/local_development.md) | Local workflow |
-| [`engineering/frontend_architecture.md`](engineering/frontend_architecture.md) | React / PWA map |
+| [`engineering/frontend_architecture.md`](engineering/frontend_architecture.md) | React / Vite map |
 | [`engineering/testing.md`](engineering/testing.md) | Test strategy |
 | [`engineering/api_pagination_standard.md`](engineering/api_pagination_standard.md) | Pagination |
 

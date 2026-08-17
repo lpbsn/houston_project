@@ -37,6 +37,9 @@ describe('app and landing build isolation', () => {
     expect(pkg.scripts['build:native']).toBe(
       'tsc -b && VITE_APP_RUNTIME=native vite build && node scripts/validate-native-build.mjs',
     )
+    expect(pkg.scripts['build:native:bundle']).toBe(
+      'VITE_APP_RUNTIME=native vite build && node scripts/validate-native-build.mjs',
+    )
     expect(pkg.scripts['dev:native']).toBe('VITE_APP_RUNTIME=native vite')
     expect(pkg.scripts['build:landing']).toContain('vite.landing.config.ts')
     expect(pkg.scripts['build:landing']).toContain('validate-landing-build')

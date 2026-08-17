@@ -39,7 +39,7 @@ import { AppShell } from '@/components/app-shell'
 import { TerrainShell } from '@/components/layout/terrain-shell'
 import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import { Button } from '@/components/ui/button'
-import { clearAuthState } from '@/features/auth/api'
+import { bootstrapQueryKey, clearAuthState } from '@/features/auth/api'
 import { AuthRoutingLoading } from '@/features/auth/components/auth-routing-loading'
 import { PendingOnboardingPage } from '@/features/auth/pages/pending-onboarding-page'
 import { TeamInvitePage } from '@/features/auth/pages/team-invite-page'
@@ -55,6 +55,7 @@ import {
 import { NoEstablishmentPage } from '@/features/auth/pages/no-establishment-page'
 import { SelectEstablishmentPage } from '@/features/auth/pages/select-establishment-page'
 import { resolvePendingLanding } from '@/features/auth/lib/pending-onboarding'
+import type { BootstrapResponse } from '@/features/auth/types'
 import { queryClient } from '@/lib/query-client'
 import { useChatAvailability, useChatConversationsQuery } from '@/features/chat/hooks'
 import { chatQueryKeys } from '@/features/chat/api'
@@ -295,7 +296,9 @@ function App() {
         <InvitationAcceptPage
           token={route.token}
           onAccepted={() => {
-            navigate(getAuthenticatedLandingPath(auth.bootstrap) ?? '/pending-onboarding', {
+            const bootstrap =
+              queryClient.getQueryData<BootstrapResponse>(bootstrapQueryKey) ?? auth.bootstrap
+            navigate(getAuthenticatedLandingPath(bootstrap) ?? '/pending-onboarding', {
               replace: true,
             })
           }}

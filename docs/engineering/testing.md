@@ -175,7 +175,7 @@ GitHub Actions (`.github/workflows/ci.yml`):
 | Job | Steps |
 |-----|-------|
 | `backend-tests` | Django check, deploy check, migrations, ruff, OpenAPI regen + diff, pytest (PostgreSQL + Redis; smoke/slow excluded) |
-| `frontend-tests` | `npm ci`, `api:generate` + diff, lint, vitest, `typecheck` (`tsc -b` once), `build:bundle` (vite only — no second `tsc -b`) |
+| `frontend-tests` | `npm ci`, `api:generate` + diff, lint, vitest, `typecheck` (`tsc -b` once), `build:bundle` and `build:native:bundle` (vite only — no second `tsc -b`) |
 | `docs-check` | `scripts/docs_check.py`, `scripts/agent_config_check.py` |
 
 **Runtime note:** CI backend steps run **native `uv`** with GitHub Actions Postgres/Redis services. Local backend validation uses **Make/Docker only** (`make backend-check`, `make verify`) — do not run `cd apps/api && uv run …` on the host. Frontend checks may run natively from `apps/web` or via `make web-*`.
@@ -188,7 +188,7 @@ GitHub Actions (`.github/workflows/ci.yml`):
 |--------|----------------|
 | `make backend-check` | Django check, ruff, migrations check, schema diff, pytest |
 | `make web-api-generate-check` | regen `types.ts` from committed `schema.yml` + `git diff` |
-| `make web-check` | vitest, typecheck, build, `web-api-generate-check` |
+| `make web-check` | vitest, typecheck, web build, native build, `web-api-generate-check` |
 | `make local-check` | `backend-check` + `web-check` |
 | `make verify` | alias for `local-check` |
 

@@ -11,6 +11,7 @@
     "build": "tsc -b && VITE_APP_RUNTIME=web vite build && node scripts/validate-web-build.mjs",
     "build:bundle": "VITE_APP_RUNTIME=web vite build && node scripts/validate-web-build.mjs",
     "build:native": "tsc -b && VITE_APP_RUNTIME=native vite build && node scripts/validate-native-build.mjs",
+    "build:native:bundle": "VITE_APP_RUNTIME=native vite build && node scripts/validate-native-build.mjs",
     "build:landing": "vite build --config vite.landing.config.ts && node scripts/validate-landing-build.mjs",
     "api:generate": "openapi-typescript ../api/schema.yml -o src/api/generated/types.ts",
     "lint": "eslint .",

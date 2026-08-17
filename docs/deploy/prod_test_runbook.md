@@ -23,7 +23,7 @@ make web-check
 make backend-deploy-check
 ```
 
-Optional routing/PWA check without Railway:
+Optional routing check without Railway:
 
 ```bash
 make up-prod-test

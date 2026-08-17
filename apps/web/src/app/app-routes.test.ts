@@ -182,6 +182,10 @@ describe('parseAppRoute', () => {
       kind: 'unknown',
       pathname: '/foo/bar',
     })
+    expect(parseAppRoute('/install-app')).toEqual({
+      kind: 'unknown',
+      pathname: '/install-app',
+    })
   })
 
   it('parses signal detail routes', () => {
