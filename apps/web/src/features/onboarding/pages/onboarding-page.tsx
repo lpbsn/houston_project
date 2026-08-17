@@ -1,6 +1,7 @@
 import { ArrowLeft } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 
+import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
 import { Button } from '@/components/ui/button'
 import { resolvePendingLanding } from '@/features/auth/lib/pending-onboarding'
@@ -21,8 +22,8 @@ type OnboardingRouteParams = {
   sessionId: string | null
 }
 
-function readRouteParams(): OnboardingRouteParams {
-  const params = new URLSearchParams(window.location.search)
+function parseOnboardingRouteParams(search: string): OnboardingRouteParams {
+  const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search)
 
   return {
     establishmentId: params.get('establishmentId'),
@@ -30,7 +31,7 @@ function readRouteParams(): OnboardingRouteParams {
   }
 }
 
-function writeRouteParams(nextParams: OnboardingRouteParams) {
+function buildOnboardingHref(nextParams: OnboardingRouteParams): string {
   const searchParams = new URLSearchParams()
 
   if (nextParams.establishmentId) {
@@ -42,12 +43,11 @@ function writeRouteParams(nextParams: OnboardingRouteParams) {
   }
 
   const query = searchParams.toString()
-  const nextUrl = query ? `/onboarding?${query}` : '/onboarding'
-
-  window.history.replaceState(null, '', nextUrl)
+  return query ? `/onboarding?${query}` : '/onboarding'
 }
 
 export function OnboardingPage({ onNavigate }: { onNavigate?: (path: string) => void }) {
+  const { search, navigate } = useAppRoute()
   const {
     activeMembership,
     hasOperationalAccess,
@@ -55,21 +55,16 @@ export function OnboardingPage({ onNavigate }: { onNavigate?: (path: string) => 
     isReady,
     pendingOnboardingMemberships,
   } = useAuth()
-  const [routeParams, setRouteParams] = useState<OnboardingRouteParams>(() => readRouteParams())
+  const routeParams = parseOnboardingRouteParams(search)
   const startMutation = useStartOnboardingSession()
   const autoStartAttemptedRef = useRef(false)
 
-  useEffect(() => {
-    const handlePopState = () => {
-      setRouteParams(readRouteParams())
-    }
-
-    window.addEventListener('popstate', handlePopState)
-
-    return () => {
-      window.removeEventListener('popstate', handlePopState)
-    }
-  }, [])
+  const writeRouteParams = useCallback(
+    (nextParams: OnboardingRouteParams) => {
+      navigate(buildOnboardingHref(nextParams), { replace: true })
+    },
+    [navigate],
+  )
 
   const handleRegistered = useCallback((result: { establishmentId: string; sessionId: string }) => {
     clearRegistrationSessionSnapshot()
@@ -79,8 +74,7 @@ export function OnboardingPage({ onNavigate }: { onNavigate?: (path: string) => 
     }
 
     writeRouteParams(nextParams)
-    setRouteParams(nextParams)
-  }, [])
+  }, [writeRouteParams])
 
   const effectiveRouteParams = useMemo(() => {
     if (routeParams.establishmentId || routeParams.sessionId) {
@@ -127,7 +121,7 @@ export function OnboardingPage({ onNavigate }: { onNavigate?: (path: string) => 
     }
 
     writeRouteParams(effectiveRouteParams)
-  }, [effectiveRouteParams, routeParams.establishmentId, routeParams.sessionId])
+  }, [effectiveRouteParams, routeParams.establishmentId, routeParams.sessionId, writeRouteParams])
 
   const shouldRedirectToOperationalConfig = shouldRedirectOnboardingToOperationalConfig({
     hasOperationalAccess,
@@ -163,11 +157,10 @@ export function OnboardingPage({ onNavigate }: { onNavigate?: (path: string) => 
       }
 
       writeRouteParams(nextParams)
-      setRouteParams(nextParams)
     } catch {
       // The start card renders the backend error from mutation state.
     }
-  }, [effectiveRouteParams.establishmentId, startMutation])
+  }, [effectiveRouteParams.establishmentId, startMutation, writeRouteParams])
 
   useEffect(() => {
     autoStartAttemptedRef.current = false

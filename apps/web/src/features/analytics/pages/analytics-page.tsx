@@ -17,6 +17,7 @@ import {
   type SVGProps,
 } from 'react'
 
+import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -44,6 +45,7 @@ import {
 } from '@/features/analytics/lib/analytics-url-state'
 import { canShowAnalyticsNavigation } from '@/features/navigation/lib/shared-navigation'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { useLocationSearch } from '@/lib/location-search'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -573,8 +575,14 @@ function AnalyticsPatternSearchInput({
   state: AnalyticsUrlState
   onStateChange: (state: AnalyticsUrlState, options?: { replace?: boolean }) => void
 }) {
+  const search = useLocationSearch()
+  const searchRef = useRef(search)
   const [draft, setDraft] = useState(state.q)
   const debounceRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
+
+  useEffect(() => {
+    searchRef.current = search
+  }, [search])
 
   function clearDebounce() {
     if (debounceRef.current) {
@@ -591,10 +599,10 @@ function AnalyticsPatternSearchInput({
   function handleChange(value: string) {
     setDraft(value)
     clearDebounce()
-    const scheduledSearch = window.location.search
+    const scheduledSearch = search
     const nextState = { ...state, q: value.trim() }
     debounceRef.current = window.setTimeout(() => {
-      if (window.location.search !== scheduledSearch) {
+      if (searchRef.current !== scheduledSearch) {
         return
       }
       onStateChange(nextState, { replace: true })
@@ -784,6 +792,7 @@ type AnalyticsPageProps = {
 
 export function AnalyticsPage({ onNavigate }: AnalyticsPageProps) {
   const { bootstrap, isBootstrapping, isReady } = useAuth()
+  const { navigate } = useAppRoute()
   const analyticsState = useAnalyticsUrlState()
   const canAccessAnalytics = canShowAnalyticsNavigation(bootstrap)
   const dashboardQuery = useAnalyticsDashboardQuery(analyticsState, {
@@ -798,8 +807,8 @@ export function AnalyticsPage({ onNavigate }: AnalyticsPageProps) {
 
   function updateAnalyticsState(nextState: AnalyticsUrlState, options?: { replace?: boolean }) {
     const href = buildAnalyticsPath(nextState)
-    const method = options?.replace ? 'replaceState' : 'pushState'
-    window.history[method](null, '', href)
+    const go = onNavigate ?? navigate
+    go(href, options)
   }
 
   if (!isReady || isBootstrapping) {

@@ -3,7 +3,10 @@ import { useState } from 'react'
 
 import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainErrorState } from '@/components/ui/terrain'
-import { readCurrentDetailDeepLink } from '@/features/comments/lib/detail-deep-link'
+import {
+  parseDetailDeepLink,
+  useLocationSearch,
+} from '@/features/comments/lib/detail-deep-link'
 import {
   buildAnalyticsSignalActionCreatePath,
   type AnalyticsSignalReturnContext,
@@ -59,8 +62,8 @@ export function SignalDetailPage({
 }: SignalDetailPageProps) {
   const auth = useAuth()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
-
-  const initialDeepLink = readCurrentDetailDeepLink()
+  const locationSearch = useLocationSearch()
+  const initialDeepLink = parseDetailDeepLink(locationSearch)
   const [activeTab, setActiveTab] = useState<SignalDetailTab>(
     initialDeepLink.tab === 'comments' ? 'comments' : 'details',
   )

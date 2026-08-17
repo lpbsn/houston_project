@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { getAppRouteKey, normalizeRoutePath, parseAppRoute } from '@/app/app-routes'
+import { getAppRouteKey, normalizeRoutePath, parseAppRoute, serializeAppRoute } from '@/app/app-routes'
 
 describe('normalizeRoutePath', () => {
   it('strips query strings before matching', () => {
@@ -155,10 +155,10 @@ describe('parseAppRoute', () => {
     })
   })
 
-  it('parses execution action plan create route before static execution hub', () => {
+  it('parses execution upcoming without treating plans/new as a create alias', () => {
     expect(parseAppRoute('/execution/plans/new')).toEqual({
-      kind: 'action-plan-create',
-      origin: 'execution',
+      kind: 'unknown',
+      pathname: '/execution/plans/new',
     })
 
     expect(parseAppRoute('/execution/upcoming')).toEqual({
@@ -166,7 +166,10 @@ describe('parseAppRoute', () => {
       path: '/execution/upcoming',
     })
     expect(getAppRouteKey({ kind: 'action-plan-create', origin: 'execution' })).toBe(
-      'action-plan-create',
+      'action-plan-create:execution',
+    )
+    expect(getAppRouteKey({ kind: 'action-plan-create', origin: 'library' })).toBe(
+      'action-plan-create:library',
     )
   })
 
@@ -235,5 +238,32 @@ describe('getAppRouteKey', () => {
   it('matches parseAppRoute output', () => {
     const route = parseAppRoute('/signals/abc-123')
     expect(getAppRouteKey(route)).toBe('signal-detail:abc-123')
+  })
+})
+
+describe('serializeAppRoute', () => {
+  it('roundtrips parsed routes including create origin query', () => {
+    const hrefs = [
+      '/reporting',
+      '/login',
+      '/signals/sig-1',
+      '/signals/sig-1/plan',
+      '/action-plans/new',
+      '/action-plans/new?from=execution',
+      '/action-plans/plan-1',
+      '/action-plans/plan-1/edit',
+      '/action-plans/executions/exec-1',
+      '/action-plans/executions/exec-1/edit',
+      '/analytics/patterns/pattern-1',
+      '/chat/conv-1',
+      '/team/member-1',
+      '/organization/establishments/est-1',
+      '/invitations/token-abc',
+      '/foo/bar',
+    ]
+
+    for (const href of hrefs) {
+      expect(serializeAppRoute(parseAppRoute(href))).toBe(href)
+    }
   })
 })

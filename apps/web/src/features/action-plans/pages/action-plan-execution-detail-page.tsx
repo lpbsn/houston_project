@@ -17,7 +17,6 @@ import {
 } from '@/features/analytics/lib/analytics-url-state'
 import {
   parseDetailDeepLink,
-  readCurrentDetailDeepLink,
   useLocationSearch,
 } from '@/features/comments/lib/detail-deep-link'
 import { TerrainFeedback } from '@/components/domain/terrain-feedback'
@@ -92,8 +91,8 @@ function ActionPlanExecutionDetailPageContent({
     executionId,
   )
 
-  const initialDeepLink = readCurrentDetailDeepLink()
   const locationSearch = useLocationSearch()
+  const initialDeepLink = parseDetailDeepLink(locationSearch)
   const validationActionsRef = useRef<HTMLDivElement | null>(null)
   const [activeTab, setActiveTab] = useState<ActionDetailTab>(
     initialDeepLink.tab === 'comments' ? 'comments' : 'details',

@@ -1,7 +1,7 @@
 # Frontend architecture
 
 Status: authoritative  
-Last reviewed: 2026-07-23
+Last reviewed: 2026-08-17
 
 ## Stack
 
@@ -15,7 +15,10 @@ Client-side router in [`apps/web/src/app/app-routes.ts`](../../apps/web/src/app/
 
 - `AppPath` — static terrain and auth paths (`/signals`, `/execution`, `/chat`, …)
 - `AppRoute` — discriminated union for detail routes (`signal-detail`, `action-plan-execution-detail`, `chat-conversation-detail`, …)
-- `AppRouteProvider` + `useAppRoute()` — `history.pushState` / `popstate`
+- `parseAppRoute` / `serializeAppRoute` — URL ↔ `AppRoute` (query owned by the route, e.g. create `from=execution`)
+- `AppHistory` — injectable location store (`getHref`, `subscribe`, `navigate`); Web uses `createBrowserHistory()`, tests use `createMemoryHistory()`
+- `AppRouteProvider` — requires `history` from the composition root ([`main.tsx`](../../apps/web/src/main.tsx)); `useAppRoute()` exposes `{ route, href, search, navigate }`
+- Search-only screen state (Analytics filters, comment deep links, onboarding ids) stays in the URL query and is read from `useAppRoute().search` / `useLocationSearch()`
 - `terrain-routes.ts` — shell config per route (`mainScroll`, topbar, bottom nav)
 
 Lazy pages: [`lazy-terrain-pages.tsx`](../../apps/web/src/app/lazy-terrain-pages.tsx).
