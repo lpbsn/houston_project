@@ -33,7 +33,7 @@ After `.env` changes with stack running: `make recreate-backend` (reloads api/ce
 
 `make web-dev` loads `VITE_*` from the repo-root `.env` (`Vite envDir`). With `VITE_API_BASE_URL=http://localhost:8000`, the browser calls the API on `:8000` directly (CORS via `HOUSTON_CLIENT_ORIGINS`). In Web runtime, when the page and configured API hosts are the local loopbacks `localhost` and `127.0.0.1`, the client aligns the API hostname with the page hostname so `SameSite=Lax` auth cookies remain same-site. The origin allowlist alone does not make cross-site cookies attach. Leave the base URL empty to keep relative `/api` paths and the Vite proxy.
 
-Native Capacitor (`npm run cap:sync`) copies `dist-native/` into the iOS and Android projects. Simulator API hosts: iOS `http://localhost:8000`, Android emulator `http://10.0.2.2:8000`. `HOUSTON_CLIENT_ORIGINS` must include `capacitor://localhost` and `https://localhost`. Debug Android allows mixed content / local cleartext only via `android/app/src/debug/` (not the committed `capacitor.config.ts`). iOS Simulator and Android emulator require Xcode / Android Studio on the machine.
+Native Capacitor (`npm run cap:sync`) copies `dist-native/` into the iOS and Android projects. Simulator API hosts: iOS `http://localhost:8000`, Android emulator `http://10.0.2.2:8000`. `DJANGO_ALLOWED_HOSTS` must include `10.0.2.2` so Django accepts the emulator `Host` header. `HOUSTON_CLIENT_ORIGINS` must include `capacitor://localhost` and `https://localhost`. Debug Android allows mixed content / local cleartext only via `android/app/src/debug/` (not the committed `capacitor.config.ts`). iOS Simulator and Android emulator require Xcode / Android Studio on the machine.
 
 ## Daily commands
 

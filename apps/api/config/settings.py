@@ -30,7 +30,7 @@ def env_float(name: str, default: float) -> float:
 
 SECRET_KEY = env_str("DJANGO_SECRET_KEY", "replace-me-for-local-dev")
 DEBUG = env_bool("DJANGO_DEBUG", default=True)
-ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,10.0.2.2")
 HOUSTON_NATIVE_WEBVIEW_ORIGINS = frozenset({"capacitor://localhost", "https://localhost"})
 HOUSTON_CLIENT_ORIGINS = env_list(
     "HOUSTON_CLIENT_ORIGINS",

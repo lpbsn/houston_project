@@ -15,7 +15,7 @@ _FORBIDDEN_SECRET_KEYS = frozenset(
 _DEFAULT_AUTH_TOKEN_SALT = "houston.auth.token"
 _DEFAULT_CHAT_WS_TICKET_SALT = "houston.chat.ws_ticket"
 _DEFAULT_REALTIME_WS_TICKET_SALT = "houston.realtime.ws_ticket"
-_LOCAL_ALLOWED_HOSTS = frozenset({"localhost", "127.0.0.1", "api", "gateway"})
+_LOCAL_ALLOWED_HOSTS = frozenset({"localhost", "127.0.0.1", "api", "gateway", "10.0.2.2"})
 _LOCAL_CSRF_HOSTNAMES = frozenset({"localhost", "127.0.0.1"})
 
 
