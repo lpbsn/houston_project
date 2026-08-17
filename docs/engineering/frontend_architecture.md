@@ -39,11 +39,11 @@ Lazy pages: [`lazy-terrain-pages.tsx`](../../apps/web/src/app/lazy-terrain-pages
 
 - `UserSession` remains the single backend session model for both runtimes.
 - Access tokens are opaque Bearer credentials kept only in frontend memory.
-- Refresh persistence is isolated under `features/auth`: Web uses an HttpOnly cookie + CSRF; the future Native composition injects a secure body-token store.
+- Refresh persistence is isolated under `features/auth`: Web uses an HttpOnly cookie + CSRF; Native injects a Keychain/Keystore body-token store from the composition root before session restore.
 - `refresh_token_transport` selects credential transport only. Features and business domains never branch on cookie/body.
 - Body transport sends `credentials: omit`, then commits a session in the order refresh persistence → in-memory access token → bootstrap cache; persistence failures fail closed before best-effort network cleanup.
 - Cookie session-creation/replacement requests are serialized inside Auth so out-of-order `Set-Cookie` responses cannot replace a newer session. Any cookie response made stale by logout fails closed and triggers best-effort cookie-session cleanup.
-- Capacitor and the concrete native secure-storage adapter are intentionally deferred to roadmap Lot 5.
+- Native refresh persistence uses `@aparajita/capacitor-secure-storage` only when `VITE_APP_RUNTIME=native` and `Capacitor.isNativePlatform()`; iCloud Keychain sync is off. The plugin is never used on web (it would write `localStorage`).
 
 ## Realtime
 
@@ -59,9 +59,9 @@ Invalidation only — backend remains source of truth.
 One React tree, two Vite pipelines in [`vite.config.ts`](../../apps/web/vite.config.ts):
 
 - **Web** (`npm run build`): `VITE_APP_RUNTIME=web`, `base: '/'`, `dist/`. Classic hashed assets; `index.html` revalidated by nginx/CDN. No service worker, no web app manifest.
-- **Native** (`npm run build:native`): `VITE_APP_RUNTIME=native`, `base: './'`, `dist-native/`. Same app without Web-only artifacts. `VITE_API_BASE_URL` is required at Vite startup (dev and build). `base: './'` is a Lot 4 output convention, not a proven Capacitor contract.
+- **Native** (`npm run build:native`): `VITE_APP_RUNTIME=native`, `base: './'`, `dist-native/`. Capacitor `webDir` is `dist-native`. `VITE_API_BASE_URL` is required at Vite startup (dev and build).
 
-`tsc -b` stays in `build` and `build:native`. The runtime pin is on the Vite process only (`tsc -b && VITE_APP_RUNTIME=… vite build`). Capacitor bootstrap is Lot 5.
+`tsc -b` stays in `build` and `build:native`. The runtime pin is on the Vite process only (`tsc -b && VITE_APP_RUNTIME=… vite build`). Native projects live in [`apps/web/ios`](../../apps/web/ios) and [`apps/web/android`](../../apps/web/android); sync with `npm run cap:sync`. Committed `capacitor.config.ts` keeps `allowMixedContent: false` and no `server.cleartext`; Android debug Gradle overlays local HTTP mixed content for the emulator.
 
 ## Commands
 
@@ -71,6 +71,7 @@ cd apps/web && npm run lint
 cd apps/web && npm test
 cd apps/web && npm run build
 cd apps/web && npm run build:native   # requires VITE_API_BASE_URL
+cd apps/web && npm run cap:sync
 make web-api-generate   # after make schema
 ```
 

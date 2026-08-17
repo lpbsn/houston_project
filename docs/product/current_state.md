@@ -80,7 +80,7 @@ Post-core gaps (non-blocking pilot): some bootstrap hints, no REST message write
 - Establishment admin (Owners org-wide + Directors on path): `/organization/establishments/{id}` — overview metrics + memberships; entry to operational config.
 - Client router: `apps/web/src/app/app-routes.ts` (not React Router).
 - Server state: TanStack Query only (no client global store library).
-- Builds: Web `dist/` (`base: '/'`) and Native `dist-native/` (`base: './'`); no service worker.
+- Builds: Web `dist/` (`base: '/'`) and Native `dist-native/` (`base: './'`); Capacitor shells in `apps/web/ios` and `apps/web/android`; no service worker.
 
 Details: [`../engineering/frontend_architecture.md`](../engineering/frontend_architecture.md).
 

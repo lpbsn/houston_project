@@ -1,0 +1,8 @@
+{
+	"appId": "app.spore",
+	"appName": "Spore",
+	"webDir": "dist-native",
+	"android": {
+		"allowMixedContent": true
+	}
+}

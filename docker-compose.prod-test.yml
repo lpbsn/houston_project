@@ -10,8 +10,8 @@ x-api-build: &api_build
 x-api-image: &api_image houston-api:prod-test
 
 x-api-environment: &api_environment
-  DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,api,gateway}
-  HOUSTON_CLIENT_ORIGINS: ${HOUSTON_CLIENT_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080}
+  DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,api,gateway,10.0.2.2}
+  HOUSTON_CLIENT_ORIGINS: ${HOUSTON_CLIENT_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080,capacitor://localhost,https://localhost}
   DJANGO_DEBUG: ${DJANGO_DEBUG:-0}
   DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-local-prod-test-django-secret-change-me}
   HOUSTON_ALLOW_INSECURE_LOCAL_CSRF_ORIGINS: ${HOUSTON_ALLOW_INSECURE_LOCAL_CSRF_ORIGINS:-1}

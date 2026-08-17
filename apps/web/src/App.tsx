@@ -576,7 +576,10 @@ function App() {
 
   if (route.kind === 'static' && route.path === '/onboarding') {
     return (
-      <div className="min-h-dvh bg-spore-cream text-spore-forest" data-testid="onboarding-shell">
+      <div
+        className="min-h-dvh bg-spore-cream pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-spore-forest"
+        data-testid="onboarding-shell"
+      >
         <OnboardingPage onNavigate={navigate} />
       </div>
     )
@@ -814,7 +817,10 @@ function App() {
   }
 
   return (
-    <motion.main {...motionProps} className="mx-auto flex min-h-screen w-full max-w-7xl px-4 py-6 sm:px-6">
+    <motion.main
+      {...motionProps}
+      className="mx-auto flex min-h-screen w-full max-w-7xl px-4 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6"
+    >
       <AppShell
         headingBadge={routeCopy.headingBadge}
         title={routeCopy.title}

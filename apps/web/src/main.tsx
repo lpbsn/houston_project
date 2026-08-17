@@ -26,16 +26,31 @@ unregisterServiceWorkers()
 
 const history = createBrowserHistory()
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <ObservationProcessingTrackerProvider>
-          <AppRouteProvider history={history}>
-            <App />
-          </AppRouteProvider>
-        </ObservationProcessingTrackerProvider>
-      </AuthProvider>
-    </QueryClientProvider>
-  </StrictMode>,
-)
+async function bootstrap() {
+  if (import.meta.env.VITE_APP_RUNTIME === 'native') {
+    try {
+      const { configureNativeBodyRefreshTokenStore } = await import(
+        '@/features/auth/native-refresh-token-store'
+      )
+      await configureNativeBodyRefreshTokenStore()
+    } catch {
+      // Store stays unconfigured; AuthProvider restore/login remain fail-closed.
+    }
+  }
+
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <ObservationProcessingTrackerProvider>
+            <AppRouteProvider history={history}>
+              <App />
+            </AppRouteProvider>
+          </ObservationProcessingTrackerProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </StrictMode>,
+  )
+}
+
+void bootstrap()

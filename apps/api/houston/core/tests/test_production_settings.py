@@ -3,9 +3,11 @@ from __future__ import annotations
 import importlib
 
 import pytest
+from config.settings import HOUSTON_NATIVE_WEBVIEW_ORIGINS, csrf_trusted_origins_from_client_origins
 from django.core.management import call_command
 from django.core.management.base import SystemCheckError
 from django.test import override_settings
+from rest_framework.test import APIClient
 
 VALID_PRODUCTION_OVERRIDES = {
     "DEBUG": False,
@@ -76,13 +78,55 @@ def test_production_deploy_check_rejects_local_http_csrf_without_exception(
 
 
 def test_production_deploy_check_allows_local_http_csrf_with_exception(valid_production_overrides):
-    valid_production_overrides["ALLOWED_HOSTS"] = ["localhost", "127.0.0.1", "api", "gateway"]
+    valid_production_overrides["ALLOWED_HOSTS"] = [
+        "localhost",
+        "127.0.0.1",
+        "api",
+        "gateway",
+        "10.0.2.2",
+    ]
     valid_production_overrides["HOUSTON_CLIENT_ORIGINS"] = ["http://localhost:8080"]
     valid_production_overrides["CSRF_TRUSTED_ORIGINS"] = ["http://localhost:8080"]
     valid_production_overrides["CORS_ALLOWED_ORIGINS"] = ["http://localhost:8080"]
     valid_production_overrides["HOUSTON_ALLOW_INSECURE_LOCAL_CSRF_ORIGINS"] = True
     valid_production_overrides["HOUSTON_ALLOW_LOCAL_ALLOWED_HOSTS"] = True
     with override_settings(**valid_production_overrides):
+        call_command("check", deploy=True)
+
+
+def test_csrf_trusted_origins_exclude_native_webview_origins():
+    derived = csrf_trusted_origins_from_client_origins(
+        [
+            "https://example.railway.app",
+            "http://localhost:5173",
+            *sorted(HOUSTON_NATIVE_WEBVIEW_ORIGINS),
+        ]
+    )
+
+    assert derived == ["https://example.railway.app", "http://localhost:5173"]
+    assert HOUSTON_NATIVE_WEBVIEW_ORIGINS.isdisjoint(derived)
+
+
+def test_production_deploy_check_allows_native_webview_origins(valid_production_overrides):
+    native_origins = sorted(HOUSTON_NATIVE_WEBVIEW_ORIGINS)
+    valid_production_overrides["HOUSTON_CLIENT_ORIGINS"] = [
+        "https://example.railway.app",
+        *native_origins,
+    ]
+    valid_production_overrides["CSRF_TRUSTED_ORIGINS"] = ["https://example.railway.app"]
+    valid_production_overrides["CORS_ALLOWED_ORIGINS"] = [
+        "https://example.railway.app",
+        *native_origins,
+    ]
+    with override_settings(**valid_production_overrides):
+        call_command("check", deploy=True)
+
+
+def test_production_deploy_check_rejects_unknown_native_scheme(valid_production_overrides):
+    valid_production_overrides["HOUSTON_CLIENT_ORIGINS"] = ["capacitor://evil.example"]
+    valid_production_overrides["CSRF_TRUSTED_ORIGINS"] = []
+    valid_production_overrides["CORS_ALLOWED_ORIGINS"] = ["capacitor://evil.example"]
+    with override_settings(**valid_production_overrides), pytest.raises(SystemCheckError):
         call_command("check", deploy=True)
 
 
@@ -115,10 +159,33 @@ def test_production_deploy_check_rejects_openai_without_api_key(valid_production
         call_command("check", deploy=True)
 
 
+def test_production_deploy_check_rejects_android_emulator_host_without_exception(
+    valid_production_overrides,
+):
+    valid_production_overrides["ALLOWED_HOSTS"] = ["10.0.2.2"]
+    valid_production_overrides["HOUSTON_ALLOW_LOCAL_ALLOWED_HOSTS"] = False
+    with override_settings(**valid_production_overrides), pytest.raises(SystemCheckError):
+        call_command("check", deploy=True)
+
+
+@pytest.mark.django_db
+def test_allowed_hosts_accepts_android_emulator_loopback(settings):
+    settings.ALLOWED_HOSTS = ["10.0.2.2"]
+    response = APIClient().get("/api/v1/auth/csrf/", HTTP_HOST="10.0.2.2:8000")
+
+    assert response.status_code == 200
+
+
 def test_production_deploy_check_allows_local_allowed_hosts_with_exception(
     valid_production_overrides,
 ):
-    valid_production_overrides["ALLOWED_HOSTS"] = ["localhost", "127.0.0.1", "api", "gateway"]
+    valid_production_overrides["ALLOWED_HOSTS"] = [
+        "localhost",
+        "127.0.0.1",
+        "api",
+        "gateway",
+        "10.0.2.2",
+    ]
     valid_production_overrides["HOUSTON_ALLOW_LOCAL_ALLOWED_HOSTS"] = True
     valid_production_overrides["HOUSTON_CLIENT_ORIGINS"] = ["http://localhost:8080"]
     valid_production_overrides["CSRF_TRUSTED_ORIGINS"] = ["http://localhost:8080"]

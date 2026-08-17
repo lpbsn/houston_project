@@ -30,21 +30,27 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
   if (!isReady) {
     return (
       <LoginPageShell>
-        <header className="flex justify-end px-4 pt-4 sm:px-6 sm:pt-6" aria-hidden />
+        <header
+          className="flex justify-end px-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 sm:pt-[max(1.5rem,env(safe-area-inset-top))]"
+          aria-hidden
+        />
         <main className="flex flex-col items-center justify-center px-4">
           <div className="flex items-center gap-3 rounded-full border border-[#E8E6DF] bg-white px-4 py-3 text-sm text-[#6B7280]">
             <LoaderCircle className="size-4 animate-spin text-[#114660]" />
             Restauration de votre session…
           </div>
         </main>
-        <footer className="pb-6 text-center text-xs text-[#9CA3AF]" aria-hidden />
+        <footer
+          className="pb-[max(1.5rem,env(safe-area-inset-bottom))] text-center text-xs text-[#9CA3AF]"
+          aria-hidden
+        />
       </LoginPageShell>
     )
   }
 
   return (
     <LoginPageShell>
-      <header className="flex justify-end px-4 pt-4 sm:px-6 sm:pt-6">
+      <header className="flex justify-end px-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 sm:pt-[max(1.5rem,env(safe-area-inset-top))]">
         <Button
           type="button"
           variant="outline"
@@ -70,7 +76,7 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
         <LoginForm />
       </main>
 
-      <footer className="pb-6 text-center text-xs text-[#9CA3AF]">
+      <footer className="pb-[max(1.5rem,env(safe-area-inset-bottom))] text-center text-xs text-[#9CA3AF]">
         © 2026 Spore · Terrain-first
       </footer>
     </LoginPageShell>
