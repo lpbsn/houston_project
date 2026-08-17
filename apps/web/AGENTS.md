@@ -129,7 +129,7 @@ Run from repo root unless needed:
 - lint: `cd apps/web && npm run lint`
 - tests: `cd apps/web && npm test`
 - build: `cd apps/web && npm run build`
-- native build: `cd apps/web && npm run build:native` (requires `VITE_API_BASE_URL`)
+- native build: `cd apps/web && npm run build:native` (requires `VITE_API_BASE_URL` and `VITE_PUBLIC_APP_URL` as an absolute http(s) origin)
 - Capacitor sync: `cd apps/web && npm run cap:sync`
 - Native Vite compile-time pin (no auth): `cd apps/web && npm run dev:native`
 

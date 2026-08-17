@@ -395,6 +395,7 @@ Ces valeurs sont déjà correctes dans `.env.example` pour Compose (hôtes `post
 | `HOUSTON_AUTH_THROTTLE_*`, `HOUSTON_CACHE_REDIS_URL` | Throttling auth |
 | `HOUSTON_PRIVATE_MEDIA_ROOT` | Vide = défaut `apps/api/private_media` dans le conteneur |
 | `VITE_API_BASE_URL` | Lu par Vite (`envDir` = racine du repo) et par le client TS. Local : `http://localhost:8000` (l’API est appelée directement, CORS autorise l’origin Vite). Vide = chemins relatifs / same-origin (prod nginx) |
+| `VITE_PUBLIC_APP_URL` | Origine publique HTTP(S) des liens d’invitation copiables (même valeur que `HOUSTON_PUBLIC_APP_URL`). Requise au build Native ; le Web retombe sur l’origine de la page si vide. |
 
 **Interdit** : secrets ou codes d’invitation dans des variables `VITE_*` ([`README.md`](README.md), règles AGENTS).
 

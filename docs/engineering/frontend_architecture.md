@@ -61,7 +61,7 @@ Network banner (`navigator.onLine`) and WS reconnect on `visibilitychange` alrea
 One React tree, two Vite pipelines in [`vite.config.ts`](../../apps/web/vite.config.ts):
 
 - **Web** (`npm run build`): `VITE_APP_RUNTIME=web`, `base: '/'`, `dist/`. Classic hashed assets; `index.html` revalidated by nginx/CDN. No service worker, no web app manifest. Boot unregisters leftover service-worker registrations from pre–Capacitor Lot 4 installs.
-- **Native** (`npm run build:native`): `VITE_APP_RUNTIME=native`, `base: './'`, `dist-native/`. Capacitor `webDir` is `dist-native`. `VITE_API_BASE_URL` is required at Vite startup (dev and build).
+- **Native** (`npm run build:native`): `VITE_APP_RUNTIME=native`, `base: './'`, `dist-native/`. Capacitor `webDir` is `dist-native`. `VITE_API_BASE_URL` and `VITE_PUBLIC_APP_URL` (absolute http(s) origin) are required at Vite startup (dev and build).
 
 `tsc -b` stays in `build` and `build:native`. The runtime pin is on the Vite process only (`tsc -b && VITE_APP_RUNTIME=… vite build`). Native projects live in [`apps/web/ios`](../../apps/web/ios) and [`apps/web/android`](../../apps/web/android); sync with `npm run cap:sync`. Committed `capacitor.config.ts` keeps `allowMixedContent: false` and no `server.cleartext`; Android debug Gradle overlays local HTTP mixed content for the emulator.
 
@@ -72,7 +72,7 @@ cd apps/web && npm run typecheck
 cd apps/web && npm run lint
 cd apps/web && npm test
 cd apps/web && npm run build
-cd apps/web && npm run build:native   # requires VITE_API_BASE_URL
+cd apps/web && npm run build:native   # requires VITE_API_BASE_URL and VITE_PUBLIC_APP_URL
 cd apps/web && npm run cap:sync
 make web-api-generate   # after make schema
 ```

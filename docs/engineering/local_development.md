@@ -41,7 +41,7 @@ Native Capacitor (`make web-cap-sync`) copies `dist-native/` into the iOS and An
 | Android emulator | `http://10.0.2.2:8000` then `make web-cap-sync` |
 | Physical device | LAN IP or HTTPS API host (not `localhost`) |
 
-Set `VITE_PUBLIC_APP_URL` to the public web origin (same value as `HOUSTON_PUBLIC_APP_URL`) so in-app invitation copy links are usable outside the WebView. Native builds require it.
+Set `VITE_PUBLIC_APP_URL` to the public HTTP(S) origin (same value as `HOUSTON_PUBLIC_APP_URL`, no path/query/hash) so in-app invitation copy links are usable outside the WebView. Native builds require it.
 
 `DJANGO_ALLOWED_HOSTS` must include `10.0.2.2` so Django accepts the emulator `Host` header. `HOUSTON_CLIENT_ORIGINS` must include `capacitor://localhost` and `https://localhost`. Debug Android allows mixed content / local cleartext only via `android/app/src/debug/` (not the committed `capacitor.config.ts`). iOS Simulator and Android emulator require Xcode / Android Studio on the machine. Native validation uses `build:native` / `cap:sync`, not the Vite `dev:native` server (`base: '/'` vs packaged `'./'`).
 

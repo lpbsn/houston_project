@@ -225,7 +225,7 @@ web-build-native:
 	cd $(WEB_DIR) && npm run build:native
 
 web-build-native-check:
-	cd $(WEB_DIR) && VITE_API_BASE_URL=https://api.example.test npm run build:native:bundle
+	cd $(WEB_DIR) && VITE_API_BASE_URL=https://api.example.test VITE_PUBLIC_APP_URL=https://app.example.test npm run build:native:bundle
 
 web-cap-sync:
 	cd $(WEB_DIR) && npm run cap:sync
