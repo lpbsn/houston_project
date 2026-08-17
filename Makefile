@@ -3,7 +3,7 @@
 	up up-build up-backend up-scheduler up-prod-test down-prod-test migrate-prod-test restart-backend recreate-backend down \
 	check test lint schema schema-check shell migrate migrations-check \
 	backend-lint backend-migrations-check backend-schema backend-schema-check backend-deploy-check backend-test backend-check backend-rebuild \
-	web-install web-dev web-dev-native web-dev-landing web-build web-build-native web-build-landing web-typecheck web-lint web-test web-api-generate web-api-generate-check web-check \
+	web-install web-dev web-dev-native web-dev-landing web-build web-build-native web-build-native-check web-build-landing web-typecheck web-lint web-test web-api-generate web-api-generate-check web-check \
 	verify local-check docker-verify-security infra-check \
 	import-catalog catalog-check \
 	preflight-organizational-owners repair-organizational-owners \
@@ -224,6 +224,9 @@ web-build:
 web-build-native:
 	cd $(WEB_DIR) && npm run build:native
 
+web-build-native-check:
+	cd $(WEB_DIR) && VITE_API_BASE_URL=https://api.example.test npm run build:native:bundle
+
 web-build-landing:
 	cd $(WEB_DIR) && npm run build:landing
 
@@ -243,7 +246,7 @@ web-api-generate-check:
 	cd $(WEB_DIR) && npm run api:generate
 	git diff --exit-code apps/web/src/api/generated/types.ts
 
-web-check: web-test web-typecheck web-build web-build-native web-api-generate-check
+web-check: web-test web-typecheck web-build web-build-native-check web-api-generate-check
 
 # -----------------------------------------------------------------------------
 # Full validation

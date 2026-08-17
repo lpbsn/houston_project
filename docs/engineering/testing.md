@@ -188,7 +188,7 @@ GitHub Actions (`.github/workflows/ci.yml`):
 |--------|----------------|
 | `make backend-check` | Django check, ruff, migrations check, schema diff, pytest |
 | `make web-api-generate-check` | regen `types.ts` from committed `schema.yml` + `git diff` |
-| `make web-check` | vitest, typecheck, web build, native build, `web-api-generate-check` |
+| `make web-check` | vitest, typecheck, web build, native bundle with placeholder `VITE_API_BASE_URL` (`web-build-native-check`), `web-api-generate-check` |
 | `make local-check` | `backend-check` + `web-check` |
 | `make verify` | alias for `local-check` |
 
