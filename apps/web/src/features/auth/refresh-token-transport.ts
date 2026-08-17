@@ -66,16 +66,18 @@ export async function prepareRefreshTransport(): Promise<PreparedAuthTransport> 
   return { ...prepared, refreshToken: stored.token }
 }
 
-export async function prepareLogoutTransport(options: {
-  hasBearer: boolean
-}): Promise<PreparedAuthTransport> {
+export async function prepareLogoutTransport(): Promise<PreparedAuthTransport> {
   const prepared = await prepareSessionCreationTransport()
-  if (prepared.transport === 'cookie' || options.hasBearer) {
+  if (prepared.transport === 'cookie') {
     return prepared
   }
 
-  const stored = await requireBodyStore().read()
-  return { ...prepared, refreshToken: stored?.token }
+  try {
+    const stored = await requireBodyStore().read()
+    return { ...prepared, refreshToken: stored?.token }
+  } catch {
+    return prepared
+  }
 }
 
 export async function persistRefreshFromAuthResponse(payload: AuthResponseWithRefresh) {

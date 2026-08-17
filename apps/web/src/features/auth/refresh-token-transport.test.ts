@@ -62,7 +62,23 @@ describe('refresh token transport', () => {
     expect(store.clear).toHaveBeenCalledOnce()
   })
 
-  it('does not read body storage when logout has a bearer', async () => {
+  it('attaches the stored refresh token for body logout', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    const store = {
+      read: vi.fn(async () => ({ token: 'logout-refresh', expiresAt: '2026-09-01T00:00:00Z' })),
+      write: vi.fn(async () => undefined),
+      clear: vi.fn(async () => undefined),
+    }
+    configureBodyRefreshTokenStore(store)
+
+    await expect(prepareLogoutTransport()).resolves.toEqual({
+      transport: 'body',
+      credentials: 'omit',
+      refreshToken: 'logout-refresh',
+    })
+  })
+
+  it('still prepares body logout when refresh storage is unavailable', async () => {
     vi.stubEnv('VITE_APP_RUNTIME', 'native')
     const store = {
       read: vi.fn(async () => {
@@ -73,26 +89,9 @@ describe('refresh token transport', () => {
     }
     configureBodyRefreshTokenStore(store)
 
-    await expect(prepareLogoutTransport({ hasBearer: true })).resolves.toEqual({
+    await expect(prepareLogoutTransport()).resolves.toEqual({
       transport: 'body',
       credentials: 'omit',
-    })
-    expect(store.read).not.toHaveBeenCalled()
-  })
-
-  it('reads body storage when logout needs refresh fallback', async () => {
-    vi.stubEnv('VITE_APP_RUNTIME', 'native')
-    const store = {
-      read: vi.fn(async () => ({ token: 'logout-refresh', expiresAt: '2026-09-01T00:00:00Z' })),
-      write: vi.fn(async () => undefined),
-      clear: vi.fn(async () => undefined),
-    }
-    configureBodyRefreshTokenStore(store)
-
-    await expect(prepareLogoutTransport({ hasBearer: false })).resolves.toEqual({
-      transport: 'body',
-      credentials: 'omit',
-      refreshToken: 'logout-refresh',
     })
   })
 })

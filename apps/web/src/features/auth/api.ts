@@ -302,6 +302,9 @@ let refreshPromise: Promise<string | null> | null = null
 let restorePromise: Promise<string | null> | null = null
 let authGeneration = 0
 let authInvalidationGeneration = 0
+let sessionReplacementDepth = 0
+let sessionReplacementIdle: Promise<void> = Promise.resolve()
+let resolveSessionReplacementIdle: (() => void) | null = null
 let cookieSessionReplacementQueue: Promise<void> = Promise.resolve()
 let bodyAuthCommitQueue: Promise<void> = Promise.resolve()
 
@@ -357,8 +360,23 @@ function enqueueAuthOperation<T>(
 }
 
 function beginSessionReplacement() {
+  if (sessionReplacementDepth === 0) {
+    sessionReplacementIdle = new Promise((resolve) => {
+      resolveSessionReplacementIdle = resolve
+    })
+  }
+  sessionReplacementDepth += 1
   authGeneration += 1
   return authGeneration
+}
+
+function endSessionReplacement() {
+  sessionReplacementDepth -= 1
+  if (sessionReplacementDepth === 0) {
+    resolveSessionReplacementIdle?.()
+    resolveSessionReplacementIdle = null
+    sessionReplacementIdle = Promise.resolve()
+  }
 }
 
 async function runSessionReplacement<T>(
@@ -366,8 +384,12 @@ async function runSessionReplacement<T>(
 ) {
   if (getRefreshTokenTransport() === 'body') {
     const generation = beginSessionReplacement()
-    const prepared = await prepareSessionCreationTransport()
-    return operation(prepared, generation)
+    try {
+      const prepared = await prepareSessionCreationTransport()
+      return await operation(prepared, generation)
+    } finally {
+      endSessionReplacement()
+    }
   }
 
   const invalidationGeneration = authInvalidationGeneration
@@ -381,7 +403,12 @@ async function runSessionReplacement<T>(
       if (invalidationGeneration !== authInvalidationGeneration) {
         throw new StaleAuthOperationError('The authenticated session is no longer current.')
       }
-      return operation(prepared, beginSessionReplacement())
+      const generation = beginSessionReplacement()
+      try {
+        return await operation(prepared, generation)
+      } finally {
+        endSessionReplacement()
+      }
     },
   )
 }
@@ -411,9 +438,6 @@ async function rejectStaleAuthEnvelope(
   prepared: PreparedAuthTransport,
   options: { persistedBodyRefresh?: boolean } = {},
 ): Promise<never> {
-  if (prepared.transport === 'cookie') {
-    clearVolatileAuthState()
-  }
   await revokeTransientSession(payload, prepared)
   if (prepared.transport === 'body' && options.persistedBodyRefresh) {
     await clearPersistedRefreshToken().catch(() => undefined)
@@ -480,6 +504,7 @@ function captureAuthGeneration() {
 }
 
 async function executeRefresh() {
+  await sessionReplacementIdle
   const generation = captureAuthGeneration()
   const prepared = await prepareRefreshTransport()
   const { data, error, response } = await apiClient.POST('/api/v1/auth/refresh/', {
@@ -654,7 +679,7 @@ export async function acceptInvitationSession(
 
 export async function logout() {
   const accessToken = getAccessToken()
-  const prepared = await prepareLogoutTransport({ hasBearer: Boolean(accessToken) })
+  const prepared = await prepareLogoutTransport()
   const { error, response } = await apiClient.POST('/api/v1/auth/logout/', {
     body: {
       refresh_token_transport: prepared.transport,
