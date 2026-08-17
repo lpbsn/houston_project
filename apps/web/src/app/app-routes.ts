@@ -2,11 +2,12 @@ import {
   createContext,
   createElement,
   type PropsWithChildren,
-  useCallback,
   useContext,
-  useEffect,
-  useState,
+  useMemo,
+  useSyncExternalStore,
 } from 'react'
+
+import { type AppHistory, getHrefSearch } from '@/app/app-history'
 
 export type AppPath =
   | '/'
@@ -64,7 +65,7 @@ export function getAppRouteKey(route: AppRoute): string {
     case 'signal-action-create':
       return `signal-action-create:${route.signalId}`
     case 'action-plan-create':
-      return 'action-plan-create'
+      return `action-plan-create:${route.origin}`
     case 'action-plan-template-detail':
       return `action-plan-template-detail:${route.actionPlanId}`
     case 'action-plan-template-edit':
@@ -238,10 +239,6 @@ export function parseAppRoute(input: string): AppRoute {
     }
   }
 
-  if (pathname === '/execution/plans/new') {
-    return { kind: 'action-plan-create', origin: 'execution' }
-  }
-
   if (
     pathname === '/' ||
     pathname === '/login' ||
@@ -271,46 +268,69 @@ export function parseAppRoute(input: string): AppRoute {
   return { kind: 'unknown', pathname }
 }
 
-function currentBrowserHref(): string {
-  return `${window.location.pathname}${window.location.search}${window.location.hash}`
+export function serializeAppRoute(route: AppRoute): string {
+  switch (route.kind) {
+    case 'static':
+      return route.path
+    case 'signal-detail':
+      return `/signals/${route.signalId}`
+    case 'signal-action-create':
+      return `/signals/${route.signalId}/plan`
+    case 'action-plan-create':
+      return route.origin === 'execution'
+        ? '/action-plans/new?from=execution'
+        : '/action-plans/new'
+    case 'action-plan-template-detail':
+      return `/action-plans/${route.actionPlanId}`
+    case 'action-plan-template-edit':
+      return `/action-plans/${route.actionPlanId}/edit`
+    case 'action-plan-execution-detail':
+      return `/action-plans/executions/${route.executionId}`
+    case 'action-plan-execution-edit':
+      return `/action-plans/executions/${route.executionId}/edit`
+    case 'analytics-pattern-detail':
+      return `/analytics/patterns/${route.patternId}`
+    case 'chat-conversation-detail':
+      return `/chat/${route.conversationId}`
+    case 'team-member-detail':
+      return `/team/${route.membershipId}`
+    case 'organization-establishment-detail':
+      return `/organization/establishments/${route.establishmentId}`
+    case 'invitation':
+      return `/invitations/${route.token}`
+    case 'unknown':
+      return route.pathname
+  }
 }
 
 type AppRouteContextValue = {
   route: AppRoute
+  search: string
   navigate: (href: string, options?: { replace?: boolean }) => void
 }
 
+type AppRouteProviderProps = PropsWithChildren<{
+  history: AppHistory
+}>
+
 const AppRouteContext = createContext<AppRouteContextValue | null>(null)
 
-export function AppRouteProvider({ children }: PropsWithChildren) {
-  const [route, setRoute] = useState<AppRoute>(() =>
-    parseAppRoute(currentBrowserHref()),
+export function AppRouteProvider({ history, children }: AppRouteProviderProps) {
+  const href = useSyncExternalStore(history.subscribe, history.getHref, history.getHref)
+  const routeKey = getAppRouteKey(parseAppRoute(href))
+  // Search-only href changes must keep the same AppRoute object (screen identity).
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by routeKey, not href
+  const route = useMemo(() => parseAppRoute(href), [routeKey])
+  const value = useMemo<AppRouteContextValue>(
+    () => ({
+      route,
+      search: getHrefSearch(href),
+      navigate: history.navigate,
+    }),
+    [history, href, route],
   )
 
-  useEffect(() => {
-    const handlePopState = () => {
-      setRoute(parseAppRoute(currentBrowserHref()))
-    }
-
-    window.addEventListener('popstate', handlePopState)
-
-    return () => {
-      window.removeEventListener('popstate', handlePopState)
-    }
-  }, [])
-
-  const navigate = useCallback((href: string, options?: { replace?: boolean }) => {
-    if (currentBrowserHref() === href) {
-      setRoute(parseAppRoute(href))
-      return
-    }
-
-    const method = options?.replace ? 'replaceState' : 'pushState'
-    window.history[method](null, '', href)
-    setRoute(parseAppRoute(href))
-  }, [])
-
-  return createElement(AppRouteContext.Provider, { value: { route, navigate } }, children)
+  return createElement(AppRouteContext.Provider, { value }, children)
 }
 
 export function useAppRoute() {

@@ -17,6 +17,7 @@ import {
   type SVGProps,
 } from 'react'
 
+import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -44,6 +45,7 @@ import {
 } from '@/features/analytics/lib/analytics-url-state'
 import { canShowAnalyticsNavigation } from '@/features/navigation/lib/shared-navigation'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { useLocationSearch } from '@/lib/location-search'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -573,8 +575,14 @@ function AnalyticsPatternSearchInput({
   state: AnalyticsUrlState
   onStateChange: (state: AnalyticsUrlState, options?: { replace?: boolean }) => void
 }) {
+  const search = useLocationSearch()
+  const searchRef = useRef(search)
   const [draft, setDraft] = useState(state.q)
   const debounceRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
+
+  useEffect(() => {
+    searchRef.current = search
+  }, [search])
 
   function clearDebounce() {
     if (debounceRef.current) {
@@ -591,10 +599,10 @@ function AnalyticsPatternSearchInput({
   function handleChange(value: string) {
     setDraft(value)
     clearDebounce()
-    const scheduledSearch = window.location.search
+    const scheduledSearch = search
     const nextState = { ...state, q: value.trim() }
     debounceRef.current = window.setTimeout(() => {
-      if (window.location.search !== scheduledSearch) {
+      if (searchRef.current !== scheduledSearch) {
         return
       }
       onStateChange(nextState, { replace: true })
@@ -621,11 +629,11 @@ function AnalyticsPatternSearchInput({
 function AnalyticsPatternTable({
   query,
   state,
-  onNavigate,
+  navigate,
 }: {
   query: ReturnType<typeof useAnalyticsPatternsInfiniteQuery>
   state: AnalyticsUrlState
-  onNavigate?: (pathname: string, options?: { replace?: boolean }) => void
+  navigate: (pathname: string, options?: { replace?: boolean }) => void
 }) {
   const items = useMemo(
     () => query.data?.pages.flatMap((page) => page.items) ?? [],
@@ -687,17 +695,11 @@ function AnalyticsPatternTable({
               data-testid="analytics-pattern-row"
               className="grid min-w-0 gap-3 px-4 py-4 text-sm transition-colors hover:bg-[#FBFAF7] focus:outline-none focus:ring-2 focus:ring-[#114660] focus:ring-offset-2 lg:grid-cols-[minmax(180px,1.5fr)_110px_120px_130px_140px_120px_minmax(160px,1fr)]"
               onClick={(event) => {
-                if (
-                  !onNavigate ||
-                  event.metaKey ||
-                  event.ctrlKey ||
-                  event.shiftKey ||
-                  event.altKey
-                ) {
+                if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
                   return
                 }
                 event.preventDefault()
-                onNavigate(detailPath)
+                navigate(detailPath)
               }}
             >
               <div className="min-w-0">
@@ -778,12 +780,9 @@ function AnalyticsPatternTable({
   )
 }
 
-type AnalyticsPageProps = {
-  onNavigate?: (pathname: string, options?: { replace?: boolean }) => void
-}
-
-export function AnalyticsPage({ onNavigate }: AnalyticsPageProps) {
+export function AnalyticsPage() {
   const { bootstrap, isBootstrapping, isReady } = useAuth()
+  const { navigate } = useAppRoute()
   const analyticsState = useAnalyticsUrlState()
   const canAccessAnalytics = canShowAnalyticsNavigation(bootstrap)
   const dashboardQuery = useAnalyticsDashboardQuery(analyticsState, {
@@ -797,9 +796,7 @@ export function AnalyticsPage({ onNavigate }: AnalyticsPageProps) {
   })
 
   function updateAnalyticsState(nextState: AnalyticsUrlState, options?: { replace?: boolean }) {
-    const href = buildAnalyticsPath(nextState)
-    const method = options?.replace ? 'replaceState' : 'pushState'
-    window.history[method](null, '', href)
+    navigate(buildAnalyticsPath(nextState), options)
   }
 
   if (!isReady || isBootstrapping) {
@@ -920,7 +917,7 @@ export function AnalyticsPage({ onNavigate }: AnalyticsPageProps) {
           <AnalyticsPatternTable
             query={patternsQuery}
             state={analyticsState}
-            onNavigate={onNavigate}
+            navigate={navigate}
           />
 
           <TerrainCard className="p-4">

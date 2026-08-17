@@ -19,6 +19,7 @@ import { canAccessEstablishmentAdminPage } from '@/features/organization/lib/can
 import { resolveOperationalConfigReturnPath } from '@/features/organization/lib/operational-config-navigation'
 import { BusinessUnitAutocomplete } from '@/features/onboarding/components/business-unit-autocomplete'
 import type { CatalogBusinessUnitSuggestion } from '@/features/onboarding/types'
+import { useLocationSearch } from '@/lib/location-search'
 
 type OperationalConfigPageProps = {
   onNavigate?: (path: string) => void
@@ -26,12 +27,15 @@ type OperationalConfigPageProps = {
 
 function useOperationalConfigReturnPath() {
   const { activeMembership, bootstrap } = useAuth()
+  const locationSearch = useLocationSearch()
   const permissionHints = getBootstrapPermissionHints(bootstrap)
   const canManageOrganization = canManageOrganizationFromBootstrapHints(permissionHints)
   const activeEstablishmentId = activeMembership?.establishment_id ?? null
 
   return useMemo(() => {
-    const returnTo = new URLSearchParams(window.location.search).get('returnTo')
+    const returnTo = new URLSearchParams(
+      locationSearch.startsWith('?') ? locationSearch.slice(1) : locationSearch,
+    ).get('returnTo')
     const canAccessActiveEstablishmentAdmin = canAccessEstablishmentAdminPage({
       canManageOrganization,
       memberships: bootstrap?.memberships,
@@ -45,7 +49,7 @@ function useOperationalConfigReturnPath() {
         activeEstablishmentId && canAccessActiveEstablishmentAdmin,
       ),
     })
-  }, [activeEstablishmentId, bootstrap?.memberships, canManageOrganization])
+  }, [activeEstablishmentId, bootstrap?.memberships, canManageOrganization, locationSearch])
 }
 
 function OperationalConfigContent({

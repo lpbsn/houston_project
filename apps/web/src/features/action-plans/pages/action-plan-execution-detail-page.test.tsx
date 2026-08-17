@@ -81,6 +81,7 @@ vi.mock('@/app/app-routes', () => ({
   useAppRoute: () => ({
     navigate: navigateMock,
     route: { kind: 'action-plan-execution-detail', executionId: 'exec-1' },
+    search: window.location.search,
   }),
 }))
 
@@ -339,11 +340,12 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
       refetch: vi.fn(),
     })
 
-    renderPage()
+    const view = renderPage()
 
     expect(scrollIntoView).not.toHaveBeenCalled()
 
     window.history.replaceState(null, '', '/action-plans/executions/exec-1?focus=validation')
+    view.rerender(createElement(ActionPlanExecutionDetailPage, { executionId: 'exec-1' }))
 
     await waitFor(() => {
       expect(scrollIntoView).toHaveBeenCalledWith({ block: 'end' })

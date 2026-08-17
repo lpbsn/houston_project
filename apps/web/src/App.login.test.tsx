@@ -30,6 +30,7 @@ vi.mock('@/app/app-routes', () => ({
   useAppRoute: () => ({
     route: routeState.route,
     navigate,
+    search: window.location.search,
   }),
 }))
 

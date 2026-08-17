@@ -3,6 +3,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import App from './App'
+import { createBrowserHistory } from '@/app/app-history'
 import { AppRouteProvider } from '@/app/app-routes'
 import { AuthProvider } from '@/app/auth-provider'
 import { ObservationProcessingTrackerProvider } from '@/features/observations/components/observation-processing-tracker-provider'
@@ -21,12 +22,14 @@ if (import.meta.env.PROD) {
   })
 }
 
+const history = createBrowserHistory()
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <ObservationProcessingTrackerProvider>
-          <AppRouteProvider>
+          <AppRouteProvider history={history}>
             <App />
           </AppRouteProvider>
         </ObservationProcessingTrackerProvider>

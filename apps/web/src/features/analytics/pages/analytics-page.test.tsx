@@ -4,6 +4,8 @@ import { createElement } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { createBrowserHistory, type AppHistory } from '@/app/app-history'
+import { AppRouteProvider } from '@/app/app-routes'
 import type { AnalyticsDashboardResponse } from '@/features/analytics/api'
 import { AnalyticsApiError } from '@/features/analytics/api'
 import { AnalyticsPage } from '@/features/analytics/pages/analytics-page'
@@ -181,6 +183,12 @@ function setFilterOptionsQuery(value: ReturnType<typeof filterOptionsQueryMock> 
   })
 }
 
+function renderAnalyticsPage(): AppHistory {
+  const history = createBrowserHistory()
+  render(createElement(AppRouteProvider, { history }, createElement(AnalyticsPage)))
+  return history
+}
+
 describe('AnalyticsPage', () => {
   afterEach(() => {
     cleanup()
@@ -207,7 +215,7 @@ describe('AnalyticsPage', () => {
       isReady: true,
     }
 
-    render(createElement(AnalyticsPage))
+    renderAnalyticsPage()
 
     expect(
       screen.getByText('Analytics est disponible pour les propriétaires, directeurs et managers.'),
@@ -232,7 +240,7 @@ describe('AnalyticsPage', () => {
       isReady: true,
     }
 
-    render(createElement(AnalyticsPage))
+    renderAnalyticsPage()
 
     expect(screen.getByText('Dashboard Analytics')).toBeTruthy()
     expect(dashboardQueryMock).toHaveBeenCalledWith(
@@ -263,7 +271,7 @@ describe('AnalyticsPage', () => {
       isReady: true,
     }
 
-    render(createElement(AnalyticsPage))
+    renderAnalyticsPage()
 
     expect(screen.getByRole('status', { name: 'Chargement Analytics' })).toBeTruthy()
   })
@@ -285,7 +293,7 @@ describe('AnalyticsPage', () => {
       isReady: true,
     }
 
-    render(createElement(AnalyticsPage))
+    renderAnalyticsPage()
 
     expect(screen.getByText('Période invalide.')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
@@ -293,7 +301,6 @@ describe('AnalyticsPage', () => {
   })
 
   it('renders dashboard KPI values from API comparison objects without recomputing deltas', () => {
-    const navigateMock = vi.fn()
     setDashboardQuery({ data: dashboard() })
     setPatternsQuery({
       data: {
@@ -347,7 +354,7 @@ describe('AnalyticsPage', () => {
       isReady: true,
     }
 
-    render(createElement(AnalyticsPage, { onNavigate: navigateMock }))
+    const history = renderAnalyticsPage()
 
     expect(screen.getByText('Signals analysés')).toBeTruthy()
     expect(screen.getAllByText('8').length).toBeGreaterThan(0)
@@ -368,9 +375,7 @@ describe('AnalyticsPage', () => {
     expect(patternLink.getAttribute('href')).toContain('/analytics/patterns/pattern-1?')
     expect(patternLink.getAttribute('href')).toContain('period_start=')
     fireEvent.click(patternLink)
-    expect(navigateMock).toHaveBeenCalledWith(
-      expect.stringContaining('/analytics/patterns/pattern-1?'),
-    )
+    expect(history.getHref()).toContain('/analytics/patterns/pattern-1?')
   })
 
   it('renders backend classification coverage and technical breakdowns factually', () => {
@@ -383,7 +388,7 @@ describe('AnalyticsPage', () => {
       isReady: true,
     }
 
-    render(createElement(AnalyticsPage))
+    renderAnalyticsPage()
 
     expect(screen.getByText('Traitement Analytics')).toBeTruthy()
     expect(screen.getByText('Population')).toBeTruthy()
@@ -408,7 +413,7 @@ describe('AnalyticsPage', () => {
       isReady: true,
     }
 
-    render(createElement(AnalyticsPage))
+    renderAnalyticsPage()
 
     expect(screen.getByText('Période Analytics')).toBeTruthy()
     expect(
@@ -467,7 +472,7 @@ describe('AnalyticsPage', () => {
       isReady: true,
     }
 
-    render(createElement(AnalyticsPage))
+    renderAnalyticsPage()
 
     expect(screen.getByText('Aucune donnée Analytics visible')).toBeTruthy()
   })
@@ -487,7 +492,7 @@ describe('AnalyticsPage', () => {
       isReady: true,
     }
 
-    render(createElement(AnalyticsPage))
+    renderAnalyticsPage()
 
     expect(screen.getByText('Dashboard Analytics')).toBeTruthy()
     expect(dashboardQueryMock).toHaveBeenCalledWith(
@@ -508,12 +513,12 @@ describe('AnalyticsPage', () => {
       isReady: true,
     }
 
-    render(createElement(AnalyticsPage))
+    const history = renderAnalyticsPage()
 
     const input = screen.getByPlaceholderText('Nom du motif')
     fireEvent.change(input, { target: { value: 'retard' } })
     act(() => {
-      window.history.pushState(null, '', '/analytics?q=externe')
+      history.navigate('/analytics?q=externe')
     })
 
     act(() => {

@@ -1,9 +1,3 @@
-export {
-  getLocationSearchSnapshot,
-  subscribeLocationSearch,
-  useLocationSearch,
-} from '@/lib/location-search'
-
 export const COMMENT_DEEP_LINK_TAB = 'comments'
 export const COMMENT_DEEP_LINK_COMMENT_ID_PARAM = 'commentId'
 export const EXECUTION_VALIDATION_FOCUS = 'validation'
@@ -44,11 +38,4 @@ export function buildExecutionValidationFocusPath(executionId: string): string {
     [EXECUTION_VALIDATION_FOCUS_PARAM]: EXECUTION_VALIDATION_FOCUS,
   })
   return `/action-plans/executions/${executionId}?${params.toString()}`
-}
-
-export function readCurrentDetailDeepLink(): DetailDeepLink {
-  if (typeof window === 'undefined') {
-    return { tab: null, commentId: null, focus: null }
-  }
-  return parseDetailDeepLink(window.location.search)
 }

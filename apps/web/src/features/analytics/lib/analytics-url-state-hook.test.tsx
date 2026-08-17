@@ -3,6 +3,8 @@
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { createMemoryHistory } from '@/app/app-history'
+import { AppRouteProvider } from '@/app/app-routes'
 import {
   type AnalyticsUrlState,
   useAnalyticsUrlState,
@@ -18,26 +20,33 @@ function Probe({ values }: { values: AnalyticsUrlState[] }) {
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
-  window.history.replaceState(null, '', '/')
 })
 
 describe('useAnalyticsUrlState', () => {
   it('keeps the default period stable across rerenders until location.search changes', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-12T10:30:00.000Z'))
-    window.history.replaceState(null, '', '/analytics')
+    const history = createMemoryHistory('/analytics')
     const values: AnalyticsUrlState[] = []
 
-    const view = render(<Probe values={values} />)
+    const view = render(
+      <AppRouteProvider history={history}>
+        <Probe values={values} />
+      </AppRouteProvider>,
+    )
     const initial = values.at(-1)!
 
     vi.setSystemTime(new Date('2026-08-12T11:30:00.000Z'))
-    view.rerender(<Probe values={values} />)
+    view.rerender(
+      <AppRouteProvider history={history}>
+        <Probe values={values} />
+      </AppRouteProvider>,
+    )
 
     expect(values.at(-1)).toEqual(initial)
 
     act(() => {
-      window.history.pushState(null, '', `/analytics?organization_id=${ORG_ID}`)
+      history.navigate(`/analytics?organization_id=${ORG_ID}`)
     })
 
     expect(values.at(-1)).toEqual({

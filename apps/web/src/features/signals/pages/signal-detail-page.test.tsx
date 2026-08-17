@@ -4,6 +4,8 @@ import { createElement } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { createBrowserHistory } from '@/app/app-history'
+import { AppRouteProvider } from '@/app/app-routes'
 import type { AnalyticsSignalReturnContext } from '@/features/analytics/lib/analytics-url-state'
 
 import type { SignalDetail } from '../types'
@@ -152,12 +154,17 @@ vi.mock('../components/signal-qualify-routing-sheet', () => ({
 }))
 
 function renderPage(options: { analyticsSignalReturnContext?: AnalyticsSignalReturnContext | null } = {}) {
+  const history = createBrowserHistory()
   return render(
-    createElement(SignalDetailPage, {
-      signalId: 'signal-1',
-      onNavigate: navigate,
-      analyticsSignalReturnContext: options.analyticsSignalReturnContext,
-    }),
+    createElement(
+      AppRouteProvider,
+      { history },
+      createElement(SignalDetailPage, {
+        signalId: 'signal-1',
+        onNavigate: navigate,
+        analyticsSignalReturnContext: options.analyticsSignalReturnContext,
+      }),
+    ),
   )
 }
 

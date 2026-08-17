@@ -84,13 +84,11 @@ import {
   parseAnalyticsSignalReturnContext,
   parseAnalyticsUrlState,
 } from '@/features/analytics/lib/analytics-url-state'
-import { useLocationSearch } from '@/lib/location-search'
 
 function App() {
   const shouldReduceMotion = useReducedMotion()
   const auth = useAuth()
-  const { route, navigate } = useAppRoute()
-  const locationSearch = useLocationSearch()
+  const { route, navigate, search: locationSearch } = useAppRoute()
 
   const motionProps = shouldReduceMotion
     ? {}
@@ -452,7 +450,7 @@ function App() {
     }
 
     if (route.path === '/analytics') {
-      return <LazyAnalyticsPage onNavigate={navigate} />
+      return <LazyAnalyticsPage />
     }
 
     if (route.path === '/general/switch-establishment') {
@@ -460,7 +458,9 @@ function App() {
     }
 
     if (route.path === '/install-app') {
-      const searchParams = new URLSearchParams(window.location.search)
+      const searchParams = new URLSearchParams(
+        locationSearch.startsWith('?') ? locationSearch.slice(1) : locationSearch,
+      )
       const fromInvitation = searchParams.get('from') === 'invitation'
       const continuePath =
         fromInvitation && auth.bootstrap
@@ -533,6 +533,7 @@ function App() {
     handleSignOut,
     analyticsPatternDetailState,
     analyticsSignalReturnContext,
+    locationSearch,
     navigate,
     route,
   ])
