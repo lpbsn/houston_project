@@ -33,7 +33,7 @@ All traffic hits `https://<railway-domain>`:
 | `/ws/*` | Django Channels / Daphne (WSS) | Implemented |
 | `/*` | Frontend static SPA | Integrated in `api-web` on Railway ([`infra/docker/railway/Dockerfile.api-web`](../../infra/docker/railway/Dockerfile.api-web)); validated locally in PR3 |
 
-The frontend API client uses `baseUrl: ''` ([`apps/web/src/api/client.ts`](../../apps/web/src/api/client.ts)), so prod-test does not need a `VITE_*` API URL.
+The frontend API client uses `baseUrl: getApiBaseUrl()` ([`apps/web/src/api/client.ts`](../../apps/web/src/api/client.ts)). An empty `VITE_API_BASE_URL` keeps relative same-origin paths, so prod-test does not need a `VITE_*` API URL.
 
 PWA workbox config is shell-only: `runtimeCaching: []`, `navigateFallbackDenylist: [/^\/api/, /^\/ws/]` ([`apps/web/vite.config.ts`](../../apps/web/vite.config.ts)).
 

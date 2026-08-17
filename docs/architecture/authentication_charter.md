@@ -114,7 +114,6 @@ Required MVP endpoints:
 
 Login must:
 
-- require CSRF
 - accept email or username identifier
 - return access token
 - return access token expiry

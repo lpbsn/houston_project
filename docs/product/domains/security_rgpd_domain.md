@@ -126,7 +126,7 @@ Implemented endpoints confirmed in `apps/api/schema.yml`:
 
 Implemented security truths confirmed today:
 
-- Login, refresh, and logout are CSRF-protected.
+- Login, refresh, and logout require CSRF for cookie transport and omit CSRF for body transport.
 - Bootstrap is bearer-authenticated.
 - Auth responses expose backend-approved membership context.
 - No export, delete, privacy-admin, support, or security-admin endpoint is currently confirmed as implemented. Media privacy endpoints (temporary photos + transcription audio) are covered by [`upload_media_domain.md`](upload_media_domain.md).
