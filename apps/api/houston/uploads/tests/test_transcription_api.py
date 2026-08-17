@@ -54,7 +54,7 @@ def _staff(api_client: APIClient, establishment: Establishment) -> tuple[User, s
     csrf = api_client.get("/api/v1/auth/csrf/").cookies["csrftoken"].value
     response = api_client.post(
         "/api/v1/auth/login/",
-        {"identifier": user.email, "password": TEST_PASSWORD},
+        {"identifier": user.email, "password": TEST_PASSWORD, "refresh_token_transport": "cookie"},
         format="json",
         HTTP_X_CSRFTOKEN=csrf,
     )

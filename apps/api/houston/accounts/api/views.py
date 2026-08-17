@@ -11,6 +11,8 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from houston.accounts.api.serializers import (
+    REFRESH_TOKEN_TRANSPORT_BODY,
+    REFRESH_TOKEN_TRANSPORT_COOKIE,
     ApiErrorResponseSerializer,
     AuthResponseSerializer,
     BootstrapResponseSerializer,
@@ -20,6 +22,8 @@ from houston.accounts.api.serializers import (
     DirectorInvitationAcceptRequestSerializer,
     DirectorInvitationAcceptResponseSerializer,
     LoginRequestSerializer,
+    LogoutRequestSerializer,
+    RefreshRequestSerializer,
     RegistrationOwnerValidateRequestSerializer,
     RegistrationRequestSerializer,
     RegistrationResponseSerializer,
@@ -115,18 +119,19 @@ class LoginView(AuthRateLimitedMixin, APIView):
             429: _THROTTLED_OPENAPI_RESPONSE,
         },
         description=(
-            "Logs in with an email or username identifier. Requires a valid Django CSRF "
-            "cookie and X-CSRFToken header."
+            "Logs in with an email or username identifier. Cookie transport requires "
+            "Django CSRF and returns the refresh token only as an HttpOnly cookie. Body "
+            "transport omits cookies and returns the refresh token in JSON."
         ),
     )
     def post(self, request):
-        csrf_failure = _enforce_csrf(request)
-
-        if csrf_failure is not None:
-            return csrf_failure
-
         serializer = LoginRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        transport = serializer.validated_data["refresh_token_transport"]
+
+        csrf_failure = _enforce_csrf_for_transport(request, transport=transport)
+        if csrf_failure is not None:
+            return csrf_failure
 
         try:
             user = authenticate_user(
@@ -142,13 +147,12 @@ class LoginView(AuthRateLimitedMixin, APIView):
             )
 
         bundle = create_login_session(request=request, user=user)
-        response = Response(bundle.payload)
-        set_refresh_cookie(
-            response=response,
+        return _build_auth_response(
+            payload=bundle.payload,
             raw_refresh_token=bundle.refresh_token.raw_token,
-            expires_at=bundle.refresh_token.record.expires_at,
+            refresh_expires_at=bundle.refresh_token.record.expires_at,
+            transport=transport,
         )
-        return response
 
 
 class RegisterView(AuthRateLimitedMixin, APIView):
@@ -167,18 +171,18 @@ class RegisterView(AuthRateLimitedMixin, APIView):
         },
         description=(
             "Registers a new owner and provisions an organization, draft establishment, "
-            "and onboarding session using a valid registration invite code. Requires a "
-            "valid Django CSRF cookie and X-CSRFToken header."
+            "and onboarding session using a valid registration invite code. Cookie "
+            "transport requires Django CSRF; body transport does not use cookies."
         ),
     )
     def post(self, request):
-        csrf_failure = _enforce_csrf(request)
-
-        if csrf_failure is not None:
-            return csrf_failure
-
         serializer = RegistrationRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        transport = serializer.validated_data.pop("refresh_token_transport")
+
+        csrf_failure = _enforce_csrf_for_transport(request, transport=transport)
+        if csrf_failure is not None:
+            return csrf_failure
 
         try:
             bundle = register_onboarding_owner(
@@ -196,13 +200,13 @@ class RegisterView(AuthRateLimitedMixin, APIView):
         except RegistrationDuplicateEmailError:
             return _registration_duplicate_email_response()
 
-        response = Response(bundle.payload, status=status.HTTP_201_CREATED)
-        set_refresh_cookie(
-            response=response,
+        return _build_auth_response(
+            payload=bundle.payload,
             raw_refresh_token=bundle.auth.refresh_token.raw_token,
-            expires_at=bundle.auth.refresh_token.record.expires_at,
+            refresh_expires_at=bundle.auth.refresh_token.record.expires_at,
+            transport=transport,
+            response_status=status.HTTP_201_CREATED,
         )
-        return response
 
 
 class ValidateOwnerRegistrationView(AuthRateLimitedMixin, APIView):
@@ -220,16 +224,10 @@ class ValidateOwnerRegistrationView(AuthRateLimitedMixin, APIView):
             429: _THROTTLED_OPENAPI_RESPONSE,
         },
         description=(
-            "Validates owner registration fields without provisioning any records. "
-            "Requires a valid Django CSRF cookie and X-CSRFToken header."
+            "Validates owner registration fields without provisioning any records."
         ),
     )
     def post(self, request):
-        csrf_failure = _enforce_csrf(request)
-
-        if csrf_failure is not None:
-            return csrf_failure
-
         serializer = RegistrationOwnerValidateRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -271,17 +269,18 @@ class DirectorInvitationAcceptView(AuthRateLimitedMixin, APIView):
             "Accepts an establishment invitation, sets the account password, "
             "activates the user and membership, and creates an auth session. "
             "Owner invitations activate all compatible owner/invited memberships in the "
-            "same organization. Requires a valid Django CSRF cookie and X-CSRFToken header."
+            "same organization. Cookie transport requires Django CSRF; body transport "
+            "does not use cookies."
         ),
     )
     def post(self, request, token: str):
-        csrf_failure = _enforce_csrf(request)
-
-        if csrf_failure is not None:
-            return csrf_failure
-
         serializer = DirectorInvitationAcceptRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        transport = serializer.validated_data.pop("refresh_token_transport")
+
+        csrf_failure = _enforce_csrf_for_transport(request, transport=transport)
+        if csrf_failure is not None:
+            return csrf_failure
 
         try:
             result = accept_establishment_invitation(
@@ -322,13 +321,13 @@ class DirectorInvitationAcceptView(AuthRateLimitedMixin, APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        response = Response(result.payload, status=status.HTTP_201_CREATED)
-        set_refresh_cookie(
-            response=response,
+        return _build_auth_response(
+            payload=result.payload,
             raw_refresh_token=result.auth.refresh_token.raw_token,
-            expires_at=result.auth.refresh_token.record.expires_at,
+            refresh_expires_at=result.auth.refresh_token.record.expires_at,
+            transport=transport,
+            response_status=status.HTTP_201_CREATED,
         )
-        return response
 
 
 class RefreshView(AuthRateLimitedMixin, APIView):
@@ -338,7 +337,7 @@ class RefreshView(AuthRateLimitedMixin, APIView):
 
     @extend_schema(
         tags=["auth"],
-        request=None,
+        request=RefreshRequestSerializer,
         responses={
             200: AuthResponseSerializer,
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
@@ -346,46 +345,50 @@ class RefreshView(AuthRateLimitedMixin, APIView):
             429: _THROTTLED_OPENAPI_RESPONSE,
         },
         description=(
-            "Rotates the HttpOnly refresh token cookie and issues a new opaque access token. "
-            "Requires a valid CSRF cookie and X-CSRFToken header. The refresh token is read "
-            "from the houston_refresh_token HttpOnly cookie."
+            "Rotates a refresh token and issues a new opaque access token. Cookie transport "
+            "reads and rotates the HttpOnly cookie and requires CSRF. Body transport reads "
+            "the explicit request field, returns the rotated token in JSON, and never "
+            "consults or modifies cookies."
         ),
     )
     def post(self, request):
-        csrf_failure = _enforce_csrf(request)
+        serializer = RefreshRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        transport = serializer.validated_data["refresh_token_transport"]
 
+        csrf_failure = _enforce_csrf_for_transport(request, transport=transport)
         if csrf_failure is not None:
             return csrf_failure
 
-        raw_refresh_token = request.COOKIES.get(settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME)
+        if transport == REFRESH_TOKEN_TRANSPORT_COOKIE:
+            raw_refresh_token = request.COOKIES.get(settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME)
+        else:
+            raw_refresh_token = serializer.validated_data["refresh_token"]
 
         if not raw_refresh_token:
-            response = _api_error_response(
+            return _auth_failure_response(
                 code="not_authenticated",
                 detail=AUTHENTICATION_FAILED_DETAIL,
                 status=status.HTTP_401_UNAUTHORIZED,
+                transport=transport,
             )
-            clear_refresh_cookie(response=response)
-            return response
 
         try:
             bundle = refresh_session(raw_refresh_token=raw_refresh_token)
         except (InvalidRefreshTokenError, RefreshTokenReuseError):
-            response = _api_error_response(
+            return _auth_failure_response(
                 code="not_authenticated",
                 detail=AUTHENTICATION_FAILED_DETAIL,
                 status=status.HTTP_401_UNAUTHORIZED,
+                transport=transport,
             )
-            clear_refresh_cookie(response=response)
-            return response
 
-        response = Response(bundle.payload)
-        set_refresh_cookie(
-            response=response,
+        return _build_auth_response(
+            payload=bundle.payload,
             raw_refresh_token=bundle.refresh_token.raw_token,
-            expires_at=bundle.refresh_token.record.expires_at,
+            refresh_expires_at=bundle.refresh_token.record.expires_at,
+            transport=transport,
         )
-        return response
 
 
 class LogoutView(APIView):
@@ -395,24 +398,33 @@ class LogoutView(APIView):
     @extend_schema(
         tags=["auth"],
         auth=[],
-        request=None,
+        request=LogoutRequestSerializer,
         responses={
-            204: OpenApiResponse(description="Session revoked and refresh cookie cleared."),
+            204: OpenApiResponse(
+                description="Session revoked; cookie cleared only for cookie transport."
+            ),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
         },
         description=(
-            "Revokes the current session, preferring the bearer access token when available "
-            "and otherwise falling back to the refresh token cookie. Requires CSRF and clears "
-            "the houston_refresh_token HttpOnly cookie."
+            "Revokes the current session, preferring a valid bearer access token. Cookie "
+            "transport requires CSRF and may fall back to and clear its refresh cookie. Body "
+            "transport may fall back to its explicit refresh token and never consults or "
+            "modifies cookies."
         ),
     )
     def post(self, request):
-        csrf_failure = _enforce_csrf(request)
+        serializer = LogoutRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        transport = serializer.validated_data["refresh_token_transport"]
 
+        csrf_failure = _enforce_csrf_for_transport(request, transport=transport)
         if csrf_failure is not None:
             return csrf_failure
 
-        raw_refresh_token = request.COOKIES.get(settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME)
+        if transport == REFRESH_TOKEN_TRANSPORT_COOKIE:
+            raw_refresh_token = request.COOKIES.get(settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME)
+        else:
+            raw_refresh_token = serializer.validated_data.get("refresh_token")
         auth_session = None if request.auth is None else request.auth.session
         session = resolve_session_for_logout(
             auth_session=auth_session,
@@ -423,7 +435,8 @@ class LogoutView(APIView):
             revoke_session(session=session)
 
         response = Response(status=status.HTTP_204_NO_CONTENT)
-        clear_refresh_cookie(response=response)
+        if transport == REFRESH_TOKEN_TRANSPORT_COOKIE:
+            clear_refresh_cookie(response=response)
         return response
 
 
@@ -531,6 +544,42 @@ def _registration_duplicate_email_response() -> Response:
 
 def _api_error_response(*, code: str, detail: str, status: int) -> Response:
     return Response({"code": code, "detail": detail}, status=status)
+
+
+def _build_auth_response(
+    *,
+    payload: dict,
+    raw_refresh_token: str,
+    refresh_expires_at,
+    transport: str,
+    response_status: int = status.HTTP_200_OK,
+) -> Response:
+    response_payload = payload.copy()
+    if transport == REFRESH_TOKEN_TRANSPORT_BODY:
+        response_payload["refresh_token"] = raw_refresh_token
+        response_payload["refresh_token_expires_at"] = refresh_expires_at
+
+    response = Response(response_payload, status=response_status)
+    if transport == REFRESH_TOKEN_TRANSPORT_COOKIE:
+        set_refresh_cookie(
+            response=response,
+            raw_refresh_token=raw_refresh_token,
+            expires_at=refresh_expires_at,
+        )
+    return response
+
+
+def _auth_failure_response(*, code: str, detail: str, status: int, transport: str) -> Response:
+    response = _api_error_response(code=code, detail=detail, status=status)
+    if transport == REFRESH_TOKEN_TRANSPORT_COOKIE:
+        clear_refresh_cookie(response=response)
+    return response
+
+
+def _enforce_csrf_for_transport(request, *, transport: str) -> Response | None:
+    if transport == REFRESH_TOKEN_TRANSPORT_BODY:
+        return None
+    return _enforce_csrf(request)
 
 
 def _enforce_csrf(request) -> Response | None:

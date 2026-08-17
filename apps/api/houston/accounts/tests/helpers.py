@@ -74,7 +74,11 @@ def login(
 ):
     return api_client.post(
         "/api/v1/auth/login/",
-        {"identifier": identifier, "password": password},
+        {
+            "identifier": identifier,
+            "password": password,
+            "refresh_token_transport": "cookie",
+        },
         format="json",
         **auth_headers(csrf_token),
         **extra_headers,
@@ -91,6 +95,7 @@ def registration_payload(**overrides):
         "password_confirmation": REGISTRATION_PASSWORD,
         "organization_name": "Northwind Group",
         "establishment_name": "Northwind Hotel",
+        "refresh_token_transport": "cookie",
     }
     payload.update(overrides)
     return payload
@@ -130,7 +135,11 @@ def post_validate_owner(api_client: APIClient, csrf_token: str, payload: dict):
 def post_login(api_client: APIClient, csrf_token: str, *, identifier: str, password: str):
     return api_client.post(
         "/api/v1/auth/login/",
-        {"identifier": identifier, "password": password},
+        {
+            "identifier": identifier,
+            "password": password,
+            "refresh_token_transport": "cookie",
+        },
         format="json",
         HTTP_X_CSRFTOKEN=csrf_token,
     )

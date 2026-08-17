@@ -109,7 +109,7 @@ def login(api_client: APIClient, *, identifier: str, password: str = TEST_PASSWO
     csrf_token = ensure_csrf(api_client)
     response = api_client.post(
         "/api/v1/auth/login/",
-        {"identifier": identifier, "password": password},
+        {"identifier": identifier, "password": password, "refresh_token_transport": "cookie"},
         format="json",
         HTTP_X_CSRFTOKEN=csrf_token,
     )
@@ -196,6 +196,7 @@ def post_accept(api_client: APIClient, *, token: str, password: str = REGISTRATI
         {
             "password": password,
             "password_confirmation": password,
+            "refresh_token_transport": "cookie",
         },
         format="json",
         HTTP_X_CSRFTOKEN=csrf_token,

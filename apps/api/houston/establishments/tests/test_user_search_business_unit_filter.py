@@ -34,6 +34,7 @@ def login(api_client: APIClient, *, membership) -> str:
         {
             "identifier": membership.user.email,
             "password": "SecurePass123!",
+            "refresh_token_transport": "cookie",
         },
         format="json",
         HTTP_X_CSRFTOKEN=csrf_token,

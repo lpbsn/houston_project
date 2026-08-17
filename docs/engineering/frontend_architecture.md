@@ -32,6 +32,16 @@ Lazy pages: [`lazy-terrain-pages.tsx`](../../apps/web/src/app/lazy-terrain-pages
 - Query key roots: feature-scoped (`signals`, `action-plans`, `chat`, `notifications`, `auth`, …)
 - Establishment switch / login: purge non-`auth` queries (`@/lib/query-invalidation`)
 
+## Authentication
+
+- `UserSession` remains the single backend session model for both runtimes.
+- Access tokens are opaque Bearer credentials kept only in frontend memory.
+- Refresh persistence is isolated under `features/auth`: Web uses an HttpOnly cookie + CSRF; the future Native composition injects a secure body-token store.
+- `refresh_token_transport` selects credential transport only. Features and business domains never branch on cookie/body.
+- Body transport sends `credentials: omit`, then commits a session in the order refresh persistence → in-memory access token → bootstrap cache; persistence failures fail closed before best-effort network cleanup.
+- Cookie session-creation/replacement requests are serialized inside Auth so out-of-order `Set-Cookie` responses cannot replace a newer session. Any cookie response made stale by logout fails closed and triggers best-effort cookie-session cleanup.
+- Capacitor and the concrete native secure-storage adapter are intentionally deferred to roadmap Lot 5.
+
 ## Realtime
 
 | Channel | Provider | Scope |

@@ -6,11 +6,21 @@ export type EstablishmentMembershipResponse = components['schemas']['Establishme
 export type EstablishmentMembershipDetailResponse =
   components['schemas']['EstablishmentMembershipDetailResponse']
 export type MembershipReinviteResponse = components['schemas']['MembershipReinviteResponse']
-export type LoginRequest = components['schemas']['LoginRequest']
+export type LoginRequest = Omit<
+  components['schemas']['LoginRequest'],
+  'refresh_token_transport'
+>
 export type RegistrationOwnerValidateRequest =
   components['schemas']['RegistrationOwnerValidateRequest']
-export type RegistrationRequest = components['schemas']['RegistrationRequest']
+export type RegistrationRequest = Omit<
+  components['schemas']['RegistrationRequest'],
+  'refresh_token_transport'
+>
 export type RegistrationResponse = components['schemas']['RegistrationResponse']
+export type DirectorInvitationAcceptInput = Omit<
+  components['schemas']['DirectorInvitationAcceptRequest'],
+  'refresh_token_transport'
+>
 export type Membership = components['schemas']['Membership']
 export type MembershipInvitationRequest = components['schemas']['MembershipInvitationRequest']
 export type MembershipUpdateRequest = components['schemas']['PatchedMembershipUpdateRequest']

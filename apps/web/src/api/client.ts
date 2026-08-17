@@ -43,13 +43,18 @@ export async function withAuthRetry<TResult extends { response: Response }>(
   const refreshedToken = await authRuntime.refreshAccessToken()
 
   if (!refreshedToken) {
-    authRuntime.clearAuth()
+    if (authRuntime.getAccessToken() === initialToken) {
+      authRuntime.clearAuth()
+    }
     return result
   }
 
   const retriedResult = await execute(refreshedToken)
 
-  if (retriedResult.response.status === 401) {
+  if (
+    retriedResult.response.status === 401 &&
+    authRuntime.getAccessToken() === refreshedToken
+  ) {
     authRuntime.clearAuth()
   }
 

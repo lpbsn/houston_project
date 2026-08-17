@@ -966,8 +966,9 @@ paths:
   /api/v1/auth/login/:
     post:
       operationId: v1_auth_login_create
-      description: Logs in with an email or username identifier. Requires a valid
-        Django CSRF cookie and X-CSRFToken header.
+      description: Logs in with an email or username identifier. Cookie transport
+        requires Django CSRF and returns the refresh token only as an HttpOnly cookie.
+        Body transport omits cookies and returns the refresh token in JSON.
       tags:
       - auth
       requestBody:
@@ -1010,14 +1011,27 @@ paths:
   /api/v1/auth/logout/:
     post:
       operationId: v1_auth_logout_create
-      description: Revokes the current session, preferring the bearer access token
-        when available and otherwise falling back to the refresh token cookie. Requires
-        CSRF and clears the houston_refresh_token HttpOnly cookie.
+      description: Revokes the current session, preferring a valid bearer access token.
+        Cookie transport requires CSRF and may fall back to and clear its refresh
+        cookie. Body transport may fall back to its explicit refresh token and never
+        consults or modifies cookies.
       tags:
       - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+        required: true
       responses:
         '204':
-          description: Session revoked and refresh cookie cleared.
+          description: Session revoked; cookie cleared only for cookie transport.
         '403':
           content:
             application/json:
@@ -1071,11 +1085,24 @@ paths:
   /api/v1/auth/refresh/:
     post:
       operationId: v1_auth_refresh_create
-      description: Rotates the HttpOnly refresh token cookie and issues a new opaque
-        access token. Requires a valid CSRF cookie and X-CSRFToken header. The refresh
-        token is read from the houston_refresh_token HttpOnly cookie.
+      description: Rotates a refresh token and issues a new opaque access token. Cookie
+        transport reads and rotates the HttpOnly cookie and requires CSRF. Body transport
+        reads the explicit request field, returns the rotated token in JSON, and never
+        consults or modifies cookies.
       tags:
       - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+        required: true
       responses:
         '200':
           content:
@@ -1105,8 +1132,8 @@ paths:
     post:
       operationId: v1_auth_register_create
       description: Registers a new owner and provisions an organization, draft establishment,
-        and onboarding session using a valid registration invite code. Requires a
-        valid Django CSRF cookie and X-CSRFToken header.
+        and onboarding session using a valid registration invite code. Cookie transport
+        requires Django CSRF; body transport does not use cookies.
       tags:
       - auth
       requestBody:
@@ -1150,7 +1177,6 @@ paths:
     post:
       operationId: v1_auth_register_validate_owner_create
       description: Validates owner registration fields without provisioning any records.
-        Requires a valid Django CSRF cookie and X-CSRFToken header.
       tags:
       - auth
       requestBody:
@@ -6679,7 +6705,7 @@ paths:
       description: Accepts an establishment invitation, sets the account password,
         activates the user and membership, and creates an auth session. Owner invitations
         activate all compatible owner/invited memberships in the same organization.
-        Requires a valid Django CSRF cookie and X-CSRFToken header.
+        Cookie transport requires Django CSRF; body transport does not use cookies.
       parameters:
       - in: path
         name: token
@@ -10230,6 +10256,11 @@ components:
         access_token_expires_at:
           type: string
           format: date-time
+        refresh_token:
+          type: string
+        refresh_token_expires_at:
+          type: string
+          format: date-time
       required:
       - access_token
       - access_token_expires_at
@@ -10767,6 +10798,8 @@ components:
     DirectorInvitationAcceptRequest:
       type: object
       properties:
+        refresh_token_transport:
+          $ref: '#/components/schemas/RefreshTokenTransportEnum'
         password:
           type: string
         password_confirmation:
@@ -10774,6 +10807,7 @@ components:
       required:
       - password
       - password_confirmation
+      - refresh_token_transport
     DirectorInvitationAcceptResponse:
       type: object
       properties:
@@ -10798,6 +10832,11 @@ components:
         access_token:
           type: string
         access_token_expires_at:
+          type: string
+          format: date-time
+        refresh_token:
+          type: string
+        refresh_token_expires_at:
           type: string
           format: date-time
         establishment_id:
@@ -11689,6 +11728,8 @@ components:
     LoginRequest:
       type: object
       properties:
+        refresh_token_transport:
+          $ref: '#/components/schemas/RefreshTokenTransportEnum'
         identifier:
           type: string
         password:
@@ -11696,6 +11737,16 @@ components:
       required:
       - identifier
       - password
+      - refresh_token_transport
+    LogoutRequest:
+      type: object
+      properties:
+        refresh_token_transport:
+          $ref: '#/components/schemas/RefreshTokenTransportEnum'
+        refresh_token:
+          type: string
+      required:
+      - refresh_token_transport
     MarkAllNotificationsReadResponse:
       type: object
       properties:
@@ -12980,6 +13031,23 @@ components:
       type: string
       enum:
       - wrong_pattern
+    RefreshRequest:
+      type: object
+      properties:
+        refresh_token_transport:
+          $ref: '#/components/schemas/RefreshTokenTransportEnum'
+        refresh_token:
+          type: string
+      required:
+      - refresh_token_transport
+    RefreshTokenTransportEnum:
+      enum:
+      - cookie
+      - body
+      type: string
+      description: |-
+        * `cookie` - Cookie
+        * `body` - Body
     RegistrationOwnerValidateRequest:
       type: object
       properties:
@@ -13006,6 +13074,8 @@ components:
     RegistrationRequest:
       type: object
       properties:
+        refresh_token_transport:
+          $ref: '#/components/schemas/RefreshTokenTransportEnum'
         invite_code:
           type: string
         first_name:
@@ -13032,6 +13102,7 @@ components:
       - organization_name
       - password
       - password_confirmation
+      - refresh_token_transport
     RegistrationResponse:
       type: object
       properties:
@@ -13056,6 +13127,11 @@ components:
         access_token:
           type: string
         access_token_expires_at:
+          type: string
+          format: date-time
+        refresh_token:
+          type: string
+        refresh_token_expires_at:
           type: string
           format: date-time
         establishment_id:

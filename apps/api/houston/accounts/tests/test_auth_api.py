@@ -74,7 +74,11 @@ def test_login_without_csrf_is_forbidden(api_client, active_user):
 
     response = api_client.post(
         "/api/v1/auth/login/",
-        {"identifier": active_user.email, "password": "secret"},
+        {
+            "identifier": active_user.email,
+            "password": "secret",
+            "refresh_token_transport": "cookie",
+        },
         format="json",
     )
 
@@ -451,7 +455,11 @@ def test_refresh_without_csrf_is_forbidden(api_client, active_user):
         password="secret",
     )
 
-    response = api_client.post("/api/v1/auth/refresh/")
+    response = api_client.post(
+        "/api/v1/auth/refresh/",
+        {"refresh_token_transport": "cookie"},
+        format="json",
+    )
 
     assert response.status_code == 403
     assert response.json() == {
@@ -472,12 +480,85 @@ def test_refresh_with_csrf_succeeds_and_rotates_refresh_token(api_client, active
     first_refresh_cookie = login_response.cookies[settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME].value
     first_access_token = login_response.json()["access_token"]
 
-    response = api_client.post("/api/v1/auth/refresh/", **auth_headers(csrf_token))
+    response = api_client.post(
+        "/api/v1/auth/refresh/",
+        {"refresh_token_transport": "cookie"},
+        format="json",
+        **auth_headers(csrf_token),
+    )
 
     assert response.status_code == 200
     body = response.json()
     assert body["access_token"] != first_access_token
     assert response.cookies[settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME].value != first_refresh_cookie
+
+
+def test_body_refresh_ignores_parasite_cookie_and_has_no_cookie_side_effect(
+    api_client,
+    active_user,
+):
+    create_membership(user=active_user)
+    body_login_response = api_client.post(
+        "/api/v1/auth/login/",
+        {
+            "identifier": active_user.email,
+            "password": "secret",
+            "refresh_token_transport": "body",
+        },
+        format="json",
+    )
+    assert body_login_response.status_code == 200
+    raw_refresh_token = body_login_response.json()["refresh_token"]
+    assert settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME not in body_login_response.cookies
+
+    parasite_user = User.objects.create_user(
+        username="parasite_cookie_user",
+        email="parasite-cookie@example.com",
+        password="secret",
+        status=User.Status.ACTIVE,
+    )
+    create_membership(user=parasite_user, name="Parasite Hotel")
+    csrf_token = ensure_csrf(api_client)
+    parasite_login = login(
+        api_client,
+        csrf_token,
+        identifier=parasite_user.email,
+        password="secret",
+    )
+    parasite_session = UserSession.objects.get(user=parasite_user)
+    assert parasite_login.status_code == 200
+
+    response = api_client.post(
+        "/api/v1/auth/refresh/",
+        {
+            "refresh_token_transport": "body",
+            "refresh_token": raw_refresh_token,
+        },
+        format="json",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["user"]["id"] == str(active_user.id)
+    assert response.json()["refresh_token"] != raw_refresh_token
+    assert settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME not in response.cookies
+    parasite_session.refresh_from_db()
+    assert parasite_session.status == UserSession.Status.ACTIVE
+
+    reuse_response = api_client.post(
+        "/api/v1/auth/refresh/",
+        {
+            "refresh_token_transport": "body",
+            "refresh_token": raw_refresh_token,
+        },
+        format="json",
+    )
+    body_session = UserSession.objects.get(user=active_user)
+    body_session.refresh_from_db()
+    parasite_session.refresh_from_db()
+    assert reuse_response.status_code == 401
+    assert settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME not in reuse_response.cookies
+    assert body_session.status == UserSession.Status.REVOKED
+    assert parasite_session.status == UserSession.Status.ACTIVE
 
 
 def test_bootstrap_clears_stale_selected_establishment_from_auth_session(api_client, active_user):
@@ -524,13 +605,23 @@ def test_old_refresh_token_reuse_revokes_family(api_client, active_user):
         password="secret",
     )
     old_refresh_cookie = login_response.cookies[settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME].value
-    api_client.post("/api/v1/auth/refresh/", **auth_headers(csrf_token))
+    api_client.post(
+        "/api/v1/auth/refresh/",
+        {"refresh_token_transport": "cookie"},
+        format="json",
+        **auth_headers(csrf_token),
+    )
 
     reuse_client = APIClient(enforce_csrf_checks=True)
     reuse_csrf = ensure_csrf(reuse_client)
     reuse_client.cookies[settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME] = old_refresh_cookie
 
-    response = reuse_client.post("/api/v1/auth/refresh/", **auth_headers(reuse_csrf))
+    response = reuse_client.post(
+        "/api/v1/auth/refresh/",
+        {"refresh_token_transport": "cookie"},
+        format="json",
+        **auth_headers(reuse_csrf),
+    )
 
     assert response.status_code == 401
     assert response.cookies[settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME].value == ""
@@ -560,7 +651,12 @@ def test_concurrent_refresh_only_one_succeeds(active_user):
             client = APIClient(enforce_csrf_checks=True)
             client.cookies[settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME] = raw_refresh_cookie
             csrf_token = ensure_csrf(client)
-            response = client.post("/api/v1/auth/refresh/", **auth_headers(csrf_token))
+            response = client.post(
+                "/api/v1/auth/refresh/",
+                {"refresh_token_transport": "cookie"},
+                format="json",
+                **auth_headers(csrf_token),
+            )
             body = response.json() if response.content else None
             return response.status_code, body
         finally:
@@ -589,7 +685,12 @@ def test_unknown_refresh_token_returns_unauthorized(api_client, active_user):
     csrf_token = ensure_csrf(api_client)
     api_client.cookies[settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME] = "unknown-refresh-token"
 
-    response = api_client.post("/api/v1/auth/refresh/", **auth_headers(csrf_token))
+    response = api_client.post(
+        "/api/v1/auth/refresh/",
+        {"refresh_token_transport": "cookie"},
+        format="json",
+        **auth_headers(csrf_token),
+    )
 
     assert response.status_code == 401
     assert response.json() == {
@@ -611,7 +712,12 @@ def test_expired_refresh_token_returns_unauthorized(api_client, active_user):
     refresh_token.expires_at = timezone.now() - timedelta(minutes=1)
     refresh_token.save(update_fields=["expires_at", "updated_at"])
 
-    response = api_client.post("/api/v1/auth/refresh/", **auth_headers(csrf_token))
+    response = api_client.post(
+        "/api/v1/auth/refresh/",
+        {"refresh_token_transport": "cookie"},
+        format="json",
+        **auth_headers(csrf_token),
+    )
 
     assert response.status_code == 401
     assert response.json() == {
@@ -633,6 +739,8 @@ def test_logout_without_csrf_is_forbidden(api_client, active_user):
 
     response = api_client.post(
         "/api/v1/auth/logout/",
+        {"refresh_token_transport": "cookie"},
+        format="json",
         HTTP_AUTHORIZATION=f"Bearer {access_token}",
     )
 
@@ -656,6 +764,8 @@ def test_logout_with_csrf_revokes_session_and_clears_cookie(api_client, active_u
 
     response = api_client.post(
         "/api/v1/auth/logout/",
+        {"refresh_token_transport": "cookie"},
+        format="json",
         **auth_headers(csrf_token, access_token),
     )
 
@@ -679,6 +789,8 @@ def test_logout_with_csrf_and_refresh_cookie_only_revokes_session(api_client, ac
 
     response = api_client.post(
         "/api/v1/auth/logout/",
+        {"refresh_token_transport": "cookie"},
+        format="json",
         **auth_headers(csrf_token),
     )
 
@@ -702,6 +814,8 @@ def test_logout_with_invalid_bearer_falls_back_to_refresh_cookie(api_client, act
 
     response = api_client.post(
         "/api/v1/auth/logout/",
+        {"refresh_token_transport": "cookie"},
+        format="json",
         **auth_headers(csrf_token, "invalid-access-token"),
     )
 
@@ -711,6 +825,55 @@ def test_logout_with_invalid_bearer_falls_back_to_refresh_cookie(api_client, act
     session = UserSession.objects.get(user=active_user)
     session.refresh_from_db()
     assert session.status == UserSession.Status.REVOKED
+
+
+def test_body_logout_ignores_parasite_cookie_and_has_no_cookie_side_effect(api_client, active_user):
+    create_membership(user=active_user)
+    body_login_response = api_client.post(
+        "/api/v1/auth/login/",
+        {
+            "identifier": active_user.email,
+            "password": "secret",
+            "refresh_token_transport": "body",
+        },
+        format="json",
+    )
+    assert body_login_response.status_code == 200
+    raw_refresh_token = body_login_response.json()["refresh_token"]
+    body_session = UserSession.objects.get(user=active_user)
+
+    parasite_user = User.objects.create_user(
+        username="parasite_logout_user",
+        email="parasite-logout@example.com",
+        password="secret",
+        status=User.Status.ACTIVE,
+    )
+    create_membership(user=parasite_user, name="Parasite Logout Hotel")
+    csrf_token = ensure_csrf(api_client)
+    parasite_login = login(
+        api_client,
+        csrf_token,
+        identifier=parasite_user.email,
+        password="secret",
+    )
+    assert parasite_login.status_code == 200
+    parasite_session = UserSession.objects.get(user=parasite_user)
+
+    response = api_client.post(
+        "/api/v1/auth/logout/",
+        {
+            "refresh_token_transport": "body",
+            "refresh_token": raw_refresh_token,
+        },
+        format="json",
+    )
+
+    assert response.status_code == 204
+    assert settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME not in response.cookies
+    body_session.refresh_from_db()
+    parasite_session.refresh_from_db()
+    assert body_session.status == UserSession.Status.REVOKED
+    assert parasite_session.status == UserSession.Status.ACTIVE
 
 
 def test_auth_responses_do_not_expose_sensitive_fields(api_client, active_user):

@@ -110,6 +110,8 @@ TOUJOURS BESOIN
 
 **Responsabilité.** Conserver un modèle de session backend unique (`UserSession`, rotation, révocation). Isoler le mécanisme de persistance du refresh : cookie HttpOnly côté Web si pertinent, équivalent natif sûr côté Native. La mémoire frontend reste le seul lieu de l’access token. Les features métier ne voient qu’une session authentifiée, pas le canal de stockage. Ne pas introduire Capacitor ici, mais lever les hypothèses « navigateur + cookie » qui bloqueraient Native.
 
+**Décision d’implémentation validée.** Le contrat explicite `refresh_token_transport: cookie | body`, qui décrit uniquement le transport du credential et jamais le runtime ou le niveau de confiance. `cookie` possède cookies + CSRF ; `body` envoie explicitement le refresh avec cookies omis et sans effet `Set-Cookie`. La rotation stricte one-shot reste commune. Le plugin de stockage sécurisé natif est choisi et branché au lot 5.
+
 ### 3. Routing
 
 **Objectif.** Disposer d’une base de navigation adaptée au Web, aux deep links et aux comportements natifs.

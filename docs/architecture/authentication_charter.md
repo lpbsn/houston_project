@@ -17,6 +17,7 @@ The current MVP auth model is:
 - access token stored only in frontend memory
 - rotating opaque refresh token
 - refresh token stored in an HttpOnly cookie for web clients
+- refresh token returned explicitly and persisted through a secure-store port for native clients
 - refresh token stored as a digest in the database
 - backend `UserSession` as the source of truth
 - backend-owned permissions and visibility
@@ -55,11 +56,12 @@ Access token:
 Refresh token:
 
 - opaque high-entropy random token
-- stored raw only in the browser HttpOnly cookie
+- stored raw only in the browser HttpOnly cookie (Web) or the injected secure native store (Native)
 - stored as `SessionRefreshToken.token_digest` in the database
 - rotated on every refresh
 - previous refresh token invalidated immediately
 - reuse of an old refresh token revokes the token family and session
+- `refresh_token_transport` (`cookie` or `body`) describes credential transport only; it is never runtime proof, a trust level, or an authorization input
 
 Refresh token cookie:
 
@@ -117,11 +119,15 @@ Login must:
 - return access token
 - return access token expiry
 - return bootstrap payload
+- require an explicit refresh transport
+- enforce CSRF and set only an HttpOnly refresh cookie for `cookie`
+- omit cookies and return refresh token + expiry in JSON for `body`
 
 Refresh must:
 
-- require CSRF
-- read refresh cookie
+- use only the explicitly selected refresh transport
+- for `cookie`: require CSRF, read and rotate only the refresh cookie
+- for `body`: require the refresh in JSON, omit CSRF, never read or modify cookies
 - validate refresh token digest and timestamps
 - rotate refresh token
 - return new access token
@@ -129,9 +135,9 @@ Refresh must:
 
 Logout must:
 
-- require CSRF
-- revoke current session if resolvable
-- clear refresh cookie
+- prefer a valid bearer token to identify the current session
+- for `cookie`: require CSRF, fall back only to the cookie, and clear that cookie
+- for `body`: fall back only to an explicit JSON refresh token and never read, set, or clear cookies
 - remain safe and idempotent
 
 Bootstrap must return:
@@ -156,7 +162,7 @@ Bootstrap is authenticated-only:
 
 ## 7. CSRF rules
 
-Cookie-backed auth mutation endpoints must enforce CSRF:
+Cookie-transport auth mutation endpoints must enforce CSRF:
 
 - `POST /api/v1/auth/login/`
 - `POST /api/v1/auth/refresh/`
@@ -164,12 +170,27 @@ Cookie-backed auth mutation endpoints must enforce CSRF:
 
 `SameSite=Lax` is defense in depth, not the primary CSRF control.
 
-The frontend must:
+The Web transport must:
 
 - call `GET /api/v1/auth/csrf/` before login when needed
 - read `csrf_token` from the JSON response (do not read `document.cookie`)
 - send `X-CSRFToken` on login, refresh, and logout
 - keep the refresh token in the HttpOnly cookie only
+
+The body transport must:
+
+- send `credentials: omit` (or an equivalent that actively excludes cookies)
+- never depend on the CSRF cookie or header
+- persist a rotated refresh before installing access token or authenticated state
+- fail closed and clear/revoke best-effort if refresh persistence fails
+- never persist refresh in localStorage or sessionStorage
+
+Frontend session replacement must:
+
+- serialize cookie-backed session creation so `Set-Cookie` responses cannot overtake one another
+- reject stale body responses before writing their refresh token
+- treat any stale cookie response after logout as fail-closed and clear it best-effort
+- never restore a previous refresh cookie in JavaScript
 
 Local Docker + Vite development:
 

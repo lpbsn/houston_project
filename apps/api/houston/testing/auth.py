@@ -68,7 +68,11 @@ def login(api_client: APIClient, *, user: User, password: str = TEST_PASSWORD) -
     csrf_token = ensure_csrf(api_client)
     response = api_client.post(
         "/api/v1/auth/login/",
-        {"identifier": identifier, "password": password},
+        {
+            "identifier": identifier,
+            "password": password,
+            "refresh_token_transport": "cookie",
+        },
         format="json",
         HTTP_X_CSRFTOKEN=csrf_token,
     )
