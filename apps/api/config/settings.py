@@ -31,17 +31,31 @@ def env_float(name: str, default: float) -> float:
 SECRET_KEY = env_str("DJANGO_SECRET_KEY", "replace-me-for-local-dev")
 DEBUG = env_bool("DJANGO_DEBUG", default=True)
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
+HOUSTON_NATIVE_WEBVIEW_ORIGINS = frozenset({"capacitor://localhost", "https://localhost"})
 HOUSTON_CLIENT_ORIGINS = env_list(
     "HOUSTON_CLIENT_ORIGINS",
-    "http://localhost:5173,http://127.0.0.1:5173",
+    ",".join(
+        [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            *sorted(HOUSTON_NATIVE_WEBVIEW_ORIGINS),
+        ]
+    ),
 )
 CORS_ALLOWED_ORIGINS = list(HOUSTON_CLIENT_ORIGINS)
 CORS_ALLOW_CREDENTIALS = True
-CSRF_TRUSTED_ORIGINS = [
-    origin
-    for origin in HOUSTON_CLIENT_ORIGINS
-    if origin.startswith("http://") or origin.startswith("https://")
-]
+
+
+def csrf_trusted_origins_from_client_origins(origins: list[str]) -> list[str]:
+    return [
+        origin
+        for origin in origins
+        if (origin.startswith("http://") or origin.startswith("https://"))
+        and origin not in HOUSTON_NATIVE_WEBVIEW_ORIGINS
+    ]
+
+
+CSRF_TRUSTED_ORIGINS = csrf_trusted_origins_from_client_origins(HOUSTON_CLIENT_ORIGINS)
 
 INSTALLED_APPS = [
     "django.contrib.auth",

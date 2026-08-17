@@ -34,4 +34,11 @@ if (!html.includes('src="/assets/') && !html.includes("src='/assets/")) {
 
 assertNoPwaBuildArtifacts(distRoot, html, fail)
 
+for (const file of hashedJs) {
+  const source = readFileSync(resolve(assetsDir, file), 'utf8')
+  if (source.includes('capacitor-secure-storage') || source.includes('@aparajita')) {
+    fail('web dist must not include native Keychain/Keystore storage')
+  }
+}
+
 console.log('web build validation ok')

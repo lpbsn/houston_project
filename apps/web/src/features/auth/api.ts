@@ -302,6 +302,7 @@ let refreshPromise: Promise<string | null> | null = null
 let restorePromise: Promise<string | null> | null = null
 let authGeneration = 0
 let authInvalidationGeneration = 0
+let sessionEpoch = 0
 let sessionReplacementDepth = 0
 let sessionReplacementIdle: Promise<void> = Promise.resolve()
 let resolveSessionReplacementIdle: (() => void) | null = null
@@ -310,6 +311,7 @@ let bodyAuthCommitQueue: Promise<void> = Promise.resolve()
 
 function clearVolatileAuthState(options?: { bumpInvalidation?: boolean }) {
   authGeneration += 1
+  sessionEpoch += 1
   if (options?.bumpInvalidation !== false) {
     authInvalidationGeneration += 1
   }
@@ -451,13 +453,23 @@ async function rejectStaleAuthEnvelope(
   throw new StaleAuthOperationError('The authenticated session is no longer current.')
 }
 
+function isStaleAuthCommit(
+  generation: number,
+  expectedEpoch: number | undefined,
+) {
+  if (expectedEpoch !== undefined) {
+    return expectedEpoch !== sessionEpoch
+  }
+  return generation !== authGeneration
+}
+
 async function commitCurrentAuthEnvelope(
   payload: AuthEnvelope,
   prepared: PreparedAuthTransport,
   generation: number,
-  options: { purgeNonAuth?: boolean },
+  options: { purgeNonAuth?: boolean; expectedEpoch?: number },
 ) {
-  if (generation !== authGeneration) {
+  if (isStaleAuthCommit(generation, options.expectedEpoch)) {
     return rejectStaleAuthEnvelope(payload, prepared)
   }
 
@@ -472,7 +484,7 @@ async function commitCurrentAuthEnvelope(
     throw new Error('The authenticated session could not be persisted.', { cause: error })
   }
 
-  if (generation !== authGeneration) {
+  if (isStaleAuthCommit(generation, options.expectedEpoch)) {
     return rejectStaleAuthEnvelope(payload, prepared, {
       persistedBodyRefresh: prepared.transport === 'body',
     })
@@ -485,12 +497,13 @@ async function commitCurrentAuthEnvelope(
   }
   setAccessToken(payload.access_token)
   hydrateBootstrap(payload)
+  sessionEpoch += 1
 }
 
 async function commitAuthEnvelope(
   payload: AuthEnvelope,
   prepared: PreparedAuthTransport,
-  options: { expectedGeneration?: number; purgeNonAuth?: boolean } = {},
+  options: { expectedGeneration?: number; expectedEpoch?: number; purgeNonAuth?: boolean } = {},
 ) {
   const generation = options.expectedGeneration ?? authGeneration
   if (prepared.transport === 'body') {
@@ -509,8 +522,14 @@ function captureAuthGeneration() {
   return authGeneration
 }
 
+function captureSessionEpoch() {
+  return sessionEpoch
+}
+
 async function performRefresh() {
   const generation = captureAuthGeneration()
+  const epoch = captureSessionEpoch()
+  const bodyTransport = getRefreshTokenTransport() === 'body'
   try {
     const prepared = await prepareRefreshTransport()
     const { data, error, response } = await apiClient.POST('/api/v1/auth/refresh/', {
@@ -526,13 +545,25 @@ async function performRefresh() {
       throw buildAuthError(response, error, 'Your session could not be refreshed.')
     }
 
-    await commitAuthEnvelope(data, prepared, { expectedGeneration: generation })
+    if (bodyTransport) {
+      await sessionReplacementIdle
+    }
+
+    await commitAuthEnvelope(data, prepared, {
+      expectedGeneration: generation,
+      ...(bodyTransport ? { expectedEpoch: epoch } : {}),
+    })
     return data
   } catch (error) {
     if (error instanceof StaleAuthOperationError) {
       throw error
     }
-    if (generation !== authGeneration) {
+    if (bodyTransport) {
+      await sessionReplacementIdle
+      if (epoch !== sessionEpoch) {
+        throw new StaleAuthOperationError('The authenticated session is no longer current.')
+      }
+    } else if (generation !== authGeneration) {
       throw new StaleAuthOperationError('The authenticated session is no longer current.')
     }
     clearVolatileAuthState({ bumpInvalidation: false })

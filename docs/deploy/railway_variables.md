@@ -12,13 +12,13 @@ After generating the public Railway domain for `api-web`:
 
 ```bash
 DJANGO_ALLOWED_HOSTS=<railway-public-domain>,healthcheck.railway.app
-HOUSTON_CLIENT_ORIGINS=https://<railway-public-domain>
+HOUSTON_CLIENT_ORIGINS=https://<railway-public-domain>,capacitor://localhost,https://localhost
 ```
 
 | Variable | Example | Notes |
 |---|---|---|
 | `DJANGO_ALLOWED_HOSTS` | `houston-prod-test.up.railway.app,healthcheck.railway.app` | Comma-separated; no spaces. Include `healthcheck.railway.app` so Railway healthchecks do not get `400 DisallowedHost`. |
-| `HOUSTON_CLIENT_ORIGINS` | `https://houston-prod-test.up.railway.app` | HTTPS frontend origin(s). Drives CORS, WebSocket Origin, and Django CSRF (http(s) only). Native schemes are Lot 5. |
+| `HOUSTON_CLIENT_ORIGINS` | `https://houston-prod-test.up.railway.app,capacitor://localhost,https://localhost` | HTTPS frontend origin(s) plus constant Native WebView origins. Drives CORS and WebSocket Origin. Django CSRF uses the http(s) entries except those Native WebView origins (`capacitor://localhost`, `https://localhost`), which stay CORS/WS only. |
 
 For multiple domains (e.g. Railway default + custom): add all to `DJANGO_ALLOWED_HOSTS`; add all `https://` frontend origins to `HOUSTON_CLIENT_ORIGINS`.
 

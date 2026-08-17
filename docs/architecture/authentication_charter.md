@@ -196,9 +196,9 @@ Local Docker + Vite development:
 - `VITE_API_BASE_URL` is the explicit API host. When empty, relative `/api` paths plus the Vite proxy remain valid
 - in Web runtime only, when both the page and configured API hostnames are local loopbacks (`localhost` or `127.0.0.1`), the API hostname is aligned with the page hostname so `SameSite=Lax` cookies remain same-site; protocol and port stay configured
 - when using the Vite `/api` proxy, preserve the browser host instead of rewriting it to the internal container hostname
-- configure `HOUSTON_CLIENT_ORIGINS` explicitly for local frontend origins such as `http://localhost:5173` and `http://127.0.0.1:5173`
+- configure `HOUSTON_CLIENT_ORIGINS` explicitly for local frontend origins such as `http://localhost:5173` and `http://127.0.0.1:5173`, plus the constant Native WebView origins `capacitor://localhost` (iOS) and `https://localhost` (Android)
 - origin allowlisting permits CORS and CSRF origin checks but does not cause browsers to attach cross-site cookies
-- Django `CSRF_TRUSTED_ORIGINS` is derived from the http(s) entries of that list; do not set it separately
+- Django `CSRF_TRUSTED_ORIGINS` is derived from the http(s) entries of that list except the constant Native WebView origins (`capacitor://localhost`, `https://localhost`), which stay CORS/WS only. Do not set CSRF trusted origins separately.
 - do not use wildcard client origins for local convenience
 
 ## 8. Frontend rules
@@ -346,7 +346,7 @@ Chat V1 is the first WebSocket surface. It uses a **different auth path** from R
 - Product WebSocket auth must not depend on session cookies or implicit `scope["user"]` from Django auth middleware.
 - Use `OriginValidator` against `HOUSTON_CLIENT_ORIGINS` before the consumer.
 - `ALLOWED_HOSTS` validates the HTTP `Host` header only; it is not a browser-origin allowlist.
-- Native origins such as `capacitor://localhost` are added in Lot 5, not here.
+- Native WebView origins `capacitor://localhost` (iOS) and `https://localhost` (Android) are constant `HOUSTON_CLIENT_ORIGINS` entries for CORS and WebSocket Origin checks.
 
 ### Ticket-based WebSocket auth (mandatory for Chat V1)
 

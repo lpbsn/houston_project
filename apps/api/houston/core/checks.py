@@ -108,6 +108,8 @@ def check_production_csrf_origins(app_configs, **kwargs):
             continue
 
         hostname = (parsed.hostname or "").lower()
+        if origin in settings.HOUSTON_NATIVE_WEBVIEW_ORIGINS:
+            continue
         if parsed.scheme == "https":
             continue
 

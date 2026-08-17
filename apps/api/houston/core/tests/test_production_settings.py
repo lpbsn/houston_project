@@ -7,6 +7,8 @@ from django.core.management import call_command
 from django.core.management.base import SystemCheckError
 from django.test import override_settings
 
+from config.settings import HOUSTON_NATIVE_WEBVIEW_ORIGINS, csrf_trusted_origins_from_client_origins
+
 VALID_PRODUCTION_OVERRIDES = {
     "DEBUG": False,
     "SECRET_KEY": "production-secret-key-value-with-sufficient-length-and-entropy",
@@ -83,6 +85,42 @@ def test_production_deploy_check_allows_local_http_csrf_with_exception(valid_pro
     valid_production_overrides["HOUSTON_ALLOW_INSECURE_LOCAL_CSRF_ORIGINS"] = True
     valid_production_overrides["HOUSTON_ALLOW_LOCAL_ALLOWED_HOSTS"] = True
     with override_settings(**valid_production_overrides):
+        call_command("check", deploy=True)
+
+
+def test_csrf_trusted_origins_exclude_native_webview_origins():
+    derived = csrf_trusted_origins_from_client_origins(
+        [
+            "https://example.railway.app",
+            "http://localhost:5173",
+            *sorted(HOUSTON_NATIVE_WEBVIEW_ORIGINS),
+        ]
+    )
+
+    assert derived == ["https://example.railway.app", "http://localhost:5173"]
+    assert HOUSTON_NATIVE_WEBVIEW_ORIGINS.isdisjoint(derived)
+
+
+def test_production_deploy_check_allows_native_webview_origins(valid_production_overrides):
+    native_origins = sorted(HOUSTON_NATIVE_WEBVIEW_ORIGINS)
+    valid_production_overrides["HOUSTON_CLIENT_ORIGINS"] = [
+        "https://example.railway.app",
+        *native_origins,
+    ]
+    valid_production_overrides["CSRF_TRUSTED_ORIGINS"] = ["https://example.railway.app"]
+    valid_production_overrides["CORS_ALLOWED_ORIGINS"] = [
+        "https://example.railway.app",
+        *native_origins,
+    ]
+    with override_settings(**valid_production_overrides):
+        call_command("check", deploy=True)
+
+
+def test_production_deploy_check_rejects_unknown_native_scheme(valid_production_overrides):
+    valid_production_overrides["HOUSTON_CLIENT_ORIGINS"] = ["capacitor://evil.example"]
+    valid_production_overrides["CSRF_TRUSTED_ORIGINS"] = []
+    valid_production_overrides["CORS_ALLOWED_ORIGINS"] = ["capacitor://evil.example"]
+    with override_settings(**valid_production_overrides), pytest.raises(SystemCheckError):
         call_command("check", deploy=True)
 
 

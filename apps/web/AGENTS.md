@@ -130,5 +130,6 @@ Run from repo root unless needed:
 - tests: `cd apps/web && npm test`
 - build: `cd apps/web && npm run build`
 - native build: `cd apps/web && npm run build:native`
+- Capacitor sync: `cd apps/web && npm run cap:sync`
 
 Use project-defined API generation command if it exists. Do not invent missing commands.

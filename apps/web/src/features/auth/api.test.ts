@@ -46,6 +46,7 @@ vi.mock('./session', () => ({
 }))
 
 import {
+  acceptInvitationSession,
   bootstrapQueryKey,
   clearAuthState,
   login,
@@ -779,6 +780,176 @@ describe('auth api cache isolation', () => {
       user: { id: 'old-user' },
     })
   })
+
+  const bodyReplacementCases = [
+    {
+      name: 'login',
+      start: () => login({ email: 'other@example.com', password: 'wrong' }),
+      failure: {
+        status: 401,
+        detail: 'Sign-in failed.',
+        pattern: /Sign-in failed/,
+      },
+    },
+    {
+      name: 'register',
+      start: () =>
+        registerOnboarding({
+          invite_code: 'INVITE',
+          first_name: 'Owner',
+          last_name: 'Example',
+          email: 'owner@example.com',
+          password: 'secret',
+          password_confirmation: 'secret',
+        }),
+      failure: {
+        status: 400,
+        detail: 'Registration could not be completed.',
+        pattern: /Registration could not be completed/,
+      },
+    },
+    {
+      name: 'invitation',
+      start: () =>
+        acceptInvitationSession('invite-token', {
+          password: 'secret',
+          password_confirmation: 'secret',
+        }),
+      failure: {
+        status: 400,
+        detail: 'Invitation could not be accepted.',
+        pattern: /Invitation could not be accepted/,
+      },
+    },
+  ] as const
+
+  function configureBodyRefreshStore(initialToken: string | null = 'old-refresh') {
+    let persistedRefresh: string | null = initialToken
+    configureBodyRefreshTokenStore({
+      read: vi.fn(async () =>
+        persistedRefresh
+          ? { token: persistedRefresh, expiresAt: '2026-09-15T00:00:00Z' }
+          : null,
+      ),
+      write: vi.fn(async (value) => {
+        persistedRefresh = value.token
+      }),
+      clear: vi.fn(async () => {
+        persistedRefresh = null
+      }),
+    })
+    return {
+      get persistedRefresh() {
+        return persistedRefresh
+      },
+    }
+  }
+
+  for (const replacement of bodyReplacementCases) {
+    it(`installs a rotated body session when an in-flight refresh succeeds after a failed ${replacement.name}`, async () => {
+      vi.stubEnv('VITE_APP_RUNTIME', 'native')
+      const store = configureBodyRefreshStore()
+      const refreshResponse = deferred<{
+        response: { status: number }
+        data: typeof bootstrapPayload & {
+          refresh_token: string
+          refresh_token_expires_at: string
+        }
+        error: undefined
+      }>()
+      const replacementResponse = deferred<{
+        response: { status: number }
+        data: undefined
+        error: { detail: string }
+      }>()
+      apiClientPostMock
+        .mockImplementationOnce(() => refreshResponse.promise)
+        .mockImplementationOnce(() => replacementResponse.promise)
+
+      const refreshPromise = refreshAccessToken()
+      await vi.waitFor(() => {
+        expect(apiClientPostMock).toHaveBeenCalledTimes(1)
+      })
+      const replacementPromise = replacement.start()
+      await vi.waitFor(() => {
+        expect(apiClientPostMock).toHaveBeenCalledTimes(2)
+      })
+
+      replacementResponse.resolve({
+        response: { status: replacement.failure.status },
+        data: undefined,
+        error: { detail: replacement.failure.detail },
+      })
+      await expect(replacementPromise).rejects.toThrow(replacement.failure.pattern)
+
+      refreshResponse.resolve({
+        response: { status: 200 },
+        data: {
+          ...bootstrapPayload,
+          access_token: 'rotated-old-access',
+          user: { ...bootstrapPayload.user, id: 'old-user' },
+          refresh_token: 'rotated-old-refresh',
+          refresh_token_expires_at: '2026-09-15T00:00:00Z',
+        },
+        error: undefined,
+      })
+
+      await expect(refreshPromise).resolves.toBe('rotated-old-access')
+      expect(store.persistedRefresh).toBe('rotated-old-refresh')
+      expect(clearAccessTokenMock).not.toHaveBeenCalled()
+      expect(setAccessTokenMock).toHaveBeenCalledTimes(1)
+      expect(setAccessTokenMock).toHaveBeenCalledWith('rotated-old-access')
+      expect(queryClient.getQueryData(bootstrapQueryKey)).toMatchObject({
+        user: { id: 'old-user' },
+      })
+      expect(apiClientPostMock).toHaveBeenCalledTimes(2)
+    })
+
+    it(`clears the body session when an in-flight refresh fails after a failed ${replacement.name}`, async () => {
+      vi.stubEnv('VITE_APP_RUNTIME', 'native')
+      const store = configureBodyRefreshStore()
+      const refreshResponse = deferred<{
+        response: { status: number }
+        data: undefined
+        error: { detail: string }
+      }>()
+      const replacementResponse = deferred<{
+        response: { status: number }
+        data: undefined
+        error: { detail: string }
+      }>()
+      apiClientPostMock
+        .mockImplementationOnce(() => refreshResponse.promise)
+        .mockImplementationOnce(() => replacementResponse.promise)
+
+      const refreshPromise = refreshAccessToken()
+      await vi.waitFor(() => {
+        expect(apiClientPostMock).toHaveBeenCalledTimes(1)
+      })
+      const replacementPromise = replacement.start()
+      await vi.waitFor(() => {
+        expect(apiClientPostMock).toHaveBeenCalledTimes(2)
+      })
+
+      replacementResponse.resolve({
+        response: { status: replacement.failure.status },
+        data: undefined,
+        error: { detail: replacement.failure.detail },
+      })
+      await expect(replacementPromise).rejects.toThrow(replacement.failure.pattern)
+
+      refreshResponse.resolve({
+        response: { status: 401 },
+        data: undefined,
+        error: { detail: 'Your session could not be refreshed.' },
+      })
+
+      await expect(refreshPromise).resolves.toBeNull()
+      expect(store.persistedRefresh).toBeNull()
+      expect(clearAccessTokenMock).toHaveBeenCalled()
+      expect(setAccessTokenMock).not.toHaveBeenCalled()
+    })
+  }
 
   it('waits for an in-flight cookie login before refreshing the new session', async () => {
     vi.stubEnv('VITE_APP_RUNTIME', 'web')
