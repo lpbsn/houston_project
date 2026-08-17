@@ -450,7 +450,7 @@ function App() {
     }
 
     if (route.path === '/analytics') {
-      return <LazyAnalyticsPage onNavigate={navigate} />
+      return <LazyAnalyticsPage />
     }
 
     if (route.path === '/general/switch-establishment') {

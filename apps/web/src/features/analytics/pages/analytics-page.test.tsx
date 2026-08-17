@@ -183,11 +183,9 @@ function setFilterOptionsQuery(value: ReturnType<typeof filterOptionsQueryMock> 
   })
 }
 
-function renderAnalyticsPage(
-  props: { onNavigate?: (pathname: string, options?: { replace?: boolean }) => void } = {},
-): AppHistory {
+function renderAnalyticsPage(): AppHistory {
   const history = createBrowserHistory()
-  render(createElement(AppRouteProvider, { history }, createElement(AnalyticsPage, props)))
+  render(createElement(AppRouteProvider, { history }, createElement(AnalyticsPage)))
   return history
 }
 
@@ -303,7 +301,6 @@ describe('AnalyticsPage', () => {
   })
 
   it('renders dashboard KPI values from API comparison objects without recomputing deltas', () => {
-    const navigateMock = vi.fn()
     setDashboardQuery({ data: dashboard() })
     setPatternsQuery({
       data: {
@@ -357,7 +354,7 @@ describe('AnalyticsPage', () => {
       isReady: true,
     }
 
-    renderAnalyticsPage({ onNavigate: navigateMock })
+    const history = renderAnalyticsPage()
 
     expect(screen.getByText('Signals analysés')).toBeTruthy()
     expect(screen.getAllByText('8').length).toBeGreaterThan(0)
@@ -378,9 +375,7 @@ describe('AnalyticsPage', () => {
     expect(patternLink.getAttribute('href')).toContain('/analytics/patterns/pattern-1?')
     expect(patternLink.getAttribute('href')).toContain('period_start=')
     fireEvent.click(patternLink)
-    expect(navigateMock).toHaveBeenCalledWith(
-      expect.stringContaining('/analytics/patterns/pattern-1?'),
-    )
+    expect(history.getHref()).toContain('/analytics/patterns/pattern-1?')
   })
 
   it('renders backend classification coverage and technical breakdowns factually', () => {

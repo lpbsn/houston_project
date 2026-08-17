@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { createElement } from 'react'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { createElement, type ReactNode } from 'react'
+import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { createMemoryHistory } from '@/app/app-history'
@@ -12,7 +12,7 @@ afterEach(() => {
 })
 
 function RouteProbe() {
-  const { route, href, search } = useAppRoute()
+  const { route, href, search, navigate } = useAppRoute()
 
   return createElement(
     'div',
@@ -25,7 +25,19 @@ function RouteProbe() {
     ),
     createElement('span', { 'data-testid': 'href' }, href),
     createElement('span', { 'data-testid': 'search' }, search),
+    createElement('button', {
+      type: 'button',
+      'data-testid': 'go-search',
+      onClick: () => navigate('/analytics?q=retard', { replace: true }),
+    }),
   )
+}
+
+function renderRoute(history: ReturnType<typeof createMemoryHistory>) {
+  return renderHook(() => useAppRoute(), {
+    wrapper: ({ children }: { children: ReactNode }) =>
+      createElement(AppRouteProvider, { history }, children),
+  })
 }
 
 describe('AppRouteProvider', () => {
@@ -70,6 +82,47 @@ describe('AppRouteProvider', () => {
     })
 
     expect(screen.getByTestId('kind').textContent).toBe('static')
+    expect(screen.getByTestId('search').textContent).toBe('?q=retard')
+  })
+
+  it('keeps the same route object when only search changes', () => {
+    const history = createMemoryHistory('/analytics')
+    const { result } = renderRoute(history)
+    const routeBefore = result.current.route
+
+    act(() => {
+      history.navigate('/analytics?q=retard', { replace: true })
+    })
+
+    expect(result.current.route).toBe(routeBefore)
+    expect(result.current.search).toBe('?q=retard')
+  })
+
+  it('replaces the route object when create origin changes', () => {
+    const history = createMemoryHistory('/action-plans/new')
+    const { result } = renderRoute(history)
+    const libraryRoute = result.current.route
+
+    act(() => {
+      history.navigate('/action-plans/new?from=execution')
+    })
+
+    expect(result.current.route).not.toBe(libraryRoute)
+    expect(result.current.route).toEqual({ kind: 'action-plan-create', origin: 'execution' })
+  })
+
+  it('updates search when navigate is called from useAppRoute', () => {
+    const history = createMemoryHistory('/analytics')
+
+    render(
+      createElement(AppRouteProvider, { history }, createElement(RouteProbe)),
+    )
+
+    act(() => {
+      screen.getByTestId('go-search').click()
+    })
+
+    expect(history.getHref()).toBe('/analytics?q=retard')
     expect(screen.getByTestId('search').textContent).toBe('?q=retard')
   })
 })

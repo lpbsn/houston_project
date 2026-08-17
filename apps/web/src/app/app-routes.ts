@@ -318,14 +318,18 @@ const AppRouteContext = createContext<AppRouteContextValue | null>(null)
 
 export function AppRouteProvider({ history, children }: AppRouteProviderProps) {
   const href = useSyncExternalStore(history.subscribe, history.getHref, history.getHref)
+  const routeKey = getAppRouteKey(parseAppRoute(href))
+  // Search-only href changes must keep the same AppRoute object (screen identity).
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by routeKey, not href
+  const route = useMemo(() => parseAppRoute(href), [routeKey])
   const value = useMemo<AppRouteContextValue>(
     () => ({
-      route: parseAppRoute(href),
+      route,
       href,
       search: getHrefSearch(href),
       navigate: history.navigate,
     }),
-    [history, href],
+    [history, href, route],
   )
 
   return createElement(AppRouteContext.Provider, { value }, children)

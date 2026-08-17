@@ -82,4 +82,14 @@ describe('createBrowserHistory', () => {
     expect(history.getHref()).toBe('/chat')
     expect(listener).toHaveBeenCalledTimes(1)
   })
+
+  it('does not notify when navigating to the same href', () => {
+    window.history.replaceState(null, '', '/reporting')
+    const history = createBrowserHistory()
+    const listener = vi.fn()
+    history.subscribe(listener)
+
+    history.navigate('/reporting')
+    expect(listener).not.toHaveBeenCalled()
+  })
 })
