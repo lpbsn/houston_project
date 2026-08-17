@@ -533,6 +533,78 @@ describe('auth api cache isolation', () => {
     })
   })
 
+  it('keeps a body replacement when an older refresh fails after login starts', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    let persistedRefresh: string | null = 'old-refresh'
+    configureBodyRefreshTokenStore({
+      read: vi.fn(async () =>
+        persistedRefresh
+          ? { token: persistedRefresh, expiresAt: '2026-09-15T00:00:00Z' }
+          : null,
+      ),
+      write: vi.fn(async (value) => {
+        persistedRefresh = value.token
+      }),
+      clear: vi.fn(async () => {
+        persistedRefresh = null
+      }),
+    })
+    const refreshResponse = deferred<{
+      response: { status: number }
+      data: undefined
+      error: { detail: string }
+    }>()
+    const loginResponse = deferred<{
+      response: { status: number }
+      data: typeof bootstrapPayload & {
+        refresh_token: string
+        refresh_token_expires_at: string
+      }
+      error: undefined
+    }>()
+    apiClientPostMock
+      .mockImplementationOnce(() => refreshResponse.promise)
+      .mockImplementationOnce(() => loginResponse.promise)
+
+    const refreshPromise = refreshAccessToken()
+    await vi.waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledTimes(1)
+    })
+    const loginPromise = login({ email: 'replacement@example.com', password: 'secret' })
+    await vi.waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledTimes(2)
+    })
+
+    loginResponse.resolve({
+      response: { status: 200 },
+      data: {
+        ...bootstrapPayload,
+        access_token: 'replacement-access',
+        user: { ...bootstrapPayload.user, id: 'replacement-user' },
+        refresh_token: 'replacement-refresh',
+        refresh_token_expires_at: '2026-09-15T00:00:00Z',
+      },
+      error: undefined,
+    })
+    await loginPromise
+    expect(persistedRefresh).toBe('replacement-refresh')
+
+    refreshResponse.resolve({
+      response: { status: 401 },
+      data: undefined,
+      error: { detail: 'Your session could not be refreshed.' },
+    })
+    await expect(refreshPromise).resolves.toBeNull()
+
+    expect(persistedRefresh).toBe('replacement-refresh')
+    expect(clearAccessTokenMock).not.toHaveBeenCalled()
+    expect(setAccessTokenMock).toHaveBeenCalledTimes(1)
+    expect(setAccessTokenMock).toHaveBeenCalledWith('replacement-access')
+    expect(queryClient.getQueryData(bootstrapQueryKey)).toMatchObject({
+      user: { id: 'replacement-user' },
+    })
+  })
+
   it('waits for an in-flight body login before refreshing the new session', async () => {
     vi.stubEnv('VITE_APP_RUNTIME', 'native')
     let persistedRefresh: string | null = 'old-refresh'
@@ -767,6 +839,127 @@ describe('auth api cache isolation', () => {
     expect(clearAccessTokenMock).not.toHaveBeenCalled()
     expect(setAccessTokenMock).toHaveBeenCalledWith('replacement-access')
     expect(setAccessTokenMock).toHaveBeenCalledWith('rotated-replacement-access')
+    expect(queryClient.getQueryData(bootstrapQueryKey)).toMatchObject({
+      user: { id: 'replacement-user' },
+    })
+  })
+
+  it('does not let a cookie refresh overlap a later login request', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    const refreshResponse = deferred<{
+      response: { status: number }
+      data: typeof bootstrapPayload
+      error: undefined
+    }>()
+    const loginResponse = deferred<{
+      response: { status: number }
+      data: typeof bootstrapPayload
+      error: undefined
+    }>()
+    apiClientPostMock
+      .mockImplementationOnce(() => refreshResponse.promise)
+      .mockImplementationOnce(() => loginResponse.promise)
+
+    const refreshPromise = refreshAccessToken()
+    await vi.waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledTimes(1)
+    })
+    expect(apiClientPostMock).toHaveBeenNthCalledWith(1, '/api/v1/auth/refresh/', expect.anything())
+
+    const loginPromise = login({ email: 'replacement@example.com', password: 'secret' })
+    await Promise.resolve()
+    expect(apiClientPostMock).toHaveBeenCalledTimes(1)
+
+    refreshResponse.resolve({
+      response: { status: 200 },
+      data: {
+        ...bootstrapPayload,
+        access_token: 'rotated-old-access',
+        user: { ...bootstrapPayload.user, id: 'old-user' },
+      },
+      error: undefined,
+    })
+    await expect(refreshPromise).resolves.toBe('rotated-old-access')
+    await vi.waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledTimes(2)
+    })
+    expect(apiClientPostMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/auth/login/',
+      expect.objectContaining({
+        body: expect.objectContaining({ refresh_token_transport: 'cookie' }),
+      }),
+    )
+
+    loginResponse.resolve({
+      response: { status: 200 },
+      data: {
+        ...bootstrapPayload,
+        access_token: 'replacement-access',
+        user: { ...bootstrapPayload.user, id: 'replacement-user' },
+      },
+      error: undefined,
+    })
+    await loginPromise
+
+    expect(setAccessTokenMock).toHaveBeenCalledWith('rotated-old-access')
+    expect(setAccessTokenMock).toHaveBeenLastCalledWith('replacement-access')
+    expect(queryClient.getQueryData(bootstrapQueryKey)).toMatchObject({
+      user: { id: 'replacement-user' },
+    })
+    expect(apiClientPostMock).not.toHaveBeenCalledWith(
+      '/api/v1/auth/logout/',
+      expect.anything(),
+    )
+  })
+
+  it('keeps a cookie login queued behind a refresh that then fails', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    const refreshResponse = deferred<{
+      response: { status: number }
+      data: undefined
+      error: { detail: string }
+    }>()
+    const loginResponse = deferred<{
+      response: { status: number }
+      data: typeof bootstrapPayload
+      error: undefined
+    }>()
+    apiClientPostMock
+      .mockImplementationOnce(() => refreshResponse.promise)
+      .mockImplementationOnce(() => loginResponse.promise)
+
+    const refreshPromise = refreshAccessToken()
+    await vi.waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledTimes(1)
+    })
+    const loginPromise = login({ email: 'replacement@example.com', password: 'secret' })
+    await Promise.resolve()
+    expect(apiClientPostMock).toHaveBeenCalledTimes(1)
+
+    refreshResponse.resolve({
+      response: { status: 401 },
+      data: undefined,
+      error: { detail: 'Your session could not be refreshed.' },
+    })
+    await expect(refreshPromise).resolves.toBeNull()
+    await vi.waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledTimes(2)
+    })
+
+    loginResponse.resolve({
+      response: { status: 200 },
+      data: {
+        ...bootstrapPayload,
+        access_token: 'replacement-access',
+        user: { ...bootstrapPayload.user, id: 'replacement-user' },
+      },
+      error: undefined,
+    })
+    await expect(loginPromise).resolves.toMatchObject({
+      user: { id: 'replacement-user' },
+    })
+    expect(setAccessTokenMock).toHaveBeenCalledWith('replacement-access')
     expect(queryClient.getQueryData(bootstrapQueryKey)).toMatchObject({
       user: { id: 'replacement-user' },
     })

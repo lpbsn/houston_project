@@ -308,9 +308,11 @@ let resolveSessionReplacementIdle: (() => void) | null = null
 let cookieSessionReplacementQueue: Promise<void> = Promise.resolve()
 let bodyAuthCommitQueue: Promise<void> = Promise.resolve()
 
-function clearVolatileAuthState() {
+function clearVolatileAuthState(options?: { bumpInvalidation?: boolean }) {
   authGeneration += 1
-  authInvalidationGeneration += 1
+  if (options?.bumpInvalidation !== false) {
+    authInvalidationGeneration += 1
+  }
   clearCsrfTokenCache()
   clearAccessToken()
   clearAllPlanningSubmissionIntents()
@@ -320,8 +322,7 @@ function clearVolatileAuthState() {
   clearAuthenticatedQueryCache(queryClient)
 }
 
-export function clearAuthState() {
-  clearVolatileAuthState()
+function clearPersistedRefreshTokenBestEffort() {
   if (getRefreshTokenTransport() === 'body') {
     void enqueueAuthOperation(
       bodyAuthCommitQueue,
@@ -331,6 +332,11 @@ export function clearAuthState() {
       clearPersistedRefreshToken,
     ).catch(() => undefined)
   }
+}
+
+export function clearAuthState() {
+  clearVolatileAuthState()
+  clearPersistedRefreshTokenBestEffort()
 }
 
 function buildTransportHeaders(prepared: PreparedAuthTransport, accessToken?: string | null) {
@@ -503,26 +509,57 @@ function captureAuthGeneration() {
   return authGeneration
 }
 
-async function executeRefresh() {
-  await sessionReplacementIdle
+async function performRefresh() {
   const generation = captureAuthGeneration()
-  const prepared = await prepareRefreshTransport()
-  const { data, error, response } = await apiClient.POST('/api/v1/auth/refresh/', {
-    body: {
-      refresh_token_transport: prepared.transport,
-      ...(prepared.refreshToken ? { refresh_token: prepared.refreshToken } : {}),
-    },
-    credentials: prepared.credentials,
-    headers: buildTransportHeaders(prepared),
-  })
+  try {
+    const prepared = await prepareRefreshTransport()
+    const { data, error, response } = await apiClient.POST('/api/v1/auth/refresh/', {
+      body: {
+        refresh_token_transport: prepared.transport,
+        ...(prepared.refreshToken ? { refresh_token: prepared.refreshToken } : {}),
+      },
+      credentials: prepared.credentials,
+      headers: buildTransportHeaders(prepared),
+    })
 
-  if (error || !data) {
-    throw buildAuthError(response, error, 'Your session could not be refreshed.')
+    if (error || !data) {
+      throw buildAuthError(response, error, 'Your session could not be refreshed.')
+    }
+
+    await commitAuthEnvelope(data, prepared, { expectedGeneration: generation })
+    return data
+  } catch (error) {
+    if (error instanceof StaleAuthOperationError) {
+      throw error
+    }
+    if (generation !== authGeneration) {
+      throw new StaleAuthOperationError('The authenticated session is no longer current.')
+    }
+    clearVolatileAuthState({ bumpInvalidation: false })
+    clearPersistedRefreshTokenBestEffort()
+    throw new StaleAuthOperationError('The authenticated session is no longer current.')
+  }
+}
+
+async function executeRefresh() {
+  if (getRefreshTokenTransport() === 'cookie') {
+    const invalidationGeneration = authInvalidationGeneration
+    return enqueueAuthOperation(
+      cookieSessionReplacementQueue,
+      (next) => {
+        cookieSessionReplacementQueue = next
+      },
+      async () => {
+        if (invalidationGeneration !== authInvalidationGeneration) {
+          throw new StaleAuthOperationError('The authenticated session is no longer current.')
+        }
+        return performRefresh()
+      },
+    )
   }
 
-  await commitAuthEnvelope(data, prepared, { expectedGeneration: generation })
-
-  return data
+  await sessionReplacementIdle
+  return performRefresh()
 }
 
 export async function refreshAccessToken() {
@@ -535,10 +572,10 @@ export async function refreshAccessToken() {
       const payload = await executeRefresh()
       return payload.access_token
     } catch (error) {
-      if (error instanceof StaleAuthOperationError) {
-        return null
+      if (!(error instanceof StaleAuthOperationError)) {
+        clearVolatileAuthState({ bumpInvalidation: false })
+        clearPersistedRefreshTokenBestEffort()
       }
-      clearAuthState()
       return null
     } finally {
       refreshPromise = null
