@@ -34,7 +34,7 @@ Read first:
 - [ ] No shadcn primitive class assertions
 
 ### Protected areas (do not weaken)
-- Auth / CSRF / refresh / throttle
+- Auth / CSRF / refresh / throttle — native auth = `refresh_token_transport: body`; CSRF = cookie auth transport Web only
 - Tenant isolation / RBAC API
 - Signal pipeline v4 golden + legacy issue-focus aggregation
 - Fake OpenAI autouse + provider guard tests

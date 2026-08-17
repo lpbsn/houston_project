@@ -266,6 +266,8 @@ Références officielles du projet : [`README.md`](README.md), [`Makefile`](Make
 | **Git** | Récent | Oui |
 | **Docker Desktop** ou **OrbStack** (moteur Docker + CLI Compose v2) | Commande `docker compose` | Oui |
 | **Make** | Fourni avec Xcode Command Line Tools : `xcode-select --install` | Oui |
+| **Xcode** | App complète (Simulateur iOS). Distinct des Command Line Tools. | Oui pour Capacitor iOS local |
+| **Android Studio** | SDK + émulateur | Oui pour Capacitor Android local |
 | **Node.js** | Image frontend Docker : **Node 24** ([`infra/docker/web/Dockerfile`](infra/docker/web/Dockerfile)). Le `package.json` ne fixe pas de version minimale. | Oui (frontend local) |
 | **npm** | Livré avec Node | Oui (frontend local) |
 | **Python 3.13.13** + **uv `0.11.16`** | Pour outillage backend **hors** Docker ([`apps/api/AGENTS.md`](apps/api/AGENTS.md)). L’image API utilise déjà Python 3.13.13 ; le builder Docker épingle uv `0.11.16` (aligné CI). | Non si vous n’exécutez le backend que dans Docker |

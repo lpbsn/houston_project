@@ -129,7 +129,8 @@ Run from repo root unless needed:
 - lint: `cd apps/web && npm run lint`
 - tests: `cd apps/web && npm test`
 - build: `cd apps/web && npm run build`
-- native build: `cd apps/web && npm run build:native`
+- native build: `cd apps/web && npm run build:native` (requires `VITE_API_BASE_URL`)
 - Capacitor sync: `cd apps/web && npm run cap:sync`
+- Native Vite compile-time pin (no auth): `cd apps/web && npm run dev:native`
 
 Use project-defined API generation command if it exists. Do not invent missing commands.

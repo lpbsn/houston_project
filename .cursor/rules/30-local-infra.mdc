@@ -9,6 +9,8 @@ Full guide: [`docs/engineering/local_development.md`](../../docs/engineering/loc
 
 - Prefer Makefile targets over raw `docker compose`
 - Backend stack: `make up-backend` · frontend dev: `make web-dev`
+- Native Capacitor: `make web-cap-sync`; bake `VITE_API_BASE_URL` per platform (iOS Simulator `http://localhost:8000`, Android emulator `http://10.0.2.2:8000`) then rebuild
+- `make web-dev-native` is a compile-time pin only — it does not authenticate in the browser
 - After `.env` changes with stack running: `make recreate-backend` (not `restart-backend`)
 - Backend checks: `make backend-test`, `make backend-check` — Docker only, not host `uv run`
 - Contract regen: `make schema && make web-api-generate`

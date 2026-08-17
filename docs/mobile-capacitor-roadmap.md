@@ -1,9 +1,11 @@
 # Spore — Roadmap Web + Capacitor
 
-Status: candidate  
-Last reviewed: 2026-08-16
+Status: authoritative  
+Last reviewed: 2026-08-17
 
-Référence d’exécution pour les agents Cursor. Ce document cadre la transformation ; il ne prescrit pas l’implémentation.
+Référence d’exécution pour les agents Cursor. **Capacitor Lots 1–5 are done.** Next is **Capacitor Lot 6** (lifecycle / network / realtime). This document frames the remaining lots; it does not prescribe implementation.
+
+These **Capacitor Lots** (1–11) are distinct from product/domain lots (taxonomy Lot 5, test Lot 4 helpers, product Lot 11 stabilization). Write **Capacitor Lot N** when referring to this roadmap.
 
 ## Objectif
 
@@ -39,8 +41,8 @@ Certains mécanismes PWA couvraient des besoins réels. La suppression de la PWA
 
 | Besoin fonctionnel | Implémentation actuelle (PWA) | Décision / lot |
 |--------------------|-------------------------------|----------------|
-| Détection réseau / états hors-ligne | Événements navigateur + bannière UI | Lot 6 — indépendant du service worker ; conservé |
-| Reconnexion WS / refetch après reprise | TanStack Query + hooks WS | Lot 6 — conservé |
+| Détection réseau / états hors-ligne | Événements navigateur + bannière UI | Capacitor Lot 6 — indépendant du service worker ; **partial**: `navigator.onLine` + Terrain banner already exist ; native `appStateChange` still this lot |
+| Reconnexion WS / refetch après reprise | TanStack Query + hooks WS | Capacitor Lot 6 — **partial**: `visibilitychange` reconnect exists ; native background/resume still this lot |
 | Notifications push terrain | Web Push (navigateur) ; contraintes iOS PWA | Lot 7 — **push natif iOS/Android** (priorité terrain) ; Web Push desktop **optionnel**, à justifier produit au lot 7 ; Web Push mobile **hors cible implicite** |
 | Mise à jour applicative Web | Service worker + bannière de refresh | Lot 4 — **retrait** ; pas de mécanisme équivalent : build Vite classique (`index.html` revalidé, assets hashés en cache long) |
 | Installation sur l’écran d’accueil | Manifeste PWA + prompts navigateur | Hors scope Web — distribution native (lot 5) |
@@ -98,43 +100,47 @@ TOUJOURS BESOIN
 
 ## Lots
 
-### 1. Runtime / API / WebSocket
+Capacitor Lot status: **1–5 done** · **6 next** · 7–11 not started.
+
+### 1. Runtime / API / WebSocket — done
 
 **Objectif.** Rendre explicites le runtime et la configuration réseau. Le frontend ne doit plus dépendre implicitement du same-origin ni du proxy Vite.
 
 **Responsabilité.** Introduire une notion de runtime (Web vs Native) et une configuration d’accès HTTP / WebSocket utilisable hors origin partagée. Les features consomment cette configuration ; elles ne calculent pas l’hôte API. CORS, hosts et tickets WS côté backend doivent supporter un client qui n’est plus same-origin. Capacitor n’est pas ajouté dans ce lot.
 
-### 2. Auth multi-runtime
+### 2. Auth multi-runtime — done
 
 **Objectif.** Faire évoluer l’authentification pour Web et Native, avec une logique de session commune.
 
 **Responsabilité.** Conserver un modèle de session backend unique (`UserSession`, rotation, révocation). Isoler le mécanisme de persistance du refresh : cookie HttpOnly côté Web si pertinent, équivalent natif sûr côté Native. La mémoire frontend reste le seul lieu de l’access token. Les features métier ne voient qu’une session authentifiée, pas le canal de stockage. Ne pas introduire Capacitor ici, mais lever les hypothèses « navigateur + cookie » qui bloqueraient Native.
 
-**Décision d’implémentation validée.** Le contrat explicite `refresh_token_transport: cookie | body`, qui décrit uniquement le transport du credential et jamais le runtime ou le niveau de confiance. `cookie` possède cookies + CSRF ; `body` envoie explicitement le refresh avec cookies omis et sans effet `Set-Cookie`. La rotation stricte one-shot reste commune. Le plugin de stockage sécurisé natif est choisi et branché au lot 5.
+**Décision d’implémentation validée.** Le contrat explicite `refresh_token_transport: cookie | body`, qui décrit uniquement le transport du credential et jamais le runtime ou le niveau de confiance. `cookie` possède cookies + CSRF ; `body` envoie explicitement le refresh avec cookies omis et sans effet `Set-Cookie`. La rotation stricte one-shot reste commune. Le plugin Keychain/Keystore est branché au composition root (Capacitor Lot 5).
 
-### 3. Routing
+### 3. Routing — done
 
 **Objectif.** Disposer d’une base de navigation adaptée au Web, aux deep links et aux comportements natifs.
 
 **Responsabilité.** Les destinations produit restent adressables par URL. Le routeur ne doit plus être indissociable de `history` navigateur seul : il doit pouvoir être piloté par le runtime (lien Web, deep link, notification) sans dupliquer les routes métier. Les deep links et le wiring natif ne sont pas implémentés ici — seule la fondation de navigation l’est.
 
-### 4. Builds Web / Native
+### 4. Builds Web / Native — done
 
 **Objectif.** Séparer clairement le build **Web** du build **Native** (Capacitor).
 
-**Responsabilité.** Un seul arbre de sources React, deux pipelines de build. Retirer service worker, manifeste PWA, registration SW et autres artefacts PWA ; ils n’appartiennent à aucun des deux runtimes cibles. Le build Web repose sur le **comportement standard d’un build Vite classique** : `index.html` revalidé normalement, assets hashés en cache long, pas de mécanisme spécifique de mise à jour applicative. Le cache HTTP navigateur/CDN suffit ; pas de remplacement du shell offline. Le build Native embarque le même frontend sans hériter d’artefacts ou d’hypothèses Web-only. Capacitor n’est pas encore bootstrappé ; ce lot prépare la séparation pour que l’ajout natif n’embarque pas accidentellement du Web-only, et inversement. Appliquer le tableau « Besoins fonctionnels vs implémentation PWA actuelle » : retrait PWA, sans reconstruction par défaut.
+**Responsabilité.** Un seul arbre de sources React, deux pipelines de build. Service worker, manifeste PWA, registration SW et autres artefacts PWA retirés ; ils n’appartiennent à aucun des deux runtimes cibles. Le build Web repose sur le **comportement standard d’un build Vite classique** : `index.html` revalidé normalement, assets hashés en cache long, pas de mécanisme spécifique de mise à jour applicative. Le cache HTTP navigateur/CDN suffit ; pas de remplacement du shell offline. Le build Native embarque le même frontend sans hériter d’artefacts ou d’hypothèses Web-only. Capacitor shells were added in Capacitor Lot 5 (`apps/web/ios`, `apps/web/android`, `make web-cap-sync`). Appliquer le tableau « Besoins fonctionnels vs implémentation PWA actuelle » : retrait PWA, sans reconstruction par défaut.
 
-### 5. Bootstrap Capacitor iOS / Android
+### 5. Bootstrap Capacitor iOS / Android — done
 
 **Objectif.** Ajouter Capacitor et obtenir un premier parcours fonctionnel sur iOS et Android.
 
 **Responsabilité.** Le même frontend React tourne dans deux shells natifs. Valider un parcours réel (auth + un flux terrain) contre l’API, avec HTTP, session et WS déjà rendus multi-runtime. Preuve de faisabilité, pas de polish UX ni de push. Si un choix des lots 1–4 est insuffisant, le corriger ici plutôt que d’empiler un workaround.
 
-### 6. Lifecycle / Network / Realtime
+### 6. Lifecycle / Network / Realtime — next
 
 **Objectif.** Adapter l’app aux coupures réseau, au background/resume et aux reconnexions WebSocket.
 
 **Responsabilité.** HTTP, WS opérationnel, WS chat et cache TanStack Query se comportent correctement quand l’app passe en arrière-plan, reprend, ou perd le réseau. Reconnexion et refetch restent online-first : pas de file de mutations hors-ligne. Isoler les hooks de lifecycle runtime des features métier. La détection réseau et les états UI associés ne dépendent pas du service worker — elles restent nécessaires dans les deux runtimes.
+
+**Déjà en place (ne pas reconstruire) :** banner `navigator.onLine` et reconnect WS sur `visibilitychange`. Ce lot ajoute le lifecycle natif (`appStateChange` / background-resume), pas une nouvelle détection réseau web.
 
 ### 7. Push multi-channel
 

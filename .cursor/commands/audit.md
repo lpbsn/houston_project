@@ -2,12 +2,13 @@
 
 Read-only. Do not edit source files or change app behavior.
 
-Houston is dev-phase only. Audit for scalability, structure, maintainability, duplication, backend/frontend drift, missing tests.
+Houston is dev-phase only. Audit for scalability, structure, maintainability, duplication, backend/frontend drift, missing tests. Frontend audits consider Web vs Native (Capacitor), not PWA.
 
 Read first:
 - `AGENTS.md` and nearest nested `AGENTS.md`
 - relevant `.cursor/rules`
 - [`docs/product/current_state.md`](../../docs/product/current_state.md)
+- [`docs/architecture/authentication_charter.md`](../../docs/architecture/authentication_charter.md) when touching auth/WS
 - related code and tests
 
 Do not add audit report files to the repository.

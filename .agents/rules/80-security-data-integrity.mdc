@@ -15,6 +15,11 @@ alwaysApply: false
 - Validate role and BusinessUnit scope before mutations.
 - Frontend checks are UX only, never security.
 
+## Auth tokens
+- Access token in memory only.
+- Refresh: cookie + CSRF (Web) or body + injected native store; never `localStorage` / `sessionStorage`.
+- Charter: [`docs/architecture/authentication_charter.md`](../../docs/architecture/authentication_charter.md)
+
 ## Uploads/media
 - Validate real file content, not only declared MIME.
 - Enforce size/type limits.

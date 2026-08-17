@@ -31,7 +31,7 @@ Lazy pages: [`lazy-terrain-pages.tsx`](../../apps/web/src/app/lazy-terrain-pages
 ## Server state
 
 - Generated OpenAPI types → API wrappers → TanStack Query hooks
-- HTTP and WebSocket hosts are resolved only in [`apps/web/src/lib/runtime.ts`](../../apps/web/src/lib/runtime.ts) (`VITE_API_BASE_URL`, `VITE_APP_RUNTIME`). Features must not compute the API host.
+- HTTP and WebSocket hosts are resolved only in [`apps/web/src/lib/runtime.ts`](../../apps/web/src/lib/runtime.ts) (`VITE_API_BASE_URL`, `VITE_APP_RUNTIME`). Public invitation copy links use `VITE_PUBLIC_APP_URL` from the same module. Features must not compute the API host.
 - Query key roots: feature-scoped (`signals`, `action-plans`, `chat`, `notifications`, `auth`, …)
 - Establishment switch / login: purge non-`auth` queries (`@/lib/query-invalidation`)
 
@@ -54,11 +54,13 @@ Lazy pages: [`lazy-terrain-pages.tsx`](../../apps/web/src/app/lazy-terrain-pages
 
 Invalidation only — backend remains source of truth.
 
+Network banner (`navigator.onLine`) and WS reconnect on `visibilitychange` already exist. Capacitor Lot 6 adds native `appStateChange` / background-resume — do not rebuild web network detection.
+
 ## Builds Web / Native
 
 One React tree, two Vite pipelines in [`vite.config.ts`](../../apps/web/vite.config.ts):
 
-- **Web** (`npm run build`): `VITE_APP_RUNTIME=web`, `base: '/'`, `dist/`. Classic hashed assets; `index.html` revalidated by nginx/CDN. No service worker, no web app manifest.
+- **Web** (`npm run build`): `VITE_APP_RUNTIME=web`, `base: '/'`, `dist/`. Classic hashed assets; `index.html` revalidated by nginx/CDN. No service worker, no web app manifest. Boot unregisters leftover service-worker registrations from pre–Capacitor Lot 4 installs.
 - **Native** (`npm run build:native`): `VITE_APP_RUNTIME=native`, `base: './'`, `dist-native/`. Capacitor `webDir` is `dist-native`. `VITE_API_BASE_URL` is required at Vite startup (dev and build).
 
 `tsc -b` stays in `build` and `build:native`. The runtime pin is on the Vite process only (`tsc -b && VITE_APP_RUNTIME=… vite build`). Native projects live in [`apps/web/ios`](../../apps/web/ios) and [`apps/web/android`](../../apps/web/android); sync with `npm run cap:sync`. Committed `capacitor.config.ts` keeps `allowMixedContent: false` and no `server.cleartext`; Android debug Gradle overlays local HTTP mixed content for the emulator.
