@@ -28,10 +28,14 @@ const history = createBrowserHistory()
 
 async function bootstrap() {
   if (import.meta.env.VITE_APP_RUNTIME === 'native') {
-    const { configureNativeBodyRefreshTokenStore } = await import(
-      '@/features/auth/native-refresh-token-store'
-    )
-    await configureNativeBodyRefreshTokenStore()
+    try {
+      const { configureNativeBodyRefreshTokenStore } = await import(
+        '@/features/auth/native-refresh-token-store'
+      )
+      await configureNativeBodyRefreshTokenStore()
+    } catch {
+      // Store stays unconfigured; AuthProvider restore/login remain fail-closed.
+    }
   }
 
   createRoot(document.getElementById('root')!).render(
