@@ -81,7 +81,6 @@ vi.mock('@/app/app-routes', () => ({
   useAppRoute: () => ({
     navigate: navigateMock,
     route: { kind: 'action-plan-execution-detail', executionId: 'exec-1' },
-    href: `${window.location.pathname}${window.location.search}${window.location.hash}`,
     search: window.location.search,
   }),
 }))

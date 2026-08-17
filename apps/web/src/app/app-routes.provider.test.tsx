@@ -12,7 +12,7 @@ afterEach(() => {
 })
 
 function RouteProbe() {
-  const { route, href, search, navigate } = useAppRoute()
+  const { route, search, navigate } = useAppRoute()
 
   return createElement(
     'div',
@@ -23,7 +23,6 @@ function RouteProbe() {
       { 'data-testid': 'detail' },
       route.kind === 'signal-detail' ? route.signalId : '',
     ),
-    createElement('span', { 'data-testid': 'href' }, href),
     createElement('span', { 'data-testid': 'search' }, search),
     createElement('button', {
       type: 'button',
@@ -50,7 +49,7 @@ describe('AppRouteProvider', () => {
 
     expect(screen.getByTestId('kind').textContent).toBe('signal-detail')
     expect(screen.getByTestId('detail').textContent).toBe('sig-1')
-    expect(screen.getByTestId('href').textContent).toBe('/signals/sig-1?tab=comments')
+    expect(history.getHref()).toBe('/signals/sig-1?tab=comments')
     expect(screen.getByTestId('search').textContent).toBe('?tab=comments')
   })
 
@@ -66,7 +65,7 @@ describe('AppRouteProvider', () => {
     })
 
     expect(screen.getByTestId('kind').textContent).toBe('action-plan-create')
-    expect(screen.getByTestId('href').textContent).toBe('/action-plans/new?from=execution')
+    expect(history.getHref()).toBe('/action-plans/new?from=execution')
     expect(screen.getByTestId('search').textContent).toBe('?from=execution')
   })
 

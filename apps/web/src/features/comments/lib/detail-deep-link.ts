@@ -1,5 +1,3 @@
-export { useLocationSearch } from '@/lib/location-search'
-
 export const COMMENT_DEEP_LINK_TAB = 'comments'
 export const COMMENT_DEEP_LINK_COMMENT_ID_PARAM = 'commentId'
 export const EXECUTION_VALIDATION_FOCUS = 'validation'

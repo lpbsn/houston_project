@@ -3,15 +3,13 @@ import { useState } from 'react'
 
 import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainErrorState } from '@/components/ui/terrain'
-import {
-  parseDetailDeepLink,
-  useLocationSearch,
-} from '@/features/comments/lib/detail-deep-link'
+import { parseDetailDeepLink } from '@/features/comments/lib/detail-deep-link'
 import {
   buildAnalyticsSignalActionCreatePath,
   type AnalyticsSignalReturnContext,
 } from '@/features/analytics/lib/analytics-url-state'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { useLocationSearch } from '@/lib/location-search'
 import { CommentSection } from '@/features/comments/components/comment-section'
 import { cn } from '@/lib/utils'
 

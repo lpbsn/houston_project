@@ -15,10 +15,7 @@ import {
   buildAnalyticsSignalDetailPath,
   parseAnalyticsSignalReturnContext,
 } from '@/features/analytics/lib/analytics-url-state'
-import {
-  parseDetailDeepLink,
-  useLocationSearch,
-} from '@/features/comments/lib/detail-deep-link'
+import { parseDetailDeepLink } from '@/features/comments/lib/detail-deep-link'
 import { TerrainFeedback } from '@/components/domain/terrain-feedback'
 import { trackObservation } from '@/features/observations/components/observation-processing-tracker-provider'
 import { resolveApiErrorMessage } from '@/lib/error-message'
@@ -77,7 +74,7 @@ function ActionPlanExecutionDetailPageContent({
   establishmentId,
   execution,
 }: ActionPlanExecutionDetailPageContentProps) {
-  const { navigate } = useAppRoute()
+  const { navigate, search: locationSearch } = useAppRoute()
   const { activeMembership } = useAuth()
   const markDoneMutation = useMarkActionPlanExecutionDoneMutation(establishmentId, executionId)
   const validateMutation = useValidateActionPlanExecutionMutation(establishmentId, executionId)
@@ -91,7 +88,6 @@ function ActionPlanExecutionDetailPageContent({
     executionId,
   )
 
-  const locationSearch = useLocationSearch()
   const initialDeepLink = parseDetailDeepLink(locationSearch)
   const validationActionsRef = useRef<HTMLDivElement | null>(null)
   const [activeTab, setActiveTab] = useState<ActionDetailTab>(

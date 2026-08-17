@@ -305,7 +305,6 @@ export function serializeAppRoute(route: AppRoute): string {
 
 type AppRouteContextValue = {
   route: AppRoute
-  href: string
   search: string
   navigate: (href: string, options?: { replace?: boolean }) => void
 }
@@ -325,7 +324,6 @@ export function AppRouteProvider({ history, children }: AppRouteProviderProps) {
   const value = useMemo<AppRouteContextValue>(
     () => ({
       route,
-      href,
       search: getHrefSearch(href),
       navigate: history.navigate,
     }),
