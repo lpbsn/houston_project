@@ -1,12 +1,12 @@
 # Houston — Current product state
 
 Status: authoritative  
-Last reviewed: 2026-07-27
+Last reviewed: 2026-08-17
 
 ## Branding
 
 - **Houston** — repository name, backend modules, technical docs, operator workflows.
-- **Spore** — PWA / mobile UI branding (`index.html`, manifest `name` / `short_name`, `apple-mobile-web-app-title`).
+- **Spore** — mobile UI branding (`index.html`, favicon / apple-touch-icon, `theme-color`).
 
 ## Operational loop (live)
 
@@ -35,7 +35,7 @@ API contract: [`apps/api/schema.yml`](../../apps/api/schema.yml).
 | Action Plan catalog + executions + feed | Live | See [`decisions/action_plan.md`](decisions/action_plan.md) |
 | Comments (signal + execution threads) | Live | REST + mention picker |
 | Notifications in-app | Live | List, preferences, mark read/archive |
-| Web Push (VAPID + subscriptions) | Live | Optional; requires browser permission |
+| Web Push (VAPID + subscriptions) | API live; client UI removed | Backend remains; Web/native delivery is Lot 7 |
 | Operational realtime (invalidation) | Live | WS ticket + `OperationalRealtimeProvider` on terrain routes |
 | Chat V1 core | Live | DM + groups, WS messages, Terrain UI `/chat` |
 | Upload / private media | Live | Authorized reads only |
@@ -51,7 +51,7 @@ REST (establishment-scoped):
 - `POST …/notifications/{id}/mark-read/`
 - `POST …/notifications/{id}/archive/`
 
-Web Push: `GET /api/v1/push/vapid-public-key/`, `POST/DELETE …/me/web-push-subscriptions/`.
+Web Push API: `GET /api/v1/push/vapid-public-key/`, `POST/DELETE …/me/web-push-subscriptions/`. The client toggle and service-worker subscription path were removed in Lot 4; delivery channels are Lot 7.
 
 Domain: [`domains/notification_domain.md`](domains/notification_domain.md).
 
@@ -80,7 +80,7 @@ Post-core gaps (non-blocking pilot): some bootstrap hints, no REST message write
 - Establishment admin (Owners org-wide + Directors on path): `/organization/establishments/{id}` — overview metrics + memberships; entry to operational config.
 - Client router: `apps/web/src/app/app-routes.ts` (not React Router).
 - Server state: TanStack Query only (no client global store library).
-- PWA: `vite-plugin-pwa` `injectManifest`, `src/sw.ts`, register on prod build.
+- Builds: Web `dist/` (`base: '/'`) and Native `dist-native/` (`base: './'`); no service worker.
 
 Details: [`../engineering/frontend_architecture.md`](../engineering/frontend_architecture.md).
 
@@ -97,7 +97,7 @@ Preserved names (do not rename without explicit decision):
 
 - Production-grade polish on all terrain screens.
 - Chat post-core UI (group admin, settings).
-- Push notifications depend on user opt-in and VAPID config.
+- Push notifications: backend VAPID remains; client delivery is Lot 7.
 - Full device QA matrix not automated in CI.
 
 ## BusinessUnit / ActivitySubject (summary)

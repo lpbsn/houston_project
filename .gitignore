@@ -22,6 +22,7 @@ staticfiles/
 # Node / frontend tooling
 node_modules/
 dist/
+dist-native/
 dist-landing/
 .vite/
 

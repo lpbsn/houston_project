@@ -4,7 +4,7 @@ Applies to `apps/web/**`.
 
 ## Stack
 
-React, TypeScript, Vite, Tailwind, shadcn/ui, TanStack Query, Framer Motion, PWA-ready. Zustand is allowed for local UI state but **not currently used** in `apps/web/src` — prefer React state until needed.
+React, TypeScript, Vite, Tailwind, shadcn/ui, TanStack Query, Framer Motion. Zustand is allowed for local UI state but **not currently used** in `apps/web/src` — prefer React state until needed.
 
 Do not upgrade frontend framework versions unless explicitly requested.
 
@@ -35,7 +35,7 @@ Do not:
 
 If generated types are wrong, fix backend schema and regenerate.
 
-## Mobile-first / PWA
+## Mobile-first
 
 Houston is phone-first for field teams.
 
@@ -129,5 +129,6 @@ Run from repo root unless needed:
 - lint: `cd apps/web && npm run lint`
 - tests: `cd apps/web && npm test`
 - build: `cd apps/web && npm run build`
+- native build: `cd apps/web && npm run build:native`
 
 Use project-defined API generation command if it exists. Do not invent missing commands.

@@ -5,7 +5,7 @@
 | Domaine | Surface | Hébergement |
 |---------|---------|-------------|
 | `https://spore-os.com` | Landing MPA (`dist-landing/`) | Cloudflare Pages (recommandé) |
-| `https://app.spore-os.com` | Application + PWA | Service Railway existant (`houston_project`) |
+| `https://app.spore-os.com` | Application web | Service Railway existant (`houston_project`) |
 
 Même dépôt GitHub, **deux builds indépendants**. Ne pas attacher `spore-os.com` au service Railway applicatif.
 
@@ -48,6 +48,6 @@ Commandes utiles :
    - `https://spore-os.com/mentions-legales/` (accès direct)
    - `https://spore-os.com/robots.txt`
    - `https://spore-os.com/sitemap.xml`
-   - `https://app.spore-os.com/` et installation PWA (`start_url: /`)
+   - `https://app.spore-os.com/`
 
 Aucun Dockerfile, nginx ou `railway.toml` landing n’est fourni volontairement : la landing est un site statique.

@@ -54,10 +54,6 @@ vi.mock('@/components/app-shell', () => ({
   },
 }))
 
-vi.mock('@/components/layout/pwa-update-banner', () => ({
-  PwaUpdateBanner: () => createElement('div', { 'data-testid': 'pwa-update-banner' }),
-}))
-
 vi.mock('@/features/onboarding/pages/onboarding-page', () => ({
   OnboardingPage: () => createElement('div', { 'data-testid': 'onboarding-page-stub' }),
 }))

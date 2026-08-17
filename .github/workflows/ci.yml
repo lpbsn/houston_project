@@ -266,6 +266,11 @@ jobs:
       - name: Build frontend bundle
         working-directory: apps/web
         run: npm run build:bundle
+      - name: Build native frontend bundle
+        working-directory: apps/web
+        env:
+          VITE_API_BASE_URL: https://api.example.test
+        run: npm run build:native
 
   docs-check:
     needs: changes

@@ -89,7 +89,6 @@ vi.mock('@/app/lazy-terrain-pages', () => {
     LazyChatRealtimeProvider: ({ children }: { children: React.ReactNode }) => children,
     LazyExecutionFeedPage: () => createElement(Page, { name: 'execution' }),
     LazyExecutionUpcomingPage: () => createElement(Page, { name: 'execution-upcoming' }),
-    LazyInstallAppPage: () => createElement(Page, { name: 'install-app' }),
     LazyNotificationsCenterPage: () => createElement(Page, { name: 'notifications' }),
     LazyProfilePage: () => createElement(Page, { name: 'profile' }),
     LazyProfileSwitchEstablishmentPage: () => createElement(Page, { name: 'switch-establishment' }),
@@ -123,10 +122,6 @@ vi.mock('@/app/lazy-terrain-pages', () => {
     LazyTeamPage: () => createElement(Page, { name: 'team' }),
   }
 })
-
-vi.mock('@/components/layout/pwa-update-banner', () => ({
-  PwaUpdateBanner: () => null,
-}))
 
 vi.mock('@/features/notifications/components/notification-center', () => ({
   NotificationCenter: () => null,

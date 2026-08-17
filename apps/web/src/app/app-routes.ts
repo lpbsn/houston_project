@@ -25,7 +25,6 @@ export type AppPath =
   | '/chat'
   | '/analytics'
   | '/general/switch-establishment'
-  | '/install-app'
   | '/general'
   | '/team'
   | '/team/invite'
@@ -255,7 +254,6 @@ export function parseAppRoute(input: string): AppRoute {
     pathname === '/chat' ||
     pathname === '/analytics' ||
     pathname === '/general/switch-establishment' ||
-    pathname === '/install-app' ||
     pathname === '/general' ||
     pathname === '/team' ||
     pathname === '/team/invite' ||

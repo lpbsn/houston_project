@@ -1,5 +1,5 @@
 import { type ComponentType } from 'react'
-import { ArrowLeftRight, BarChart3, Building2, ChevronRight, Download, Library, Users } from 'lucide-react'
+import { ArrowLeftRight, BarChart3, Building2, ChevronRight, Library, Users } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import {
@@ -27,7 +27,6 @@ import {
 } from '@/features/notifications/hooks'
 import { GamificationScoreCard } from '@/features/gamification/components/gamification-score-card'
 import { useGamificationOverviewQuery } from '@/features/gamification/hooks'
-import { useWebPushToggle } from '@/features/push/hooks'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -185,9 +184,6 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   const notificationsEnabled = notificationPreferencesQuery.data?.notifications_enabled ?? true
   const isNotificationTogglePending =
     notificationPreferencesQuery.isLoading || updateNotificationPreferencesMutation.isPending
-  const webPushToggle = useWebPushToggle(establishmentId, notificationPreferencesQuery.data, {
-    isPreferencesLoading: notificationPreferencesQuery.isLoading,
-  })
 
   if (!isReady || isBootstrapping) {
     return (
@@ -242,13 +238,6 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
             onClick={() => onNavigate?.('/general/switch-establishment')}
           />
         ) : null}
-        <ProfileManagementNavCard
-          icon={Download}
-          iconClassName="bg-[#EEF2FF] text-[#1B4FD8]"
-          title="Installer l'application"
-          subtitle="Ajoutez Spore à votre écran d'accueil"
-          onClick={() => onNavigate?.('/install-app')}
-        />
         <TerrainCard className="divide-y divide-[#E8E6DF] p-0">
           <TerrainSwitch
             label="Notifications"
@@ -260,20 +249,6 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
               })
             }}
           />
-          <TerrainSwitch
-            label="Notifications push"
-            checked={webPushToggle.checked}
-            disabled={webPushToggle.disabled}
-            onCheckedChange={webPushToggle.onToggle}
-          />
-          {webPushToggle.notificationsBlockedMessage ? (
-            <p className="px-4 pb-3.5 text-xs text-[#a3a19a]">
-              {webPushToggle.notificationsBlockedMessage}
-            </p>
-          ) : null}
-          {webPushToggle.message ? (
-            <p className="px-4 pb-3.5 text-xs text-[#a3a19a]">{webPushToggle.message}</p>
-          ) : null}
           {notificationPreferencesQuery.isError ? (
             <p className="px-4 pb-3.5 text-xs text-[#E24B4A]">
               Les préférences de notifications n&apos;ont pas pu être chargées.
@@ -283,9 +258,6 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
             <p className="px-4 pb-3.5 text-xs text-[#E24B4A]">
               La mise à jour des notifications a échoué.
             </p>
-          ) : null}
-          {webPushToggle.isError && webPushToggle.errorMessage ? (
-            <p className="px-4 pb-3.5 text-xs text-[#E24B4A]">{webPushToggle.errorMessage}</p>
           ) : null}
         </TerrainCard>
       </div>

@@ -212,11 +212,17 @@ web-install:
 web-dev:
 	cd $(WEB_DIR) && npm run dev
 
+web-dev-native:
+	cd $(WEB_DIR) && npm run dev:native
+
 web-dev-landing:
 	cd $(WEB_DIR) && npm run dev:landing
 
 web-build:
 	cd $(WEB_DIR) && npm run build
+
+web-build-native:
+	cd $(WEB_DIR) && npm run build:native
 
 web-build-landing:
 	cd $(WEB_DIR) && npm run build:landing
@@ -237,7 +243,7 @@ web-api-generate-check:
 	cd $(WEB_DIR) && npm run api:generate
 	git diff --exit-code apps/web/src/api/generated/types.ts
 
-web-check: web-test web-typecheck web-build web-api-generate-check
+web-check: web-test web-typecheck web-build web-build-native web-api-generate-check
 
 # -----------------------------------------------------------------------------
 # Full validation

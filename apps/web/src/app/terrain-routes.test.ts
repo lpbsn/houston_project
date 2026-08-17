@@ -54,10 +54,6 @@ describe('usesTerrainShell', () => {
     expect(usesTerrainShell({ kind: 'invitation', token: 't' })).toBe(false)
   })
 
-  it('returns true for install app route', () => {
-    expect(usesTerrainShell({ kind: 'static', path: '/install-app' })).toBe(true)
-  })
-
   it('returns true for analytics pattern detail', () => {
     expect(usesTerrainShell({ kind: 'analytics-pattern-detail', patternId: 'pattern-1' })).toBe(
       true,
@@ -368,16 +364,6 @@ describe('getTerrainRouteConfig', () => {
       'getTerrainRouteConfig called for a non-terrain route',
     )
   })
-
-  it('configures install app route without topbar or bottom nav', () => {
-    const installAppRoute = { kind: 'static', path: '/install-app' } as const
-
-    expect(getTerrainRouteConfig(installAppRoute)).toMatchObject({
-      hideTopbar: true,
-      showBottomNav: false,
-      mainScroll: 'auto',
-    })
-  })
 })
 
 describe('resolveTerrainTopbarShowBottomBorder', () => {
@@ -474,11 +460,6 @@ describe('getTerrainContentKey', () => {
       'getTerrainContentKey called for a non-terrain route',
     )
   })
-
-  it('maps install app route to stable key', () => {
-    const installAppRoute = { kind: 'static', path: '/install-app' } as const
-    expect(getTerrainContentKey(installAppRoute)).toBe('install-app')
-  })
 })
 
 describe('isProtectedRoute', () => {
@@ -536,7 +517,6 @@ describe('requiresActiveMembership', () => {
       '/chat',
       '/general',
       '/general/switch-establishment',
-      '/install-app',
       '/team',
       '/team/invite',
       '/action-plans',
@@ -579,30 +559,5 @@ describe('requiresActiveMembership', () => {
         establishmentId: 'est-1',
       }),
     ).toBe(false)
-  })
-})
-
-describe('/install-app route guards and terrain config', () => {
-  const installAppRoute = { kind: 'static', path: '/install-app' } as const
-
-  it('is protected and requires active membership', () => {
-    expect(isProtectedRoute(installAppRoute)).toBe(true)
-    expect(requiresActiveMembership(installAppRoute)).toBe(true)
-  })
-
-  it('uses terrain shell', () => {
-    expect(usesTerrainShell(installAppRoute)).toBe(true)
-  })
-
-  it('configures terrain shell without topbar or bottom nav', () => {
-    expect(getTerrainRouteConfig(installAppRoute)).toMatchObject({
-      hideTopbar: true,
-      showBottomNav: false,
-      mainScroll: 'auto',
-    })
-  })
-
-  it('maps to stable terrain content key', () => {
-    expect(getTerrainContentKey(installAppRoute)).toBe('install-app')
   })
 })

@@ -35,7 +35,7 @@ All traffic hits `https://<railway-domain>`:
 
 The frontend API client uses `baseUrl: getApiBaseUrl()` ([`apps/web/src/api/client.ts`](../../apps/web/src/api/client.ts)). An empty `VITE_API_BASE_URL` keeps relative same-origin paths, so prod-test does not need a `VITE_*` API URL.
 
-PWA workbox config is shell-only: `runtimeCaching: []`, `navigateFallbackDenylist: [/^\/api/, /^\/ws/]` ([`apps/web/vite.config.ts`](../../apps/web/vite.config.ts)).
+Web static cache: hashed `/assets/` are immutable; `index.html` is revalidated (`Cache-Control: no-cache`). No service worker.
 
 ## Services
 
@@ -125,12 +125,12 @@ Redis must remain on the Railway private network. **Do not expose Redis publicly
 * **Railway V1:** persistent volume on `api-web` at `HOUSTON_PRIVATE_MEDIA_ROOT=/app/apps/api/private_media`. Worker uses ephemeral path only — cross-service purge/delete is **not fully guaranteed** (Railway cannot share volumes across services). Details: [`railway_deploy_contract.md`](railway_deploy_contract.md#known-limitations-v1--private-media).
 * **Backup:** private photos must be backed up separately from PostgreSQL (volume snapshot or export). See deploy contract.
 
-## PWA strategy
+## Static cache
 
-* Shell and static build assets may be cached by the service worker.
-* Network-only (never cached by SW): `/api/*`, `/ws/*`, uploads, transcription, private media, operational data.
-* No offline business workflow. No offline queue. No background sync.
-* Aligns with current [`vite.config.ts`](../../apps/web/vite.config.ts) (`runtimeCaching: []`).
+* Hashed Vite assets under `/assets/` may be cached long-term (`immutable`).
+* `index.html` is always revalidated (`Cache-Control: no-cache`).
+* No service worker, no web app manifest, no shell offline.
+* Network-only for `/api/*`, `/ws/*`, uploads, transcription, private media, operational data.
 
 ## Celery strategy
 
