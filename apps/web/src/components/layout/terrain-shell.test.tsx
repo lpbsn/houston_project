@@ -87,7 +87,6 @@ function renderTerrainShell(
       {
         contentKey: 'test',
         topbar: <div data-testid="terrain-topbar">Topbar</div>,
-        updateBanner: <div role="status">Update available</div>,
         showBottomNav: false,
         mainScroll,
         navigate: () => undefined,
@@ -109,6 +108,13 @@ describe('TerrainShell', () => {
     const main = screen.getByRole('main')
     expect(main.className).toContain('overflow-hidden')
     expect(main.className).not.toContain('overflow-y-auto')
+
+    const contentColumn = main.parentElement
+    const shell = contentColumn?.parentElement
+    expect(shell?.className).toContain('fixed')
+    expect(shell?.className).toContain('h-dvh')
+    expect(shell?.className).toContain('overflow-hidden')
+    expect(shell?.getAttribute('data-terrain-shell-root')).not.toBeNull()
   })
 
   it('allows main scroll when mainScroll is auto', () => {
@@ -116,23 +122,6 @@ describe('TerrainShell', () => {
 
     const main = screen.getByRole('main')
     expect(main.className).toContain('overflow-y-auto')
-  })
-
-  it('renders update banner inside the shell as a shrink-0 sibling before main', () => {
-    const { container } = renderTerrainShell('hidden')
-
-    const main = screen.getByRole('main')
-    const contentColumn = main.parentElement
-    const shell = contentColumn?.parentElement
-    expect(shell?.className).toContain('fixed')
-    expect(shell?.className).toContain('h-dvh')
-    expect(shell?.className).toContain('overflow-hidden')
-    expect(shell?.getAttribute('data-terrain-shell-root')).not.toBeNull()
-
-    const updateBannerSlot = main.previousElementSibling
-    expect(updateBannerSlot?.className).toContain('shrink-0')
-    expect(updateBannerSlot?.textContent).not.toBe('')
-    expect(container.querySelector('[role="status"]')).toBeTruthy()
   })
 
   it('renders one shared topbar and a desktop sidebar from shared navigation', () => {

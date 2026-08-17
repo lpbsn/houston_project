@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Houston is a mobile-first, event-driven operational PWA for field teams.
+Houston is a mobile-first, event-driven operational app for field teams.
 
 ## Core loop
 

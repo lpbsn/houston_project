@@ -5,7 +5,7 @@ Last reviewed: 2026-08-17
 
 ## Stack
 
-React, TypeScript, Vite, Tailwind, shadcn/ui, TanStack Query, Framer Motion (terrain transitions), PWA via `vite-plugin-pwa`.
+React, TypeScript, Vite, Tailwind, shadcn/ui, TanStack Query, Framer Motion (terrain transitions). Two Vite pipelines from one source tree: Web (`dist/`, `base: '/'`) and Native (`dist-native/`, `base: './'`).
 
 Zustand was removed from the stack — prefer TanStack Query for server state and React state for local UI.
 
@@ -54,18 +54,14 @@ Lazy pages: [`lazy-terrain-pages.tsx`](../../apps/web/src/app/lazy-terrain-pages
 
 Invalidation only — backend remains source of truth.
 
-## PWA
+## Builds Web / Native
 
-[`vite.config.ts`](../../apps/web/vite.config.ts):
+One React tree, two Vite pipelines in [`vite.config.ts`](../../apps/web/vite.config.ts):
 
-- `strategies: 'injectManifest'`
-- `srcDir: 'src'`, `filename: 'sw.ts'`
-- `registerType: 'prompt'`, `injectRegister: false`
-- Manifest branding: **Spore**
+- **Web** (`npm run build`): `VITE_APP_RUNTIME=web`, `base: '/'`, `dist/`. Classic hashed assets; `index.html` revalidated by nginx/CDN. No service worker, no web app manifest.
+- **Native** (`npm run build:native`): `VITE_APP_RUNTIME=native`, `base: './'`, `dist-native/`. Same app without Web-only artifacts. `VITE_API_BASE_URL` is required at Vite startup (dev and build). `base: './'` is a Lot 4 output convention, not a proven Capacitor contract.
 
-[`sw.ts`](../../apps/web/src/sw.ts): Workbox precache, SPA navigation fallback, push + `notificationclick` handlers.
-
-Prod registration via `virtual:pwa-register` in [`main.tsx`](../../apps/web/src/main.tsx).
+`tsc -b` stays in `build` and `build:native`. The runtime pin is on the Vite process only (`tsc -b && VITE_APP_RUNTIME=… vite build`). Capacitor bootstrap is Lot 5.
 
 ## Commands
 
@@ -74,6 +70,7 @@ cd apps/web && npm run typecheck
 cd apps/web && npm run lint
 cd apps/web && npm test
 cd apps/web && npm run build
+cd apps/web && npm run build:native   # requires VITE_API_BASE_URL
 make web-api-generate   # after make schema
 ```
 

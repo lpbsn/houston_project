@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Houston readonly smoke — health, same-origin routing, PWA assets.
+# Houston readonly smoke — health, same-origin routing, SPA shell.
 #
 # Usage:
 #   BASE_URL=https://<railway-domain> ./scripts/smoke/readonly.sh
@@ -25,8 +25,6 @@ Checks:
   GET /signals                    → SPA shell (id="root")
   GET /api/foo                    → NOT SPA HTML
   GET /ws/v1/.../realtime/        → NOT SPA HTML
-  GET /manifest.webmanifest       → 200
-  GET /sw.js                      → 200
 
 Manual / sign-off only: worker logs, auth, cache headers, OpenAI pipeline.
 EOF
@@ -79,12 +77,5 @@ ok "GET /api/foo (not SPA)"
 body="$(curl -sS "${BASE_URL}/ws/v1/establishments/00000000-0000-0000-0000-000000000000/realtime/" 2>/dev/null || true)"
 assert_no_spa_html "/ws/v1/.../realtime/" "$body"
 ok "GET /ws/v1/.../realtime/ (not SPA)"
-
-curl -fsS -o /dev/null "${BASE_URL}/manifest.webmanifest" \
-  || fail "GET /manifest.webmanifest"
-ok "GET /manifest.webmanifest"
-
-curl -fsS -o /dev/null "${BASE_URL}/sw.js" || fail "GET /sw.js"
-ok "GET /sw.js"
 
 echo "All readonly smoke checks passed."

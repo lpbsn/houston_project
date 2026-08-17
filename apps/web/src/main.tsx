@@ -7,20 +7,22 @@ import { createBrowserHistory } from '@/app/app-history'
 import { AppRouteProvider } from '@/app/app-routes'
 import { AuthProvider } from '@/app/auth-provider'
 import { ObservationProcessingTrackerProvider } from '@/features/observations/components/observation-processing-tracker-provider'
-import { notifyPwaUpdateAvailable } from '@/lib/pwa-update'
 import { queryClient } from '@/lib/query-client'
 import './styles/globals.css'
 
-if (import.meta.env.PROD) {
-  void import('virtual:pwa-register').then(({ registerSW }) => {
-    const updateSW = registerSW({
-      immediate: false,
-      onNeedRefresh() {
-        notifyPwaUpdateAvailable(() => updateSW())
-      },
-    })
+function unregisterServiceWorkers(): void {
+  if (!('serviceWorker' in navigator)) {
+    return
+  }
+
+  void navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const registration of registrations) {
+      void registration.unregister()
+    }
   })
 }
+
+unregisterServiceWorkers()
 
 const history = createBrowserHistory()
 

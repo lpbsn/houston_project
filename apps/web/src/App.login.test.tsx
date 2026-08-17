@@ -7,7 +7,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppRoute } from '@/app/app-routes'
 
 const navigate = vi.fn()
-const pwaBannerRenderCount = vi.hoisted(() => ({ value: 0 }))
 const appShellRenderCount = vi.hoisted(() => ({ value: 0 }))
 const routeState = vi.hoisted(() => ({
   route: { kind: 'static', path: '/login' } as AppRoute,
@@ -54,13 +53,6 @@ vi.mock('@/components/app-shell', () => ({
   },
 }))
 
-vi.mock('@/components/layout/pwa-update-banner', () => ({
-  PwaUpdateBanner: () => {
-    pwaBannerRenderCount.value += 1
-    return createElement('div', { 'data-testid': 'pwa-update-banner' })
-  },
-}))
-
 vi.mock('@/features/auth/components/login-form', () => ({
   LoginForm: () => createElement('div', { 'data-testid': 'login-form-stub' }, 'Se connecter'),
 }))
@@ -99,23 +91,20 @@ function resetAuthState() {
 afterEach(() => {
   cleanup()
   navigate.mockReset()
-  pwaBannerRenderCount.value = 0
   appShellRenderCount.value = 0
   routeState.route = { kind: 'static', path: '/login' }
   resetAuthState()
 })
 
 describe('App /login routing', () => {
-  it('renders LoginPage without AppShell and a single PwaUpdateBanner', () => {
+  it('renders LoginPage without AppShell', () => {
     render(createElement(App))
 
     expect(screen.getByTestId('login-page')).toBeTruthy()
     expect(screen.queryByTestId('app-shell')).toBeNull()
     expect(screen.queryByText('Welcome back')).toBeNull()
     expect(screen.queryByText('houston')).toBeNull()
-    expect(screen.getAllByTestId('pwa-update-banner')).toHaveLength(1)
     expect(appShellRenderCount.value).toBe(0)
-    expect(pwaBannerRenderCount.value).toBe(1)
   })
 
   it('renders LoginPage session-restore UI when auth is not ready', () => {

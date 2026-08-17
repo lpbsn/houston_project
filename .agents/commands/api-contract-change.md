@@ -13,7 +13,7 @@ Required workflow:
 Validation (see [`docs/engineering/testing.md`](../../docs/engineering/testing.md) — CI ≠ `make verify`):
 - contract change: `make schema && make web-api-generate && make backend-schema-check && make web-api-generate-check`
 - backend: `make backend-test` with focused `ARGS='path/to/test.py'`, or `make backend-check` before merge
-- frontend: `cd apps/web && npm run typecheck && npm test` (add `npm run build` for PWA-affecting changes)
+- frontend: `cd apps/web && npm run typecheck && npm test`
 
 Constraints:
 - no schema drift

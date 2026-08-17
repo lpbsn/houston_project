@@ -17,7 +17,6 @@ import {
   LazyExecutionUpcomingPage,
   LazyProfilePage,
   LazyProfileSwitchEstablishmentPage,
-  LazyInstallAppPage,
   LazyNotificationsCenterPage,
   LazyTeamPage,
   LazyTeamMemberDetailPage,
@@ -37,11 +36,10 @@ import {
   usesTerrainShell,
 } from '@/app/terrain-routes'
 import { AppShell } from '@/components/app-shell'
-import { PwaUpdateBanner } from '@/components/layout/pwa-update-banner'
 import { TerrainShell } from '@/components/layout/terrain-shell'
 import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import { Button } from '@/components/ui/button'
-import { clearAuthState } from '@/features/auth/api'
+import { bootstrapQueryKey, clearAuthState } from '@/features/auth/api'
 import { AuthRoutingLoading } from '@/features/auth/components/auth-routing-loading'
 import { PendingOnboardingPage } from '@/features/auth/pages/pending-onboarding-page'
 import { TeamInvitePage } from '@/features/auth/pages/team-invite-page'
@@ -57,6 +55,7 @@ import {
 import { NoEstablishmentPage } from '@/features/auth/pages/no-establishment-page'
 import { SelectEstablishmentPage } from '@/features/auth/pages/select-establishment-page'
 import { resolvePendingLanding } from '@/features/auth/lib/pending-onboarding'
+import type { BootstrapResponse } from '@/features/auth/types'
 import { queryClient } from '@/lib/query-client'
 import { useChatAvailability, useChatConversationsQuery } from '@/features/chat/hooks'
 import { chatQueryKeys } from '@/features/chat/api'
@@ -297,7 +296,11 @@ function App() {
         <InvitationAcceptPage
           token={route.token}
           onAccepted={() => {
-            navigate('/install-app?from=invitation', { replace: true })
+            const bootstrap =
+              queryClient.getQueryData<BootstrapResponse>(bootstrapQueryKey) ?? auth.bootstrap
+            navigate(getAuthenticatedLandingPath(bootstrap) ?? '/pending-onboarding', {
+              replace: true,
+            })
           }}
         />
       )
@@ -457,19 +460,6 @@ function App() {
       return <LazyProfileSwitchEstablishmentPage onNavigate={navigate} />
     }
 
-    if (route.path === '/install-app') {
-      const searchParams = new URLSearchParams(
-        locationSearch.startsWith('?') ? locationSearch.slice(1) : locationSearch,
-      )
-      const fromInvitation = searchParams.get('from') === 'invitation'
-      const continuePath =
-        fromInvitation && auth.bootstrap
-          ? (getAuthenticatedLandingPath(auth.bootstrap) ?? '/pending-onboarding')
-          : undefined
-
-      return <LazyInstallAppPage onNavigate={navigate} continuePath={continuePath} />
-    }
-
     if (route.path === '/general') {
       return (
         <LazyProfilePage
@@ -533,7 +523,6 @@ function App() {
     handleSignOut,
     analyticsPatternDetailState,
     analyticsSignalReturnContext,
-    locationSearch,
     navigate,
     route,
   ])
@@ -578,31 +567,18 @@ function App() {
   )
 
   if (route.kind !== 'invitation' && shouldShowAuthRoutingLoading(route, auth)) {
-    return (
-      <>
-        <PwaUpdateBanner />
-        <AuthRoutingLoading />
-      </>
-    )
+    return <AuthRoutingLoading />
   }
 
   if (route.kind === 'static' && route.path === '/login') {
-    return (
-      <>
-        <PwaUpdateBanner />
-        <LoginPage onNavigate={navigate} />
-      </>
-    )
+    return <LoginPage onNavigate={navigate} />
   }
 
   if (route.kind === 'static' && route.path === '/onboarding') {
     return (
-      <>
-        <PwaUpdateBanner />
-        <div className="min-h-dvh bg-spore-cream text-spore-forest" data-testid="onboarding-shell">
-          <OnboardingPage onNavigate={navigate} />
-        </div>
-      </>
+      <div className="min-h-dvh bg-spore-cream text-spore-forest" data-testid="onboarding-shell">
+        <OnboardingPage onNavigate={navigate} />
+      </div>
     )
   }
 
@@ -773,7 +749,6 @@ function App() {
           navigate={navigate}
           showChatNav={showChatNav}
           chatHasUnread={chatHasUnread}
-          updateBanner={<PwaUpdateBanner />}
           topbar={
             <TerrainTopbar
               variant="hub"
@@ -818,7 +793,6 @@ function App() {
           navigate={navigate}
           showChatNav={showChatNav}
           chatHasUnread={chatHasUnread}
-          updateBanner={<PwaUpdateBanner />}
           topbar={
             terrainConfig.hideTopbar ? null : (
               <TerrainTopbar
@@ -840,8 +814,6 @@ function App() {
   }
 
   return (
-    <>
-      <PwaUpdateBanner />
     <motion.main {...motionProps} className="mx-auto flex min-h-screen w-full max-w-7xl px-4 py-6 sm:px-6">
       <AppShell
         headingBadge={routeCopy.headingBadge}
@@ -852,7 +824,6 @@ function App() {
         <Suspense fallback={<RoutePageLoading />}>{routeContent}</Suspense>
       </AppShell>
     </motion.main>
-    </>
   )
 }
 

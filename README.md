@@ -1,6 +1,6 @@
 # Houston
 
-Houston is a mobile-first operational PWA for field teams. Django owns business rules and API contracts; React (Spore UI) consumes OpenAPI-generated types via TanStack Query.
+Houston is a mobile-first operational app for field teams. Django owns business rules and API contracts; React (Spore UI) consumes OpenAPI-generated types via TanStack Query.
 
 ## Start here
 

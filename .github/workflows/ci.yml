@@ -262,10 +262,15 @@ jobs:
       - name: Typecheck frontend
         working-directory: apps/web
         run: npm run typecheck
-      # GATE-01: typecheck (tsc -b) once; build:bundle is vite-only (no second tsc -b).
+      # GATE-01: typecheck (tsc -b) once; build:bundle and build:native:bundle are vite-only (no second tsc -b).
       - name: Build frontend bundle
         working-directory: apps/web
         run: npm run build:bundle
+      - name: Build native frontend bundle
+        working-directory: apps/web
+        env:
+          VITE_API_BASE_URL: https://api.example.test
+        run: npm run build:native:bundle
 
   docs-check:
     needs: changes

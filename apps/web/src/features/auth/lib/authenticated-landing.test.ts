@@ -242,9 +242,8 @@ describe('isPublicAuthRoute', () => {
 })
 
 describe('routeAllowsMissingActiveMembership', () => {
-  it('returns true for onboarding, install-app, and organization routes', () => {
+  it('returns true for onboarding and organization routes', () => {
     expect(routeAllowsMissingActiveMembership('/pending-onboarding')).toBe(true)
-    expect(routeAllowsMissingActiveMembership('/install-app')).toBe(true)
     expect(routeAllowsMissingActiveMembership('/organization')).toBe(true)
     expect(routeAllowsMissingActiveMembership('/organization/establishments/est-1')).toBe(true)
     expect(routeAllowsMissingActiveMembership('/app')).toBe(false)

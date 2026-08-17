@@ -73,25 +73,6 @@ const { authState } = vi.hoisted(() => ({
   },
 }))
 
-const webPushToggleState = vi.hoisted(() => ({
-  current: {
-    state: 'disabled' as
-      | 'ios_not_installed'
-      | 'unsupported'
-      | 'permission_denied'
-      | 'enabled'
-      | 'disabled',
-    message: null as string | null,
-    notificationsBlockedMessage: null as string | null,
-    checked: false,
-    disabled: false,
-    isPending: false,
-    isError: false,
-    errorMessage: null as string | null,
-    onToggle: vi.fn(),
-  },
-}))
-
 const { gamificationQueryState, refetchGamification } = vi.hoisted(() => {
   const refetch = vi.fn()
 
@@ -179,10 +160,6 @@ vi.mock('@/features/gamification/hooks', () => ({
   }),
 }))
 
-vi.mock('@/features/push/hooks', () => ({
-  useWebPushToggle: () => webPushToggleState.current,
-}))
-
 afterEach(() => {
   cleanup()
   onNavigate.mockReset()
@@ -233,17 +210,6 @@ afterEach(() => {
     isLoading: false,
     isError: false,
     refetch: refetchGamification,
-  }
-  webPushToggleState.current = {
-    state: 'disabled',
-    message: null,
-    notificationsBlockedMessage: null,
-    checked: false,
-    disabled: false,
-    isPending: false,
-    isError: false,
-    errorMessage: null,
-    onToggle: vi.fn(),
   }
 })
 
@@ -357,7 +323,7 @@ describe('ProfilePage', () => {
 
     expect(screen.getByText("Le score n'a pas pu être chargé.")).toBeTruthy()
     expect(screen.getByText('Marie Renaud')).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Installer l'application/i })).toBeTruthy()
+    expect(screen.getByRole('switch', { name: 'Notifications' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
     expect(refetchGamification).toHaveBeenCalledTimes(1)
@@ -379,7 +345,7 @@ describe('ProfilePage', () => {
 
     expect(screen.getByText('Score & progression')).toBeTruthy()
     expect(screen.getByText('Marie Renaud')).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Installer l'application/i })).toBeTruthy()
+    expect(screen.getByRole('switch', { name: 'Notifications' })).toBeTruthy()
   })
 
   it('renders rewards as a disabled accessible placeholder without navigation', () => {
@@ -561,88 +527,6 @@ describe('ProfilePage', () => {
 
     fireEvent.click(notificationSwitch)
     expect(mutate).toHaveBeenCalledWith({ notifications_enabled: false })
-  })
-
-  it('renders push toggle states with explicit helper messages', () => {
-    const cases = [
-      {
-        state: 'unsupported',
-        message: 'Les notifications push ne sont pas disponibles sur cet appareil.',
-      },
-      {
-        state: 'ios_not_installed',
-        message: "Ajoutez l'application à l'écran d'accueil pour activer les notifications push.",
-      },
-      {
-        state: 'permission_denied',
-        message: 'Les notifications sont bloquées. Autorisez-les dans les réglages du navigateur.',
-      },
-      {
-        state: 'enabled',
-        message: null,
-        checked: true,
-      },
-      {
-        state: 'disabled',
-        message: null,
-        checked: false,
-      },
-    ] as const
-
-    for (const testCase of cases) {
-      webPushToggleState.current = {
-        state: testCase.state,
-        message: testCase.message,
-        notificationsBlockedMessage: null,
-        checked: 'checked' in testCase ? testCase.checked : false,
-        disabled: testCase.state !== 'enabled' && testCase.state !== 'disabled',
-        isPending: false,
-        isError: false,
-        errorMessage: null,
-        onToggle: vi.fn(),
-      }
-
-      const { unmount } = render(
-        createElement(ProfilePage, {
-          onNavigate,
-          onSignOut,
-        }),
-      )
-
-      const pushSwitch = screen.getByRole('switch', { name: 'Notifications push' })
-      expect(pushSwitch.getAttribute('aria-checked')).toBe(
-        'checked' in testCase && testCase.checked ? 'true' : 'false',
-      )
-
-      if (testCase.message) {
-        expect(screen.getByText(testCase.message)).toBeTruthy()
-      }
-
-      unmount()
-    }
-  })
-
-  it('shows blocked message when in-app notifications are disabled', () => {
-    webPushToggleState.current = {
-      state: 'disabled',
-      message: null,
-      notificationsBlockedMessage: "Activez d'abord les notifications.",
-      checked: false,
-      disabled: true,
-      isPending: false,
-      isError: false,
-      errorMessage: null,
-      onToggle: vi.fn(),
-    }
-
-    render(
-      createElement(ProfilePage, {
-        onNavigate,
-        onSignOut,
-      }),
-    )
-
-    expect(screen.getByText("Activez d'abord les notifications.")).toBeTruthy()
   })
 
   it('hides management section when permission hints deny access', () => {
@@ -960,18 +844,5 @@ describe('ProfilePage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Changer d'établissement/i }))
     expect(onNavigate).toHaveBeenCalledWith('/general/switch-establishment')
-  })
-
-  it('shows install app card and navigates to install guide', () => {
-    render(
-      createElement(ProfilePage, {
-        onNavigate,
-        onSignOut,
-      }),
-    )
-
-    expect(screen.getByRole('button', { name: /Installer l'application/i })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: /Installer l'application/i }))
-    expect(onNavigate).toHaveBeenCalledWith('/install-app')
   })
 })

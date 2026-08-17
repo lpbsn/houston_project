@@ -37,7 +37,6 @@ const OPERATIONAL_STATIC_PATHS = new Set<string>([
   '/chat',
   '/general',
   '/general/switch-establishment',
-  '/install-app',
   '/team',
   '/team/invite',
   '/action-plans',
@@ -70,7 +69,7 @@ const ACTION_PLAN_TERRAIN_PATHS = new Set<string>(['/action-plans'])
 
 const TEAM_TERRAIN_PATHS = new Set<string>(['/team', '/team/invite'])
 
-const PROFILE_TERRAIN_PATHS = new Set<string>(['/general/switch-establishment', '/install-app'])
+const PROFILE_TERRAIN_PATHS = new Set<string>(['/general/switch-establishment'])
 
 const NOTIFICATIONS_TERRAIN_PATHS = new Set<string>(['/notifications-center'])
 
@@ -364,16 +363,6 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
     }
   }
 
-  if (route.kind === 'static' && route.path === '/install-app') {
-    return {
-      topbarVariant: 'detail',
-      hideTopbar: true,
-      showBottomNav: false,
-      desktopActivePath: '/general',
-      mainScroll: 'auto',
-    }
-  }
-
   if (route.kind === 'static' && route.path === '/action-plans') {
     return {
       topbarVariant: 'detail',
@@ -517,8 +506,6 @@ export function getTerrainContentKey(route: AppRoute): string {
         return 'team-invite'
       case '/general/switch-establishment':
         return 'general-switch-establishment'
-      case '/install-app':
-        return 'install-app'
       default:
         break
     }

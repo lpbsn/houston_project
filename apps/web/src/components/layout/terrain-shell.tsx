@@ -19,7 +19,6 @@ import { cn } from '@/lib/utils'
 type TerrainShellProps = PropsWithChildren<{
   contentKey: string
   topbar: ReactNode
-  updateBanner?: ReactNode
   showBottomNav: boolean
   activeNavPath?: TerrainNavPath
   bootstrap?: BootstrapResponse | null
@@ -33,7 +32,6 @@ type TerrainShellProps = PropsWithChildren<{
 export function TerrainShell({
   contentKey,
   topbar,
-  updateBanner,
   showBottomNav,
   activeNavPath,
   bootstrap,
@@ -68,7 +66,6 @@ export function TerrainShell({
           <SuccessToastHost />
         </div>
         <div className="shrink-0">{topbar}</div>
-        {updateBanner ? <div className="shrink-0">{updateBanner}</div> : null}
         <NetworkStatusBanner isOnline={isOnline} />
         {isOnline ? (
           <OperationalReconnectBanner status={operationalConnectionStatus} />
