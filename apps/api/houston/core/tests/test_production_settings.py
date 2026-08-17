@@ -3,12 +3,11 @@ from __future__ import annotations
 import importlib
 
 import pytest
+from config.settings import HOUSTON_NATIVE_WEBVIEW_ORIGINS, csrf_trusted_origins_from_client_origins
 from django.core.management import call_command
 from django.core.management.base import SystemCheckError
 from django.test import override_settings
 from rest_framework.test import APIClient
-
-from config.settings import HOUSTON_NATIVE_WEBVIEW_ORIGINS, csrf_trusted_origins_from_client_origins
 
 VALID_PRODUCTION_OVERRIDES = {
     "DEBUG": False,

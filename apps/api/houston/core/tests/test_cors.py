@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import pytest
-from rest_framework.test import APIClient
-
 from config.settings import HOUSTON_NATIVE_WEBVIEW_ORIGINS
+from rest_framework.test import APIClient
 
 pytestmark = pytest.mark.django_db
 
