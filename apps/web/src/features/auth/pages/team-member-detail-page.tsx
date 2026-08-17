@@ -336,7 +336,7 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="shrink-0 border-b border-[#E8E6DF] bg-white px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+      <header className="shrink-0 border-b border-[#E8E6DF] bg-white px-4 pb-3 pt-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <Button

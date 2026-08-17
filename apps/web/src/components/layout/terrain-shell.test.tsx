@@ -124,6 +124,20 @@ describe('TerrainShell', () => {
     expect(main.className).toContain('overflow-y-auto')
   })
 
+  it('owns top safe-area on main only when the topbar is absent', () => {
+    const { unmount } = renderTerrainShell('auto', { topbar: null })
+
+    expect(screen.getByRole('main').className).toContain(
+      'pt-[env(safe-area-inset-top)]',
+    )
+    unmount()
+
+    renderTerrainShell('auto')
+    expect(screen.getByRole('main').className).not.toContain(
+      'pt-[env(safe-area-inset-top)]',
+    )
+  })
+
   it('renders one shared topbar and a desktop sidebar from shared navigation', () => {
     renderTerrainShell('auto', {
       bootstrap: bootstrap([membership({ role: 'manager' })]),
