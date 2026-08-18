@@ -1,9 +1,9 @@
 # Spore — Roadmap Web + Capacitor
 
 Status: authoritative  
-Last reviewed: 2026-08-17
+Last reviewed: 2026-08-18
 
-Référence d’exécution pour les agents Cursor. **Capacitor Lots 1–5 are done.** Next is **Capacitor Lot 6** (lifecycle / network / realtime). This document frames the remaining lots; it does not prescribe implementation.
+Référence d’exécution pour les agents Cursor. **Capacitor Lots 1–5 are done.** Next is **Capacitor Lot 6** (lifecycle / network / realtime). After Lot 6, a framing checkpoint **Offline capture terrain** precedes Lot 7. This document frames the remaining lots; it does not prescribe implementation.
 
 These **Capacitor Lots** (1–11) are distinct from product/domain lots (taxonomy Lot 5, test Lot 4 helpers, product Lot 11 stabilization). Write **Capacitor Lot N** when referring to this roadmap.
 
@@ -33,7 +33,11 @@ Deux runtimes, un seul arbre de sources :
 | **Web** | Navigateur desktop et mobile | Build classique, sans service worker ni manifeste PWA comme socle |
 | **Native** | iOS et Android via Capacitor | Shell natif, distribution App Store / Play Store |
 
-L’application reste **online-first**. Ne pas introduire d’architecture offline-first sans besoin métier explicite.
+L’application reste **online-first**. Spore est destiné à des équipes terrain pouvant travailler ponctuellement dans des chambres froides, parkings, caves ou autres zones à connectivité faible ou intermittente. Perdre une saisie terrain critique à cause d’une coupure réseau n’est pas acceptable.
+
+Cela n’implique pas un **offline-first généralisé** : pas de réplication locale complète de l’application, pas de cache durable généralisé, pas de synchronisation universelle de toutes les mutations.
+
+En revanche, une capacité **ciblée d’offline capture** est une possibilité légitime pour les workflows terrain critiques : conserver localement une saisie ou un média lorsqu’elle ne peut pas être envoyée, puis la synchroniser au retour du réseau. Le stockage, l’idempotence, le rejeu, les médias et l’UX se cadrent à partir des workflows réels — pas d’architecture imposée à l’avance (file de mutations TanStack ou autre).
 
 ## Besoins fonctionnels vs implémentation PWA actuelle
 
@@ -73,7 +77,7 @@ Chaque lot est un chantier séparé. Un agent qui ouvre un lot doit :
 
 Les fichiers, interfaces, plugins Capacitor, librairies et migrations se décident **au début du lot**, après inspection — pas dans cette roadmap.
 
-Ordre des lots : strictement séquentiel. Un lot suivant ne commence que si le précédent est implémenté et validé.
+Ordre des lots : strictement séquentiel. Un lot suivant ne commence que si le précédent est implémenté et validé. Le checkpoint Offline capture terrain (après le lot 6) n’est pas un lot d’implémentation ; il précède le lot 7.
 
 Contexte de migration. Le projet est développé par un seul développeur et n’a aucun utilisateur réel en production. Il n’est donc pas nécessaire de privilégier les stratégies de migration “safe” destinées à préserver temporairement l’existant : compatibilité ascendante, doubles chemins, feature flags, migrations progressives, fallbacks temporaires ou conservation d’anciennes abstractions. Si une rupture ou une refonte rend la cible plus simple, propre et maintenable, elle doit être privilégiée.
 Cela ne signifie pas ignorer la qualité ou la sécurité technique : le repository doit rester fonctionnel et validé à la fin de chaque lot.
@@ -100,7 +104,7 @@ TOUJOURS BESOIN
 
 ## Lots
 
-Capacitor Lot status: **1–5 done** · **6 next** · 7–11 not started.
+Capacitor Lot status: **1–5 done** · **6 next** · checkpoint Offline capture terrain · 7–11 not started.
 
 ### 1. Runtime / API / WebSocket — done
 
@@ -138,9 +142,15 @@ Capacitor Lot status: **1–5 done** · **6 next** · 7–11 not started.
 
 **Objectif.** Adapter l’app aux coupures réseau, au background/resume et aux reconnexions WebSocket.
 
-**Responsabilité.** HTTP, WS opérationnel, WS chat et cache TanStack Query se comportent correctement quand l’app passe en arrière-plan, reprend, ou perd le réseau. Reconnexion et refetch restent online-first : pas de file de mutations hors-ligne. Isoler les hooks de lifecycle runtime des features métier. La détection réseau et les états UI associés ne dépendent pas du service worker — elles restent nécessaires dans les deux runtimes.
+**Responsabilité.** HTTP, WS opérationnel, WS chat et cache TanStack Query se comportent correctement quand l’app passe en arrière-plan, reprend, ou perd le réseau. Reconnexion WS et resynchronisation du cache restent online-first. Ce lot ne met pas en œuvre d’offline capture ; sa conception (lifecycle, état réseau, reconnexion) ne doit pas la rendre inutilement difficile plus tard. Isoler les hooks de lifecycle runtime des features métier. La détection réseau et les états UI associés ne dépendent pas du service worker — elles restent nécessaires dans les deux runtimes.
 
 **Déjà en place (ne pas reconstruire) :** banner `navigator.onLine` et reconnect WS sur `visibilitychange`. Ce lot ajoute le lifecycle natif (`appStateChange` / background-resume), pas une nouvelle détection réseau web.
+
+### Checkpoint — Offline capture terrain
+
+**Objectif.** Cadrer, à partir des workflows réels, lesquels doivent survivre à une connectivité intermittente, et si une implémentation d’offline capture ciblée doit être avancée avant le Push (lot 7).
+
+**Responsabilité.** Ce n’est pas un lot d’implémentation. Examiner les saisies terrain critiques — exemples à instruire, pas des décisions déjà prises : observations, photos/audio, autres captures — et déterminer si une conservation locale puis une synchronisation au retour du réseau est justifiée. Trancher le périmètre produit, pas l’architecture : stockage, idempotence, rejeu, médias et UX se décident seulement si le checkpoint conclut à une implémentation. L’offline-first généralisé reste hors cible.
 
 ### 7. Push multi-channel
 
@@ -162,9 +172,9 @@ Capacitor Lot status: **1–5 done** · **6 next** · 7–11 not started.
 
 ### 10. Résilience terrain
 
-**Objectif.** Renforcer l’app face aux connexions instables, interruptions et saisies importantes, sans basculer en offline-first.
+**Objectif.** Renforcer l’app face aux connexions instables, interruptions et saisies importantes, sans basculer en offline-first généralisé.
 
-**Responsabilité.** Mieux échouer et mieux reprendre : retries, états réseau explicites, protection des saisies critiques (observation, etc.) contre une interruption. Pas de cache durable de données opérationnelles, pas de queue de mutations persistée, pas de mode hors-ligne comme architecture. Si un besoin offline-first apparaît plus tard, ce sera un chantier distinct.
+**Responsabilité.** Mieux échouer et mieux reprendre : retries, états réseau explicites, protection des saisies critiques contre une interruption. Une persistance/reprise ciblée des opérations terrain critiques (offline capture) reste possible si le checkpoint l’a justifiée ; ce lot ne l’interdit pas. Interdit uniquement : offline-first généralisé, réplication locale complète, cache durable généralisé, persistance automatique de toutes les mutations. Si un besoin d’offline-first généralisé apparaît plus tard, ce sera un chantier distinct.
 
 ### 11. DX / CI / release mobile
 
@@ -181,14 +191,15 @@ Capacitor Lot status: **1–5 done** · **6 next** · 7–11 not started.
 - Deux runtimes : **Web classique** + **Native Capacitor** ; un seul arbre React ; online-first.
 - Suppression PWA : retrait SW, manifeste, installabilité — **sans remplacement équivalent**.
 - Build Web : Vite classique : assets fingerprintés/hashés ; politique HTTP configurée au niveau du serveur/CDN pour permettre la revalidation de index.html et le cache long des assets immuables. Aucun mécanisme applicatif spécifique de mise à jour n’est prévu.
-- Cache / offline : pas de shell offline ni de stratégie offline dédiée ; produit online-first.
+- Cache / shell offline PWA : pas de shell offline ni de stratégie offline dédiée héritée du service worker.
+- Offline-first généralisé : hors cible — pas de réplication locale complète, pas de cache durable généralisé, pas de synchronisation universelle de toutes les mutations.
 - Push terrain : **natif iOS/Android** prioritaire ; Web Push mobile hors cible implicite.
 - Suppression PWA ≠ reconstruction systématique des capacités PWA ailleurs.
 
 ### Encore ouvertes
 
 - **Web Push desktop** : à trancher **au lot 7** uniquement si un besoin produit réel émerge (ex. alertes direction sans app native).
-- **Offline-first métier** : chantier distinct, uniquement si un besoin métier explicite apparaît (hors scope actuel).
+- **Offline capture terrain** : capacité ciblée possible pour des workflows critiques ; à cadrer au checkpoint après le lot 6, à partir des workflows réels. Pas d’architecture imposée (file de mutations, stockage, rejeu, médias, UX).
 
 ---
 
@@ -196,7 +207,7 @@ Capacitor Lot status: **1–5 done** · **6 next** · 7–11 not started.
 
 - Deuxième frontend ou app native séparée.
 - PWA comme runtime produit distinct (service worker, manifeste, installabilité navigateur).
-- Architecture offline-first ou synchronisation locale.
+- Offline-first généralisé (réplication locale complète, cache durable généralisé, synchronisation universelle de toutes les mutations).
 - Refonte métier (Observation, Signal, Action Plan, Chat, Analytics).
 - Décisions d’implémentation (fichiers, APIs internes, plugins, stores).
 
