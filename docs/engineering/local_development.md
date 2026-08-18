@@ -8,7 +8,7 @@ Daily workflow for Houston on macOS / OrbStack. Install from scratch: [`INSTALL_
 ## Recommended stack
 
 - **Backend:** Docker (`make up-backend`) — postgres, redis, api, celery
-- **Frontend:** native npm (`make web-dev`) — http://localhost:5173
+- **Frontend:** host npm (`make web-dev`) — http://localhost:5173
 
 Do **not** run `make up` (Docker web on 5173) and `make web-dev` at the same time.
 
