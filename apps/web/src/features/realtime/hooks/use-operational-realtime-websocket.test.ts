@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const issueOperationalRealtimeWsTicket = vi.fn(async () => ({
@@ -48,30 +48,37 @@ class MockWebSocket {
   }
 }
 
-async function connectSocket(result: { current: { connectionStatus: string } }) {
-  await waitFor(() => {
-    expect(MockWebSocket.instances[0]).toBeDefined()
+async function flushMicrotasks() {
+  await act(async () => {
+    await Promise.resolve()
   })
+}
+
+async function connectSocket(result: { current: { connectionStatus: string } }) {
+  await flushMicrotasks()
 
   const socket = MockWebSocket.instances[0]
-  socket?.open()
-  socket?.emitMessage({ type: 'auth.ok' })
+  expect(socket).toBeDefined()
 
-  await waitFor(() => {
-    expect(result.current.connectionStatus).toBe('connected')
+  act(() => {
+    socket?.open()
+    socket?.emitMessage({ type: 'auth.ok' })
   })
 
+  expect(result.current.connectionStatus).toBe('connected')
   return socket
 }
 
 describe('useOperationalRealtimeWebSocket', () => {
   beforeEach(() => {
+    vi.useFakeTimers()
     MockWebSocket.instances = []
     issueOperationalRealtimeWsTicket.mockClear()
     vi.stubGlobal('WebSocket', MockWebSocket as unknown as typeof WebSocket)
   })
 
   afterEach(() => {
+    cleanup()
     vi.useRealTimers()
     vi.unstubAllGlobals()
     vi.unstubAllEnvs()
@@ -88,24 +95,24 @@ describe('useOperationalRealtimeWebSocket', () => {
       }),
     )
 
-    await waitFor(() => {
-      expect(issueOperationalRealtimeWsTicket).toHaveBeenCalledWith('est-1')
-    })
+    await flushMicrotasks()
+
+    expect(issueOperationalRealtimeWsTicket).toHaveBeenCalledWith('est-1')
 
     const socket = MockWebSocket.instances[0]
     expect(socket?.url).toContain('/ws/v1/establishments/est-1/realtime/')
     expect(socket?.readyState).toBe(MockWebSocket.CONNECTING)
-    socket?.open()
-
-    await waitFor(() => {
-      expect(socket?.sent[0]).toContain('ws-ticket-1')
+    act(() => {
+      socket?.open()
     })
 
-    socket?.emitMessage({ type: 'auth.ok' })
+    expect(socket?.sent[0]).toContain('ws-ticket-1')
 
-    await waitFor(() => {
-      expect(result.current.connectionStatus).toBe('connected')
+    act(() => {
+      socket?.emitMessage({ type: 'auth.ok' })
     })
+
+    expect(result.current.connectionStatus).toBe('connected')
   })
 
   it('opens the websocket against the configured API host', async () => {
@@ -118,9 +125,7 @@ describe('useOperationalRealtimeWebSocket', () => {
       }),
     )
 
-    await waitFor(() => {
-      expect(MockWebSocket.instances[0]).toBeDefined()
-    })
+    await flushMicrotasks()
 
     expect(MockWebSocket.instances[0]?.url).toBe(
       'ws://localhost:8000/ws/v1/establishments/est-1/realtime/',
@@ -135,24 +140,22 @@ describe('useOperationalRealtimeWebSocket', () => {
       }),
     )
 
-    await waitFor(() => {
-      expect(MockWebSocket.instances[0]).toBeDefined()
-    })
+    await flushMicrotasks()
 
     const socket = MockWebSocket.instances[0]
-    socket?.open()
-
-    await waitFor(() => {
-      expect(socket?.sent[0]).toContain('ws-ticket-1')
+    expect(socket).toBeDefined()
+    act(() => {
+      socket?.open()
     })
 
-    await waitFor(
-      () => {
-        expect(result.current.connectionStatus).toBe('reconnecting')
-      },
-      { timeout: 6_000 },
-    )
-  }, 10_000)
+    expect(socket?.sent[0]).toContain('ws-ticket-1')
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000)
+    })
+
+    expect(result.current.connectionStatus).toBe('reconnecting')
+  })
 
   it('ignores stale socket onclose without breaking the active connection', async () => {
     const { result } = renderHook(() =>
@@ -162,28 +165,30 @@ describe('useOperationalRealtimeWebSocket', () => {
       }),
     )
 
-    await waitFor(() => {
-      expect(MockWebSocket.instances[0]).toBeDefined()
-      expect(result.current.connectionStatus).toBe('connecting')
-    })
+    await flushMicrotasks()
+
+    expect(result.current.connectionStatus).toBe('connecting')
 
     const staleSocket = MockWebSocket.instances[0]
+    expect(staleSocket).toBeDefined()
 
-    await result.current.reconnect()
-
-    await waitFor(() => {
-      expect(MockWebSocket.instances[1]).toBeDefined()
+    await act(async () => {
+      await result.current.reconnect()
     })
+
+    expect(MockWebSocket.instances[1]).toBeDefined()
 
     const activeSocket = MockWebSocket.instances[1]
-    activeSocket?.open()
-    activeSocket?.emitMessage({ type: 'auth.ok' })
-
-    await waitFor(() => {
-      expect(result.current.connectionStatus).toBe('connected')
+    act(() => {
+      activeSocket?.open()
+      activeSocket?.emitMessage({ type: 'auth.ok' })
     })
 
-    staleSocket?.onclose?.({ code: 4408, reason: 'auth_timeout', wasClean: true } as CloseEvent)
+    expect(result.current.connectionStatus).toBe('connected')
+
+    act(() => {
+      staleSocket?.onclose?.({ code: 4408, reason: 'auth_timeout', wasClean: true } as CloseEvent)
+    })
 
     expect(result.current.connectionStatus).toBe('connected')
   })
@@ -197,11 +202,11 @@ describe('useOperationalRealtimeWebSocket', () => {
     )
 
     const socket = await connectSocket(result)
-    socket?.close()
-
-    await waitFor(() => {
-      expect(result.current.connectionStatus).toBe('reconnecting')
+    act(() => {
+      socket?.close()
     })
+
+    expect(result.current.connectionStatus).toBe('reconnecting')
 
     const callsBefore = issueOperationalRealtimeWsTicket.mock.calls.length
 
@@ -209,11 +214,13 @@ describe('useOperationalRealtimeWebSocket', () => {
       configurable: true,
       value: 'visible',
     })
-    document.dispatchEvent(new Event('visibilitychange'))
-
-    await waitFor(() => {
-      expect(issueOperationalRealtimeWsTicket.mock.calls.length).toBeGreaterThan(callsBefore)
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'))
     })
+
+    await flushMicrotasks()
+
+    expect(issueOperationalRealtimeWsTicket.mock.calls.length).toBeGreaterThan(callsBefore)
   })
 
   it('reconnects on window online when disconnected', async () => {
@@ -225,18 +232,20 @@ describe('useOperationalRealtimeWebSocket', () => {
     )
 
     const socket = await connectSocket(result)
-    socket?.close()
-
-    await waitFor(() => {
-      expect(result.current.connectionStatus).toBe('reconnecting')
+    act(() => {
+      socket?.close()
     })
+
+    expect(result.current.connectionStatus).toBe('reconnecting')
 
     const callsBefore = issueOperationalRealtimeWsTicket.mock.calls.length
-    window.dispatchEvent(new Event('online'))
-
-    await waitFor(() => {
-      expect(issueOperationalRealtimeWsTicket.mock.calls.length).toBeGreaterThan(callsBefore)
+    act(() => {
+      window.dispatchEvent(new Event('online'))
     })
+
+    await flushMicrotasks()
+
+    expect(issueOperationalRealtimeWsTicket.mock.calls.length).toBeGreaterThan(callsBefore)
   })
 
   it('calls onReconnect on second auth.ok after unplanned close', async () => {
@@ -253,23 +262,24 @@ describe('useOperationalRealtimeWebSocket', () => {
     const socket = await connectSocket(result)
     expect(onReconnect).not.toHaveBeenCalled()
 
-    socket?.close()
+    act(() => {
+      socket?.close()
+    })
 
-    await waitFor(
-      () => {
-        expect(issueOperationalRealtimeWsTicket).toHaveBeenCalledTimes(2)
-        expect(MockWebSocket.instances[1]).toBeDefined()
-      },
-      { timeout: 3_000 },
-    )
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000)
+    })
+
+    expect(issueOperationalRealtimeWsTicket).toHaveBeenCalledTimes(2)
+    expect(MockWebSocket.instances[1]).toBeDefined()
 
     const socket2 = MockWebSocket.instances[1]
-    socket2?.open()
-    socket2?.emitMessage({ type: 'auth.ok' })
-
-    await waitFor(() => {
-      expect(onReconnect).toHaveBeenCalledTimes(1)
-      expect(result.current.connectionStatus).toBe('connected')
+    act(() => {
+      socket2?.open()
+      socket2?.emitMessage({ type: 'auth.ok' })
     })
+
+    expect(onReconnect).toHaveBeenCalledTimes(1)
+    expect(result.current.connectionStatus).toBe('connected')
   })
 })
