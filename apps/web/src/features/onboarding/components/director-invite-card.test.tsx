@@ -3,7 +3,7 @@
 import { createElement } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { DirectorInviteCard } from './director-invite-card'
 import type { ActivationSummaryResponse } from '@/features/onboarding/types'
@@ -54,6 +54,10 @@ function renderDirectorInviteCard() {
     ),
   )
 }
+
+beforeEach(() => {
+  vi.stubEnv('VITE_PUBLIC_APP_URL', '')
+})
 
 afterEach(() => {
   cleanup()

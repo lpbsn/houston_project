@@ -135,6 +135,7 @@ beforeEach(() => {
   inviteMembership.mockReset()
   invalidateMembershipListQueries.mockReset()
   invalidateMembershipListQueries.mockResolvedValue(undefined)
+  vi.stubEnv('VITE_PUBLIC_APP_URL', '')
 })
 
 afterEach(() => {
