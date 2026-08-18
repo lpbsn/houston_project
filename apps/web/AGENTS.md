@@ -4,9 +4,13 @@ Applies to `apps/web/**`.
 
 ## Stack
 
-React, TypeScript, Vite, Tailwind, shadcn/ui, TanStack Query, Framer Motion. Zustand is allowed for local UI state but **not currently used** in `apps/web/src` — prefer React state until needed.
+React, TypeScript, Vite, Tailwind, shadcn/ui, TanStack Query, Framer Motion.
+
+One source tree, two Vite pipelines: Web and Native/Capacitor. Not a PWA — do not reintroduce a service worker or web app manifest.
 
 Do not upgrade frontend framework versions unless explicitly requested.
+
+Architecture reference: [`docs/engineering/frontend_architecture.md`](../../docs/engineering/frontend_architecture.md).
 
 ## Ownership
 
@@ -14,123 +18,60 @@ Do not upgrade frontend framework versions unless explicitly requested.
 - Backend owns business rules, permissions, lifecycle, visibility, and validation.
 - OpenAPI/generated types own API data contracts.
 - TanStack Query owns server state.
-- React `useState` / context for local UI state (Zustand optional, not in use today).
+- React state owns local UI (drawers, tabs, modals). Do not persist server-owned data in client stores.
 
-Architecture map: [`docs/engineering/frontend_architecture.md`](../../docs/engineering/frontend_architecture.md).
-
-Do not move business workflows to React.
+Do not move business workflows to React. Frontend permission checks are UX only; unauthorized data must not be fetched and hidden locally.
 
 ## API flow
 
-Use:
+generated client → API wrapper/hook → TanStack Query → component
 
-generated client -> API wrapper/hook -> TanStack Query -> component
+Do not call `fetch` in feature components, duplicate or hand-edit generated API types, or use endpoints absent from OpenAPI. If generated types are wrong, fix the backend schema and regenerate.
 
-Do not:
-- call `fetch` directly in feature components
-- manually duplicate generated API types
-- manually edit generated API files
-- use endpoints not present in OpenAPI
-- store server-owned data in Zustand
+HTTP and WebSocket hosts are resolved only in [`apps/web/src/lib/runtime.ts`](src/lib/runtime.ts).
 
-If generated types are wrong, fix backend schema and regenerate.
+## Surfaces
 
-## Mobile-first
+Identify the actual product surface and shell from the repository before changing UI. Mobile-first is not mobile-only; do not force phone-style layouts onto desktop-oriented surfaces. Reuse existing shells. No hover-only critical actions.
 
-Houston is phone-first for field teams.
+Current operational patterns (not a closed taxonomy — inspect routing and shells):
 
-- build mobile layout first
-- no desktop-only or hover-only UX
-- no horizontal page scroll
-- critical actions must be reachable on phone
-- loading, empty, error, unauthorized, and offline states must be explicit
-- no casual caching of authenticated operational data
-- no durable offline mutation queue unless explicitly implemented
-- no persistent storage of sensitive business data
+- Terrain operational (`TerrainShell`, bottom-nav hubs): mobile-primary, desktop-supported
+- Analytics (`TerrainShell`, not in mobile bottom nav): desktop-primary, remain coherent on small screens
+- Organization / admin / config / onboarding / auth (`AppShell`): desktop-primary, existing shell conventions
 
-## State
+Public landing is a separate marketing tree and must not inherit Terrain phone-shell rules.
 
-Use TanStack Query for reads, mutations, cache, invalidation, and server-derived loading/error state.
+Native keyboard, safe-area, and Web vs Native auth diagnosis: Skill `native-runtime-debug`.
 
-Use React state for local UI (drawers, tabs, modals). Zustand is optional per stack docs but not imported in `src/` today.
+## State and cache
 
-Forbidden in client persistent stores (Zustand if adopted later):
-- feed data
-- permissions
-- workflow statuses
-- backend-derived visibility
-- API response caches
+TanStack Query for reads, mutations, cache, invalidation, and server-derived loading/error. React state for local UI.
 
-TanStack Query cache isolation: `auth` is the only root preserved on establishment switch, login, and registration. Never store operational, tenant-scoped, workspace, onboarding, reporting, or feature data under `auth`. Logout must clear the full query cache; login, registration, and establishment switch must purge all non-auth queries before hydrating bootstrap.
+`auth` is the only query root that may survive login, registration, or establishment switch. Never store operational or tenant-scoped data under `auth`. Logout clears the full query cache; login, registration, and establishment switch purge non-auth queries before hydrating bootstrap. Implementation: `@/lib/query-invalidation`.
 
-Establishment-scoped cache purge (`@/lib/query-invalidation`):
-- Logout / invalidated session: `clearAuthenticatedQueryCache` — `cancelQueries()` then `queryClient.clear()`.
-- Login / registration: `purgeNonAuthQueries` — `cancelQueries` then `removeQueries` with predicate `queryKey[0] !== 'auth'`, then rewrite `['auth', 'bootstrap']`.
-- Establishment switch: same as login/registration — `purgeNonAuthQueries`, then rewrite `['auth', 'bootstrap']`.
-- Default-safe: any non-`auth` query root is treated as tenant-scoped and removed automatically — no manual whitelist to update per feature.
-- Only queries under the `auth` root may survive an establishment switch (today: bootstrap). Do not store operational data under `auth`.
+Do not casually cache authenticated operational data in durable client storage. No durable offline mutation queue unless explicitly implemented. Access tokens stay in memory; do not put refresh credentials in `localStorage` / `sessionStorage`.
 
-## Components
+## Components and realtime
 
-Components may render UI, handle interactions, call focused hooks, and display states.
+Components may render UI, handle interactions, call focused hooks, and display loading/empty/error/unauthorized/offline states when relevant. They must not fetch directly, compute real permissions, encode lifecycle transitions, or duplicate backend state.
 
-Components must not:
-- perform direct fetch calls
-- compute real permissions
-- encode lifecycle transitions
-- orchestrate complex API workflows
-- duplicate backend state
+Generic realtime is invalidation or a safe Query patch. Backend remains source of truth. Chat is the exception: dedicated WebSocket for messages; REST remains source for history, structure, and permissions; the ws-ticket is REST-issued and not persisted.
 
-## Permissions
+Use existing shadcn/ui and domain components first. Prefer readable Tailwind. Use Framer Motion sparingly.
 
-Frontend may display backend permission hints.
-Frontend must not enforce security.
-Unauthorized data must not be sent and hidden locally.
+## Tests and commands
 
-## Realtime
+Procedure: [`docs/engineering/testing.md`](../../docs/engineering/testing.md).
 
-Generic realtime is invalidation/refetch only.
-Backend remains source of truth.
-On realtime event, invalidate or safely patch TanStack Query.
-
-Chat V1 exception:
-- WebSocket sends messages
-- REST remains source for history/structure/permissions
-- ws-ticket is REST-issued and not persisted
-
-## UI conventions
-
-Use shadcn/ui primitives and existing Houston domain components first.
-Prefer simple, readable Tailwind.
-Use Framer Motion sparingly; operational clarity beats polish.
-Respect accessibility basics: labels, accessible icon buttons, reduced motion.
-
-## Tests
-
-Conventions: [`docs/engineering/testing.md`](../../docs/engineering/testing.md) · Cursor: [`.cursor/rules/40-testing.mdc`](../../.cursor/rules/40-testing.mdc).
-
-Test **product risk at the owning layer** — check lib/hook tests before adding page tests:
-
-| Layer | Owns |
-|-------|------|
-| `features/*/lib/*.test.ts` | Validation, cache keys, navigation derivation, RBAC display hints (Node) |
-| Hooks / mutations | TanStack invalidation and errors with real `QueryClient` (jsdom) |
-| Pages / auth provider | Wiring risk only: cache purge, guards, blocked submit — not layout or copy |
-
-Do not: assert Tailwind/shadcn classes or French copy unless exported as a lib rule; duplicate query-invalidation rules already in `query-invalidation.test.ts`; mock away invalidation under test.
-
-Run targeted: `cd apps/web && npm test -- path/to/file.test.ts`.
-
-## Commands
+Test product risk at the owning layer: lib (Node) → hooks/mutations with a real `QueryClient` → page tests only for wiring risk. Do not assert Tailwind/shadcn classes or French copy unless exported as a lib rule.
 
 Run from repo root unless needed:
 
-- typecheck: `cd apps/web && npm run typecheck`
-- lint: `cd apps/web && npm run lint`
-- tests: `cd apps/web && npm test`
-- build: `cd apps/web && npm run build`
-- native build: `cd apps/web && npm run build:native` (requires `VITE_API_BASE_URL` and `VITE_PUBLIC_APP_URL` as an absolute http(s) origin)
-- Capacitor sync: `cd apps/web && npm run cap:sync`
-- Native Vite compile-time pin (no auth): `cd apps/web && npm run dev:native`
-
-Use project-defined API generation command if it exists. Do not invent missing commands.
+- `cd apps/web && npm run typecheck`
+- `cd apps/web && npm run lint`
+- `cd apps/web && npm test -- path/to/file.test.ts`
+- `cd apps/web && npm run build`
+- `cd apps/web && npm run build:native` (requires `VITE_API_BASE_URL` and `VITE_PUBLIC_APP_URL`)
+- `make web-cap-sync` / `make web-dev-native` (`web-dev-native` is a compile-time runtime pin, not authentication)
+- `make web-api-generate` after `make schema`

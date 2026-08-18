@@ -1,0 +1,26 @@
+---
+description: Identify the product surface and shell before changing UI. Mobile-first is not mobile-only.
+globs:
+  - "apps/web/src/components/**/*.tsx"
+  - "apps/web/src/features/**/*.tsx"
+  - "apps/web/src/styles/**/*.css"
+  - "apps/web/src/App.tsx"
+alwaysApply: false
+---
+
+# Product surfaces
+
+1. Identify the **actual** product surface and shell from the repository (routing, `usesTerrainShell`, `TerrainShell` vs `AppShell`, feature tree). Do not assume a fixed enum.
+2. Reuse that surface’s existing shell and layout conventions. One codebase. No hover-only critical actions. List unvalidated viewports explicitly.
+
+Current operational patterns (not a closed taxonomy):
+
+- **Terrain operational** (`TerrainShell`, bottom-nav hubs): mobile-primary, desktop-supported.
+- **Analytics** (`TerrainShell`, not in mobile bottom nav): desktop-primary; remain coherent on small screens.
+- **Organization / admin / config / onboarding / auth** (`AppShell`): desktop-primary; do not force `TerrainShell` or phone-column layouts.
+
+Mobile-first must not become mobile-only, and must not force phone-style layouts onto desktop-oriented surfaces.
+
+Public landing (`features/landing`) is a separate marketing tree — follow its conventions; do not apply Terrain phone-shell rules.
+
+Native keyboard / safe-area diagnosis is the `native-runtime-debug` Skill, not this Rule.

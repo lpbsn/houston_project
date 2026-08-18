@@ -79,4 +79,4 @@ make web-api-generate   # after make schema
 
 ## Agent entry
 
-[`apps/web/AGENTS.md`](../../apps/web/AGENTS.md) — ownership rules and cache purge policy.
+[`apps/web/AGENTS.md`](../../apps/web/AGENTS.md) — ownership, cache isolation, and surface identification.

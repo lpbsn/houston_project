@@ -5,6 +5,7 @@
 	backend-lint backend-migrations-check backend-schema backend-schema-check backend-deploy-check backend-test backend-check backend-rebuild \
 	web-install web-dev web-dev-native web-dev-landing web-build web-build-native web-build-native-check web-cap-sync web-build-landing web-typecheck web-lint web-test web-api-generate web-api-generate-check web-check \
 	verify local-check docker-verify-security infra-check \
+	docs-check agent-config-check agent-config-sync \
 	import-catalog catalog-check \
 	preflight-organizational-owners repair-organizational-owners \
 	bootstrap-dev reset-dev-db assert-local-dev-db clean-operational-test-data
@@ -258,3 +259,12 @@ web-check: web-test web-typecheck web-build web-build-native-check web-api-gener
 local-check: backend-check web-check
 
 verify: local-check
+
+docs-check:
+	python3 scripts/docs_check.py && python3 scripts/agent_config_check.py
+
+agent-config-check:
+	python3 scripts/agent_config_check.py
+
+agent-config-sync:
+	python3 scripts/agent_config_check.py --sync

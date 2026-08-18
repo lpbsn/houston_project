@@ -114,9 +114,15 @@ jobs:
                 frontend=true
                 matched=true
                 ;;
-              docs/*|scripts/docs_check.py|scripts/agent_config_check.py|.cursor/*|AGENTS.md)
+              docs/*|scripts/docs_check.py|scripts/agent_config_check.py|.cursor/*|.agents/*|AGENTS.md|.cursorignore|.cursorindexingignore)
                 docs=true
                 matched=true
+                ;;
+            esac
+
+            case "$path" in
+              AGENTS.md|*AGENTS.md)
+                docs=true
                 ;;
             esac
 

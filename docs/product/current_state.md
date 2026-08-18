@@ -6,7 +6,7 @@ Last reviewed: 2026-08-17
 ## Branding
 
 - **Houston** — repository name, backend modules, technical docs, operator workflows.
-- **Spore** — mobile UI branding (`index.html`, favicon / apple-touch-icon, `theme-color`).
+- **Spore** — product name (UI, Capacitor app, landing, emails).
 
 ## Operational loop (live)
 

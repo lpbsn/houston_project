@@ -18,6 +18,7 @@ SCAN_ROOTS = [
     ROOT / "docs",
     ROOT / ".cursor/rules",
     ROOT / ".cursor/commands",
+    ROOT / ".cursor/skills",
     ROOT / "infra/railway/README.md",
 ]
 

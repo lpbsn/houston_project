@@ -10,124 +10,69 @@ Do not upgrade backend framework versions unless explicitly requested.
 
 ## Ownership
 
-- `services.py`: writes, workflows, lifecycle transitions, event publication.
-- `selectors.py`: reusable reads, feeds, permission-scoped lists.
-- `permissions.py`: authorization helpers and RBAC checks.
-- `api/views.py`: HTTP orchestration only.
-- `api/serializers.py`: request validation and response representation only.
-- `models.py`: fields, constraints, indexes, simple invariants.
+- Domain **services** modules: writes, workflows, lifecycle transitions, event publication. Some domains split `*_services.py` rather than a single `services.py`.
+- **selectors**: reusable reads, feeds, permission-scoped lists.
+- **permissions**: authorization helpers and RBAC checks.
+- `api/` views: HTTP orchestration only.
+- `api/` serializers: request validation and response representation only.
+- **models**: fields, constraints, indexes, simple invariants.
+- `core/`: shared infrastructure only — no product workflows.
 
 Do not put business workflows in views, serializers, models, Django signals, Celery tasks, or `core/`.
 
-### Observation → AI → Signal pipeline
+### Observation → AI → Signal
 
-Current ownership (intentional; do not move without explicit refactor):
+App-level ownership (inspect current services and tasks before changing it):
 
-| App | Owns |
-|-----|------|
-| `observations` | Intake (`submit_observation`), `ObservationProcessing` state, processing-status read API |
-| `ai` | Provider adapter, prompt/input build, Pydantic parse, `AIUsageLog` metadata |
-| `signals` | Celery task entry (`process_observation_task`), `run_observation_pipeline` orchestration, validation, `apply_pipeline_output`, signal create/aggregate, stuck/orphan recovery sweeps |
+- `observations` — intake, processing status, enqueue after commit
+- `ai` — provider adapter, prompt/input, structured parse, usage metadata (not a public HTTP contract)
+- `signals` — pipeline orchestration, signal create/aggregate, recovery sweeps
 
-`observations/services.py` enqueues `signals.tasks.process_observation_task` on commit after submit — cross-app coupling by design in MVP.
+Cross-app enqueue after submit is intentional. Exact function names belong in code.
 
 ## Business rules
 
-Backend owns:
-- permissions
-- establishment isolation
-- membership status/scope
-- lifecycle transitions
-- feed visibility/sorting
-- API contracts
+Backend owns permissions, establishment isolation, membership status/scope, lifecycle transitions, feed visibility/sorting, and API contracts. Frontend hints are UX only.
 
-Frontend hints are UX only.
+## Events, async, realtime
 
-## Event-driven
+Persist valid business state first. Side effects after commit. Consumers must be retry-safe and reasonably idempotent. Events are traces and triggers, not business truth. Do not invent a separate event bus.
 
-For significant state changes:
-- persist valid business state first
-- emit minimal non-sensitive event after valid transition
-- prefer after-commit behavior when transaction safety matters
-- consumers handle notification, realtime, audit, analytics, async jobs
-- consumers must be retry-safe/idempotent where applicable
+Celery: pass durable IDs, reload from the database, handle missing records, bound retries. Do not pass raw Observation text or other sensitive payloads as task arguments.
 
-Events are traces and triggers, not business source of truth.
+Redis: cache, rate limit, Channels, and Celery infra only — never business or authorization truth.
 
-**Runtime side effects today:** post-commit hubs in `houston/realtime/broadcast.py` and `houston/notifications/scheduling.py` only — do not invent a separate event bus.
+Channels: consumers stay thin; validate user, membership, and establishment access. Generic realtime sends invalidation only. Chat uses a dedicated WebSocket protocol and a REST-issued ticket.
 
-## Transactions
+AI output is untrusted external input. Keep business invariants in backend code. Minimize provider payloads. Distinguish provider failure, invalid output, and business validation failure.
 
-Use `transaction.atomic` for multi-write workflows, lifecycle transitions with side effects, aggregation, permissions-relevant writes, and event publication.
+## Transactions and schema
 
-Do not wrap simple selectors in transactions.
+Use `transaction.atomic` for multi-write workflows, lifecycle transitions with side effects, aggregation, permissions-relevant writes, and event publication. Do not wrap simple selectors.
 
-## API / OpenAPI
+Design schema changes for integrity and realistic growth. Preserve existing data only when current data or deployment constraints require it; otherwise prefer the simplest direct migration compatible with actual constraints.
 
-If API shape changes:
-- update serializer/view/service tests
-- update schema using project command
-- regenerate frontend types using project command
-- update frontend callers
+## API contracts
 
-Do not invent missing schema/type generation commands. Report missing commands.
+The HTTP `api/` package is the usual owner of external request/response shape. Services, models, or permissions can still change external semantics. If they do, consider the full contract chain regardless of which file triggered the change. Do not regenerate schema or frontend types when the external contract is unchanged. Do not invent missing generation commands.
 
-## Async
-
-Celery:
-- pass IDs only
-- reload records from DB
-- handle missing records
-- keep tasks idempotent when retryable
-- do not pass raw Observation text or sensitive payloads
-
-Redis:
-- cache/rate limit/locks/Channels only
-- never business truth or authorization truth
-
-Channels:
-- consumers stay thin
-- validate user, membership, establishment access
-- generic realtime sends invalidation only
-- Chat V1 uses dedicated WS protocol and REST-issued ticket
+Canonical: `make schema` then `make web-api-generate`.
 
 ## Security
 
-Never log or expose:
-- secrets/tokens
-- raw Observation text
-- comments content
-- photo/audio content
-- full AI prompts/outputs
-- sensitive business payloads
+Never log or expose secrets/tokens, raw Observation text, comments content, photo/audio content, full AI prompts/outputs, or other sensitive business payloads.
 
-## Tests
+## Tests and commands
 
-Conventions: [`docs/engineering/testing.md`](../../docs/engineering/testing.md) · Cursor: [`.cursor/rules/40-testing.mdc`](../../.cursor/rules/40-testing.mdc).
+Procedure: [`docs/engineering/testing.md`](../../docs/engineering/testing.md).
 
-Test **product risk at the owning layer** — check existing coverage before adding:
+Test product risk at the owning layer. Check existing coverage before adding. Do not re-prove the same permission rule in unit and API tests. Shared helpers live in `houston/testing/` or domain `tests/helpers.py` — never import from `test_*.py`.
 
-| Layer | Owns |
-|-------|------|
-| `permissions.py` | RBAC combinations not trivially duplicated at API |
-| `services.py` | Transitions, invariants, DB side effects |
-| `selectors.py` | Scoping, filtering, tenant reads |
-| `test_*_api.py` | HTTP status, response shape, CSRF, tenant boundary |
-| Celery / WS / producers | After-commit side effects, idempotence, payload allowlist |
+Run from repo root via Make (Docker stack required):
 
-Do not: re-prove the same permission rule in unit + API; import from `test_*.py`; test Django `_meta` trivia; mark `slow` without justification.
+- `make backend-test ARGS='path -q'`
+- `make backend-lint`
+- `make backend-migrations-check`
+- `make backend-check`
 
-Prefer behavior tests over fragile internal mocks. Run targeted tests via `make backend-test ARGS='path -q'`.
-
-## Commands
-
-Run from repo root via Make (Docker stack required for backend):
-
-- lint: `make backend-lint` (or `make lint`)
-- tests: `make backend-test` (or `make test` — local DB guard only)
-- migrations check: `make backend-migrations-check`
-- full backend gate: `make backend-check`
-
-Do not run `cd apps/api && uv run pytest` natively on the host — use Make targets or `docker compose exec api`.
-
-Use project-defined schema/catalog commands if they exist. Do not invent missing commands.
+Do not run `cd apps/api && uv run pytest` on the host — use Make targets or `docker compose exec api`.
