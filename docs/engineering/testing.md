@@ -155,12 +155,13 @@ cd apps/web && npm run typecheck
 
 - Pure lib helpers: `features/<domain>/lib/*.test.ts` (Node environment)
 - Provider/hook integration: `// @vitest-environment jsdom` + `@testing-library/react`
-- Shared harness: `src/test-utils/` (`createTestQueryClient`, auth mocks, WebSocket mock)
+- Shared harness: `src/test-utils/` exports `createTestQueryClient` only. Auth and WebSocket mocks stay local to the tests that need them.
 
 ### Rules
 
 - Lib tests stay in **Node** (fast, no DOM).
-- Auth provider, WebSocket hooks, and TanStack Query mutations use **jsdom** + test-utils.
+- Auth provider uses **jsdom** (app `queryClient`). TanStack Query mutations use **jsdom** + `createTestQueryClient`. WebSocket hooks use **jsdom** with local mocks.
+- Do not wait on real time for WebSocket auth timeout or reconnect. Use `vi.useFakeTimers()` and `vi.advanceTimersByTimeAsync` in the chat/operational WS hook tests. Presence intervals can use `vi.advanceTimersByTime` (`use-chat-conversation-presence.test.ts`). Do not raise the global `testTimeout` to absorb load.
 - Do not assert exact Tailwind classes, shadcn primitive styling, or French copy unless the string encodes a business rule exported from lib code.
 - Do not add page tests for layout or copy when the rule already lives in lib/hook tests.
 

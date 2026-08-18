@@ -1,3 +1,4 @@
+import { availableParallelism } from 'node:os'
 import { fileURLToPath, URL } from 'node:url'
 
 import tailwindcss from '@tailwindcss/vite'
@@ -6,6 +7,10 @@ import { loadEnv } from 'vite'
 import { defineConfig } from 'vitest/config'
 
 const envDir = fileURLToPath(new URL('../..', import.meta.url))
+
+// Vitest 4.1.8 non-watch default: max(availableParallelism - 1, 1). Cap at 4 so
+// local high-core machines do not oversubscribe jsdom; CI (~3) stays unchanged.
+const defaultVitestWorkers = Math.max(availableParallelism() - 1, 1)
 
 function isAbsoluteHttpOrigin(value: string): boolean {
   try {
@@ -74,6 +79,7 @@ export default defineConfig(({ command, mode }) => {
     test: {
       environment: 'node',
       include: ['src/**/*.{test,spec}.{ts,tsx}'],
+      maxWorkers: Math.min(defaultVitestWorkers, 4),
     },
   }
 })
