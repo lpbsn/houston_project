@@ -342,6 +342,7 @@ export function useChatWebSocket({
         !shouldResumeWsConnection({
           enabled: enabledRef.current,
           resumeBlocked: resumeBlockedRef.current,
+          suspended: suspendedRef.current,
           force,
           isConnected: connectionStatusRef.current === 'connected',
         })

@@ -124,4 +124,55 @@ describe('app lifecycle', () => {
     document.dispatchEvent(new Event('visibilitychange'))
     expect(onBackground).toHaveBeenCalledTimes(1)
   })
+
+  it('leaves web fallback if addListener fails', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    isNativePlatform.mockReturnValue(true)
+    addListener.mockRejectedValue(new Error('plugin'))
+
+    await expect(configureNativeAppLifecycle()).rejects.toThrow('plugin')
+
+    expect(usesNativeAppLifecycle()).toBe(false)
+  })
+
+  it('removes the plugin listener and stays on web fallback if getState fails', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    isNativePlatform.mockReturnValue(true)
+    const remove = vi.fn(async () => undefined)
+    addListener.mockImplementation(async () => ({ remove }))
+    getState.mockRejectedValue(new Error('state'))
+
+    await expect(configureNativeAppLifecycle()).rejects.toThrow('state')
+
+    expect(remove).toHaveBeenCalledTimes(1)
+    expect(usesNativeAppLifecycle()).toBe(false)
+  })
+
+  it('prefers appStateChange received during configuration over a stale snapshot', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    isNativePlatform.mockReturnValue(true)
+    let listener: ((state: { isActive: boolean }) => void) | undefined
+    let resolveState: (value: { isActive: boolean }) => void = () => {}
+    addListener.mockImplementation(async (_event, next) => {
+      listener = next
+      return { remove: async () => undefined }
+    })
+    getState.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveState = resolve
+        }),
+    )
+
+    const configuring = configureNativeAppLifecycle()
+    await vi.waitFor(() => {
+      expect(listener).toBeDefined()
+    })
+    listener?.({ isActive: false })
+    resolveState({ isActive: true })
+    await configuring
+
+    expect(usesNativeAppLifecycle()).toBe(true)
+    expect(getIsAppActive()).toBe(false)
+  })
 })

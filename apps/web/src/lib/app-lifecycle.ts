@@ -79,14 +79,31 @@ export async function configureNativeAppLifecycle() {
   }
 
   const { App } = await import('@capacitor/app')
-  const state = await App.getState()
-  nativeIsActive = state.isActive
-  nativeConfigured = true
+  let latestFromListener: boolean | undefined
+  let handle: { remove: () => Promise<void> } | null = null
 
-  const handle = await App.addListener('appStateChange', ({ isActive }) => {
-    emitNative(isActive)
-  })
-  removeNativeListener = () => handle.remove()
+  try {
+    const pluginHandle = await App.addListener('appStateChange', ({ isActive }) => {
+      if (!nativeConfigured) {
+        latestFromListener = isActive
+        return
+      }
+      emitNative(isActive)
+    })
+    handle = pluginHandle
+    const state = await App.getState()
+    nativeIsActive = latestFromListener ?? state.isActive
+    nativeConfigured = true
+    removeNativeListener = () => pluginHandle.remove()
+  } catch (error) {
+    if (handle) {
+      await handle.remove()
+    }
+    nativeConfigured = false
+    nativeIsActive = true
+    removeNativeListener = null
+    throw error
+  }
 }
 
 export async function resetAppLifecycleForTests() {

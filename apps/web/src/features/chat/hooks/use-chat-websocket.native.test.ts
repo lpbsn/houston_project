@@ -8,9 +8,21 @@ const getState = vi.hoisted(() => vi.fn(async () => ({ isActive: true })))
 const appStateListeners = vi.hoisted(() => ({
   current: [] as Array<(state: { isActive: boolean }) => void>,
 }))
-const addListener = vi.hoisted(() =>
+const addAppListener = vi.hoisted(() =>
   vi.fn(async (_event: string, listener: (state: { isActive: boolean }) => void) => {
     appStateListeners.current.push(listener)
+    return { remove: async () => undefined }
+  }),
+)
+const getStatus = vi.hoisted(() =>
+  vi.fn(async () => ({ connected: true, connectionType: 'wifi' as const })),
+)
+const networkStatusListeners = vi.hoisted(() => ({
+  current: [] as Array<(status: { connected: boolean }) => void>,
+}))
+const addNetworkListener = vi.hoisted(() =>
+  vi.fn(async (_event: string, listener: (status: { connected: boolean }) => void) => {
+    networkStatusListeners.current.push(listener)
     return { remove: async () => undefined }
   }),
 )
@@ -25,7 +37,15 @@ vi.mock('@capacitor/app', () => ({
   App: {
     getState: (...args: unknown[]) => getState(...args),
     addListener: (...args: unknown[]) =>
-      addListener(...(args as [string, (state: { isActive: boolean }) => void])),
+      addAppListener(...(args as [string, (state: { isActive: boolean }) => void])),
+  },
+}))
+
+vi.mock('@capacitor/network', () => ({
+  Network: {
+    getStatus: (...args: unknown[]) => getStatus(...args),
+    addListener: (...args: unknown[]) =>
+      addNetworkListener(...(args as [string, (status: { connected: boolean }) => void])),
   },
 }))
 
@@ -36,6 +56,7 @@ vi.mock('../api', () => ({
 }))
 
 import { configureNativeAppLifecycle, resetAppLifecycleForTests } from '@/lib/app-lifecycle'
+import { configureNativeNetworkStatus, resetNetworkStatusForTests } from '@/lib/network-status'
 
 import { useChatWebSocket } from './use-chat-websocket'
 
@@ -91,27 +112,35 @@ async function connectSocket(result: { current: { connectionStatus: string } }) 
   return socket
 }
 
+async function configureNativeRuntime() {
+  await configureNativeAppLifecycle()
+  await configureNativeNetworkStatus()
+}
+
 describe('useChatWebSocket native lifecycle', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     MockWebSocket.instances = []
     issueChatWsTicket.mockClear()
     appStateListeners.current = []
+    networkStatusListeners.current = []
     vi.stubGlobal('WebSocket', MockWebSocket as unknown as typeof WebSocket)
     vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:8000')
     isNativePlatform.mockReturnValue(true)
   })
 
   afterEach(async () => {
     cleanup()
     await resetAppLifecycleForTests()
+    await resetNetworkStatusForTests()
     vi.useRealTimers()
     vi.unstubAllGlobals()
     vi.unstubAllEnvs()
   })
 
   it('does not resume after access.revoked on native foreground', async () => {
-    await configureNativeAppLifecycle()
+    await configureNativeRuntime()
 
     const { result } = renderHook(() =>
       useChatWebSocket({
@@ -142,7 +171,7 @@ describe('useChatWebSocket native lifecycle', () => {
   })
 
   it('reconnects on native foreground even if the client still thought it was connected', async () => {
-    await configureNativeAppLifecycle()
+    await configureNativeRuntime()
 
     const { result } = renderHook(() =>
       useChatWebSocket({
@@ -175,7 +204,7 @@ describe('useChatWebSocket native lifecycle', () => {
   })
 
   it('does not open a socket or schedule backoff when backgrounded during ticket fetch', async () => {
-    await configureNativeAppLifecycle()
+    await configureNativeRuntime()
 
     let resolveTicket: (value: { ticket: string; expires_in: number }) => void = () => {}
     issueChatWsTicket.mockImplementationOnce(
@@ -212,5 +241,53 @@ describe('useChatWebSocket native lifecycle', () => {
       await vi.advanceTimersByTimeAsync(15_000)
     })
     expect(issueChatWsTicket.mock.calls.length).toBe(1)
+  })
+
+  it('does not resume on native network return while backgrounded', async () => {
+    await configureNativeRuntime()
+
+    const { result } = renderHook(() =>
+      useChatWebSocket({
+        establishmentId: 'est-1',
+        enabled: true,
+      }),
+    )
+    await connectSocket(result)
+    const callsAfterConnect = issueChatWsTicket.mock.calls.length
+
+    act(() => {
+      for (const listener of appStateListeners.current) {
+        listener({ isActive: false })
+      }
+    })
+    act(() => {
+      for (const listener of networkStatusListeners.current) {
+        listener({ connected: false })
+      }
+    })
+    act(() => {
+      for (const listener of networkStatusListeners.current) {
+        listener({ connected: true })
+      }
+    })
+    act(() => {
+      window.dispatchEvent(new Event('online'))
+    })
+    await flushMicrotasks()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000)
+    })
+
+    expect(issueChatWsTicket.mock.calls.length).toBe(callsAfterConnect)
+    expect(MockWebSocket.instances).toHaveLength(1)
+
+    act(() => {
+      for (const listener of appStateListeners.current) {
+        listener({ isActive: true })
+      }
+    })
+    await flushMicrotasks()
+
+    expect(issueChatWsTicket.mock.calls.length).toBeGreaterThan(callsAfterConnect)
   })
 })

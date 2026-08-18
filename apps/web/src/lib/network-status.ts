@@ -108,27 +108,46 @@ export async function configureNativeNetworkStatus() {
   }
 
   const { Network } = await import('@capacitor/network')
-  const status = await Network.getStatus()
-  nativeIsOnline = status.connected
-  nativeConfigured = true
+  let latestFromListener: boolean | undefined
+  let handle: { remove: () => Promise<void> } | null = null
 
-  onlineManager.setEventListener((setOnline) => {
-    setOnline(nativeIsOnline)
-    const onChange = () => {
+  try {
+    const pluginHandle = await Network.addListener('networkStatusChange', (next) => {
+      if (!nativeConfigured) {
+        latestFromListener = next.connected
+        return
+      }
+      nativeIsOnline = next.connected
+      notifyNativeNetworkStatus()
+    })
+    handle = pluginHandle
+    const status = await Network.getStatus()
+    nativeIsOnline = latestFromListener ?? status.connected
+    removeNativeListener = () => pluginHandle.remove()
+    onlineManager.setEventListener((setOnline) => {
       setOnline(nativeIsOnline)
+      const onChange = () => {
+        setOnline(nativeIsOnline)
+      }
+      nativeListeners.add(onChange)
+      return () => {
+        nativeListeners.delete(onChange)
+      }
+    })
+    onlineManager.setOnline(nativeIsOnline)
+    nativeConfigured = true
+  } catch (error) {
+    if (handle) {
+      await handle.remove()
     }
-    nativeListeners.add(onChange)
-    return () => {
-      nativeListeners.delete(onChange)
-    }
-  })
-  onlineManager.setOnline(nativeIsOnline)
-
-  const handle = await Network.addListener('networkStatusChange', (next) => {
-    nativeIsOnline = next.connected
-    notifyNativeNetworkStatus()
-  })
-  removeNativeListener = () => handle.remove()
+    nativeConfigured = false
+    nativeIsOnline = true
+    nativeListeners.clear()
+    removeNativeListener = null
+    restoreDefaultOnlineManagerListener()
+    onlineManager.setOnline(readNavigatorOnline())
+    throw error
+  }
 }
 
 export async function resetNetworkStatusForTests() {

@@ -8,6 +8,7 @@ describe('shouldResumeWsConnection', () => {
       shouldResumeWsConnection({
         enabled: false,
         resumeBlocked: false,
+        suspended: false,
         force: true,
         isConnected: false,
       }),
@@ -19,6 +20,7 @@ describe('shouldResumeWsConnection', () => {
       shouldResumeWsConnection({
         enabled: true,
         resumeBlocked: true,
+        suspended: false,
         force: true,
         isConnected: false,
       }),
@@ -30,6 +32,7 @@ describe('shouldResumeWsConnection', () => {
       shouldResumeWsConnection({
         enabled: true,
         resumeBlocked: false,
+        suspended: false,
         force: false,
         isConnected: false,
       }),
@@ -41,6 +44,7 @@ describe('shouldResumeWsConnection', () => {
       shouldResumeWsConnection({
         enabled: true,
         resumeBlocked: false,
+        suspended: false,
         force: false,
         isConnected: true,
       }),
@@ -52,6 +56,31 @@ describe('shouldResumeWsConnection', () => {
       shouldResumeWsConnection({
         enabled: true,
         resumeBlocked: false,
+        suspended: false,
+        force: true,
+        isConnected: true,
+      }),
+    ).toBe(true)
+  })
+
+  it('does not resume a suspended channel on network return', () => {
+    expect(
+      shouldResumeWsConnection({
+        enabled: true,
+        resumeBlocked: false,
+        suspended: true,
+        force: false,
+        isConnected: false,
+      }),
+    ).toBe(false)
+  })
+
+  it('force-resumes a suspended channel on native foreground', () => {
+    expect(
+      shouldResumeWsConnection({
+        enabled: true,
+        resumeBlocked: false,
+        suspended: true,
         force: true,
         isConnected: true,
       }),

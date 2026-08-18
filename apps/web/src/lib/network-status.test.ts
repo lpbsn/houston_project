@@ -159,4 +159,72 @@ describe('useNetworkStatus', () => {
 
     unsubscribe()
   })
+
+  it('leaves window online as the source if addListener fails', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    isNativePlatform.mockReturnValue(true)
+    addListener.mockRejectedValue(new Error('plugin'))
+    Object.defineProperty(navigator, 'onLine', {
+      configurable: true,
+      value: true,
+    })
+
+    await expect(configureNativeNetworkStatus()).rejects.toThrow('plugin')
+
+    const onOnline = vi.fn()
+    const unsubscribe = subscribeNetworkOnline(onOnline)
+    act(() => {
+      window.dispatchEvent(new Event('online'))
+    })
+    expect(onOnline).toHaveBeenCalledTimes(1)
+    unsubscribe()
+  })
+
+  it('removes the plugin listener and stays on window online if getStatus fails', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    isNativePlatform.mockReturnValue(true)
+    const remove = vi.fn(async () => undefined)
+    addListener.mockImplementation(async () => ({ remove }))
+    getStatus.mockRejectedValue(new Error('status'))
+
+    await expect(configureNativeNetworkStatus()).rejects.toThrow('status')
+
+    expect(remove).toHaveBeenCalledTimes(1)
+    const onOnline = vi.fn()
+    const unsubscribe = subscribeNetworkOnline(onOnline)
+    act(() => {
+      window.dispatchEvent(new Event('online'))
+    })
+    expect(onOnline).toHaveBeenCalledTimes(1)
+    unsubscribe()
+  })
+
+  it('prefers networkStatusChange received during configuration over a stale snapshot', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    isNativePlatform.mockReturnValue(true)
+    let listener: ((status: { connected: boolean }) => void) | undefined
+    let resolveStatus: (value: { connected: boolean; connectionType: 'wifi' }) => void = () => {}
+    addListener.mockImplementation(async (_event, next) => {
+      listener = next
+      return { remove: async () => undefined }
+    })
+    getStatus.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveStatus = resolve
+        }),
+    )
+
+    const configuring = configureNativeNetworkStatus()
+    await vi.waitFor(() => {
+      expect(listener).toBeDefined()
+    })
+    listener?.({ connected: false })
+    resolveStatus({ connected: true, connectionType: 'wifi' })
+    await configuring
+
+    const { result } = renderHook(() => useNetworkStatus())
+    expect(result.current.isOnline).toBe(false)
+    expect(onlineManager.isOnline()).toBe(false)
+  })
 })
