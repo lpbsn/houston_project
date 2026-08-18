@@ -3,7 +3,7 @@
 import { createElement } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { DirectorInviteCard } from './director-invite-card'
 import type { ActivationSummaryResponse } from '@/features/onboarding/types'
@@ -55,8 +55,13 @@ function renderDirectorInviteCard() {
   )
 }
 
+beforeEach(() => {
+  vi.stubEnv('VITE_PUBLIC_APP_URL', '')
+})
+
 afterEach(() => {
   cleanup()
+  vi.unstubAllEnvs()
   inviteDirector.mockReset()
   inviteDirectorPending = false
 })
@@ -102,6 +107,21 @@ describe('DirectorInviteCard', () => {
 
     expect(screen.getByText(`${window.location.origin}/invitations/director-token`)).toBeTruthy()
     expect(screen.getByRole('button', { name: /Copy invitation link/i })).toBeTruthy()
+  })
+
+  it('builds invitation links from VITE_PUBLIC_APP_URL', async () => {
+    vi.stubEnv('VITE_PUBLIC_APP_URL', 'https://app.example.test')
+    inviteDirector.mockResolvedValue({
+      invitation_accept_path: '/invitations/director-token',
+    })
+
+    renderDirectorInviteCard()
+    fillDirectorForm()
+    fireEvent.click(screen.getByRole('button', { name: /Invite Director/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('https://app.example.test/invitations/director-token')).toBeTruthy()
+    })
   })
 
   it('hides the success block when a new submit starts', async () => {

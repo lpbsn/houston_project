@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { getApiBaseUrl, getAppRuntime, resolveApiUrl, resolveWsUrl } from './runtime'
+import { getApiBaseUrl, getAppRuntime, getPublicAppOrigin, resolveApiUrl, resolvePublicAppUrl, resolveWsUrl } from './runtime'
 
 describe('runtime', () => {
   afterEach(() => {
@@ -93,5 +93,50 @@ describe('runtime', () => {
     expect(resolveWsUrl('/ws/v1/establishments/est-1/realtime/')).toBe(
       `ws://${window.location.host}/ws/v1/establishments/est-1/realtime/`,
     )
+  })
+
+  it('uses VITE_PUBLIC_APP_URL for invitation links when set', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    vi.stubEnv('VITE_PUBLIC_APP_URL', 'https://app.example.test/')
+
+    expect(getPublicAppOrigin()).toBe('https://app.example.test')
+    expect(resolvePublicAppUrl('/invitations/token-abc')).toBe(
+      'https://app.example.test/invitations/token-abc',
+    )
+  })
+
+  it('falls back to the page origin on web when VITE_PUBLIC_APP_URL is empty', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    vi.stubEnv('VITE_PUBLIC_APP_URL', '')
+
+    expect(getPublicAppOrigin()).toBe(window.location.origin)
+    expect(resolvePublicAppUrl('invitations/token-abc')).toBe(
+      `${window.location.origin}/invitations/token-abc`,
+    )
+  })
+
+  it('keeps an absolute invitation path unchanged', () => {
+    vi.stubEnv('VITE_PUBLIC_APP_URL', 'https://app.example.test')
+
+    expect(resolvePublicAppUrl('https://other.example.test/invitations/token-abc')).toBe(
+      'https://other.example.test/invitations/token-abc',
+    )
+  })
+
+  it('uses VITE_PUBLIC_APP_URL on native instead of the WebView origin', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    vi.stubEnv('VITE_PUBLIC_APP_URL', 'https://app.example.test')
+    vi.stubGlobal('window', { location: { origin: 'capacitor://localhost' } })
+
+    expect(resolvePublicAppUrl('/invitations/token-abc')).toBe(
+      'https://app.example.test/invitations/token-abc',
+    )
+  })
+
+  it('throws when native runtime has no public app URL', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    vi.stubEnv('VITE_PUBLIC_APP_URL', '')
+
+    expect(() => getPublicAppOrigin()).toThrow(/VITE_PUBLIC_APP_URL is required/)
   })
 })

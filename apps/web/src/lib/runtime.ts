@@ -65,3 +65,30 @@ export function resolveWsUrl(path: string): string {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${protocol}//${window.location.host}${normalizedPath}`
 }
+
+function readPublicAppUrl(): string {
+  return trimTrailingSlash((import.meta.env.VITE_PUBLIC_APP_URL ?? '').trim())
+}
+
+export function getPublicAppOrigin(): string {
+  const configured = readPublicAppUrl()
+  const runtime = getAppRuntime()
+  if (runtime === 'native') {
+    if (!configured) {
+      throw new Error('VITE_PUBLIC_APP_URL is required when VITE_APP_RUNTIME=native.')
+    }
+    return configured
+  }
+  if (configured) {
+    return configured
+  }
+  return window.location.origin
+}
+
+export function resolvePublicAppUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) {
+    return path
+  }
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${getPublicAppOrigin()}${normalizedPath}`
+}

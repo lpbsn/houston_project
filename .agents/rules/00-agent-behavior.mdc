@@ -7,7 +7,7 @@ alwaysApply: true
 
 Before editing:
 - Inspect existing code, tests, and patterns in the touched area
-- Identify impacted layer: backend, frontend, API, async, security, tests
+- Identify impacted layer: backend, frontend, API, async, security, tests, native
 
 While editing:
 - Smallest coherent patch; no unrelated refactor, format, or dependency changes

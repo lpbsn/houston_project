@@ -29,3 +29,4 @@ Do:
 - run targeted tests while iterating; project gates before merge
 
 Protected: auth/tenant isolation, pipeline v4 golden, fake OpenAI guards, notification producers, query cache purge.
+Native auth = `refresh_token_transport: body`; CSRF = cookie auth transport Web only.

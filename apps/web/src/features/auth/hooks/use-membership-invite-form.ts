@@ -7,6 +7,7 @@ import { type BusinessUnitScopeSelection } from '@/features/auth/lib/business-un
 import { resolveInvitationErrorMessage } from '@/features/auth/lib/invitation-errors'
 import { requiresInviteScopes } from '@/features/auth/lib/invitation-rbac'
 import type { MembershipInvitationRequestRoleEnum } from '@/features/auth/types'
+import { resolvePublicAppUrl } from '@/lib/runtime'
 
 export type MembershipInviteFormState = {
   email: string
@@ -25,11 +26,7 @@ const emptyForm: MembershipInviteFormState = {
 const DEFAULT_TARGET_ROLES: MembershipInvitationRequestRoleEnum[] = ['staff', 'manager']
 
 export function buildInvitationAcceptUrl(acceptPath: string) {
-  if (acceptPath.startsWith('http://') || acceptPath.startsWith('https://')) {
-    return acceptPath
-  }
-
-  return `${window.location.origin}${acceptPath.startsWith('/') ? acceptPath : `/${acceptPath}`}`
+  return resolvePublicAppUrl(acceptPath)
 }
 
 type UseMembershipInviteFormOptions = {

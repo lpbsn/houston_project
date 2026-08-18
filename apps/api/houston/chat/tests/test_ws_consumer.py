@@ -6,6 +6,7 @@ import pytest
 from asgiref.sync import async_to_sync
 from channels.testing import WebsocketCommunicator
 from config.asgi import application
+from config.settings import HOUSTON_NATIVE_WEBVIEW_ORIGINS
 from houston.chat.tests.conftest import (
     create_establishment,
     create_membership,
@@ -202,6 +203,28 @@ def test_ws_rejects_invalid_origin():
         connected, _ = await communicator.connect()
         assert not connected
         await communicator.disconnect()
+
+    async_to_sync(run)()
+
+
+def test_ws_allows_native_webview_origins(settings):
+    native_origins = sorted(HOUSTON_NATIVE_WEBVIEW_ORIGINS)
+    settings.HOUSTON_CLIENT_ORIGINS = native_origins
+    establishment = create_establishment()
+
+    async def run():
+        for origin in native_origins:
+            communicator = WebsocketCommunicator(
+                application,
+                ws_chat_path(establishment.id),
+                headers=[
+                    (b"host", b"localhost"),
+                    (b"origin", origin.encode()),
+                ],
+            )
+            connected, _ = await communicator.connect()
+            assert connected
+            await communicator.disconnect()
 
     async_to_sync(run)()
 

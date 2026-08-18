@@ -1,7 +1,7 @@
 # MVP Scope — Pilot
 
 Status: authoritative  
-Last reviewed: 2026-07-13
+Last reviewed: 2026-08-17
 
 ## Objective
 
@@ -21,7 +21,8 @@ Observation → Signal → Action Plan → Execution → Validation → Feed upd
 - AI pipeline → Signal feed and detail
 - Action Plan catalog, executions, execution feed, lifecycle commands
 - Comments on signals and action plan executions
-- In-app notifications + Web Push foundation
+- In-app notifications; Web Push **API/backend only** (frontend client removed in Capacitor Lot 4; delivery is Capacitor Lot 7)
+- Capacitor iOS/Android shells (pilot feasibility; same React tree)
 - Operational realtime invalidation (refetch, not business truth in WS)
 - Chat V1 core (DM + groups, WebSocket messages)
 - Private media uploads with authorized access
@@ -31,7 +32,8 @@ Observation → Signal → Action Plan → Execution → Validation → Feed upd
 
 - Billing, SSO, MFA (unless already present)
 - Legacy Action / Checklist domains (removed)
-- Native mobile apps
+- App Store / Play Store release and CI `cap sync` (Capacitor Lot 11)
+- Native push (Capacitor Lot 7)
 - Durable offline mutation queue
 - Chat: REST message send, read receipts, typing, AI on chat, chat-to-signal
 - Feed subscriptions (deferred — see `feed_subscription_domain.md`)

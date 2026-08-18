@@ -1,7 +1,7 @@
 # Smoke checklist
 
 Status: authoritative  
-Last reviewed: 2026-07-13
+Last reviewed: 2026-08-17
 
 Unified smoke validation for local pilot and Railway prod-test.
 
@@ -12,6 +12,16 @@ Unified smoke validation for local pilot and Railway prod-test.
 - [ ] `docker compose ps`: postgres, redis, api, celery **Up**
 - [ ] Health: `curl` → `200` on http://localhost:8000/api/v1/health/
 - [ ] `make web-dev` → http://localhost:5173 (no port conflict with `make up` web container)
+
+## Local pilot — native (simulator / emulator)
+
+Optional. Not CI. Store release and `cap sync` in pipeline are Capacitor Lot 11.
+
+- [ ] Xcode (iOS Simulator) and/or Android Studio (emulator) installed — see [`INSTALL_MAC.md`](../../INSTALL_MAC.md)
+- [ ] iOS: `VITE_API_BASE_URL=http://localhost:8000` then `make web-cap-sync`; login + one terrain flow + WS
+- [ ] Android emulator: `VITE_API_BASE_URL=http://10.0.2.2:8000` then `make web-cap-sync` (rebuild required; default `.env` `localhost` does not reach the host)
+- [ ] `VITE_PUBLIC_APP_URL` (Vite) and `HOUSTON_PUBLIC_APP_URL` (Django) are distinct variables; set both to the same public HTTP(S) origin (not the emulator API host `10.0.2.2`)
+- [ ] `make web-dev-native` is a compile-time pin only — it does not authenticate in the browser
 
 ## Local pilot — product journey
 

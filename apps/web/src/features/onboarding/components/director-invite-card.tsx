@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { buildInvitationCreatedMessage } from '@/features/auth/lib/invitation-messaging'
 import type { ActivationSummaryResponse } from '@/features/onboarding/types'
 import { useInviteDirector } from '@/features/onboarding/hooks'
+import { resolvePublicAppUrl } from '@/lib/runtime'
 import {
   BlockerList,
   OnboardingErrorState,
@@ -45,14 +46,6 @@ function hasDirectorReadinessBlocker(activationSummary: ActivationSummaryRespons
   return activationSummary.readiness.blockers.some(
     (blocker) => blocker.code === 'missing_active_or_invited_director',
   )
-}
-
-function buildInvitationAcceptUrl(acceptPath: string) {
-  if (acceptPath.startsWith('http://') || acceptPath.startsWith('https://')) {
-    return acceptPath
-  }
-
-  return `${window.location.origin}${acceptPath.startsWith('/') ? acceptPath : `/${acceptPath}`}`
 }
 
 export function DirectorInviteCard({
@@ -101,7 +94,7 @@ export function DirectorInviteCard({
         last_name: form.last_name.trim(),
       })
       setInvitedEmail(submittedEmail)
-      setInvitationLink(buildInvitationAcceptUrl(response.invitation_accept_path))
+      setInvitationLink(resolvePublicAppUrl(response.invitation_accept_path))
       setForm(emptyForm)
     } catch {
       setInvitationLink(null)

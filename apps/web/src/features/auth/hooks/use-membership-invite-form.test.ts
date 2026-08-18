@@ -135,10 +135,12 @@ beforeEach(() => {
   inviteMembership.mockReset()
   invalidateMembershipListQueries.mockReset()
   invalidateMembershipListQueries.mockResolvedValue(undefined)
+  vi.stubEnv('VITE_PUBLIC_APP_URL', '')
 })
 
 afterEach(() => {
   cleanup()
+  vi.unstubAllEnvs()
 })
 
 describe('useMembershipInviteForm', () => {
@@ -167,6 +169,31 @@ describe('useMembershipInviteForm', () => {
       `${window.location.origin}/invitations/token-abc`,
     )
     expect(invalidateMembershipListQueries).toHaveBeenCalledWith('est-1', expect.anything())
+  })
+
+  it('builds invitation links from VITE_PUBLIC_APP_URL', async () => {
+    vi.stubEnv('VITE_PUBLIC_APP_URL', 'https://app.example.test')
+    inviteMembership.mockResolvedValue({
+      invitation_accept_path: '/invitations/token-abc',
+    })
+
+    renderWithQueryClient(
+      createElement(InviteFormProbe, {
+        establishmentId: 'est-1',
+      }),
+    )
+
+    fillInviteForm('staff@example.com')
+
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button', { name: 'Submit' }))
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('invitation-link').textContent).toBe(
+        'https://app.example.test/invitations/token-abc',
+      )
+    })
   })
 
   it('shows success UI when list invalidation is still pending', async () => {

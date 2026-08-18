@@ -10,7 +10,7 @@ Checklist:
 - API contract, schema, generated types, query invalidation drift
 - RBAC, tenant isolation, sensitive data leaks
 - lifecycle consistency, migrations
-- mobile/PWA loading/error/offline states
+- Web vs Native (Capacitor) loading/error/offline states (no service worker)
 - weak or missing tests; unnecessary refactor or duplication
 
 Focus on risks **introduced by this diff** — not exhaustive noise.
