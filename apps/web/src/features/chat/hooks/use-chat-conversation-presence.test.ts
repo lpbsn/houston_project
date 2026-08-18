@@ -98,22 +98,15 @@ describe('useChatConversationPresence', () => {
     expect(postChatConversationPresenceMock).toHaveBeenCalledWith('est-1', 'conv-1')
   })
 
-  it('cleans up interval and listener on unmount', () => {
-    const removeEventListenerSpy = vi.spyOn(document, 'removeEventListener')
+  it('cleans up interval on unmount', () => {
     const { unmount } = renderHook(() => useChatConversationPresence('est-1', 'conv-1'))
 
     unmount()
-
-    expect(removeEventListenerSpy).toHaveBeenCalledWith(
-      'visibilitychange',
-      expect.any(Function),
-    )
 
     act(() => {
       vi.advanceTimersByTime(60_000)
     })
 
     expect(postChatConversationPresenceMock).toHaveBeenCalledTimes(1)
-    removeEventListenerSpy.mockRestore()
   })
 })

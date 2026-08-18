@@ -36,6 +36,20 @@ async function bootstrap() {
     } catch {
       // Store stays unconfigured; AuthProvider restore/login remain fail-closed.
     }
+
+    try {
+      const { configureNativeAppLifecycle } = await import('@/lib/app-lifecycle')
+      await configureNativeAppLifecycle()
+    } catch {
+      // Web visibility remains the lifecycle source.
+    }
+
+    try {
+      const { configureNativeNetworkStatus } = await import('@/lib/network-status')
+      await configureNativeNetworkStatus()
+    } catch {
+      // navigator.onLine remains the network source.
+    }
   }
 
   createRoot(document.getElementById('root')!).render(

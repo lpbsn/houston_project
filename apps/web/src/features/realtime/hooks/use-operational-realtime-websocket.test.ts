@@ -282,4 +282,95 @@ describe('useOperationalRealtimeWebSocket', () => {
     expect(onReconnect).toHaveBeenCalledTimes(1)
     expect(result.current.connectionStatus).toBe('connected')
   })
+
+  it('does not resume after an access close on visibility or online', async () => {
+    const { result } = renderHook(() =>
+      useOperationalRealtimeWebSocket({
+        establishmentId: 'est-1',
+        enabled: true,
+      }),
+    )
+
+    await connectSocket(result)
+    act(() => {
+      result.current.requestIntentionalClose()
+    })
+
+    const callsAfterClose = issueOperationalRealtimeWsTicket.mock.calls.length
+
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible',
+    })
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'))
+      window.dispatchEvent(new Event('online'))
+    })
+    await flushMicrotasks()
+
+    expect(issueOperationalRealtimeWsTicket.mock.calls.length).toBe(callsAfterClose)
+  })
+
+  it('does not resume after session.revoked on visibilitychange', async () => {
+    const { result } = renderHook(() =>
+      useOperationalRealtimeWebSocket({
+        establishmentId: 'est-1',
+        enabled: true,
+      }),
+    )
+
+    const socket = await connectSocket(result)
+    act(() => {
+      socket?.emitMessage({
+        type: 'access',
+        reason: 'session.revoked',
+        occurred_at: '2026-08-18T00:00:00Z',
+      })
+      socket?.close()
+    })
+
+    const callsAfterRevoke = issueOperationalRealtimeWsTicket.mock.calls.length
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible',
+    })
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await flushMicrotasks()
+
+    expect(issueOperationalRealtimeWsTicket.mock.calls.length).toBe(callsAfterRevoke)
+  })
+
+  it('still resumes after membership.updated when the socket later drops', async () => {
+    const { result } = renderHook(() =>
+      useOperationalRealtimeWebSocket({
+        establishmentId: 'est-1',
+        enabled: true,
+      }),
+    )
+
+    const socket = await connectSocket(result)
+    act(() => {
+      socket?.emitMessage({
+        type: 'access',
+        reason: 'membership.updated',
+        occurred_at: '2026-08-18T00:00:00Z',
+      })
+    })
+    expect(result.current.connectionStatus).toBe('connected')
+
+    act(() => {
+      socket?.close()
+    })
+    expect(result.current.connectionStatus).toBe('reconnecting')
+
+    const callsBefore = issueOperationalRealtimeWsTicket.mock.calls.length
+    act(() => {
+      window.dispatchEvent(new Event('online'))
+    })
+    await flushMicrotasks()
+
+    expect(issueOperationalRealtimeWsTicket.mock.calls.length).toBeGreaterThan(callsBefore)
+  })
 })

@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
 
+import { getIsAppActive, subscribeAppBackground, subscribeAppForeground } from '@/lib/app-lifecycle'
+
 import { postChatConversationPresence } from '../api'
 
 const HEARTBEAT_INTERVAL_MS = 30_000
@@ -50,25 +52,23 @@ export function useChatConversationPresence(
       intervalId = null
     }
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        sendPresence()
-        startInterval()
-        return
-      }
+    const unsubscribeForeground = subscribeAppForeground(() => {
+      sendPresence()
+      startInterval()
+    })
+    const unsubscribeBackground = subscribeAppBackground(() => {
       stopInterval()
-    }
+    })
 
-    if (document.visibilityState === 'visible') {
+    if (getIsAppActive()) {
       sendPresence()
       startInterval()
     }
 
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-
     return () => {
       stopInterval()
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      unsubscribeForeground()
+      unsubscribeBackground()
     }
   }, [establishmentId, conversationId])
 }
