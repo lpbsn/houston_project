@@ -191,6 +191,9 @@ GitHub Actions (`.github/workflows/ci.yml`):
 | `make web-check` | vitest, typecheck, web build, native bundle with placeholder `VITE_API_BASE_URL` and `VITE_PUBLIC_APP_URL` (`web-build-native-check`), `web-api-generate-check` |
 | `make local-check` | `backend-check` + `web-check` |
 | `make verify` | alias for `local-check` |
+| `make docs-check` | `scripts/docs_check.py` + `scripts/agent_config_check.py` |
+| `make agent-config-check` | `.cursor` / `.agents` structural invariants |
+| `make agent-config-sync` | copy canonical `.cursor` commands/rules/skills → `.agents` |
 
 Run `make verify && make web-lint` before merging when the Docker stack is up and you need full confidence. For day-to-day backend work, `make backend-test` or `make backend-lint` is enough.
 
@@ -244,5 +247,5 @@ Command: `report_issue_focus_aggregation_eval` (see `houston/signals/management/
 
 ## Agent workflow
 
-- Before adding or expanding tests: read this doc and run the [`test-audit`](../../.cursor/commands/test-audit.md) checklist on the touched scope.
-- Cursor rule: [`.cursor/rules/40-testing.mdc`](../../.cursor/rules/40-testing.mdc) (applies when editing test files).
+- Before adding or expanding tests: read this doc. For the current change, use [`test-review`](../../.cursor/commands/test-review.md).
+- Nested `AGENTS.md` files hold only short layer-ownership pointers; this document is the testing procedure.

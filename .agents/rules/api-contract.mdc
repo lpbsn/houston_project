@@ -1,0 +1,20 @@
+---
+description: External API contract changes — OpenAPI chain and published contracts. Not a complete detector.
+globs:
+  - "apps/api/**/api/**/*.py"
+  - "apps/api/schema.yml"
+  - "apps/web/src/api/**"
+  - "contracts/**"
+alwaysApply: false
+---
+
+# API contracts
+
+This Rule attaches on high-probability contract files. It does **not** detect every semantic contract change.
+
+- If **external** HTTP request/response semantics changed: backend tests → `make schema` → `make web-api-generate` → update callers, query keys, and cache behavior.
+- Do not hand-edit generated OpenAPI client artifacts (`apps/web/src/api/generated/`).
+- Do not regenerate schema or frontend types when the external HTTP contract is unchanged.
+- `contracts/**` is a published non-OpenAPI contract. Treat it as its own external contract; do not run the OpenAPI regen chain for it unless the HTTP API also changed.
+
+Services, models, permissions, or feature wrappers can still change external semantics. If they do, the same end-to-end chain applies even when this Rule did not attach.
