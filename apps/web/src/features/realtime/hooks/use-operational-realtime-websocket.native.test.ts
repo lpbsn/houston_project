@@ -175,6 +175,118 @@ describe('useOperationalRealtimeWebSocket native lifecycle', () => {
     expect(issueOperationalRealtimeWsTicket.mock.calls.length).toBeGreaterThan(callsAfterConnect)
   })
 
+  it('reconnects once on native online after offline foreground without a stale connected veto', async () => {
+    await configureNativeRuntime()
+
+    const { result } = renderHook(() =>
+      useOperationalRealtimeWebSocket({
+        establishmentId: 'est-1',
+        enabled: true,
+      }),
+    )
+    await connectSocket(result)
+    const callsAfterConnect = issueOperationalRealtimeWsTicket.mock.calls.length
+
+    act(() => {
+      for (const listener of appStateListeners.current) {
+        listener({ isActive: false })
+      }
+    })
+    act(() => {
+      for (const listener of networkStatusListeners.current) {
+        listener({ connected: false })
+      }
+    })
+    act(() => {
+      for (const listener of appStateListeners.current) {
+        listener({ isActive: true })
+      }
+    })
+    await flushMicrotasks()
+
+    expect(issueOperationalRealtimeWsTicket.mock.calls.length).toBe(callsAfterConnect)
+    expect(result.current.connectionStatus).toBe('connected')
+
+    act(() => {
+      for (const listener of networkStatusListeners.current) {
+        listener({ connected: true })
+      }
+    })
+    await flushMicrotasks()
+
+    expect(issueOperationalRealtimeWsTicket.mock.calls.length).toBe(callsAfterConnect + 1)
+    const resumedSocket = MockWebSocket.instances.at(-1)
+    expect(resumedSocket).toBeDefined()
+    act(() => {
+      resumedSocket?.open()
+      resumedSocket?.emitMessage({ type: 'auth.ok' })
+    })
+    expect(result.current.connectionStatus).toBe('connected')
+  })
+
+  it('supersedes an in-flight native foreground connect when the network returns', async () => {
+    await configureNativeRuntime()
+
+    const { result } = renderHook(() =>
+      useOperationalRealtimeWebSocket({
+        establishmentId: 'est-1',
+        enabled: true,
+      }),
+    )
+    await connectSocket(result)
+    const callsAfterConnect = issueOperationalRealtimeWsTicket.mock.calls.length
+
+    act(() => {
+      for (const listener of appStateListeners.current) {
+        listener({ isActive: false })
+      }
+    })
+
+    let resolveForegroundTicket: (value: { ticket: string; expires_in: number }) => void = () => {}
+    issueOperationalRealtimeWsTicket.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveForegroundTicket = resolve
+        }),
+    )
+
+    act(() => {
+      for (const listener of appStateListeners.current) {
+        listener({ isActive: true })
+      }
+    })
+    await flushMicrotasks()
+    expect(issueOperationalRealtimeWsTicket.mock.calls.length).toBe(callsAfterConnect + 1)
+
+    act(() => {
+      for (const listener of networkStatusListeners.current) {
+        listener({ connected: false })
+      }
+    })
+    act(() => {
+      for (const listener of networkStatusListeners.current) {
+        listener({ connected: true })
+      }
+    })
+    await flushMicrotasks()
+
+    expect(issueOperationalRealtimeWsTicket.mock.calls.length).toBe(callsAfterConnect + 2)
+
+    await act(async () => {
+      resolveForegroundTicket({ ticket: 'ws-ticket-stale', expires_in: 60 })
+      await Promise.resolve()
+    })
+
+    const resumedSocket = MockWebSocket.instances.at(-1)
+    expect(resumedSocket).toBeDefined()
+    act(() => {
+      resumedSocket?.open()
+      resumedSocket?.emitMessage({ type: 'auth.ok' })
+    })
+    expect(result.current.connectionStatus).toBe('connected')
+    expect(resumedSocket?.sent[0]).toContain('ws-ticket-1')
+  })
+
   it('does not open a socket or schedule backoff when backgrounded during ticket fetch', async () => {
     await configureNativeRuntime()
 

@@ -17,7 +17,7 @@ function readNavigatorOnline(): boolean {
   return navigator.onLine
 }
 
-function getIsOnline(): boolean {
+export function getIsOnline(): boolean {
   if (nativeConfigured) {
     return nativeIsOnline
   }

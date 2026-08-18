@@ -28,6 +28,7 @@ vi.mock('@capacitor/network', () => ({
 
 import {
   configureNativeNetworkStatus,
+  getIsOnline,
   resetNetworkStatusForTests,
   subscribeNetworkOnline,
   useNetworkStatus,
@@ -125,6 +126,31 @@ describe('useNetworkStatus', () => {
 
     expect(result.current.isOnline).toBe(true)
     expect(onlineManager.isOnline()).toBe(true)
+  })
+
+  it('exposes getIsOnline from the native Network snapshot', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    isNativePlatform.mockReturnValue(true)
+    getStatus.mockResolvedValue({ connected: true, connectionType: 'wifi' })
+    let listener: ((status: { connected: boolean }) => void) | undefined
+    addListener.mockImplementation(async (_event, next) => {
+      listener = next
+      return { remove: async () => undefined }
+    })
+
+    await configureNativeNetworkStatus()
+
+    expect(getIsOnline()).toBe(true)
+
+    act(() => {
+      listener?.({ connected: false })
+    })
+    expect(getIsOnline()).toBe(false)
+
+    act(() => {
+      listener?.({ connected: true })
+    })
+    expect(getIsOnline()).toBe(true)
   })
 
   it('notifies subscribeNetworkOnline on native offline-to-online, not window online', async () => {
