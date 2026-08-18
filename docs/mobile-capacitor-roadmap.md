@@ -3,7 +3,7 @@
 Status: authoritative  
 Last reviewed: 2026-08-18
 
-Référence d’exécution pour les agents Cursor. **Capacitor Lots 1–5 are done.** Next is **Capacitor Lot 6** (lifecycle / network / realtime). After Lot 6, a framing checkpoint **Offline capture terrain** precedes Lot 7. This document frames the remaining lots; it does not prescribe implementation.
+Référence d’exécution pour les agents Cursor. **Capacitor Lots 1–6 are done.** Next is the framing checkpoint **Offline capture terrain**, then **Capacitor Lot 7** (push). This document frames the remaining lots; it does not prescribe implementation.
 
 These **Capacitor Lots** (1–11) are distinct from product/domain lots (taxonomy Lot 5, test Lot 4 helpers, product Lot 11 stabilization). Write **Capacitor Lot N** when referring to this roadmap.
 
@@ -45,8 +45,8 @@ Certains mécanismes PWA couvraient des besoins réels. La suppression de la PWA
 
 | Besoin fonctionnel | Implémentation actuelle (PWA) | Décision / lot |
 |--------------------|-------------------------------|----------------|
-| Détection réseau / états hors-ligne | Événements navigateur + bannière UI | Capacitor Lot 6 — indépendant du service worker ; **partial**: `navigator.onLine` + Terrain banner already exist ; native `appStateChange` still this lot |
-| Reconnexion WS / refetch après reprise | TanStack Query + hooks WS | Capacitor Lot 6 — **partial**: `visibilitychange` reconnect exists ; native background/resume still this lot |
+| Détection réseau / états hors-ligne | Événements navigateur + bannière UI | Capacitor Lot 6 — **done**: Web `navigator.onLine` ; Native `@capacitor/network` ; une source `isOnline` par runtime |
+| Reconnexion WS / refetch après reprise | TanStack Query + hooks WS | Capacitor Lot 6 — **done**: `visibilitychange` (Web) + native `appStateChange` ; resync via `onReconnect` existant |
 | Notifications push terrain | Web Push (navigateur) ; contraintes iOS PWA | Lot 7 — **push natif iOS/Android** (priorité terrain) ; Web Push desktop **optionnel**, à justifier produit au lot 7 ; Web Push mobile **hors cible implicite** |
 | Mise à jour applicative Web | Service worker + bannière de refresh | Lot 4 — **retrait** ; pas de mécanisme équivalent : build Vite classique (`index.html` revalidé, assets hashés en cache long) |
 | Installation sur l’écran d’accueil | Manifeste PWA + prompts navigateur | Hors scope Web — distribution native (lot 5) |
@@ -104,7 +104,7 @@ TOUJOURS BESOIN
 
 ## Lots
 
-Capacitor Lot status: **1–5 done** · **6 next** · checkpoint Offline capture terrain · 7–11 not started.
+Capacitor Lot status: **1–6 done** · checkpoint Offline capture terrain · 7–11 not started.
 
 ### 1. Runtime / API / WebSocket — done
 
@@ -138,13 +138,13 @@ Capacitor Lot status: **1–5 done** · **6 next** · checkpoint Offline capture
 
 **Responsabilité.** Le même frontend React tourne dans deux shells natifs. Valider un parcours réel (auth + un flux terrain) contre l’API, avec HTTP, session et WS déjà rendus multi-runtime. Preuve de faisabilité, pas de polish UX ni de push. Si un choix des lots 1–4 est insuffisant, le corriger ici plutôt que d’empiler un workaround.
 
-### 6. Lifecycle / Network / Realtime — next
+### 6. Lifecycle / Network / Realtime — done
 
 **Objectif.** Adapter l’app aux coupures réseau, au background/resume et aux reconnexions WebSocket.
 
 **Responsabilité.** HTTP, WS opérationnel, WS chat et cache TanStack Query se comportent correctement quand l’app passe en arrière-plan, reprend, ou perd le réseau. Reconnexion WS et resynchronisation du cache restent online-first. Ce lot ne met pas en œuvre d’offline capture ; sa conception (lifecycle, état réseau, reconnexion) ne doit pas la rendre inutilement difficile plus tard. Isoler les hooks de lifecycle runtime des features métier. La détection réseau et les états UI associés ne dépendent pas du service worker — elles restent nécessaires dans les deux runtimes.
 
-**Déjà en place (ne pas reconstruire) :** banner `navigator.onLine` et reconnect WS sur `visibilitychange`. Ce lot ajoute le lifecycle natif (`appStateChange` / background-resume), pas une nouvelle détection réseau web.
+**Fait.** Banner Web `navigator.onLine` conservé. Native : `@capacitor/app` `appStateChange` + `@capacitor/network`. Reconnect WS au foreground natif même si le client croyait le socket ouvert ; pas de reconnect après close d’accès. Query : pas d’`invalidateQueries` global au foreground.
 
 ### Checkpoint — Offline capture terrain
 

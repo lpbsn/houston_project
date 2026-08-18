@@ -161,6 +161,34 @@ describe('useChatWebSocket', () => {
     expect(issueChatWsTicket).toHaveBeenCalledTimes(1)
   })
 
+  it('does not resume after access.revoked on visibility or online', async () => {
+    const { result } = renderHook(() =>
+      useChatWebSocket({
+        establishmentId: 'est-1',
+        enabled: true,
+      }),
+    )
+
+    const socket = await connectSocket(result)
+    act(() => {
+      socket?.emitMessage({ type: 'access.revoked', reason: 'chat_disabled' })
+      socket?.close()
+    })
+
+    const callsAfterRevoke = issueChatWsTicket.mock.calls.length
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible',
+    })
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'))
+      window.dispatchEvent(new Event('online'))
+    })
+    await flushMicrotasks()
+
+    expect(issueChatWsTicket.mock.calls.length).toBe(callsAfterRevoke)
+  })
+
   it('keeps network reconnect behavior after unplanned close', async () => {
     const { result } = renderHook(() =>
       useChatWebSocket({
@@ -359,6 +387,38 @@ describe('useChatWebSocket', () => {
       reason: 'participant_removed',
     })
     expect(result.current.connectionStatus).toBe('connected')
+  })
+
+  it('still resumes after conversation.access_revoked when the socket later drops', async () => {
+    const { result } = renderHook(() =>
+      useChatWebSocket({
+        establishmentId: 'est-1',
+        enabled: true,
+      }),
+    )
+
+    const socket = await connectSocket(result)
+    act(() => {
+      socket?.emitMessage({
+        type: 'conversation.access_revoked',
+        conversation_id: 'conv-1',
+        reason: 'participant_removed',
+      })
+    })
+    expect(result.current.connectionStatus).toBe('connected')
+
+    act(() => {
+      socket?.close()
+    })
+    expect(result.current.connectionStatus).toBe('reconnecting')
+
+    const callsBefore = issueChatWsTicket.mock.calls.length
+    act(() => {
+      window.dispatchEvent(new Event('online'))
+    })
+    await flushMicrotasks()
+
+    expect(issueChatWsTicket.mock.calls.length).toBeGreaterThan(callsBefore)
   })
 
   it('does not reconnect when enabled becomes false', async () => {

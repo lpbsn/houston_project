@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import {
+  subscribeAppBackground,
+  subscribeAppForeground,
+  usesNativeAppLifecycle,
+} from '@/lib/app-lifecycle'
+import { subscribeNetworkOnline } from '@/lib/network-status'
 import { resolveWsUrl } from '@/lib/runtime'
+import { shouldResumeWsConnection } from '@/lib/ws-resume'
 
 import { issueOperationalRealtimeWsTicket } from '../api'
 import type {
@@ -64,6 +71,8 @@ export function useOperationalRealtimeWebSocket({
   const reconnectAttemptRef = useRef(0)
   const reconnectTimerRef = useRef<number | null>(null)
   const intentionalCloseRef = useRef(false)
+  const resumeBlockedRef = useRef(false)
+  const suspendedRef = useRef(false)
   const hasConnectedOnceRef = useRef(false)
   const connectRef = useRef<(() => Promise<void>) | null>(null)
   const connectGenerationRef = useRef(0)
@@ -120,7 +129,7 @@ export function useOperationalRealtimeWebSocket({
   }, [setConnectionStatus])
 
   const connect = useCallback(async () => {
-    if (!establishmentId || !enabled) {
+    if (!establishmentId || !enabled || resumeBlockedRef.current || suspendedRef.current) {
       return
     }
 
@@ -134,12 +143,20 @@ export function useOperationalRealtimeWebSocket({
 
     try {
       const ticketResponse = await issueOperationalRealtimeWsTicket(establishmentId)
-      if (generation !== connectGenerationRef.current) {
+      if (
+        generation !== connectGenerationRef.current ||
+        suspendedRef.current ||
+        resumeBlockedRef.current
+      ) {
         return
       }
 
       const socket = new WebSocket(buildOperationalRealtimeWebSocketUrl(establishmentId))
-      if (generation !== connectGenerationRef.current) {
+      if (
+        generation !== connectGenerationRef.current ||
+        suspendedRef.current ||
+        resumeBlockedRef.current
+      ) {
         socket.close()
         return
       }
@@ -206,7 +223,10 @@ export function useOperationalRealtimeWebSocket({
         }
 
         if (parsed.type === 'access') {
-          intentionalCloseRef.current = true
+          if (parsed.reason === 'session.revoked') {
+            resumeBlockedRef.current = true
+            intentionalCloseRef.current = true
+          }
           onAccessRef.current?.(parsed)
         }
       }
@@ -224,7 +244,12 @@ export function useOperationalRealtimeWebSocket({
         socketRef.current = null
         logWsCloseDev('realtime', event)
 
-        if (intentionalCloseRef.current || !enabledRef.current) {
+        if (
+          resumeBlockedRef.current ||
+          suspendedRef.current ||
+          intentionalCloseRef.current ||
+          !enabledRef.current
+        ) {
           intentionalCloseRef.current = false
           setConnectionStatus('disconnected')
           return
@@ -237,7 +262,11 @@ export function useOperationalRealtimeWebSocket({
         // onclose handles reconnection
       }
     } catch {
-      if (generation === connectGenerationRef.current) {
+      if (
+        generation === connectGenerationRef.current &&
+        !suspendedRef.current &&
+        !resumeBlockedRef.current
+      ) {
         scheduleReconnect()
       }
     }
@@ -249,6 +278,8 @@ export function useOperationalRealtimeWebSocket({
 
   useEffect(() => {
     intentionalCloseRef.current = false
+    resumeBlockedRef.current = false
+    suspendedRef.current = false
     hasConnectedOnceRef.current = false
     reconnectAttemptRef.current = 0
 
@@ -272,32 +303,45 @@ export function useOperationalRealtimeWebSocket({
       return
     }
 
-    const resumeIfDisconnected = () => {
-      if (connectionStatusRef.current !== 'connected') {
-        void connectRef.current?.()
+    const resume = (force: boolean) => {
+      if (
+        !shouldResumeWsConnection({
+          enabled: enabledRef.current,
+          resumeBlocked: resumeBlockedRef.current,
+          force,
+          isConnected: connectionStatusRef.current === 'connected',
+        })
+      ) {
+        return
       }
+      suspendedRef.current = false
+      void connectRef.current?.()
     }
 
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        resumeIfDisconnected()
+    const unsubscribeForeground = subscribeAppForeground(() => {
+      resume(usesNativeAppLifecycle())
+    })
+    const unsubscribeBackground = subscribeAppBackground(() => {
+      if (!usesNativeAppLifecycle()) {
+        return
       }
-    }
-
-    const onOnline = () => {
-      resumeIfDisconnected()
-    }
-
-    document.addEventListener('visibilitychange', onVisibilityChange)
-    window.addEventListener('online', onOnline)
+      suspendedRef.current = true
+      clearReconnectTimer()
+      closeSocket()
+    })
+    const unsubscribeOnline = subscribeNetworkOnline(() => {
+      resume(false)
+    })
 
     return () => {
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-      window.removeEventListener('online', onOnline)
+      unsubscribeForeground()
+      unsubscribeBackground()
+      unsubscribeOnline()
     }
-  }, [enabled, establishmentId])
+  }, [clearReconnectTimer, closeSocket, enabled, establishmentId])
 
   const requestIntentionalClose = useCallback(() => {
+    resumeBlockedRef.current = true
     intentionalCloseRef.current = true
     closeSocket()
   }, [closeSocket])

@@ -1,7 +1,7 @@
 # Frontend architecture
 
 Status: authoritative  
-Last reviewed: 2026-08-17
+Last reviewed: 2026-08-18
 
 ## Stack
 
@@ -54,7 +54,7 @@ Lazy pages: [`lazy-terrain-pages.tsx`](../../apps/web/src/app/lazy-terrain-pages
 
 Invalidation only — backend remains source of truth.
 
-Network banner (`navigator.onLine`) and WS reconnect on `visibilitychange` already exist. Capacitor Lot 6 adds native `appStateChange` / background-resume — do not rebuild web network detection.
+Network banner (`navigator.onLine` on Web; `@capacitor/network` on Native) and WS reconnect on `visibilitychange` / native `appStateChange` share runtime lifecycle and a single `isOnline` source. Query resync after pause is the existing WS `onReconnect` catalogue plus `refetchOnReconnect` when that network signal flaps — not a global foreground invalidate.
 
 ## Builds Web / Native
 
