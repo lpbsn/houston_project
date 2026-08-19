@@ -315,6 +315,140 @@ describe('useChatWebSocket native lifecycle', () => {
     expect(resumedSocket?.sent[0]).toContain('ws-ticket-1')
   })
 
+  it('does not open a socket or schedule backoff when a stale ticket resolves after native offline foreground', async () => {
+    await configureNativeRuntime()
+
+    let resolveTicket: (value: { ticket: string; expires_in: number }) => void = () => {}
+    issueChatWsTicket.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveTicket = resolve
+        }),
+    )
+
+    renderHook(() =>
+      useChatWebSocket({
+        establishmentId: 'est-1',
+        enabled: true,
+      }),
+    )
+
+    expect(issueChatWsTicket).toHaveBeenCalledTimes(1)
+    expect(MockWebSocket.instances).toHaveLength(0)
+
+    act(() => {
+      for (const listener of appStateListeners.current) {
+        listener({ isActive: false })
+      }
+    })
+    act(() => {
+      for (const listener of networkStatusListeners.current) {
+        listener({ connected: false })
+      }
+    })
+    act(() => {
+      for (const listener of appStateListeners.current) {
+        listener({ isActive: true })
+      }
+    })
+    await flushMicrotasks()
+
+    expect(issueChatWsTicket).toHaveBeenCalledTimes(1)
+    expect(MockWebSocket.instances).toHaveLength(0)
+
+    await act(async () => {
+      resolveTicket({ ticket: 'ws-ticket-stale', expires_in: 60 })
+      await Promise.resolve()
+    })
+
+    expect(MockWebSocket.instances).toHaveLength(0)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000)
+    })
+    expect(issueChatWsTicket.mock.calls.length).toBe(1)
+
+    act(() => {
+      for (const listener of networkStatusListeners.current) {
+        listener({ connected: true })
+      }
+    })
+    await flushMicrotasks()
+
+    expect(issueChatWsTicket.mock.calls.length).toBe(2)
+    const resumedSocket = MockWebSocket.instances.at(-1)
+    expect(resumedSocket).toBeDefined()
+    act(() => {
+      resumedSocket?.open()
+      resumedSocket?.emitMessage({ type: 'auth.ok' })
+    })
+    expect(resumedSocket?.sent[0]).toContain('ws-ticket-1')
+  })
+
+  it('does not schedule backoff when a stale ticket rejects after native offline foreground', async () => {
+    await configureNativeRuntime()
+
+    let rejectTicket: (reason?: unknown) => void = () => {}
+    issueChatWsTicket.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectTicket = reject
+        }),
+    )
+
+    renderHook(() =>
+      useChatWebSocket({
+        establishmentId: 'est-1',
+        enabled: true,
+      }),
+    )
+
+    expect(issueChatWsTicket).toHaveBeenCalledTimes(1)
+    expect(MockWebSocket.instances).toHaveLength(0)
+
+    act(() => {
+      for (const listener of appStateListeners.current) {
+        listener({ isActive: false })
+      }
+    })
+    act(() => {
+      for (const listener of networkStatusListeners.current) {
+        listener({ connected: false })
+      }
+    })
+    act(() => {
+      for (const listener of appStateListeners.current) {
+        listener({ isActive: true })
+      }
+    })
+    await flushMicrotasks()
+
+    expect(issueChatWsTicket).toHaveBeenCalledTimes(1)
+    expect(MockWebSocket.instances).toHaveLength(0)
+
+    await act(async () => {
+      rejectTicket(new Error('ticket failed'))
+      await Promise.resolve()
+    })
+
+    expect(MockWebSocket.instances).toHaveLength(0)
+    expect(issueChatWsTicket.mock.calls.length).toBe(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000)
+    })
+    expect(issueChatWsTicket.mock.calls.length).toBe(1)
+
+    act(() => {
+      for (const listener of networkStatusListeners.current) {
+        listener({ connected: true })
+      }
+    })
+    await flushMicrotasks()
+
+    expect(issueChatWsTicket.mock.calls.length).toBe(2)
+  })
+
   it('does not open a socket or schedule backoff when backgrounded during ticket fetch', async () => {
     await configureNativeRuntime()
 

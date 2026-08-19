@@ -325,6 +325,7 @@ export function useOperationalRealtimeWebSocket({
       if (native) {
         suspendedRef.current = false
         if (!getIsOnline()) {
+          connectGenerationRef.current += 1
           return
         }
       }
