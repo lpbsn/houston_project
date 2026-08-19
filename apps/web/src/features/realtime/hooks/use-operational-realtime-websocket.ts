@@ -5,7 +5,7 @@ import {
   subscribeAppForeground,
   usesNativeAppLifecycle,
 } from '@/lib/app-lifecycle'
-import { subscribeNetworkOnline } from '@/lib/network-status'
+import { getIsOnline, subscribeNetworkOnline } from '@/lib/network-status'
 import { resolveWsUrl } from '@/lib/runtime'
 import { shouldResumeWsConnection } from '@/lib/ws-resume'
 
@@ -310,7 +310,8 @@ export function useOperationalRealtimeWebSocket({
           resumeBlocked: resumeBlockedRef.current,
           suspended: suspendedRef.current,
           force,
-          isConnected: connectionStatusRef.current === 'connected',
+          isConnected:
+            connectionStatusRef.current === 'connected' && socketRef.current !== null,
         })
       ) {
         return
@@ -320,7 +321,15 @@ export function useOperationalRealtimeWebSocket({
     }
 
     const unsubscribeForeground = subscribeAppForeground(() => {
-      resume(usesNativeAppLifecycle())
+      const native = usesNativeAppLifecycle()
+      if (native) {
+        suspendedRef.current = false
+        if (!getIsOnline()) {
+          connectGenerationRef.current += 1
+          return
+        }
+      }
+      resume(native)
     })
     const unsubscribeBackground = subscribeAppBackground(() => {
       if (!usesNativeAppLifecycle()) {
