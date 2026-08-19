@@ -20,8 +20,6 @@ from houston.testing.auth import build_api_membership
 
 pytestmark = pytest.mark.django_db
 
-VAPID_SETTINGS = FCM_PUSH_SETTINGS
-
 EVENT_KEY_SUBJECT_TYPES = [
     (
         Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
@@ -50,7 +48,7 @@ EVENT_KEY_SUBJECT_TYPES = [
 ]
 
 
-def _create_subscription(*, user) -> PushDevice:
+def _create_push_device(*, user) -> PushDevice:
     return PushDevice.objects.create(
         user=user,
         token=f"fcm-token-{uuid.uuid4()}",
@@ -65,7 +63,7 @@ def _prepare_recipient():
     return recipient
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 @pytest.mark.parametrize(("event_key", "subject_type"), EVENT_KEY_SUBJECT_TYPES)
 def test_run_push_for_notification_sends_for_allowlisted_event_keys(
     event_key,
@@ -77,7 +75,7 @@ def test_run_push_for_notification_sends_for_allowlisted_event_keys(
         event_key=event_key,
         subject_type=subject_type,
     )
-    subscription = _create_subscription(user=recipient.user)
+    device = _create_push_device(user=recipient.user)
 
     with (
         patch(
@@ -92,12 +90,12 @@ def test_run_push_for_notification_sends_for_allowlisted_event_keys(
     send_fcm.assert_called_once()
     delivery = PushDelivery.objects.get()
     assert delivery.notification_id == notification.id
-    assert delivery.device_id == subscription.id
+    assert delivery.device_id == device.id
     assert delivery.status == PushDelivery.Status.SENT
     assert delivery.sent_at is not None
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 @pytest.mark.django_db(transaction=True)
 def test_run_push_for_notification_sends_for_comment_mention():
     from houston.comments.services import create_signal_comment
@@ -132,7 +130,7 @@ def test_run_push_for_notification_sends_for_comment_mention():
         subject_type=Notification.SubjectType.COMMENT,
         subject_id=comment.id,
     )
-    subscription = _create_subscription(user=staff.user)
+    device = _create_push_device(user=staff.user)
 
     with patch("houston.notifications.push.services.send_fcm") as send_fcm:
         sent_count = run_push_for_notification(notification.id)
@@ -141,7 +139,7 @@ def test_run_push_for_notification_sends_for_comment_mention():
     send_fcm.assert_called_once()
     delivery = PushDelivery.objects.get()
     assert delivery.notification_id == notification.id
-    assert delivery.device_id == subscription.id
+    assert delivery.device_id == device.id
     assert delivery.status == PushDelivery.Status.SENT
 
 
@@ -152,7 +150,7 @@ COMMENT_PUSH_EVENT_KEYS = [
 ]
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("event_key", COMMENT_PUSH_EVENT_KEYS)
 def test_run_push_for_notification_sends_for_comment_event_keys(event_key):
@@ -239,7 +237,7 @@ def test_run_push_for_notification_sends_for_comment_event_keys(event_key):
     ).first()
     assert notification is not None
 
-    subscription = _create_subscription(user=push_recipient.user)
+    device = _create_push_device(user=push_recipient.user)
 
     with patch("houston.notifications.push.services.send_fcm") as send_fcm:
         sent_count = run_push_for_notification(notification.id)
@@ -247,11 +245,11 @@ def test_run_push_for_notification_sends_for_comment_event_keys(event_key):
     assert sent_count == 1
     send_fcm.assert_called_once()
     delivery = PushDelivery.objects.get(notification_id=notification.id)
-    assert delivery.device_id == subscription.id
+    assert delivery.device_id == device.id
     assert delivery.status == PushDelivery.Status.SENT
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 def test_run_push_for_notification_skips_chat_when_presence_active():
     recipient = _prepare_recipient()
     notification = create_test_notification(
@@ -259,7 +257,7 @@ def test_run_push_for_notification_skips_chat_when_presence_active():
         event_key=Notification.EventKey.CHAT_MESSAGE_RECEIVED,
         subject_type=Notification.SubjectType.CHAT_CONVERSATION,
     )
-    _create_subscription(user=recipient.user)
+    _create_push_device(user=recipient.user)
 
     with (
         patch(
@@ -275,13 +273,13 @@ def test_run_push_for_notification_skips_chat_when_presence_active():
     send_fcm.assert_not_called()
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 def test_run_push_for_notification_skips_when_actor_is_recipient():
     recipient = _prepare_recipient()
     notification = create_test_notification(recipient=recipient)
     notification.actor_membership = recipient
     notification.save(update_fields=["actor_membership", "updated_at"])
-    _create_subscription(user=recipient.user)
+    _create_push_device(user=recipient.user)
 
     with patch("houston.notifications.push.services.send_fcm") as send_fcm:
         sent_count = run_push_for_notification(notification.id)
@@ -291,11 +289,11 @@ def test_run_push_for_notification_skips_when_actor_is_recipient():
     send_fcm.assert_not_called()
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 def test_run_push_for_notification_skips_when_subject_not_visible():
     recipient = _prepare_recipient()
     notification = create_test_notification(recipient=recipient)
-    _create_subscription(user=recipient.user)
+    _create_push_device(user=recipient.user)
 
     with (
         patch(
@@ -315,7 +313,7 @@ def test_run_push_for_notification_skips_when_subject_not_visible():
 def test_run_push_for_notification_skips_when_fcm_not_configured():
     recipient = _prepare_recipient()
     notification = create_test_notification(recipient=recipient)
-    _create_subscription(user=recipient.user)
+    _create_push_device(user=recipient.user)
 
     with patch("houston.notifications.push.services.send_fcm") as send_fcm:
         sent_count = run_push_for_notification(notification.id)
@@ -325,7 +323,7 @@ def test_run_push_for_notification_skips_when_fcm_not_configured():
     send_fcm.assert_not_called()
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 def test_run_push_for_notification_marks_missing_navigation_as_skipped():
     recipient = _prepare_recipient()
     notification = create_test_notification(
@@ -333,7 +331,7 @@ def test_run_push_for_notification_marks_missing_navigation_as_skipped():
         event_key=Notification.EventKey.COMMENT_MENTION_CREATED,
         subject_type=Notification.SubjectType.COMMENT,
     )
-    _create_subscription(user=recipient.user)
+    _create_push_device(user=recipient.user)
 
     with (
         patch(
@@ -351,11 +349,11 @@ def test_run_push_for_notification_marks_missing_navigation_as_skipped():
     send_fcm.assert_not_called()
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 def test_run_push_for_notification_is_idempotent_after_sent():
     recipient = _prepare_recipient()
     notification = create_test_notification(recipient=recipient)
-    _create_subscription(user=recipient.user)
+    _create_push_device(user=recipient.user)
 
     with (
         patch(
@@ -374,14 +372,14 @@ def test_run_push_for_notification_is_idempotent_after_sent():
     assert send_fcm.call_count == 1
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 def test_run_push_for_notification_does_not_retry_failed_delivery():
     recipient = _prepare_recipient()
     notification = create_test_notification(recipient=recipient)
-    subscription = _create_subscription(user=recipient.user)
+    device = _create_push_device(user=recipient.user)
     PushDelivery.objects.create(
         notification_id=notification.id,
-        device_id=subscription.id,
+        device_id=device.id,
         status=PushDelivery.Status.FAILED,
         error_code="http_500",
     )
@@ -402,11 +400,11 @@ def test_run_push_for_notification_does_not_retry_failed_delivery():
     send_fcm.assert_not_called()
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 def test_run_push_for_notification_revokes_device_on_unregistered():
     recipient = _prepare_recipient()
     notification = create_test_notification(recipient=recipient)
-    subscription = _create_subscription(user=recipient.user)
+    device = _create_push_device(user=recipient.user)
     with (
         patch(
             "houston.notifications.push.services.recipient_can_view_notification_subject",
@@ -423,15 +421,15 @@ def test_run_push_for_notification_revokes_device_on_unregistered():
     delivery = PushDelivery.objects.get()
     assert delivery.status == PushDelivery.Status.FAILED
     assert delivery.error_code == "unregistered"
-    subscription.refresh_from_db()
-    assert subscription.revoked_at is not None
+    device.refresh_from_db()
+    assert device.revoked_at is not None
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 def test_run_push_for_notification_marks_unknown_fcm_error():
     recipient = _prepare_recipient()
     notification = create_test_notification(recipient=recipient)
-    _create_subscription(user=recipient.user)
+    _create_push_device(user=recipient.user)
 
     with (
         patch(
@@ -451,14 +449,14 @@ def test_run_push_for_notification_marks_unknown_fcm_error():
     assert delivery.error_code == "unknown"
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 def test_try_claim_push_delivery_for_send_is_exclusive():
     recipient = _prepare_recipient()
     notification = create_test_notification(recipient=recipient)
-    subscription = _create_subscription(user=recipient.user)
+    device = _create_push_device(user=recipient.user)
     delivery = PushDelivery.objects.create(
         notification_id=notification.id,
-        device_id=subscription.id,
+        device_id=device.id,
         status=PushDelivery.Status.QUEUED,
     )
     now = timezone.now()
@@ -469,14 +467,14 @@ def test_try_claim_push_delivery_for_send_is_exclusive():
     assert _try_claim_push_delivery_for_send(delivery_id=delivery.id, now=now) is False
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 def test_run_push_for_notification_skips_processing_delivery():
     recipient = _prepare_recipient()
     notification = create_test_notification(recipient=recipient)
-    subscription = _create_subscription(user=recipient.user)
+    device = _create_push_device(user=recipient.user)
     PushDelivery.objects.create(
         notification_id=notification.id,
-        device_id=subscription.id,
+        device_id=device.id,
         status=PushDelivery.Status.PROCESSING,
     )
 
@@ -494,11 +492,11 @@ def test_run_push_for_notification_skips_processing_delivery():
     assert PushDelivery.objects.get().status == PushDelivery.Status.PROCESSING
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 def test_run_claim_lost_does_not_send():
     recipient = _prepare_recipient()
     notification = create_test_notification(recipient=recipient)
-    _create_subscription(user=recipient.user)
+    _create_push_device(user=recipient.user)
 
     with (
         patch(
@@ -517,15 +515,15 @@ def test_run_claim_lost_does_not_send():
     send_fcm.assert_not_called()
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 def test_run_push_continues_after_unexpected_send_error():
     recipient = _prepare_recipient()
     notification = create_test_notification(recipient=recipient)
-    first_subscription = _create_subscription(user=recipient.user)
-    second_subscription = _create_subscription(user=recipient.user)
+    first_device = _create_push_device(user=recipient.user)
+    second_device = _create_push_device(user=recipient.user)
 
     def send_side_effect(*, device, payload):
-        if device.id == first_subscription.id:
+        if device.id == first_device.id:
             raise RuntimeError("boom")
 
     with (
@@ -545,19 +543,19 @@ def test_run_push_continues_after_unexpected_send_error():
         delivery.device_id: delivery
         for delivery in PushDelivery.objects.filter(notification_id=notification.id)
     }
-    assert deliveries[first_subscription.id].status == PushDelivery.Status.FAILED
-    assert deliveries[first_subscription.id].error_code == "unexpected_error"
-    assert deliveries[second_subscription.id].status == PushDelivery.Status.SENT
+    assert deliveries[first_device.id].status == PushDelivery.Status.FAILED
+    assert deliveries[first_device.id].error_code == "unexpected_error"
+    assert deliveries[second_device.id].status == PushDelivery.Status.SENT
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 def test_run_push_for_notification_does_not_retry_skipped_delivery():
     recipient = _prepare_recipient()
     notification = create_test_notification(recipient=recipient)
-    subscription = _create_subscription(user=recipient.user)
+    device = _create_push_device(user=recipient.user)
     PushDelivery.objects.create(
         notification_id=notification.id,
-        device_id=subscription.id,
+        device_id=device.id,
         status=PushDelivery.Status.SKIPPED,
         error_code="missing_navigation",
     )

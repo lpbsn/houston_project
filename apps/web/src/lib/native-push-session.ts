@@ -19,10 +19,6 @@ export function registerNativePushController(next: NativePushController | null) 
   controller = next
 }
 
-export function isNativePushConfigured(): boolean {
-  return controller !== null
-}
-
 export async function optInNativePush() {
   if (!controller) {
     throw new Error('Native push is not available.')
@@ -63,6 +59,7 @@ export async function runNativePushBeforeLogout() {
 }
 
 let getActiveEstablishmentId: () => string | null = () => null
+let getActiveUserId: () => string | null = () => null
 
 export function setNativePushActiveEstablishmentGetter(getter: () => string | null) {
   getActiveEstablishmentId = getter
@@ -70,4 +67,12 @@ export function setNativePushActiveEstablishmentGetter(getter: () => string | nu
 
 export function readNativePushActiveEstablishmentId() {
   return getActiveEstablishmentId()
+}
+
+export function setNativePushActiveUserIdGetter(getter: () => string | null) {
+  getActiveUserId = getter
+}
+
+export function readNativePushActiveUserId() {
+  return getActiveUserId()
 }

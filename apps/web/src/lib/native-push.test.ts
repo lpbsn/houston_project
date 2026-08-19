@@ -70,6 +70,7 @@ import {
   optInNativePush,
   runNativePushBeforeLogout,
   setNativePushActiveEstablishmentGetter,
+  setNativePushActiveUserIdGetter,
   syncNativePushTokenIfGranted,
 } from './native-push-session'
 import { configureNativePush, resetNativePushForTests } from './native-push'
@@ -78,6 +79,7 @@ describe('native push', () => {
   afterEach(async () => {
     await resetNativePushForTests()
     setNativePushActiveEstablishmentGetter(() => null)
+    setNativePushActiveUserIdGetter(() => null)
     isNativePlatform.mockReset()
     isNativePlatform.mockReturnValue(false)
     getPlatform.mockReset()
@@ -130,10 +132,43 @@ describe('native push', () => {
     vi.stubEnv('VITE_APP_RUNTIME', 'native')
     isNativePlatform.mockReturnValue(true)
     getAccessToken.mockReturnValue('access-token')
+    setNativePushActiveUserIdGetter(() => 'user-1')
     await configureNativePush({ history: createMemoryHistory() })
     await syncNativePushTokenIfGranted()
     await syncNativePushTokenIfGranted()
     expect(upsertPushDevice).toHaveBeenCalledOnce()
+  })
+
+  it('re-upserts the same token after the session user changes', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    isNativePlatform.mockReturnValue(true)
+    getAccessToken.mockReturnValue('access-token')
+    setNativePushActiveUserIdGetter(() => 'user-a')
+    await configureNativePush({ history: createMemoryHistory() })
+    await syncNativePushTokenIfGranted()
+    expect(upsertPushDevice).toHaveBeenCalledOnce()
+
+    setNativePushActiveUserIdGetter(() => 'user-b')
+    await syncNativePushTokenIfGranted()
+
+    expect(upsertPushDevice).toHaveBeenCalledTimes(2)
+    expect(upsertPushDevice).toHaveBeenNthCalledWith(2, { token: 'fcm-token-1', platform: 'ios' })
+    expect(revokePushDevice).not.toHaveBeenCalled()
+  })
+
+  it('re-upserts on opt-in after the session user changes', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    isNativePlatform.mockReturnValue(true)
+    getAccessToken.mockReturnValue('access-token')
+    setNativePushActiveUserIdGetter(() => 'user-a')
+    await configureNativePush({ history: createMemoryHistory() })
+    await syncNativePushTokenIfGranted()
+
+    setNativePushActiveUserIdGetter(() => 'user-b')
+    await optInNativePush()
+
+    expect(upsertPushDevice).toHaveBeenCalledTimes(2)
+    expect(revokePushDevice).not.toHaveBeenCalled()
   })
 
   it('rotates by upserting the new token and revoking the previous device', async () => {

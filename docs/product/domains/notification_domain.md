@@ -30,10 +30,10 @@ Notification does not own:
 - Backend-owned recipient resolution, priority selection, and channel selection from domain events.
 - Minimal, non-sensitive notification payloads that point to an authenticated subject fetch.
 - Per-recipient read and archive state.
-- Candidate push delivery for selected high-attention cases when implemented.
+- Native FCM push delivery for selected high-attention cases (Lot 7).
 - Targeted mention notifications without operational permission grants. Mention on an execution comment grants read/thread access in the comments and action-plan domains; the notification itself does not grant access.
 
-Current truth (Lot 1 in-app):
+Current truth (Lot 1 in-app + Lot 7 native push):
 - `apps/api/houston/notifications/` implements persisted in-app notifications, recipient resolution, dedupe, and scheduling producers (`scheduling.py`).
 - `apps/api/schema.yml` lists notification endpoints: list, mark-read, archive, mark-all-read, preferences.
 - Frontend Notification Center uses TanStack Query (`features/notifications/`).
@@ -70,7 +70,7 @@ Current truth (Lot 1 in-app):
 - Read and archive state is per recipient.
 - Realtime invalidation does not replace persisted in-app notifications.
 - Notification Center does not replace Feed.
-- Target channel direction is `info` -> `in_app`, `action_required` -> `in_app` and candidate `push`, `urgent` -> `in_app` and candidate `push`, `system` -> `in_app` or selective email depending on type.
+- Target channel direction is `info` -> `in_app`, `action_required` -> `in_app` and `push`, `urgent` -> `in_app` and `push`, `system` -> `in_app` or selective email depending on type.
 
 ## 5. Main Objects
 
@@ -88,7 +88,7 @@ Current truth (Lot 1 in-app):
 
 - `NotificationChannel`
   - `in_app` is the validated MVP direction.
-  - `push` is candidate until implemented.
+  - `push` is native FCM (Lot 7); Web Push is out.
   - `email` remains selective or post-MVP unless separately validated.
 
 - `NotificationDelivery`
@@ -127,9 +127,9 @@ Target transition direction:
 - recipient archives -> `archived`
 - delivery attempt created -> `queued` then `sent`, `delivered`, `failed`, or `skipped`
 
-Current code (Lot 1):
+Current code (Lot 1 in-app + Lot 7 native push):
 - `Notification` model with statuses `unread`, `read`, `archived`.
-- In-app delivery only; push/email delivery tracking not implemented.
+- In-app notifications plus native FCM `PushDelivery` tracking; email delivery tracking not implemented.
 
 ## 7. Permissions
 

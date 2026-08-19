@@ -8,6 +8,7 @@ import { getAppRuntime } from '@/lib/runtime'
 import {
   NativePushPermissionDeniedError,
   readNativePushActiveEstablishmentId,
+  readNativePushActiveUserId,
   registerNativePushController,
 } from './native-push-session'
 import { applyNativePushTap, parseNativePushTapPayload, type NativePushTapTarget } from './native-push-tap'
@@ -17,6 +18,7 @@ type PermissionReceive = 'granted' | 'denied' | 'prompt'
 let nativeConfigured = false
 let currentToken: string | null = null
 let currentDeviceId: string | null = null
+let currentUserId: string | null = null
 let bufferedToken: string | null = null
 let pendingTap: NativePushTapTarget | null = null
 let applyingTap = false
@@ -55,7 +57,13 @@ async function upsertToken(token: string) {
     return
   }
 
-  if (token === currentToken && currentDeviceId) {
+  const sessionUserId = readNativePushActiveUserId()
+  if (
+    token === currentToken &&
+    currentDeviceId &&
+    sessionUserId !== null &&
+    sessionUserId === currentUserId
+  ) {
     bufferedToken = null
     return
   }
@@ -65,6 +73,7 @@ async function upsertToken(token: string) {
   const device = await upsertPushDevice({ token, platform })
   currentToken = token
   currentDeviceId = device.id
+  currentUserId = sessionUserId
   bufferedToken = null
 
   if (previousDeviceId && previousToken && previousToken !== token) {
@@ -182,6 +191,7 @@ async function beforeLogout() {
   const deviceId = currentDeviceId
   currentToken = null
   currentDeviceId = null
+  currentUserId = null
   bufferedToken = null
   pendingTap = null
 
@@ -255,6 +265,7 @@ export async function resetNativePushForTests() {
   nativeConfigured = false
   currentToken = null
   currentDeviceId = null
+  currentUserId = null
   bufferedToken = null
   pendingTap = null
   applyingTap = false

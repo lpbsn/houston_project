@@ -167,7 +167,7 @@ Ticket auth orthogonal (wipe refresh Native sur erreur réseau) : hors ce checkp
 
 **Objectif.** Découpler les notifications métier de leur canal de livraison.
 
-**Responsabilité.** Le domaine Notification reste la source des messages d’attention (in-app + règles). **Push natif iOS/Android** : cible prioritaire pour les usages terrain. **Web Push desktop** : optionnel — ne l’implémenter qu’au lot 7 si un besoin produit réel le justifie (direction / management). **Web Push mobile** : hors cible implicite. L’inscription, les permissions et le payload de delivery restent spécifiques au canal retenu ; le contenu notifié et le deep link cible restent communs. Ne pas coupler les features au plugin de push.
+**Responsabilité.** Le domaine Notification reste la source des messages d’attention (in-app + règles). Canal unique : **push natif iOS/Android** (FCM). **Web Push desktop** : non. **Web Push mobile** : hors cible. L’inscription, les permissions et le payload de delivery restent spécifiques au canal ; le contenu notifié et le deep link cible restent communs. Ne pas coupler les features au plugin de push.
 
 **Fait (2026-08-19).** Canal unique FCM HTTP v1 + `@capacitor-firebase/messaging`. `PushDevice` user-scoped ; envoi filtré par membership `push_enabled`. Web Push / VAPID retirés. Web Push desktop **non**. Tap OS (foreground / background / terminated) : `establishment_id` + `url` du payload. Sync token si session + permission OS granted (pas le `push_enabled` de l’établissement actif). Device QA manuel iOS physique + Android.
 

@@ -22,8 +22,6 @@ from houston.testing.auth import build_api_membership
 
 pytestmark = pytest.mark.django_db
 
-VAPID_SETTINGS = FCM_PUSH_SETTINGS
-
 
 @pytest.fixture(autouse=True)
 def clear_cache():
@@ -32,7 +30,7 @@ def clear_cache():
     cache.clear()
 
 
-def _create_subscription(*, user) -> PushDevice:
+def _create_push_device(*, user) -> PushDevice:
     return PushDevice.objects.create(
         user=user,
         token=f"fcm-token-{uuid.uuid4()}",
@@ -58,11 +56,11 @@ def _create_chat_notification(*, recipient, conversation_id: uuid.UUID | None = 
     )
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 def test_run_push_for_notification_sends_chat_message_received():
     recipient = _prepare_recipient()
     notification = _create_chat_notification(recipient=recipient)
-    _create_subscription(user=recipient.user)
+    _create_push_device(user=recipient.user)
 
     with (
         patch(
@@ -79,7 +77,7 @@ def test_run_push_for_notification_sends_chat_message_received():
     assert delivery.status == PushDelivery.Status.SENT
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 def test_run_push_for_notification_skips_chat_when_presence_active():
     recipient = _prepare_recipient()
     conversation_id = uuid.uuid4()
@@ -87,7 +85,7 @@ def test_run_push_for_notification_skips_chat_when_presence_active():
         recipient=recipient,
         conversation_id=conversation_id,
     )
-    _create_subscription(user=recipient.user)
+    _create_push_device(user=recipient.user)
 
     with (
         patch(
@@ -107,11 +105,11 @@ def test_run_push_for_notification_skips_chat_when_presence_active():
     send_fcm.assert_not_called()
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 def test_run_push_for_notification_throttles_chat_push_to_one_per_window():
     recipient = _prepare_recipient()
     conversation_id = uuid.uuid4()
-    _create_subscription(user=recipient.user)
+    _create_push_device(user=recipient.user)
 
     notifications = [
         _create_chat_notification(recipient=recipient, conversation_id=conversation_id)
@@ -131,8 +129,8 @@ def test_run_push_for_notification_throttles_chat_push_to_one_per_window():
     assert send_fcm.call_count == 1
 
 
-@override_settings(**VAPID_SETTINGS)
-def test_chat_push_throttle_not_consumed_without_active_subscription():
+@override_settings(**FCM_PUSH_SETTINGS)
+def test_chat_push_throttle_not_consumed_without_active_device():
     recipient = _prepare_recipient()
     conversation_id = uuid.uuid4()
     notification = _create_chat_notification(
@@ -155,7 +153,7 @@ def test_chat_push_throttle_not_consumed_without_active_subscription():
     )
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 def test_chat_push_throttle_not_consumed_when_navigation_missing():
     recipient = _prepare_recipient()
     conversation_id = uuid.uuid4()
@@ -163,7 +161,7 @@ def test_chat_push_throttle_not_consumed_when_navigation_missing():
         recipient=recipient,
         conversation_id=conversation_id,
     )
-    _create_subscription(user=recipient.user)
+    _create_push_device(user=recipient.user)
 
     with (
         patch(
@@ -188,7 +186,7 @@ def test_chat_push_throttle_not_consumed_when_navigation_missing():
     )
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 def test_chat_push_throttle_not_consumed_when_all_deliveries_fail():
     recipient = _prepare_recipient()
     conversation_id = uuid.uuid4()
@@ -196,7 +194,7 @@ def test_chat_push_throttle_not_consumed_when_all_deliveries_fail():
         recipient=recipient,
         conversation_id=conversation_id,
     )
-    _create_subscription(user=recipient.user)
+    _create_push_device(user=recipient.user)
 
     with (
         patch(
@@ -220,7 +218,7 @@ def test_chat_push_throttle_not_consumed_when_all_deliveries_fail():
     )
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 def test_chat_push_throttle_consumed_after_successful_send():
     recipient = _prepare_recipient()
     conversation_id = uuid.uuid4()
@@ -228,7 +226,7 @@ def test_chat_push_throttle_consumed_after_successful_send():
         recipient=recipient,
         conversation_id=conversation_id,
     )
-    _create_subscription(user=recipient.user)
+    _create_push_device(user=recipient.user)
 
     with (
         patch(
@@ -247,16 +245,16 @@ def test_chat_push_throttle_consumed_after_successful_send():
     )
 
 
-@override_settings(**VAPID_SETTINGS)
-def test_chat_push_throttle_consumed_when_one_of_multiple_subscriptions_succeeds():
+@override_settings(**FCM_PUSH_SETTINGS)
+def test_chat_push_throttle_consumed_when_one_of_multiple_devices_succeeds():
     recipient = _prepare_recipient()
     conversation_id = uuid.uuid4()
     notification = _create_chat_notification(
         recipient=recipient,
         conversation_id=conversation_id,
     )
-    _create_subscription(user=recipient.user)
-    _create_subscription(user=recipient.user)
+    _create_push_device(user=recipient.user)
+    _create_push_device(user=recipient.user)
 
     call_count = 0
 

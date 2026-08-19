@@ -26,6 +26,7 @@ import type { PendingOnboardingMembership } from '@/features/auth/lib/pending-on
 import {
   applyPendingNativePushTap,
   setNativePushActiveEstablishmentGetter,
+  setNativePushActiveUserIdGetter,
   syncNativePushTokenIfGranted,
 } from '@/lib/native-push-session'
 
@@ -126,14 +127,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setNativePushActiveEstablishmentGetter(
       () => bootstrap?.active_membership?.establishment_id ?? null,
     )
-  }, [bootstrap?.active_membership?.establishment_id])
+    setNativePushActiveUserIdGetter(() => bootstrap?.user?.id ?? null)
+  }, [bootstrap?.active_membership?.establishment_id, bootstrap?.user?.id])
 
   useEffect(() => {
     if (!isAuthenticated || !isReady) {
       return
     }
     void syncNativePushTokenIfGranted()
-  }, [isAuthenticated, isReady])
+  }, [isAuthenticated, isReady, bootstrap?.user?.id])
 
   useEffect(() => {
     if (!isAuthenticated || !isReady) {
