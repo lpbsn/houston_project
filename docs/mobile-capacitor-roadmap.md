@@ -171,6 +171,8 @@ Ticket auth orthogonal (wipe refresh Native sur erreur réseau) : hors ce checkp
 
 **Fait (2026-08-19).** Canal unique FCM HTTP v1 + `@capacitor-firebase/messaging`. `PushDevice` user-scoped ; envoi filtré par membership `push_enabled`. Web Push / VAPID retirés. Web Push desktop **non**. Tap OS (foreground / background / terminated) : `establishment_id` + `url` du payload. Sync token si session + permission OS granted (pas le `push_enabled` de l’établissement actif). Device QA manuel iOS physique + Android.
 
+**Validation (2026-08-19).** Implémentation Lot 7 terminée. `npx cap sync` validé. Build Android avec Firebase validé. Build iOS avec `@capacitor-firebase/messaging` + Firebase validé (`GoogleService-Info.plist` embarqué dans la target iOS ; entitlement `aps-environment=development` présent et référencé). Push iOS sur device réel **non validé** : le compte Apple actuel est une Personal Team ; cette validation reste en attente jusqu’à l’adhésion à l’Apple Developer Program, nécessaire pour tester APNs proprement sur iPhone physique. La suite de validation immédiate se poursuit sur Android de bout en bout.
+
 ### 8. Deep links / navigation native
 
 **Objectif.** Les URLs métier, notifications et liens externes ouvrent la bonne destination sur Web ou dans l’app native.
