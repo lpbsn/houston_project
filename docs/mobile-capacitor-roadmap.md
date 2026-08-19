@@ -3,7 +3,7 @@
 Status: authoritative  
 Last reviewed: 2026-08-19
 
-Référence d’exécution pour les agents Cursor. **Capacitor Lots 1–6 are done.** Checkpoint **Offline capture terrain** is **done**. Next is **Capacitor Lot 7** (push). This document frames the remaining lots; it does not prescribe implementation.
+Référence d’exécution pour les agents Cursor. **Capacitor Lots 1–7 are done.** Next is **Capacitor Lot 8** (deep links). This document frames the remaining lots; it does not prescribe implementation.
 
 These **Capacitor Lots** (1–11) are distinct from product/domain lots (taxonomy Lot 5, test Lot 4 helpers, product Lot 11 stabilization). Write **Capacitor Lot N** when referring to this roadmap.
 
@@ -47,7 +47,7 @@ Certains mécanismes PWA couvraient des besoins réels. La suppression de la PWA
 |--------------------|-------------------------------|----------------|
 | Détection réseau / états hors-ligne | Événements navigateur + bannière UI | Capacitor Lot 6 — **done**: Web `navigator.onLine` ; Native `@capacitor/network` ; une source `isOnline` par runtime |
 | Reconnexion WS / refetch après reprise | TanStack Query + hooks WS | Capacitor Lot 6 — **done**: `visibilitychange` (Web) + native `appStateChange` ; resync via `onReconnect` existant |
-| Notifications push terrain | Web Push (navigateur) ; contraintes iOS PWA | Lot 7 — **push natif iOS/Android** (priorité terrain) ; Web Push desktop **optionnel**, à justifier produit au lot 7 ; Web Push mobile **hors cible implicite** |
+| Notifications push terrain | Push natif iOS/Android (FCM) | **Lot 7 done.** Web Push desktop **non** ; Web Push mobile hors cible |
 | Mise à jour applicative Web | Service worker + bannière de refresh | Lot 4 — **retrait** ; pas de mécanisme équivalent : build Vite classique (`index.html` revalidé, assets hashés en cache long) |
 | Installation sur l’écran d’accueil | Manifeste PWA + prompts navigateur | Hors scope Web — distribution native (lot 5) |
 | Cache assets / shell offline | Service worker `injectManifest` | Lot 4 — **retrait** ; cache HTTP navigateur/CDN suffit ; pas de shell offline ni de stratégie offline dédiée |
@@ -77,7 +77,7 @@ Chaque lot est un chantier séparé. Un agent qui ouvre un lot doit :
 
 Les fichiers, interfaces, plugins Capacitor, librairies et migrations se décident **au début du lot**, après inspection — pas dans cette roadmap.
 
-Ordre des lots : strictement séquentiel. Un lot suivant ne commence que si le précédent est implémenté et validé. Le checkpoint Offline capture terrain est **done** (cadrage seulement, pas d’implémentation). **Capacitor Lot 7** est le prochain lot d’implémentation. Ne pas ouvrir de stockage, file, ou sync Observation avant le Lot 7.
+Ordre des lots : strictement séquentiel. Un lot suivant ne commence que si le précédent est implémenté et validé. Le checkpoint Offline capture terrain est **done** (cadrage seulement, pas d’implémentation). **Capacitor Lot 7 is done.** **Capacitor Lot 8** is next. Ne pas ouvrir de stockage, file, ou sync Observation avant le Lot 10.
 
 Contexte de migration. Le projet est développé par un seul développeur et n’a aucun utilisateur réel en production. Il n’est donc pas nécessaire de privilégier les stratégies de migration “safe” destinées à préserver temporairement l’existant : compatibilité ascendante, doubles chemins, feature flags, migrations progressives, fallbacks temporaires ou conservation d’anciennes abstractions. Si une rupture ou une refonte rend la cible plus simple, propre et maintenable, elle doit être privilégiée.
 Cela ne signifie pas ignorer la qualité ou la sécurité technique : le repository doit rester fonctionnel et validé à la fin de chaque lot.
@@ -104,7 +104,7 @@ TOUJOURS BESOIN
 
 ## Lots
 
-Capacitor Lot status: **1–6 done** · checkpoint Offline capture terrain **done** · **7 next** · 8–11 not started.
+Capacitor Lot status: **1–7 done** · checkpoint Offline capture terrain **done** · **8 next** · 9–11 not started.
 
 ### 1. Runtime / API / WebSocket — done
 
@@ -150,7 +150,7 @@ Capacitor Lot status: **1–6 done** · checkpoint Offline capture terrain **don
 
 **Objectif.** Cadrer, à partir des workflows réels, lesquels doivent survivre à une connectivité intermittente, et si une implémentation d’offline capture ciblée doit être avancée avant le Push (lot 7).
 
-**Décision (2026-08-19).** Pas de lot d’implémentation Offline avant Push. **Lot 7 reste le prochain lot.** La seule capture critique identifiée est l’**Observation** (rapport direct `/reporting`, et observation-depuis-tâche texte seul). Traitement ciblé au **Lot 10**, régime **process vivant** uniquement.
+**Décision (2026-08-19).** Pas de lot d’implémentation Offline avant Push. **Lot 7 was the next implementation lot (now done).** La seule capture critique identifiée est l’**Observation** (rapport direct `/reporting`, et observation-depuis-tâche texte seul). Traitement ciblé au **Lot 10**, régime **process vivant** uniquement.
 
 Deux régimes — ne pas les mélanger :
 
@@ -163,11 +163,13 @@ Cette protection Observation régime A est un **prérequis avant un vrai usage o
 
 Ticket auth orthogonal (wipe refresh Native sur erreur réseau) : hors ce checkpoint, hors Lot 10, hors séquencement Push — [issue #181](https://github.com/lpbsn/houston_project/issues/181), [`architecture/authentication_charter.md`](architecture/authentication_charter.md).
 
-### 7. Push multi-channel
+### 7. Push multi-channel — done
 
 **Objectif.** Découpler les notifications métier de leur canal de livraison.
 
 **Responsabilité.** Le domaine Notification reste la source des messages d’attention (in-app + règles). **Push natif iOS/Android** : cible prioritaire pour les usages terrain. **Web Push desktop** : optionnel — ne l’implémenter qu’au lot 7 si un besoin produit réel le justifie (direction / management). **Web Push mobile** : hors cible implicite. L’inscription, les permissions et le payload de delivery restent spécifiques au canal retenu ; le contenu notifié et le deep link cible restent communs. Ne pas coupler les features au plugin de push.
+
+**Fait (2026-08-19).** Canal unique FCM HTTP v1 + `@capacitor-firebase/messaging`. `PushDevice` user-scoped ; envoi filtré par membership `push_enabled`. Web Push / VAPID retirés. Web Push desktop **non**. Tap OS (foreground / background / terminated) : `establishment_id` + `url` du payload. Sync token si session + permission OS granted (pas le `push_enabled` de l’établissement actif). Device QA manuel iOS physique + Android.
 
 ### 8. Deep links / navigation native
 
@@ -206,14 +208,14 @@ Interdit : offline-first généralisé ; réplication locale complète ; cache d
 - Build Web : Vite classique : assets fingerprintés/hashés ; politique HTTP configurée au niveau du serveur/CDN pour permettre la revalidation de index.html et le cache long des assets immuables. Aucun mécanisme applicatif spécifique de mise à jour n’est prévu.
 - Cache / shell offline PWA : pas de shell offline ni de stratégie offline dédiée héritée du service worker.
 - Offline-first généralisé : hors cible — pas de réplication locale complète, pas de cache durable généralisé, pas de synchronisation universelle de toutes les mutations, pas de file de mutations durable.
-- Push terrain : **natif iOS/Android** prioritaire ; Web Push mobile hors cible implicite.
+- Push terrain : **natif iOS/Android** (Lot 7 done) ; Web Push mobile hors cible ; **Web Push desktop : non**.
 - Suppression PWA ≠ reconstruction systématique des capacités PWA ailleurs.
 - **Offline capture terrain (checkpoint done, 2026-08-19)** : pas de lot d’implémentation avant Push. Seule capture critique = Observation. Lot 10 = régime process-vivant seulement (pas de survie après kill). Audio / chat / commentaires / commandes de cycle de vie exclus. Pas de stockage, file, ou sync avant le Lot 7, et le Lot 10 ne les introduit pas pour le régime B.
 - Ne pas ouvrir d’implémentation de stockage / file / sync Observation avant Capacitor Lot 7.
 
 ### Encore ouvertes
 
-- **Web Push desktop** : à trancher **au lot 7** uniquement si un besoin produit réel émerge (ex. alertes direction sans app native).
+_(aucune pour le Lot 7 — Web Push desktop tranché **non**.)_
 
 ---
 

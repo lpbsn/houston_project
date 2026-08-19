@@ -69,6 +69,8 @@ Generate independent random values (`openssl rand -hex 32`). Set on `api-web`, `
 | `HOUSTON_CHAT_WS_TICKET_SALT` | yes | Not dev default |
 | `HOUSTON_REALTIME_WS_TICKET_SALT` | yes | Not dev default |
 | `OPENAI_API_KEY` | yes | Required when AI providers are `openai` |
+| `HOUSTON_PUSH_ENABLED` | no | Kill-switch for FCM send; default off |
+| `HOUSTON_FCM_SERVICE_ACCOUNT_JSON` | when push on | Firebase service-account JSON string; `api-web` + `celery-worker`. Never log. APNs `.p8` stays in Firebase Console. |
 
 Forbidden placeholders: `replace-me-for-local-dev`, empty values.
 
@@ -83,6 +85,7 @@ Forbidden placeholders: `replace-me-for-local-dev`, empty values.
 | `POSTGRES_*` | yes | yes | yes |
 | `REDIS_URL`, `CELERY_*`, `HOUSTON_CACHE_REDIS_URL` | yes | yes | yes |
 | Auth salts / `OPENAI_API_KEY` | yes | yes | yes |
+| `HOUSTON_PUSH_ENABLED`, `HOUSTON_FCM_SERVICE_ACCOUNT_JSON` | yes | yes | no |
 | `HOUSTON_INVITATION_EMAIL_ENABLED`, `HOUSTON_PUBLIC_APP_URL` | yes | yes | optional |
 | `HOUSTON_INVITATION_EMAIL_FROM`, `RESEND_API_KEY` | no | yes | no |
 | AI provider vars (`HOUSTON_AI_*`) | yes | yes | yes |

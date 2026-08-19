@@ -7,29 +7,23 @@ import pytest
 from django.test import override_settings
 
 from houston.establishments.models import EstablishmentMembership
-from houston.notifications.models import Notification, PushDelivery, WebPushSubscription
+from houston.notifications.models import Notification, PushDelivery, PushDevice
 from houston.notifications.push.services import run_push_for_notification
 from houston.notifications.push.tasks import send_push_for_notification_task
 from houston.notifications.tests.conftest import create_test_notification
-from houston.notifications.tests.vapid_constants import TEST_PRIVATE_KEY, TEST_PUBLIC_KEY
+from houston.notifications.tests.fcm_constants import FCM_PUSH_SETTINGS
 from houston.testing.auth import build_api_membership
 
 pytestmark = pytest.mark.django_db
 
-VAPID_SETTINGS = {
-    "HOUSTON_PUSH_ENABLED": True,
-    "HOUSTON_VAPID_PUBLIC_KEY": TEST_PUBLIC_KEY,
-    "HOUSTON_VAPID_PRIVATE_KEY": TEST_PRIVATE_KEY,
-    "HOUSTON_VAPID_SUBJECT": "mailto:push@houston.local",
-}
+VAPID_SETTINGS = FCM_PUSH_SETTINGS
 
 
-def _create_subscription(*, user) -> WebPushSubscription:
-    return WebPushSubscription.objects.create(
+def _create_subscription(*, user) -> PushDevice:
+    return PushDevice.objects.create(
         user=user,
-        endpoint=f"https://push.example.com/device/{uuid.uuid4()}",
-        p256dh="p256dh-key",
-        auth="auth-key",
+        token=f"fcm-token-{uuid.uuid4()}",
+        platform="android",
     )
 
 
@@ -69,12 +63,12 @@ def test_run_push_for_notification_skips_when_event_key_not_allowlisted():
     )
     _create_subscription(user=recipient.user)
 
-    with patch("houston.notifications.push.services.send_web_push") as send_web_push:
+    with patch("houston.notifications.push.services.send_fcm") as send_fcm:
         sent_count = run_push_for_notification(notification.id)
 
     assert sent_count == 0
     assert PushDelivery.objects.count() == 0
-    send_web_push.assert_not_called()
+    send_fcm.assert_not_called()
 
 
 @override_settings(**VAPID_SETTINGS)
@@ -99,41 +93,41 @@ def test_run_push_for_notification_skips_when_preferences_disabled(
     notification = create_test_notification(recipient=recipient)
     _create_subscription(user=recipient.user)
 
-    with patch("houston.notifications.push.services.send_web_push") as send_web_push:
+    with patch("houston.notifications.push.services.send_fcm") as send_fcm:
         sent_count = run_push_for_notification(notification.id)
 
     assert sent_count == 0
     assert PushDelivery.objects.count() == 0
-    send_web_push.assert_not_called()
+    send_fcm.assert_not_called()
 
 
 @override_settings(**VAPID_SETTINGS)
-def test_run_push_for_notification_skips_when_no_active_subscriptions():
+def test_run_push_for_notification_skips_when_no_active_devices():
     recipient = _prepare_recipient()
     notification = create_test_notification(recipient=recipient)
 
-    with patch("houston.notifications.push.services.send_web_push") as send_web_push:
+    with patch("houston.notifications.push.services.send_fcm") as send_fcm:
         sent_count = run_push_for_notification(notification.id)
 
     assert sent_count == 0
     assert PushDelivery.objects.count() == 0
-    send_web_push.assert_not_called()
+    send_fcm.assert_not_called()
 
 
 @override_settings(**VAPID_SETTINGS)
-def test_run_push_for_notification_skips_revoked_subscription():
+def test_run_push_for_notification_skips_revoked_device():
     recipient = _prepare_recipient()
     notification = create_test_notification(recipient=recipient)
     subscription = _create_subscription(user=recipient.user)
     subscription.revoked_at = notification.created_at
     subscription.save(update_fields=["revoked_at", "updated_at"])
 
-    with patch("houston.notifications.push.services.send_web_push") as send_web_push:
+    with patch("houston.notifications.push.services.send_fcm") as send_fcm:
         sent_count = run_push_for_notification(notification.id)
 
     assert sent_count == 0
     assert PushDelivery.objects.count() == 0
-    send_web_push.assert_not_called()
+    send_fcm.assert_not_called()
 
 
 @override_settings(**VAPID_SETTINGS)
@@ -147,20 +141,20 @@ def test_run_push_for_notification_sends_delivery_when_guards_pass():
             "houston.notifications.push.services.recipient_can_view_notification_subject",
             return_value=True,
         ),
-        patch("houston.notifications.push.services.send_web_push") as send_web_push,
+        patch("houston.notifications.push.services.send_fcm") as send_fcm,
     ):
         sent_count = run_push_for_notification(notification.id)
 
     assert sent_count == 1
-    send_web_push.assert_called_once()
+    send_fcm.assert_called_once()
     delivery = PushDelivery.objects.get()
     assert delivery.notification_id == notification.id
-    assert delivery.subscription_id == subscription.id
+    assert delivery.device_id == subscription.id
     assert delivery.status == PushDelivery.Status.SENT
 
 
 @override_settings(**VAPID_SETTINGS)
-def test_run_push_for_notification_is_idempotent_per_subscription():
+def test_run_push_for_notification_is_idempotent_per_device():
     recipient = _prepare_recipient()
     notification = create_test_notification(recipient=recipient)
     _create_subscription(user=recipient.user)
@@ -170,7 +164,7 @@ def test_run_push_for_notification_is_idempotent_per_subscription():
             "houston.notifications.push.services.recipient_can_view_notification_subject",
             return_value=True,
         ),
-        patch("houston.notifications.push.services.send_web_push") as send_web_push,
+        patch("houston.notifications.push.services.send_fcm") as send_fcm,
     ):
         first_count = run_push_for_notification(notification.id)
         second_count = run_push_for_notification(notification.id)
@@ -178,7 +172,7 @@ def test_run_push_for_notification_is_idempotent_per_subscription():
     assert first_count == 1
     assert second_count == 0
     assert PushDelivery.objects.count() == 1
-    assert send_web_push.call_count == 1
+    assert send_fcm.call_count == 1
 
 
 @override_settings(**VAPID_SETTINGS)
@@ -192,7 +186,7 @@ def test_send_push_for_notification_task_delegates_to_service():
             "houston.notifications.push.services.recipient_can_view_notification_subject",
             return_value=True,
         ),
-        patch("houston.notifications.push.services.send_web_push"),
+        patch("houston.notifications.push.services.send_fcm"),
     ):
         sent_count = send_push_for_notification_task.run(str(notification.id))
 

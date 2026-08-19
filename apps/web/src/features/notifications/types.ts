@@ -7,6 +7,8 @@ export type MarkAllNotificationsReadResponse =
 export type NotificationPreferences = components['schemas']['NotificationPreferences']
 export type NotificationPreferencesUpdate =
   components['schemas']['PatchedNotificationPreferencesUpdate']
+export type PushDeviceResponse = components['schemas']['PushDeviceResponse']
+export type PushDeviceUpsert = components['schemas']['PushDeviceUpsert']
 export type NotificationSubjectType = NotificationItem['subject_type']
 export type NotificationItemStatus = NotificationItem['status']
 export type NotificationPriority = NotificationItem['priority']

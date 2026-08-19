@@ -6,24 +6,21 @@ import uuid
 from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
-from pywebpush import WebPushException
 
 from houston.chat.presence import is_chat_presence_active
-from houston.notifications.models import Notification, PushDelivery, WebPushSubscription
+from houston.notifications.models import Notification, PushDelivery, PushDevice
 from houston.notifications.permissions import recipient_can_view_notification_subject
 from houston.notifications.push import constants as push_constants
 from houston.notifications.push.chat_guards import (
     claim_chat_push_throttle,
     release_chat_push_throttle,
 )
-from houston.notifications.push.exceptions import WebPushSubscriptionValidationError
+from houston.notifications.push.exceptions import FcmSendError
 from houston.notifications.push.payloads import build_push_payload
 from houston.notifications.push.sender import (
-    is_vapid_configured,
-    log_vapid_not_configured,
-    send_web_push,
-    should_revoke_subscription_for_error,
-    web_push_error_code,
+    is_fcm_configured,
+    log_fcm_not_configured,
+    send_fcm,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,117 +35,103 @@ TERMINAL_PUSH_DELIVERY_STATUSES = frozenset(
 )
 
 
-def get_web_push_subscription_for_user(
+def get_push_device_for_user(
     *,
-    subscription_id: uuid.UUID,
+    device_id: uuid.UUID,
     user,
-) -> WebPushSubscription | None:
-    return WebPushSubscription.objects.filter(pk=subscription_id, user=user).first()
+) -> PushDevice | None:
+    return PushDevice.objects.filter(pk=device_id, user=user).first()
 
 
-def _refresh_web_push_subscription(
+def _refresh_push_device(
     *,
-    subscription: WebPushSubscription,
+    device: PushDevice,
     user,
-    p256dh: str,
-    auth: str,
-    user_agent: str,
+    platform: str,
     now,
-) -> WebPushSubscription:
-    if subscription.user_id != user.id:
-        raise WebPushSubscriptionValidationError("Endpoint already registered to another user.")
-    subscription.p256dh = p256dh
-    subscription.auth = auth
-    subscription.user_agent = user_agent
-    subscription.last_seen_at = now
-    subscription.revoked_at = None
-    subscription.save(
+) -> PushDevice:
+    device.user = user
+    device.platform = platform
+    device.last_seen_at = now
+    device.revoked_at = None
+    device.save(
         update_fields=[
-            "p256dh",
-            "auth",
-            "user_agent",
+            "user",
+            "platform",
             "last_seen_at",
             "revoked_at",
             "updated_at",
         ],
     )
-    return subscription
+    return device
 
 
 @transaction.atomic
-def upsert_web_push_subscription(
+def upsert_push_device(
     *,
     user,
-    endpoint: str,
-    p256dh: str,
-    auth: str,
-    user_agent: str = "",
-) -> WebPushSubscription:
+    token: str,
+    platform: str,
+) -> PushDevice:
     now = timezone.now()
-    existing = WebPushSubscription.objects.filter(endpoint=endpoint).first()
+    existing = PushDevice.objects.filter(token=token, revoked_at__isnull=True).first()
     if existing is not None:
-        return _refresh_web_push_subscription(
-            subscription=existing,
+        return _refresh_push_device(
+            device=existing,
             user=user,
-            p256dh=p256dh,
-            auth=auth,
-            user_agent=user_agent,
+            platform=platform,
             now=now,
         )
 
     try:
         with transaction.atomic():
-            return WebPushSubscription.objects.create(
+            return PushDevice.objects.create(
                 user=user,
-                endpoint=endpoint,
-                p256dh=p256dh,
-                auth=auth,
-                user_agent=user_agent,
+                token=token,
+                platform=platform,
                 last_seen_at=now,
             )
     except IntegrityError:
-        existing = WebPushSubscription.objects.filter(endpoint=endpoint).first()
+        existing = PushDevice.objects.filter(token=token, revoked_at__isnull=True).first()
         if existing is None:
             raise
-        return _refresh_web_push_subscription(
-            subscription=existing,
+        return _refresh_push_device(
+            device=existing,
             user=user,
-            p256dh=p256dh,
-            auth=auth,
-            user_agent=user_agent,
+            platform=platform,
             now=now,
         )
 
 
 @transaction.atomic
-def revoke_subscription(
+def revoke_push_device(
     *,
-    subscription: WebPushSubscription,
+    device: PushDevice,
     user,
-) -> WebPushSubscription | None:
-    if subscription.user_id != user.id:
+) -> PushDevice | None:
+    if device.user_id != user.id:
         return None
-    if subscription.revoked_at is not None:
-        return subscription
+    if device.revoked_at is not None:
+        return device
 
     now = timezone.now()
-    subscription.revoked_at = now
-    subscription.save(update_fields=["revoked_at", "updated_at"])
-    return subscription
+    device.revoked_at = now
+    device.save(update_fields=["revoked_at", "updated_at"])
+    return device
 
 
-def _queue_push_delivery(*, notification_id: uuid.UUID, subscription_id: uuid.UUID) -> PushDelivery:
+def _queue_push_delivery(*, notification_id: uuid.UUID, device_id: uuid.UUID) -> PushDelivery:
     try:
         delivery, _created = PushDelivery.objects.get_or_create(
             notification_id=notification_id,
-            subscription_id=subscription_id,
+            device_id=device_id,
             defaults={"status": PushDelivery.Status.QUEUED},
         )
         return delivery
     except IntegrityError:
         delivery = PushDelivery.objects.filter(
             notification_id=notification_id,
-            subscription_id=subscription_id,
+            device_id=device_id,
         ).first()
         if delivery is None:
             raise
@@ -193,11 +176,11 @@ def _mark_push_delivery_sent(*, delivery: PushDelivery, now) -> None:
 
 
 @transaction.atomic
-def _revoke_subscription_internal(*, subscription: WebPushSubscription, now) -> None:
-    if subscription.revoked_at is not None:
+def _revoke_device_internal(*, device: PushDevice, now) -> None:
+    if device.revoked_at is not None:
         return
-    subscription.revoked_at = now
-    subscription.save(update_fields=["revoked_at", "updated_at"])
+    device.revoked_at = now
+    device.save(update_fields=["revoked_at", "updated_at"])
 
 
 def run_push_for_notification(notification_id: uuid.UUID) -> int:
@@ -244,17 +227,17 @@ def run_push_for_notification(notification_id: uuid.UUID) -> int:
     ):
         return 0
 
-    if not is_vapid_configured():
-        log_vapid_not_configured(notification_id=str(notification.id))
+    if not is_fcm_configured():
+        log_fcm_not_configured(notification_id=str(notification.id))
         return 0
 
-    subscriptions = list(
-        WebPushSubscription.objects.filter(
+    devices = list(
+        PushDevice.objects.filter(
             user_id=recipient.user_id,
             revoked_at__isnull=True,
         )
     )
-    if not subscriptions:
+    if not devices:
         return 0
 
     payload = build_push_payload(notification)
@@ -275,10 +258,10 @@ def run_push_for_notification(notification_id: uuid.UUID) -> int:
     skipped_count = 0
     failed_count = 0
 
-    for subscription in subscriptions:
+    for device in devices:
         delivery = _queue_push_delivery(
             notification_id=notification.id,
-            subscription_id=subscription.id,
+            device_id=device.id,
         )
         if delivery.status in TERMINAL_PUSH_DELIVERY_STATUSES:
             continue
@@ -298,13 +281,12 @@ def run_push_for_notification(notification_id: uuid.UUID) -> int:
         delivery.refresh_from_db()
 
         try:
-            send_web_push(subscription=subscription, payload=payload)
-        except WebPushException as exc:
-            error_code = web_push_error_code(exc)
-            _mark_push_delivery_failed(delivery=delivery, error_code=error_code)
+            send_fcm(device=device, payload=payload)
+        except FcmSendError as exc:
+            _mark_push_delivery_failed(delivery=delivery, error_code=exc.error_code)
             failed_count += 1
-            if should_revoke_subscription_for_error(exc):
-                _revoke_subscription_internal(subscription=subscription, now=now)
+            if exc.should_revoke:
+                _revoke_device_internal(device=device, now=now)
             continue
         except Exception as exc:
             _mark_push_delivery_failed(delivery=delivery, error_code="unexpected_error")
@@ -314,7 +296,7 @@ def run_push_for_notification(notification_id: uuid.UUID) -> int:
                 extra={
                     "event": "push_delivery_unexpected_error",
                     "notification_id": str(notification.id),
-                    "subscription_id": str(subscription.id),
+                    "device_id": str(device.id),
                     "error_code": "unexpected_error",
                     "exception_class": type(exc).__name__,
                 },
@@ -337,7 +319,7 @@ def run_push_for_notification(notification_id: uuid.UUID) -> int:
         extra={
             "event": "push_for_notification_processed",
             "notification_id": str(notification.id),
-            "delivery_count": len(subscriptions),
+            "delivery_count": len(devices),
             "sent_count": sent_count,
             "skipped_count": skipped_count,
             "failed_count": failed_count,

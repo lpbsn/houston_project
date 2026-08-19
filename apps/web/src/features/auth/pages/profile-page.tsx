@@ -1,4 +1,4 @@
-import { type ComponentType } from 'react'
+import { type ComponentType, useEffect, useState } from 'react'
 import { ArrowLeftRight, BarChart3, Building2, ChevronRight, Library, Users } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
@@ -27,6 +27,12 @@ import {
 } from '@/features/notifications/hooks'
 import { GamificationScoreCard } from '@/features/gamification/components/gamification-score-card'
 import { useGamificationOverviewQuery } from '@/features/gamification/hooks'
+import {
+  NativePushPermissionDeniedError,
+  checkNativePushReceivePermission,
+  optInNativePush,
+} from '@/lib/native-push-session'
+import { getAppRuntime } from '@/lib/runtime'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -182,8 +188,30 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   const updateNotificationPreferencesMutation =
     useUpdateNotificationPreferencesMutation(establishmentId)
   const notificationsEnabled = notificationPreferencesQuery.data?.notifications_enabled ?? true
+  const pushEnabled = notificationPreferencesQuery.data?.push_enabled ?? false
+  const isNativeRuntime = getAppRuntime() === 'native'
+  const [pushOptInError, setPushOptInError] = useState<string | null>(null)
+  const [isPushOptingIn, setIsPushOptingIn] = useState(false)
+  const [osReceive, setOsReceive] = useState<'granted' | 'denied' | 'prompt' | 'unavailable'>(
+    'unavailable',
+  )
   const isNotificationTogglePending =
     notificationPreferencesQuery.isLoading || updateNotificationPreferencesMutation.isPending
+
+  useEffect(() => {
+    if (!isNativeRuntime) {
+      return
+    }
+    let cancelled = false
+    void checkNativePushReceivePermission().then((receive) => {
+      if (!cancelled) {
+        setOsReceive(receive)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isNativeRuntime, pushEnabled])
 
   if (!isReady || isBootstrapping) {
     return (
@@ -258,6 +286,51 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
             <p className="px-4 pb-3.5 text-xs text-[#E24B4A]">
               La mise à jour des notifications a échoué.
             </p>
+          ) : null}
+          {isNativeRuntime ? (
+            <>
+              <TerrainSwitch
+                label="Notifications push"
+                checked={pushEnabled}
+                disabled={
+                  isNotificationTogglePending ||
+                  isPushOptingIn ||
+                  !notificationsEnabled
+                }
+                onCheckedChange={(checked) => {
+                  setPushOptInError(null)
+                  if (!checked) {
+                    updateNotificationPreferencesMutation.mutate({ push_enabled: false })
+                    return
+                  }
+                  setIsPushOptingIn(true)
+                  void optInNativePush()
+                    .then(() => {
+                      updateNotificationPreferencesMutation.mutate({ push_enabled: true })
+                    })
+                    .catch((error: unknown) => {
+                      if (error instanceof NativePushPermissionDeniedError) {
+                        setPushOptInError(
+                          "Les notifications système n'ont pas été autorisées.",
+                        )
+                        return
+                      }
+                      setPushOptInError("L'activation des notifications push a échoué.")
+                    })
+                    .finally(() => {
+                      setIsPushOptingIn(false)
+                    })
+                }}
+              />
+              {pushEnabled && osReceive === 'denied' ? (
+                <p className="px-4 pb-3.5 text-xs text-[#E24B4A]">
+                  Les notifications sont bloquées dans les réglages du téléphone.
+                </p>
+              ) : null}
+              {pushOptInError ? (
+                <p className="px-4 pb-3.5 text-xs text-[#E24B4A]">{pushOptInError}</p>
+              ) : null}
+            </>
           ) : null}
         </TerrainCard>
       </div>

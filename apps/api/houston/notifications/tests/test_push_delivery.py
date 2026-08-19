@@ -6,26 +6,21 @@ from unittest.mock import patch
 import pytest
 from django.test import override_settings
 from django.utils import timezone
-from pywebpush import WebPushException
 
 from houston.establishments.models import EstablishmentMembership
-from houston.notifications.models import Notification, PushDelivery, WebPushSubscription
+from houston.notifications.models import Notification, PushDelivery, PushDevice
+from houston.notifications.push.exceptions import FcmSendError
 from houston.notifications.push.services import (
     _try_claim_push_delivery_for_send,
     run_push_for_notification,
 )
 from houston.notifications.tests.conftest import create_test_notification
-from houston.notifications.tests.vapid_constants import TEST_PRIVATE_KEY, TEST_PUBLIC_KEY
+from houston.notifications.tests.fcm_constants import FCM_PUSH_SETTINGS
 from houston.testing.auth import build_api_membership
 
 pytestmark = pytest.mark.django_db
 
-VAPID_SETTINGS = {
-    "HOUSTON_PUSH_ENABLED": True,
-    "HOUSTON_VAPID_PUBLIC_KEY": TEST_PUBLIC_KEY,
-    "HOUSTON_VAPID_PRIVATE_KEY": TEST_PRIVATE_KEY,
-    "HOUSTON_VAPID_SUBJECT": "mailto:push@houston.local",
-}
+VAPID_SETTINGS = FCM_PUSH_SETTINGS
 
 EVENT_KEY_SUBJECT_TYPES = [
     (
@@ -55,12 +50,11 @@ EVENT_KEY_SUBJECT_TYPES = [
 ]
 
 
-def _create_subscription(*, user) -> WebPushSubscription:
-    return WebPushSubscription.objects.create(
+def _create_subscription(*, user) -> PushDevice:
+    return PushDevice.objects.create(
         user=user,
-        endpoint=f"https://push.example.com/device/{uuid.uuid4()}",
-        p256dh="p256dh-key",
-        auth="auth-key",
+        token=f"fcm-token-{uuid.uuid4()}",
+        platform="android",
     )
 
 
@@ -90,15 +84,15 @@ def test_run_push_for_notification_sends_for_allowlisted_event_keys(
             "houston.notifications.push.services.recipient_can_view_notification_subject",
             return_value=True,
         ),
-        patch("houston.notifications.push.services.send_web_push") as send_web_push,
+        patch("houston.notifications.push.services.send_fcm") as send_fcm,
     ):
         sent_count = run_push_for_notification(notification.id)
 
     assert sent_count == 1
-    send_web_push.assert_called_once()
+    send_fcm.assert_called_once()
     delivery = PushDelivery.objects.get()
     assert delivery.notification_id == notification.id
-    assert delivery.subscription_id == subscription.id
+    assert delivery.device_id == subscription.id
     assert delivery.status == PushDelivery.Status.SENT
     assert delivery.sent_at is not None
 
@@ -140,14 +134,14 @@ def test_run_push_for_notification_sends_for_comment_mention():
     )
     subscription = _create_subscription(user=staff.user)
 
-    with patch("houston.notifications.push.services.send_web_push") as send_web_push:
+    with patch("houston.notifications.push.services.send_fcm") as send_fcm:
         sent_count = run_push_for_notification(notification.id)
 
     assert sent_count == 1
-    send_web_push.assert_called_once()
+    send_fcm.assert_called_once()
     delivery = PushDelivery.objects.get()
     assert delivery.notification_id == notification.id
-    assert delivery.subscription_id == subscription.id
+    assert delivery.device_id == subscription.id
     assert delivery.status == PushDelivery.Status.SENT
 
 
@@ -247,13 +241,13 @@ def test_run_push_for_notification_sends_for_comment_event_keys(event_key):
 
     subscription = _create_subscription(user=push_recipient.user)
 
-    with patch("houston.notifications.push.services.send_web_push") as send_web_push:
+    with patch("houston.notifications.push.services.send_fcm") as send_fcm:
         sent_count = run_push_for_notification(notification.id)
 
     assert sent_count == 1
-    send_web_push.assert_called_once()
+    send_fcm.assert_called_once()
     delivery = PushDelivery.objects.get(notification_id=notification.id)
-    assert delivery.subscription_id == subscription.id
+    assert delivery.device_id == subscription.id
     assert delivery.status == PushDelivery.Status.SENT
 
 
@@ -272,13 +266,13 @@ def test_run_push_for_notification_skips_chat_when_presence_active():
             "houston.notifications.push.services.is_chat_presence_active",
             return_value=True,
         ),
-        patch("houston.notifications.push.services.send_web_push") as send_web_push,
+        patch("houston.notifications.push.services.send_fcm") as send_fcm,
     ):
         sent_count = run_push_for_notification(notification.id)
 
     assert sent_count == 0
     assert PushDelivery.objects.count() == 0
-    send_web_push.assert_not_called()
+    send_fcm.assert_not_called()
 
 
 @override_settings(**VAPID_SETTINGS)
@@ -289,12 +283,12 @@ def test_run_push_for_notification_skips_when_actor_is_recipient():
     notification.save(update_fields=["actor_membership", "updated_at"])
     _create_subscription(user=recipient.user)
 
-    with patch("houston.notifications.push.services.send_web_push") as send_web_push:
+    with patch("houston.notifications.push.services.send_fcm") as send_fcm:
         sent_count = run_push_for_notification(notification.id)
 
     assert sent_count == 0
     assert PushDelivery.objects.count() == 0
-    send_web_push.assert_not_called()
+    send_fcm.assert_not_called()
 
 
 @override_settings(**VAPID_SETTINGS)
@@ -308,31 +302,27 @@ def test_run_push_for_notification_skips_when_subject_not_visible():
             "houston.notifications.push.services.recipient_can_view_notification_subject",
             return_value=False,
         ),
-        patch("houston.notifications.push.services.send_web_push") as send_web_push,
+        patch("houston.notifications.push.services.send_fcm") as send_fcm,
     ):
         sent_count = run_push_for_notification(notification.id)
 
     assert sent_count == 0
     assert PushDelivery.objects.count() == 0
-    send_web_push.assert_not_called()
+    send_fcm.assert_not_called()
 
 
-@override_settings(
-    HOUSTON_PUSH_ENABLED=True,
-    HOUSTON_VAPID_PUBLIC_KEY="",
-    HOUSTON_VAPID_PRIVATE_KEY="",
-)
-def test_run_push_for_notification_skips_when_vapid_not_configured():
+@override_settings(HOUSTON_PUSH_ENABLED=True, HOUSTON_FCM_SERVICE_ACCOUNT_JSON="")
+def test_run_push_for_notification_skips_when_fcm_not_configured():
     recipient = _prepare_recipient()
     notification = create_test_notification(recipient=recipient)
     _create_subscription(user=recipient.user)
 
-    with patch("houston.notifications.push.services.send_web_push") as send_web_push:
+    with patch("houston.notifications.push.services.send_fcm") as send_fcm:
         sent_count = run_push_for_notification(notification.id)
 
     assert sent_count == 0
     assert PushDelivery.objects.count() == 0
-    send_web_push.assert_not_called()
+    send_fcm.assert_not_called()
 
 
 @override_settings(**VAPID_SETTINGS)
@@ -350,7 +340,7 @@ def test_run_push_for_notification_marks_missing_navigation_as_skipped():
             "houston.notifications.push.services.recipient_can_view_notification_subject",
             return_value=True,
         ),
-        patch("houston.notifications.push.services.send_web_push") as send_web_push,
+        patch("houston.notifications.push.services.send_fcm") as send_fcm,
     ):
         sent_count = run_push_for_notification(notification.id)
 
@@ -358,7 +348,7 @@ def test_run_push_for_notification_marks_missing_navigation_as_skipped():
     delivery = PushDelivery.objects.get()
     assert delivery.status == PushDelivery.Status.SKIPPED
     assert delivery.error_code == "missing_navigation"
-    send_web_push.assert_not_called()
+    send_fcm.assert_not_called()
 
 
 @override_settings(**VAPID_SETTINGS)
@@ -372,7 +362,7 @@ def test_run_push_for_notification_is_idempotent_after_sent():
             "houston.notifications.push.services.recipient_can_view_notification_subject",
             return_value=True,
         ),
-        patch("houston.notifications.push.services.send_web_push") as send_web_push,
+        patch("houston.notifications.push.services.send_fcm") as send_fcm,
     ):
         first_count = run_push_for_notification(notification.id)
         second_count = run_push_for_notification(notification.id)
@@ -381,7 +371,7 @@ def test_run_push_for_notification_is_idempotent_after_sent():
     assert second_count == 0
     assert PushDelivery.objects.count() == 1
     assert PushDelivery.objects.get().status == PushDelivery.Status.SENT
-    assert send_web_push.call_count == 1
+    assert send_fcm.call_count == 1
 
 
 @override_settings(**VAPID_SETTINGS)
@@ -391,7 +381,7 @@ def test_run_push_for_notification_does_not_retry_failed_delivery():
     subscription = _create_subscription(user=recipient.user)
     PushDelivery.objects.create(
         notification_id=notification.id,
-        subscription_id=subscription.id,
+        device_id=subscription.id,
         status=PushDelivery.Status.FAILED,
         error_code="http_500",
     )
@@ -401,7 +391,7 @@ def test_run_push_for_notification_does_not_retry_failed_delivery():
             "houston.notifications.push.services.recipient_can_view_notification_subject",
             return_value=True,
         ),
-        patch("houston.notifications.push.services.send_web_push") as send_web_push,
+        patch("houston.notifications.push.services.send_fcm") as send_fcm,
     ):
         sent_count = run_push_for_notification(notification.id)
 
@@ -409,24 +399,22 @@ def test_run_push_for_notification_does_not_retry_failed_delivery():
     delivery = PushDelivery.objects.get()
     assert delivery.status == PushDelivery.Status.FAILED
     assert delivery.error_code == "http_500"
-    send_web_push.assert_not_called()
+    send_fcm.assert_not_called()
 
 
 @override_settings(**VAPID_SETTINGS)
-def test_run_push_for_notification_revokes_subscription_on_410():
+def test_run_push_for_notification_revokes_device_on_unregistered():
     recipient = _prepare_recipient()
     notification = create_test_notification(recipient=recipient)
     subscription = _create_subscription(user=recipient.user)
-    response = type("Response", (), {"status_code": 410})()
-
     with (
         patch(
             "houston.notifications.push.services.recipient_can_view_notification_subject",
             return_value=True,
         ),
         patch(
-            "houston.notifications.push.services.send_web_push",
-            side_effect=WebPushException("gone", response=response),
+            "houston.notifications.push.services.send_fcm",
+            side_effect=FcmSendError(error_code="unregistered", should_revoke=True),
         ),
     ):
         sent_count = run_push_for_notification(notification.id)
@@ -434,13 +422,13 @@ def test_run_push_for_notification_revokes_subscription_on_410():
     assert sent_count == 0
     delivery = PushDelivery.objects.get()
     assert delivery.status == PushDelivery.Status.FAILED
-    assert delivery.error_code == "http_410"
+    assert delivery.error_code == "unregistered"
     subscription.refresh_from_db()
     assert subscription.revoked_at is not None
 
 
 @override_settings(**VAPID_SETTINGS)
-def test_run_push_for_notification_marks_unknown_web_push_error():
+def test_run_push_for_notification_marks_unknown_fcm_error():
     recipient = _prepare_recipient()
     notification = create_test_notification(recipient=recipient)
     _create_subscription(user=recipient.user)
@@ -451,8 +439,8 @@ def test_run_push_for_notification_marks_unknown_web_push_error():
             return_value=True,
         ),
         patch(
-            "houston.notifications.push.services.send_web_push",
-            side_effect=WebPushException("network error", response=None),
+            "houston.notifications.push.services.send_fcm",
+            side_effect=FcmSendError(error_code="unknown", should_revoke=False),
         ),
     ):
         sent_count = run_push_for_notification(notification.id)
@@ -470,7 +458,7 @@ def test_try_claim_push_delivery_for_send_is_exclusive():
     subscription = _create_subscription(user=recipient.user)
     delivery = PushDelivery.objects.create(
         notification_id=notification.id,
-        subscription_id=subscription.id,
+        device_id=subscription.id,
         status=PushDelivery.Status.QUEUED,
     )
     now = timezone.now()
@@ -488,7 +476,7 @@ def test_run_push_for_notification_skips_processing_delivery():
     subscription = _create_subscription(user=recipient.user)
     PushDelivery.objects.create(
         notification_id=notification.id,
-        subscription_id=subscription.id,
+        device_id=subscription.id,
         status=PushDelivery.Status.PROCESSING,
     )
 
@@ -497,12 +485,12 @@ def test_run_push_for_notification_skips_processing_delivery():
             "houston.notifications.push.services.recipient_can_view_notification_subject",
             return_value=True,
         ),
-        patch("houston.notifications.push.services.send_web_push") as send_web_push,
+        patch("houston.notifications.push.services.send_fcm") as send_fcm,
     ):
         sent_count = run_push_for_notification(notification.id)
 
     assert sent_count == 0
-    send_web_push.assert_not_called()
+    send_fcm.assert_not_called()
     assert PushDelivery.objects.get().status == PushDelivery.Status.PROCESSING
 
 
@@ -521,12 +509,12 @@ def test_run_claim_lost_does_not_send():
             "houston.notifications.push.services._try_claim_push_delivery_for_send",
             return_value=False,
         ),
-        patch("houston.notifications.push.services.send_web_push") as send_web_push,
+        patch("houston.notifications.push.services.send_fcm") as send_fcm,
     ):
         sent_count = run_push_for_notification(notification.id)
 
     assert sent_count == 0
-    send_web_push.assert_not_called()
+    send_fcm.assert_not_called()
 
 
 @override_settings(**VAPID_SETTINGS)
@@ -536,8 +524,8 @@ def test_run_push_continues_after_unexpected_send_error():
     first_subscription = _create_subscription(user=recipient.user)
     second_subscription = _create_subscription(user=recipient.user)
 
-    def send_side_effect(*, subscription, payload):
-        if subscription.id == first_subscription.id:
+    def send_side_effect(*, device, payload):
+        if device.id == first_subscription.id:
             raise RuntimeError("boom")
 
     with (
@@ -546,7 +534,7 @@ def test_run_push_continues_after_unexpected_send_error():
             return_value=True,
         ),
         patch(
-            "houston.notifications.push.services.send_web_push",
+            "houston.notifications.push.services.send_fcm",
             side_effect=send_side_effect,
         ),
     ):
@@ -554,7 +542,7 @@ def test_run_push_continues_after_unexpected_send_error():
 
     assert sent_count == 1
     deliveries = {
-        delivery.subscription_id: delivery
+        delivery.device_id: delivery
         for delivery in PushDelivery.objects.filter(notification_id=notification.id)
     }
     assert deliveries[first_subscription.id].status == PushDelivery.Status.FAILED
@@ -569,7 +557,7 @@ def test_run_push_for_notification_does_not_retry_skipped_delivery():
     subscription = _create_subscription(user=recipient.user)
     PushDelivery.objects.create(
         notification_id=notification.id,
-        subscription_id=subscription.id,
+        device_id=subscription.id,
         status=PushDelivery.Status.SKIPPED,
         error_code="missing_navigation",
     )
@@ -579,12 +567,12 @@ def test_run_push_for_notification_does_not_retry_skipped_delivery():
             "houston.notifications.push.services.recipient_can_view_notification_subject",
             return_value=True,
         ),
-        patch("houston.notifications.push.services.send_web_push") as send_web_push,
+        patch("houston.notifications.push.services.send_fcm") as send_fcm,
     ):
         sent_count = run_push_for_notification(notification.id)
 
     assert sent_count == 0
-    send_web_push.assert_not_called()
+    send_fcm.assert_not_called()
     delivery = PushDelivery.objects.get()
     assert delivery.status == PushDelivery.Status.SKIPPED
     assert delivery.error_code == "missing_navigation"

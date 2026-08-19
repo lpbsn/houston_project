@@ -15,6 +15,9 @@ const onNavigate = vi.fn()
 const onSignOut = vi.fn()
 
 const mutate = vi.fn()
+const { optInNativePush } = vi.hoisted(() => ({
+  optInNativePush: vi.fn(async () => undefined),
+}))
 
 const { authState } = vi.hoisted(() => ({
   authState: {
@@ -145,6 +148,17 @@ vi.mock('@/features/notifications/hooks', () => ({
   }),
 }))
 
+vi.mock('@/lib/native-push-session', () => ({
+  NativePushPermissionDeniedError: class NativePushPermissionDeniedError extends Error {
+    constructor() {
+      super('Notification permission was not granted.')
+      this.name = 'NativePushPermissionDeniedError'
+    }
+  },
+  checkNativePushReceivePermission: async () => 'granted',
+  optInNativePush: () => optInNativePush(),
+}))
+
 vi.mock('@/features/gamification/hooks', () => ({
   useGamificationOverviewQuery: () => gamificationQueryState.current,
   useGamificationTransactionsInfiniteQuery: () => ({
@@ -162,9 +176,12 @@ vi.mock('@/features/gamification/hooks', () => ({
 
 afterEach(() => {
   cleanup()
+  vi.unstubAllEnvs()
   onNavigate.mockReset()
   onSignOut.mockReset()
   mutate.mockReset()
+  optInNativePush.mockReset()
+  optInNativePush.mockResolvedValue(undefined)
   refetchGamification.mockReset()
   gamificationQueryState.current = {
     data: {
@@ -527,6 +544,50 @@ describe('ProfilePage', () => {
 
     fireEvent.click(notificationSwitch)
     expect(mutate).toHaveBeenCalledWith({ notifications_enabled: false })
+  })
+
+  it('hides the push toggle on web', () => {
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    expect(screen.queryByRole('switch', { name: 'Notifications push' })).toBeNull()
+  })
+
+  it('opts in natively before persisting push_enabled', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Notifications push' }))
+    await vi.waitFor(() => {
+      expect(optInNativePush).toHaveBeenCalledOnce()
+    })
+    expect(mutate).toHaveBeenCalledWith({ push_enabled: true })
+  })
+
+  it('does not PATCH push_enabled when native opt-in fails', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    optInNativePush.mockRejectedValueOnce(new Error('upsert failed'))
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Notifications push' }))
+    await vi.waitFor(() => {
+      expect(optInNativePush).toHaveBeenCalledOnce()
+    })
+    expect(mutate).not.toHaveBeenCalled()
   })
 
   it('hides management section when permission hints deny access', () => {

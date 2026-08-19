@@ -34,8 +34,8 @@ API contract: [`apps/api/schema.yml`](../../apps/api/schema.yml).
 | Signal feed + lifecycle | Live | Pin, mark interesting, archive (interesting only; not exposed after), resolve, cancel |
 | Action Plan catalog + executions + feed | Live | See [`decisions/action_plan.md`](decisions/action_plan.md) |
 | Comments (signal + execution threads) | Live | REST + mention picker |
-| Notifications in-app | Live | List, preferences, mark read/archive |
-| Web Push (VAPID + subscriptions) | API live; client UI removed | Backend remains; Web/native delivery is Lot 7 |
+| Notifications in-app | Live | List, preferences, mark read |
+| Native push (FCM) | Live | Capacitor Lot 7; membership `push_enabled`; Web Push removed |
 | Operational realtime (invalidation) | Live | WS ticket + `OperationalRealtimeProvider` on terrain routes |
 | Chat V1 core | Live | DM + groups, WS messages, Terrain UI `/chat` |
 | Upload / private media | Live | Authorized reads only |
@@ -46,12 +46,11 @@ API contract: [`apps/api/schema.yml`](../../apps/api/schema.yml).
 REST (establishment-scoped):
 
 - `GET …/notifications/`
-- `PATCH …/notifications/preferences/`
+- `GET` / `PATCH …/notifications/preferences/`
 - `POST …/notifications/mark-all-read/`
 - `POST …/notifications/{id}/mark-read/`
-- `POST …/notifications/{id}/archive/`
 
-Web Push API: `GET /api/v1/push/vapid-public-key/`, `POST/DELETE …/me/web-push-subscriptions/`. The client toggle and service-worker subscription path were removed in Lot 4; delivery channels are Lot 7.
+Native push API: `POST/DELETE …/me/push-devices/` (FCM token, user-scoped). Membership `push_enabled` remains establishment-scoped. Web Push / VAPID removed. Web Push desktop is out (Lot 7).
 
 Domain: [`domains/notification_domain.md`](domains/notification_domain.md).
 
@@ -97,7 +96,7 @@ Preserved names (do not rename without explicit decision):
 
 - Production-grade polish on all terrain screens.
 - Chat post-core UI (group admin, settings).
-- Push notifications: backend VAPID remains; client delivery is Capacitor Lot 7.
+- Push notifications: native FCM live (Capacitor Lot 7). Device QA (foreground / background / terminated, physical iOS + Android) is manual. Web Push desktop is out.
 - Observation compose today is memory-only (`/reporting` React state) with immediate photo upload. Capacitor Lot 10 must protect Observation **while the process is alive** (checkpoint Offline capture, done). That protection is a **prerequisite before real field usage or a terrain pilot under intermittent connectivity**. Survival after process kill is not in that lot.
 - Native refresh: body-transport `performRefresh` can clear a still-valid Keychain refresh token on network error — [issue #181](https://github.com/lpbsn/houston_project/issues/181), not Offline capture and not Lot 10. See [`../architecture/authentication_charter.md`](../architecture/authentication_charter.md).
 - Full device QA matrix not automated in CI.

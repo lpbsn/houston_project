@@ -79,16 +79,12 @@ def notifications_preferences_url(establishment_id) -> str:
     return f"/api/v1/establishments/{establishment_id}/notifications/preferences/"
 
 
-def vapid_public_key_url() -> str:
-    return "/api/v1/push/vapid-public-key/"
+def push_devices_url() -> str:
+    return "/api/v1/me/push-devices/"
 
 
-def web_push_subscriptions_url() -> str:
-    return "/api/v1/me/web-push-subscriptions/"
-
-
-def web_push_subscription_revoke_url(subscription_id) -> str:
-    return f"/api/v1/me/web-push-subscriptions/{subscription_id}/"
+def push_device_revoke_url(device_id) -> str:
+    return f"/api/v1/me/push-devices/{device_id}/"
 
 
 def create_test_notification(

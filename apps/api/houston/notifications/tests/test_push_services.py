@@ -8,132 +8,115 @@ from django.db import IntegrityError
 from django.test import override_settings
 
 from houston.establishments.models import EstablishmentMembership
-from houston.notifications.models import PushDelivery, WebPushSubscription
-from houston.notifications.push.exceptions import WebPushSubscriptionValidationError
+from houston.notifications.models import PushDelivery, PushDevice
 from houston.notifications.push.services import (
     run_push_for_notification,
-    upsert_web_push_subscription,
+    upsert_push_device,
 )
 from houston.notifications.tests.conftest import create_test_notification
-from houston.notifications.tests.vapid_constants import TEST_PRIVATE_KEY, TEST_PUBLIC_KEY
+from houston.notifications.tests.fcm_constants import FCM_PUSH_SETTINGS
 from houston.testing.auth import build_api_membership
 
 pytestmark = pytest.mark.django_db
 
-ENDPOINT = "https://push.example.com/device/race-test"
-P256DH = "updated-p256dh-key"
-AUTH = "updated-auth-key"
-
-VAPID_SETTINGS = {
-    "HOUSTON_PUSH_ENABLED": True,
-    "HOUSTON_VAPID_PUBLIC_KEY": TEST_PUBLIC_KEY,
-    "HOUSTON_VAPID_PRIVATE_KEY": TEST_PRIVATE_KEY,
-    "HOUSTON_VAPID_SUBJECT": "mailto:push@houston.local",
-}
+TOKEN = "fcm-token-race-test"
+PLATFORM = "android"
 
 
-def _force_create_race_path(monkeypatch, *, endpoint: str) -> None:
-    original_filter = WebPushSubscription.objects.filter
+def _force_create_race_path(monkeypatch, *, token: str) -> None:
+    original_filter = PushDevice.objects.filter
+    calls = {"count": 0}
 
     def filter_with_miss_on_first(*args, **kwargs):
         queryset = original_filter(*args, **kwargs)
-        if args and args[0] == endpoint:
-            original_first = queryset.first
-            calls = {"count": 0}
+        if kwargs.get("token") != token:
+            return queryset
+        original_first = queryset.first
 
-            def first_with_initial_miss():
-                calls["count"] += 1
-                if calls["count"] == 1:
-                    return None
-                return original_first()
+        def first_with_initial_miss():
+            calls["count"] += 1
+            if calls["count"] == 1:
+                return None
+            return original_first()
 
-            queryset.first = first_with_initial_miss  # type: ignore[method-assign]
+        queryset.first = first_with_initial_miss  # type: ignore[method-assign]
         return queryset
 
-    monkeypatch.setattr(WebPushSubscription.objects, "filter", filter_with_miss_on_first)
+    monkeypatch.setattr(PushDevice.objects, "filter", filter_with_miss_on_first)
     monkeypatch.setattr(
-        WebPushSubscription.objects,
+        PushDevice.objects,
         "create",
-        lambda **_kwargs: (_ for _ in ()).throw(IntegrityError("duplicate endpoint")),
+        lambda **_kwargs: (_ for _ in ()).throw(IntegrityError("duplicate token")),
     )
 
 
 def test_upsert_recovers_from_create_race_for_same_user(monkeypatch):
     recipient = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    WebPushSubscription.objects.create(
+    PushDevice.objects.create(
         user=recipient.user,
-        endpoint=ENDPOINT,
-        p256dh="stale-p256dh",
-        auth="stale-auth",
+        token=TOKEN,
+        platform="ios",
     )
-    _force_create_race_path(monkeypatch, endpoint=ENDPOINT)
+    _force_create_race_path(monkeypatch, token=TOKEN)
 
-    subscription = upsert_web_push_subscription(
+    device = upsert_push_device(
         user=recipient.user,
-        endpoint=ENDPOINT,
-        p256dh=P256DH,
-        auth=AUTH,
-        user_agent="pytest",
+        token=TOKEN,
+        platform=PLATFORM,
     )
 
-    assert WebPushSubscription.objects.filter(endpoint=ENDPOINT).count() == 1
-    assert subscription.user_id == recipient.user_id
-    assert subscription.p256dh == P256DH
-    assert subscription.auth == AUTH
-    assert subscription.revoked_at is None
+    assert PushDevice.objects.filter(token=TOKEN, revoked_at__isnull=True).count() == 1
+    assert device.user_id == recipient.user_id
+    assert device.platform == PLATFORM
+    assert device.revoked_at is None
 
 
-def test_upsert_create_race_for_other_user_raises_validation_error(monkeypatch):
+def test_upsert_create_race_for_other_user_transfers_ownership(monkeypatch):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     outsider = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    WebPushSubscription.objects.create(
+    PushDevice.objects.create(
         user=owner.user,
-        endpoint=ENDPOINT,
-        p256dh="owner-p256dh",
-        auth="owner-auth",
+        token=TOKEN,
+        platform="ios",
     )
-    _force_create_race_path(monkeypatch, endpoint=ENDPOINT)
+    _force_create_race_path(monkeypatch, token=TOKEN)
 
-    with pytest.raises(
-        WebPushSubscriptionValidationError,
-        match="another user",
-    ):
-        upsert_web_push_subscription(
-            user=outsider.user,
-            endpoint=ENDPOINT,
-            p256dh=P256DH,
-            auth=AUTH,
-        )
+    device = upsert_push_device(
+        user=outsider.user,
+        token=TOKEN,
+        platform=PLATFORM,
+    )
+
+    assert device.user_id == outsider.user_id
+    assert PushDevice.objects.filter(token=TOKEN, revoked_at__isnull=True).count() == 1
 
 
 def test_upsert_reraises_integrity_error_when_row_missing_after_create_race(monkeypatch):
     recipient = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    _force_create_race_path(monkeypatch, endpoint=ENDPOINT)
+    _force_create_race_path(monkeypatch, token=TOKEN)
 
-    with pytest.raises(IntegrityError, match="duplicate endpoint"):
-        upsert_web_push_subscription(
+    with pytest.raises(IntegrityError, match="duplicate token"):
+        upsert_push_device(
             user=recipient.user,
-            endpoint=ENDPOINT,
-            p256dh=P256DH,
-            auth=AUTH,
+            token=TOKEN,
+            platform=PLATFORM,
         )
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 def test_run_push_for_notification_treats_existing_delivery_as_idempotent(monkeypatch):
     recipient = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     recipient.push_enabled = True
     recipient.save(update_fields=["push_enabled", "updated_at"])
     notification = create_test_notification(recipient=recipient)
-    subscription = WebPushSubscription.objects.create(
+    device = PushDevice.objects.create(
         user=recipient.user,
-        endpoint=f"https://push.example.com/device/{uuid.uuid4()}",
-        p256dh="p256dh-key",
-        auth="auth-key",
+        token=f"fcm-token-{uuid.uuid4()}",
+        platform="android",
     )
     PushDelivery.objects.create(
         notification_id=notification.id,
-        subscription_id=subscription.id,
+        device_id=device.id,
         status=PushDelivery.Status.QUEUED,
     )
 
@@ -147,20 +130,20 @@ def test_run_push_for_notification_treats_existing_delivery_as_idempotent(monkey
             "houston.notifications.push.services.recipient_can_view_notification_subject",
             return_value=True,
         ),
-        patch("houston.notifications.push.services.send_web_push") as send_web_push,
+        patch("houston.notifications.push.services.send_fcm") as send_fcm,
     ):
         sent_count = run_push_for_notification(notification.id)
 
     assert sent_count == 1
-    send_web_push.assert_called_once()
+    send_fcm.assert_called_once()
     assert PushDelivery.objects.filter(
         notification_id=notification.id,
-        subscription_id=subscription.id,
+        device_id=device.id,
     ).count() == 1
     assert PushDelivery.objects.get().status == PushDelivery.Status.SENT
 
 
-@override_settings(**VAPID_SETTINGS)
+@override_settings(**FCM_PUSH_SETTINGS)
 def test_run_push_for_notification_reraises_integrity_error_when_delivery_missing(
     monkeypatch,
 ):
@@ -168,11 +151,10 @@ def test_run_push_for_notification_reraises_integrity_error_when_delivery_missin
     recipient.push_enabled = True
     recipient.save(update_fields=["push_enabled", "updated_at"])
     notification = create_test_notification(recipient=recipient)
-    WebPushSubscription.objects.create(
+    PushDevice.objects.create(
         user=recipient.user,
-        endpoint=f"https://push.example.com/device/{uuid.uuid4()}",
-        p256dh="p256dh-key",
-        auth="auth-key",
+        token=f"fcm-token-{uuid.uuid4()}",
+        platform="android",
     )
 
     def raise_integrity_error(*_args, **_kwargs):

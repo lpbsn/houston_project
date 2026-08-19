@@ -1,8 +1,8 @@
 # Notification Domain
 
 Status: authoritative
-Last reviewed: 2026-08-17
-Implementation status: lot1_in_app
+Last reviewed: 2026-08-19
+Implementation status: lot7_native_push
 
 ## 1. Purpose
 
@@ -40,8 +40,8 @@ Current truth (Lot 1 in-app):
 - Membership-scoped realtime invalidation (`notification.created` / `notification.updated` / `notification.bulk_updated`) refreshes the notification list and unread badge; transport is owned by `houston/realtime/` (see [`realtime_domain.md`](realtime_domain.md)).
 - Lot 1 event keys are defined in `houston/notifications/constants.py` (`LOT1_EVENT_KEYS`).
 - `notifications_enabled` on `EstablishmentMembership` suppresses in-app notification creation for that recipient.
-- Web Push backend remains (VAPID + `WebPushSubscription` for allowlisted Lot 1 event keys in `PUSH_V1_EVENT_KEYS` (`houston/notifications/push/constants.py`), gated by `HOUSTON_PUSH_ENABLED` and membership `push_enabled`). The frontend client (toggle, service-worker subscription) was removed in Lot 4. Delivery-channel strategy is Lot 7 — do not treat Web Push as an active frontend capability.
-- Chat push (`chat.message.received`) is allowlisted on the backend only with anti-spam guards: Redis conversation presence (`chat:presence:{membership_id}:{conversation_id}`, TTL 45s, heartbeat via `POST .../chat/conversations/{id}/presence/`) and push throttle (`push:chat:{conversation_id}:{recipient_membership_id}`, TTL 120s). In-app chat notification rules (dedupe 5 min) are unchanged. No frontend Web Push subscription path remains.
+- Native FCM push (Capacitor Lot 7): `PushDevice` user-scoped; send gated by membership `push_enabled` and `PUSH_V1_EVENT_KEYS`. Frontend Native: OS permission + token upsert + profile toggle. Web has no push toggle and no service worker. Web Push / VAPID removed.
+- Chat push (`chat.message.received`) is allowlisted on the backend with anti-spam guards: Redis conversation presence (`chat:presence:{membership_id}:{conversation_id}`, TTL 45s, heartbeat via `POST .../chat/conversations/{id}/presence/`) and push throttle (`push:chat:{conversation_id}:{recipient_membership_id}`, TTL 120s). In-app chat notification rules (dedupe 5 min) are unchanged.
 
 ## 3. Out of Scope
 
@@ -146,7 +146,7 @@ Current code (Lot 1):
 Lot 1 source triggers (implemented in `scheduling.py`; keys in `LOT1_EVENT_KEYS`):
 
 - Action Plan execution: `action_plan.execution.created`, `action_plan.execution.pending_validation`, `action_plan.execution.canceled`, `action_plan.execution.reopened`
-- Chat: `chat.message.received` (in-app; backend may still enqueue Web Push when allowlisted and guards pass; generic copy with actor display name; `subject_type=chat_conversation`, `subject_id=conversation_id`; in-app dedupe per conversation + recipient + actor within 5 minutes; backend push suppressed when recipient presence is active in conversation or within 2-minute push throttle window). No frontend Web Push subscription after Lot 4.
+- Chat: `chat.message.received` (in-app; backend may still enqueue native FCM when allowlisted and guards pass; generic copy with actor display name; `subject_type=chat_conversation`, `subject_id=conversation_id`; in-app dedupe per conversation + recipient + actor within 5 minutes; backend push suppressed when recipient presence is active in conversation or within 2-minute push throttle window).
 - Comment: `comment.mention.created`
 - Signal: `signal.created`, `signal.pinned`, `signal.resolved`, `signal.canceled`
 
@@ -171,11 +171,10 @@ Implemented notification endpoints in `apps/api/schema.yml`:
 - `POST .../notifications/{notification_id}/archive/`
 - `POST .../notifications/mark-all-read/`
 - `GET` / `PATCH .../notifications/preferences/` — `notifications_enabled`, `push_enabled`
-- `GET /api/v1/push/vapid-public-key/`
-- `POST /api/v1/me/web-push-subscriptions/` (upsert), `POST .../{id}/touch/`, `DELETE .../{id}/` (revoke)
+- `POST /api/v1/me/push-devices/` (upsert FCM token), `DELETE .../me/push-devices/{device_id}/` (revoke)
 - `POST .../chat/conversations/{conversation_id}/presence/` — chat push presence heartbeat (204)
 
-The VAPID and `web-push-subscriptions` endpoints remain in the API. No frontend caller remains after Lot 4; Lot 7 decides delivery. Presence heartbeats remain a frontend call. Do not treat Web Push as an active client capability.
+Push delivery is native FCM only. Token sync is user-scoped (session + OS permission granted). `push_enabled` remains membership-scoped at send time. Web Push / VAPID / `touch/` are gone.
 
 Not implemented:
 
@@ -189,7 +188,8 @@ Not implemented:
 - Chat message notifications (`chat.message.received`): navigate to `/chat/{conversation_id}` (`subject_type=chat_conversation`). Notification copy must not include message body. While viewing a conversation, the client sends presence heartbeats (`POST .../presence/`, ~30s when visible) so the backend can suppress push if it still delivers.
 - Comment mention notifications (`comment.mention.created`): when `navigation` is present, open the parent detail (`signal` or `action_plan_execution`) with the Commentaires tab and scroll/highlight the mentioned comment (`?tab=comments&commentId={subject_id}`). When `navigation` is `null` (comment hard-deleted; V1 without denormalized parent on `Notification`), mark read only — no navigation. When the parent loads but the comment is absent from the authorized list, show an inline unavailable message in the Commentaires tab.
 - `navigation` is a non-sensitive routing hint (parent type + UUID only); authorization remains on the parent and comment list fetches.
-- There is no active frontend Web Push capability (no VAPID fetch, no subscription upsert, no service-worker push). In-app Notification Center and realtime invalidation remain. Lot 7 decides delivery strategy.
+- Native profile exposes `push_enabled` (fail-closed opt-in: OS permission → FCM token → upsert → then PATCH). Web has no push toggle.
+- Tap of an OS notification uses payload `url` + `establishment_id` (not the in-app list `url`). Universal Links remain Lot 8.
 - Frontend must not display sensitive raw content from notification, push, or realtime payloads.
 - Frontend must handle `unread`, `read`, and `archived` states when APIs exist.
 - Frontend may optimistically update read state only if backend confirmation or reconciliation remains the authority.

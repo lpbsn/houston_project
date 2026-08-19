@@ -157,26 +157,35 @@ class Notification(BaseModel):
         ]
 
 
-class WebPushSubscription(BaseModel):
+class PushDevice(BaseModel):
+    class Platform(models.TextChoices):
+        IOS = "ios", "iOS"
+        ANDROID = "android", "Android"
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name="web_push_subscriptions",
+        related_name="push_devices",
     )
-    endpoint = models.CharField(max_length=512, unique=True)
-    p256dh = models.CharField(max_length=255)
-    auth = models.CharField(max_length=255)
-    user_agent = models.CharField(max_length=512, blank=True, default="")
+    token = models.CharField(max_length=512)
+    platform = models.CharField(max_length=16, choices=Platform.choices)
     last_seen_at = models.DateTimeField(null=True, blank=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["token"],
+                condition=Q(revoked_at__isnull=True),
+                name="notifications_pushdevice_active_token_uniq",
+            ),
+        ]
         indexes = [
             models.Index(fields=["user", "revoked_at"]),
         ]
 
     def __str__(self) -> str:
-        return f"WebPushSubscription({self.user_id}, {self.endpoint[:48]}...)"
+        return f"PushDevice({self.user_id}, {self.platform})"
 
 
 class PushDelivery(BaseModel):
@@ -192,8 +201,8 @@ class PushDelivery(BaseModel):
         on_delete=models.CASCADE,
         related_name="push_deliveries",
     )
-    subscription = models.ForeignKey(
-        WebPushSubscription,
+    device = models.ForeignKey(
+        PushDevice,
         on_delete=models.CASCADE,
         related_name="push_deliveries",
     )
@@ -208,10 +217,10 @@ class PushDelivery(BaseModel):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["notification", "subscription"],
-                name="notifications_pushdelivery_notification_subscription_uniq",
+                fields=["notification", "device"],
+                name="notifications_pushdelivery_notification_device_uniq",
             ),
         ]
 
     def __str__(self) -> str:
-        return f"PushDelivery({self.notification_id}, {self.subscription_id}, {self.status})"
+        return f"PushDelivery({self.notification_id}, {self.device_id}, {self.status})"

@@ -7,6 +7,17 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: false,
   },
+  experimental: {
+    ios: {
+      spm: {
+        packageOptions: {
+          '@capacitor-firebase/messaging': {
+            symlink: true,
+          },
+        },
+      },
+    },
+  },
 }
 
 export default config

@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import uuid
 
-from django.conf import settings
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import permissions, status
-from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -18,9 +16,8 @@ from houston.notifications.api.serializers import (
     NotificationListResponseSerializer,
     NotificationPreferencesSerializer,
     NotificationPreferencesUpdateSerializer,
-    VapidPublicKeySerializer,
-    WebPushSubscriptionResponseSerializer,
-    WebPushSubscriptionUpsertSerializer,
+    PushDeviceResponseSerializer,
+    PushDeviceUpsertSerializer,
     serialize_notification,
 )
 from houston.notifications.constants import (
@@ -30,11 +27,10 @@ from houston.notifications.constants import (
 from houston.notifications.exceptions import NotificationCursorError
 from houston.notifications.models import Notification
 from houston.notifications.navigation import build_comment_navigation_index
-from houston.notifications.push.exceptions import WebPushSubscriptionValidationError
 from houston.notifications.push.services import (
-    get_web_push_subscription_for_user,
-    revoke_subscription,
-    upsert_web_push_subscription,
+    get_push_device_for_user,
+    revoke_push_device,
+    upsert_push_device,
 )
 from houston.notifications.selectors import build_notifications_page, count_unread_notifications
 from houston.notifications.services import (
@@ -269,78 +265,47 @@ class NotificationPreferencesView(EstablishmentScopedObservationMixin, APIView):
         return Response(NotificationPreferencesSerializer(payload).data)
 
 
-def _serialize_web_push_subscription(subscription) -> dict:
+def _serialize_push_device(device) -> dict:
     return {
-        "id": subscription.id,
-        "endpoint": subscription.endpoint,
-        "created_at": subscription.created_at,
-        "last_seen_at": subscription.last_seen_at,
+        "id": device.id,
+        "platform": device.platform,
+        "created_at": device.created_at,
+        "last_seen_at": device.last_seen_at,
     }
 
 
-class VapidPublicKeyView(APIView):
-    authentication_classes = []
-    permission_classes = [AllowAny]
-
-    @extend_schema(
-        tags=["push"],
-        responses={
-            200: VapidPublicKeySerializer,
-            503: OpenApiResponse(response=DetailResponseSerializer),
-        },
-        description="Returns the VAPID public key for Web Push subscription.",
-    )
-    def get(self, request):
-        public_key = settings.HOUSTON_VAPID_PUBLIC_KEY.strip()
-        if not public_key:
-            return Response(
-                {"detail": "Push is not configured."},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-        return Response(VapidPublicKeySerializer({"public_key": public_key}).data)
-
-
-class WebPushSubscriptionUpsertView(APIView):
+class PushDeviceUpsertView(APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
         tags=["push"],
-        request=WebPushSubscriptionUpsertSerializer,
+        request=PushDeviceUpsertSerializer,
         responses={
-            200: WebPushSubscriptionResponseSerializer,
+            200: PushDeviceResponseSerializer,
             400: OpenApiResponse(response=ApiErrorResponseSerializer),
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
         },
-        description="Creates or updates a Web Push subscription for the authenticated user.",
+        description="Creates or updates an FCM push device for the authenticated user.",
     )
     def post(self, request):
-        serializer = WebPushSubscriptionUpsertSerializer(data=request.data)
+        serializer = PushDeviceUpsertSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
                 {"code": "validation_error", "detail": serializer.errors},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        try:
-            subscription = upsert_web_push_subscription(
-                user=request.user,
-                endpoint=serializer.validated_data["endpoint"],
-                p256dh=serializer.validated_data["p256dh"],
-                auth=serializer.validated_data["auth"],
-                user_agent=serializer.validated_data.get("user_agent", ""),
-            )
-        except WebPushSubscriptionValidationError as exc:
-            return Response(
-                {"code": "validation_error", "detail": exc.detail},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        payload = _serialize_web_push_subscription(subscription)
-        return Response(WebPushSubscriptionResponseSerializer(payload).data)
+        device = upsert_push_device(
+            user=request.user,
+            token=serializer.validated_data["token"],
+            platform=serializer.validated_data["platform"],
+        )
+        payload = _serialize_push_device(device)
+        return Response(PushDeviceResponseSerializer(payload).data)
 
 
-class WebPushSubscriptionRevokeView(APIView):
+class PushDeviceRevokeView(APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [permissions.IsAuthenticated]
 
@@ -348,19 +313,19 @@ class WebPushSubscriptionRevokeView(APIView):
         tags=["push"],
         request=None,
         responses={
-            204: OpenApiResponse(description="Subscription revoked."),
+            204: OpenApiResponse(description="Device revoked."),
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
         },
-        description="Soft-revokes a Web Push subscription for the authenticated user.",
+        description="Soft-revokes an FCM push device for the authenticated user.",
     )
-    def delete(self, request, subscription_id):
-        subscription = get_web_push_subscription_for_user(
-            subscription_id=uuid.UUID(str(subscription_id)),
+    def delete(self, request, device_id):
+        device = get_push_device_for_user(
+            device_id=uuid.UUID(str(device_id)),
             user=request.user,
         )
-        if subscription is None:
+        if device is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        revoke_subscription(subscription=subscription, user=request.user)
+        revoke_push_device(device=device, user=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
