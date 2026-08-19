@@ -1,7 +1,7 @@
 # Houston documentation
 
 Status: authoritative  
-Last reviewed: 2026-08-18
+Last reviewed: 2026-08-19
 
 Git is the only history. There is no `archive/` or `audits/` folder in active docs.
 
@@ -32,7 +32,7 @@ Git is the only history. There is no `archive/` or `audits/` folder in active do
 | [`architecture/api_error_contract.md`](architecture/api_error_contract.md) | API errors |
 | [`engineering/local_development.md`](engineering/local_development.md) | Local workflow |
 | [`engineering/frontend_architecture.md`](engineering/frontend_architecture.md) | React / Vite map |
-| [`mobile-capacitor-roadmap.md`](mobile-capacitor-roadmap.md) | Web + Capacitor migration (Capacitor Lots 1–6 done; next is checkpoint Offline capture terrain, then Lot 7 push) |
+| [`mobile-capacitor-roadmap.md`](mobile-capacitor-roadmap.md) | Web + Capacitor migration (Lots 1–6 + Offline capture checkpoint done; next is Lot 7 push; Observation process-alive protection is Lot 10) |
 | [`engineering/testing.md`](engineering/testing.md) | Test strategy |
 | [`engineering/api_pagination_standard.md`](engineering/api_pagination_standard.md) | Pagination |
 

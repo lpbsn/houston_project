@@ -1,7 +1,7 @@
 # Houston — Current product state
 
 Status: authoritative  
-Last reviewed: 2026-08-17
+Last reviewed: 2026-08-19
 
 ## Branding
 
@@ -97,7 +97,9 @@ Preserved names (do not rename without explicit decision):
 
 - Production-grade polish on all terrain screens.
 - Chat post-core UI (group admin, settings).
-- Push notifications: backend VAPID remains; client delivery is Lot 7.
+- Push notifications: backend VAPID remains; client delivery is Capacitor Lot 7.
+- Observation compose today is memory-only (`/reporting` React state) with immediate photo upload. Capacitor Lot 10 must protect Observation **while the process is alive** (checkpoint Offline capture, done). That protection is a **prerequisite before real field usage or a terrain pilot under intermittent connectivity**. Survival after process kill is not in that lot.
+- Native refresh: body-transport `performRefresh` can clear a still-valid Keychain refresh token on network error — [issue #181](https://github.com/lpbsn/houston_project/issues/181), not Offline capture and not Lot 10. See [`../architecture/authentication_charter.md`](../architecture/authentication_charter.md).
 - Full device QA matrix not automated in CI.
 
 ## BusinessUnit / ActivitySubject (summary)
