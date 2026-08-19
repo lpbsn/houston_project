@@ -12,7 +12,7 @@ Notification owns:
 - recipient resolution after backend visibility and RBAC re-check
 - priority and channel selection
 - persisted in-app notification state
-- delivery tracking when channel delivery is implemented
+- native FCM delivery tracking (`PushDelivery`); other channels when implemented
 
 Notification does not own:
 - event persistence or event catalog definition
@@ -50,7 +50,7 @@ Current truth (Lot 1 in-app + Lot 7 native push):
 - Quiet hours, digests, grouping, or presence-aware suppression for non-chat notifications.
 - Rich media, attachments, or media binaries inside notifications.
 - Notification-based access grants or notification-based business truth.
-- Chat sounds and message-body previews in notifications (in-app `chat.message.received` is in Lot 1; push chat is Lot D — see §8).
+- Chat sounds and message-body previews in notifications (in-app and native FCM `chat.message.received` use generic copy; message body remains excluded).
 - Full provider setup or push runbook details.
 - Full admin notification console or analytics dashboard.
 - Cross-tenant notifications.
@@ -92,8 +92,8 @@ Current truth (Lot 1 in-app + Lot 7 native push):
   - `email` remains selective or post-MVP unless separately validated.
 
 - `NotificationDelivery`
-  - Per-channel delivery attempt or outcome when delivery tracking is implemented.
-  - Exact provider metadata remains candidate.
+  - Native FCM: `PushDelivery` per notification + device (`queued`, `processing`, `sent`, `failed`, `skipped`).
+  - Exact provider metadata remains candidate. Email delivery tracking is not implemented.
 
 - `NotificationPreference`
   - Minimal recipient/channel preference such as `push_enabled` or candidate `email_enabled`.
@@ -146,7 +146,7 @@ Current code (Lot 1 in-app + Lot 7 native push):
 Lot 1 source triggers (implemented in `scheduling.py`; keys in `LOT1_EVENT_KEYS`):
 
 - Action Plan execution: `action_plan.execution.created`, `action_plan.execution.pending_validation`, `action_plan.execution.canceled`, `action_plan.execution.reopened`
-- Chat: `chat.message.received` (in-app; backend may still enqueue native FCM when allowlisted and guards pass; generic copy with actor display name; `subject_type=chat_conversation`, `subject_id=conversation_id`; in-app dedupe per conversation + recipient + actor within 5 minutes; backend push suppressed when recipient presence is active in conversation or within 2-minute push throttle window).
+- Chat: `chat.message.received` (in-app and native FCM when guards pass; generic copy with actor display name; `subject_type=chat_conversation`, `subject_id=conversation_id`; in-app dedupe per conversation + recipient + actor within 5 minutes; backend push suppressed when recipient presence is active in conversation or within 2-minute push throttle window).
 - Comment: `comment.mention.created`
 - Signal: `signal.created`, `signal.pinned`, `signal.resolved`, `signal.canceled`
 
