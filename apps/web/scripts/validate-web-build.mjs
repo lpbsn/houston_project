@@ -39,6 +39,12 @@ for (const file of hashedJs) {
   if (source.includes('capacitor-secure-storage') || source.includes('@aparajita')) {
     fail('web dist must not include native Keychain/Keystore storage')
   }
+  if (
+    source.includes('@capacitor-firebase/messaging') ||
+    source.includes('firebase-messaging-sw')
+  ) {
+    fail('web dist must not include native FCM or a Firebase messaging service worker')
+  }
 }
 
 console.log('web build validation ok')

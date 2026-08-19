@@ -19,11 +19,12 @@
     "preview:landing": "vite preview --config vite.landing.config.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "cap:sync": "npm run build:native && npx cap sync",
-    "cap:sync:bundle": "npm run build:native:bundle && npx cap sync"
+    "cap:sync": "npm run build:native && npx cap sync && node scripts/ios-spm-symlinks.mjs",
+    "cap:sync:bundle": "npm run build:native:bundle && npx cap sync && node scripts/ios-spm-symlinks.mjs"
   },
   "dependencies": {
     "@aparajita/capacitor-secure-storage": "^8.0.0",
+    "@capacitor-firebase/messaging": "^8.4.0",
     "@capacitor/android": "^8.5.0",
     "@capacitor/app": "^8.1.1",
     "@capacitor/core": "^8.5.0",
@@ -33,6 +34,7 @@
     "@tanstack/react-query": "^5.100.14",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "firebase": "^12.17.1",
     "framer-motion": "^12.40.0",
     "lucide-react": "^1.16.0",
     "openapi-fetch": "^0.17.0",

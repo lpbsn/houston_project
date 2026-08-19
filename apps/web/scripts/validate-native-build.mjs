@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { assertCapacitorFirebaseMessagingSymlink } from './ios-spm-symlinks.mjs'
 import { assertNoPwaBuildArtifacts } from './validate-build-artifacts.mjs'
 
 const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -36,5 +37,6 @@ if (!html.includes('src="./assets/') && !html.includes('src="assets/')) {
 }
 
 assertNoPwaBuildArtifacts(distRoot, html, fail)
+assertCapacitorFirebaseMessagingSymlink(webRoot, fail)
 
 console.log('native build validation ok')

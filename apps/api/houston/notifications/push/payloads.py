@@ -13,6 +13,10 @@ ALLOWED_PUSH_DATA_KEYS: frozenset[str] = frozenset(
 )
 
 
+def stringify_push_data(data: dict) -> dict[str, str]:
+    return {key: "" if value is None else str(value) for key, value in data.items()}
+
+
 def build_push_payload(notification: Notification) -> dict:
     return {
         "title": notification.title,

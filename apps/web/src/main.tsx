@@ -50,6 +50,13 @@ async function bootstrap() {
     } catch {
       // navigator.onLine remains the network source.
     }
+
+    try {
+      const { configureNativePush } = await import('@/lib/native-push')
+      await configureNativePush({ history })
+    } catch {
+      // Push stays unconfigured; in-app notifications remain.
+    }
   }
 
   createRoot(document.getElementById('root')!).render(

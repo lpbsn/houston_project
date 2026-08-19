@@ -1,9 +1,9 @@
 # Spore — Roadmap Web + Capacitor
 
 Status: authoritative  
-Last reviewed: 2026-08-18
+Last reviewed: 2026-08-19
 
-Référence d’exécution pour les agents Cursor. **Capacitor Lots 1–6 are done.** Next is the framing checkpoint **Offline capture terrain**, then **Capacitor Lot 7** (push). This document frames the remaining lots; it does not prescribe implementation.
+Référence d’exécution pour les agents Cursor. **Capacitor Lots 1–7 are done.** Next is **Capacitor Lot 8** (deep links). This document frames the remaining lots; it does not prescribe implementation.
 
 These **Capacitor Lots** (1–11) are distinct from product/domain lots (taxonomy Lot 5, test Lot 4 helpers, product Lot 11 stabilization). Write **Capacitor Lot N** when referring to this roadmap.
 
@@ -33,11 +33,11 @@ Deux runtimes, un seul arbre de sources :
 | **Web** | Navigateur desktop et mobile | Build classique, sans service worker ni manifeste PWA comme socle |
 | **Native** | iOS et Android via Capacitor | Shell natif, distribution App Store / Play Store |
 
-L’application reste **online-first**. Spore est destiné à des équipes terrain pouvant travailler ponctuellement dans des chambres froides, parkings, caves ou autres zones à connectivité faible ou intermittente. Perdre une saisie terrain critique à cause d’une coupure réseau n’est pas acceptable.
+L’application reste **online-first**. Spore est destiné à des équipes terrain pouvant travailler ponctuellement dans des chambres froides, parkings, caves ou autres zones à connectivité faible ou intermittente. Perdre une saisie Observation critique tant que le process reste vivant n’est pas acceptable.
 
-Cela n’implique pas un **offline-first généralisé** : pas de réplication locale complète de l’application, pas de cache durable généralisé, pas de synchronisation universelle de toutes les mutations.
+Cela n’implique pas un **offline-first généralisé** : pas de réplication locale complète de l’application, pas de cache durable généralisé, pas de synchronisation universelle de toutes les mutations, pas de file de mutations durable.
 
-En revanche, une capacité **ciblée d’offline capture** est une possibilité légitime pour les workflows terrain critiques : conserver localement une saisie ou un média lorsqu’elle ne peut pas être envoyée, puis la synchroniser au retour du réseau. Le stockage, l’idempotence, le rejeu, les médias et l’UX se cadrent à partir des workflows réels — pas d’architecture imposée à l’avance (file de mutations TanStack ou autre).
+La protection ciblée retenue (checkpoint Offline capture, **done**) est la **survie de la saisie Observation tant que le process reste vivant** (blip, background sans kill, picker si le process reste intact, navigation interne), plus ne plus exiger l’upload photo pour composer. Elle est portée par le **Lot 10**. Elle ne promet pas la survie après process kill / cold start, ni une file, ni une sync. Audio, chat, commentaires, et commandes de cycle de vie (tâches, signaux, plans) restent online-only. Pas d’architecture de stockage ou de synchronisation imposée ici — le Lot 10 tranche l’implémentation du régime process-vivant seulement.
 
 ## Besoins fonctionnels vs implémentation PWA actuelle
 
@@ -47,7 +47,7 @@ Certains mécanismes PWA couvraient des besoins réels. La suppression de la PWA
 |--------------------|-------------------------------|----------------|
 | Détection réseau / états hors-ligne | Événements navigateur + bannière UI | Capacitor Lot 6 — **done**: Web `navigator.onLine` ; Native `@capacitor/network` ; une source `isOnline` par runtime |
 | Reconnexion WS / refetch après reprise | TanStack Query + hooks WS | Capacitor Lot 6 — **done**: `visibilitychange` (Web) + native `appStateChange` ; resync via `onReconnect` existant |
-| Notifications push terrain | Web Push (navigateur) ; contraintes iOS PWA | Lot 7 — **push natif iOS/Android** (priorité terrain) ; Web Push desktop **optionnel**, à justifier produit au lot 7 ; Web Push mobile **hors cible implicite** |
+| Notifications push terrain | Push natif iOS/Android (FCM) | **Lot 7 done.** Web Push desktop **non** ; Web Push mobile hors cible |
 | Mise à jour applicative Web | Service worker + bannière de refresh | Lot 4 — **retrait** ; pas de mécanisme équivalent : build Vite classique (`index.html` revalidé, assets hashés en cache long) |
 | Installation sur l’écran d’accueil | Manifeste PWA + prompts navigateur | Hors scope Web — distribution native (lot 5) |
 | Cache assets / shell offline | Service worker `injectManifest` | Lot 4 — **retrait** ; cache HTTP navigateur/CDN suffit ; pas de shell offline ni de stratégie offline dédiée |
@@ -77,7 +77,7 @@ Chaque lot est un chantier séparé. Un agent qui ouvre un lot doit :
 
 Les fichiers, interfaces, plugins Capacitor, librairies et migrations se décident **au début du lot**, après inspection — pas dans cette roadmap.
 
-Ordre des lots : strictement séquentiel. Un lot suivant ne commence que si le précédent est implémenté et validé. Le checkpoint Offline capture terrain (après le lot 6) n’est pas un lot d’implémentation ; il précède le lot 7.
+Ordre des lots : strictement séquentiel. Un lot suivant ne commence que si le précédent est implémenté et validé. Le checkpoint Offline capture terrain est **done** (cadrage seulement, pas d’implémentation). **Capacitor Lot 7 is done.** **Capacitor Lot 8** is next. Ne pas ouvrir de stockage, file, ou sync Observation avant le Lot 10.
 
 Contexte de migration. Le projet est développé par un seul développeur et n’a aucun utilisateur réel en production. Il n’est donc pas nécessaire de privilégier les stratégies de migration “safe” destinées à préserver temporairement l’existant : compatibilité ascendante, doubles chemins, feature flags, migrations progressives, fallbacks temporaires ou conservation d’anciennes abstractions. Si une rupture ou une refonte rend la cible plus simple, propre et maintenable, elle doit être privilégiée.
 Cela ne signifie pas ignorer la qualité ou la sécurité technique : le repository doit rester fonctionnel et validé à la fin de chaque lot.
@@ -104,7 +104,7 @@ TOUJOURS BESOIN
 
 ## Lots
 
-Capacitor Lot status: **1–6 done** · checkpoint Offline capture terrain · 7–11 not started.
+Capacitor Lot status: **1–7 done** · checkpoint Offline capture terrain **done** · **8 next** · 9–11 not started.
 
 ### 1. Runtime / API / WebSocket — done
 
@@ -146,17 +146,32 @@ Capacitor Lot status: **1–6 done** · checkpoint Offline capture terrain · 7�
 
 **Fait.** Banner Web `navigator.onLine` conservé. Native : `@capacitor/app` `appStateChange` + `@capacitor/network`. Reconnect WS au foreground natif même si le client croyait le socket ouvert ; pas de reconnect après close d’accès. Query : pas d’`invalidateQueries` global au foreground.
 
-### Checkpoint — Offline capture terrain
+### Checkpoint — Offline capture terrain — done
 
 **Objectif.** Cadrer, à partir des workflows réels, lesquels doivent survivre à une connectivité intermittente, et si une implémentation d’offline capture ciblée doit être avancée avant le Push (lot 7).
 
-**Responsabilité.** Ce n’est pas un lot d’implémentation. Examiner les saisies terrain critiques — exemples à instruire, pas des décisions déjà prises : observations, photos/audio, autres captures — et déterminer si une conservation locale puis une synchronisation au retour du réseau est justifiée. Trancher le périmètre produit, pas l’architecture : stockage, idempotence, rejeu, médias et UX se décident seulement si le checkpoint conclut à une implémentation. L’offline-first généralisé reste hors cible.
+**Décision (2026-08-19).** Pas de lot d’implémentation Offline avant Push. **Lot 7 was the next implementation lot (now done).** La seule capture critique identifiée est l’**Observation** (rapport direct `/reporting`, et observation-depuis-tâche texte seul). Traitement ciblé au **Lot 10**, régime **process vivant** uniquement.
 
-### 7. Push multi-channel
+Deux régimes — ne pas les mélanger :
+
+- **Régime A (Lot 10)** — le process JS/WebView tourne encore : blip réseau, background sans kill, picker fichier/caméra **si** le process n’est pas recréé, navigation interne. Ne pas perdre texte + photos locales in-process. Ne plus exiger l’upload photo pour composer. Aucune persistance hors process n’est requise ni promise.
+- **Régime B (non promis)** — kill OS, swipe-away, recréation d’activité, cold start. Restaurer la saisie exigerait persistance + exception sécurité/RGPD + éventuellement auth hors-ligne. Hors Lot 10. Un picker qui **tue** le process n’est pas du régime A ; le constater sur device au Lot 10 rouvre B explicitement.
+
+Hors périmètre de capture : audio (transcription online-only, jamais persistée), chat, commentaires, lifecycle Signal, mark-done / skip / exécution, création/édition de plan, lectures de feeds. File universelle, sync, et survie après kill sont du sur-engineering pour ce checkpoint.
+
+Cette protection Observation régime A est un **prérequis avant un vrai usage ou pilote terrain à connectivité intermittente**. L’état actuel (draft mémoire seule, upload photo immédiat) est acceptable **pendant le développement jusqu’au Lot 10**, pas comme posture d’usage réel sous réseau instable.
+
+Ticket auth orthogonal (wipe refresh Native sur erreur réseau) : hors ce checkpoint, hors Lot 10, hors séquencement Push — [issue #181](https://github.com/lpbsn/houston_project/issues/181), [`architecture/authentication_charter.md`](architecture/authentication_charter.md).
+
+### 7. Push multi-channel — done
 
 **Objectif.** Découpler les notifications métier de leur canal de livraison.
 
-**Responsabilité.** Le domaine Notification reste la source des messages d’attention (in-app + règles). **Push natif iOS/Android** : cible prioritaire pour les usages terrain. **Web Push desktop** : optionnel — ne l’implémenter qu’au lot 7 si un besoin produit réel le justifie (direction / management). **Web Push mobile** : hors cible implicite. L’inscription, les permissions et le payload de delivery restent spécifiques au canal retenu ; le contenu notifié et le deep link cible restent communs. Ne pas coupler les features au plugin de push.
+**Responsabilité.** Le domaine Notification reste la source des messages d’attention (in-app + règles). Canal unique : **push natif iOS/Android** (FCM). **Web Push desktop** : non. **Web Push mobile** : hors cible. L’inscription, les permissions et le payload de delivery restent spécifiques au canal ; le contenu notifié et le deep link cible restent communs. Ne pas coupler les features au plugin de push.
+
+**Fait (2026-08-19).** Canal unique FCM HTTP v1 + `@capacitor-firebase/messaging`. `PushDevice` user-scoped ; envoi filtré par membership `push_enabled`. Web Push / VAPID retirés. Web Push desktop **non**. Tap OS (foreground / background / terminated) : `establishment_id` + `url` du payload. Sync token si session + permission OS granted (pas le `push_enabled` de l’établissement actif). Device QA manuel iOS physique + Android.
+
+**Validation (2026-08-19).** Implémentation Lot 7 terminée. `npx cap sync` validé. Build Android avec Firebase validé. Build iOS avec `@capacitor-firebase/messaging` + Firebase validé (`GoogleService-Info.plist` embarqué dans la target iOS ; entitlement `aps-environment=development` présent et référencé). Push iOS sur device réel **non validé** : le compte Apple actuel est une Personal Team ; cette validation reste en attente jusqu’à l’adhésion à l’Apple Developer Program, nécessaire pour tester APNs proprement sur iPhone physique. La suite de validation immédiate se poursuit sur Android de bout en bout.
 
 ### 8. Deep links / navigation native
 
@@ -174,7 +189,9 @@ Capacitor Lot status: **1–6 done** · checkpoint Offline capture terrain · 7�
 
 **Objectif.** Renforcer l’app face aux connexions instables, interruptions et saisies importantes, sans basculer en offline-first généralisé.
 
-**Responsabilité.** Mieux échouer et mieux reprendre : retries, états réseau explicites, protection des saisies critiques contre une interruption. Une persistance/reprise ciblée des opérations terrain critiques (offline capture) reste possible si le checkpoint l’a justifiée ; ce lot ne l’interdit pas. Interdit uniquement : offline-first généralisé, réplication locale complète, cache durable généralisé, persistance automatique de toutes les mutations. Si un besoin d’offline-first généralisé apparaît plus tard, ce sera un chantier distinct.
+**Responsabilité.** Mieux échouer et mieux reprendre : retries, états réseau explicites, et la protection Observation **régime A** tranchée au checkpoint : ne pas perdre la saisie (texte + photos locales in-process) tant que le process reste vivant ; ne plus exiger l’upload photo pour composer ; UX honnête (pas de faux « envoyé »). Surfaces : `/reporting` et observation-depuis-tâche. **Prérequis** avant un vrai usage/pilote terrain à connectivité intermittente.
+
+Interdit : offline-first généralisé ; réplication locale complète ; cache durable généralisé ; file ou sync de mutations ; survie après process kill / cold start ; persistance hors process « au cas où » ; capture locale de chat, commentaires, tâches, signaux, plans, ou audio. Si le QA device montre qu’un picker **tue** le process, rouvrir le régime B en chantier séparé — ne pas l’absorber ici. Si un besoin d’offline-first généralisé apparaît plus tard, ce sera un chantier distinct.
 
 ### 11. DX / CI / release mobile
 
@@ -192,14 +209,15 @@ Capacitor Lot status: **1–6 done** · checkpoint Offline capture terrain · 7�
 - Suppression PWA : retrait SW, manifeste, installabilité — **sans remplacement équivalent**.
 - Build Web : Vite classique : assets fingerprintés/hashés ; politique HTTP configurée au niveau du serveur/CDN pour permettre la revalidation de index.html et le cache long des assets immuables. Aucun mécanisme applicatif spécifique de mise à jour n’est prévu.
 - Cache / shell offline PWA : pas de shell offline ni de stratégie offline dédiée héritée du service worker.
-- Offline-first généralisé : hors cible — pas de réplication locale complète, pas de cache durable généralisé, pas de synchronisation universelle de toutes les mutations.
-- Push terrain : **natif iOS/Android** prioritaire ; Web Push mobile hors cible implicite.
+- Offline-first généralisé : hors cible — pas de réplication locale complète, pas de cache durable généralisé, pas de synchronisation universelle de toutes les mutations, pas de file de mutations durable.
+- Push terrain : **natif iOS/Android** (Lot 7 done) ; Web Push mobile hors cible ; **Web Push desktop : non**.
 - Suppression PWA ≠ reconstruction systématique des capacités PWA ailleurs.
+- **Offline capture terrain (checkpoint done, 2026-08-19)** : pas de lot d’implémentation avant Push. Seule capture critique = Observation. Lot 10 = régime process-vivant seulement (pas de survie après kill). Audio / chat / commentaires / commandes de cycle de vie exclus. Pas de stockage, file, ou sync avant le Lot 7, et le Lot 10 ne les introduit pas pour le régime B.
+- Ne pas ouvrir d’implémentation de stockage / file / sync Observation avant Capacitor Lot 7.
 
 ### Encore ouvertes
 
-- **Web Push desktop** : à trancher **au lot 7** uniquement si un besoin produit réel émerge (ex. alertes direction sans app native).
-- **Offline capture terrain** : capacité ciblée possible pour des workflows critiques ; à cadrer au checkpoint après le lot 6, à partir des workflows réels. Pas d’architecture imposée (file de mutations, stockage, rejeu, médias, UX).
+_(aucune pour le Lot 7 — Web Push desktop tranché **non**.)_
 
 ---
 
@@ -207,8 +225,11 @@ Capacitor Lot status: **1–6 done** · checkpoint Offline capture terrain · 7�
 
 - Deuxième frontend ou app native séparée.
 - PWA comme runtime produit distinct (service worker, manifeste, installabilité navigateur).
-- Offline-first généralisé (réplication locale complète, cache durable généralisé, synchronisation universelle de toutes les mutations).
+- Offline-first généralisé (réplication locale complète, cache durable généralisé, synchronisation universelle de toutes les mutations, file de mutations durable).
+- Survie Observation après process kill / cold start (régime B) — persistance hors process, exception RGPD, auth hors-ligne.
+- Capture locale de chat, commentaires, audio, ou commandes de cycle de vie.
 - Refonte métier (Observation, Signal, Action Plan, Chat, Analytics).
 - Décisions d’implémentation (fichiers, APIs internes, plugins, stores).
+- Wipe refresh token Native sur erreur réseau ([issue #181](https://github.com/lpbsn/houston_project/issues/181) ; pas ce checkpoint).
 
 Ces sujets se tranchent lot par lot, après lecture du code.

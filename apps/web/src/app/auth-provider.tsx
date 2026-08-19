@@ -23,6 +23,12 @@ import {
 import { getAccessToken, useAccessToken } from '@/features/auth/session'
 import type { BootstrapResponse, LoginRequest } from '@/features/auth/types'
 import type { PendingOnboardingMembership } from '@/features/auth/lib/pending-onboarding'
+import {
+  applyPendingNativePushTap,
+  setNativePushActiveEstablishmentGetter,
+  setNativePushActiveUserIdGetter,
+  syncNativePushTokenIfGranted,
+} from '@/lib/native-push-session'
 
 type AuthContextValue = {
   activeMembership: BootstrapResponse['active_membership']
@@ -116,6 +122,27 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const isReady = isSessionResolved && !isBootstrapping
   const bootstrap = bootstrapQuery.data ?? null
   const isAuthenticated = Boolean(accessToken) && Boolean(bootstrap)
+
+  useEffect(() => {
+    setNativePushActiveEstablishmentGetter(
+      () => bootstrap?.active_membership?.establishment_id ?? null,
+    )
+    setNativePushActiveUserIdGetter(() => bootstrap?.user?.id ?? null)
+  }, [bootstrap?.active_membership?.establishment_id, bootstrap?.user?.id])
+
+  useEffect(() => {
+    if (!isAuthenticated || !isReady) {
+      return
+    }
+    void syncNativePushTokenIfGranted()
+  }, [isAuthenticated, isReady, bootstrap?.user?.id])
+
+  useEffect(() => {
+    if (!isAuthenticated || !isReady) {
+      return
+    }
+    void applyPendingNativePushTap()
+  }, [isAuthenticated, isReady, bootstrap?.active_membership?.establishment_id])
 
   const value = useMemo<AuthContextValue>(
     () => ({

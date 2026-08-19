@@ -5,22 +5,20 @@ from houston.notifications.api.views import (
     NotificationPreferencesView,
     NotificationsListView,
     NotificationsMarkAllReadView,
-    VapidPublicKeyView,
-    WebPushSubscriptionRevokeView,
-    WebPushSubscriptionUpsertView,
+    PushDeviceRevokeView,
+    PushDeviceUpsertView,
 )
 
 urlpatterns = [
-    path("push/vapid-public-key/", VapidPublicKeyView.as_view(), name="push-vapid-public-key"),
     path(
-        "me/web-push-subscriptions/",
-        WebPushSubscriptionUpsertView.as_view(),
-        name="web-push-subscriptions-upsert",
+        "me/push-devices/",
+        PushDeviceUpsertView.as_view(),
+        name="push-devices-upsert",
     ),
     path(
-        "me/web-push-subscriptions/<uuid:subscription_id>/",
-        WebPushSubscriptionRevokeView.as_view(),
-        name="web-push-subscriptions-revoke",
+        "me/push-devices/<uuid:device_id>/",
+        PushDeviceRevokeView.as_view(),
+        name="push-devices-revoke",
     ),
     path(
         "establishments/<uuid:establishment_id>/notifications/",

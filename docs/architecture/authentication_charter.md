@@ -335,6 +335,7 @@ Auth throttling for public auth mutation endpoints is implemented via DRF `Scope
 ### Remaining security TODOs
 
 - add suspicious token reuse monitoring and alerting
+- **Native refresh wipe on network error** — [issue #181](https://github.com/lpbsn/houston_project/issues/181) (distinct ticket; not Offline capture, not Capacitor Lot 10, not sequenced into Lot 7). Confirmed: `getRefreshTokenTransport()` is `body` when `getAppRuntime() === 'native'`. `performRefresh` in `apps/web/src/features/auth/api.ts` catches any non-`StaleAuthOperationError` failure of `POST /api/v1/auth/refresh/` (including network) and calls `clearPersistedRefreshTokenBestEffort()`, which clears the Keychain/Keystore body store. Cookie Web is a no-op. Effect: a Native cold start or refresh that fails on the network can erase a still-valid refresh token. Fix fail-closed vs network separately from Observation capture.
 
 ## 14. WebSocket authentication (Chat V1)
 

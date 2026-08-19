@@ -1921,7 +1921,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/me/web-push-subscriptions/": {
+    "/api/v1/me/push-devices/": {
         parameters: {
             query?: never;
             header?: never;
@@ -1930,15 +1930,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Creates or updates a Web Push subscription for the authenticated user. */
-        post: operations["v1_me_web_push_subscriptions_create"];
+        /** @description Creates or updates an FCM push device for the authenticated user. */
+        post: operations["v1_me_push_devices_create"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/me/web-push-subscriptions/{subscription_id}/": {
+    "/api/v1/me/push-devices/{device_id}/": {
         parameters: {
             query?: never;
             header?: never;
@@ -1948,8 +1948,8 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** @description Soft-revokes a Web Push subscription for the authenticated user. */
-        delete: operations["v1_me_web_push_subscriptions_destroy"];
+        /** @description Soft-revokes an FCM push device for the authenticated user. */
+        delete: operations["v1_me_push_devices_destroy"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2306,23 +2306,6 @@ export interface paths {
         };
         /** @description Lists organizational Owners (active and invited), deduplicated by user. */
         get: operations["v1_organizations_owners_retrieve"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/push/vapid-public-key/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Returns the VAPID public key for Web Push subscription. */
-        get: operations["v1_push_vapid_public_key_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4286,6 +4269,12 @@ export interface components {
             can_cancel_resolution_request: boolean;
         };
         /**
+         * @description * `ios` - ios
+         *     * `android` - android
+         * @enum {string}
+         */
+        PlatformEnum: "ios" | "android";
+        /**
          * @description * `info` - Info
          *     * `action_required` - Action required
          *     * `urgent` - Urgent
@@ -4317,6 +4306,19 @@ export interface components {
             section?: string;
             field?: string;
             key?: string;
+        };
+        PushDeviceResponse: {
+            /** Format: uuid */
+            id: string;
+            platform: components["schemas"]["PlatformEnum"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_seen_at: string | null;
+        };
+        PushDeviceUpsert: {
+            token: string;
+            platform: components["schemas"]["PlatformEnum"];
         };
         /**
          * @description * `updated` - updated
@@ -4702,25 +4704,6 @@ export interface components {
             errors: {
                 [key: string]: unknown;
             };
-        };
-        VapidPublicKey: {
-            public_key: string;
-        };
-        WebPushSubscriptionResponse: {
-            /** Format: uuid */
-            id: string;
-            endpoint: string;
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            last_seen_at: string | null;
-        };
-        WebPushSubscriptionUpsert: {
-            endpoint: string;
-            p256dh: string;
-            auth: string;
-            /** @default  */
-            user_agent: string;
         };
     };
     responses: never;
@@ -11415,7 +11398,7 @@ export interface operations {
             };
         };
     };
-    v1_me_web_push_subscriptions_create: {
+    v1_me_push_devices_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -11424,9 +11407,9 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["WebPushSubscriptionUpsert"];
-                "application/x-www-form-urlencoded": components["schemas"]["WebPushSubscriptionUpsert"];
-                "multipart/form-data": components["schemas"]["WebPushSubscriptionUpsert"];
+                "application/json": components["schemas"]["PushDeviceUpsert"];
+                "application/x-www-form-urlencoded": components["schemas"]["PushDeviceUpsert"];
+                "multipart/form-data": components["schemas"]["PushDeviceUpsert"];
             };
         };
         responses: {
@@ -11435,7 +11418,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WebPushSubscriptionResponse"];
+                    "application/json": components["schemas"]["PushDeviceResponse"];
                 };
             };
             400: {
@@ -11456,18 +11439,18 @@ export interface operations {
             };
         };
     };
-    v1_me_web_push_subscriptions_destroy: {
+    v1_me_push_devices_destroy: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                subscription_id: string;
+                device_id: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Subscription revoked. */
+            /** @description Device revoked. */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -12725,33 +12708,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    v1_push_vapid_public_key_retrieve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VapidPublicKey"];
-                };
-            };
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
                 };
             };
         };

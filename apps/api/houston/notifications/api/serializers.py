@@ -124,19 +124,13 @@ class NotificationPreferencesUpdateSerializer(serializers.Serializer):
         return attrs
 
 
-class VapidPublicKeySerializer(serializers.Serializer):
-    public_key = serializers.CharField()
+class PushDeviceUpsertSerializer(serializers.Serializer):
+    token = serializers.CharField(max_length=512)
+    platform = serializers.ChoiceField(choices=["ios", "android"])
 
 
-class WebPushSubscriptionUpsertSerializer(serializers.Serializer):
-    endpoint = serializers.CharField(max_length=512)
-    p256dh = serializers.CharField(max_length=255)
-    auth = serializers.CharField(max_length=255)
-    user_agent = serializers.CharField(max_length=512, required=False, allow_blank=True, default="")
-
-
-class WebPushSubscriptionResponseSerializer(serializers.Serializer):
+class PushDeviceResponseSerializer(serializers.Serializer):
     id = serializers.UUIDField()
-    endpoint = serializers.CharField()
+    platform = serializers.ChoiceField(choices=["ios", "android"])
     created_at = serializers.DateTimeField()
     last_seen_at = serializers.DateTimeField(allow_null=True)
