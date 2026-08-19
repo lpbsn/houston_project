@@ -19,8 +19,8 @@
     "preview:landing": "vite preview --config vite.landing.config.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "cap:sync": "npm run build:native && npx cap sync",
-    "cap:sync:bundle": "npm run build:native:bundle && npx cap sync"
+    "cap:sync": "npm run build:native && npx cap sync && node scripts/ios-spm-symlinks.mjs",
+    "cap:sync:bundle": "npm run build:native:bundle && npx cap sync && node scripts/ios-spm-symlinks.mjs"
   },
   "dependencies": {
     "@aparajita/capacitor-secure-storage": "^8.0.0",
