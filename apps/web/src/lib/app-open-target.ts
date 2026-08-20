@@ -49,9 +49,6 @@ export function isPendingDestinationHref(href: string): boolean {
   if (allowsUnauthenticatedAccess(route) || shouldRedirectUnauthenticatedPublicRoute(route)) {
     return false
   }
-  if (route.kind === 'static' && route.path === '/login') {
-    return false
-  }
 
   return true
 }
@@ -96,7 +93,7 @@ export function parseAppOpenTargetFromLocation(route: AppRoute, search: string):
   if (allowsUnauthenticatedAccess(route) || shouldRedirectUnauthenticatedPublicRoute(route)) {
     return null
   }
-  if (route.kind === 'static' && (route.path === '/login' || route.path === '/select-establishment')) {
+  if (route.kind === 'static' && route.path === '/select-establishment') {
     return null
   }
 

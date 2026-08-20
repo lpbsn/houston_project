@@ -34,10 +34,10 @@ function queueRawUrl(raw: string) {
     return
   }
   setPendingNativeDeepLink(target)
-  void applyPendingNativeDeepLink()
+  void applyPending()
 }
 
-async function applyPendingNativeDeepLink(): Promise<void> {
+async function applyPending(): Promise<void> {
   const pending = peekPendingNativeDeepLink()
   const session = readNativeDeepLinkSession()
   if (!pending || !history || applying || !session.isReady()) {
@@ -45,7 +45,7 @@ async function applyPendingNativeDeepLink(): Promise<void> {
   }
 
   applying = true
-  setPendingNativeDeepLink(null)
+  clearPendingNativeDeepLink()
   try {
     if (!session.isAuthenticated()) {
       if (isPublicAppOpenTarget(pending)) {
@@ -103,7 +103,7 @@ export async function configureNativeDeepLinks(options: { history: AppHistory })
     })
     removeListener = () => handle!.remove()
     registerNativeDeepLinkController({
-      applyPending: applyPendingNativeDeepLink,
+      applyPending,
     })
     // Handshake is one-shot for this configure call. A later open of the same
     // href must apply even if Capacitor never delivered the duplicate event.
