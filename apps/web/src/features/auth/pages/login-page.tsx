@@ -31,7 +31,7 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
     return (
       <LoginPageShell>
         <header
-          className="flex justify-end px-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 sm:pt-[max(1.5rem,env(safe-area-inset-top))]"
+          className="flex justify-end px-4 pt-[max(1rem,var(--app-safe-top))] sm:px-6 sm:pt-[max(1.5rem,var(--app-safe-top))]"
           aria-hidden
         />
         <main className="flex flex-col items-center justify-center px-4">
@@ -41,7 +41,7 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
           </div>
         </main>
         <footer
-          className="pb-[max(1.5rem,env(safe-area-inset-bottom))] text-center text-xs text-[#9CA3AF]"
+          className="pb-[max(1.5rem,var(--app-safe-bottom))] text-center text-xs text-[#9CA3AF]"
           aria-hidden
         />
       </LoginPageShell>
@@ -50,7 +50,7 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
 
   return (
     <LoginPageShell>
-      <header className="flex justify-end px-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 sm:pt-[max(1.5rem,env(safe-area-inset-top))]">
+      <header className="flex justify-end px-4 pt-[max(1rem,var(--app-safe-top))] sm:px-6 sm:pt-[max(1.5rem,var(--app-safe-top))]">
         <Button
           type="button"
           variant="outline"
@@ -76,7 +76,7 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
         <LoginForm />
       </main>
 
-      <footer className="pb-[max(1.5rem,env(safe-area-inset-bottom))] text-center text-xs text-[#9CA3AF]">
+      <footer className="pb-[max(1.5rem,var(--app-safe-bottom))] text-center text-xs text-[#9CA3AF]">
         © 2026 Spore · Terrain-first
       </footer>
     </LoginPageShell>

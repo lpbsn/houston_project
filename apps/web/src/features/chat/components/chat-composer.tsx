@@ -28,7 +28,7 @@ export function ChatComposer({ disabled = false, onSend }: ChatComposerProps) {
     <footer
       className={cn(
         'shrink-0 border-t border-[#E8E6DF] bg-[#F5F4F0]',
-        'px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+        'px-3 pt-2 pb-[max(0.75rem,var(--app-safe-bottom))]',
       )}
     >
       <div className="flex items-end gap-2">

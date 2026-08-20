@@ -61,7 +61,7 @@ export function TerrainShell({
         showChat={showChatNav}
       />
       <div className="relative flex min-h-0 flex-1 flex-col bg-[#F5F4F0]">
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-50 flex flex-col gap-2 px-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-50 flex flex-col gap-2 px-2 pt-[max(0.5rem,var(--app-safe-top))]">
           <ObservationProcessingBanner navigate={navigate} />
           <SuccessToastHost />
         </div>
@@ -73,7 +73,7 @@ export function TerrainShell({
         <main
           className={cn(
             'min-h-0 flex-1',
-            !topbar && 'pt-[env(safe-area-inset-top)] lg:pt-0',
+            !topbar && 'pt-[var(--app-safe-top)] lg:pt-0',
             mainScroll === 'hidden'
               ? 'overflow-hidden'
               : 'overflow-y-auto overscroll-y-contain',

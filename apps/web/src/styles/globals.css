@@ -54,6 +54,8 @@
   --spore-muted: #5a7a6c;
   --spore-card: #ffffff;
   --spore-danger: #e07a5f;
+  --app-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --app-safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
 }
 
 @theme inline {

@@ -64,6 +64,13 @@ async function bootstrap() {
     } catch {
       // Deep links stay unconfigured; in-app routing remains.
     }
+
+    try {
+      const { configureNativeSystemBack } = await import('@/lib/native-system-back')
+      await configureNativeSystemBack({ history })
+    } catch {
+      // Android system back stays on the WebView default.
+    }
   }
 
   createRoot(document.getElementById('root')!).render(

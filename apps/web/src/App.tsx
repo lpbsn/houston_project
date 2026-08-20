@@ -27,6 +27,7 @@ import {
 import { NotFoundPage } from '@/app/not-found-page'
 import { RoutePageLoading } from '@/app/route-page-loading'
 import { useAuth } from '@/app/auth-provider'
+import { resolveTerrainBackPath } from '@/app/terrain-back-path'
 import {
   getTerrainContentKey,
   getTerrainRouteConfig,
@@ -77,8 +78,6 @@ import { NotificationCenter } from '@/features/notifications/components/notifica
 import { ActionPlanExecutionDetailTopbarTrailing } from '@/features/action-plans/components/action-plan-execution-detail-topbar-trailing'
 import { ActionPlanTemplateDetailTopbarTrailing } from '@/features/action-plans/components/action-plan-template-detail-topbar-trailing'
 import {
-  buildAnalyticsPatternDetailPath,
-  buildAnalyticsReturnPath,
   buildAnalyticsSignalDetailPath,
   parseAnalyticsSignalReturnContext,
   parseAnalyticsUrlState,
@@ -95,6 +94,7 @@ import {
   applyPendingNativeDeepLink,
   peekPendingNativeDeepLink,
 } from '@/lib/native-deep-link-session'
+import { setNativeSystemBackHrefGetter } from '@/lib/native-system-back'
 
 function App() {
   const shouldReduceMotion = useReducedMotion()
@@ -271,20 +271,40 @@ function App() {
   const executionDetailId =
     route.kind === 'action-plan-execution-detail' ? route.executionId : null
   const staticRoutePath = route.kind === 'static' ? route.path : null
+  const analyticsNow = useMemo(() => {
+    void locationSearch
+    void route.kind
+    return new Date()
+  }, [locationSearch, route.kind])
   const analyticsPatternDetailState = useMemo(
     () =>
       route.kind === 'analytics-pattern-detail'
-        ? parseAnalyticsUrlState(locationSearch, { now: new Date() })
+        ? parseAnalyticsUrlState(locationSearch, { now: analyticsNow })
         : null,
-    [locationSearch, route.kind],
+    [analyticsNow, locationSearch, route.kind],
   )
   const analyticsSignalReturnContext = useMemo(
     () =>
       route.kind === 'signal-detail' || route.kind === 'signal-action-create'
-        ? parseAnalyticsSignalReturnContext(locationSearch, { now: new Date() })
+        ? parseAnalyticsSignalReturnContext(locationSearch, { now: analyticsNow })
         : null,
-    [locationSearch, route.kind],
+    [analyticsNow, locationSearch, route.kind],
   )
+  const terrainBackPath = useMemo(
+    () =>
+      resolveTerrainBackPath(route, {
+        search: locationSearch,
+        now: analyticsNow,
+        hasOperationalAccess: auth.hasOperationalAccess,
+        authenticatedLandingPath: getAuthenticatedLandingPath(auth.bootstrap),
+      }),
+    [analyticsNow, auth.bootstrap, auth.hasOperationalAccess, locationSearch, route],
+  )
+
+  useEffect(() => {
+    setNativeSystemBackHrefGetter(() => terrainBackPath)
+    return () => setNativeSystemBackHrefGetter(null)
+  }, [terrainBackPath])
 
   const terrainTopbarTrailing = useMemo(() => {
     if (!establishmentId || !auth.hasOperationalAccess) {
@@ -648,7 +668,7 @@ function App() {
   if (route.kind === 'static' && route.path === '/onboarding') {
     return (
       <div
-        className="min-h-dvh bg-spore-cream pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-spore-forest"
+        className="min-h-dvh bg-spore-cream pt-[var(--app-safe-top)] pb-[var(--app-safe-bottom)] text-spore-forest"
         data-testid="onboarding-shell"
       >
         <OnboardingPage onNavigate={navigate} />
@@ -840,21 +860,6 @@ function App() {
 
   if (usesTerrainShell(route)) {
     const terrainConfig = getTerrainRouteConfig(route)
-    let terrainBackPath = terrainConfig.backPath
-    if (route.kind === 'signal-detail' && analyticsSignalReturnContext) {
-      terrainBackPath = buildAnalyticsPatternDetailPath(
-        analyticsSignalReturnContext.patternId,
-        analyticsSignalReturnContext.state,
-      )
-    } else if (route.kind === 'analytics-pattern-detail' && analyticsPatternDetailState) {
-      terrainBackPath = buildAnalyticsReturnPath(analyticsPatternDetailState)
-    } else if (
-      route.kind === 'static' &&
-      route.path === '/analytics' &&
-      !auth.hasOperationalAccess
-    ) {
-      terrainBackPath = getAuthenticatedLandingPath(auth.bootstrap) ?? '/login'
-    }
     return wrapTerrainWithOperationalRealtime(
       wrapTerrainWithChatRealtime(
         <TerrainShell
@@ -890,7 +895,7 @@ function App() {
   return (
     <motion.main
       {...motionProps}
-      className="mx-auto flex min-h-screen w-full max-w-7xl px-4 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6"
+      className="mx-auto flex min-h-screen w-full max-w-7xl px-4 pt-[max(1.5rem,var(--app-safe-top))] pb-[max(1.5rem,var(--app-safe-bottom))] sm:px-6"
     >
       <AppShell
         headingBadge={routeCopy.headingBadge}

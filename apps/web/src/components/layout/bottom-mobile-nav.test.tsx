@@ -20,7 +20,7 @@ describe('BottomMobileNav', () => {
     const nav = screen.getByRole('navigation', { name: 'Navigation terrain' })
     expect(nav.className).toContain('z-20')
     expect(nav.className).toContain('relative')
-    expect(nav.className).toContain('pb-[max(0.25rem,env(safe-area-inset-bottom))]')
+    expect(nav.className).toContain('pb-[max(0.25rem,var(--app-safe-bottom))]')
     expect(screen.getByRole('link', { name: 'Nouvelle observation' })).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Nouvelle observation' }).className).toContain(
       '114660',
@@ -38,7 +38,7 @@ describe('BottomMobileNav', () => {
     expect(list?.className).toContain('h-11')
     expect(list?.className).not.toContain('pb-[max')
     expect(list?.className).not.toContain('pt-')
-    expect(nav.className).toContain('pb-[max(0.25rem,env(safe-area-inset-bottom))]')
+    expect(nav.className).toContain('pb-[max(0.25rem,var(--app-safe-bottom))]')
   })
 
   it('renders primary FAB as a 56x56 absolute link outside the row flow', () => {

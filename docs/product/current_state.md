@@ -1,7 +1,7 @@
 # Houston — Current product state
 
 Status: authoritative  
-Last reviewed: 2026-08-19
+Last reviewed: 2026-08-20
 
 ## Branding
 
@@ -74,7 +74,8 @@ Post-core gaps (non-blocking pilot): some bootstrap hints, no REST message write
 
 ## Frontend
 
-- Terrain mobile shell (`TerrainShell`, bottom nav, safe areas).
+- Terrain mobile shell (`TerrainShell`, bottom nav, `--app-safe-*` insets).
+- Native UX (Capacitor Lot 9): Android system back aligned on `backPath`; iOS keyboard resize native; Observation mic OS declarations.
 - Management shell (`AppShell`) for non-terrain routes: `/organization`, `/organization/establishments/{id}`, `/app/operational-config`, onboarding.
 - Organization admin (Owners): `/organization` — establishments, members, owners.
 - Establishment admin (Owners org-wide + Directors on path): `/organization/establishments/{id}` — overview metrics + memberships; entry to operational config.

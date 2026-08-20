@@ -1,4 +1,5 @@
 import type { CapacitorConfig } from '@capacitor/cli'
+import { KeyboardResize } from '@capacitor/keyboard'
 
 const config: CapacitorConfig = {
   appId: 'app.spore',
@@ -6,6 +7,11 @@ const config: CapacitorConfig = {
   webDir: 'dist-native',
   android: {
     allowMixedContent: false,
+  },
+  plugins: {
+    Keyboard: {
+      resize: KeyboardResize.Native,
+    },
   },
   experimental: {
     ios: {

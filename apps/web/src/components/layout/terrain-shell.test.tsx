@@ -128,13 +128,13 @@ describe('TerrainShell', () => {
     const { unmount } = renderTerrainShell('auto', { topbar: null })
 
     expect(screen.getByRole('main').className).toContain(
-      'pt-[env(safe-area-inset-top)]',
+      'pt-[var(--app-safe-top)]',
     )
     unmount()
 
     renderTerrainShell('auto')
     expect(screen.getByRole('main').className).not.toContain(
-      'pt-[env(safe-area-inset-top)]',
+      'pt-[var(--app-safe-top)]',
     )
   })
 

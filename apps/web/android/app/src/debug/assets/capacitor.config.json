@@ -4,5 +4,10 @@
 	"webDir": "dist-native",
 	"android": {
 		"allowMixedContent": true
+	},
+	"plugins": {
+		"Keyboard": {
+			"resize": "native"
+		}
 	}
 }

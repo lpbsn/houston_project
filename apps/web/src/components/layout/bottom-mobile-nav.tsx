@@ -34,7 +34,7 @@ export function BottomMobileNav({
       aria-label="Navigation terrain"
       className={cn(
         'relative z-20 w-full shrink-0 overflow-visible border-t border-[#E8E6DF] bg-white',
-        'pb-[max(0.25rem,env(safe-area-inset-bottom))]',
+        'pb-[max(0.25rem,var(--app-safe-bottom))]',
         className,
       )}
     >
