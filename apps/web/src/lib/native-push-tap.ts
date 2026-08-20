@@ -1,11 +1,9 @@
+import { isRelativeAppPath } from '@/lib/app-open-target'
+
 export type NativePushTapTarget = {
   url: string
   establishment_id: string
   notification_id: string
-}
-
-function isRelativeAppPath(url: string): boolean {
-  return url.startsWith('/') && !url.startsWith('//') && !url.includes('://')
 }
 
 export function parseNativePushTapPayload(data: unknown): NativePushTapTarget | null {

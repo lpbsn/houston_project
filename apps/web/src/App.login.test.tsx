@@ -74,6 +74,12 @@ vi.mock('framer-motion', () => ({
   useReducedMotion: () => true,
 }))
 
+import {
+  clearPendingNativeDeepLink,
+  registerNativeDeepLinkController,
+  setPendingNativeDeepLink,
+} from '@/lib/native-deep-link-session'
+
 import App from './App'
 
 function resetAuthState() {
@@ -94,6 +100,8 @@ afterEach(() => {
   appShellRenderCount.value = 0
   routeState.route = { kind: 'static', path: '/login' }
   resetAuthState()
+  clearPendingNativeDeepLink()
+  registerNativeDeepLinkController(null)
 })
 
 describe('App /login routing', () => {
@@ -142,5 +150,28 @@ describe('App /login routing', () => {
 
     expect(screen.getByText('Chargement de votre session…')).toBeTruthy()
     expect(screen.queryByTestId('login-page')).toBeNull()
+  })
+
+  it('redirects unauthenticated / to login when a pending deep link apply is a no-op', () => {
+    routeState.route = { kind: 'static', path: '/' }
+    setPendingNativeDeepLink({ href: '/signals/s1' })
+
+    render(createElement(App))
+
+    expect(navigate).toHaveBeenCalledWith('/login', { replace: true })
+  })
+
+  it('does not race login redirect when a pending deep link is consumed', () => {
+    routeState.route = { kind: 'static', path: '/' }
+    setPendingNativeDeepLink({ href: '/signals/s1' })
+    registerNativeDeepLinkController({
+      applyPending: async () => {
+        setPendingNativeDeepLink(null)
+      },
+    })
+
+    render(createElement(App))
+
+    expect(navigate).not.toHaveBeenCalled()
   })
 })

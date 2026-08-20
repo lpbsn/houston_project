@@ -29,6 +29,7 @@ import {
   setNativePushActiveUserIdGetter,
   syncNativePushTokenIfGranted,
 } from '@/lib/native-push-session'
+import { setNativeDeepLinkSessionGetters } from '@/lib/native-deep-link-session'
 
 type AuthContextValue = {
   activeMembership: BootstrapResponse['active_membership']
@@ -128,7 +129,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
       () => bootstrap?.active_membership?.establishment_id ?? null,
     )
     setNativePushActiveUserIdGetter(() => bootstrap?.user?.id ?? null)
-  }, [bootstrap?.active_membership?.establishment_id, bootstrap?.user?.id])
+    setNativeDeepLinkSessionGetters({
+      isReady: () => isReady,
+      isAuthenticated: () => isAuthenticated,
+    })
+  }, [bootstrap?.active_membership?.establishment_id, bootstrap?.user?.id, isAuthenticated, isReady])
 
   useEffect(() => {
     if (!isAuthenticated || !isReady) {

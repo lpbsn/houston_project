@@ -1,7 +1,7 @@
 # Frontend architecture
 
 Status: authoritative  
-Last reviewed: 2026-08-18
+Last reviewed: 2026-08-19
 
 ## Stack
 
@@ -19,6 +19,7 @@ Client-side router in [`apps/web/src/app/app-routes.ts`](../../apps/web/src/app/
 - `AppHistory` — injectable location store (`getHref`, `subscribe`, `navigate`); Web uses `createBrowserHistory()`, tests use `createMemoryHistory()`
 - `AppRouteProvider` — requires `history` from the composition root ([`main.tsx`](../../apps/web/src/main.tsx)); `useAppRoute()` exposes `{ route, search, navigate }`. Search-only URL changes keep the same `route` object (`getAppRouteKey`); `search` still updates.
 - Search-only screen state (Analytics filters, comment deep links, onboarding ids) stays in the URL query and is read from `useAppRoute().search` / `useLocationSearch()`
+- Native HTTPS deep links (`getLaunchUrl` / `appUrlOpen`) parse the public origin then `parseAppRoute`; `establishment_id` is a sibling of the product href through login / select-establishment. See [`apps/web/src/lib/app-open-target.ts`](../../apps/web/src/lib/app-open-target.ts).
 - `terrain-routes.ts` — shell config per route (`mainScroll`, topbar, bottom nav)
 
 Lazy pages: [`lazy-terrain-pages.tsx`](../../apps/web/src/app/lazy-terrain-pages.tsx).

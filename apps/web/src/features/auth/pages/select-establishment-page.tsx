@@ -1,9 +1,11 @@
 import { useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 
+import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
 import { switchEstablishment } from '@/features/auth/api'
 import { EstablishmentSelectorCard } from '@/features/auth/components/establishment-selector-card'
+import { parsePendingAppOpenFromSearch } from '@/lib/app-open-target'
 
 type SelectEstablishmentPageProps = {
   onNavigate: (path: string) => void
@@ -11,6 +13,7 @@ type SelectEstablishmentPageProps = {
 
 export function SelectEstablishmentPage({ onNavigate }: SelectEstablishmentPageProps) {
   const { memberships } = useAuth()
+  const { search } = useAppRoute()
   const [pendingEstablishmentId, setPendingEstablishmentId] = useState<string | null>(null)
   const [selectorError, setSelectorError] = useState<string | null>(null)
   const isSwitchingRef = useRef(false)
@@ -30,7 +33,8 @@ export function SelectEstablishmentPage({ onNavigate }: SelectEstablishmentPageP
 
     try {
       await switchMutation.mutateAsync({ establishment_id: establishmentId })
-      onNavigate('/reporting')
+      const pending = parsePendingAppOpenFromSearch(search)
+      onNavigate(pending?.href ?? '/reporting')
     } catch (error) {
       setSelectorError(
         error instanceof Error ? error.message : 'Impossible de sélectionner cet établissement.',
