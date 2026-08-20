@@ -36,6 +36,7 @@ API contract: [`apps/api/schema.yml`](../../apps/api/schema.yml).
 | Comments (signal + execution threads) | Live | REST + mention picker |
 | Notifications in-app | Live | List, preferences, mark read |
 | Native push (FCM) | Live | Capacitor Lot 7; membership `push_enabled`; Web Push removed |
+| Native HTTPS deep links | Live | Capacitor Lot 8 handler (`getLaunchUrl` / `appUrlOpen`); device QA pending; App Links / Universal Links E2E blocked ops/ADP |
 | Operational realtime (invalidation) | Live | WS ticket + `OperationalRealtimeProvider` on terrain routes |
 | Chat V1 core | Live | DM + groups, WS messages, Terrain UI `/chat` |
 | Upload / private media | Live | Authorized reads only |
@@ -97,6 +98,7 @@ Preserved names (do not rename without explicit decision):
 - Production-grade polish on all terrain screens.
 - Chat post-core UI (group admin, settings).
 - Push notifications: native FCM live (Capacitor Lot 7). Device QA (foreground / background / terminated, physical iOS + Android) is manual. Web Push desktop is out.
+- Native HTTPS deep links: handler live (Capacitor Lot 8). Device QA pending (Android `adb` VIEW intent → app → navigation, physical iOS). App Links / Universal Links E2E blocked until association files are published and Apple Developer Program (same bar as Lot 7 APNs).
 - Observation compose today is memory-only (`/reporting` React state) with immediate photo upload. Capacitor Lot 10 must protect Observation **while the process is alive** (checkpoint Offline capture, done). That protection is a **prerequisite before real field usage or a terrain pilot under intermittent connectivity**. Survival after process kill is not in that lot.
 - Native refresh: body-transport `performRefresh` can clear a still-valid Keychain refresh token on network error — [issue #181](https://github.com/lpbsn/houston_project/issues/181), not Offline capture and not Lot 10. See [`../architecture/authentication_charter.md`](../architecture/authentication_charter.md).
 - Full device QA matrix not automated in CI.

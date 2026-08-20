@@ -9,6 +9,7 @@ import { SelectEstablishmentPage } from './select-establishment-page'
 
 const onNavigate = vi.fn()
 const switchEstablishment = vi.fn()
+let mockSearch = ''
 
 function renderPage() {
   const queryClient = new QueryClient({
@@ -69,6 +70,16 @@ vi.mock('@/app/auth-provider', () => ({
   }),
 }))
 
+vi.mock('@/app/app-routes', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/app/app-routes')>()
+  return {
+    ...actual,
+    useAppRoute: () => ({
+      search: mockSearch,
+    }),
+  }
+})
+
 vi.mock('@/features/auth/api', () => ({
   switchEstablishment: (...args: unknown[]) => switchEstablishment(...args),
 }))
@@ -77,6 +88,7 @@ afterEach(() => {
   cleanup()
   onNavigate.mockReset()
   switchEstablishment.mockReset()
+  mockSearch = ''
 })
 
 describe('SelectEstablishmentPage', () => {
@@ -131,6 +143,19 @@ describe('SelectEstablishmentPage', () => {
     resolveSwitch({})
     await waitFor(() => {
       expect(onNavigate).toHaveBeenCalledWith('/reporting')
+    })
+  })
+
+  it('navigates to next after a manual switch when the pending dest has no establishment hint', async () => {
+    mockSearch = '?next=%2Fsignals%2Fs1'
+    switchEstablishment.mockResolvedValueOnce({})
+
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: /Brasserie Metz/i }))
+
+    await waitFor(() => {
+      expect(onNavigate).toHaveBeenCalledWith('/signals/s1')
     })
   })
 })

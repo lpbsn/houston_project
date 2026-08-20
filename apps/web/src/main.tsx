@@ -57,6 +57,13 @@ async function bootstrap() {
     } catch {
       // Push stays unconfigured; in-app notifications remain.
     }
+
+    try {
+      const { configureNativeDeepLinks } = await import('@/lib/native-deep-link')
+      await configureNativeDeepLinks({ history })
+    } catch {
+      // Deep links stay unconfigured; in-app routing remains.
+    }
   }
 
   createRoot(document.getElementById('root')!).render(

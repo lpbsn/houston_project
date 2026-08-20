@@ -3,7 +3,7 @@
 Status: authoritative  
 Last reviewed: 2026-08-19
 
-Référence d’exécution pour les agents Cursor. **Capacitor Lots 1–7 are done.** Next is **Capacitor Lot 8** (deep links). This document frames the remaining lots; it does not prescribe implementation.
+Référence d’exécution pour les agents Cursor. **Capacitor Lots 1–8 are done.** Next is **Capacitor Lot 9** (UX native). This document frames the remaining lots; it does not prescribe implementation.
 
 These **Capacitor Lots** (1–11) are distinct from product/domain lots (taxonomy Lot 5, test Lot 4 helpers, product Lot 11 stabilization). Write **Capacitor Lot N** when referring to this roadmap.
 
@@ -77,7 +77,7 @@ Chaque lot est un chantier séparé. Un agent qui ouvre un lot doit :
 
 Les fichiers, interfaces, plugins Capacitor, librairies et migrations se décident **au début du lot**, après inspection — pas dans cette roadmap.
 
-Ordre des lots : strictement séquentiel. Un lot suivant ne commence que si le précédent est implémenté et validé. Le checkpoint Offline capture terrain est **done** (cadrage seulement, pas d’implémentation). **Capacitor Lot 7 is done.** **Capacitor Lot 8** is next. Ne pas ouvrir de stockage, file, ou sync Observation avant le Lot 10.
+Ordre des lots : strictement séquentiel. Un lot suivant ne commence que si le précédent est implémenté et validé. Le checkpoint Offline capture terrain est **done** (cadrage seulement, pas d’implémentation). **Capacitor Lot 8 is done.** **Capacitor Lot 9** is next. Ne pas ouvrir de stockage, file, ou sync Observation avant le Lot 10.
 
 Contexte de migration. Le projet est développé par un seul développeur et n’a aucun utilisateur réel en production. Il n’est donc pas nécessaire de privilégier les stratégies de migration “safe” destinées à préserver temporairement l’existant : compatibilité ascendante, doubles chemins, feature flags, migrations progressives, fallbacks temporaires ou conservation d’anciennes abstractions. Si une rupture ou une refonte rend la cible plus simple, propre et maintenable, elle doit être privilégiée.
 Cela ne signifie pas ignorer la qualité ou la sécurité technique : le repository doit rester fonctionnel et validé à la fin de chaque lot.
@@ -104,7 +104,7 @@ TOUJOURS BESOIN
 
 ## Lots
 
-Capacitor Lot status: **1–7 done** · checkpoint Offline capture terrain **done** · **8 next** · 9–11 not started.
+Capacitor Lot status: **1–8 done** · checkpoint Offline capture terrain **done** · **9 next** · 10–11 not started.
 
 ### 1. Runtime / API / WebSocket — done
 
@@ -173,11 +173,15 @@ Ticket auth orthogonal (wipe refresh Native sur erreur réseau) : hors ce checkp
 
 **Validation (2026-08-19).** Implémentation Lot 7 terminée. `npx cap sync` validé. Build Android avec Firebase validé. Build iOS avec `@capacitor-firebase/messaging` + Firebase validé (`GoogleService-Info.plist` embarqué dans la target iOS ; entitlement `aps-environment=development` présent et référencé). Push iOS sur device réel **non validé** : le compte Apple actuel est une Personal Team ; cette validation reste en attente jusqu’à l’adhésion à l’Apple Developer Program, nécessaire pour tester APNs proprement sur iPhone physique. La suite de validation immédiate se poursuit sur Android de bout en bout.
 
-### 8. Deep links / navigation native
+### 8. Deep links / navigation native — done
 
 **Objectif.** Les URLs métier, notifications et liens externes ouvrent la bonne destination sur Web ou dans l’app native.
 
 **Responsabilité.** Une URL produit résout la même route dans les deux runtimes. Clics de notification, liens d’invitation et liens externes passent par cette résolution. Auth et établissement courant restent des préconditions backend ; le client n’ouvre pas une ressource non autorisée. S’appuie sur le routeur du lot 3, sans le réinventer.
+
+**Fait (2026-08-19).** Universal Links / App Links HTTPS sur `app.spore-os.com` (`getLaunchUrl` + `appUrlOpen`, dédup handshake seulement). Parser : origine HTTPS exacte + `parseAppRoute`. Destination `{ href, establishmentId? }` portée via `/login` et `/select-establishment`. Switch établissement seulement si l’id est explicite. Pas de custom scheme, pas de fichiers AASA/assetlinks placeholder.
+
+**Validation (2026-08-19).** Handler Android (`adb` VIEW intent → app → navigation) est le niveau de QA du lot. **App Links E2E** (ouverture automatique depuis le Web) bloqués tant que `assetlinks.json` n’est pas publié. **Universal Links iOS E2E** bloqués par l’Apple Developer Program (même barre que l’APNs Lot 7).
 
 ### 9. UX native
 
@@ -217,7 +221,7 @@ Interdit : offline-first généralisé ; réplication locale complète ; cache d
 
 ### Encore ouvertes
 
-_(aucune pour le Lot 7 — Web Push desktop tranché **non**.)_
+_(App Links / Universal Links E2E — fichiers d’association ops + ADP iOS, hors commit Lot 8.)_
 
 ---
 

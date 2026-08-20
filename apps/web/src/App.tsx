@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useMemo, type ReactNode } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 
 import { useAppRoute } from '@/app/app-routes'
@@ -39,7 +39,7 @@ import { AppShell } from '@/components/app-shell'
 import { TerrainShell } from '@/components/layout/terrain-shell'
 import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import { Button } from '@/components/ui/button'
-import { bootstrapQueryKey, clearAuthState } from '@/features/auth/api'
+import { bootstrapQueryKey, clearAuthState, switchEstablishment } from '@/features/auth/api'
 import { AuthRoutingLoading } from '@/features/auth/components/auth-routing-loading'
 import { PendingOnboardingPage } from '@/features/auth/pages/pending-onboarding-page'
 import { TeamInvitePage } from '@/features/auth/pages/team-invite-page'
@@ -83,11 +83,24 @@ import {
   parseAnalyticsSignalReturnContext,
   parseAnalyticsUrlState,
 } from '@/features/analytics/lib/analytics-url-state'
+import {
+  applyAppOpenTarget,
+  buildLoginRedirectHref,
+  buildSelectEstablishmentRedirectHref,
+  parseAppOpenTargetFromLocation,
+  parsePendingAppOpenFromSearch,
+  resolveSelectEstablishmentHintTarget,
+} from '@/lib/app-open-target'
+import {
+  applyPendingNativeDeepLink,
+  peekPendingNativeDeepLink,
+} from '@/lib/native-deep-link-session'
 
 function App() {
   const shouldReduceMotion = useReducedMotion()
   const auth = useAuth()
   const { route, navigate, search: locationSearch } = useAppRoute()
+  const applyingOpenRef = useRef(false)
 
   const motionProps = shouldReduceMotion
     ? {}
@@ -102,36 +115,61 @@ function App() {
       return
     }
 
-    if (shouldRedirectUnauthenticatedPublicRoute(route) && !auth.isAuthenticated) {
-      navigate('/login', { replace: true })
+    if (peekPendingNativeDeepLink()) {
+      void applyPendingNativeDeepLink()
+      // Apply takes charge synchronously (clears pending). A no-op must not
+      // skip login / landing.
+      if (!peekPendingNativeDeepLink()) {
+        return
+      }
+    }
+
+    if (!auth.isAuthenticated) {
+      if (shouldRedirectUnauthenticatedPublicRoute(route)) {
+        navigate('/login', { replace: true })
+        return
+      }
+
+      if (isProtectedRoute(route) && !allowsUnauthenticatedAccess(route)) {
+        const target = parseAppOpenTargetFromLocation(route, locationSearch)
+        navigate(target ? buildLoginRedirectHref(target) : '/login', { replace: true })
+      }
       return
     }
 
-    const isProtectedRouteMatch = isProtectedRoute(route)
-
-    if (isProtectedRouteMatch && !auth.isAuthenticated && !allowsUnauthenticatedAccess(route)) {
-      navigate('/login', { replace: true })
-    }
-  }, [auth.isAuthenticated, auth.isReady, navigate, route])
-
-  useEffect(() => {
-    if (!shouldPreserveTeamListUiState(route)) {
-      resetTeamListUiState()
-    }
-  }, [route])
-
-  useEffect(() => {
-    if (!auth.isReady || route.kind === 'invitation') {
-      return
-    }
-
-    if (!auth.isAuthenticated || !auth.bootstrap) {
+    if (!auth.bootstrap) {
       return
     }
 
     const landingPath = getAuthenticatedLandingPath(auth.bootstrap)
 
     if (shouldRedirectAuthenticatedPublicRoute(route) && landingPath) {
+      const pending = parsePendingAppOpenFromSearch(locationSearch)
+      if (pending && auth.hasOperationalAccess) {
+        if (applyingOpenRef.current) {
+          return
+        }
+        applyingOpenRef.current = true
+        void applyAppOpenTarget(pending, {
+          getActiveEstablishmentId: () =>
+            auth.bootstrap?.active_membership?.establishment_id ?? null,
+          switchEstablishment: async (establishmentId) => {
+            await switchEstablishment({ establishment_id: establishmentId })
+          },
+          navigate,
+        })
+          .catch(() => {
+            navigate(landingPath, { replace: true })
+          })
+          .finally(() => {
+            applyingOpenRef.current = false
+          })
+        return
+      }
+      if (pending && landingPath === '/select-establishment') {
+        navigate(buildSelectEstablishmentRedirectHref(pending), { replace: true })
+        return
+      }
       navigate(landingPath, { replace: true })
       return
     }
@@ -152,6 +190,31 @@ function App() {
       return
     }
 
+    if (route.kind === 'static' && route.path === '/select-establishment') {
+      const hinted = resolveSelectEstablishmentHintTarget(locationSearch, auth.memberships)
+      if (hinted) {
+        if (applyingOpenRef.current) {
+          return
+        }
+        applyingOpenRef.current = true
+        void applyAppOpenTarget(hinted, {
+          getActiveEstablishmentId: () =>
+            auth.bootstrap?.active_membership?.establishment_id ?? null,
+          switchEstablishment: async (establishmentId) => {
+            await switchEstablishment({ establishment_id: establishmentId })
+          },
+          navigate,
+        })
+          .catch(() => {
+            // Stay on the selector when the hinted establishment cannot be opened.
+          })
+          .finally(() => {
+            applyingOpenRef.current = false
+          })
+        return
+      }
+    }
+
     if (route.kind === 'organization-establishment-detail') {
       return
     }
@@ -168,10 +231,18 @@ function App() {
     auth.hasOperationalAccess,
     auth.isAuthenticated,
     auth.isReady,
+    auth.memberships,
     auth.pendingOnboardingMemberships,
+    locationSearch,
     navigate,
     route,
   ])
+
+  useEffect(() => {
+    if (!shouldPreserveTeamListUiState(route)) {
+      resetTeamListUiState()
+    }
+  }, [route])
 
   const handleSignOut = useCallback(() => {
     void auth.logout().then(() => {

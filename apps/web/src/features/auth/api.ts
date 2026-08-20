@@ -5,6 +5,7 @@ import { clearAllPlanningSubmissionIntents } from '@/features/action-plans/lib/a
 import { clearObservationProcessingTrackerOnLogout } from '@/features/observations/lib/observation-processing-tracker-store'
 import { clearRegistrationSessionSnapshot } from '@/features/onboarding/lib/registration-session-storage'
 import { runNativePushBeforeLogout } from '@/lib/native-push-session'
+import { clearPendingNativeDeepLink } from '@/lib/native-deep-link-session'
 import { queryClient } from '@/lib/query-client'
 import {
   clearAuthenticatedQueryCache,
@@ -748,6 +749,7 @@ export async function acceptInvitationSession(
 
 export async function logout() {
   await runNativePushBeforeLogout()
+  clearPendingNativeDeepLink()
   const accessToken = getAccessToken()
   const prepared = await prepareLogoutTransport()
   const { error, response } = await apiClient.POST('/api/v1/auth/logout/', {

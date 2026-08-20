@@ -189,7 +189,7 @@ Not implemented:
 - Comment mention notifications (`comment.mention.created`): when `navigation` is present, open the parent detail (`signal` or `action_plan_execution`) with the Commentaires tab and scroll/highlight the mentioned comment (`?tab=comments&commentId={subject_id}`). When `navigation` is `null` (comment hard-deleted; V1 without denormalized parent on `Notification`), mark read only — no navigation. When the parent loads but the comment is absent from the authorized list, show an inline unavailable message in the Commentaires tab.
 - `navigation` is a non-sensitive routing hint (parent type + UUID only); authorization remains on the parent and comment list fetches.
 - Native profile exposes `push_enabled` (fail-closed opt-in: OS permission → FCM token → upsert → then PATCH). Web has no push toggle.
-- Tap of an OS notification uses payload `url` + `establishment_id` (not the in-app list `url`). Universal Links remain Lot 8.
+- Tap of an OS notification uses payload `url` + `establishment_id` (not the in-app list `url`). Native HTTPS deep-link **handler** is Lot 8 (`getLaunchUrl` / `appUrlOpen` → `AppRoute`). Verified App Links / Universal Links E2E remain blocked on ops association files (and iOS ADP).
 - Frontend must not display sensitive raw content from notification, push, or realtime payloads.
 - Frontend must handle `unread`, `read`, and `archived` states when APIs exist.
 - Frontend may optimistically update read state only if backend confirmation or reconciliation remains the authority.
