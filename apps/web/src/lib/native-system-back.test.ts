@@ -30,7 +30,7 @@ import { registerNativeOverlayDismiss, resetNativeOverlayDismissForTests } from 
 import {
   configureNativeSystemBack,
   resetNativeSystemBackForTests,
-  setNativeSystemBackHrefGetter,
+  setNativeSystemBackAuthGetter,
 } from './native-system-back'
 
 describe('native system back', () => {
@@ -111,13 +111,42 @@ describe('native system back', () => {
     expect(minimizeApp).not.toHaveBeenCalled()
   })
 
-  it('uses the live getter when App has registered a back href', async () => {
+  it('uses live auth extras when leaving analytics without operational access', async () => {
+    const { history, pressBack } = await configureAndroid(createMemoryHistory('/analytics'))
+    setNativeSystemBackAuthGetter(() => ({
+      hasOperationalAccess: false,
+      authenticatedLandingPath: '/organization',
+    }))
+
+    pressBack()
+
+    expect(history.getHref()).toBe('/organization')
+    expect(minimizeApp).not.toHaveBeenCalled()
+  })
+
+  it('resolves from live history after navigating to a hub instead of a stale back path', async () => {
     const { history, pressBack } = await configureAndroid(createMemoryHistory('/signals/sig-1'))
-    setNativeSystemBackHrefGetter(() => '/analytics')
+
+    pressBack()
+    expect(history.getHref()).toBe('/signals')
+    expect(minimizeApp).not.toHaveBeenCalled()
+
+    pressBack()
+    expect(history.getHref()).toBe('/signals')
+    expect(minimizeApp).toHaveBeenCalledTimes(1)
+  })
+
+  it('minimizes when the semantic back path is already the current href', async () => {
+    const { history, pressBack } = await configureAndroid(createMemoryHistory('/analytics'))
+    setNativeSystemBackAuthGetter(() => ({
+      hasOperationalAccess: false,
+      authenticatedLandingPath: '/analytics',
+    }))
 
     pressBack()
 
     expect(history.getHref()).toBe('/analytics')
+    expect(minimizeApp).toHaveBeenCalledTimes(1)
   })
 
   it('minimizes on a terrain hub with no back path', async () => {

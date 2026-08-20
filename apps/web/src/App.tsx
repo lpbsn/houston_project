@@ -94,7 +94,7 @@ import {
   applyPendingNativeDeepLink,
   peekPendingNativeDeepLink,
 } from '@/lib/native-deep-link-session'
-import { setNativeSystemBackHrefGetter } from '@/lib/native-system-back'
+import { setNativeSystemBackAuthGetter } from '@/lib/native-system-back'
 
 function App() {
   const shouldReduceMotion = useReducedMotion()
@@ -301,10 +301,19 @@ function App() {
     [analyticsNow, auth.bootstrap, auth.hasOperationalAccess, locationSearch, route],
   )
 
+  const nativeSystemBackAuthRef = useRef({
+    hasOperationalAccess: auth.hasOperationalAccess,
+    authenticatedLandingPath: getAuthenticatedLandingPath(auth.bootstrap),
+  })
+  nativeSystemBackAuthRef.current = {
+    hasOperationalAccess: auth.hasOperationalAccess,
+    authenticatedLandingPath: getAuthenticatedLandingPath(auth.bootstrap),
+  }
+
   useEffect(() => {
-    setNativeSystemBackHrefGetter(() => terrainBackPath)
-    return () => setNativeSystemBackHrefGetter(null)
-  }, [terrainBackPath])
+    setNativeSystemBackAuthGetter(() => nativeSystemBackAuthRef.current)
+    return () => setNativeSystemBackAuthGetter(null)
+  }, [])
 
   const terrainTopbarTrailing = useMemo(() => {
     if (!establishmentId || !auth.hasOperationalAccess) {

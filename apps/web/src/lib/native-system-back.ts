@@ -5,8 +5,13 @@ import { resolveTerrainBackPath } from '@/app/terrain-back-path'
 import { dismissTopNativeOverlay } from '@/lib/native-overlay-dismiss'
 import { getAppRuntime } from '@/lib/runtime'
 
+export type NativeSystemBackAuth = {
+  hasOperationalAccess?: boolean
+  authenticatedLandingPath?: string | null
+}
+
 let history: AppHistory | null = null
-let getBackHref: (() => string | null) | null = null
+let getBackAuth: (() => NativeSystemBackAuth | null) | null = null
 let minimizeApp: (() => Promise<void>) | null = null
 let removeListener: (() => Promise<void>) | null = null
 
@@ -17,14 +22,15 @@ async function loadNativeDeps() {
 }
 
 function resolveBackHref(): string | null {
-  if (getBackHref) {
-    return getBackHref()
-  }
   if (!history) {
     return null
   }
   const href = history.getHref()
-  return resolveTerrainBackPath(parseAppRoute(href), { search: getHrefSearch(href) })
+  const auth = getBackAuth?.() ?? {}
+  return resolveTerrainBackPath(parseAppRoute(href), {
+    search: getHrefSearch(href),
+    ...auth,
+  })
 }
 
 function handleAndroidBack() {
@@ -33,8 +39,8 @@ function handleAndroidBack() {
   }
 
   const backHref = resolveBackHref()
-  if (backHref) {
-    history?.navigate(backHref)
+  if (backHref && history && backHref !== history.getHref()) {
+    history.navigate(backHref)
     return
   }
 
@@ -70,15 +76,15 @@ export async function configureNativeSystemBack(options: { history: AppHistory }
       await handle.remove()
     }
     history = null
-    getBackHref = null
+    getBackAuth = null
     minimizeApp = null
     removeListener = null
     throw error
   }
 }
 
-export function setNativeSystemBackHrefGetter(getter: (() => string | null) | null) {
-  getBackHref = getter
+export function setNativeSystemBackAuthGetter(getter: (() => NativeSystemBackAuth | null) | null) {
+  getBackAuth = getter
 }
 
 export async function resetNativeSystemBackForTests() {
@@ -87,6 +93,6 @@ export async function resetNativeSystemBackForTests() {
     removeListener = null
   }
   history = null
-  getBackHref = null
+  getBackAuth = null
   minimizeApp = null
 }
