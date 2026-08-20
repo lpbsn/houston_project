@@ -301,19 +301,15 @@ function App() {
     [analyticsNow, auth.bootstrap, auth.hasOperationalAccess, locationSearch, route],
   )
 
-  const nativeSystemBackAuthRef = useRef({
-    hasOperationalAccess: auth.hasOperationalAccess,
-    authenticatedLandingPath: getAuthenticatedLandingPath(auth.bootstrap),
-  })
-  nativeSystemBackAuthRef.current = {
-    hasOperationalAccess: auth.hasOperationalAccess,
-    authenticatedLandingPath: getAuthenticatedLandingPath(auth.bootstrap),
-  }
-
   useEffect(() => {
-    setNativeSystemBackAuthGetter(() => nativeSystemBackAuthRef.current)
+    const hasOperationalAccess = auth.hasOperationalAccess
+    const authenticatedLandingPath = getAuthenticatedLandingPath(auth.bootstrap)
+    setNativeSystemBackAuthGetter(() => ({
+      hasOperationalAccess,
+      authenticatedLandingPath,
+    }))
     return () => setNativeSystemBackAuthGetter(null)
-  }, [])
+  }, [auth.bootstrap, auth.hasOperationalAccess])
 
   const terrainTopbarTrailing = useMemo(() => {
     if (!establishmentId || !auth.hasOperationalAccess) {
