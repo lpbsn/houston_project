@@ -27,11 +27,17 @@ vi.mock('@capacitor/app', () => ({
   },
 }))
 
-vi.mock('@/features/auth/api', () => ({
-  switchEstablishment: (...args: unknown[]) => switchEstablishment(...args),
-}))
+vi.mock('@/features/auth/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/auth/api')>()
+  return {
+    ...actual,
+    switchEstablishment: (...args: unknown[]) => switchEstablishment(...args),
+  }
+})
 
 import { createMemoryHistory } from '@/app/app-history'
+import { AuthApiError, bootstrapQueryKey } from '@/features/auth/api'
+import { queryClient } from '@/lib/query-client'
 import {
   applyPendingNativeDeepLink,
   clearPendingNativeDeepLink,
@@ -43,6 +49,7 @@ import { setNativePushActiveEstablishmentGetter } from './native-push-session'
 
 const PUBLIC_ORIGIN = 'https://app.example.test'
 const SIGNAL_URL = `${PUBLIC_ORIGIN}/signals/s1?establishment_id=est-2`
+const CHAT_URL = `${PUBLIC_ORIGIN}/chat/c1`
 
 describe('native deep links', () => {
   afterEach(async () => {
@@ -53,6 +60,7 @@ describe('native deep links', () => {
     addListener.mockClear()
     switchEstablishment.mockReset()
     listeners.appUrlOpen = undefined
+    queryClient.removeQueries({ queryKey: bootstrapQueryKey })
     vi.unstubAllEnvs()
   })
 
@@ -162,6 +170,83 @@ describe('native deep links', () => {
     await configure()
     expect(peekPendingNativeDeepLink()).not.toBeNull()
     clearPendingNativeDeepLink()
+    expect(peekPendingNativeDeepLink()).toBeNull()
+  })
+
+  it('drains a concurrent open after the in-flight apply finishes', async () => {
+    let resolveSwitch: () => void = () => undefined
+    switchEstablishment.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSwitch = () => resolve()
+        }),
+    )
+
+    const history = await configure()
+    setNativePushActiveEstablishmentGetter(() => 'est-1')
+    setNativeDeepLinkSessionGetters({
+      isReady: () => true,
+      isAuthenticated: () => true,
+    })
+
+    listeners.appUrlOpen?.({ url: SIGNAL_URL })
+    await vi.waitFor(() => {
+      expect(switchEstablishment).toHaveBeenCalledWith({ establishment_id: 'est-2' })
+    })
+
+    listeners.appUrlOpen?.({ url: CHAT_URL })
+    resolveSwitch()
+
+    await vi.waitFor(() => {
+      expect(history.getHref()).toBe('/chat/c1')
+    })
+  })
+
+  it('navigates to landing and does not restore pending when switch is rejected', async () => {
+    switchEstablishment.mockRejectedValueOnce(new AuthApiError('Not found.', 404))
+
+    const history = await configure(createMemoryHistory('/profile'))
+    setNativePushActiveEstablishmentGetter(() => 'est-1')
+    setNativeDeepLinkSessionGetters({
+      isReady: () => true,
+      isAuthenticated: () => true,
+    })
+
+    listeners.appUrlOpen?.({ url: SIGNAL_URL })
+    await vi.waitFor(() => {
+      expect(history.getHref()).toBe('/reporting')
+    })
+    expect(peekPendingNativeDeepLink()).toBeNull()
+    expect(history.getHref()).not.toBe('/signals/s1')
+  })
+
+  it('applies a concurrent open instead of landing when switch rejects', async () => {
+    let rejectSwitch: (error: unknown) => void = () => undefined
+    switchEstablishment.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectSwitch = reject
+        }),
+    )
+
+    const history = await configure(createMemoryHistory('/profile'))
+    setNativePushActiveEstablishmentGetter(() => 'est-1')
+    setNativeDeepLinkSessionGetters({
+      isReady: () => true,
+      isAuthenticated: () => true,
+    })
+
+    listeners.appUrlOpen?.({ url: SIGNAL_URL })
+    await vi.waitFor(() => {
+      expect(switchEstablishment).toHaveBeenCalledWith({ establishment_id: 'est-2' })
+    })
+
+    listeners.appUrlOpen?.({ url: CHAT_URL })
+    rejectSwitch(new AuthApiError('Not found.', 404))
+
+    await vi.waitFor(() => {
+      expect(history.getHref()).toBe('/chat/c1')
+    })
     expect(peekPendingNativeDeepLink()).toBeNull()
   })
 })

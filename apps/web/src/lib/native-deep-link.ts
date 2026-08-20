@@ -1,5 +1,6 @@
 import type { AppHistory } from '@/app/app-history'
-import { switchEstablishment } from '@/features/auth/api'
+import { bootstrapQueryKey, switchEstablishment } from '@/features/auth/api'
+import { getAuthenticatedLandingPath } from '@/features/auth/lib/authenticated-landing'
 import {
   applyAppOpenTarget,
   buildLoginRedirectHref,
@@ -15,6 +16,7 @@ import {
   setPendingNativeDeepLink,
 } from '@/lib/native-deep-link-session'
 import { readNativePushActiveEstablishmentId } from '@/lib/native-push-session'
+import { queryClient } from '@/lib/query-client'
 import { getAppRuntime } from '@/lib/runtime'
 
 let history: AppHistory | null = null
@@ -44,31 +46,39 @@ async function applyPending(): Promise<void> {
     return
   }
 
+  const currentHistory = history
   applying = true
   clearPendingNativeDeepLink()
   try {
     if (!session.isAuthenticated()) {
       if (isPublicAppOpenTarget(pending)) {
-        history.navigate(pending.href, { replace: true })
-        return
+        currentHistory.navigate(pending.href, { replace: true })
+      } else {
+        currentHistory.navigate(buildLoginRedirectHref(pending), { replace: true })
       }
-      history.navigate(buildLoginRedirectHref(pending), { replace: true })
-      return
+    } else {
+      await applyAppOpenTarget(pending, {
+        getActiveEstablishmentId: readNativePushActiveEstablishmentId,
+        switchEstablishment: async (establishmentId) => {
+          await switchEstablishment({ establishment_id: establishmentId })
+        },
+        navigate: (href, options) => {
+          history?.navigate(href, options)
+        },
+      })
     }
-
-    await applyAppOpenTarget(pending, {
-      getActiveEstablishmentId: readNativePushActiveEstablishmentId,
-      switchEstablishment: async (establishmentId) => {
-        await switchEstablishment({ establishment_id: establishmentId })
-      },
-      navigate: (href, options) => {
-        history?.navigate(href, options)
-      },
-    })
   } catch {
-    // Do not open the resource when switch/navigation fails.
+    if (!peekPendingNativeDeepLink()) {
+      const landing =
+        getAuthenticatedLandingPath(queryClient.getQueryData(bootstrapQueryKey)) ?? '/reporting'
+      currentHistory.navigate(landing, { replace: true })
+    }
   } finally {
     applying = false
+  }
+
+  if (peekPendingNativeDeepLink()) {
+    void applyPending()
   }
 }
 
