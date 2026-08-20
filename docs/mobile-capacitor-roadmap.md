@@ -1,9 +1,9 @@
 # Spore — Roadmap Web + Capacitor
 
 Status: authoritative  
-Last reviewed: 2026-08-19
+Last reviewed: 2026-08-20
 
-Référence d’exécution pour les agents Cursor. **Capacitor Lots 1–8 are done.** Next is **Capacitor Lot 9** (UX native). This document frames the remaining lots; it does not prescribe implementation.
+Référence d’exécution pour les agents Cursor. **Capacitor Lots 1–9 are done.** Next is **Capacitor Lot 10** (résilience terrain / Observation régime A). This document frames the remaining lots; it does not prescribe implementation.
 
 These **Capacitor Lots** (1–11) are distinct from product/domain lots (taxonomy Lot 5, test Lot 4 helpers, product Lot 11 stabilization). Write **Capacitor Lot N** when referring to this roadmap.
 
@@ -77,7 +77,7 @@ Chaque lot est un chantier séparé. Un agent qui ouvre un lot doit :
 
 Les fichiers, interfaces, plugins Capacitor, librairies et migrations se décident **au début du lot**, après inspection — pas dans cette roadmap.
 
-Ordre des lots : strictement séquentiel. Un lot suivant ne commence que si le précédent est implémenté et validé. Le checkpoint Offline capture terrain est **done** (cadrage seulement, pas d’implémentation). **Capacitor Lot 8 is done.** **Capacitor Lot 9** is next. Ne pas ouvrir de stockage, file, ou sync Observation avant le Lot 10.
+Ordre des lots : strictement séquentiel. Un lot suivant ne commence que si le précédent est implémenté et validé. Le checkpoint Offline capture terrain est **done** (cadrage seulement, pas d’implémentation). **Capacitor Lot 9 is done.** **Capacitor Lot 10** is next. Ne pas ouvrir de stockage, file, ou sync Observation avant le Lot 10.
 
 Contexte de migration. Le projet est développé par un seul développeur et n’a aucun utilisateur réel en production. Il n’est donc pas nécessaire de privilégier les stratégies de migration “safe” destinées à préserver temporairement l’existant : compatibilité ascendante, doubles chemins, feature flags, migrations progressives, fallbacks temporaires ou conservation d’anciennes abstractions. Si une rupture ou une refonte rend la cible plus simple, propre et maintenable, elle doit être privilégiée.
 Cela ne signifie pas ignorer la qualité ou la sécurité technique : le repository doit rester fonctionnel et validé à la fin de chaque lot.
@@ -104,7 +104,7 @@ TOUJOURS BESOIN
 
 ## Lots
 
-Capacitor Lot status: **1–8 done** · checkpoint Offline capture terrain **done** · **9 next** · 10–11 not started.
+Capacitor Lot status: **1–9 done** · checkpoint Offline capture terrain **done** · **10 next** · 11 not started.
 
 ### 1. Runtime / API / WebSocket — done
 
@@ -183,11 +183,15 @@ Ticket auth orthogonal (wipe refresh Native sur erreur réseau) : hors ce checkp
 
 **Validation (2026-08-19).** Handler Android (`adb` VIEW intent → app → navigation) est le niveau de QA du lot. **App Links E2E** (ouverture automatique depuis le Web) bloqués tant que `assetlinks.json` n’est pas publié. **Universal Links iOS E2E** bloqués par l’Apple Developer Program (même barre que l’APNs Lot 7).
 
-### 9. UX native
+### 9. UX native — done
 
 **Objectif.** Traiter les écarts d’expérience vraiment utiles en native : safe areas, clavier, status bar, permissions, et le minimum d’équivalent.
 
 **Responsabilité.** Isoler ces adaptations du métier. Le terrain reste mobile-first ; Analytics et le management restent desktop-first — ne pas forcer une UX native sur les surfaces direction. N’introduire que ce qui est constaté comme bloquant ou dégradant sur device, pas un catalogue de plugins.
+
+**Fait (2026-08-20).** Navigation produit inchangée : topbar « Retour » + `backPath`. Android : `backButton` → overlay dismissible → `backPath` → `minimizeApp()` (pas `history.back`, pas `exitApp`). iOS : pas de listener ; le topbar reste la navigation arrière. Safe areas : token `--app-safe-*` = `var(--safe-area-inset-*, env(...))` sur les paddings existants. Clavier : `@capacitor/keyboard` `resize: native` (iOS WKWebView / `h-dvh`) + Android `adjustResize`. Micro : `NSMicrophoneUsageDescription` + `RECORD_AUDIO` pour la transcription Observation déjà livrée. Pas de plugin Camera / StatusBar.
+
+**Validation (2026-08-20).** Tests jsdom du handler Android et de `resolveTerrainBackPath`. Device QA iOS (Personal Team) + Android : safe areas, clavier login/reporting/chat/commentaires (T0/T1/T2), retour Android vs topbar, prompt micro. Noter un blocage iPhone seulement s’il se produit. Double gutter iOS : investiguer, ne pas présumer `contentInset: never`.
 
 ### 10. Résilience terrain
 

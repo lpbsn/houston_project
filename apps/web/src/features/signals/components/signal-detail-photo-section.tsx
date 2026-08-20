@@ -3,6 +3,7 @@ import { useEffect, useId, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { TerrainCard, TerrainFieldLabel } from '@/components/ui/terrain'
+import { registerNativeOverlayDismiss } from '@/lib/native-overlay-dismiss'
 import { cn } from '@/lib/utils'
 
 import type { SignalDetail } from '../types'
@@ -65,10 +66,12 @@ function PhotoPreviewModal({
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    const unregister = registerNativeOverlayDismiss(onClose)
     return () => {
+      unregister()
       document.body.style.overflow = previousOverflow
     }
-  }, [])
+  }, [onClose])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

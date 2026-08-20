@@ -1,7 +1,7 @@
 # Frontend architecture
 
 Status: authoritative  
-Last reviewed: 2026-08-19
+Last reviewed: 2026-08-20
 
 ## Stack
 
@@ -21,12 +21,13 @@ Client-side router in [`apps/web/src/app/app-routes.ts`](../../apps/web/src/app/
 - Search-only screen state (Analytics filters, comment deep links, onboarding ids) stays in the URL query and is read from `useAppRoute().search` / `useLocationSearch()`
 - Native HTTPS deep links (`getLaunchUrl` / `appUrlOpen`) parse the public origin then `parseAppRoute`; `establishment_id` is a sibling of the product href through login / select-establishment. See [`apps/web/src/lib/app-open-target.ts`](../../apps/web/src/lib/app-open-target.ts).
 - `terrain-routes.ts` — shell config per route (`mainScroll`, topbar, bottom nav)
+- Terrain back path is semantic (`resolveTerrainBackPath` / topbar « Retour »), not `history.back`. Android hardware back uses that path (overlay first, then `minimizeApp` on hubs). iOS has no system back listener.
 
 Lazy pages: [`lazy-terrain-pages.tsx`](../../apps/web/src/app/lazy-terrain-pages.tsx).
 
 ## Layout
 
-- **Terrain shell** — `TerrainShell` (`fixed inset-x-0 top-0`, `h-dvh`, topbar, scrollable main, optional bottom nav)
+- **Terrain shell** — `TerrainShell` (`fixed inset-x-0 top-0`, `h-dvh`, topbar, scrollable main, optional bottom nav). Safe-area token `--app-safe-top/bottom` = `var(--safe-area-inset-*, env(safe-area-inset-*, 0px))` (Capacitor Android polyfill + iOS `env()`).
 - **App shell** — desktop/management shell for non-terrain routes (`/organization*`, `/app/operational-config`, onboarding, auth pages)
 
 ## Server state

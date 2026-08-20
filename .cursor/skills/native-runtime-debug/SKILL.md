@@ -16,7 +16,7 @@ Diagnose Web vs Native/Capacitor failures: iOS keyboard and `visualViewport`, sa
 1. Confirm runtime: `getAppRuntime()` in [`apps/web/src/lib/runtime.ts`](../../../apps/web/src/lib/runtime.ts) (`VITE_APP_RUNTIME`), plus `Capacitor.isNativePlatform()` when native plugins are involved.
 2. Identify the scroll owner (document vs `TerrainShell` `main`) before changing overflow or `position`.
 3. For keyboard/layout bugs: capture T0 (idle), T1 (focused / broken), T2 (blur restored) using `visualViewport` and shell/topbar `getBoundingClientRect`. Do not apply global `position: fixed`, overflow locks, or height hacks without that evidence.
-4. Preserve `h-dvh`, flex `min-h-0`, and `env(safe-area-inset-*)` on topbar, bottom nav, composer, and sticky footers.
+4. Preserve `h-dvh`, flex `min-h-0`, and `--app-safe-top` / `--app-safe-bottom` on topbar, bottom nav, composer, and sticky footers. Do not revert paddings to raw `env(safe-area-inset-*)`.
 
 ## Spore traps
 

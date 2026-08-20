@@ -1,5 +1,6 @@
-import { useId, type ReactNode } from 'react'
+import { useEffect, useId, type ReactNode } from 'react'
 
+import { registerNativeOverlayDismiss } from '@/lib/native-overlay-dismiss'
 import { cn } from '@/lib/utils'
 
 type TerrainBottomSheetProps = {
@@ -20,6 +21,13 @@ export function TerrainBottomSheet({
   dismissible = true,
 }: TerrainBottomSheetProps) {
   const titleId = useId()
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    return registerNativeOverlayDismiss(onClose)
+  }, [onClose, open])
 
   if (!open) {
     return null
@@ -54,7 +62,7 @@ export function TerrainBottomSheet({
           {children}
         </div>
         {footer ? (
-          <div className="shrink-0 border-t border-[#E8E6DF] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="shrink-0 border-t border-[#E8E6DF] px-4 pt-3 pb-[max(0.75rem,var(--app-safe-bottom))]">
             {footer}
           </div>
         ) : null}

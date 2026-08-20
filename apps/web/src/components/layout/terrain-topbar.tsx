@@ -47,7 +47,7 @@ export function TerrainTopbar({
         className={cn(
           'shrink-0 bg-white',
           showBottomBorder && 'border-b border-[#E8E6DF]',
-          'pt-[max(0.75rem,env(safe-area-inset-top))] pb-1.5 lg:pt-0 lg:pb-0',
+          'pt-[max(0.75rem,var(--app-safe-top))] pb-1.5 lg:pt-0 lg:pb-0',
         )}
       >
         <div className="flex h-14 items-center justify-between gap-3 px-3 lg:h-16 lg:px-6">
@@ -70,7 +70,7 @@ export function TerrainTopbar({
         className={cn(
           'shrink-0 bg-white',
           showBottomBorder && 'border-b border-[#E8E6DF]',
-          'pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 lg:pt-0 lg:pb-0',
+          'pt-[max(0.75rem,var(--app-safe-top))] pb-3 lg:pt-0 lg:pb-0',
         )}
       >
         <div className="px-4 lg:px-6">
@@ -103,7 +103,7 @@ export function TerrainTopbar({
       className={cn(
           'shrink-0 bg-white',
           showBottomBorder && 'border-b border-[#E8E6DF]',
-          'pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 lg:pt-0 lg:pb-0',
+          'pt-[max(0.75rem,var(--app-safe-top))] pb-3 lg:pt-0 lg:pb-0',
         )}
     >
       <div className="flex items-center justify-between gap-3 px-4 lg:h-16 lg:px-6">

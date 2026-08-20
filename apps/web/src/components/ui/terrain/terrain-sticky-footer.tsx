@@ -22,7 +22,7 @@ export const TerrainStickyFooter = forwardRef<HTMLElement, TerrainStickyFooterPr
         data-testid={dataTestId}
         className={cn(
           'sticky bottom-0 z-10 mt-auto shrink-0',
-          'px-3 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+          'px-3 pt-2.5 pb-[max(0.75rem,var(--app-safe-bottom))]',
           variant === 'default' && [
             'border-t border-[#E8E6DF] bg-[#F5F4F0]',
             'shadow-[0_-4px_12px_rgba(0,0,0,0.04)]',

@@ -964,7 +964,7 @@ export function DraftOnboardingWizard({ sessionId, onNavigate }: DraftOnboarding
         </div>
       )}
 
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-20 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-8">
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-20 px-4 pb-[max(1rem,var(--app-safe-bottom))] sm:px-8">
         <div className="pointer-events-auto mx-auto flex w-full max-w-[96rem] items-center justify-between gap-4 rounded-full border border-spore-forest/10 bg-white/95 px-4 py-3 shadow-lg backdrop-blur">
           <p className="min-w-0 flex-1 truncate text-sm text-spore-muted">{stickyMessage}</p>
           <div className="flex shrink-0 items-center gap-2">
