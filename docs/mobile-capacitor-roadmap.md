@@ -201,9 +201,12 @@ Ticket auth orthogonal (wipe refresh Native sur erreur réseau) : hors ce checkp
 
 Interdit : offline-first généralisé ; réplication locale complète ; cache durable généralisé ; file ou sync de mutations ; survie après process kill / cold start ; persistance hors process « au cas où » ; capture locale de chat, commentaires, tâches, signaux, plans, ou audio. Si le QA device montre qu’un picker **tue** le process, rouvrir le régime B en chantier séparé — ne pas l’absorber ici. Si un besoin d’offline-first généralisé apparaît plus tard, ce sera un chantier distinct.
 
-**Fait (2026-08-20).** Store compose in-memory (pas de disque) : texte + `File` photos sur `/reporting`, texte seul pour observation-depuis-tâche. Survît unmount / navigation interne. Clear sur 201, logout, switch établissement. **Aucun** `POST temporary-uploads` avant Envoyer. Pipeline unique : upload des `File` puis `POST observations/`. Échec : draft intact, IDs de la tentative oubliés, l’utilisateur retape Envoyer. Pas de retry 404 dédié (le contrat ne distingue pas expiration / `LINKED` / ID inconnu). Envoyer **désactivé** hors ligne ; composer reste possible. Banner Lot 6 inchangée. Audio / chat / commentaires / lifecycle : online-only.
+**Fait (2026-08-20).** Store compose in-memory (pas de disque) : texte + `File` photos sur `/reporting`, texte seul pour observation-depuis-tâche. Survît unmount / navigation interne. Clear sur 201, `clearAuthState` (logout / révocation), login/register (`purgeNonAuth`), et switch établissement. Pas sur un refresh réseau / 401 (`clearVolatileAuthState`). **Aucun** `POST temporary-uploads` avant Envoyer. Pipeline unique : upload des `File` puis `POST observations/`. Échec : draft intact, IDs de la tentative oubliés, l’utilisateur retape Envoyer. Pas de retry 404 dédié (le contrat ne distingue pas expiration / `LINKED` / ID inconnu). Envoyer **désactivé** hors ligne ; composer reste possible. Banner Lot 6 inchangée. Audio / chat / commentaires / lifecycle : online-only.
 
-**Validation (2026-08-20).** Tests jsdom du store, du pipeline upload-then-POST, de `/reporting` (unmount, hors ligne, échec conserve les `File`) et de la sheet tâche (Annuler conserve, 201 clear). Device QA manuel iOS + Android : nav interne, background sans kill, avion → compose → reconnect → Envoyer, picker (si le process meurt, noter et rouvrir B — ne pas l’absorber ici).
+**Validation (2026-08-21).** Tests jsdom du store, du pipeline upload-then-POST, de `/reporting` (unmount, hors ligne, échec conserve les `File`) et de la sheet tâche (Annuler conserve, 201 clear). Device :
+- Android émulateur : nav interne, background sans kill, avion → reconnect → Envoyer, picker DocumentsUI — **PASS** (même pid).
+- iOS Simulator : nav, background, picker Photos — **PASS** ; avion → reconnect — **non testé** (pas de signal Capacitor exploitable).
+- iPhone physique : **offline → reconnect encore ouvert**. Kill / survie post-process hors lot. Si un picker tue le process, noter et rouvrir B — ne pas l’absorber ici.
 
 ### 11. DX / CI / release mobile
 
@@ -225,11 +228,11 @@ Interdit : offline-first généralisé ; réplication locale complète ; cache d
 - Push terrain : **natif iOS/Android** (Lot 7 done) ; Web Push mobile hors cible ; **Web Push desktop : non**.
 - Suppression PWA ≠ reconstruction systématique des capacités PWA ailleurs.
 - **Offline capture terrain (checkpoint done, 2026-08-19)** : seule capture critique = Observation. **Capacitor Lot 10 done** : régime process-vivant seulement (pas de survie après kill). Audio / chat / commentaires / commandes de cycle de vie exclus. Pas de file, sync, ni persistance hors process.
-- **Capacitor Lot 10 implémentation (2026-08-20)** : draft in-memory ; photos uploadées seulement à Envoyer ; Envoyer désactivé hors ligne ; pas d’upload opportuniste ; pas de retry 404.
+- **Capacitor Lot 10 implémentation (2026-08-20)** : draft in-memory ; photos uploadées seulement à Envoyer ; Envoyer désactivé hors ligne ; pas d’upload opportuniste ; pas de retry 404. Purge draft : 201, fin de session, nouvelle identité, switch établissement — pas un échec refresh.
 
 ### Encore ouvertes
 
-_(App Links / Universal Links E2E — fichiers d’association ops + ADP iOS, hors commit Lot 8.)_
+_(App Links / Universal Links E2E — fichiers d’association ops + ADP iOS, hors commit Lot 8. Capacitor Lot 10 : iPhone physique offline → reconnect encore ouvert ; implémentation régime A done.)_
 
 ---
 

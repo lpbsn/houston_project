@@ -36,7 +36,7 @@ Lazy pages: [`lazy-terrain-pages.tsx`](../../apps/web/src/app/lazy-terrain-pages
 - HTTP and WebSocket hosts are resolved only in [`apps/web/src/lib/runtime.ts`](../../apps/web/src/lib/runtime.ts) (`VITE_API_BASE_URL`, `VITE_APP_RUNTIME`). Public invitation copy links use `VITE_PUBLIC_APP_URL` from the same module. Features must not compute the API host.
 - Query key roots: feature-scoped (`signals`, `action-plans`, `chat`, `notifications`, `auth`, …)
 - Establishment switch / login: purge non-`auth` queries (`@/lib/query-invalidation`)
-- Observation compose drafts (`/reporting` text + local `File` photos; task-observation text) live in an in-memory process store. They survive route remounts while the JS/WebView process is alive. Not durable. Cleared on submit 201, logout, and establishment switch. Photos upload only at Envoyer.
+- Observation compose drafts (`/reporting` text + local `File` photos; task-observation text) live in an in-memory process store. They survive route remounts while the JS/WebView process is alive. Not durable. Cleared on submit 201, session end (`clearAuthState`), new identity (`purgeNonAuth` on login/register), and establishment switch. Not cleared on refresh network/401 (`clearVolatileAuthState`). Photos upload only at Envoyer.
 
 ## Authentication
 
