@@ -6,18 +6,24 @@ import { useAuth } from '@/app/auth-provider'
 import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
 import { AnalyticsApiError } from '@/features/analytics/api'
 import {
-  DashboardComingSoonCard,
-  DashboardExportButton,
   ContributorsCard,
+  DashboardAiSummaryPlaceholder,
+  DashboardExportButton,
+  DashboardRevenuePlaceholder,
   NewPatternsCard,
-  ObservationAgingCard,
-  ObservationPerformanceCard,
-  PlanPerformanceCard,
+  ObservationTreatmentCard,
+  OpenObservationsCard,
+  PlanDeadlinesCard,
   PolesCard,
   RecurringPatternsCard,
   ZonesCard,
 } from '@/features/analytics/components/dashboard-widgets'
 import { useAnalyticsDashboardQuery } from '@/features/analytics/hooks'
+import {
+  collectDashboardComparisons,
+  dashboardCoverageBannerMessage,
+  worstDashboardCoverage,
+} from '@/features/analytics/lib/dashboard-comparisons'
 import {
   buildDashboardHref,
   DASHBOARD_PERIOD_DAYS,
@@ -80,6 +86,12 @@ export function AnalyticsPage({ scope = { type: 'session' } }: AnalyticsPageProp
       : scope.type === 'establishment'
         ? `/e/${scope.establishmentId}`
         : '/analytics'
+  const coverageMessage = dashboardQuery.data
+    ? dashboardCoverageBannerMessage({
+        coverage: worstDashboardCoverage(collectDashboardComparisons(dashboardQuery.data)),
+        historyReliableFrom: dashboardQuery.data.history_reliable_from,
+      })
+    : null
 
   function setPeriod(next: DashboardPeriodDays) {
     navigate(buildDashboardHref(pathname, next), { replace: true })
@@ -106,25 +118,25 @@ export function AnalyticsPage({ scope = { type: 'session' } }: AnalyticsPageProp
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5 pb-10 lg:px-8">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-[#1a1a1a]">Dashboard Spore Analytics</h1>
+    <div className="mx-auto flex w-full min-w-0 max-w-[96rem] flex-col gap-5 px-4 py-5 pb-10 lg:px-8 lg:py-6 lg:pb-12 xl:px-10">
+      <header className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-bold tracking-tight text-[#1a1a1a]">Dashboard</h1>
           <p className="mt-1 text-sm text-[#7D7B75]">
             {isCross
               ? 'Vue agrégée de tous vos établissements'
               : 'Vue de l’établissement courant'}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex flex-wrap gap-1 rounded-lg bg-white p-1 ring-1 ring-[#E8E6DF]">
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 lg:w-auto">
+          <div className="flex min-w-0 flex-wrap gap-1 rounded-lg bg-white p-1 ring-1 ring-[#E8E6DF]">
             {DASHBOARD_PERIOD_DAYS.map((days) => (
               <button
                 key={days}
                 type="button"
                 onClick={() => setPeriod(days)}
                 className={cn(
-                  'h-8 rounded-md px-2.5 text-[12px] font-semibold',
+                  'h-8 min-w-0 rounded-md px-2.5 text-[12px] font-semibold',
                   periodDays === days
                     ? 'bg-[#1F7A4D] text-white'
                     : 'text-[#7D7B75] hover:bg-[#F5F4F0]',
@@ -138,10 +150,13 @@ export function AnalyticsPage({ scope = { type: 'session' } }: AnalyticsPageProp
         </div>
       </header>
 
-      <DashboardComingSoonCard
-        title="Résumé de la semaine"
-        message="Le résumé généré par IA utilisera la période sélectionnée. Aucune donnée n’est simulée en V1."
-      />
+      {coverageMessage ? (
+        <p className="rounded-xl border border-[#E8E6DF] bg-white px-4 py-2.5 text-[13px] text-[#7D7B75]">
+          {coverageMessage}
+        </p>
+      ) : null}
+
+      <DashboardAiSummaryPlaceholder />
 
       {dashboardQuery.isLoading ? (
         <div className="flex items-center justify-center py-16 text-[#7D7B75]">
@@ -167,7 +182,7 @@ export function AnalyticsPage({ scope = { type: 'session' } }: AnalyticsPageProp
 
       {dashboardQuery.data ? (
         <>
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid min-w-0 gap-4 lg:grid-cols-2 lg:gap-5">
             <RecurringPatternsCard items={dashboardQuery.data.recurring_patterns} />
             <NewPatternsCard
               items={dashboardQuery.data.new_patterns}
@@ -175,21 +190,16 @@ export function AnalyticsPage({ scope = { type: 'session' } }: AnalyticsPageProp
               isCross={isCross}
             />
             <ContributorsCard items={dashboardQuery.data.contributors} />
-            <ObservationAgingCard data={dashboardQuery.data} />
-          </div>
-          <ObservationPerformanceCard data={dashboardQuery.data} />
-          <PlanPerformanceCard data={dashboardQuery.data} />
-          <div className="grid gap-4 lg:grid-cols-2">
+            <ObservationTreatmentCard data={dashboardQuery.data} />
+            <OpenObservationsCard data={dashboardQuery.data} />
+            <PlanDeadlinesCard data={dashboardQuery.data} />
+            <DashboardRevenuePlaceholder />
             <ZonesCard
               items={dashboardQuery.data.zones}
               previewLimit={dashboardQuery.data.zones_preview_limit}
               isCross={isCross}
             />
             <PolesCard items={dashboardQuery.data.poles} isCross={isCross} />
-            <DashboardComingSoonCard
-              title="CA vs Observations"
-              message="Nécessite l’intégration de votre caisse. Aucun chiffre n’est affiché tant que la donnée réelle n’est pas connectée."
-            />
           </div>
         </>
       ) : null}

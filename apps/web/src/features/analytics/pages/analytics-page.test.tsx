@@ -8,6 +8,7 @@ import { createMemoryHistory, type AppHistory } from '@/app/app-history'
 import { AppRouteProvider } from '@/app/app-routes'
 import type { AnalyticsDashboardResponse } from '@/features/analytics/api'
 import { AnalyticsApiError } from '@/features/analytics/api'
+import { dashboardCoverageBannerMessage } from '@/features/analytics/lib/dashboard-comparisons'
 import { AnalyticsPage } from '@/features/analytics/pages/analytics-page'
 
 const dashboardQueryMock = vi.fn()
@@ -275,10 +276,44 @@ describe('AnalyticsPage', () => {
     })
 
     renderAnalyticsPage()
-    expect(screen.getByText('Données incomplètes')).toBeTruthy()
+    const banner = dashboardCoverageBannerMessage({
+      coverage: 'partial',
+      historyReliableFrom: '2026-01-01T00:00:00.000Z',
+    })
+    expect(banner).toBeTruthy()
+    expect(screen.getByText(banner as string)).toBeTruthy()
+    expect(screen.queryByText('Données incomplètes')).toBeNull()
     expect(screen.queryByText('Motif 6 caché')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Voir tout' }))
     expect(screen.getByText('Motif 6 caché')).toBeTruthy()
+  })
+
+  it('omits the coverage banner when every comparison is complete', () => {
+    authState.current.bootstrap = managerBootstrap()
+    dashboardQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: dashboard({ aging_over_15d_share: comparison(0.16, 'complete', 0.02) }),
+      refetch: vi.fn(),
+    })
+
+    renderAnalyticsPage()
+    expect(
+      screen.queryByText(
+        dashboardCoverageBannerMessage({
+          coverage: 'partial',
+          historyReliableFrom: '2026-01-01T00:00:00.000Z',
+        }) as string,
+      ),
+    ).toBeNull()
+    expect(
+      screen.queryByText(
+        dashboardCoverageBannerMessage({
+          coverage: 'not_comparable',
+          historyReliableFrom: '2026-01-01T00:00:00.000Z',
+        }) as string,
+      ),
+    ).toBeNull()
   })
 
   it('shows explicit 403 copy', () => {
@@ -304,8 +339,28 @@ describe('AnalyticsPage', () => {
     })
 
     renderAnalyticsPage()
-    expect(screen.getByText('Résumé de la semaine')).toBeTruthy()
+    expect(screen.getByText('Résumé de la semaine · généré par IA')).toBeTruthy()
     expect(screen.getAllByText('Bientôt disponible').length).toBeGreaterThan(0)
     expect(screen.getByText('CA vs Observations')).toBeTruthy()
+  })
+
+  it('exposes period controls and long-copy dashboard widgets', () => {
+    authState.current.bootstrap = managerBootstrap()
+    dashboardQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: dashboard(),
+      refetch: vi.fn(),
+    })
+
+    renderAnalyticsPage()
+    for (const days of ['3 j', '7 j', '15 j', '30 j', '90 j']) {
+      expect(screen.getByRole('button', { name: days })).toBeTruthy()
+    }
+    expect(screen.getByRole('button', { name: 'Exporter' })).toBeTruthy()
+    expect(screen.getByText('4 observations · 1 établissements')).toBeTruthy()
+    expect(screen.getByText('En avance')).toBeTruthy()
+    expect(screen.getByText('À temps')).toBeTruthy()
+    expect(screen.getByText('En retard')).toBeTruthy()
   })
 })

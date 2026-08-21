@@ -40,6 +40,7 @@ import {
   getTerrainRouteConfig,
   isProtectedRoute,
   requiresActiveMembership,
+  resolveTerrainTopbarPlacement,
   resolveTerrainTopbarShowBottomBorder,
   usesTerrainShell,
 } from '@/app/terrain-routes'
@@ -997,6 +998,19 @@ function App() {
 
   if (usesTerrainShell(route)) {
     const terrainConfig = getTerrainRouteConfig(route)
+    const topbarPlacement = resolveTerrainTopbarPlacement(route, terrainConfig)
+    const terrainTopbar =
+      topbarPlacement === 'hidden' ? null : (
+        <TerrainTopbar
+          variant={terrainConfig.topbarVariant}
+          title={terrainConfig.title}
+          pageTitle={terrainConfig.pageTitle}
+          detailTitleLayout={terrainConfig.detailTitleLayout}
+          showBottomBorder={resolveTerrainTopbarShowBottomBorder(route, terrainConfig)}
+          onBack={terrainBackPath ? () => navigate(terrainBackPath) : undefined}
+          trailing={terrainTopbarTrailing}
+        />
+      )
     return wrapTerrainWithOperationalRealtime(
       wrapTerrainWithChatRealtime(
         <TerrainShell
@@ -1010,16 +1024,10 @@ function App() {
           showChatNav={showChatNav}
           chatHasUnread={chatHasUnread}
           topbar={
-            terrainConfig.hideTopbar ? null : (
-              <TerrainTopbar
-                variant={terrainConfig.topbarVariant}
-                title={terrainConfig.title}
-                pageTitle={terrainConfig.pageTitle}
-                detailTitleLayout={terrainConfig.detailTitleLayout}
-                showBottomBorder={resolveTerrainTopbarShowBottomBorder(route, terrainConfig)}
-                onBack={terrainBackPath ? () => navigate(terrainBackPath) : undefined}
-                trailing={terrainTopbarTrailing}
-              />
+            topbarPlacement === 'mobile-only' && terrainTopbar ? (
+              <div className="lg:hidden">{terrainTopbar}</div>
+            ) : (
+              terrainTopbar
             )
           }
         >

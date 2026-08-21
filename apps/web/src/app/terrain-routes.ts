@@ -33,6 +33,8 @@ export type TerrainRouteConfig = {
   hideTopbar?: boolean
 }
 
+export type TerrainTopbarPlacement = 'all' | 'hidden' | 'mobile-only'
+
 const OPERATIONAL_STATIC_PATHS = new Set<string>([
   '/app/operational-config',
   '/reporting',
@@ -219,6 +221,14 @@ function scopedHubConfig(
     mainScroll: isDashboard || page === 'general' || page === 'settings' || page === 'reporting'
       ? 'auto'
       : 'hidden',
+    ...(isDashboard
+      ? {
+          hideTopbar: true,
+          topbarVariant: 'detail' as const,
+          title: 'Analyse',
+          backPath: '/general',
+        }
+      : {}),
   }
 }
 
@@ -479,6 +489,19 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
   }
 
   throw new Error('getTerrainRouteConfig called for a non-terrain route')
+}
+
+export function resolveTerrainTopbarPlacement(
+  route: AppRoute,
+  config: TerrainRouteConfig,
+): TerrainTopbarPlacement {
+  if (!config.hideTopbar) {
+    return 'all'
+  }
+  if (route.kind === 'scoped-terrain' && route.page === 'dashboard') {
+    return 'mobile-only'
+  }
+  return 'hidden'
 }
 
 export function resolveTerrainTopbarShowBottomBorder(

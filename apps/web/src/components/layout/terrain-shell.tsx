@@ -59,7 +59,7 @@ export function TerrainShell({
         navigate={navigate}
         showChat={showChatNav}
       />
-      <div className="relative flex min-h-0 flex-1 flex-col bg-[#F5F4F0]">
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[#F5F4F0]">
         <div className="pointer-events-none absolute inset-x-0 top-0 z-50 flex flex-col gap-2 px-2 pt-[max(0.5rem,var(--app-safe-top))]">
           <ObservationProcessingBanner navigate={navigate} />
           <SuccessToastHost />
@@ -71,7 +71,7 @@ export function TerrainShell({
         ) : null}
         <main
           className={cn(
-            'min-h-0 flex-1',
+            'min-h-0 min-w-0 flex-1',
             !topbar && 'pt-[var(--app-safe-top)] lg:pt-0',
             mainScroll === 'hidden'
               ? 'overflow-hidden'
@@ -79,14 +79,14 @@ export function TerrainShell({
           )}
         >
           {shouldReduceMotion ? (
-            <div className="h-full min-h-0">
+            <div className="h-full min-h-0 min-w-0">
               <TerrainErrorBoundary resetKey={contentKey} navigate={navigate}>
                 {children}
               </TerrainErrorBoundary>
             </div>
           ) : (
             <AnimatePresence initial={false}>
-              <motion.div key={contentKey} className="h-full min-h-0" {...pageMotion}>
+              <motion.div key={contentKey} className="h-full min-h-0 min-w-0" {...pageMotion}>
                 <TerrainErrorBoundary resetKey={contentKey} navigate={navigate}>
                   {children}
                 </TerrainErrorBoundary>

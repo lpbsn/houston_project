@@ -5,6 +5,7 @@ import {
   getTerrainRouteConfig,
   isProtectedRoute,
   requiresActiveMembership,
+  resolveTerrainTopbarPlacement,
   resolveTerrainTopbarShowBottomBorder,
   usesTerrainShell,
 } from '@/app/terrain-routes'
@@ -255,11 +256,14 @@ describe('getTerrainRouteConfig', () => {
         page: 'dashboard',
       }),
     ).toEqual({
-      topbarVariant: 'hub',
+      topbarVariant: 'detail',
+      title: 'Analyse',
       pageTitle: 'Dashboard',
+      backPath: '/general',
       showBottomNav: false,
       desktopActivePath: '/cross',
       mainScroll: 'auto',
+      hideTopbar: true,
     })
   })
 
@@ -392,6 +396,51 @@ describe('getTerrainRouteConfig', () => {
     expect(() => getTerrainRouteConfig({ kind: 'static', path: '/organization' })).toThrow(
       'getTerrainRouteConfig called for a non-terrain route',
     )
+  })
+})
+
+describe('resolveTerrainTopbarPlacement', () => {
+  it('keeps a mobile-only shell topbar on scoped dashboards', () => {
+    const cross = {
+      kind: 'scoped-terrain' as const,
+      scope: { type: 'cross' as const },
+      page: 'dashboard' as const,
+    }
+    const establishment = {
+      kind: 'scoped-terrain' as const,
+      scope: {
+        type: 'establishment' as const,
+        establishmentId: '11111111-1111-4111-8111-111111111111',
+      },
+      page: 'dashboard' as const,
+    }
+    expect(resolveTerrainTopbarPlacement(cross, getTerrainRouteConfig(cross))).toBe('mobile-only')
+    expect(resolveTerrainTopbarPlacement(establishment, getTerrainRouteConfig(establishment))).toBe(
+      'mobile-only',
+    )
+  })
+
+  it('shows the shared topbar on /analytics', () => {
+    const route = { kind: 'static' as const, path: '/analytics' as const }
+    expect(resolveTerrainTopbarPlacement(route, getTerrainRouteConfig(route))).toBe('all')
+  })
+
+  it('hides the shared topbar on pages that own an in-page back control', () => {
+    const teamMember = { kind: 'team-member-detail' as const, membershipId: 'member-1' }
+    const templateEdit = { kind: 'action-plan-template-edit' as const, actionPlanId: 'plan-1' }
+    const executionEdit = {
+      kind: 'action-plan-execution-edit' as const,
+      executionId: 'exec-1',
+    }
+    expect(resolveTerrainTopbarPlacement(teamMember, getTerrainRouteConfig(teamMember))).toBe(
+      'hidden',
+    )
+    expect(resolveTerrainTopbarPlacement(templateEdit, getTerrainRouteConfig(templateEdit))).toBe(
+      'hidden',
+    )
+    expect(
+      resolveTerrainTopbarPlacement(executionEdit, getTerrainRouteConfig(executionEdit)),
+    ).toBe('hidden')
   })
 })
 

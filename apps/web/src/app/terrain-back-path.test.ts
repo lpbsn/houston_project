@@ -70,4 +70,21 @@ describe('resolveTerrainBackPath', () => {
       ),
     ).toBe('/general')
   })
+
+  it('sends scoped dashboards back to Général', () => {
+    expect(
+      resolveTerrainBackPath({
+        kind: 'scoped-terrain',
+        scope: { type: 'cross' },
+        page: 'dashboard',
+      }),
+    ).toBe('/general')
+    expect(
+      resolveTerrainBackPath({
+        kind: 'scoped-terrain',
+        scope: { type: 'establishment', establishmentId: 'est-1' },
+        page: 'dashboard',
+      }),
+    ).toBe('/general')
+  })
 })
