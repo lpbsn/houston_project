@@ -1,52 +1,47 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { LoaderCircle, SendHorizonal } from 'lucide-react'
 import { useReducedMotion } from 'framer-motion'
 
 import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainErrorState, TerrainStickyFooter } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
-import {
-  ReportPhotosSection,
-  type ReportPhotoDraft,
-} from '@/features/observations/components/report-photos-section'
+import { ReportPhotosSection } from '@/features/observations/components/report-photos-section'
 import { ReportTextSection } from '@/features/observations/components/report-text-section'
 import { trackObservation } from '@/features/observations/components/observation-processing-tracker-provider'
 import { ObservationsApiError } from '@/features/observations/api'
 import {
-  useDeleteTemporaryPhotoMutation,
-  useSubmitObservationMutation,
+  useSubmitObservationComposeMutation,
   useTranscribeAudioMutation,
-  useUploadTemporaryPhotoMutation,
 } from '@/features/observations/hooks'
+import { useReportingComposeDraft } from '@/features/observations/lib/use-observation-compose-draft'
 import {
   MAX_OBSERVATION_PHOTOS,
   OBSERVATION_TEXT_MAX_LENGTH,
   OBSERVATION_TEXT_MIN_LENGTH,
 } from '@/features/observations/types'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { useNetworkStatus } from '@/lib/network-status'
 import { terrain, terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 export function ReportPage() {
   const shouldReduceMotion = useReducedMotion()
   const auth = useAuth()
+  const { isOnline } = useNetworkStatus()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
   const authorMembershipId = auth.bootstrap?.active_membership?.id ?? null
+  const { text, photos, setText, addPhoto, removePhoto, clear } =
+    useReportingComposeDraft(establishmentId)
 
-  const [text, setText] = useState('')
-  const [photos, setPhotos] = useState<ReportPhotoDraft[]>([])
   const [formError, setFormError] = useState<string | null>(null)
   const [isRecording, setIsRecording] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
-  const photoPreviewUrlsRef = useRef<Set<string>>(new Set())
 
-  const uploadMutation = useUploadTemporaryPhotoMutation(establishmentId)
-  const deleteMutation = useDeleteTemporaryPhotoMutation(establishmentId)
   const transcribeMutation = useTranscribeAudioMutation(establishmentId)
-  const submitMutation = useSubmitObservationMutation(establishmentId)
+  const submitMutation = useSubmitObservationComposeMutation(establishmentId)
 
   const isSubmitPending = submitMutation.isPending
 
@@ -55,39 +50,14 @@ export function ReportPage() {
   const canSubmit =
     textLength >= OBSERVATION_TEXT_MIN_LENGTH &&
     textLength <= OBSERVATION_TEXT_MAX_LENGTH &&
-    photos.every((photo) => photo.status === 'ready') &&
-    !uploadMutation.isPending &&
+    isOnline &&
     !isSubmitPending &&
     !isTranscribing
 
   const resolveReportError = (error: unknown) =>
     resolveApiErrorMessage(error, ObservationsApiError, 'Une erreur est survenue.')
 
-  function trackPreviewUrl(url: string) {
-    photoPreviewUrlsRef.current.add(url)
-  }
-
-  function revokePreviewUrl(url: string) {
-    if (!photoPreviewUrlsRef.current.delete(url)) {
-      return
-    }
-    URL.revokeObjectURL(url)
-  }
-
-  function revokeAllPreviewUrls() {
-    for (const url of photoPreviewUrlsRef.current) {
-      URL.revokeObjectURL(url)
-    }
-    photoPreviewUrlsRef.current.clear()
-  }
-
-  useEffect(() => {
-    return () => {
-      revokeAllPreviewUrls()
-    }
-  }, [])
-
-  const handlePhotoSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file || !establishmentId) {
@@ -98,44 +68,8 @@ export function ReportPage() {
       return
     }
 
-    const localId = crypto.randomUUID()
-    const previewUrl = URL.createObjectURL(file)
-    trackPreviewUrl(previewUrl)
-    setPhotos((current) => [
-      ...current,
-      { localId, file, uploadId: null, status: 'uploading', previewUrl },
-    ])
     setFormError(null)
-
-    try {
-      const upload = await uploadMutation.mutateAsync(file)
-      setPhotos((current) =>
-        current.map((photo) =>
-          photo.localId === localId
-            ? { ...photo, uploadId: upload.id, status: 'ready' }
-            : photo,
-        ),
-      )
-    } catch (error) {
-      setPhotos((current) =>
-        current.map((photo) =>
-          photo.localId === localId ? { ...photo, status: 'failed' } : photo,
-        ),
-      )
-      setFormError(resolveReportError(error))
-    }
-  }
-
-  const handleRemovePhoto = async (photo: ReportPhotoDraft) => {
-    revokePreviewUrl(photo.previewUrl)
-    setPhotos((current) => current.filter((item) => item.localId !== photo.localId))
-    if (photo.uploadId && establishmentId) {
-      try {
-        await deleteMutation.mutateAsync(photo.uploadId)
-      } catch {
-        // Best-effort cleanup; draft already removed locally.
-      }
-    }
+    addPhoto(file)
   }
 
   const handleStartRecording = async () => {
@@ -199,16 +133,12 @@ export function ReportPage() {
       return
     }
 
-    const uploadIds = photos
-      .map((photo) => photo.uploadId)
-      .filter((id): id is string => Boolean(id))
-
     try {
       const response = await submitMutation.mutateAsync({
         text: trimmedText,
-        temporary_upload_ids: uploadIds,
+        files: photos.map((photo) => photo.file),
       })
-      revokeAllPreviewUrls()
+      clear()
       trackObservation({
         observationId: response.id,
         establishmentId,
@@ -216,8 +146,6 @@ export function ReportPage() {
         origin: 'direct_report',
         submittedAt: response.submitted_at,
       })
-      setText('')
-      setPhotos([])
     } catch (error) {
       setFormError(resolveReportError(error))
     }
@@ -262,9 +190,9 @@ export function ReportPage() {
 
           <ReportPhotosSection
             photos={photos}
-            isUploadPending={uploadMutation.isPending}
-            onPhotoSelect={(event) => void handlePhotoSelect(event)}
-            onRemovePhoto={(photo) => void handleRemovePhoto(photo)}
+            disabled={isSubmitPending}
+            onPhotoSelect={handlePhotoSelect}
+            onRemovePhoto={(photo) => removePhoto(photo.localId)}
           />
 
           {formError ? <TerrainErrorState message={formError} /> : null}

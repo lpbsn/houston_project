@@ -2,39 +2,8 @@ import { useMutation } from '@tanstack/react-query'
 
 import { useAuth } from '@/app/auth-provider'
 
-import {
-  deleteTemporaryPhoto,
-  submitObservation,
-  transcribeAudio,
-  uploadTemporaryPhoto,
-} from './api'
-import type { ObservationSubmitRequest } from './types'
-
-export function useUploadTemporaryPhotoMutation(establishmentId: string | null) {
-  useAuth()
-
-  return useMutation({
-    mutationFn: async (file: File) => {
-      if (!establishmentId) {
-        throw new Error('Établissement non sélectionné.')
-      }
-      return uploadTemporaryPhoto(establishmentId, file)
-    },
-  })
-}
-
-export function useDeleteTemporaryPhotoMutation(establishmentId: string | null) {
-  useAuth()
-
-  return useMutation({
-    mutationFn: async (uploadId: string) => {
-      if (!establishmentId) {
-        throw new Error('Établissement non sélectionné.')
-      }
-      await deleteTemporaryPhoto(establishmentId, uploadId)
-    },
-  })
-}
+import { uploadThenSubmitObservation } from './lib/observation-compose-submit'
+import { submitObservation, transcribeAudio, uploadTemporaryPhoto } from './api'
 
 export function useTranscribeAudioMutation(establishmentId: string | null) {
   useAuth()
@@ -49,15 +18,20 @@ export function useTranscribeAudioMutation(establishmentId: string | null) {
   })
 }
 
-export function useSubmitObservationMutation(establishmentId: string | null) {
+export function useSubmitObservationComposeMutation(establishmentId: string | null) {
   useAuth()
 
   return useMutation({
-    mutationFn: async (body: ObservationSubmitRequest) => {
+    mutationFn: async (input: { text: string; files: File[] }) => {
       if (!establishmentId) {
         throw new Error('Établissement non sélectionné.')
       }
-      return submitObservation(establishmentId, body)
+      return uploadThenSubmitObservation({
+        text: input.text,
+        files: input.files,
+        uploadPhoto: (file) => uploadTemporaryPhoto(establishmentId, file),
+        submit: (body) => submitObservation(establishmentId, body),
+      })
     },
   })
 }

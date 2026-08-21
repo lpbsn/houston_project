@@ -5,12 +5,14 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ActionPlanExecutionDetail } from '@/features/action-plans/types'
+import { __resetObservationComposeDraftStoreForTests } from '@/features/observations/lib/observation-compose-draft-store'
 
 import { ActionPlanExecutionDetailPage } from './action-plan-execution-detail-page'
 
 const detailQueryMock = vi.fn()
 const navigateMock = vi.fn()
 const validateMutateAsyncMock = vi.fn()
+const observationMutateAsyncMock = vi.fn()
 
 const { CommentSectionMock } = vi.hoisted(() => ({
   CommentSectionMock: vi.fn(() => createElement('div', { 'data-testid': 'comment-section' })),
@@ -132,7 +134,7 @@ vi.mock('../hooks', () => ({
     error: null,
   }),
   useCreateObservationFromActionPlanTaskMutation: () => ({
-    mutateAsync: vi.fn(),
+    mutateAsync: observationMutateAsyncMock,
     isPending: false,
     error: null,
   }),
@@ -140,6 +142,10 @@ vi.mock('../hooks', () => ({
 
 vi.mock('@/features/comments/components/comment-section', () => ({
   CommentSection: CommentSectionMock,
+}))
+
+vi.mock('@/features/observations/components/observation-processing-tracker-provider', () => ({
+  trackObservation: vi.fn(),
 }))
 
 function buildTaskExecution(
@@ -201,6 +207,7 @@ function getCommentsTab() {
 afterEach(() => {
   window.history.replaceState(null, '', '/')
   cleanup()
+  __resetObservationComposeDraftStoreForTests()
   vi.clearAllMocks()
 })
 
@@ -878,5 +885,83 @@ describe('ActionPlanExecutionDetailPage UI refonte', () => {
 
     expect(screen.getByRole('button', { name: 'Annuler' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Marquer terminé' })).toBeNull()
+  })
+})
+
+describe('ActionPlanExecutionDetailPage observation compose', () => {
+  function mockPendingTask() {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildExecution({
+        task_executions: [
+          buildTaskExecution({
+            id: 'task-1',
+            task: 'Contrôler la terrasse',
+            position: 1,
+            business_unit: {
+              id: 'bu-1',
+              specific_name: 'Restaurant',
+              instance_description: '',
+              active: true,
+              generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' },
+            },
+          }),
+        ],
+      }),
+      error: null,
+      refetch: vi.fn(),
+    })
+  }
+
+  async function openObservationSheet() {
+    fireEvent.click(screen.getByRole('button', { name: 'Actions sur la tâche' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Créer une observation' }))
+    expect(await screen.findByRole('dialog', { name: 'Créer une observation' })).toBeTruthy()
+  }
+
+  it('keeps task observation text after closing the sheet', async () => {
+    mockPendingTask()
+    renderPage()
+
+    await openObservationSheet()
+    fireEvent.change(screen.getByPlaceholderText('Décrivez l’observation...'), {
+      target: { value: 'Tache visible sur le mur.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }))
+
+    expect(screen.queryByRole('dialog', { name: 'Créer une observation' })).toBeNull()
+
+    await openObservationSheet()
+    expect(
+      (screen.getByPlaceholderText('Décrivez l’observation...') as HTMLTextAreaElement).value,
+    ).toBe('Tache visible sur le mur.')
+  })
+
+  it('clears the task observation draft after a successful submit', async () => {
+    observationMutateAsyncMock.mockResolvedValue({ observation_id: 'obs-1' })
+    mockPendingTask()
+    renderPage()
+
+    await openObservationSheet()
+    fireEvent.change(screen.getByPlaceholderText('Décrivez l’observation...'), {
+      target: { value: 'Tache visible sur le mur.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer' }))
+
+    await waitFor(() => {
+      expect(observationMutateAsyncMock).toHaveBeenCalledWith({
+        taskExecutionId: 'task-1',
+        body: { text: 'Tache visible sur le mur.' },
+      })
+    })
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Créer une observation' })).toBeNull()
+    })
+
+    await openObservationSheet()
+    expect(
+      (screen.getByPlaceholderText('Décrivez l’observation...') as HTMLTextAreaElement).value,
+    ).toBe('')
   })
 })

@@ -3,7 +3,7 @@
 Status: authoritative  
 Last reviewed: 2026-08-20
 
-Référence d’exécution pour les agents Cursor. **Capacitor Lots 1–9 are done.** Next is **Capacitor Lot 10** (résilience terrain / Observation régime A). This document frames the remaining lots; it does not prescribe implementation.
+Référence d’exécution pour les agents Cursor. **Capacitor Lots 1–10 are done.** Next is **Capacitor Lot 11** (DX / CI / release mobile). This document frames the remaining lots; it does not prescribe implementation.
 
 These **Capacitor Lots** (1–11) are distinct from product/domain lots (taxonomy Lot 5, test Lot 4 helpers, product Lot 11 stabilization). Write **Capacitor Lot N** when referring to this roadmap.
 
@@ -37,7 +37,7 @@ L’application reste **online-first**. Spore est destiné à des équipes terra
 
 Cela n’implique pas un **offline-first généralisé** : pas de réplication locale complète de l’application, pas de cache durable généralisé, pas de synchronisation universelle de toutes les mutations, pas de file de mutations durable.
 
-La protection ciblée retenue (checkpoint Offline capture, **done**) est la **survie de la saisie Observation tant que le process reste vivant** (blip, background sans kill, picker si le process reste intact, navigation interne), plus ne plus exiger l’upload photo pour composer. Elle est portée par le **Lot 10**. Elle ne promet pas la survie après process kill / cold start, ni une file, ni une sync. Audio, chat, commentaires, et commandes de cycle de vie (tâches, signaux, plans) restent online-only. Pas d’architecture de stockage ou de synchronisation imposée ici — le Lot 10 tranche l’implémentation du régime process-vivant seulement.
+La protection ciblée retenue (checkpoint Offline capture, **done**) est la **survie de la saisie Observation tant que le process reste vivant** (blip, background sans kill, picker si le process reste intact, navigation interne), plus ne plus exiger l’upload photo pour composer. Elle est portée par le **Lot 10 (done)**. Elle ne promet pas la survie après process kill / cold start, ni une file, ni une sync. Audio, chat, commentaires, et commandes de cycle de vie (tâches, signaux, plans) restent online-only.
 
 ## Besoins fonctionnels vs implémentation PWA actuelle
 
@@ -77,7 +77,7 @@ Chaque lot est un chantier séparé. Un agent qui ouvre un lot doit :
 
 Les fichiers, interfaces, plugins Capacitor, librairies et migrations se décident **au début du lot**, après inspection — pas dans cette roadmap.
 
-Ordre des lots : strictement séquentiel. Un lot suivant ne commence que si le précédent est implémenté et validé. Le checkpoint Offline capture terrain est **done** (cadrage seulement, pas d’implémentation). **Capacitor Lot 9 is done.** **Capacitor Lot 10** is next. Ne pas ouvrir de stockage, file, ou sync Observation avant le Lot 10.
+Ordre des lots : strictement séquentiel. Un lot suivant ne commence que si le précédent est implémenté et validé. **Capacitor Lot 10 is done.** **Capacitor Lot 11** is next. Ne pas ouvrir de stockage durable, file, ou sync Observation (régime B) dans le Lot 11.
 
 Contexte de migration. Le projet est développé par un seul développeur et n’a aucun utilisateur réel en production. Il n’est donc pas nécessaire de privilégier les stratégies de migration “safe” destinées à préserver temporairement l’existant : compatibilité ascendante, doubles chemins, feature flags, migrations progressives, fallbacks temporaires ou conservation d’anciennes abstractions. Si une rupture ou une refonte rend la cible plus simple, propre et maintenable, elle doit être privilégiée.
 Cela ne signifie pas ignorer la qualité ou la sécurité technique : le repository doit rester fonctionnel et validé à la fin de chaque lot.
@@ -104,7 +104,7 @@ TOUJOURS BESOIN
 
 ## Lots
 
-Capacitor Lot status: **1–9 done** · checkpoint Offline capture terrain **done** · **10 next** · 11 not started.
+Capacitor Lot status: **1–10 done** · checkpoint Offline capture terrain **done** · **11 next**.
 
 ### 1. Runtime / API / WebSocket — done
 
@@ -159,7 +159,7 @@ Deux régimes — ne pas les mélanger :
 
 Hors périmètre de capture : audio (transcription online-only, jamais persistée), chat, commentaires, lifecycle Signal, mark-done / skip / exécution, création/édition de plan, lectures de feeds. File universelle, sync, et survie après kill sont du sur-engineering pour ce checkpoint.
 
-Cette protection Observation régime A est un **prérequis avant un vrai usage ou pilote terrain à connectivité intermittente**. L’état actuel (draft mémoire seule, upload photo immédiat) est acceptable **pendant le développement jusqu’au Lot 10**, pas comme posture d’usage réel sous réseau instable.
+Cette protection Observation régime A est un **prérequis avant un vrai usage ou pilote terrain à connectivité intermittente**. **Capacitor Lot 10 (done)** : draft in-memory process-scoped ; photos `File` locales ; upload uniquement à Envoyer ; bouton Envoyer désactivé hors ligne.
 
 Ticket auth orthogonal (wipe refresh Native sur erreur réseau) : hors ce checkpoint, hors Lot 10, hors séquencement Push — [issue #181](https://github.com/lpbsn/houston_project/issues/181), [`architecture/authentication_charter.md`](architecture/authentication_charter.md).
 
@@ -193,13 +193,20 @@ Ticket auth orthogonal (wipe refresh Native sur erreur réseau) : hors ce checkp
 
 **Validation (2026-08-20).** Tests jsdom du handler Android et de `resolveTerrainBackPath`. Device QA iOS (Personal Team) + Android : safe areas, clavier login/reporting/chat/commentaires (T0/T1/T2), retour Android vs topbar, prompt micro. Noter un blocage iPhone seulement s’il se produit. Double gutter iOS : investiguer, ne pas présumer `contentInset: never`.
 
-### 10. Résilience terrain
+### 10. Résilience terrain — done
 
 **Objectif.** Renforcer l’app face aux connexions instables, interruptions et saisies importantes, sans basculer en offline-first généralisé.
 
 **Responsabilité.** Mieux échouer et mieux reprendre : retries, états réseau explicites, et la protection Observation **régime A** tranchée au checkpoint : ne pas perdre la saisie (texte + photos locales in-process) tant que le process reste vivant ; ne plus exiger l’upload photo pour composer ; UX honnête (pas de faux « envoyé »). Surfaces : `/reporting` et observation-depuis-tâche. **Prérequis** avant un vrai usage/pilote terrain à connectivité intermittente.
 
 Interdit : offline-first généralisé ; réplication locale complète ; cache durable généralisé ; file ou sync de mutations ; survie après process kill / cold start ; persistance hors process « au cas où » ; capture locale de chat, commentaires, tâches, signaux, plans, ou audio. Si le QA device montre qu’un picker **tue** le process, rouvrir le régime B en chantier séparé — ne pas l’absorber ici. Si un besoin d’offline-first généralisé apparaît plus tard, ce sera un chantier distinct.
+
+**Fait (2026-08-20).** Store compose in-memory (pas de disque) : texte + `File` photos sur `/reporting`, texte seul pour observation-depuis-tâche. Survît unmount / navigation interne. Clear sur 201, `clearAuthState` (logout / révocation), login/register (`purgeNonAuth`), et switch établissement. Pas sur un refresh réseau / 401 (`clearVolatileAuthState`). **Aucun** `POST temporary-uploads` avant Envoyer. Pipeline unique : upload des `File` puis `POST observations/`. Échec : draft intact, IDs de la tentative oubliés, l’utilisateur retape Envoyer. Pas de retry 404 dédié (le contrat ne distingue pas expiration / `LINKED` / ID inconnu). Envoyer **désactivé** hors ligne ; composer reste possible. Banner Lot 6 inchangée. Audio / chat / commentaires / lifecycle : online-only.
+
+**Validation (2026-08-21).** Tests jsdom du store, du pipeline upload-then-POST, de `/reporting` (unmount, hors ligne, échec conserve les `File`) et de la sheet tâche (Annuler conserve, 201 clear). Device :
+- Android émulateur : nav interne, background sans kill, avion → reconnect → Envoyer, picker DocumentsUI — **PASS** (même pid).
+- iOS Simulator : nav, background, picker Photos — **PASS** ; avion → reconnect — **non testé** (pas de signal Capacitor exploitable).
+- iPhone physique : **offline → reconnect encore ouvert**. Kill / survie post-process hors lot. Si un picker tue le process, noter et rouvrir B — ne pas l’absorber ici.
 
 ### 11. DX / CI / release mobile
 
@@ -220,12 +227,12 @@ Interdit : offline-first généralisé ; réplication locale complète ; cache d
 - Offline-first généralisé : hors cible — pas de réplication locale complète, pas de cache durable généralisé, pas de synchronisation universelle de toutes les mutations, pas de file de mutations durable.
 - Push terrain : **natif iOS/Android** (Lot 7 done) ; Web Push mobile hors cible ; **Web Push desktop : non**.
 - Suppression PWA ≠ reconstruction systématique des capacités PWA ailleurs.
-- **Offline capture terrain (checkpoint done, 2026-08-19)** : pas de lot d’implémentation avant Push. Seule capture critique = Observation. Lot 10 = régime process-vivant seulement (pas de survie après kill). Audio / chat / commentaires / commandes de cycle de vie exclus. Pas de stockage, file, ou sync avant le Lot 7, et le Lot 10 ne les introduit pas pour le régime B.
-- Ne pas ouvrir d’implémentation de stockage / file / sync Observation avant Capacitor Lot 7.
+- **Offline capture terrain (checkpoint done, 2026-08-19)** : seule capture critique = Observation. **Capacitor Lot 10 done** : régime process-vivant seulement (pas de survie après kill). Audio / chat / commentaires / commandes de cycle de vie exclus. Pas de file, sync, ni persistance hors process.
+- **Capacitor Lot 10 implémentation (2026-08-20)** : draft in-memory ; photos uploadées seulement à Envoyer ; Envoyer désactivé hors ligne ; pas d’upload opportuniste ; pas de retry 404. Purge draft : 201, fin de session, nouvelle identité, switch établissement — pas un échec refresh.
 
 ### Encore ouvertes
 
-_(App Links / Universal Links E2E — fichiers d’association ops + ADP iOS, hors commit Lot 8.)_
+_(App Links / Universal Links E2E — fichiers d’association ops + ADP iOS, hors commit Lot 8. Capacitor Lot 10 : iPhone physique offline → reconnect encore ouvert ; implémentation régime A done.)_
 
 ---
 

@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import {
+  __resetObservationComposeDraftStoreForTests,
+  getReportingComposeDraft,
+  setReportingComposeText,
+} from '@/features/observations/lib/observation-compose-draft-store'
 import { queryClient } from '@/lib/query-client'
 import {
   getSuccessToastsSnapshot,
@@ -118,6 +123,7 @@ describe('auth api cache isolation', () => {
   })
 
   afterEach(() => {
+    __resetObservationComposeDraftStoreForTests()
     clearBodyRefreshTokenStoreConfiguration()
     vi.unstubAllEnvs()
   })
@@ -1352,5 +1358,83 @@ describe('auth api cache isolation', () => {
     expect(queryClient.getQueryData(bootstrapQueryKey)).toBeUndefined()
     expect(queryClient.getQueryCache().getAll()).toHaveLength(0)
     expect(getSuccessToastsSnapshot()).toEqual([])
+  })
+
+  describe('observation compose draft purge', () => {
+    const composeText = 'Tache visible sur le mur.'
+
+    function seedComposeDraft() {
+      setReportingComposeText('est-a', composeText)
+    }
+
+    function expectComposeDraftKept() {
+      expect(getReportingComposeDraft('est-a').text).toBe(composeText)
+    }
+
+    function expectComposeDraftCleared() {
+      expect(getReportingComposeDraft('est-a').text).toBe('')
+    }
+
+    it.each([
+      {
+        name: 'network failure',
+        mockRefresh: () => {
+          apiClientPostMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+        },
+      },
+      {
+        name: '401',
+        mockRefresh: () => {
+          apiClientPostMock.mockResolvedValueOnce({
+            response: { status: 401 },
+            data: undefined,
+            error: { detail: 'Your session could not be refreshed.' },
+          })
+        },
+      },
+    ])('keeps the compose draft when refresh fails ($name)', async ({ mockRefresh }) => {
+      vi.stubEnv('VITE_APP_RUNTIME', 'web')
+      seedComposeDraft()
+      mockRefresh()
+
+      await expect(refreshAccessToken()).resolves.toBeNull()
+
+      expect(clearAccessTokenMock).toHaveBeenCalled()
+      expectComposeDraftKept()
+    })
+
+    it('clears the compose draft on clearAuthState', () => {
+      seedComposeDraft()
+
+      clearAuthState()
+
+      expectComposeDraftCleared()
+    })
+
+    it('clears the compose draft on login', async () => {
+      seedComposeDraft()
+      apiClientPostMock.mockResolvedValueOnce({
+        response: { status: 200 },
+        data: bootstrapPayload,
+        error: undefined,
+      })
+
+      await login({ email: 'owner@example.com', password: 'secret' })
+
+      expectComposeDraftCleared()
+    })
+
+    it('clears the compose draft when switching establishment', async () => {
+      seedComposeDraft()
+      withAuthRetryMock.mockResolvedValueOnce({
+        response: { status: 200 },
+        data: bootstrapPayload,
+        error: undefined,
+      })
+
+      await switchEstablishment({ establishment_id: 'est-b' })
+
+      expectComposeDraftCleared()
+    })
   })
 })

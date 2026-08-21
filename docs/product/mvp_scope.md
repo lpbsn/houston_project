@@ -1,13 +1,13 @@
 # MVP Scope — Pilot
 
 Status: authoritative  
-Last reviewed: 2026-08-19
+Last reviewed: 2026-08-20
 
 ## Objective
 
 A field team can report, structure, assign, execute, validate, and follow operational situations on mobile-first terrain UI.
 
-Development until Capacitor Lot 10 assumes **connected conditions**. **Observation process-alive protection** (Capacitor Lot 10 — do not lose in-progress Observation text and local photos while the JS/WebView process is still alive; do not require photo upload in order to compose) is a **prerequisite before real field usage or a terrain pilot under intermittent connectivity**. It is not post-launch comfort. Survival after process kill / cold start is **not** that prerequisite and is not in MVP.
+**Observation process-alive protection** (Capacitor Lot 10, done) keeps in-progress Observation text and local photos while the JS/WebView process is still alive, and does not require photo upload in order to compose. It is a **prerequisite before real field usage or a terrain pilot under intermittent connectivity**. Other mutations remain online-only. Survival after process kill / cold start is **not** that prerequisite and is not in MVP.
 
 ## Core loop
 
@@ -20,6 +20,7 @@ Observation → Signal → Action Plan → Execution → Validation → Feed upd
 - Identity, memberships, establishment isolation, RBAC
 - Manual onboarding v2 (BusinessUnit / ActivitySubject)
 - Observation submission (text, optional photo, audio transcription)
+- Observation process-alive compose (Capacitor Lot 10 — in-memory draft, upload at send)
 - AI pipeline → Signal feed and detail
 - Action Plan catalog, executions, execution feed, lifecycle commands
 - Comments on signals and action plan executions
@@ -35,7 +36,7 @@ Observation → Signal → Action Plan → Execution → Validation → Feed upd
 - Billing, SSO, MFA (unless already present)
 - Legacy Action / Checklist domains (removed)
 - App Store / Play Store release and CI `cap sync` (Capacitor Lot 11)
-- Durable offline mutation queue (universal mutation outbox / sync). Distinct from Capacitor Lot 10, which protects **Observation compose while the process is alive** only — not a queue, not post-kill restore.
+- Durable offline mutation queue (universal mutation outbox / sync). Distinct from Capacitor Lot 10 (done), which protects **Observation compose while the process is alive** only — not a queue, not post-kill restore.
 - Observation survival after process kill / cold start (requires durable persistence + security policy exception + possibly offline auth)
 - Offline capture of chat, comments, audio, signal/task/plan lifecycle commands, or feed reads
 - Chat: REST message send, read receipts, typing, AI on chat, chat-to-signal
