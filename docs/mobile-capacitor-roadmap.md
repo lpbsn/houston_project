@@ -1,9 +1,9 @@
 # Spore — Roadmap Web + Capacitor
 
 Status: authoritative  
-Last reviewed: 2026-08-20
+Last reviewed: 2026-08-21
 
-Référence d’exécution pour les agents Cursor. **Capacitor Lots 1–10 are done.** Next is **Capacitor Lot 11** (DX / CI / release mobile). This document frames the remaining lots; it does not prescribe implementation.
+Référence d’exécution pour les agents Cursor. **Capacitor Lots 1–10 are done** and are the Capacitor foundation for product work. **Capacitor Lot 11** (DX / CI / release mobile) is **deferred**, not abandoned. This document frames remaining Capacitor work; it does not prescribe implementation.
 
 These **Capacitor Lots** (1–11) are distinct from product/domain lots (taxonomy Lot 5, test Lot 4 helpers, product Lot 11 stabilization). Write **Capacitor Lot N** when referring to this roadmap.
 
@@ -77,7 +77,7 @@ Chaque lot est un chantier séparé. Un agent qui ouvre un lot doit :
 
 Les fichiers, interfaces, plugins Capacitor, librairies et migrations se décident **au début du lot**, après inspection — pas dans cette roadmap.
 
-Ordre des lots : strictement séquentiel. Un lot suivant ne commence que si le précédent est implémenté et validé. **Capacitor Lot 10 is done.** **Capacitor Lot 11** is next. Ne pas ouvrir de stockage durable, file, ou sync Observation (régime B) dans le Lot 11.
+Ordre des lots : Lots 1–10 étaient strictement séquentiels et sont **done**. Ils constituent le socle Capacitor pour **reprendre le développement produit**. **Capacitor Lot 11** is **deferred** — do not open it as the next Capacitor chantier. If Lot 11 is later reopened, still do not open durable Observation storage, queue, or sync (régime B) inside it.
 
 Contexte de migration. Le projet est développé par un seul développeur et n’a aucun utilisateur réel en production. Il n’est donc pas nécessaire de privilégier les stratégies de migration “safe” destinées à préserver temporairement l’existant : compatibilité ascendante, doubles chemins, feature flags, migrations progressives, fallbacks temporaires ou conservation d’anciennes abstractions. Si une rupture ou une refonte rend la cible plus simple, propre et maintenable, elle doit être privilégiée.
 Cela ne signifie pas ignorer la qualité ou la sécurité technique : le repository doit rester fonctionnel et validé à la fin de chaque lot.
@@ -104,7 +104,7 @@ TOUJOURS BESOIN
 
 ## Lots
 
-Capacitor Lot status: **1–10 done** · checkpoint Offline capture terrain **done** · **11 next**.
+Capacitor Lot status: **1–10 done** · checkpoint Offline capture terrain **done** · **11 deferred**.
 
 ### 1. Runtime / API / WebSocket — done
 
@@ -208,11 +208,19 @@ Interdit : offline-first généralisé ; réplication locale complète ; cache d
 - iOS Simulator : nav, background, picker Photos — **PASS** ; avion → reconnect — **non testé** (pas de signal Capacitor exploitable).
 - iPhone physique : **offline → reconnect encore ouvert**. Kill / survie post-process hors lot. Si un picker tue le process, noter et rouvrir B — ne pas l’absorber ici.
 
-### 11. DX / CI / release mobile
+### 11. DX / CI / release mobile — deferred
 
 **Objectif.** Simplifier développement, build, validation et release Web / iOS / Android.
 
 **Responsabilité.** Un workflow tenable pour un développeur unique : lancer Web et Native en local, vérifier les deux runtimes, produire et publier sans procédure opaque. CI et release restent proportionnés à l’équipe. Pas de plateforme de release surdimensionnée. Le déploiement Web suit le build Vite classique défini au lot 4 — pas de mécanisme de versioning ou de mise à jour applicative supplémentaire à prévoir ici.
+
+**Pourquoi deferred.** Lots 1–10 sont le socle nécessaire pour reprendre le développement produit. Le projet se développe et se valide localement sur Web + Capacitor iOS/Android. La distribution bêta iOS/Android n’est pas ouverte ; l’Apple Developer Program et les canaux Google Play ne sont pas activés. Construire maintenant une automatisation de release / signing / store qui ne peut pas être validée de bout en bout n’apporte pas de valeur pour un développeur unique. Deferred does not mean abandoned.
+
+**Déclencheur de reprise.** Préparation **réelle** de TestFlight et/ou Google Play Internal Testing (comptes et canaux utilisables). Not a hypothetical “later”.
+
+**À traiter à la reprise** (périmètre du lot, pas de design d’implémentation) : signing / distribution ; identifiers et credentials nécessaires ; version / build numbers ; archives iOS / AAB Android ; procédures de publication ; checks CI/release réellement utiles à ce moment-là ; documentation opératoire.
+
+**Déjà couvert — ne pas reconstruire.** Builds locaux Web / Native (`npm run build`, `npm run build:native`) ; `make web-cap-sync` / `cap:sync` ; validations Web et native existantes (tests, smoke locale, CI `build:native:bundle`). Do not treat local `cap sync` as missing work for this lot.
 
 ---
 
@@ -229,6 +237,7 @@ Interdit : offline-first généralisé ; réplication locale complète ; cache d
 - Suppression PWA ≠ reconstruction systématique des capacités PWA ailleurs.
 - **Offline capture terrain (checkpoint done, 2026-08-19)** : seule capture critique = Observation. **Capacitor Lot 10 done** : régime process-vivant seulement (pas de survie après kill). Audio / chat / commentaires / commandes de cycle de vie exclus. Pas de file, sync, ni persistance hors process.
 - **Capacitor Lot 10 implémentation (2026-08-20)** : draft in-memory ; photos uploadées seulement à Envoyer ; Envoyer désactivé hors ligne ; pas d’upload opportuniste ; pas de retry 404. Purge draft : 201, fin de session, nouvelle identité, switch établissement — pas un échec refresh.
+- **Capacitor Lot 11 (2026-08-21)** : DX / CI / release mobile **deferred** until real TestFlight / Google Play Internal Testing prep. Not abandoned. Local Web/Native builds and `cap sync` stay the daily workflow.
 
 ### Encore ouvertes
 
