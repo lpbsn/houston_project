@@ -1,11 +1,16 @@
-import type { AppPath } from '@/app/app-routes'
+import { useEffect, useMemo, useState } from 'react'
+import { ChevronDown } from 'lucide-react'
+
+import {
+  isScopedNavItemActive,
+  resolveScopedDesktopNavigation,
+} from '@/features/navigation/lib/scoped-desktop-navigation'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
-import { resolveDesktopNavigation } from '@/features/navigation/lib/shared-navigation'
 import { formatMembershipRoleDisplay } from '@/lib/display-names'
 import { cn } from '@/lib/utils'
 
 type DesktopTerrainSidebarProps = {
-  activePath?: AppPath
+  activePath?: string
   bootstrap?: BootstrapResponse | null
   className?: string
   navigate: (pathname: string, options?: { replace?: boolean }) => void
@@ -54,99 +59,130 @@ export function DesktopTerrainSidebar({
   navigate,
   showChat,
 }: DesktopTerrainSidebarProps) {
-  const { primaryAction, navigationItems } = resolveDesktopNavigation({ bootstrap, showChat })
-  const activeMembership = bootstrap?.active_membership ?? null
+  const sections = useMemo(
+    () => resolveScopedDesktopNavigation({ bootstrap, showChat }),
+    [bootstrap, showChat],
+  )
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
   const user = bootstrap?.user ?? null
-  const PrimaryActionIcon = primaryAction?.icon
+  const activeMembership = bootstrap?.active_membership ?? null
+
+  useEffect(() => {
+    setExpandedIds((current) => {
+      const next = new Set(current)
+      for (const section of sections) {
+        if (section.defaultExpanded && current.size === 0) {
+          next.add(section.id)
+        }
+        if (section.items.some((item) => isScopedNavItemActive(item.href, activePath))) {
+          next.add(section.id)
+        }
+      }
+      return next
+    })
+  }, [activePath, sections])
+
+  function toggleSection(sectionId: string) {
+    setExpandedIds((current) => {
+      const next = new Set(current)
+      if (next.has(sectionId)) {
+        next.delete(sectionId)
+      } else {
+        next.add(sectionId)
+      }
+      return next
+    })
+  }
 
   return (
     <aside
       className={cn(
-        'hidden h-full w-72 shrink-0 flex-col border-r border-[#E8E6DF] bg-white',
+        'hidden h-full w-72 shrink-0 flex-col bg-[#1B1B1B] text-white',
         className,
       )}
       aria-label="Navigation principale"
     >
-      <div className="flex h-16 shrink-0 items-center gap-3 border-b border-[#E8E6DF] px-5">
+      <div className="flex h-16 shrink-0 items-center gap-3 border-b border-white/10 px-5">
         <span
-          className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#114660] text-sm font-bold text-white"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1F7A4D] text-xs font-bold text-white"
           aria-hidden
         >
           S
         </span>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-[#1a1a1a]">Spore</p>
-          <p className="text-[10px] font-semibold tracking-[0.12em] text-[#7D7B75] uppercase">
-            Terrain
-          </p>
+          <p className="truncate text-sm font-semibold">Spore Analytics</p>
         </div>
       </div>
 
-      <div className="shrink-0 px-3 py-4">
-        {primaryAction ? (
-          <a
-            href={primaryAction.path}
-            aria-current={
-              activePath && primaryAction.activePaths.includes(activePath) ? 'page' : undefined
-            }
-            onClick={(event) => {
-              event.preventDefault()
-              navigate(primaryAction.path)
-            }}
-            className={cn(
-              'flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold transition-colors',
-              activePath && primaryAction.activePaths.includes(activePath)
-                ? 'bg-[#114660] text-white'
-                : 'bg-[#1F7A4D] text-white hover:bg-[#17623D]',
-            )}
-          >
-            {PrimaryActionIcon ? (
-              <PrimaryActionIcon className="h-4 w-4 shrink-0" aria-hidden />
-            ) : null}
-            <span className="truncate">{primaryAction.label}</span>
-          </a>
-        ) : null}
-      </div>
-
-      <nav className="flex flex-1 flex-col gap-1 px-3 pb-4" aria-label="Sections">
-        {navigationItems.map((item) => {
-          const Icon = item.icon
-          const isActive = activePath ? item.activePaths.includes(activePath) : false
-
+      <nav className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-4" aria-label="Sections">
+        {sections.map((section) => {
+          const expanded = expandedIds.has(section.id)
           return (
-            <a
-              key={item.id}
-              href={item.path}
-              aria-current={isActive ? 'page' : undefined}
-              onClick={(event) => {
-                event.preventDefault()
-                navigate(item.path)
-              }}
-              className={cn(
-                'flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold transition-colors',
-                isActive
-                  ? 'bg-[#114660] text-white'
-                  : 'text-[#3D5A50] hover:bg-[#F5F4F0] hover:text-[#114660]',
-              )}
-            >
-              <Icon className="h-4 w-4 shrink-0" aria-hidden />
-              <span className="truncate">{item.label}</span>
-            </a>
+            <section key={section.id} className="flex flex-col gap-1">
+              <button
+                type="button"
+                className="flex w-full items-start justify-between gap-2 rounded-lg px-2 py-1.5 text-left"
+                aria-expanded={expanded}
+                onClick={() => toggleSection(section.id)}
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-[10px] font-semibold tracking-[0.14em] text-white/55 uppercase">
+                    {section.title}
+                  </span>
+                  {section.subtitle ? (
+                    <span className="mt-0.5 block truncate text-[11px] text-white/40">
+                      {section.subtitle}
+                    </span>
+                  ) : null}
+                </span>
+                <ChevronDown
+                  className={cn(
+                    'mt-0.5 h-3.5 w-3.5 shrink-0 text-white/45 transition-transform',
+                    expanded ? 'rotate-0' : '-rotate-90',
+                  )}
+                  aria-hidden
+                />
+              </button>
+              {expanded
+                ? section.items.map((item) => {
+                    const isActive = isScopedNavItemActive(item.href, activePath)
+                    return (
+                      <a
+                        key={item.id}
+                        href={item.href}
+                        aria-current={isActive ? 'page' : undefined}
+                        onClick={(event) => {
+                          event.preventDefault()
+                          navigate(item.href)
+                        }}
+                        className={cn(
+                          'flex min-h-10 items-center rounded-lg px-3 text-sm font-medium transition-colors',
+                          isActive
+                            ? 'bg-[#1F7A4D] text-white'
+                            : 'text-white/75 hover:bg-white/8 hover:text-white',
+                        )}
+                      >
+                        <span className="truncate">{item.label}</span>
+                      </a>
+                    )
+                  })
+                : null}
+            </section>
           )
         })}
       </nav>
 
-      <div className="shrink-0 border-t border-[#E8E6DF] p-4">
+      <div className="shrink-0 border-t border-white/10 p-4">
         <div className="flex min-w-0 items-center gap-3">
           <span
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#114660] text-xs font-semibold text-white"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#1F7A4D] text-xs font-semibold text-white"
             aria-hidden
           >
             {buildUserInitials(user)}
           </span>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-[#1a1a1a]">{buildUserName(user)}</p>
-            <p className="truncate text-xs text-[#7D7B75]">{buildContextLabel(activeMembership)}</p>
+            <p className="truncate text-sm font-semibold">{buildUserName(user)}</p>
+            <p className="truncate text-xs text-white/45">{buildContextLabel(activeMembership)}</p>
           </div>
         </div>
       </div>

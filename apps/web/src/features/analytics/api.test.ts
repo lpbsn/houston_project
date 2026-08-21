@@ -31,6 +31,7 @@ import {
 } from './api'
 
 const dashboardResponse = {
+  period_days: 7,
   current_period: {
     period_start: '2026-07-13T10:30:00.000Z',
     period_end: '2026-08-12T10:30:00.000Z',
@@ -39,96 +40,165 @@ const dashboardResponse = {
     period_start: '2026-06-13T10:30:00.000Z',
     period_end: '2026-07-13T10:30:00.000Z',
   },
-  current_kpis: {
-    analytics_signal_population_count: 0,
-    signals_analyzed_count: 0,
-    operational_patterns_count: 0,
-    actionable_signals_count: 0,
-    median_resolution_seconds: null,
-    resolution_time_signal_count: 0,
-    invalid_resolution_duration_count: 0,
-    business_assignment_coverage: {
-      total_count: 0,
-      with_pattern_count: 0,
-      without_pattern_count: 0,
-      coverage_rate: null,
+  history_reliable_from: '2026-01-01T00:00:00.000Z',
+  scope_type: 'cross',
+  establishment_id: null,
+  establishment_ids: [],
+  recurring_patterns: [],
+  new_patterns: [],
+  new_patterns_preview_limit: 5,
+  contributors: [],
+  observation_delay_canceled: {
+    median_seconds: null,
+    mean_seconds: null,
+    p90_seconds: null,
+    n: 0,
+    comparison: {
+      current_value: null,
+      previous_value: null,
+      absolute_delta: null,
+      relative_change: null,
+      relative_change_status: 'not_applicable',
+      coverage: 'complete',
     },
-    technical_classification_state: {
-      total_count: 0,
-      technical_state_breakdown: {},
-      technical_terminal_success_count: 0,
-      technical_pending_or_error_count: 0,
-    },
-    recurring_patterns_count: 0,
-    recurrence_window: {
-      window_start: '2026-07-13T10:30:00.000Z',
-      window_end: '2026-08-12T10:30:00.000Z',
-    },
-    recurrence_status: 'computed',
   },
-  previous_kpis: {
-    analytics_signal_population_count: 0,
-    signals_analyzed_count: 0,
-    operational_patterns_count: 0,
-    actionable_signals_count: 0,
-    median_resolution_seconds: null,
-    resolution_time_signal_count: 0,
-    invalid_resolution_duration_count: 0,
-    business_assignment_coverage: {
-      total_count: 0,
-      with_pattern_count: 0,
-      without_pattern_count: 0,
-      coverage_rate: null,
+  observation_delay_resolved: {
+    median_seconds: null,
+    mean_seconds: null,
+    p90_seconds: null,
+    n: 0,
+    comparison: {
+      current_value: null,
+      previous_value: null,
+      absolute_delta: null,
+      relative_change: null,
+      relative_change_status: 'not_applicable',
+      coverage: 'complete',
     },
-    technical_classification_state: {
-      total_count: 0,
-      technical_state_breakdown: {},
-      technical_terminal_success_count: 0,
-      technical_pending_or_error_count: 0,
+  },
+  observation_delay_transformed: {
+    median_seconds: null,
+    mean_seconds: null,
+    p90_seconds: null,
+    n: 0,
+    comparison: {
+      current_value: null,
+      previous_value: null,
+      absolute_delta: null,
+      relative_change: null,
+      relative_change_status: 'not_applicable',
+      coverage: 'complete',
     },
-    recurring_patterns_count: 0,
-    recurrence_window: {
-      window_start: '2026-06-13T10:30:00.000Z',
-      window_end: '2026-07-13T10:30:00.000Z',
-    },
-    recurrence_status: 'computed',
   },
-  signals_analyzed_count: {
-    current_value: 0,
-    previous_value: 0,
-    absolute_delta: 0,
-    relative_change: null,
-    relative_change_status: 'undefined_previous_zero',
-  },
-  operational_patterns_count: {
-    current_value: 0,
-    previous_value: 0,
-    absolute_delta: 0,
-    relative_change: null,
-    relative_change_status: 'undefined_previous_zero',
-  },
-  actionable_signals_count: {
-    current_value: 0,
-    previous_value: 0,
-    absolute_delta: 0,
-    relative_change: null,
-    relative_change_status: 'undefined_previous_zero',
-  },
-  median_resolution_seconds: {
+  operational_resolution_rate: {
     current_value: null,
     previous_value: null,
     absolute_delta: null,
     relative_change: null,
     relative_change_status: 'not_applicable',
+    coverage: 'complete',
   },
-  recurring_patterns_count: {
+  closure_resolved_share: {
+    current_value: null,
+    previous_value: null,
+    absolute_delta: null,
+    relative_change: null,
+    relative_change_status: 'not_applicable',
+    coverage: 'complete',
+  },
+  reopenings: {
     current_value: 0,
     previous_value: 0,
     absolute_delta: 0,
     relative_change: null,
     relative_change_status: 'undefined_previous_zero',
+    coverage: 'complete',
   },
-  recurrence_status: 'computed',
+  open_observation_count: 0,
+  aging_buckets: [],
+  aging_over_15d_share: {
+    current_value: null,
+    previous_value: null,
+    absolute_delta: null,
+    relative_change: null,
+    relative_change_status: 'not_applicable',
+    coverage: 'complete',
+  },
+  plan_delay_canceled: {
+    median_seconds: null,
+    mean_seconds: null,
+    p90_seconds: null,
+    n: 0,
+    comparison: {
+      current_value: null,
+      previous_value: null,
+      absolute_delta: null,
+      relative_change: null,
+      relative_change_status: 'not_applicable',
+      coverage: 'complete',
+    },
+  },
+  plan_delay_resolved: {
+    median_seconds: null,
+    mean_seconds: null,
+    p90_seconds: null,
+    n: 0,
+    comparison: {
+      current_value: null,
+      previous_value: null,
+      absolute_delta: null,
+      relative_change: null,
+      relative_change_status: 'not_applicable',
+      coverage: 'complete',
+    },
+  },
+  plan_validation: {
+    median_seconds: null,
+    mean_seconds: null,
+    p90_seconds: null,
+    n: 0,
+    comparison: {
+      current_value: null,
+      previous_value: null,
+      absolute_delta: null,
+      relative_change: null,
+      relative_change_status: 'not_applicable',
+      coverage: 'complete',
+    },
+  },
+  plan_deadlines: {
+    early: null,
+    on_time: null,
+    late: null,
+    n: 0,
+    early_comparison: {
+      current_value: null,
+      previous_value: null,
+      absolute_delta: null,
+      relative_change: null,
+      relative_change_status: 'not_applicable',
+      coverage: 'complete',
+    },
+    on_time_comparison: {
+      current_value: null,
+      previous_value: null,
+      absolute_delta: null,
+      relative_change: null,
+      relative_change_status: 'not_applicable',
+      coverage: 'complete',
+    },
+    late_comparison: {
+      current_value: null,
+      previous_value: null,
+      absolute_delta: null,
+      relative_change: null,
+      relative_change_status: 'not_applicable',
+      coverage: 'complete',
+    },
+  },
+  zones: [],
+  zones_preview_limit: 7,
+  poles: [],
 } satisfies AnalyticsDashboardResponse
 
 describe('analytics api', () => {
@@ -142,11 +212,10 @@ describe('analytics api', () => {
     })
   })
 
-  it('fetches the dashboard with the resolved analytics URL state only', async () => {
+  it('fetches the dashboard with period_days and no establishment in Cross', async () => {
     await fetchAnalyticsDashboard({
-      periodStart: '2026-07-13T10:30:00.000Z',
-      periodEnd: '2026-08-12T10:30:00.000Z',
-      organizationId: '11111111-1111-4111-8111-111111111111',
+      periodDays: 7,
+      establishmentId: null,
     })
 
     expect(getMock).toHaveBeenCalledWith(
@@ -154,9 +223,7 @@ describe('analytics api', () => {
       expect.objectContaining({
         params: {
           query: {
-            period_start: '2026-07-13T10:30:00.000Z',
-            period_end: '2026-08-12T10:30:00.000Z',
-            organization_id: '11111111-1111-4111-8111-111111111111',
+            period_days: 7,
           },
         },
         headers: { Authorization: 'Bearer test-token' },
@@ -165,16 +232,15 @@ describe('analytics api', () => {
     expect(getMock.mock.calls[0]?.[1]?.params?.query).not.toHaveProperty('establishment_id')
   })
 
-  it('omits organization_id when it is absent', async () => {
+  it('includes establishment_id when an establishment dashboard is requested', async () => {
     await fetchAnalyticsDashboard({
-      periodStart: '2026-07-13T10:30:00.000Z',
-      periodEnd: '2026-08-12T10:30:00.000Z',
-      organizationId: null,
+      periodDays: 15,
+      establishmentId: '22222222-2222-4222-8222-222222222222',
     })
 
     expect(getMock.mock.calls[0]?.[1]?.params?.query).toEqual({
-      period_start: '2026-07-13T10:30:00.000Z',
-      period_end: '2026-08-12T10:30:00.000Z',
+      period_days: 15,
+      establishment_id: '22222222-2222-4222-8222-222222222222',
     })
   })
 
@@ -187,9 +253,8 @@ describe('analytics api', () => {
 
     await expect(
       fetchAnalyticsDashboard({
-        periodStart: '2026-07-13T10:30:00.000Z',
-        periodEnd: '2026-08-12T10:30:00.000Z',
-        organizationId: null,
+        periodDays: 7,
+        establishmentId: null,
       }),
     ).rejects.toMatchObject({
       code: 'analytics_period_invalid',
@@ -199,27 +264,24 @@ describe('analytics api', () => {
 
     await expect(
       fetchAnalyticsDashboard({
-        periodStart: '2026-07-13T10:30:00.000Z',
-        periodEnd: '2026-08-12T10:30:00.000Z',
-        organizationId: null,
+        periodDays: 7,
+        establishmentId: null,
       }),
     ).rejects.toBeInstanceOf(AnalyticsApiError)
   })
 
-  it('keeps dashboard query keys stable from URL state', () => {
+  it('keeps dashboard query keys stable from period and establishment', () => {
     expect(
       analyticsQueryKeys.dashboard({
-        periodStart: '2026-07-13T10:30:00.000Z',
-        periodEnd: '2026-08-12T10:30:00.000Z',
-        organizationId: null,
+        periodDays: 7,
+        establishmentId: null,
       }),
     ).toEqual([
       'analytics',
       'dashboard',
       {
-        periodStart: '2026-07-13T10:30:00.000Z',
-        periodEnd: '2026-08-12T10:30:00.000Z',
-        organizationId: null,
+        periodDays: 7,
+        establishmentId: null,
       },
     ])
   })

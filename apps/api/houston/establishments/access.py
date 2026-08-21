@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+from uuid import UUID
 
 from houston.accounts.authentication import AccessTokenAuthContext
 from houston.accounts.models import User
@@ -56,6 +57,17 @@ class ApiAccessContext:
     active_memberships: tuple[EstablishmentMembership, ...]
     active_membership: EstablishmentMembership | None
     selected_establishment: Establishment | None
+
+    def membership_for_establishment(
+        self,
+        establishment_id: UUID | None,
+    ) -> EstablishmentMembership | None:
+        if establishment_id is None:
+            return None
+        for membership in self.active_memberships:
+            if membership.establishment_id == establishment_id:
+                return membership
+        return None
 
 
 @dataclass(frozen=True)

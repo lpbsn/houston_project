@@ -9,6 +9,8 @@ from houston.signals.constants import (
     AI_ISSUE_FOCUS_MAX_LENGTH,
     SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
     SIGNAL_LIFECYCLE_EVENT_CANCELED,
+    SIGNAL_LIFECYCLE_EVENT_CREATED,
+    SIGNAL_LIFECYCLE_EVENT_HISTORY_BASELINE,
     SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING,
     SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS,
     SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
@@ -221,6 +223,8 @@ class SignalLifecycleEvent(BaseModel):
     """Append-only journal of Signal lifecycle transitions. Insert-only from services."""
 
     class EventType(models.TextChoices):
+        CREATED = SIGNAL_LIFECYCLE_EVENT_CREATED, "Created"
+        HISTORY_BASELINE = SIGNAL_LIFECYCLE_EVENT_HISTORY_BASELINE, "History baseline"
         MARKED_INTERESTING = (
             SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING,
             "Marked interesting",
@@ -264,6 +268,13 @@ class SignalLifecycleEvent(BaseModel):
             models.Index(
                 fields=["establishment", "occurred_at"],
                 name="sig_lifecycle_est_at_idx",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["signal"],
+                condition=Q(event_type=SIGNAL_LIFECYCLE_EVENT_HISTORY_BASELINE),
+                name="sig_lifecycle_one_baseline",
             ),
         ]
 

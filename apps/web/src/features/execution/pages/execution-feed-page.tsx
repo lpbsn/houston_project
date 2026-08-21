@@ -35,6 +35,8 @@ const EXECUTION_FEED_DEFAULT_COLLAPSED_SECTIONS = ['done', 'canceled'] as const
 type ExecutionFeedPageProps = {
   onOpenActionPlanExecution?: (executionId: string) => void
   onNavigate?: (pathname: string) => void
+  establishmentId?: string | null
+  source?: 'establishment' | 'cross'
 }
 
 function readScheduledPreviewFromFeedPages(
@@ -61,13 +63,17 @@ function readScheduledPreviewFromFeedPages(
 export function ExecutionFeedPage({
   onOpenActionPlanExecution,
   onNavigate,
+  establishmentId: establishmentIdProp,
+  source = 'establishment',
 }: ExecutionFeedPageProps) {
   const auth = useAuth()
-  const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
+  const establishmentId =
+    establishmentIdProp ?? auth.bootstrap?.active_membership?.establishment_id ?? null
+  const isCross = source === 'cross'
   const [viewMode, setViewMode] = useState<ExecutionViewMode>('personal')
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false)
 
-  const planFeedQuery = useActionPlanExecutionFeedQuery(establishmentId, viewMode)
+  const planFeedQuery = useActionPlanExecutionFeedQuery(establishmentId, viewMode, { source })
   const quickActions = useActionPlanExecutionFeedQuickActions({
     establishmentId,
     viewMode,
@@ -94,6 +100,7 @@ export function ExecutionFeedPage({
     ? getBootstrapPermissionHints(auth.bootstrap)
     : null
   const canCreate =
+    !isCross &&
     auth.bootstrap != null &&
     !auth.isBootstrapping &&
     canOpenExecutionCreateMenu(permissionHints)
@@ -125,7 +132,7 @@ export function ExecutionFeedPage({
     </Button>
   ) : null
 
-  if (!establishmentId) {
+  if (!establishmentId && !isCross) {
     return (
       <p className="px-3 py-4 text-sm text-[#6b5f52]">Établissement non sélectionné.</p>
     )
@@ -141,9 +148,11 @@ export function ExecutionFeedPage({
         onSelectCatalog={() => onNavigate?.('/action-plans')}
       />
       <TerrainHubSubheader>
-        <TerrainHubViewToolbar trailing={createAction}>
-          <ExecutionFeedTabs viewMode={viewMode} onChange={setViewMode} />
-        </TerrainHubViewToolbar>
+        {isCross ? null : (
+          <TerrainHubViewToolbar trailing={createAction}>
+            <ExecutionFeedTabs viewMode={viewMode} onChange={setViewMode} />
+          </TerrainHubViewToolbar>
+        )}
       </TerrainHubSubheader>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 pb-4">
         {isInitialLoading ? (
@@ -165,7 +174,7 @@ export function ExecutionFeedPage({
               />
             ) : null}
 
-            {planFeedQuery.isSuccess && onNavigate ? (
+            {planFeedQuery.isSuccess && onNavigate && !isCross ? (
               <ExecutionUpcomingNavRow
                 count={scheduledCount}
                 onNavigate={() => onNavigate('/execution/upcoming')}
@@ -181,7 +190,7 @@ export function ExecutionFeedPage({
                         key={`plan-pinned-${item.id}`}
                         item={item}
                         onSelect={(id) => onOpenActionPlanExecution?.(id)}
-                        onOpenActions={quickActions.openActions}
+                        onOpenActions={isCross ? undefined : quickActions.openActions}
                       />
                     ))}
                   </div>
@@ -204,7 +213,7 @@ export function ExecutionFeedPage({
                               key={`plan-${item.id}`}
                               item={item}
                               onSelect={(id) => onOpenActionPlanExecution?.(id)}
-                              onOpenActions={quickActions.openActions}
+                              onOpenActions={isCross ? undefined : quickActions.openActions}
                             />
                           ))}
                         </div>

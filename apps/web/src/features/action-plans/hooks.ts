@@ -17,7 +17,9 @@ import {
   fetchActionPlanCatalog,
   fetchActionPlanDetail,
   fetchActionPlanExecutionDetail,
+  fetchCrossActionPlanExecutionDetail,
   fetchActionPlanExecutionFeed,
+  fetchCrossActionPlanExecutionFeed,
   fetchActionPlanExecutionUpcoming,
   markActionPlanExecutionDone,
   markActionPlanTaskDone,
@@ -95,13 +97,22 @@ export function useActionPlanDetailQuery(
 export function useActionPlanExecutionFeedQuery(
   establishmentId: string | null,
   viewMode: ActionPlanExecutionFeedViewMode,
+  options?: { source?: 'establishment' | 'cross' },
 ) {
+  const source = options?.source ?? 'establishment'
+  const enabled = source === 'cross' || Boolean(establishmentId)
   return useInfiniteQuery({
-    queryKey: establishmentId
-      ? actionPlansQueryKeys.executionFeed(establishmentId, viewMode)
-      : ['action-plans', 'action-plan-execution-feed', 'none'],
+    queryKey:
+      source === 'cross'
+        ? actionPlansQueryKeys.crossExecutionFeed
+        : establishmentId
+          ? actionPlansQueryKeys.executionFeed(establishmentId, viewMode)
+          : ['action-plans', 'action-plan-execution-feed', 'none'],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) => {
+      if (source === 'cross') {
+        return fetchCrossActionPlanExecutionFeed({ cursor: pageParam })
+      }
       if (!establishmentId) {
         throw new Error('Établissement non sélectionné.')
       }
@@ -115,7 +126,7 @@ export function useActionPlanExecutionFeedQuery(
       }
       return lastPage.next_cursor
     },
-    enabled: Boolean(establishmentId),
+    enabled,
   })
 }
 
@@ -149,19 +160,29 @@ export function useActionPlanExecutionUpcomingQuery(
 export function useActionPlanExecutionDetailQuery(
   establishmentId: string | null,
   executionId: string | null,
+  options?: { source?: 'establishment' | 'cross' },
 ) {
+  const source = options?.source ?? 'establishment'
   return useQuery({
     queryKey:
-      establishmentId && executionId
-        ? actionPlansQueryKeys.executionDetail(establishmentId, executionId)
-        : ['action-plans', 'execution-detail', 'none'],
+      source === 'cross' && executionId
+        ? actionPlansQueryKeys.crossExecutionDetail(executionId)
+        : establishmentId && executionId
+          ? actionPlansQueryKeys.executionDetail(establishmentId, executionId)
+          : ['action-plans', 'execution-detail', 'none'],
     queryFn: () => {
-      if (!establishmentId || !executionId) {
+      if (!executionId) {
+        throw new Error('Exécution introuvable.')
+      }
+      if (source === 'cross') {
+        return fetchCrossActionPlanExecutionDetail(executionId)
+      }
+      if (!establishmentId) {
         throw new Error('Exécution introuvable.')
       }
       return fetchActionPlanExecutionDetail(establishmentId, executionId)
     },
-    enabled: Boolean(establishmentId && executionId),
+    enabled: Boolean(executionId) && (source === 'cross' || Boolean(establishmentId)),
   })
 }
 

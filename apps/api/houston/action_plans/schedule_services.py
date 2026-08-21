@@ -160,7 +160,10 @@ def get_active_started_execution_for_schedule(
 
 def _cancel_schedule_future_execution(*, execution: ActionPlanExecution) -> None:
     from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_CANCELED
-    from houston.action_plans.lifecycle_events import record_execution_lifecycle_event
+    from houston.action_plans.lifecycle_events import (
+        execution_transition_metadata,
+        record_execution_lifecycle_event,
+    )
 
     now = timezone.now()
     execution.status = EXECUTION_STATUS_CANCELED
@@ -183,7 +186,13 @@ def _cancel_schedule_future_execution(*, execution: ActionPlanExecution) -> None
         event_type=EXECUTION_LIFECYCLE_EVENT_CANCELED,
         occurred_at=now,
         actor_membership=None,
-        metadata_safe={"cancel_origin": CANCEL_ORIGIN_SCHEDULE_SYNC},
+        metadata_safe={
+            "cancel_origin": CANCEL_ORIGIN_SCHEDULE_SYNC,
+            **execution_transition_metadata(
+                status=EXECUTION_STATUS_CANCELED,
+                end_at=execution.end_at,
+            ),
+        },
     )
     from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
     from houston.notifications.scheduling import (
@@ -253,10 +262,15 @@ def reactivate_schedule_future_execution(
     )
     now = timezone.now()
     from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_REACTIVATED
-    from houston.action_plans.lifecycle_events import record_execution_lifecycle_event
+    from houston.action_plans.lifecycle_events import (
+        execution_transition_metadata,
+        record_execution_deadline_changed,
+        record_execution_lifecycle_event,
+    )
     from houston.action_plans.services import initial_execution_status
 
     new_status = initial_execution_status(start_at=occurrence_start, now=now)
+    previous_end_at = execution.end_at
     execution.status = new_status
     execution.canceled_at = None
     execution.canceled_by_membership = None
@@ -293,8 +307,15 @@ def reactivate_schedule_future_execution(
         actor_membership=None,
         metadata_safe={
             "reactivation_origin": CANCEL_ORIGIN_SCHEDULE_SYNC,
-            "to_status": new_status,
+            **execution_transition_metadata(status=new_status, end_at=execution.end_at),
         },
+    )
+    record_execution_deadline_changed(
+        execution=execution,
+        from_end_at=previous_end_at,
+        to_end_at=execution.end_at,
+        occurred_at=now,
+        actor_membership=None,
     )
     from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
 
@@ -328,6 +349,7 @@ def _sync_future_execution_window(
         schedule_assignee=schedule_assignee,
     )
     now = timezone.now()
+    previous_end_at = execution.end_at
     execution.start_at = occurrence_start
     execution.end_at = occurrence_end
     execution.visible_from = visible_from
@@ -341,7 +363,16 @@ def _sync_future_execution_window(
             "updated_at",
         ],
     )
+    from houston.action_plans.lifecycle_events import record_execution_deadline_changed
     from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
+
+    record_execution_deadline_changed(
+        execution=execution,
+        from_end_at=previous_end_at,
+        to_end_at=execution.end_at,
+        occurred_at=now,
+        actor_membership=None,
+    )
 
     schedule_action_plan_execution_invalidation(
         execution=execution,

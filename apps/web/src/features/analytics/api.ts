@@ -2,11 +2,22 @@ import { apiClient, withAuthRetry } from '@/api/client'
 import type { components } from '@/api/generated/types'
 import { parseStandardApiError } from '@/lib/api-errors'
 
+import type { DashboardPeriodDays } from './lib/dashboard-url-state'
 import type { AnalyticsUrlState } from './lib/analytics-url-state'
 
 export type AnalyticsDashboardResponse =
   components['schemas']['AnalyticsDashboardResponse']
-export type AnalyticsKPIResult = components['schemas']['AnalyticsKPIResult']
+export type AnalyticsDashboardMetricComparison =
+  components['schemas']['AnalyticsDashboardMetricComparison']
+export type AnalyticsDelayStats = components['schemas']['AnalyticsDelayStats']
+export type AnalyticsContributorItem =
+  components['schemas']['AnalyticsContributorItem']
+export type AnalyticsNamedCountItem =
+  components['schemas']['AnalyticsNamedCountItem']
+export type AnalyticsNewPatternItem =
+  components['schemas']['AnalyticsNewPatternItem']
+export type AnalyticsRecurringPatternItem =
+  components['schemas']['AnalyticsRecurringPatternItem']
 export type AnalyticsMetricComparison =
   components['schemas']['AnalyticsMetricComparison']
 export type AnalyticsPatternListResponse =
@@ -44,14 +55,16 @@ export type AnalyticsPatternSplitToNewRequest =
 
 export const analyticsQueryKeys = {
   all: ['analytics'] as const,
-  dashboard: (state: AnalyticsUrlState) =>
+  dashboard: (options: {
+    periodDays: DashboardPeriodDays
+    establishmentId: string | null
+  }) =>
     [
       'analytics',
       'dashboard',
       {
-        periodStart: state.periodStart,
-        periodEnd: state.periodEnd,
-        organizationId: state.organizationId,
+        periodDays: options.periodDays,
+        establishmentId: options.establishmentId,
       },
     ] as const,
   patterns: (state: AnalyticsUrlState, pageSize?: number) =>
@@ -156,11 +169,13 @@ function assertAnalyticsData<T>(result: {
   throw parseError(result.response, result.error)
 }
 
-function buildDashboardQuery(state: AnalyticsUrlState) {
+function buildDashboardQuery(options: {
+  periodDays: DashboardPeriodDays
+  establishmentId: string | null
+}) {
   return {
-    period_start: state.periodStart,
-    period_end: state.periodEnd,
-    ...(state.organizationId ? { organization_id: state.organizationId } : {}),
+    period_days: options.periodDays,
+    ...(options.establishmentId ? { establishment_id: options.establishmentId } : {}),
   }
 }
 
@@ -233,14 +248,15 @@ function buildGovernanceTargetsQuery(options: {
   }
 }
 
-export async function fetchAnalyticsDashboard(
-  state: AnalyticsUrlState,
-): Promise<AnalyticsDashboardResponse> {
+export async function fetchAnalyticsDashboard(options: {
+  periodDays: DashboardPeriodDays
+  establishmentId: string | null
+}): Promise<AnalyticsDashboardResponse> {
   const result = await withAuthRetry(
     (accessToken) =>
       apiClient.GET('/api/v1/analytics/dashboard/', {
         params: {
-          query: buildDashboardQuery(state),
+          query: buildDashboardQuery(options),
         },
         headers: getAuthHeaders(accessToken),
       }),

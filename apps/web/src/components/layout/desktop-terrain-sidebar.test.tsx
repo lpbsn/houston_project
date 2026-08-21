@@ -53,10 +53,10 @@ afterEach(() => {
 })
 
 describe('DesktopTerrainSidebar', () => {
-  it('renders Nouvelle observation once as the persistent primary action', () => {
+  it('renders scoped Cross and establishment sections for managers', () => {
     render(
       <DesktopTerrainSidebar
-        activePath="/reporting"
+        activePath="/cross"
         bootstrap={bootstrap([membership({ role: 'manager' })])}
         navigate={vi.fn()}
         showChat={true}
@@ -64,36 +64,31 @@ describe('DesktopTerrainSidebar', () => {
     )
 
     const sidebar = screen.getByLabelText('Navigation principale')
-    const primaryAction = within(sidebar).getByRole('link', { name: 'Nouvelle observation' })
-    const sections = within(sidebar).getByRole('navigation', { name: 'Sections' })
-
-    expect(primaryAction.getAttribute('href')).toBe('/reporting')
-    expect(primaryAction.getAttribute('aria-current')).toBe('page')
-    expect(within(sidebar).getAllByRole('link', { name: 'Nouvelle observation' })).toHaveLength(1)
-    expect(within(sections).queryByRole('link', { name: 'Nouvelle observation' })).toBeNull()
+    expect(within(sidebar).getByText('Spore Analytics')).toBeTruthy()
+    expect(within(sidebar).getByText('Cross-établissement')).toBeTruthy()
+    expect(within(sidebar).getByRole('link', { name: 'Dashboard' })).toBeTruthy()
+    expect(within(sidebar).getByText('Spore Paris')).toBeTruthy()
   })
 
-  it('navigates to reporting without appending establishment context', () => {
+  it('navigates to the Cross observations feed', () => {
     const navigate = vi.fn()
-
     render(
       <DesktopTerrainSidebar
-        activePath="/analytics"
-        bootstrap={bootstrap([membership({ role: 'manager' })])}
+        activePath="/cross"
+        bootstrap={bootstrap([membership({ role: 'manager' })] )}
         navigate={navigate}
         showChat={false}
       />,
     )
 
-    fireEvent.click(screen.getByRole('link', { name: 'Nouvelle observation' }))
-
-    expect(navigate).toHaveBeenCalledWith('/reporting')
+    fireEvent.click(screen.getByRole('link', { name: 'Observations' }))
+    expect(navigate).toHaveBeenCalledWith('/cross/signals')
   })
 
-  it('keeps Analytics hidden for Staff-only users without affecting the reporting action', () => {
+  it('hides Cross for Staff-only users', () => {
     render(
       <DesktopTerrainSidebar
-        activePath="/general"
+        activePath="/e/est-1/signals"
         bootstrap={bootstrap([membership({ role: 'staff' })])}
         navigate={vi.fn()}
         showChat={true}
@@ -101,15 +96,15 @@ describe('DesktopTerrainSidebar', () => {
     )
 
     const sidebar = screen.getByLabelText('Navigation principale')
-    expect(within(sidebar).getByRole('link', { name: 'Nouvelle observation' })).toBeTruthy()
-    expect(within(sidebar).queryByRole('link', { name: 'Analyse' })).toBeNull()
-    expect(within(sidebar).getByRole('link', { name: 'Chat' })).toBeTruthy()
+    expect(within(sidebar).queryByText('Cross-établissement')).toBeNull()
+    expect(within(sidebar).queryByRole('link', { name: 'Dashboard' })).toBeNull()
+    expect(within(sidebar).getByRole('link', { name: 'Observations' })).toBeTruthy()
   })
 
   it('shows French role labels in the footer context line', () => {
     render(
       <DesktopTerrainSidebar
-        activePath="/general"
+        activePath="/cross"
         bootstrap={bootstrap([membership({ role: 'owner' })])}
         navigate={vi.fn()}
         showChat={false}

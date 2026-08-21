@@ -572,6 +572,8 @@ class ActionPlanExecutionDetailSerializer(serializers.Serializer):
     task_executions = ActionPlanTaskExecutionSerializer(many=True)
     permission_hints = ActionPlanExecutionPermissionHintsSerializer()
     active_review = ActionPlanExecutionActiveReviewSerializer(allow_null=True)
+    establishment_id = serializers.UUIDField(required=False)
+    establishment_name = serializers.CharField(required=False)
 
 
 class ActionPlanTaskSkipRequestSerializer(serializers.Serializer):
@@ -732,9 +734,11 @@ def serialize_task_execution(
     task_execution: ActionPlanExecutionTask,
     *,
     membership,
+    read_only: bool = False,
 ) -> dict:
     from houston.action_plans.permission_hints import (
         build_action_plan_task_execution_permission_hints,
+        read_only_action_plan_task_execution_permission_hints,
     )
 
     return {
@@ -752,9 +756,13 @@ def serialize_task_execution(
         "completed_at": task_execution.completed_at,
         "skipped_at": task_execution.skipped_at,
         "observation_created_at": task_execution.observation_created_at,
-        "permission_hints": build_action_plan_task_execution_permission_hints(
-            membership=membership,
-            task_execution=task_execution,
+        "permission_hints": (
+            read_only_action_plan_task_execution_permission_hints()
+            if read_only
+            else build_action_plan_task_execution_permission_hints(
+                membership=membership,
+                task_execution=task_execution,
+            )
         ),
     }
 
@@ -777,9 +785,11 @@ def serialize_execution_detail(
     execution: ActionPlanExecution,
     *,
     membership,
+    read_only: bool = False,
 ) -> dict:
     from houston.action_plans.permission_hints import (
         build_action_plan_execution_permission_hints,
+        read_only_action_plan_execution_permission_hints,
     )
 
     def _optional_membership_display(membership_obj) -> str | None:
@@ -845,14 +855,20 @@ def serialize_execution_detail(
         "assignees_by_pole": _serialize_assignees_by_pole(execution),
         "involved_poles": _serialize_involved_poles(execution),
         "task_executions": [
-            serialize_task_execution(task, membership=membership)
+            serialize_task_execution(task, membership=membership, read_only=read_only)
             for task in execution.task_executions.all()
         ],
-        "permission_hints": build_action_plan_execution_permission_hints(
-            membership=membership,
-            execution=execution,
+        "permission_hints": (
+            read_only_action_plan_execution_permission_hints()
+            if read_only
+            else build_action_plan_execution_permission_hints(
+                membership=membership,
+                execution=execution,
+            )
         ),
         "active_review": _serialize_active_review(execution),
+        "establishment_id": execution.establishment_id,
+        "establishment_name": execution.establishment.name,
     }
 
 

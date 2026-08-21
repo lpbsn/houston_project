@@ -114,6 +114,12 @@ export const LazyActionPlanExecutionEditPage = lazy(() =>
   })),
 )
 
+export const LazyComingSoonPage = lazy(() =>
+  import('@/features/analytics/pages/coming-soon-page').then((module) => ({
+    default: module.ComingSoonPage,
+  })),
+)
+
 export const LazyChatRealtimeProvider = lazy(() =>
   import('@/features/chat/components/chat-realtime-provider').then((module) => ({
     default: module.ChatRealtimeProvider,

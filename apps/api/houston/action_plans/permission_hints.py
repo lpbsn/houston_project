@@ -98,6 +98,27 @@ def build_action_plan_execution_permission_hints(
     }
 
 
+def read_only_action_plan_execution_permission_hints() -> dict[str, bool]:
+    return {
+        "can_mark_done": False,
+        "can_validate": False,
+        "can_reopen": False,
+        "can_cancel": False,
+        "can_update": False,
+        "is_pilot_pole_assignee": False,
+        "can_pin": False,
+    }
+
+
+def read_only_action_plan_task_execution_permission_hints() -> dict[str, bool]:
+    return {
+        "can_mark_done": False,
+        "can_unmark_done": False,
+        "can_skip": False,
+        "can_create_observation": False,
+    }
+
+
 def build_action_plan_task_execution_permission_hints(
     *,
     membership: EstablishmentMembership,

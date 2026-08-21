@@ -14,10 +14,8 @@ def resolve_observation_actor_membership(
     establishment_id: uuid.UUID,
 ) -> EstablishmentMembership | None:
     access_context = get_api_access_context(request)
-    membership = access_context.active_membership
+    membership = access_context.membership_for_establishment(establishment_id)
     if membership is None:
-        return None
-    if membership.establishment_id != establishment_id:
         return None
     if not can_create_observation(membership):
         return None

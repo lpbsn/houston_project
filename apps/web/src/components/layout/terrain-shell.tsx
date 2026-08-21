@@ -1,7 +1,6 @@
 import type { PropsWithChildren, ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
-import type { AppPath } from '@/app/app-routes'
 import { BottomMobileNav } from '@/components/layout/bottom-mobile-nav'
 import { DesktopTerrainSidebar } from '@/components/layout/desktop-terrain-sidebar'
 import { TerrainErrorBoundary } from '@/components/layout/terrain-error-boundary'
@@ -22,7 +21,7 @@ type TerrainShellProps = PropsWithChildren<{
   showBottomNav: boolean
   activeNavPath?: TerrainNavPath
   bootstrap?: BootstrapResponse | null
-  desktopActivePath?: AppPath
+  desktopActivePath?: string
   mainScroll?: TerrainMainScroll
   navigate: (pathname: string, options?: { replace?: boolean }) => void
   showChatNav?: boolean

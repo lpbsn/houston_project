@@ -405,6 +405,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cross/action-plan-execution-feed/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_cross_action_plan_execution_feed_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cross/action-plan-executions/{execution_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_cross_action_plan_execution_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cross/signal-feed/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_cross_signal_feed_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cross/signals/{signal_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_cross_signal_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/": {
         parameters: {
             query?: never;
@@ -2503,6 +2567,9 @@ export interface components {
             task_executions: components["schemas"]["ActionPlanTaskExecution"][];
             permission_hints: components["schemas"]["ActionPlanExecutionPermissionHints"];
             active_review: components["schemas"]["ActionPlanExecutionActiveReview"] | null;
+            /** Format: uuid */
+            establishment_id?: string;
+            establishment_name?: string;
         };
         ActionPlanExecutionFeedAssignee: {
             /** Format: uuid */
@@ -2540,6 +2607,9 @@ export interface components {
             created_at: string;
             is_pinned: boolean;
             permission_hints: components["schemas"]["ActionPlanExecutionPermissionHints"];
+            /** Format: uuid */
+            establishment_id?: string;
+            establishment_name?: string;
         };
         ActionPlanExecutionFeedItemWrapper: {
             item_type: string;
@@ -2874,39 +2944,91 @@ export interface components {
             active: boolean;
             is_generic: boolean;
         };
-        AnalyticsBusinessAssignmentCoverage: {
-            total_count: number;
-            with_pattern_count: number;
-            without_pattern_count: number;
+        AnalyticsAgingBucket: {
+            key: string;
+            label: string;
+            count: number;
             /** Format: double */
-            coverage_rate: number | null;
+            share: number | null;
+        };
+        AnalyticsContributorItem: {
+            /** Format: uuid */
+            user_id: string;
+            name: string;
+            pts: number;
+            roles: string[];
+            poles: string[];
+        };
+        AnalyticsDashboardMetricComparison: {
+            /** Format: double */
+            current_value: number | null;
+            /** Format: double */
+            previous_value: number | null;
+            /** Format: double */
+            absolute_delta: number | null;
+            /** Format: double */
+            relative_change: number | null;
+            relative_change_status: string;
+            coverage: components["schemas"]["CoverageEnum"];
         };
         AnalyticsDashboardResponse: {
+            period_days: number;
             current_period: components["schemas"]["AnalyticsPeriod"];
             previous_period: components["schemas"]["AnalyticsPeriod"];
-            current_kpis: components["schemas"]["AnalyticsKPIResult"];
-            previous_kpis: components["schemas"]["AnalyticsKPIResult"];
-            signals_analyzed_count: components["schemas"]["AnalyticsMetricComparison"];
-            operational_patterns_count: components["schemas"]["AnalyticsMetricComparison"];
-            actionable_signals_count: components["schemas"]["AnalyticsMetricComparison"];
-            median_resolution_seconds: components["schemas"]["AnalyticsMetricComparison"];
-            recurring_patterns_count: components["schemas"]["AnalyticsMetricComparison"];
-            recurrence_status: string;
+            /** Format: date-time */
+            history_reliable_from: string;
+            scope_type: components["schemas"]["AnalyticsDashboardResponseScopeTypeEnum"];
+            /** Format: uuid */
+            establishment_id: string | null;
+            establishment_ids: string[];
+            recurring_patterns: components["schemas"]["AnalyticsRecurringPatternItem"][];
+            new_patterns: components["schemas"]["AnalyticsNewPatternItem"][];
+            new_patterns_preview_limit: number;
+            contributors: components["schemas"]["AnalyticsContributorItem"][];
+            observation_delay_canceled: components["schemas"]["AnalyticsDelayStats"];
+            observation_delay_resolved: components["schemas"]["AnalyticsDelayStats"];
+            observation_delay_transformed: components["schemas"]["AnalyticsDelayStats"];
+            operational_resolution_rate: components["schemas"]["AnalyticsDashboardMetricComparison"];
+            closure_resolved_share: components["schemas"]["AnalyticsDashboardMetricComparison"];
+            reopenings: components["schemas"]["AnalyticsDashboardMetricComparison"];
+            open_observation_count: number;
+            aging_buckets: components["schemas"]["AnalyticsAgingBucket"][];
+            aging_over_15d_share: components["schemas"]["AnalyticsDashboardMetricComparison"];
+            plan_delay_canceled: components["schemas"]["AnalyticsDelayStats"];
+            plan_delay_resolved: components["schemas"]["AnalyticsDelayStats"];
+            plan_validation: components["schemas"]["AnalyticsDelayStats"];
+            plan_deadlines: components["schemas"]["AnalyticsDeadlineShare"];
+            zones: components["schemas"]["AnalyticsNamedCountItem"][];
+            zones_preview_limit: number;
+            poles: components["schemas"]["AnalyticsNamedCountItem"][];
         };
-        AnalyticsKPIResult: {
-            analytics_signal_population_count: number;
-            signals_analyzed_count: number;
-            operational_patterns_count: number;
-            actionable_signals_count: number;
+        /**
+         * @description * `cross` - cross
+         *     * `establishment` - establishment
+         * @enum {string}
+         */
+        AnalyticsDashboardResponseScopeTypeEnum: "cross" | "establishment";
+        AnalyticsDeadlineShare: {
             /** Format: double */
-            median_resolution_seconds: number | null;
-            resolution_time_signal_count: number;
-            invalid_resolution_duration_count: number;
-            business_assignment_coverage: components["schemas"]["AnalyticsBusinessAssignmentCoverage"];
-            technical_classification_state: components["schemas"]["AnalyticsTechnicalClassificationState"];
-            recurring_patterns_count: number;
-            recurrence_window: components["schemas"]["AnalyticsRecurrenceWindow"];
-            recurrence_status: string;
+            early: number | null;
+            /** Format: double */
+            on_time: number | null;
+            /** Format: double */
+            late: number | null;
+            n: number;
+            early_comparison: components["schemas"]["AnalyticsDashboardMetricComparison"];
+            on_time_comparison: components["schemas"]["AnalyticsDashboardMetricComparison"];
+            late_comparison: components["schemas"]["AnalyticsDashboardMetricComparison"];
+        };
+        AnalyticsDelayStats: {
+            /** Format: double */
+            median_seconds: number | null;
+            /** Format: double */
+            mean_seconds: number | null;
+            /** Format: double */
+            p90_seconds: number | null;
+            n: number;
+            comparison: components["schemas"]["AnalyticsDashboardMetricComparison"];
         };
         AnalyticsMetricComparison: {
             /** Format: double */
@@ -2918,6 +3040,27 @@ export interface components {
             /** Format: double */
             relative_change: number | null;
             relative_change_status: string;
+        };
+        AnalyticsNamedCountItem: {
+            id: string;
+            name: string;
+            count: number;
+            /** Format: uuid */
+            establishment_id: string | null;
+            establishment_name: string | null;
+            comparison: components["schemas"]["AnalyticsDashboardMetricComparison"];
+        };
+        AnalyticsNewPatternItem: {
+            /** Format: uuid */
+            pattern_id: string;
+            name: string;
+            /** Format: date-time */
+            first_seen_at: string;
+            observation_count: number;
+            establishment_count: number | null;
+            /** Format: uuid */
+            establishment_id: string | null;
+            establishment_name: string | null;
         };
         AnalyticsOwnerGovernancePatternRef: {
             /** Format: uuid */
@@ -3142,6 +3285,13 @@ export interface components {
             /** Format: date-time */
             window_end: string;
         };
+        AnalyticsRecurringPatternItem: {
+            /** Format: uuid */
+            pattern_id: string;
+            name: string;
+            signal_count: number;
+            comparison: components["schemas"]["AnalyticsDashboardMetricComparison"];
+        };
         AnalyticsSignalBusinessUnitRef: {
             /** Format: uuid */
             id: string;
@@ -3151,14 +3301,6 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
-        };
-        AnalyticsTechnicalClassificationState: {
-            total_count: number;
-            technical_state_breakdown: {
-                [key: string]: number;
-            };
-            technical_terminal_success_count: number;
-            technical_pending_or_error_count: number;
         };
         ApiErrorResponse: {
             code: string;
@@ -3384,6 +3526,13 @@ export interface components {
             can_reply: boolean;
             can_resolve: boolean;
         };
+        /**
+         * @description * `complete` - complete
+         *     * `partial` - partial
+         *     * `not_comparable` - not_comparable
+         * @enum {string}
+         */
+        CoverageEnum: "complete" | "partial" | "not_comparable";
         CsrfResponse: {
             detail: string;
             csrf_token: string;
@@ -3594,7 +3743,7 @@ export interface components {
          */
         EstablishmentMembershipRoleEnum: "owner" | "director" | "manager" | "staff";
         EstablishmentMembershipScopeItem: {
-            scope_type: components["schemas"]["ScopeTypeEnum"];
+            scope_type: components["schemas"]["ScopeTypeB92Enum"];
             /** Format: uuid */
             scope_id: string;
             scope_label: string;
@@ -3603,7 +3752,7 @@ export interface components {
             business_unit_count: number;
         };
         EstablishmentMembershipScopeWriteItem: {
-            scope_type: components["schemas"]["ScopeTypeEnum"];
+            scope_type: components["schemas"]["ScopeTypeB92Enum"];
             /** Format: uuid */
             scope_id: string;
         };
@@ -4420,7 +4569,7 @@ export interface components {
          * @description * `business_unit` - business_unit
          * @enum {string}
          */
-        ScopeTypeEnum: "business_unit";
+        ScopeTypeB92Enum: "business_unit";
         ScopedUserSearchResult: {
             /** Format: uuid */
             id: string;
@@ -4464,6 +4613,9 @@ export interface components {
             aggregation_count: number;
             permission_hints: components["schemas"]["PermissionHints"];
             resolution_request: components["schemas"]["SignalResolutionRequest"] | null;
+            /** Format: uuid */
+            establishment_id?: string;
+            establishment_name?: string;
             structured_summary: string;
             issue_focus: string;
             source_context: components["schemas"]["SourceContext"];
@@ -4530,6 +4682,9 @@ export interface components {
             aggregation_count: number;
             permission_hints: components["schemas"]["PermissionHints"];
             resolution_request: components["schemas"]["SignalResolutionRequest"] | null;
+            /** Format: uuid */
+            establishment_id?: string;
+            establishment_name?: string;
         };
         SignalFeedResponse: {
             items: components["schemas"]["SignalFeedItem"][];
@@ -4596,6 +4751,9 @@ export interface components {
             aggregation_count: number;
             permission_hints: components["schemas"]["PermissionHints"];
             resolution_request: components["schemas"]["SignalResolutionRequest"] | null;
+            /** Format: uuid */
+            establishment_id?: string;
+            establishment_name?: string;
             structured_summary: string;
             issue_focus: string;
             source_context: components["schemas"]["SourceContext"];
@@ -4749,11 +4907,10 @@ export interface operations {
     };
     v1_analytics_dashboard_retrieve: {
         parameters: {
-            query: {
+            query?: {
                 establishment_id?: string;
-                organization_id?: string;
-                period_end: string;
-                period_start: string;
+                /** @description Sliding window length in days. Default 7. */
+                period_days?: 15 | 3 | 30 | 7 | 90;
             };
             header?: never;
             path?: never;
@@ -5889,6 +6046,194 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CatalogBusinessUnitSuggestion"][];
+                };
+            };
+        };
+    };
+    v1_cross_action_plan_execution_feed_retrieve: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                establishment_id?: string;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPlanExecutionFeedResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_cross_action_plan_execution_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                execution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPlanExecutionDetail"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_cross_signal_feed_retrieve: {
+        parameters: {
+            query?: {
+                activity_subject_ids?: string;
+                business_unit_ids?: string;
+                cursor?: string;
+                establishment_id?: string;
+                needs_qualification?: boolean;
+                page_size?: number;
+                statuses?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalFeedResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_cross_signal_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                signal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalDetail"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };

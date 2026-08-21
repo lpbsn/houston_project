@@ -1,4 +1,9 @@
-import type { AppPath, AppRoute } from '@/app/app-routes'
+import type { AppRoute } from '@/app/app-routes'
+import {
+  serializeScopedTerrainPath,
+  type ScopedTerrainPage,
+  type TerrainScope,
+} from '@/app/scoped-terrain'
 
 export type { AppRoute } from '@/app/app-routes'
 
@@ -22,7 +27,7 @@ export type TerrainRouteConfig = {
   backPath?: string
   showBottomNav: boolean
   activeNavPath?: TerrainNavPath
-  desktopActivePath?: AppPath
+  desktopActivePath?: string
   mainScroll?: TerrainMainScroll
   showTopbarBottomBorder?: boolean
   hideTopbar?: boolean
@@ -54,6 +59,7 @@ const PROTECTED_STATIC_PATHS = new Set<string>([
 ])
 
 const OPERATIONAL_ROUTE_KINDS = new Set<AppRoute['kind']>([
+  'scoped-terrain',
   'signal-detail',
   'signal-action-create',
   'action-plan-create',
@@ -114,6 +120,10 @@ export function requiresActiveMembership(route: AppRoute): boolean {
     return false
   }
 
+  if (route.kind === 'scoped-terrain') {
+    return true
+  }
+
   if (
     route.kind === 'signal-detail' ||
     route.kind === 'signal-action-create' ||
@@ -137,6 +147,7 @@ export function usesTerrainShell(route: AppRoute): boolean {
   }
 
   if (
+    route.kind === 'scoped-terrain' ||
     route.kind === 'signal-detail' ||
     route.kind === 'signal-action-create' ||
     route.kind === 'action-plan-create' ||
@@ -174,14 +185,58 @@ export function usesTerrainShell(route: AppRoute): boolean {
   return false
 }
 
+function scopedPageTitle(page: string): string | undefined {
+  switch (page) {
+    case 'dashboard':
+      return 'Dashboard'
+    case 'reporting':
+      return 'Nouvelle observation'
+    case 'signals':
+      return 'Observations'
+    case 'execution':
+      return 'Exécution'
+    case 'chat':
+      return 'Discussions'
+    case 'general':
+      return 'Général'
+    case 'settings':
+      return 'Paramètres'
+    default:
+      return undefined
+  }
+}
+
+function scopedHubConfig(
+  scope: TerrainScope,
+  page: ScopedTerrainPage,
+): TerrainRouteConfig {
+  const isDashboard = page === 'dashboard'
+  return {
+    topbarVariant: 'hub',
+    pageTitle: scopedPageTitle(page),
+    showBottomNav: false,
+    desktopActivePath: serializeScopedTerrainPath(scope, page),
+    mainScroll: isDashboard || page === 'general' || page === 'settings' || page === 'reporting'
+      ? 'auto'
+      : 'hidden',
+  }
+}
+
 export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
+  if (route.kind === 'scoped-terrain') {
+    return scopedHubConfig(route.scope, route.page)
+  }
+
   if (route.kind === 'signal-detail') {
+    const backPath = route.scope
+      ? serializeScopedTerrainPath(route.scope, 'signals')
+      : '/signals'
     return {
       topbarVariant: 'detail',
       title: 'Observation',
-      backPath: '/signals',
+      backPath,
       showBottomNav: false,
-      desktopActivePath: '/signals',
+      desktopActivePath: backPath,
       mainScroll: 'auto',
     }
   }
@@ -398,12 +453,15 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
   }
 
   if (route.kind === 'action-plan-execution-detail') {
+    const backPath = route.scope
+      ? serializeScopedTerrainPath(route.scope, 'execution')
+      : '/execution'
     return {
       topbarVariant: 'detail',
       title: "Plan d'action",
-      backPath: '/execution',
+      backPath,
       showBottomNav: false,
-      desktopActivePath: '/execution',
+      desktopActivePath: backPath,
       mainScroll: 'auto',
     }
   }
@@ -440,6 +498,13 @@ export function resolveTerrainTopbarShowBottomBorder(
 
 /** Stable key for terrain page transitions (AnimatePresence). Excludes viewMode and query state. */
 export function getTerrainContentKey(route: AppRoute): string {
+  if (route.kind === 'scoped-terrain') {
+    if (route.scope.type === 'cross') {
+      return `scoped-cross-${route.page}`
+    }
+    return `scoped-est-${route.scope.establishmentId}-${route.page}`
+  }
+
   if (route.kind === 'signal-detail') {
     return `signal-detail-${route.signalId}`
   }

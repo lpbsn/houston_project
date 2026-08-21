@@ -16,7 +16,9 @@ import {
   createSignalResolutionRequest,
   fetchQualifyRoutingOptions,
   fetchSignalDetail,
+  fetchCrossSignalDetail,
   fetchSignalFeed,
+  fetchCrossSignalFeed,
   markSignalInteresting,
   pinSignal,
   qualifySignalRouting,
@@ -43,13 +45,22 @@ export function useSignalFeedQuery(
   establishmentId: string | null,
   viewMode: SignalViewMode,
   filters: SignalFeedFilters,
+  options?: { source?: 'establishment' | 'cross' },
 ) {
+  const source = options?.source ?? 'establishment'
+  const enabled = source === 'cross' || Boolean(establishmentId)
   return useInfiniteQuery({
-    queryKey: establishmentId
-      ? signalsQueryKeys.feed(establishmentId, viewMode, filters)
-      : ['signals', 'feed', 'none'],
+    queryKey:
+      source === 'cross'
+        ? signalsQueryKeys.crossFeed(filters)
+        : establishmentId
+          ? signalsQueryKeys.feed(establishmentId, viewMode, filters)
+          : ['signals', 'feed', 'none'],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) => {
+      if (source === 'cross') {
+        return fetchCrossSignalFeed(filters, { cursor: pageParam })
+      }
       if (!establishmentId) {
         throw new Error('Établissement non sélectionné.')
       }
@@ -63,23 +74,36 @@ export function useSignalFeedQuery(
       }
       return lastPage.next_cursor
     },
-    enabled: Boolean(establishmentId),
+    enabled,
   })
 }
 
-export function useSignalDetailQuery(establishmentId: string | null, signalId: string | null) {
+export function useSignalDetailQuery(
+  establishmentId: string | null,
+  signalId: string | null,
+  options?: { source?: 'establishment' | 'cross' },
+) {
+  const source = options?.source ?? 'establishment'
   return useQuery({
     queryKey:
-      establishmentId && signalId
-        ? signalsQueryKeys.detail(establishmentId, signalId)
-        : ['signals', 'detail', 'none'],
+      source === 'cross' && signalId
+        ? signalsQueryKeys.crossDetail(signalId)
+        : establishmentId && signalId
+          ? signalsQueryKeys.detail(establishmentId, signalId)
+          : ['signals', 'detail', 'none'],
     queryFn: () => {
-      if (!establishmentId || !signalId) {
+      if (!signalId) {
+        throw new Error('Observation introuvable.')
+      }
+      if (source === 'cross') {
+        return fetchCrossSignalDetail(signalId)
+      }
+      if (!establishmentId) {
         throw new Error('Observation introuvable.')
       }
       return fetchSignalDetail(establishmentId, signalId)
     },
-    enabled: Boolean(establishmentId && signalId),
+    enabled: Boolean(signalId) && (source === 'cross' || Boolean(establishmentId)),
   })
 }
 

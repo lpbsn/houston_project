@@ -159,22 +159,16 @@ paths:
           type: string
           format: uuid
       - in: query
-        name: organization_id
+        name: period_days
         schema:
-          type: string
-          format: uuid
-      - in: query
-        name: period_end
-        schema:
-          type: string
-          format: date-time
-        required: true
-      - in: query
-        name: period_start
-        schema:
-          type: string
-          format: date-time
-        required: true
+          type: integer
+          enum:
+          - 15
+          - 3
+          - 30
+          - 7
+          - 90
+        description: Sliding window length in days. Default 7.
       tags:
       - analytics
       security:
@@ -1306,6 +1300,190 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/CatalogBusinessUnitSuggestion'
+          description: ''
+  /api/v1/cross/action-plan-execution-feed/:
+    get:
+      operationId: v1_cross_action_plan_execution_feed_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: establishment_id
+        schema:
+          type: string
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanExecutionFeedResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/cross/action-plan-executions/{execution_id}/:
+    get:
+      operationId: v1_cross_action_plan_execution_retrieve
+      parameters:
+      - in: path
+        name: execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanExecutionDetail'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/cross/signal-feed/:
+    get:
+      operationId: v1_cross_signal_feed_retrieve
+      parameters:
+      - in: query
+        name: activity_subject_ids
+        schema:
+          type: string
+      - in: query
+        name: business_unit_ids
+        schema:
+          type: string
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: establishment_id
+        schema:
+          type: string
+      - in: query
+        name: needs_qualification
+        schema:
+          type: boolean
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: statuses
+        schema:
+          type: string
+      tags:
+      - signals
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalFeedResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/cross/signals/{signal_id}/:
+    get:
+      operationId: v1_cross_signal_retrieve
+      parameters:
+      - in: path
+        name: signal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - signals
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalDetail'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
   /api/v1/establishments/:
     post:
@@ -8440,6 +8618,11 @@ components:
           allOf:
           - $ref: '#/components/schemas/ActionPlanExecutionActiveReview'
           nullable: true
+        establishment_id:
+          type: string
+          format: uuid
+        establishment_name:
+          type: string
       required:
       - action_plan_id
       - active_review
@@ -8558,6 +8741,11 @@ components:
           type: boolean
         permission_hints:
           $ref: '#/components/schemas/ActionPlanExecutionPermissionHints'
+        establishment_id:
+          type: string
+          format: uuid
+        establishment_name:
+          type: string
       required:
       - assignees
       - created_at
@@ -9429,100 +9617,245 @@ components:
       - is_generic
       - label
       - source
-    AnalyticsBusinessAssignmentCoverage:
+    AnalyticsAgingBucket:
       type: object
       properties:
-        total_count:
+        key:
+          type: string
+        label:
+          type: string
+        count:
           type: integer
-        with_pattern_count:
-          type: integer
-        without_pattern_count:
-          type: integer
-        coverage_rate:
+        share:
           type: number
           format: double
           nullable: true
       required:
-      - coverage_rate
-      - total_count
-      - with_pattern_count
-      - without_pattern_count
+      - count
+      - key
+      - label
+      - share
+    AnalyticsContributorItem:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        pts:
+          type: integer
+        roles:
+          type: array
+          items:
+            type: string
+        poles:
+          type: array
+          items:
+            type: string
+      required:
+      - name
+      - poles
+      - pts
+      - roles
+      - user_id
+    AnalyticsDashboardMetricComparison:
+      type: object
+      properties:
+        current_value:
+          type: number
+          format: double
+          nullable: true
+        previous_value:
+          type: number
+          format: double
+          nullable: true
+        absolute_delta:
+          type: number
+          format: double
+          nullable: true
+        relative_change:
+          type: number
+          format: double
+          nullable: true
+        relative_change_status:
+          type: string
+        coverage:
+          $ref: '#/components/schemas/CoverageEnum'
+      required:
+      - absolute_delta
+      - coverage
+      - current_value
+      - previous_value
+      - relative_change
+      - relative_change_status
     AnalyticsDashboardResponse:
       type: object
       properties:
+        period_days:
+          type: integer
         current_period:
           $ref: '#/components/schemas/AnalyticsPeriod'
         previous_period:
           $ref: '#/components/schemas/AnalyticsPeriod'
-        current_kpis:
-          $ref: '#/components/schemas/AnalyticsKPIResult'
-        previous_kpis:
-          $ref: '#/components/schemas/AnalyticsKPIResult'
-        signals_analyzed_count:
-          $ref: '#/components/schemas/AnalyticsMetricComparison'
-        operational_patterns_count:
-          $ref: '#/components/schemas/AnalyticsMetricComparison'
-        actionable_signals_count:
-          $ref: '#/components/schemas/AnalyticsMetricComparison'
-        median_resolution_seconds:
-          $ref: '#/components/schemas/AnalyticsMetricComparison'
-        recurring_patterns_count:
-          $ref: '#/components/schemas/AnalyticsMetricComparison'
-        recurrence_status:
+        history_reliable_from:
           type: string
+          format: date-time
+        scope_type:
+          $ref: '#/components/schemas/AnalyticsDashboardResponseScopeTypeEnum'
+        establishment_id:
+          type: string
+          format: uuid
+          nullable: true
+        establishment_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        recurring_patterns:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsRecurringPatternItem'
+        new_patterns:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsNewPatternItem'
+        new_patterns_preview_limit:
+          type: integer
+        contributors:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsContributorItem'
+        observation_delay_canceled:
+          $ref: '#/components/schemas/AnalyticsDelayStats'
+        observation_delay_resolved:
+          $ref: '#/components/schemas/AnalyticsDelayStats'
+        observation_delay_transformed:
+          $ref: '#/components/schemas/AnalyticsDelayStats'
+        operational_resolution_rate:
+          $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
+        closure_resolved_share:
+          $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
+        reopenings:
+          $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
+        open_observation_count:
+          type: integer
+        aging_buckets:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsAgingBucket'
+        aging_over_15d_share:
+          $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
+        plan_delay_canceled:
+          $ref: '#/components/schemas/AnalyticsDelayStats'
+        plan_delay_resolved:
+          $ref: '#/components/schemas/AnalyticsDelayStats'
+        plan_validation:
+          $ref: '#/components/schemas/AnalyticsDelayStats'
+        plan_deadlines:
+          $ref: '#/components/schemas/AnalyticsDeadlineShare'
+        zones:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsNamedCountItem'
+        zones_preview_limit:
+          type: integer
+        poles:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsNamedCountItem'
       required:
-      - actionable_signals_count
-      - current_kpis
+      - aging_buckets
+      - aging_over_15d_share
+      - closure_resolved_share
+      - contributors
       - current_period
-      - median_resolution_seconds
-      - operational_patterns_count
-      - previous_kpis
+      - establishment_id
+      - establishment_ids
+      - history_reliable_from
+      - new_patterns
+      - new_patterns_preview_limit
+      - observation_delay_canceled
+      - observation_delay_resolved
+      - observation_delay_transformed
+      - open_observation_count
+      - operational_resolution_rate
+      - period_days
+      - plan_deadlines
+      - plan_delay_canceled
+      - plan_delay_resolved
+      - plan_validation
+      - poles
       - previous_period
-      - recurrence_status
-      - recurring_patterns_count
-      - signals_analyzed_count
-    AnalyticsKPIResult:
+      - recurring_patterns
+      - reopenings
+      - scope_type
+      - zones
+      - zones_preview_limit
+    AnalyticsDashboardResponseScopeTypeEnum:
+      enum:
+      - cross
+      - establishment
+      type: string
+      description: |-
+        * `cross` - cross
+        * `establishment` - establishment
+    AnalyticsDeadlineShare:
       type: object
       properties:
-        analytics_signal_population_count:
-          type: integer
-        signals_analyzed_count:
-          type: integer
-        operational_patterns_count:
-          type: integer
-        actionable_signals_count:
-          type: integer
-        median_resolution_seconds:
+        early:
           type: number
           format: double
           nullable: true
-        resolution_time_signal_count:
+        on_time:
+          type: number
+          format: double
+          nullable: true
+        late:
+          type: number
+          format: double
+          nullable: true
+        n:
           type: integer
-        invalid_resolution_duration_count:
-          type: integer
-        business_assignment_coverage:
-          $ref: '#/components/schemas/AnalyticsBusinessAssignmentCoverage'
-        technical_classification_state:
-          $ref: '#/components/schemas/AnalyticsTechnicalClassificationState'
-        recurring_patterns_count:
-          type: integer
-        recurrence_window:
-          $ref: '#/components/schemas/AnalyticsRecurrenceWindow'
-        recurrence_status:
-          type: string
+        early_comparison:
+          $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
+        on_time_comparison:
+          $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
+        late_comparison:
+          $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
       required:
-      - actionable_signals_count
-      - analytics_signal_population_count
-      - business_assignment_coverage
-      - invalid_resolution_duration_count
-      - median_resolution_seconds
-      - operational_patterns_count
-      - recurrence_status
-      - recurrence_window
-      - recurring_patterns_count
-      - resolution_time_signal_count
-      - signals_analyzed_count
-      - technical_classification_state
+      - early
+      - early_comparison
+      - late
+      - late_comparison
+      - n
+      - on_time
+      - on_time_comparison
+    AnalyticsDelayStats:
+      type: object
+      properties:
+        median_seconds:
+          type: number
+          format: double
+          nullable: true
+        mean_seconds:
+          type: number
+          format: double
+          nullable: true
+        p90_seconds:
+          type: number
+          format: double
+          nullable: true
+        n:
+          type: integer
+        comparison:
+          $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
+      required:
+      - comparison
+      - mean_seconds
+      - median_seconds
+      - n
+      - p90_seconds
     AnalyticsMetricComparison:
       type: object
       properties:
@@ -9550,6 +9883,62 @@ components:
       - previous_value
       - relative_change
       - relative_change_status
+    AnalyticsNamedCountItem:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        count:
+          type: integer
+        establishment_id:
+          type: string
+          format: uuid
+          nullable: true
+        establishment_name:
+          type: string
+          nullable: true
+        comparison:
+          $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
+      required:
+      - comparison
+      - count
+      - establishment_id
+      - establishment_name
+      - id
+      - name
+    AnalyticsNewPatternItem:
+      type: object
+      properties:
+        pattern_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        first_seen_at:
+          type: string
+          format: date-time
+        observation_count:
+          type: integer
+        establishment_count:
+          type: integer
+          nullable: true
+        establishment_id:
+          type: string
+          format: uuid
+          nullable: true
+        establishment_name:
+          type: string
+          nullable: true
+      required:
+      - establishment_count
+      - establishment_id
+      - establishment_name
+      - first_seen_at
+      - name
+      - observation_count
+      - pattern_id
     AnalyticsOwnerGovernancePatternRef:
       type: object
       properties:
@@ -10134,6 +10523,23 @@ components:
       required:
       - window_end
       - window_start
+    AnalyticsRecurringPatternItem:
+      type: object
+      properties:
+        pattern_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        signal_count:
+          type: integer
+        comparison:
+          $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
+      required:
+      - comparison
+      - name
+      - pattern_id
+      - signal_count
     AnalyticsSignalBusinessUnitRef:
       type: object
       properties:
@@ -10156,24 +10562,6 @@ components:
       required:
       - id
       - name
-    AnalyticsTechnicalClassificationState:
-      type: object
-      properties:
-        total_count:
-          type: integer
-        technical_state_breakdown:
-          type: object
-          additionalProperties:
-            type: integer
-        technical_terminal_success_count:
-          type: integer
-        technical_pending_or_error_count:
-          type: integer
-      required:
-      - technical_pending_or_error_count
-      - technical_state_breakdown
-      - technical_terminal_success_count
-      - total_count
     ApiErrorResponse:
       type: object
       properties:
@@ -10746,6 +11134,16 @@ components:
       required:
       - can_reply
       - can_resolve
+    CoverageEnum:
+      enum:
+      - complete
+      - partial
+      - not_comparable
+      type: string
+      description: |-
+        * `complete` - complete
+        * `partial` - partial
+        * `not_comparable` - not_comparable
     CsrfResponse:
       type: object
       properties:
@@ -11285,7 +11683,7 @@ components:
       type: object
       properties:
         scope_type:
-          $ref: '#/components/schemas/ScopeTypeEnum'
+          $ref: '#/components/schemas/ScopeTypeB92Enum'
         scope_id:
           type: string
           format: uuid
@@ -11306,7 +11704,7 @@ components:
       type: object
       properties:
         scope_type:
-          $ref: '#/components/schemas/ScopeTypeEnum'
+          $ref: '#/components/schemas/ScopeTypeB92Enum'
         scope_id:
           type: string
           format: uuid
@@ -13242,7 +13640,7 @@ components:
       required:
       - activity_description
       - optional_units
-    ScopeTypeEnum:
+    ScopeTypeB92Enum:
       enum:
       - business_unit
       type: string
@@ -13350,6 +13748,11 @@ components:
           allOf:
           - $ref: '#/components/schemas/SignalResolutionRequest'
           nullable: true
+        establishment_id:
+          type: string
+          format: uuid
+        establishment_name:
+          type: string
         structured_summary:
           type: string
         issue_focus:
@@ -13530,6 +13933,11 @@ components:
           allOf:
           - $ref: '#/components/schemas/SignalResolutionRequest'
           nullable: true
+        establishment_id:
+          type: string
+          format: uuid
+        establishment_name:
+          type: string
       required:
       - aggregation_count
       - created_at
@@ -13695,6 +14103,11 @@ components:
           allOf:
           - $ref: '#/components/schemas/SignalResolutionRequest'
           nullable: true
+        establishment_id:
+          type: string
+          format: uuid
+        establishment_name:
+          type: string
         structured_summary:
           type: string
         issue_focus:

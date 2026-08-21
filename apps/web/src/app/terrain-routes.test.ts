@@ -16,6 +16,19 @@ describe('usesTerrainShell', () => {
     }
   })
 
+  it('returns true for scoped desktop Cross and establishment hubs', () => {
+    expect(
+      usesTerrainShell({ kind: 'scoped-terrain', scope: { type: 'cross' }, page: 'dashboard' }),
+    ).toBe(true)
+    expect(
+      usesTerrainShell({
+        kind: 'scoped-terrain',
+        scope: { type: 'establishment', establishmentId: '11111111-1111-4111-8111-111111111111' },
+        page: 'signals',
+      }),
+    ).toBe(true)
+  })
+
   it('returns true for signal detail', () => {
     expect(usesTerrainShell({ kind: 'signal-detail', signalId: 'abc' })).toBe(true)
   })
@@ -231,6 +244,22 @@ describe('getTerrainRouteConfig', () => {
       desktopActivePath: '/execution',
       mainScroll: 'auto',
       hideTopbar: true,
+    })
+  })
+
+  it('configures scoped Cross dashboard without mobile bottom nav', () => {
+    expect(
+      getTerrainRouteConfig({
+        kind: 'scoped-terrain',
+        scope: { type: 'cross' },
+        page: 'dashboard',
+      }),
+    ).toEqual({
+      topbarVariant: 'hub',
+      pageTitle: 'Dashboard',
+      showBottomNav: false,
+      desktopActivePath: '/cross',
+      mainScroll: 'auto',
     })
   })
 

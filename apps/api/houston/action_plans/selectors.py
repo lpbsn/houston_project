@@ -88,6 +88,7 @@ _EXECUTION_DETAIL_SELECT_RELATED = (
     "started_by_membership__user",
     "reactivated_by_membership__user",
     "action_plan",
+    "establishment",
 )
 _EXECUTION_ASSIGNEE_PREFETCH = Prefetch(
     "assignees",
@@ -214,6 +215,31 @@ def get_action_plan_execution_for_detail(
     return execution
 
 
+def get_cross_action_plan_execution_for_detail(
+    *,
+    memberships: list[EstablishmentMembership],
+    execution_id: uuid.UUID,
+) -> tuple[ActionPlanExecution | None, EstablishmentMembership | None]:
+    by_establishment = {
+        membership.establishment_id: membership for membership in memberships
+    }
+    stub = (
+        ActionPlanExecution.objects.filter(
+            id=execution_id,
+            establishment_id__in=by_establishment,
+        )
+        .only("id", "establishment_id")
+        .first()
+    )
+    if stub is None:
+        return None, None
+    membership = by_establishment[stub.establishment_id]
+    return get_action_plan_execution_for_detail(
+        membership=membership,
+        execution_id=execution_id,
+    ), membership
+
+
 def linked_action_plan_executions_for_signal_detail(
     *,
     membership: EstablishmentMembership,
@@ -325,6 +351,7 @@ _EXECUTION_FEED_SELECT_RELATED = (
     "source_signal__activity_subject",
     "source_signal__activity_subject__catalog_activity_subject",
     "created_by__user",
+    "establishment",
 )
 _EXECUTION_FEED_TASK_PREFETCH = Prefetch(
     "task_executions",

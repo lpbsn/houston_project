@@ -30,9 +30,8 @@ from houston.analytics.api.serializers import (
     AnalyticsPatternSplitToExistingRequestSerializer,
     AnalyticsPatternSplitToNewRequestSerializer,
 )
-from houston.analytics.comparisons import get_analytics_kpi_comparison
+from houston.analytics.dashboard import DEFAULT_DASHBOARD_PERIOD_DAYS, get_analytics_dashboard
 from houston.analytics.exceptions import AnalyticsValidationError
-from houston.analytics.kpis import AnalyticsKPIResult
 from houston.analytics.pattern_detail import get_analytics_pattern_detail
 from houston.analytics.pattern_list import (
     DEFAULT_PATTERN_LIST_PAGE_SIZE,
@@ -65,6 +64,7 @@ from houston.analytics.services import (
 from houston.establishments.access import get_api_access_context
 from houston.establishments.permissions import HasActiveMembership
 
+ANALYTICS_READ_FORBIDDEN_CODES = frozenset({"analytics_scope_forbidden"})
 ANALYTICS_READ_NOT_FOUND_CODES = frozenset({"analytics_pattern_not_found"})
 ANALYTICS_READ_BAD_REQUEST_CODES = frozenset(
     {
@@ -160,6 +160,11 @@ class AnalyticsOwnerGovernanceAPIView(APIView):
 
 
 def _analytics_error_response(exc: AnalyticsValidationError) -> Response:
+    if exc.code in ANALYTICS_READ_FORBIDDEN_CODES:
+        return Response(
+            {"code": exc.code, "detail": str(exc) or "Permission denied."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
     if exc.code in ANALYTICS_READ_NOT_FOUND_CODES:
         return Response(
             {"code": exc.code, "detail": str(exc) or "Not found."},
@@ -382,15 +387,21 @@ def _dataclass_payload(value: Any) -> Any:
     return value
 
 
-def _serialize_kpis(kpis: AnalyticsKPIResult) -> dict:
-    return _dataclass_payload(kpis)
-
-
 def _serialize_dashboard(result) -> dict:
-    payload = _dataclass_payload(result)
-    payload["current_kpis"] = _serialize_kpis(result.current_kpis)
-    payload["previous_kpis"] = _serialize_kpis(result.previous_kpis)
-    return payload
+    return _dataclass_payload(result)
+
+
+def _parse_period_days(query_params) -> int:
+    raw_value = query_params.get("period_days")
+    if raw_value in (None, ""):
+        return DEFAULT_DASHBOARD_PERIOD_DAYS
+    try:
+        return int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise AnalyticsValidationError(
+            "period_days must be one of 3, 7, 15, 30, 90.",
+            code="analytics_period_invalid",
+        ) from exc
 
 
 def _serialize_owner_governance(result) -> dict:
@@ -425,6 +436,17 @@ PERIOD_SCOPE_PARAMETERS = [
     OpenApiParameter(name="establishment_id", required=False, type=OpenApiTypes.UUID),
 ]
 
+DASHBOARD_PARAMETERS = [
+    OpenApiParameter(
+        name="period_days",
+        required=False,
+        type=int,
+        enum=[3, 7, 15, 30, 90],
+        description="Sliding window length in days. Default 7.",
+    ),
+    OpenApiParameter(name="establishment_id", required=False, type=OpenApiTypes.UUID),
+]
+
 PATTERN_LIST_FILTER_PARAMETERS = [
     OpenApiParameter(name="establishment_ids", required=False, type=str),
     OpenApiParameter(name="q", required=False, type=str),
@@ -452,7 +474,7 @@ class AnalyticsDashboardView(AnalyticsAPIView):
     @extend_schema(
         tags=["analytics"],
         operation_id="v1_analytics_dashboard_retrieve",
-        parameters=PERIOD_SCOPE_PARAMETERS,
+        parameters=DASHBOARD_PARAMETERS,
         responses={
             200: AnalyticsDashboardResponseSerializer,
             400: OpenApiResponse(response=ApiErrorResponseSerializer),
@@ -462,12 +484,10 @@ class AnalyticsDashboardView(AnalyticsAPIView):
     )
     def get(self, request):
         try:
-            period_start, period_end = _parse_period(request.query_params)
-            result = get_analytics_kpi_comparison(
+            result = get_analytics_dashboard(
                 request.user,
-                period_start=period_start,
-                period_end=period_end,
-                **_scope_kwargs(request.query_params),
+                period_days=_parse_period_days(request.query_params),
+                establishment_id=_parse_optional_uuid(request.query_params, "establishment_id"),
             )
         except AnalyticsValidationError as exc:
             return _analytics_error_response(exc)

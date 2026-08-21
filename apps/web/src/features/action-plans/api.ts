@@ -45,10 +45,13 @@ export const actionPlansQueryKeys = {
     ['action-plans', 'detail', establishmentId, actionPlanId] as const,
   executionFeed: (establishmentId: string, viewMode: ActionPlanExecutionFeedViewMode) =>
     ['action-plans', 'action-plan-execution-feed', establishmentId, viewMode] as const,
+  crossExecutionFeed: ['action-plans', 'cross-action-plan-execution-feed'] as const,
   executionUpcoming: (establishmentId: string, viewMode: ActionPlanExecutionFeedViewMode) =>
     ['action-plans', 'action-plan-execution-upcoming', establishmentId, viewMode] as const,
   executionDetail: (establishmentId: string, executionId: string) =>
     ['action-plans', 'execution-detail', establishmentId, executionId] as const,
+  crossExecutionDetail: (executionId: string) =>
+    ['action-plans', 'cross-execution-detail', executionId] as const,
 }
 
 export class ActionPlansApiError extends Error {
@@ -163,6 +166,25 @@ export async function fetchActionPlanExecutionFeed(
           ...establishmentPath(establishmentId),
           query: {
             view_mode: viewMode,
+            ...(options.cursor ? { cursor: options.cursor } : {}),
+            ...(options.pageSize ? { page_size: options.pageSize } : {}),
+          },
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanExecutionFeedResponse>(result)
+}
+
+export async function fetchCrossActionPlanExecutionFeed(
+  options: { cursor?: string; pageSize?: number } = {},
+): Promise<ActionPlanExecutionFeedResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/cross/action-plan-execution-feed/', {
+        params: {
+          query: {
             ...(options.cursor ? { cursor: options.cursor } : {}),
             ...(options.pageSize ? { page_size: options.pageSize } : {}),
           },
@@ -364,6 +386,22 @@ export async function fetchActionPlanExecutionDetail(
           headers: getAuthHeaders(accessToken),
         },
       ),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanExecutionDetail>(result)
+}
+
+export async function fetchCrossActionPlanExecutionDetail(
+  executionId: string,
+): Promise<ActionPlanExecutionDetail> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/cross/action-plan-executions/{execution_id}/', {
+        params: {
+          path: { execution_id: executionId },
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
     { refreshable: true },
   )
   return assertActionPlanData<ActionPlanExecutionDetail>(result)

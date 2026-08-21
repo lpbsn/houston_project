@@ -24,12 +24,16 @@ import { useNetworkStatus } from '@/lib/network-status'
 import { terrain, terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
-export function ReportPage() {
+export function ReportPage({ establishmentId: establishmentIdProp }: { establishmentId?: string | null } = {}) {
   const shouldReduceMotion = useReducedMotion()
   const auth = useAuth()
   const { isOnline } = useNetworkStatus()
-  const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
-  const authorMembershipId = auth.bootstrap?.active_membership?.id ?? null
+  const establishmentId =
+    establishmentIdProp ?? auth.bootstrap?.active_membership?.establishment_id ?? null
+  const authorMembershipId =
+    auth.bootstrap?.memberships.find(
+      (membership) => membership.establishment_id === establishmentId && membership.status === 'active',
+    )?.id ?? auth.bootstrap?.active_membership?.id ?? null
   const { text, photos, setText, addPhoto, removePhoto, clear } =
     useReportingComposeDraft(establishmentId)
 

@@ -14,7 +14,10 @@ from houston.action_plans.constants import (
     TASK_STATUS_PENDING,
 )
 from houston.action_plans.models import ActionPlanExecution
-from houston.action_plans.permission_hints import build_action_plan_execution_permission_hints
+from houston.action_plans.permission_hints import (
+    build_action_plan_execution_permission_hints,
+    read_only_action_plan_execution_permission_hints,
+)
 from houston.action_plans.selectors import action_plan_execution_overdue
 
 FEED_TASK_PREVIEW_LIMIT = 3
@@ -70,6 +73,8 @@ class ActionPlanExecutionFeedItemSerializer(serializers.Serializer):
     created_at = serializers.DateTimeField()
     is_pinned = serializers.BooleanField()
     permission_hints = ActionPlanExecutionPermissionHintsSerializer()
+    establishment_id = serializers.UUIDField(required=False)
+    establishment_name = serializers.CharField(required=False)
 
 
 class ActionPlanExecutionFeedItemWrapperSerializer(serializers.Serializer):
@@ -90,6 +95,7 @@ def serialize_action_plan_execution_feed_item(
     execution: ActionPlanExecution,
     membership,
     is_overdue: bool | None = None,
+    read_only: bool = False,
 ) -> dict:
     overdue = (
         is_overdue if is_overdue is not None else action_plan_execution_overdue(execution=execution)
@@ -137,9 +143,15 @@ def serialize_action_plan_execution_feed_item(
         "last_activity_at": execution.last_activity_at,
         "created_at": execution.created_at,
         "is_pinned": bool(getattr(execution, "is_feed_pinned", False)),
-        "permission_hints": build_action_plan_execution_permission_hints(
-            membership=membership,
-            execution=execution,
-            in_feed=True,
+        "establishment_id": execution.establishment_id,
+        "establishment_name": execution.establishment.name,
+        "permission_hints": (
+            read_only_action_plan_execution_permission_hints()
+            if read_only
+            else build_action_plan_execution_permission_hints(
+                membership=membership,
+                execution=execution,
+                in_feed=True,
+            )
         ),
     }

@@ -198,6 +198,7 @@ def update_action_plan_execution(
     diff = ExecutionUpdateDiff()
     update_fields = ["last_activity_at", "updated_at"]
     now = timezone.now()
+    previous_end_at = execution.end_at
 
     if title is not None:
         normalized_title = _normalize_title(title)
@@ -276,6 +277,17 @@ def update_action_plan_execution(
 
     execution.last_activity_at = now
     execution.save(update_fields=update_fields)
+
+    if diff.end_at_changed:
+        from houston.action_plans.lifecycle_events import record_execution_deadline_changed
+
+        record_execution_deadline_changed(
+            execution=execution,
+            from_end_at=previous_end_at,
+            to_end_at=execution.end_at,
+            occurred_at=now,
+            actor_membership=actor,
+        )
 
     if assignees is not None:
         _apply_assignee_writes(

@@ -20,8 +20,11 @@ export const signalsQueryKeys = {
   all: ['signals'] as const,
   feed: (establishmentId: string, viewMode: SignalViewMode, filters: SignalFeedFilters) =>
     ['signals', 'feed', establishmentId, viewMode, normalizeSignalFeedFilters(filters)] as const,
+  crossFeed: (filters: SignalFeedFilters) =>
+    ['signals', 'cross-feed', normalizeSignalFeedFilters(filters)] as const,
   detail: (establishmentId: string, signalId: string) =>
     ['signals', 'detail', establishmentId, signalId] as const,
+  crossDetail: (signalId: string) => ['signals', 'cross-detail', signalId] as const,
   qualifyRoutingOptions: (establishmentId: string) =>
     ['signals', 'qualify-routing-options', establishmentId] as const,
 }
@@ -124,6 +127,25 @@ export async function fetchSignalFeed(
   return assertSignalData<SignalFeedResponse>(result)
 }
 
+export async function fetchCrossSignalFeed(
+  filters: SignalFeedFilters,
+  options: { cursor?: string; pageSize?: number } = {},
+): Promise<SignalFeedResponse> {
+  const { view_mode: _viewMode, ...query } = buildSignalFeedQuery('personal', filters, options)
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/cross/signal-feed/', {
+        params: {
+          query,
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  return assertSignalData<SignalFeedResponse>(result)
+}
+
 export async function fetchSignalDetail(
   establishmentId: string,
   signalId: string,
@@ -132,6 +154,21 @@ export async function fetchSignalDetail(
     (accessToken) =>
       apiClient.GET('/api/v1/establishments/{establishment_id}/signals/{signal_id}/', {
         params: signalPathParams(establishmentId, signalId),
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  return assertSignalData<SignalDetail>(result)
+}
+
+export async function fetchCrossSignalDetail(signalId: string): Promise<SignalDetail> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/cross/signals/{signal_id}/', {
+        params: {
+          path: { signal_id: signalId },
+        },
         headers: getAuthHeaders(accessToken),
       }),
     { refreshable: true },
