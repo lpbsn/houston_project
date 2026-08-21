@@ -408,6 +408,10 @@ def test_cutover_signal_terminals_skip_missing_timestamps():
     assert terminal.occurred_at == resolved_at
     assert terminal.metadata_safe == {"to_status": Signal.Status.RESOLVED}
     assert event_types(resolved_without_ts) == {SIGNAL_LIFECYCLE_EVENT_HISTORY_BASELINE}
+    assert not SignalLifecycleEvent.objects.filter(
+        signal=resolved_without_ts,
+        event_type=SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+    ).exists()
     canceled_terminal = SignalLifecycleEvent.objects.get(
         signal=canceled,
         event_type=SIGNAL_LIFECYCLE_EVENT_CANCELED,
@@ -434,6 +438,30 @@ def test_cutover_signal_terminals_skip_missing_timestamps():
         == Signal.Status.RESOLVED
     )
     _assert_no_invented_legacy_events()
+
+
+def test_cutover_does_not_invent_canceled_event_from_last_activity_at():
+    establishment = create_establishment()
+    canceled = _create_cutover_signal(
+        establishment,
+        status=Signal.Status.CANCELED,
+        title="Legacy cancel",
+    )
+    last_activity = timezone.now() - timedelta(days=9)
+    Signal.objects.filter(pk=canceled.pk).update(last_activity_at=last_activity)
+    canceled.refresh_from_db()
+
+    apply_analytics_history_cutover()
+
+    assert not SignalLifecycleEvent.objects.filter(
+        signal=canceled,
+        event_type=SIGNAL_LIFECYCLE_EVENT_CANCELED,
+    ).exists()
+    baseline = SignalLifecycleEvent.objects.get(
+        signal=canceled,
+        event_type=SIGNAL_LIFECYCLE_EVENT_HISTORY_BASELINE,
+    )
+    assert baseline.occurred_at != last_activity
 
 
 def test_cutover_execution_terminals_match_current_status_branches():

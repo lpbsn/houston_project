@@ -9653,7 +9653,12 @@ components:
           type: array
           items:
             type: string
+        establishment_names:
+          type: array
+          items:
+            type: string
       required:
+      - establishment_names
       - name
       - poles
       - pts
@@ -9736,6 +9741,14 @@ components:
           $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
         closure_resolved_share:
           $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
+        closure_measured_resolved_count:
+          type: integer
+        closure_measured_canceled_count:
+          type: integer
+        undatable_signal_terminals:
+          $ref: '#/components/schemas/AnalyticsUndatableSignalTerminals'
+        undatable_execution_terminals:
+          $ref: '#/components/schemas/AnalyticsUndatableExecutionTerminals'
         reopenings:
           $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
         open_observation_count:
@@ -9767,6 +9780,8 @@ components:
       required:
       - aging_buckets
       - aging_over_15d_share
+      - closure_measured_canceled_count
+      - closure_measured_resolved_count
       - closure_resolved_share
       - contributors
       - current_period
@@ -9790,6 +9805,8 @@ components:
       - recurring_patterns
       - reopenings
       - scope_type
+      - undatable_execution_terminals
+      - undatable_signal_terminals
       - zones
       - zones_preview_limit
     AnalyticsDashboardResponseScopeTypeEnum:
@@ -9817,6 +9834,12 @@ components:
           nullable: true
         n:
           type: integer
+        early_count:
+          type: integer
+        on_time_count:
+          type: integer
+        late_count:
+          type: integer
         early_comparison:
           $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
         on_time_comparison:
@@ -9826,11 +9849,14 @@ components:
       required:
       - early
       - early_comparison
+      - early_count
       - late
       - late_comparison
+      - late_count
       - n
       - on_time
       - on_time_comparison
+      - on_time_count
     AnalyticsDelayStats:
       type: object
       properties:
@@ -9850,12 +9876,18 @@ components:
           type: integer
         comparison:
           $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
+        undatable_in_scope:
+          type: integer
+        unstarted_in_scope:
+          type: integer
       required:
       - comparison
       - mean_seconds
       - median_seconds
       - n
       - p90_seconds
+      - undatable_in_scope
+      - unstarted_in_scope
     AnalyticsMetricComparison:
       type: object
       properties:
@@ -10562,6 +10594,29 @@ components:
       required:
       - id
       - name
+    AnalyticsUndatableExecutionTerminals:
+      type: object
+      properties:
+        canceled:
+          type: integer
+        done:
+          type: integer
+      required:
+      - canceled
+      - done
+    AnalyticsUndatableSignalTerminals:
+      type: object
+      properties:
+        canceled:
+          type: integer
+        resolved:
+          type: integer
+        archived:
+          type: integer
+      required:
+      - archived
+      - canceled
+      - resolved
     ApiErrorResponse:
       type: object
       properties:

@@ -149,12 +149,23 @@ describe('native system back', () => {
     expect(minimizeApp).toHaveBeenCalledTimes(1)
   })
 
-  it('minimizes on a terrain hub with no back path', async () => {
-    const { history, pressBack } = await configureAndroid(createMemoryHistory('/reporting'))
+  it('minimizes on Dashboard hubs instead of forcing /general', async () => {
+    const { history, pressBack } = await configureAndroid(createMemoryHistory('/cross'))
+    setNativeSystemBackAuthGetter(() => ({ hasOperationalAccess: true }))
 
     pressBack()
 
-    expect(history.getHref()).toBe('/reporting')
+    expect(history.getHref()).toBe('/cross')
+    expect(minimizeApp).toHaveBeenCalledTimes(1)
+  })
+
+  it('minimizes on /analytics when operational access is present', async () => {
+    const { history, pressBack } = await configureAndroid(createMemoryHistory('/analytics'))
+    setNativeSystemBackAuthGetter(() => ({ hasOperationalAccess: true }))
+
+    pressBack()
+
+    expect(history.getHref()).toBe('/analytics')
     expect(minimizeApp).toHaveBeenCalledTimes(1)
   })
 

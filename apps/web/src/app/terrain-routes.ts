@@ -216,7 +216,7 @@ function scopedHubConfig(
   return {
     topbarVariant: 'hub',
     pageTitle: scopedPageTitle(page),
-    showBottomNav: false,
+    showBottomNav: isDashboard,
     desktopActivePath: serializeScopedTerrainPath(scope, page),
     mainScroll: isDashboard || page === 'general' || page === 'settings' || page === 'reporting'
       ? 'auto'
@@ -224,9 +224,7 @@ function scopedHubConfig(
     ...(isDashboard
       ? {
           hideTopbar: true,
-          topbarVariant: 'detail' as const,
-          title: 'Analyse',
-          backPath: '/general',
+          showTopbarBottomBorder: false,
         }
       : {}),
   }
@@ -375,12 +373,13 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
 
   if (route.kind === 'static' && route.path === '/analytics') {
     return {
-      topbarVariant: 'detail',
-      title: 'Analyse',
-      backPath: '/general',
-      showBottomNav: false,
+      topbarVariant: 'hub',
+      pageTitle: 'Dashboard',
+      showBottomNav: true,
       desktopActivePath: '/analytics',
       mainScroll: 'auto',
+      hideTopbar: true,
+      showTopbarBottomBorder: false,
     }
   }
 
@@ -499,6 +498,9 @@ export function resolveTerrainTopbarPlacement(
     return 'all'
   }
   if (route.kind === 'scoped-terrain' && route.page === 'dashboard') {
+    return 'mobile-only'
+  }
+  if (route.kind === 'static' && route.path === '/analytics') {
     return 'mobile-only'
   }
   return 'hidden'

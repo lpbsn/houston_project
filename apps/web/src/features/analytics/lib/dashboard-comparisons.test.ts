@@ -8,11 +8,23 @@ import type {
 import {
   canShowDashboardDelta,
   collectDashboardComparisons,
+  contributorInitials,
   dashboardCoverageBannerMessage,
+  dashboardNewBadgeTone,
+  dashboardPreviousPeriodFooter,
+  DASHBOARD_VS_PREVIOUS_PERIOD,
   emptyObservationDelayMessage,
+  formatContributorEstablishments,
+  formatContributorPoles,
+  formatDashboardDurationDelta,
   formatDashboardHistoryDate,
+  formatCountedNoun,
+  formatLateDeadlineHero,
   formatMeasuredSample,
+  formatNewPatternVolume,
   medianDurationHint,
+  shouldShowDashboardDelayMean,
+  shouldShowDashboardDelayP90,
   worstDashboardCoverage,
 } from '@/features/analytics/lib/dashboard-comparisons'
 
@@ -36,6 +48,8 @@ function delay(coverage: AnalyticsDashboardMetricComparison['coverage'] = 'compl
     p90_seconds: null,
     n: 1,
     comparison: comparison(coverage),
+    undatable_in_scope: 0,
+    unstarted_in_scope: 0,
   }
 }
 
@@ -65,6 +79,10 @@ function dashboard(
     observation_delay_transformed: delay(),
     operational_resolution_rate: comparison(),
     closure_resolved_share: comparison(),
+    closure_measured_resolved_count: 0,
+    closure_measured_canceled_count: 0,
+    undatable_signal_terminals: { canceled: 0, resolved: 0, archived: 0 },
+    undatable_execution_terminals: { canceled: 0, done: 0 },
     reopenings: comparison(),
     open_observation_count: 0,
     aging_buckets: [],
@@ -77,6 +95,9 @@ function dashboard(
       on_time: 0.5,
       late: 0.3,
       n: 10,
+      early_count: 2,
+      on_time_count: 5,
+      late_count: 3,
       early_comparison: comparison(),
       on_time_comparison: comparison(),
       late_comparison: comparison(),
@@ -108,26 +129,40 @@ describe('dashboardCoverageBannerMessage', () => {
       dashboardCoverageBannerMessage({
         coverage: 'complete',
         historyReliableFrom: '2026-01-01T00:00:00.000Z',
+        hasDisplayableDelta: true,
       }),
     ).toBeNull()
   })
 
-  it('dates a partial-history banner from history_reliable_from', () => {
+  it('uses cadrage copy when some deltas remain displayable', () => {
     const date = formatDashboardHistoryDate('2026-01-01T00:00:00.000Z')
     expect(
       dashboardCoverageBannerMessage({
         coverage: 'partial',
         historyReliableFrom: '2026-01-01T00:00:00.000Z',
+        hasDisplayableDelta: true,
       }),
-    ).toBe(`Les évolutions ne portent que sur l’historique fiable, à partir du ${date}.`)
+    ).toBe(
+      `Pas encore assez d’historique pour comparer certaines évolutions. Historique fiable depuis le ${date}.`,
+    )
+    expect(
+      dashboardCoverageBannerMessage({
+        coverage: 'not_comparable',
+        historyReliableFrom: '2026-01-01T00:00:00.000Z',
+        hasDisplayableDelta: true,
+      }),
+    ).toBe(
+      `Pas encore assez d’historique pour comparer certaines évolutions. Historique fiable depuis le ${date}.`,
+    )
   })
 
-  it('uses not_comparable copy without inventing a coverage rule', () => {
+  it('uses previous-period copy when no delta is displayable', () => {
     const date = formatDashboardHistoryDate('2026-03-15T00:00:00.000Z')
     expect(
       dashboardCoverageBannerMessage({
         coverage: 'not_comparable',
         historyReliableFrom: '2026-03-15T00:00:00.000Z',
+        hasDisplayableDelta: false,
       }),
     ).toBe(
       `Pas encore assez d’historique pour comparer à la période précédente. Historique fiable à partir du ${date}.`,
@@ -160,6 +195,25 @@ describe('canShowDashboardDelta', () => {
   })
 })
 
+describe('dashboardPreviousPeriodFooter', () => {
+  it('keeps the footer only when a card has a displayable comparison', () => {
+    expect(dashboardPreviousPeriodFooter([comparison('complete')])).toBe(
+      DASHBOARD_VS_PREVIOUS_PERIOD,
+    )
+    expect(dashboardPreviousPeriodFooter([comparison('partial'), comparison('not_comparable')])).toBe(
+      undefined,
+    )
+  })
+})
+
+describe('dashboardNewBadgeTone', () => {
+  it('keeps Nouveau visually neutral on zones and poles', () => {
+    expect(dashboardNewBadgeTone('neutral')).toBe('neutral')
+    expect(dashboardNewBadgeTone('negative-up')).toBe('positive')
+    expect(dashboardNewBadgeTone('positive-up')).toBe('positive')
+  })
+})
+
 describe('formatMeasuredSample', () => {
   it('pluralizes observations and plans', () => {
     expect(formatMeasuredSample(0)).toBe('0 observations mesurées')
@@ -170,13 +224,84 @@ describe('formatMeasuredSample', () => {
   })
 })
 
+describe('formatNewPatternVolume', () => {
+  it('pluralizes Cross observation and establishment counts', () => {
+    expect(
+      formatNewPatternVolume({ isCross: true, observationCount: 4, establishmentCount: 1 }),
+    ).toBe('4 observations · 1 établissement')
+    expect(
+      formatNewPatternVolume({ isCross: true, observationCount: 1, establishmentCount: 2 }),
+    ).toBe('1 observation · 2 établissements')
+  })
+
+  it('uses detection copy on an establishment dashboard', () => {
+    expect(
+      formatNewPatternVolume({ isCross: false, observationCount: 1, establishmentCount: 1 }),
+    ).toBe('1 observation depuis sa détection')
+    expect(
+      formatNewPatternVolume({ isCross: false, observationCount: 3, establishmentCount: 1 }),
+    ).toBe('3 observations depuis sa détection')
+  })
+})
+
+describe('duration visibility and absolute delta', () => {
+  it('hides mean and P90 until the sample is large enough', () => {
+    expect(shouldShowDashboardDelayMean(1)).toBe(false)
+    expect(shouldShowDashboardDelayMean(2)).toBe(true)
+    expect(shouldShowDashboardDelayP90(9)).toBe(false)
+    expect(shouldShowDashboardDelayP90(10)).toBe(true)
+  })
+
+  it('formats an absolute duration delta without a percent sign', () => {
+    expect(formatDashboardDurationDelta(4 * 86400)).toBe('4 j')
+    expect(formatDashboardDurationDelta(-4 * 86400)).toBe('4 j')
+    expect(formatDashboardDurationDelta(0)).toBe('0 min')
+    expect(formatDashboardDurationDelta(null)).toBeNull()
+  })
+})
+
+describe('deadline and contributor copy', () => {
+  it('prefers a count formulation at low volume', () => {
+    expect(formatLateDeadlineHero({ lateShare: 1, lateCount: 1, n: 1 })).toBe(
+      '1 plan en retard sur 1 mesuré',
+    )
+    expect(formatLateDeadlineHero({ lateShare: 0.22, lateCount: 8, n: 17 })).toContain(
+      'des plans sont en retard',
+    )
+  })
+
+  it('derives initials and pole overflow from payload fields', () => {
+    expect(contributorInitials('Nadia B.')).toBe('NB')
+    expect(contributorInitials('Léa Martin')).toBe('LM')
+    expect(formatContributorPoles([])).toBe('Sans pôle')
+    expect(formatContributorPoles(['Cuisine', 'Bar', 'Salle'])).toBe('Cuisine · +2 pôles')
+    expect(formatContributorEstablishments([])).toBe('')
+    expect(formatContributorEstablishments(['ANBU'])).toBe('ANBU')
+    expect(formatContributorEstablishments(['ANBU', 'AKATSUKI'])).toBe('ANBU · AKATSUKI')
+    expect(formatContributorEstablishments(['ANBU', 'AKATSUKI', 'Konoha'])).toBe(
+      'ANBU · +2 établissements',
+    )
+  })
+})
+
+describe('formatCountedNoun', () => {
+  it('does not render NaN when a count is missing', () => {
+    expect(formatCountedNoun(Number.NaN, 'plan en retard', 'plans en retard')).toBe(
+      '— plans en retard',
+    )
+  })
+})
+
 describe('empty delay copy', () => {
-  it('distinguishes a zero sample from missing history', () => {
+  it('distinguishes a measured empty period from undatable terminal stock', () => {
     expect(emptyObservationDelayMessage('canceled')).toBe(
-      'Aucune observation annulée sur la période',
+      'Aucune annulation mesurée sur la période',
+    )
+    expect(emptyObservationDelayMessage('canceled', 24)).toBe(
+      '24 observations annulées dans ce périmètre, sans date historisée. Elles ne peuvent pas entrer dans cette métrique.',
     )
     expect(emptyObservationDelayMessage('resolved')).toBe(
-      'Aucune observation résolue sur la période',
+      'Aucune résolution mesurée sur la période',
     )
     expect(emptyObservationDelayMessage('transformed')).toBe(
       'Aucune observation mise en plan sur la période',

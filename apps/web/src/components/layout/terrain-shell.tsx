@@ -94,7 +94,7 @@ export function TerrainShell({
             </AnimatePresence>
           )}
         </main>
-        {showBottomNav && activeNavPath ? (
+        {showBottomNav ? (
           <BottomMobileNav
             className="shrink-0 lg:hidden"
             activePath={activeNavPath}

@@ -34,6 +34,8 @@ class AnalyticsDelayStatsSerializer(serializers.Serializer):
     p90_seconds = serializers.FloatField(allow_null=True)
     n = serializers.IntegerField()
     comparison = AnalyticsDashboardMetricComparisonSerializer()
+    undatable_in_scope = serializers.IntegerField()
+    unstarted_in_scope = serializers.IntegerField()
 
 
 class AnalyticsRecurringPatternItemSerializer(serializers.Serializer):
@@ -59,6 +61,7 @@ class AnalyticsContributorItemSerializer(serializers.Serializer):
     pts = serializers.IntegerField()
     roles = serializers.ListField(child=serializers.CharField())
     poles = serializers.ListField(child=serializers.CharField())
+    establishment_names = serializers.ListField(child=serializers.CharField())
 
 
 class AnalyticsAgingBucketSerializer(serializers.Serializer):
@@ -77,11 +80,25 @@ class AnalyticsNamedCountItemSerializer(serializers.Serializer):
     comparison = AnalyticsDashboardMetricComparisonSerializer()
 
 
+class AnalyticsUndatableSignalTerminalsSerializer(serializers.Serializer):
+    canceled = serializers.IntegerField()
+    resolved = serializers.IntegerField()
+    archived = serializers.IntegerField()
+
+
+class AnalyticsUndatableExecutionTerminalsSerializer(serializers.Serializer):
+    canceled = serializers.IntegerField()
+    done = serializers.IntegerField()
+
+
 class AnalyticsDeadlineShareSerializer(serializers.Serializer):
     early = serializers.FloatField(allow_null=True)
     on_time = serializers.FloatField(allow_null=True)
     late = serializers.FloatField(allow_null=True)
     n = serializers.IntegerField()
+    early_count = serializers.IntegerField()
+    on_time_count = serializers.IntegerField()
+    late_count = serializers.IntegerField()
     early_comparison = AnalyticsDashboardMetricComparisonSerializer()
     on_time_comparison = AnalyticsDashboardMetricComparisonSerializer()
     late_comparison = AnalyticsDashboardMetricComparisonSerializer()
@@ -104,6 +121,10 @@ class AnalyticsDashboardResponseSerializer(serializers.Serializer):
     observation_delay_transformed = AnalyticsDelayStatsSerializer()
     operational_resolution_rate = AnalyticsDashboardMetricComparisonSerializer()
     closure_resolved_share = AnalyticsDashboardMetricComparisonSerializer()
+    closure_measured_resolved_count = serializers.IntegerField()
+    closure_measured_canceled_count = serializers.IntegerField()
+    undatable_signal_terminals = AnalyticsUndatableSignalTerminalsSerializer()
+    undatable_execution_terminals = AnalyticsUndatableExecutionTerminalsSerializer()
     reopenings = AnalyticsDashboardMetricComparisonSerializer()
     open_observation_count = serializers.IntegerField()
     aging_buckets = AnalyticsAgingBucketSerializer(many=True)

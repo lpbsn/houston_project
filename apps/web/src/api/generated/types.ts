@@ -2958,6 +2958,7 @@ export interface components {
             pts: number;
             roles: string[];
             poles: string[];
+            establishment_names: string[];
         };
         AnalyticsDashboardMetricComparison: {
             /** Format: double */
@@ -2990,6 +2991,10 @@ export interface components {
             observation_delay_transformed: components["schemas"]["AnalyticsDelayStats"];
             operational_resolution_rate: components["schemas"]["AnalyticsDashboardMetricComparison"];
             closure_resolved_share: components["schemas"]["AnalyticsDashboardMetricComparison"];
+            closure_measured_resolved_count: number;
+            closure_measured_canceled_count: number;
+            undatable_signal_terminals: components["schemas"]["AnalyticsUndatableSignalTerminals"];
+            undatable_execution_terminals: components["schemas"]["AnalyticsUndatableExecutionTerminals"];
             reopenings: components["schemas"]["AnalyticsDashboardMetricComparison"];
             open_observation_count: number;
             aging_buckets: components["schemas"]["AnalyticsAgingBucket"][];
@@ -3016,6 +3021,9 @@ export interface components {
             /** Format: double */
             late: number | null;
             n: number;
+            early_count: number;
+            on_time_count: number;
+            late_count: number;
             early_comparison: components["schemas"]["AnalyticsDashboardMetricComparison"];
             on_time_comparison: components["schemas"]["AnalyticsDashboardMetricComparison"];
             late_comparison: components["schemas"]["AnalyticsDashboardMetricComparison"];
@@ -3029,6 +3037,8 @@ export interface components {
             p90_seconds: number | null;
             n: number;
             comparison: components["schemas"]["AnalyticsDashboardMetricComparison"];
+            undatable_in_scope: number;
+            unstarted_in_scope: number;
         };
         AnalyticsMetricComparison: {
             /** Format: double */
@@ -3301,6 +3311,15 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+        };
+        AnalyticsUndatableExecutionTerminals: {
+            canceled: number;
+            done: number;
+        };
+        AnalyticsUndatableSignalTerminals: {
+            canceled: number;
+            resolved: number;
+            archived: number;
         };
         ApiErrorResponse: {
             code: string;

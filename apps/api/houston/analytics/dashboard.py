@@ -60,6 +60,7 @@ from houston.establishments.models import EstablishmentMembership
 from houston.gamification.models import PointTransaction
 from houston.signals.constants import (
     ACTIVE_SIGNAL_STATUSES,
+    SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
     SIGNAL_LIFECYCLE_EVENT_CANCELED,
     SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS,
     SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
@@ -100,6 +101,21 @@ class DelayStats:
     p90_seconds: float | None
     n: int
     comparison: DashboardMetricComparison
+    undatable_in_scope: int
+    unstarted_in_scope: int
+
+
+@dataclass(frozen=True)
+class UndatableSignalTerminals:
+    canceled: int
+    resolved: int
+    archived: int
+
+
+@dataclass(frozen=True)
+class UndatableExecutionTerminals:
+    canceled: int
+    done: int
 
 
 @dataclass(frozen=True)
@@ -138,6 +154,7 @@ class ContributorItem:
     pts: int
     roles: tuple[str, ...]
     poles: tuple[str, ...]
+    establishment_names: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -154,6 +171,9 @@ class DeadlineShare:
     on_time: float | None
     late: float | None
     n: int
+    early_count: int
+    on_time_count: int
+    late_count: int
     early_comparison: DashboardMetricComparison
     on_time_comparison: DashboardMetricComparison
     late_comparison: DashboardMetricComparison
@@ -177,6 +197,10 @@ class AnalyticsDashboardResult:
     observation_delay_transformed: DelayStats
     operational_resolution_rate: DashboardMetricComparison
     closure_resolved_share: DashboardMetricComparison
+    closure_measured_resolved_count: int
+    closure_measured_canceled_count: int
+    undatable_signal_terminals: UndatableSignalTerminals
+    undatable_execution_terminals: UndatableExecutionTerminals
     reopenings: DashboardMetricComparison
     open_observation_count: int
     aging_buckets: tuple[AgingBucket, ...]
@@ -269,6 +293,14 @@ def get_analytics_dashboard(
     )
     journal_coverage = comparison_coverage(current=journal_current, previous=journal_previous)
     complete_coverage = COVERAGE_COMPLETE
+    undatable_signals = _undatable_signal_terminals(
+        signals=signals,
+        events_by_signal=events_by_signal,
+    )
+    undatable_executions = _undatable_execution_terminals(
+        executions=executions,
+        events_by_execution=events_by_execution,
+    )
 
     recurring = _recurring_patterns(
         signals=signals,
@@ -293,6 +325,7 @@ def get_analytics_dashboard(
         terminal_event=SIGNAL_LIFECYCLE_EVENT_CANCELED,
         coverage=journal_coverage,
         include_p90=True,
+        undatable_in_scope=undatable_signals.canceled,
     )
     obs_resolved = _signal_delay_stats(
         signals=signals,
@@ -302,6 +335,7 @@ def get_analytics_dashboard(
         terminal_event=SIGNAL_LIFECYCLE_EVENT_RESOLVED,
         coverage=journal_coverage,
         include_p90=True,
+        undatable_in_scope=undatable_signals.resolved,
     )
     obs_transformed = _plan_transform_delay_stats(
         signals=signals,
@@ -311,6 +345,7 @@ def get_analytics_dashboard(
         previous_period=previous_period,
         coverage=complete_coverage,
         include_p90=True,
+        undatable_in_scope=0,
     )
     operational_rate = _operational_resolution(
         signals=signals,
@@ -320,12 +355,14 @@ def get_analytics_dashboard(
         reliable_from=reliable_from,
         coverage=journal_coverage,
     )
-    closure_share = _closure_resolved_share(
+    closure_share, measured_resolved, measured_canceled = _closure_resolved_share(
         signals=signals,
         events_by_signal=events_by_signal,
         current_period=current_period,
         previous_period=previous_period,
         coverage=journal_coverage,
+        undatable_resolved=undatable_signals.resolved,
+        undatable_canceled=undatable_signals.canceled,
     )
     reopenings = _reopening_counts(
         events_by_signal=events_by_signal,
@@ -348,6 +385,11 @@ def get_analytics_dashboard(
         terminal_event=EXECUTION_LIFECYCLE_EVENT_CANCELED,
         coverage=journal_coverage,
         include_p90=False,
+        undatable_in_scope=undatable_executions.canceled,
+        unstarted_in_scope=_canceled_unstarted_execution_count(
+            executions=executions,
+            events_by_execution=events_by_execution,
+        ),
     )
     plan_resolved = _execution_delay_stats(
         executions=executions,
@@ -358,6 +400,7 @@ def get_analytics_dashboard(
         coverage=journal_coverage,
         include_p90=False,
         also_marked_done_done=True,
+        undatable_in_scope=undatable_executions.done,
     )
     plan_validation = _validation_delay_stats(
         executions=executions,
@@ -365,6 +408,7 @@ def get_analytics_dashboard(
         current_period=current_period,
         previous_period=previous_period,
         coverage=journal_coverage,
+        undatable_in_scope=undatable_executions.done,
     )
     deadlines = _deadline_respect(
         executions=executions,
@@ -407,6 +451,10 @@ def get_analytics_dashboard(
         observation_delay_transformed=obs_transformed,
         operational_resolution_rate=operational_rate,
         closure_resolved_share=closure_share,
+        closure_measured_resolved_count=measured_resolved,
+        closure_measured_canceled_count=measured_canceled,
+        undatable_signal_terminals=undatable_signals,
+        undatable_execution_terminals=undatable_executions,
         reopenings=reopenings,
         open_observation_count=open_count,
         aging_buckets=aging_buckets,
@@ -480,12 +528,171 @@ def _duration_stats(values: list[float], *, include_p90: bool) -> tuple[float | 
     return median, mean, p90, n
 
 
+def _first_event_at(events: list[JournalEvent], event_type: str) -> datetime | None:
+    for event in events:
+        if event.event_type == event_type:
+            return event.occurred_at
+    return None
+
+
+def _has_event(events: list[JournalEvent], event_type: str) -> bool:
+    return any(event.event_type == event_type for event in events)
+
+
+def _signal_canonical_terminal_at(signal: Signal, event_type: str) -> datetime | None:
+    if event_type == SIGNAL_LIFECYCLE_EVENT_CANCELED:
+        return signal.canceled_at
+    if event_type == SIGNAL_LIFECYCLE_EVENT_RESOLVED:
+        return signal.resolved_at
+    if event_type == SIGNAL_LIFECYCLE_EVENT_ARCHIVED:
+        return signal.archived_at
+    return None
+
+
+def _signal_measurable_terminal_at(
+    events: list[JournalEvent],
+    *,
+    signal: Signal,
+    event_type: str,
+) -> datetime | None:
+    return _first_event_at(events, event_type) or _signal_canonical_terminal_at(
+        signal, event_type
+    )
+
+
+def _execution_done_canonical_at(execution: ActionPlanExecution) -> datetime | None:
+    """DONE is dated by validate (`validated_at`) or mark-done without validation (`marked_done_at`)."""
+    if execution.validated_at is not None:
+        return execution.validated_at
+    return execution.marked_done_at
+
+
+def _execution_measurable_cancel_at(
+    events: list[JournalEvent],
+    *,
+    execution: ActionPlanExecution,
+) -> datetime | None:
+    return _first_event_at(events, EXECUTION_LIFECYCLE_EVENT_CANCELED) or execution.canceled_at
+
+
+def _execution_measurable_done_at(
+    events: list[JournalEvent],
+    *,
+    execution: ActionPlanExecution,
+    also_marked_done_done: bool,
+) -> datetime | None:
+    for event in events:
+        if event.event_type == EXECUTION_LIFECYCLE_EVENT_VALIDATED:
+            return event.occurred_at
+        if (
+            also_marked_done_done
+            and event.event_type == EXECUTION_LIFECYCLE_EVENT_MARKED_DONE
+            and (event.metadata_safe.get("to_status") or EXECUTION_STATUS_DONE)
+            == EXECUTION_STATUS_DONE
+        ):
+            return event.occurred_at
+    return _execution_done_canonical_at(execution)
+
+
+def _signal_is_undatable(
+    signal: Signal,
+    events: list[JournalEvent],
+    *,
+    status: str,
+    event_type: str,
+) -> bool:
+    if signal.status != status:
+        return False
+    if _signal_canonical_terminal_at(signal, event_type) is not None:
+        return False
+    return not _has_event(events, event_type)
+
+
+def _undatable_signal_terminals(
+    *,
+    signals: list[Signal],
+    events_by_signal: dict[UUID, list[JournalEvent]],
+) -> UndatableSignalTerminals:
+    canceled = resolved = archived = 0
+    for signal in signals:
+        events = events_by_signal.get(signal.id, [])
+        if _signal_is_undatable(
+            signal,
+            events,
+            status=Signal.Status.CANCELED,
+            event_type=SIGNAL_LIFECYCLE_EVENT_CANCELED,
+        ):
+            canceled += 1
+        elif _signal_is_undatable(
+            signal,
+            events,
+            status=Signal.Status.RESOLVED,
+            event_type=SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+        ):
+            resolved += 1
+        elif _signal_is_undatable(
+            signal,
+            events,
+            status=Signal.Status.ARCHIVED,
+            event_type=SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
+        ):
+            archived += 1
+    return UndatableSignalTerminals(
+        canceled=canceled,
+        resolved=resolved,
+        archived=archived,
+    )
+
+
+def _undatable_execution_terminals(
+    *,
+    executions: list[ActionPlanExecution],
+    events_by_execution: dict[UUID, list[JournalEvent]],
+) -> UndatableExecutionTerminals:
+    canceled = done = 0
+    for execution in executions:
+        events = events_by_execution.get(execution.id, [])
+        if execution.status == EXECUTION_STATUS_CANCELED:
+            if execution.canceled_at is None and not _has_event(
+                events, EXECUTION_LIFECYCLE_EVENT_CANCELED
+            ):
+                canceled += 1
+            continue
+        if execution.status != EXECUTION_STATUS_DONE:
+            continue
+        if execution.marked_done_at is not None or execution.validated_at is not None:
+            continue
+        if _has_event(events, EXECUTION_LIFECYCLE_EVENT_VALIDATED) or _has_event(
+            events, EXECUTION_LIFECYCLE_EVENT_MARKED_DONE
+        ):
+            continue
+        done += 1
+    return UndatableExecutionTerminals(canceled=canceled, done=done)
+
+
+def _canceled_unstarted_execution_count(
+    *,
+    executions: list[ActionPlanExecution],
+    events_by_execution: dict[UUID, list[JournalEvent]],
+) -> int:
+    count = 0
+    for execution in executions:
+        events = events_by_execution.get(execution.id, [])
+        if _execution_measurable_cancel_at(events, execution=execution) is None:
+            continue
+        if _first_started_at(events, fallback=execution.started_at) is None:
+            count += 1
+    return count
+
+
 def _delay_from_values(
     *,
     current_values: list[float],
     previous_values: list[float],
     coverage: str,
     include_p90: bool,
+    undatable_in_scope: int = 0,
+    unstarted_in_scope: int = 0,
 ) -> DelayStats:
     median, mean, p90, n = _duration_stats(current_values, include_p90=include_p90)
     prev_median, _, _, _ = _duration_stats(previous_values, include_p90=include_p90)
@@ -499,6 +706,8 @@ def _delay_from_values(
             previous=prev_median,
             coverage=coverage,
         ),
+        undatable_in_scope=undatable_in_scope,
+        unstarted_in_scope=unstarted_in_scope,
     )
 
 
@@ -511,6 +720,7 @@ def _signal_delay_stats(
     terminal_event: str,
     coverage: str,
     include_p90: bool,
+    undatable_in_scope: int = 0,
 ) -> DelayStats:
     current: list[float] = []
     previous: list[float] = []
@@ -519,11 +729,11 @@ def _signal_delay_stats(
         created_at = first_signal_created_at(events, fallback=signal.created_at)
         if created_at is None:
             continue
-        first_terminal = None
-        for event in events:
-            if event.event_type == terminal_event:
-                first_terminal = event.occurred_at
-                break
+        first_terminal = _signal_measurable_terminal_at(
+            events,
+            signal=signal,
+            event_type=terminal_event,
+        )
         if first_terminal is None or first_terminal < created_at:
             continue
         duration = (first_terminal - created_at).total_seconds()
@@ -536,6 +746,7 @@ def _signal_delay_stats(
         previous_values=previous,
         coverage=coverage,
         include_p90=include_p90,
+        undatable_in_scope=undatable_in_scope,
     )
 
 
@@ -548,6 +759,7 @@ def _plan_transform_delay_stats(
     previous_period: AnalyticsComparisonPeriod,
     coverage: str,
     include_p90: bool,
+    undatable_in_scope: int = 0,
 ) -> DelayStats:
     first_plan_at: dict[UUID, datetime] = {}
     for execution in executions:
@@ -578,6 +790,7 @@ def _plan_transform_delay_stats(
         previous_values=previous,
         coverage=coverage,
         include_p90=include_p90,
+        undatable_in_scope=undatable_in_scope,
     )
 
 
@@ -602,6 +815,8 @@ def _execution_delay_stats(
     coverage: str,
     include_p90: bool,
     also_marked_done_done: bool = False,
+    undatable_in_scope: int = 0,
+    unstarted_in_scope: int = 0,
 ) -> DelayStats:
     current: list[float] = []
     previous: list[float] = []
@@ -610,19 +825,14 @@ def _execution_delay_stats(
         started_at = _first_started_at(events, fallback=execution.started_at)
         if started_at is None:
             continue
-        first_terminal = None
-        for event in events:
-            if event.event_type == terminal_event:
-                first_terminal = event.occurred_at
-                break
-            if (
-                also_marked_done_done
-                and event.event_type == EXECUTION_LIFECYCLE_EVENT_MARKED_DONE
-                and (event.metadata_safe.get("to_status") or EXECUTION_STATUS_DONE)
-                == EXECUTION_STATUS_DONE
-            ):
-                first_terminal = event.occurred_at
-                break
+        if terminal_event == EXECUTION_LIFECYCLE_EVENT_CANCELED:
+            first_terminal = _execution_measurable_cancel_at(events, execution=execution)
+        else:
+            first_terminal = _execution_measurable_done_at(
+                events,
+                execution=execution,
+                also_marked_done_done=also_marked_done_done,
+            )
         if first_terminal is None or first_terminal < started_at:
             continue
         duration = (first_terminal - started_at).total_seconds()
@@ -635,6 +845,8 @@ def _execution_delay_stats(
         previous_values=previous,
         coverage=coverage,
         include_p90=include_p90,
+        undatable_in_scope=undatable_in_scope,
+        unstarted_in_scope=unstarted_in_scope,
     )
 
 
@@ -645,6 +857,7 @@ def _validation_delay_stats(
     current_period: AnalyticsComparisonPeriod,
     previous_period: AnalyticsComparisonPeriod,
     coverage: str,
+    undatable_in_scope: int = 0,
 ) -> DelayStats:
     current: list[float] = []
     previous: list[float] = []
@@ -662,6 +875,14 @@ def _validation_delay_stats(
             if event.event_type == EXECUTION_LIFECYCLE_EVENT_VALIDATED:
                 validated_at = event.occurred_at
                 break
+        if pending_at is None:
+            pending_at = (
+                execution.marked_done_at
+                if execution.requires_validation and execution.marked_done_at is not None
+                else None
+            )
+        if validated_at is None:
+            validated_at = execution.validated_at
         if pending_at is None or validated_at is None or validated_at < pending_at:
             continue
         duration = (validated_at - pending_at).total_seconds()
@@ -674,6 +895,7 @@ def _validation_delay_stats(
         previous_values=previous,
         coverage=coverage,
         include_p90=False,
+        undatable_in_scope=undatable_in_scope,
     )
 
 
@@ -729,6 +951,39 @@ def _operational_resolution(
     )
 
 
+def _closure_counts_for_period(
+    *,
+    signals: list[Signal],
+    events_by_signal: dict[UUID, list[JournalEvent]],
+    period: AnalyticsComparisonPeriod,
+) -> tuple[int, int]:
+    resolved = 0
+    canceled = 0
+    for signal in signals:
+        events = events_by_signal.get(signal.id, [])
+        resolved_events = [
+            event
+            for event in events
+            if event.event_type == SIGNAL_LIFECYCLE_EVENT_RESOLVED
+            and _in_period(event.occurred_at, period)
+        ]
+        canceled_events = [
+            event
+            for event in events
+            if event.event_type == SIGNAL_LIFECYCLE_EVENT_CANCELED
+            and _in_period(event.occurred_at, period)
+        ]
+        if resolved_events:
+            resolved += len(resolved_events)
+        elif signal.resolved_at is not None and _in_period(signal.resolved_at, period):
+            resolved += 1
+        if canceled_events:
+            canceled += len(canceled_events)
+        elif signal.canceled_at is not None and _in_period(signal.canceled_at, period):
+            canceled += 1
+    return resolved, canceled
+
+
 def _closure_resolved_share(
     *,
     signals: list[Signal],
@@ -736,29 +991,34 @@ def _closure_resolved_share(
     current_period: AnalyticsComparisonPeriod,
     previous_period: AnalyticsComparisonPeriod,
     coverage: str,
-) -> DashboardMetricComparison:
-    def share_for(period: AnalyticsComparisonPeriod) -> float | None:
-        resolved = 0
-        canceled = 0
-        for signal in signals:
-            for event in events_by_signal.get(signal.id, []):
-                if not _in_period(event.occurred_at, period):
-                    continue
-                if event.event_type == SIGNAL_LIFECYCLE_EVENT_RESOLVED:
-                    resolved += 1
-                elif event.event_type == SIGNAL_LIFECYCLE_EVENT_CANCELED:
-                    canceled += 1
+    undatable_resolved: int,
+    undatable_canceled: int,
+) -> tuple[DashboardMetricComparison, int, int]:
+    current_resolved, current_canceled = _closure_counts_for_period(
+        signals=signals,
+        events_by_signal=events_by_signal,
+        period=current_period,
+    )
+    previous_resolved, previous_canceled = _closure_counts_for_period(
+        signals=signals,
+        events_by_signal=events_by_signal,
+        period=previous_period,
+    )
+    withhold_ratio = (undatable_resolved + undatable_canceled) > 0
+
+    def share(resolved: int, canceled: int) -> float | None:
         denominator = resolved + canceled
         if denominator == 0:
             return None
         return resolved / denominator
 
-    return compare_dashboard_metric_values(
-        current=share_for(current_period),
-        previous=share_for(previous_period),
+    comparison = compare_dashboard_metric_values(
+        current=None if withhold_ratio else share(current_resolved, current_canceled),
+        previous=None if withhold_ratio else share(previous_resolved, previous_canceled),
         coverage=coverage,
         points=True,
     )
+    return comparison, current_resolved, current_canceled
 
 
 def _reopening_counts(
@@ -1078,6 +1338,15 @@ def _contributors(
                 if scope.business_unit_id in bu_ids:
                     poles.append(_dimension_label(scope.business_unit))
         unique_poles = tuple(sorted(set(poles))) or (UNASSIGNED_LABEL,)
+        establishment_names = tuple(
+            sorted(
+                {
+                    membership.establishment.name
+                    for membership in user_memberships
+                    if membership.establishment.name
+                }
+            )
+        )
         items.append(
             ContributorItem(
                 user_id=user_id,
@@ -1085,6 +1354,7 @@ def _contributors(
                 pts=int(row["pts"] or 0),
                 roles=roles,
                 poles=unique_poles,
+                establishment_names=establishment_names,
             )
         )
     return tuple(items)
@@ -1180,7 +1450,7 @@ def _deadline_respect(
         *,
         at: datetime,
         period: AnalyticsComparisonPeriod | None,
-    ) -> tuple[float | None, float | None, float | None, int]:
+    ) -> tuple[float | None, float | None, float | None, int, int, int, int]:
         early = on_time = late = 0
         for execution in executions:
             events = events_by_execution.get(execution.id, [])
@@ -1228,11 +1498,14 @@ def _deadline_respect(
                     late += 1
         total = early + on_time + late
         if total == 0:
-            return None, None, None, 0
-        return early / total, on_time / total, late / total, total
+            return None, None, None, 0, 0, 0, 0
+        return early / total, on_time / total, late / total, total, early, on_time, late
 
-    cur_early, cur_on_time, cur_late, n = shares_for(at=now, period=current_period)
-    prev_early, prev_on_time, prev_late, _ = shares_for(
+    cur_early, cur_on_time, cur_late, n, early_count, on_time_count, late_count = shares_for(
+        at=now,
+        period=current_period,
+    )
+    prev_early, prev_on_time, prev_late, _prev_n, _pe, _po, _pl = shares_for(
         at=current_period.period_start,
         period=previous_period,
     )
@@ -1241,6 +1514,9 @@ def _deadline_respect(
         on_time=cur_on_time,
         late=cur_late,
         n=n,
+        early_count=early_count,
+        on_time_count=on_time_count,
+        late_count=late_count,
         early_comparison=compare_dashboard_metric_values(
             current=cur_early, previous=prev_early, coverage=coverage, points=True
         ),

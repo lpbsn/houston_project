@@ -70,4 +70,11 @@ describe('BottomMobileNav', () => {
 
     expect(screen.queryByRole('link', { name: 'Analyse' })).toBeNull()
   })
+
+  it('can render every tab without a current page', () => {
+    render(<BottomMobileNav navigate={vi.fn()} />)
+
+    expect(screen.getByRole('navigation', { name: 'Navigation terrain' })).toBeTruthy()
+    expect(screen.queryByRole('link', { current: 'page' })).toBeNull()
+  })
 })

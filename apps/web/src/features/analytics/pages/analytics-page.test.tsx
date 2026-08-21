@@ -135,6 +135,7 @@ function dashboard(
         pts: 24,
         roles: ['staff'],
         poles: ['Cuisine'],
+        establishment_names: ['ANBU', 'AKATSUKI'],
       },
     ],
     observation_delay_canceled: {
@@ -143,6 +144,8 @@ function dashboard(
       p90_seconds: null,
       n: 3,
       comparison: comparison(86400, 'complete', -0.06),
+      undatable_in_scope: 0,
+      unstarted_in_scope: 0,
     },
     observation_delay_resolved: {
       median_seconds: 200000,
@@ -150,6 +153,8 @@ function dashboard(
       p90_seconds: null,
       n: 4,
       comparison: comparison(200000),
+      undatable_in_scope: 0,
+      unstarted_in_scope: 0,
     },
     observation_delay_transformed: {
       median_seconds: 100000,
@@ -157,9 +162,15 @@ function dashboard(
       p90_seconds: null,
       n: 2,
       comparison: comparison(100000),
+      undatable_in_scope: 0,
+      unstarted_in_scope: 0,
     },
     operational_resolution_rate: comparison(0.75, 'complete', 0.05),
     closure_resolved_share: comparison(0.8),
+    closure_measured_resolved_count: 4,
+    closure_measured_canceled_count: 1,
+    undatable_signal_terminals: { canceled: 0, resolved: 0, archived: 0 },
+    undatable_execution_terminals: { canceled: 0, done: 0 },
     reopenings: comparison(2, 'complete', 0),
     open_observation_count: 12,
     aging_buckets: [
@@ -173,6 +184,8 @@ function dashboard(
       p90_seconds: null,
       n: 1,
       comparison: comparison(86400),
+      undatable_in_scope: 0,
+      unstarted_in_scope: 0,
     },
     plan_delay_resolved: {
       median_seconds: 200000,
@@ -180,6 +193,8 @@ function dashboard(
       p90_seconds: null,
       n: 2,
       comparison: comparison(200000),
+      undatable_in_scope: 0,
+      unstarted_in_scope: 0,
     },
     plan_validation: {
       median_seconds: 50000,
@@ -187,12 +202,17 @@ function dashboard(
       p90_seconds: null,
       n: 2,
       comparison: comparison(50000),
+      undatable_in_scope: 0,
+      unstarted_in_scope: 0,
     },
     plan_deadlines: {
       early: 0.21,
       on_time: 0.54,
       late: 0.25,
       n: 10,
+      early_count: 2,
+      on_time_count: 5,
+      late_count: 3,
       early_comparison: comparison(0.21),
       on_time_comparison: comparison(0.54),
       late_comparison: comparison(0.25),
@@ -279,6 +299,7 @@ describe('AnalyticsPage', () => {
     const banner = dashboardCoverageBannerMessage({
       coverage: 'partial',
       historyReliableFrom: '2026-01-01T00:00:00.000Z',
+      hasDisplayableDelta: true,
     })
     expect(banner).toBeTruthy()
     expect(screen.getByText(banner as string)).toBeTruthy()
@@ -303,6 +324,7 @@ describe('AnalyticsPage', () => {
         dashboardCoverageBannerMessage({
           coverage: 'partial',
           historyReliableFrom: '2026-01-01T00:00:00.000Z',
+          hasDisplayableDelta: true,
         }) as string,
       ),
     ).toBeNull()
@@ -311,6 +333,7 @@ describe('AnalyticsPage', () => {
         dashboardCoverageBannerMessage({
           coverage: 'not_comparable',
           historyReliableFrom: '2026-01-01T00:00:00.000Z',
+          hasDisplayableDelta: false,
         }) as string,
       ),
     ).toBeNull()
@@ -329,7 +352,7 @@ describe('AnalyticsPage', () => {
     expect(screen.getByText('Vous n’avez pas accès à cet établissement.')).toBeTruthy()
   })
 
-  it('shows IA and export placeholders', () => {
+  it('shows IA and export placeholders after operational widgets', () => {
     authState.current.bootstrap = managerBootstrap()
     dashboardQueryMock.mockReturnValue({
       isLoading: false,
@@ -339,12 +362,16 @@ describe('AnalyticsPage', () => {
     })
 
     renderAnalyticsPage()
-    expect(screen.getByText('Résumé de la semaine · généré par IA')).toBeTruthy()
+    expect(screen.getByText('Résumé IA')).toBeTruthy()
     expect(screen.getAllByText('Bientôt disponible').length).toBeGreaterThan(0)
     expect(screen.getByText('CA vs Observations')).toBeTruthy()
+    const headings = screen.getAllByRole('heading').map((node) => node.textContent)
+    expect(headings.indexOf('Motifs récurrents')).toBeGreaterThan(-1)
+    expect(headings.indexOf('Motifs récurrents')).toBeLessThan(headings.indexOf('Résumé IA'))
+    expect(headings.indexOf('Résumé IA')).toBeLessThan(headings.indexOf('CA vs Observations'))
   })
 
-  it('exposes period controls and long-copy dashboard widgets', () => {
+  it('exposes period controls and dashboard widgets without fake confidence copy', () => {
     authState.current.bootstrap = managerBootstrap()
     dashboardQueryMock.mockReturnValue({
       isLoading: false,
@@ -358,9 +385,12 @@ describe('AnalyticsPage', () => {
       expect(screen.getByRole('button', { name: days })).toBeTruthy()
     }
     expect(screen.getByRole('button', { name: 'Exporter' })).toBeTruthy()
-    expect(screen.getByText('4 observations · 1 établissements')).toBeTruthy()
+    expect(screen.getByText('4 observations · 1 établissement')).toBeTruthy()
+    expect(screen.getByText('ANBU · AKATSUKI')).toBeTruthy()
     expect(screen.getByText('En avance')).toBeTruthy()
     expect(screen.getByText('À temps')).toBeTruthy()
     expect(screen.getByText('En retard')).toBeTruthy()
+    expect(screen.queryByText(/confiance/i)).toBeNull()
+    expect(screen.queryByText(/qualité/i)).toBeNull()
   })
 })

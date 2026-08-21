@@ -26,6 +26,12 @@ export function canShowDashboardDelta(
   )
 }
 
+export function dashboardNewBadgeTone(
+  sense: DashboardTrendSense,
+): 'positive' | 'neutral' {
+  return sense === 'neutral' ? 'neutral' : 'positive'
+}
+
 export function dashboardTrendTone(
   delta: number | null,
   sense: DashboardTrendSense,
@@ -98,12 +104,16 @@ export function formatDashboardDuration(seconds: number | null): string {
   if (seconds == null) {
     return '—'
   }
-  if (seconds < 3600) {
-    return `${Math.max(1, Math.round(seconds / 60))} min`
+  if (seconds === 0) {
+    return '0 min'
   }
-  const days = seconds / 86400
+  if (Math.abs(seconds) < 3600) {
+    return `${Math.max(1, Math.round(Math.abs(seconds) / 60))} min`
+  }
+  const abs = Math.abs(seconds)
+  const days = abs / 86400
   if (days < 1) {
-    return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(seconds / 3600)} h`
+    return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(abs / 3600)} h`
   }
   return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(days)} j`
 }
@@ -186,15 +196,24 @@ export function formatDashboardHistoryDate(isoDate: string): string {
 export function dashboardCoverageBannerMessage(options: {
   coverage: DashboardCoverage
   historyReliableFrom: string
+  hasDisplayableDelta: boolean
 }): string | null {
   if (options.coverage === 'complete') {
     return null
   }
   const date = formatDashboardHistoryDate(options.historyReliableFrom)
-  if (options.coverage === 'not_comparable') {
-    return `Pas encore assez d’historique pour comparer à la période précédente. Historique fiable à partir du ${date}.`
+  if (options.hasDisplayableDelta) {
+    return `Pas encore assez d’historique pour comparer certaines évolutions. Historique fiable depuis le ${date}.`
   }
-  return `Les évolutions ne portent que sur l’historique fiable, à partir du ${date}.`
+  return `Pas encore assez d’historique pour comparer à la période précédente. Historique fiable à partir du ${date}.`
+}
+
+export function dashboardPreviousPeriodFooter(
+  comparisons: Array<
+    Pick<AnalyticsDashboardMetricComparison, 'coverage' | 'relative_change_status'>
+  >,
+): string | undefined {
+  return comparisons.some(canShowDashboardDelta) ? DASHBOARD_VS_PREVIOUS_PERIOD : undefined
 }
 
 export function formatMeasuredSample(
@@ -214,22 +233,198 @@ export function medianDurationHint(durationLabel: string): string {
 
 export function emptyObservationDelayMessage(
   kind: 'canceled' | 'resolved' | 'transformed',
+  undatableInScope = 0,
 ): string {
+  if (kind === 'transformed') {
+    return 'Aucune observation mise en plan sur la période'
+  }
+  if (undatableInScope > 0) {
+    const stock = formatCountedNoun(
+      undatableInScope,
+      kind === 'canceled' ? 'observation annulée' : 'observation résolue',
+      kind === 'canceled' ? 'observations annulées' : 'observations résolues',
+    )
+    return `${stock} dans ce périmètre, sans date historisée. Elles ne peuvent pas entrer dans cette métrique.`
+  }
   if (kind === 'canceled') {
-    return 'Aucune observation annulée sur la période'
+    return 'Aucune annulation mesurée sur la période'
   }
-  if (kind === 'resolved') {
-    return 'Aucune observation résolue sur la période'
-  }
-  return 'Aucune observation mise en plan sur la période'
+  return 'Aucune résolution mesurée sur la période'
 }
 
-export function emptyPlanDelayMessage(kind: 'canceled' | 'resolved' | 'validated'): string {
+export function emptyPlanDelayMessage(
+  kind: 'canceled' | 'resolved' | 'validated',
+  options: { undatableInScope?: number; unstartedInScope?: number } = {},
+): string {
+  const undatable = options.undatableInScope ?? 0
+  const unstarted = options.unstartedInScope ?? 0
+  if (kind === 'canceled' && undatable > 0) {
+    const stock = formatCountedNoun(undatable, 'plan annulé', 'plans annulés')
+    return `${stock} dans ce périmètre, sans date historisée. Ils ne peuvent pas entrer dans cette métrique.`
+  }
+  if (kind === 'canceled' && unstarted > 0) {
+    return 'Des plans ont été annulés avant d’être démarrés ; ils n’entrent pas dans ce délai.'
+  }
+  if (kind === 'resolved' && undatable > 0) {
+    const stock = formatCountedNoun(undatable, 'plan résolu', 'plans résolus')
+    return `${stock} dans ce périmètre, sans date historisée. Ils ne peuvent pas entrer dans cette métrique.`
+  }
+  if (kind === 'validated' && undatable > 0) {
+    return emptyPlanDelayMessage('resolved', { undatableInScope: undatable })
+  }
   if (kind === 'canceled') {
-    return 'Aucun plan annulé sur la période'
+    return 'Aucune annulation de plan mesurée sur la période'
   }
   if (kind === 'resolved') {
-    return 'Aucun plan résolu sur la période'
+    return 'Aucune résolution de plan mesurée sur la période'
   }
   return 'Aucune validation sur la période'
+}
+
+export function delayExclusionNote(
+  undatableInScope: number,
+  unit: 'observation' | 'plan',
+): string | null {
+  if (undatableInScope <= 0) {
+    return null
+  }
+  const stock = formatCountedNoun(
+    undatableInScope,
+    unit === 'plan' ? 'plan non datable exclu' : 'observation non datable exclue',
+    unit === 'plan' ? 'plans non datables exclus' : 'observations non datables exclues',
+  )
+  return `${stock} de ce périmètre.`
+}
+
+export function closureResolvedShareHint(options: {
+  measuredResolvedCount: number
+  measuredCanceledCount: number
+  undatableResolved: number
+  undatableCanceled: number
+}): string {
+  const undatable = options.undatableResolved + options.undatableCanceled
+  if (undatable > 0) {
+    const excluded = formatCountedNoun(
+      undatable,
+      'clôture non datable est exclue',
+      'clôtures non datables sont exclues',
+    )
+    const measured = options.measuredResolvedCount + options.measuredCanceledCount
+    if (measured === 0) {
+      return `${excluded} ; aucune clôture mesurable sur la période.`
+    }
+    return `${options.measuredResolvedCount} résolution${options.measuredResolvedCount === 1 ? '' : 's'} et ${options.measuredCanceledCount} annulation${options.measuredCanceledCount === 1 ? '' : 's'} mesurées. ${excluded}.`
+  }
+  return 'des clôtures mesurées sont des résolutions plutôt que des annulations'
+}
+
+const DASHBOARD_LOW_VOLUME_DEADLINE_N = 5
+
+export function formatDashboardDurationDelta(seconds: number | null): string | null {
+  if (seconds == null) {
+    return null
+  }
+  return formatDashboardDuration(Math.abs(seconds))
+}
+
+export function shouldShowDashboardDelayMean(n: number): boolean {
+  return n >= 2
+}
+
+export function shouldShowDashboardDelayP90(n: number): boolean {
+  return n >= 10
+}
+
+export function formatCountedNoun(count: number, singular: string, plural: string): string {
+  if (!Number.isFinite(count)) {
+    return `— ${plural}`
+  }
+  const formatted = new Intl.NumberFormat('fr-FR').format(count)
+  return `${formatted} ${count === 1 ? singular : plural}`
+}
+
+export function formatNewPatternVolume(options: {
+  isCross: boolean
+  observationCount: number
+  establishmentCount: number | null
+}): string {
+  const observations = formatCountedNoun(
+    options.observationCount,
+    'observation',
+    'observations',
+  )
+  if (!options.isCross) {
+    return options.observationCount === 1
+      ? '1 observation depuis sa détection'
+      : `${observations} depuis sa détection`
+  }
+  const establishments = formatCountedNoun(
+    options.establishmentCount ?? 0,
+    'établissement',
+    'établissements',
+  )
+  return `${observations} · ${establishments}`
+}
+
+export function contributorInitials(name: string): string {
+  const parts = name
+    .trim()
+    .split(/\s+/)
+    .map((part) => part.replace(/[^\p{L}\p{N}]/gu, ''))
+    .filter(Boolean)
+  if (parts.length === 0) {
+    return '?'
+  }
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase()
+  }
+  const first = parts[0][0] ?? ''
+  const last = parts[parts.length - 1]?.[0] ?? ''
+  return `${first}${last}`.toUpperCase()
+}
+
+export function formatContributorPoles(poles: string[]): string {
+  if (poles.length === 0) {
+    return 'Sans pôle'
+  }
+  if (poles.length === 1) {
+    return poles[0] ?? 'Sans pôle'
+  }
+  const extra = poles.length - 1
+  return `${poles[0]} · +${extra} ${extra === 1 ? 'pôle' : 'pôles'}`
+}
+
+export function formatContributorEstablishments(names: string[]): string {
+  if (names.length === 0) {
+    return ''
+  }
+  if (names.length === 1) {
+    return names[0] ?? ''
+  }
+  if (names.length === 2) {
+    return `${names[0]} · ${names[1]}`
+  }
+  const extra = names.length - 1
+  return `${names[0]} · +${extra} établissements`
+}
+
+export function formatLateDeadlineHero(options: {
+  lateShare: number | null
+  lateCount: number
+  n: number
+}): string {
+  if (options.n > 0 && options.n < DASHBOARD_LOW_VOLUME_DEADLINE_N) {
+    return formatLateCountOnMeasured(options.lateCount, options.n)
+  }
+  return `${formatDashboardPercent(options.lateShare)} des plans sont en retard`
+}
+
+export function formatLateCountOnMeasured(lateCount: number, n: number): string {
+  const lateLabel = formatCountedNoun(lateCount, 'plan en retard', 'plans en retard')
+  const measured = n === 1 ? '1 mesuré' : `${new Intl.NumberFormat('fr-FR').format(n)} mesurés`
+  return `${lateLabel} sur ${measured}`
+}
+
+export function isOver15dAgingBucket(bucket: { key: string; label: string }): boolean {
+  return bucket.key === '> 15 j' || bucket.key === 'gt_15d' || bucket.label.includes('> 15')
 }

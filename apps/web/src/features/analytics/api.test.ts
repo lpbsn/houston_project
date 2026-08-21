@@ -61,6 +61,8 @@ const dashboardResponse = {
       relative_change_status: 'not_applicable',
       coverage: 'complete',
     },
+    undatable_in_scope: 0,
+    unstarted_in_scope: 0,
   },
   observation_delay_resolved: {
     median_seconds: null,
@@ -75,6 +77,8 @@ const dashboardResponse = {
       relative_change_status: 'not_applicable',
       coverage: 'complete',
     },
+    undatable_in_scope: 0,
+    unstarted_in_scope: 0,
   },
   observation_delay_transformed: {
     median_seconds: null,
@@ -89,6 +93,8 @@ const dashboardResponse = {
       relative_change_status: 'not_applicable',
       coverage: 'complete',
     },
+    undatable_in_scope: 0,
+    unstarted_in_scope: 0,
   },
   operational_resolution_rate: {
     current_value: null,
@@ -106,6 +112,10 @@ const dashboardResponse = {
     relative_change_status: 'not_applicable',
     coverage: 'complete',
   },
+  closure_measured_resolved_count: 0,
+  closure_measured_canceled_count: 0,
+  undatable_signal_terminals: { canceled: 0, resolved: 0, archived: 0 },
+  undatable_execution_terminals: { canceled: 0, done: 0 },
   reopenings: {
     current_value: 0,
     previous_value: 0,
@@ -137,6 +147,8 @@ const dashboardResponse = {
       relative_change_status: 'not_applicable',
       coverage: 'complete',
     },
+    undatable_in_scope: 0,
+    unstarted_in_scope: 0,
   },
   plan_delay_resolved: {
     median_seconds: null,
@@ -151,6 +163,8 @@ const dashboardResponse = {
       relative_change_status: 'not_applicable',
       coverage: 'complete',
     },
+    undatable_in_scope: 0,
+    unstarted_in_scope: 0,
   },
   plan_validation: {
     median_seconds: null,
@@ -165,12 +179,17 @@ const dashboardResponse = {
       relative_change_status: 'not_applicable',
       coverage: 'complete',
     },
+    undatable_in_scope: 0,
+    unstarted_in_scope: 0,
   },
   plan_deadlines: {
     early: null,
     on_time: null,
     late: null,
     n: 0,
+    early_count: 0,
+    on_time_count: 0,
+    late_count: 0,
     early_comparison: {
       current_value: null,
       previous_value: null,

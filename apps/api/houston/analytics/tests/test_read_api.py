@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import timedelta
 from urllib.parse import urlencode
 
@@ -11,6 +12,9 @@ from houston.analytics.dashboard import get_analytics_dashboard
 from houston.analytics.models import SignalPatternAssignment
 from houston.analytics.services import create_operational_pattern
 from houston.establishments.models import EstablishmentMembership
+from houston.gamification.constants import CURRENT_RULE_VERSION
+from houston.gamification.models import PointTransaction
+from houston.gamification.services import open_season
 from houston.signals.models import Signal
 from houston.testing.auth import auth_headers, build_api_membership, login
 from houston.testing.factories import create_establishment, create_membership, create_user
@@ -292,6 +296,14 @@ def test_dashboard_response_matches_backend_primitive(api_client):
     assert body["period_days"] == expected.period_days
     assert body["open_observation_count"] == expected.open_observation_count
     assert len(body["recurring_patterns"]) == len(expected.recurring_patterns)
+    deadlines = body["plan_deadlines"]
+    assert deadlines["early_count"] == expected.plan_deadlines.early_count
+    assert deadlines["on_time_count"] == expected.plan_deadlines.on_time_count
+    assert deadlines["late_count"] == expected.plan_deadlines.late_count
+    assert (
+        deadlines["early_count"] + deadlines["on_time_count"] + deadlines["late_count"]
+        == deadlines["n"]
+    )
 
 
 def test_pattern_list_detail_and_signals_payloads_are_allowlisted(api_client):
@@ -336,3 +348,45 @@ def test_pattern_list_detail_and_signals_payloads_are_allowlisted(api_client):
     assert "assignment_source" not in signal_item
     assert "routing_key" not in signal_item
     assert "raw_text" not in str(signals_response.json())
+
+
+def test_dashboard_contributor_payload_includes_establishment_names(api_client):
+    owner = create_user(username="api-cross-owner")
+    contributor = create_user(username="api-contributor")
+    anbu = create_establishment(name="ANBU")
+    akatsuki = create_establishment(name="AKATSUKI")
+    for establishment in (anbu, akatsuki):
+        create_membership(
+            establishment=establishment,
+            user=owner,
+            role=EstablishmentMembership.Role.OWNER,
+        )
+        staff = create_membership(
+            establishment=establishment,
+            user=contributor,
+            role=EstablishmentMembership.Role.STAFF,
+        )
+        season = open_season(establishment)
+        tx_id = uuid.uuid4()
+        PointTransaction.objects.create(
+            id=tx_id,
+            membership=staff,
+            establishment=establishment,
+            season=season,
+            delta=3,
+            reason_code="test.award",
+            source_type="test",
+            source_id=str(tx_id),
+            rule_version=CURRENT_RULE_VERSION,
+            occurred_at=timezone.now() - timedelta(hours=1),
+            idempotency_key=f"tx:{tx_id}",
+        )
+
+    response = authenticated_get(api_client, owner, dashboard_url())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["scope_type"] == "cross"
+    assert payload["contributors"][0]["establishment_names"] == ["AKATSUKI", "ANBU"]
+    assert "roles" in payload["contributors"][0]
+    assert "poles" in payload["contributors"][0]

@@ -248,7 +248,7 @@ describe('getTerrainRouteConfig', () => {
     })
   })
 
-  it('configures scoped Cross dashboard without mobile bottom nav', () => {
+  it('configures scoped Cross dashboard with the shared mobile hub nav and no active tab', () => {
     expect(
       getTerrainRouteConfig({
         kind: 'scoped-terrain',
@@ -256,25 +256,25 @@ describe('getTerrainRouteConfig', () => {
         page: 'dashboard',
       }),
     ).toEqual({
-      topbarVariant: 'detail',
-      title: 'Analyse',
+      topbarVariant: 'hub',
       pageTitle: 'Dashboard',
-      backPath: '/general',
-      showBottomNav: false,
+      showBottomNav: true,
       desktopActivePath: '/cross',
       mainScroll: 'auto',
       hideTopbar: true,
+      showTopbarBottomBorder: false,
     })
   })
 
-  it('configures analytics route as a minimal detail route', () => {
+  it('configures analytics as a hub destination without an active bottom-nav tab', () => {
     expect(getTerrainRouteConfig({ kind: 'static', path: '/analytics' })).toEqual({
-      topbarVariant: 'detail',
-      title: 'Analyse',
-      backPath: '/general',
-      showBottomNav: false,
+      topbarVariant: 'hub',
+      pageTitle: 'Dashboard',
+      showBottomNav: true,
       desktopActivePath: '/analytics',
       mainScroll: 'auto',
+      hideTopbar: true,
+      showTopbarBottomBorder: false,
     })
   })
 
@@ -420,9 +420,9 @@ describe('resolveTerrainTopbarPlacement', () => {
     )
   })
 
-  it('shows the shared topbar on /analytics', () => {
+  it('keeps a mobile-only shell topbar on /analytics', () => {
     const route = { kind: 'static' as const, path: '/analytics' as const }
-    expect(resolveTerrainTopbarPlacement(route, getTerrainRouteConfig(route))).toBe('all')
+    expect(resolveTerrainTopbarPlacement(route, getTerrainRouteConfig(route))).toBe('mobile-only')
   })
 
   it('hides the shared topbar on pages that own an in-page back control', () => {

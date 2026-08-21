@@ -13,6 +13,7 @@ import {
   NewPatternsCard,
   ObservationTreatmentCard,
   OpenObservationsCard,
+  OperationalSummaryStrip,
   PlanDeadlinesCard,
   PolesCard,
   RecurringPatternsCard,
@@ -20,6 +21,7 @@ import {
 } from '@/features/analytics/components/dashboard-widgets'
 import { useAnalyticsDashboardQuery } from '@/features/analytics/hooks'
 import {
+  canShowDashboardDelta,
   collectDashboardComparisons,
   dashboardCoverageBannerMessage,
   worstDashboardCoverage,
@@ -86,10 +88,14 @@ export function AnalyticsPage({ scope = { type: 'session' } }: AnalyticsPageProp
       : scope.type === 'establishment'
         ? `/e/${scope.establishmentId}`
         : '/analytics'
+  const coverageComparisons = dashboardQuery.data
+    ? collectDashboardComparisons(dashboardQuery.data)
+    : []
   const coverageMessage = dashboardQuery.data
     ? dashboardCoverageBannerMessage({
-        coverage: worstDashboardCoverage(collectDashboardComparisons(dashboardQuery.data)),
+        coverage: worstDashboardCoverage(coverageComparisons),
         historyReliableFrom: dashboardQuery.data.history_reliable_from,
+        hasDisplayableDelta: coverageComparisons.some(canShowDashboardDelta),
       })
     : null
 
@@ -118,9 +124,9 @@ export function AnalyticsPage({ scope = { type: 'session' } }: AnalyticsPageProp
   }
 
   return (
-    <div className="mx-auto flex w-full min-w-0 max-w-[96rem] flex-col gap-5 px-4 py-5 pb-10 lg:px-8 lg:py-6 lg:pb-12 xl:px-10">
+    <div className="mx-auto flex w-full min-w-0 max-w-[96rem] flex-col gap-4 px-4 py-5 pb-28 lg:gap-5 lg:px-8 lg:py-6 lg:pb-12 xl:px-10">
       <header className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0">
+        <div className="hidden min-w-0 lg:block">
           <h1 className="text-3xl font-bold tracking-tight text-[#1a1a1a]">Dashboard</h1>
           <p className="mt-1 text-sm text-[#7D7B75]">
             {isCross
@@ -156,8 +162,6 @@ export function AnalyticsPage({ scope = { type: 'session' } }: AnalyticsPageProp
         </p>
       ) : null}
 
-      <DashboardAiSummaryPlaceholder />
-
       {dashboardQuery.isLoading ? (
         <div className="flex items-center justify-center py-16 text-[#7D7B75]">
           <Loader2 className="h-6 w-6 animate-spin" />
@@ -182,24 +186,52 @@ export function AnalyticsPage({ scope = { type: 'session' } }: AnalyticsPageProp
 
       {dashboardQuery.data ? (
         <>
-          <div className="grid min-w-0 gap-4 lg:grid-cols-2 lg:gap-5">
-            <RecurringPatternsCard items={dashboardQuery.data.recurring_patterns} />
-            <NewPatternsCard
-              items={dashboardQuery.data.new_patterns}
-              previewLimit={dashboardQuery.data.new_patterns_preview_limit}
-              isCross={isCross}
-            />
-            <ContributorsCard items={dashboardQuery.data.contributors} />
-            <ObservationTreatmentCard data={dashboardQuery.data} />
-            <OpenObservationsCard data={dashboardQuery.data} />
-            <PlanDeadlinesCard data={dashboardQuery.data} />
-            <DashboardRevenuePlaceholder />
-            <ZonesCard
-              items={dashboardQuery.data.zones}
-              previewLimit={dashboardQuery.data.zones_preview_limit}
-              isCross={isCross}
-            />
-            <PolesCard items={dashboardQuery.data.poles} isCross={isCross} />
+          <OperationalSummaryStrip data={dashboardQuery.data} />
+          <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:gap-5">
+            <div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col lg:gap-5">
+              <div className="order-1 min-w-0 lg:order-none">
+                <RecurringPatternsCard items={dashboardQuery.data.recurring_patterns} />
+              </div>
+              <div className="order-4 min-w-0 lg:order-none">
+                <ObservationTreatmentCard data={dashboardQuery.data} />
+              </div>
+              <div className="order-5 min-w-0 lg:order-none">
+                <PlanDeadlinesCard data={dashboardQuery.data} />
+              </div>
+              <div className="order-7 min-w-0 lg:order-none">
+                <PolesCard items={dashboardQuery.data.poles} isCross={isCross} />
+              </div>
+            </div>
+            <div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col lg:gap-5">
+              <div className="order-2 min-w-0 lg:order-none">
+                <NewPatternsCard
+                  items={dashboardQuery.data.new_patterns}
+                  previewLimit={dashboardQuery.data.new_patterns_preview_limit}
+                  isCross={isCross}
+                />
+              </div>
+              <div className="order-3 min-w-0 lg:order-none">
+                <OpenObservationsCard data={dashboardQuery.data} />
+              </div>
+              <div className="order-6 min-w-0 lg:order-none">
+                <ZonesCard
+                  items={dashboardQuery.data.zones}
+                  previewLimit={dashboardQuery.data.zones_preview_limit}
+                  isCross={isCross}
+                />
+              </div>
+              <div className="order-8 min-w-0 lg:order-none">
+                <ContributorsCard items={dashboardQuery.data.contributors} isCross={isCross} />
+              </div>
+            </div>
+          </div>
+          <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5">
+            <div className="min-w-0">
+              <DashboardAiSummaryPlaceholder />
+            </div>
+            <div className="min-w-0">
+              <DashboardRevenuePlaceholder />
+            </div>
           </div>
         </>
       ) : null}
