@@ -272,7 +272,8 @@ def get_analytics_dashboard(
         establishment_ids = tuple(sorted(allowed_ids))
     events_by_signal = _group_signal_events(signal_ids)
     executions = list(
-        ActionPlanExecution.objects.filter(establishment_id__in=establishment_ids)
+        read_scope.readable_executions_queryset()
+        .filter(establishment_id__in=establishment_ids)
         .select_related("establishment", "source_signal")
         .prefetch_related("lifecycle_events")
     )

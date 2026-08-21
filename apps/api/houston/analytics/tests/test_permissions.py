@@ -4,6 +4,7 @@ import pytest
 from django.utils import timezone
 
 from houston.accounts.models import User
+from houston.action_plans.models import ActionPlanExecution
 from houston.analytics.models import SignalPatternAssignment
 from houston.analytics.permissions import (
     analytics_accessible_establishment_ids_for_user,
@@ -50,6 +51,28 @@ def create_signal(
         structured_summary="Structured signal summary.",
         issue_focus=issue_focus or title.lower().replace(" ", "-"),
         last_activity_at=timezone.now(),
+    )
+
+
+def create_execution(
+    membership,
+    *,
+    title="Execution",
+    source_signal=None,
+    pilot_business_unit,
+    affected_business_unit=None,
+    responsible_business_unit=None,
+):
+    return ActionPlanExecution.objects.create(
+        establishment=membership.establishment,
+        created_by=membership,
+        title=title,
+        source_signal=source_signal,
+        pilot_business_unit=pilot_business_unit,
+        affected_business_unit=affected_business_unit,
+        responsible_business_unit=responsible_business_unit,
+        last_activity_at=timezone.now(),
+        use_shared_chronology=True,
     )
 
 
@@ -327,6 +350,146 @@ def test_manager_without_scope_reads_unassigned_but_not_resolved_business_unit_s
 
     assert readable_titles == {unassigned.title}
     assert resolved.title not in readable_titles
+
+
+def test_owner_reads_unlinked_executions_in_establishment():
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    business_unit = create_business_unit(establishment=owner.establishment, key="bar")
+    unlinked = create_execution(
+        owner,
+        title="Unlinked",
+        pilot_business_unit=business_unit,
+    )
+
+    readable_ids = set(
+        resolve_analytics_read_scope(owner.user)
+        .readable_executions_queryset()
+        .values_list("id", flat=True)
+    )
+
+    assert readable_ids == {unlinked.id}
+
+
+def test_manager_execution_scope_follows_source_signal_then_unlinked_bu_fallback():
+    manager = build_membership(role=EstablishmentMembership.Role.MANAGER)
+    in_scope_bu = create_business_unit(establishment=manager.establishment, key="bar")
+    out_scope_bu = create_business_unit(establishment=manager.establishment, key="kitchen")
+    create_membership_with_business_unit_scope(
+        membership=manager,
+        business_unit=in_scope_bu,
+    )
+    in_scope_signal = create_signal(
+        manager,
+        title="In scope signal",
+        affected_business_unit=in_scope_bu,
+        responsible_business_unit=in_scope_bu,
+    )
+    out_of_scope_signal = create_signal(
+        manager,
+        title="Out of scope signal",
+        affected_business_unit=out_scope_bu,
+        responsible_business_unit=out_scope_bu,
+    )
+    unassigned_signal = create_signal(
+        manager,
+        title="Unassigned signal",
+        affected_business_unit=out_scope_bu,
+        responsible_business_unit=out_scope_bu,
+        routing_status=Signal.RoutingStatus.UNASSIGNED,
+    )
+    linked_in_scope = create_execution(
+        manager,
+        title="Linked in scope",
+        source_signal=in_scope_signal,
+        pilot_business_unit=in_scope_bu,
+    )
+    linked_out_of_scope_signal_on_in_scope_execution_bu = create_execution(
+        manager,
+        title="Linked out of scope signal",
+        source_signal=out_of_scope_signal,
+        pilot_business_unit=in_scope_bu,
+        affected_business_unit=in_scope_bu,
+        responsible_business_unit=in_scope_bu,
+    )
+    linked_unassigned = create_execution(
+        manager,
+        title="Linked unassigned",
+        source_signal=unassigned_signal,
+        pilot_business_unit=out_scope_bu,
+    )
+    unlinked_in_scope = create_execution(
+        manager,
+        title="Unlinked in scope",
+        pilot_business_unit=in_scope_bu,
+        affected_business_unit=in_scope_bu,
+        responsible_business_unit=in_scope_bu,
+    )
+    unlinked_out_of_scope = create_execution(
+        manager,
+        title="Unlinked out of scope",
+        pilot_business_unit=out_scope_bu,
+        affected_business_unit=out_scope_bu,
+        responsible_business_unit=out_scope_bu,
+    )
+
+    readable_ids = set(
+        resolve_analytics_read_scope(manager.user)
+        .readable_executions_queryset()
+        .values_list("id", flat=True)
+    )
+
+    assert readable_ids == {
+        linked_in_scope.id,
+        linked_unassigned.id,
+        unlinked_in_scope.id,
+    }
+    assert linked_out_of_scope_signal_on_in_scope_execution_bu.id not in readable_ids
+    assert unlinked_out_of_scope.id not in readable_ids
+
+
+def test_manager_without_scope_reads_unassigned_linked_executions_only():
+    manager = build_membership(role=EstablishmentMembership.Role.MANAGER)
+    business_unit = create_business_unit(establishment=manager.establishment, key="bar")
+    resolved_signal = create_signal(
+        manager,
+        title="Resolved",
+        affected_business_unit=business_unit,
+        responsible_business_unit=business_unit,
+    )
+    unassigned_signal = create_signal(
+        manager,
+        title="Unassigned",
+        affected_business_unit=business_unit,
+        responsible_business_unit=business_unit,
+        routing_status=Signal.RoutingStatus.UNASSIGNED,
+    )
+    linked_resolved = create_execution(
+        manager,
+        title="Linked resolved",
+        source_signal=resolved_signal,
+        pilot_business_unit=business_unit,
+    )
+    linked_unassigned = create_execution(
+        manager,
+        title="Linked unassigned",
+        source_signal=unassigned_signal,
+        pilot_business_unit=business_unit,
+    )
+    unlinked = create_execution(
+        manager,
+        title="Unlinked",
+        pilot_business_unit=business_unit,
+    )
+
+    readable_ids = set(
+        resolve_analytics_read_scope(manager.user)
+        .readable_executions_queryset()
+        .values_list("id", flat=True)
+    )
+
+    assert readable_ids == {linked_unassigned.id}
+    assert linked_resolved.id not in readable_ids
+    assert unlinked.id not in readable_ids
 
 
 def test_multi_memberships_union_keeps_manager_business_unit_constraints():

@@ -21,7 +21,7 @@ from houston.gamification.services import open_season
 from houston.signals.models import Signal
 from houston.testing.auth import auth_headers, build_api_membership, login
 from houston.testing.factories import create_establishment, create_membership, create_user
-from houston.testing.taxonomy import create_business_unit
+from houston.testing.taxonomy import create_business_unit, create_membership_with_business_unit_scope
 
 pytestmark = pytest.mark.django_db
 
@@ -294,6 +294,77 @@ def test_done_execution_without_canonical_timestamps_is_undatable():
         last_activity_at=timezone.now(),
         use_shared_chronology=True,
         status=EXECUTION_STATUS_DONE,
+    )
+
+    result = get_analytics_dashboard(membership.user, period_days=7)
+
+    assert result.undatable_execution_terminals.done == 1
+    assert result.plan_delay_resolved.undatable_in_scope == 1
+    assert result.plan_delay_resolved.n == 0
+
+
+def _create_undatable_done_execution(
+    membership,
+    *,
+    title,
+    business_unit,
+    source_signal=None,
+):
+    return ActionPlanExecution.objects.create(
+        establishment=membership.establishment,
+        created_by=membership,
+        title=title,
+        source_signal=source_signal,
+        pilot_business_unit=business_unit,
+        affected_business_unit=business_unit,
+        responsible_business_unit=business_unit,
+        last_activity_at=timezone.now(),
+        use_shared_chronology=True,
+        status=EXECUTION_STATUS_DONE,
+    )
+
+
+def test_manager_dashboard_plan_metrics_exclude_out_of_scope_executions():
+    membership = build_api_membership(role=EstablishmentMembership.Role.MANAGER)
+    apply_analytics_history_cutover()
+    in_scope_bu = create_business_unit(
+        establishment=membership.establishment,
+        key="analytics_manager_in_scope",
+    )
+    out_scope_bu = create_business_unit(
+        establishment=membership.establishment,
+        key="analytics_manager_out_scope",
+    )
+    create_membership_with_business_unit_scope(
+        membership=membership,
+        business_unit=in_scope_bu,
+    )
+    out_of_scope_signal = Signal.objects.create(
+        establishment=membership.establishment,
+        status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.RESOLVED,
+        title="Out of scope source",
+        structured_summary="Summary for out of scope source.",
+        issue_focus="out-of-scope-source",
+        last_activity_at=timezone.now(),
+        affected_business_unit=out_scope_bu,
+        responsible_business_unit=out_scope_bu,
+    )
+    _create_undatable_done_execution(
+        membership,
+        title="In scope unlinked",
+        business_unit=in_scope_bu,
+    )
+    _create_undatable_done_execution(
+        membership,
+        title="Out of scope unlinked",
+        business_unit=out_scope_bu,
+    )
+    _create_undatable_done_execution(
+        membership,
+        title="Linked out of scope signal on in-scope execution BU",
+        business_unit=in_scope_bu,
+        source_signal=out_of_scope_signal,
     )
 
     result = get_analytics_dashboard(membership.user, period_days=7)

@@ -5,10 +5,12 @@ from dataclasses import dataclass
 from django.db.models import Q, QuerySet
 
 from houston.accounts.models import User
+from houston.action_plans.models import ActionPlanExecution
 from houston.analytics.models import OperationalPattern, SignalPatternAssignment
 from houston.analytics.permissions import (
     ANALYTICS_READ_ROLES,
     analytics_signal_scope_q_for_membership,
+    can_read_analytics,
     empty_signal_scope_q,
 )
 from houston.analytics.status_matrix import (
@@ -17,7 +19,10 @@ from houston.analytics.status_matrix import (
     recurrence_signal_q,
     resolution_time_signal_q,
 )
-from houston.establishments.membership_scope import membership_scope_prefetch
+from houston.establishments.membership_scope import (
+    membership_business_unit_scope_ids,
+    membership_scope_prefetch,
+)
 from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.establishments.role_constants import ADMIN_ROLES
 from houston.organizations.models import Organization
@@ -27,9 +32,13 @@ from houston.signals.models import Signal
 @dataclass(frozen=True)
 class AnalyticsReadScope:
     signal_scope_q: Q
+    execution_scope_q: Q
 
     def readable_signals_queryset(self) -> QuerySet[Signal]:
         return Signal.objects.filter(self.signal_scope_q).distinct()
+
+    def readable_executions_queryset(self) -> QuerySet[ActionPlanExecution]:
+        return ActionPlanExecution.objects.filter(self.execution_scope_q).distinct()
 
     def default_signals_queryset(self) -> QuerySet[Signal]:
         return self._signals_for_status_q(default_analytics_signal_q())
@@ -54,13 +63,15 @@ def resolve_analytics_read_scope(
     establishment_id=None,
     establishment_ids=None,
 ) -> AnalyticsReadScope:
+    signal_scope_q, execution_scope_q = _analytics_scope_qs_for_user(
+        user,
+        organization_id=organization_id,
+        establishment_id=establishment_id,
+        establishment_ids=establishment_ids,
+    )
     return AnalyticsReadScope(
-        signal_scope_q=_analytics_signal_scope_q_for_user(
-            user,
-            organization_id=organization_id,
-            establishment_id=establishment_id,
-            establishment_ids=establishment_ids,
-        )
+        signal_scope_q=signal_scope_q,
+        execution_scope_q=execution_scope_q,
     )
 
 
@@ -180,15 +191,16 @@ def analytics_readable_patterns_queryset(
     )
 
 
-def _analytics_signal_scope_q_for_user(
+def _analytics_scope_qs_for_user(
     user: User | None,
     *,
     organization_id=None,
     establishment_id=None,
     establishment_ids=None,
-) -> Q:
+) -> tuple[Q, Q]:
+    empty = empty_signal_scope_q()
     if user is None or user.status != User.Status.ACTIVE:
-        return empty_signal_scope_q()
+        return empty, empty
 
     memberships = (
         EstablishmentMembership.objects.filter(
@@ -210,23 +222,59 @@ def _analytics_signal_scope_q_for_user(
         memberships = memberships.filter(establishment_id__in=establishment_ids)
 
     admin_establishment_ids = []
-    membership_scopes = []
+    signal_scopes = []
+    execution_scopes = []
     for membership in memberships:
         if membership.role in ADMIN_ROLES:
             admin_establishment_ids.append(membership.establishment_id)
         else:
-            membership_scopes.append(analytics_signal_scope_q_for_membership(membership))
+            signal_scopes.append(analytics_signal_scope_q_for_membership(membership))
+            execution_scopes.append(_analytics_execution_scope_q_for_membership(membership))
     if admin_establishment_ids:
-        membership_scopes.append(
-            Q(
-                establishment_id__in=admin_establishment_ids,
-                establishment__status=Establishment.Status.ACTIVE,
-                establishment__organization__status=Organization.Status.ACTIVE,
-            )
+        admin_scope = Q(
+            establishment_id__in=admin_establishment_ids,
+            establishment__status=Establishment.Status.ACTIVE,
+            establishment__organization__status=Organization.Status.ACTIVE,
         )
-    if not membership_scopes:
+        signal_scopes.append(admin_scope)
+        execution_scopes.append(admin_scope)
+    return _combine_scope_qs(signal_scopes), _combine_scope_qs(execution_scopes)
+
+
+def _combine_scope_qs(scopes: list[Q]) -> Q:
+    if not scopes:
         return empty_signal_scope_q()
-    scope_q = membership_scopes[0]
-    for membership_scope in membership_scopes[1:]:
+    scope_q = scopes[0]
+    for membership_scope in scopes[1:]:
         scope_q |= membership_scope
     return scope_q
+
+
+def _analytics_execution_scope_q_for_membership(
+    membership: EstablishmentMembership,
+) -> Q:
+    if not can_read_analytics(membership):
+        return empty_signal_scope_q()
+
+    base_scope = Q(
+        establishment_id=membership.establishment_id,
+        establishment__status=Establishment.Status.ACTIVE,
+        establishment__organization__status=Organization.Status.ACTIVE,
+    )
+    if membership.role in ADMIN_ROLES:
+        return base_scope
+    if membership.role != EstablishmentMembership.Role.MANAGER:
+        return empty_signal_scope_q()
+
+    linked = Q(source_signal__routing_status=Signal.RoutingStatus.UNASSIGNED)
+    business_unit_ids = membership_business_unit_scope_ids(membership)
+    if not business_unit_ids:
+        return base_scope & linked
+    linked |= Q(source_signal__affected_business_unit_id__in=business_unit_ids)
+    linked |= Q(source_signal__responsible_business_unit_id__in=business_unit_ids)
+    unlinked = Q(source_signal_id__isnull=True) & (
+        Q(pilot_business_unit_id__in=business_unit_ids)
+        | Q(affected_business_unit_id__in=business_unit_ids)
+        | Q(responsible_business_unit_id__in=business_unit_ids)
+    )
+    return base_scope & (linked | unlinked)
