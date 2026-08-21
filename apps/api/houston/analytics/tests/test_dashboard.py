@@ -21,7 +21,10 @@ from houston.gamification.services import open_season
 from houston.signals.models import Signal
 from houston.testing.auth import auth_headers, build_api_membership, login
 from houston.testing.factories import create_establishment, create_membership, create_user
-from houston.testing.taxonomy import create_business_unit, create_membership_with_business_unit_scope
+from houston.testing.taxonomy import (
+    create_business_unit,
+    create_membership_with_business_unit_scope,
+)
 
 pytestmark = pytest.mark.django_db
 
