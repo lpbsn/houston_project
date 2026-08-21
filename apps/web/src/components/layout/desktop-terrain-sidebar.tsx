@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 
 import {
   isScopedNavItemActive,
   resolveScopedDesktopNavigation,
+  type ScopedDesktopNavSection,
 } from '@/features/navigation/lib/scoped-desktop-navigation'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
 import { formatMembershipRoleDisplay } from '@/lib/display-names'
@@ -52,6 +53,23 @@ function buildContextLabel(membership: Membership | null | undefined): string {
   return establishmentName ? `${roleLabel} · ${establishmentName}` : roleLabel
 }
 
+function mergeExpandedSectionIds(
+  current: Set<string>,
+  sections: ScopedDesktopNavSection[],
+  activePath?: string,
+): Set<string> {
+  const next = new Set(current)
+  for (const section of sections) {
+    if (section.defaultExpanded && current.size === 0) {
+      next.add(section.id)
+    }
+    if (section.items.some((item) => isScopedNavItemActive(item.href, activePath))) {
+      next.add(section.id)
+    }
+  }
+  return next
+}
+
 export function DesktopTerrainSidebar({
   activePath,
   bootstrap,
@@ -63,24 +81,17 @@ export function DesktopTerrainSidebar({
     () => resolveScopedDesktopNavigation({ bootstrap, showChat }),
     [bootstrap, showChat],
   )
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
+  const [expandedIds, setExpandedIds] = useState(() =>
+    mergeExpandedSectionIds(new Set(), sections, activePath),
+  )
+  const [expansionSync, setExpansionSync] = useState({ activePath, sections })
   const user = bootstrap?.user ?? null
   const activeMembership = bootstrap?.active_membership ?? null
 
-  useEffect(() => {
-    setExpandedIds((current) => {
-      const next = new Set(current)
-      for (const section of sections) {
-        if (section.defaultExpanded && current.size === 0) {
-          next.add(section.id)
-        }
-        if (section.items.some((item) => isScopedNavItemActive(item.href, activePath))) {
-          next.add(section.id)
-        }
-      }
-      return next
-    })
-  }, [activePath, sections])
+  if (activePath !== expansionSync.activePath || sections !== expansionSync.sections) {
+    setExpansionSync({ activePath, sections })
+    setExpandedIds((current) => mergeExpandedSectionIds(current, sections, activePath))
+  }
 
   function toggleSection(sectionId: string) {
     setExpandedIds((current) => {

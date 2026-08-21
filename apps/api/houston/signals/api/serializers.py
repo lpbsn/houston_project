@@ -381,7 +381,9 @@ def serialize_linked_action_plan_execution_for_signal_detail(
     }
 
 
-def serialize_signal_detail(*, signal: Signal, membership, request, read_only: bool = False) -> dict:
+def serialize_signal_detail(
+    *, signal: Signal, membership, request, read_only: bool = False
+) -> dict:
     from houston.action_plans.selectors import linked_action_plan_executions_for_signal_detail
     from houston.signals.selectors import (
         build_resolution_request_events,

@@ -21,7 +21,6 @@ from houston.action_plans.constants import (
     EXECUTION_STATUS_CANCELED,
     EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
-    EXECUTION_STATUS_PENDING_VALIDATION,
     EXECUTION_STATUS_SCHEDULED,
 )
 from houston.analytics.models import AnalyticsHistoryCoverage
@@ -297,7 +296,10 @@ def execution_end_at_at(
                 terminal_occurred_at = event.occurred_at
 
     status = execution_status_at(at=at, reliable_from=reliable_from, events=events)
-    if status in {EXECUTION_STATUS_DONE, EXECUTION_STATUS_CANCELED} and terminal_occurred_at is not None:
+    if (
+        status in {EXECUTION_STATUS_DONE, EXECUTION_STATUS_CANCELED}
+        and terminal_occurred_at is not None
+    ):
         return terminal_end_at if terminal_end_at is not None else (
             last_deadline_to if last_deadline_to is not None else origin_end_at
         )
@@ -306,7 +308,9 @@ def execution_end_at_at(
     return origin_end_at
 
 
-def first_signal_created_at(events: list[JournalEvent], *, fallback: datetime | None) -> datetime | None:
+def first_signal_created_at(
+    events: list[JournalEvent], *, fallback: datetime | None
+) -> datetime | None:
     created = [
         event.occurred_at
         for event in events

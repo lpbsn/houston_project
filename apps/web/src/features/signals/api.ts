@@ -76,14 +76,14 @@ function assertSignalData<T>(result: {
 }
 
 function buildSignalFeedQuery(
-  viewMode: SignalViewMode,
+  viewMode: SignalViewMode | null,
   filters: SignalFeedFilters,
   options: { cursor?: string; pageSize?: number } = {},
 ) {
   const normalized = normalizeSignalFeedFilters(filters)
 
   return {
-    view_mode: viewMode,
+    ...(viewMode ? { view_mode: viewMode } : {}),
     ...(normalized.statuses.length > 0 ? { statuses: normalized.statuses.join(',') } : {}),
     ...(normalized.businessUnitIds.length > 0
       ? { business_unit_ids: normalized.businessUnitIds.join(',') }
@@ -131,12 +131,11 @@ export async function fetchCrossSignalFeed(
   filters: SignalFeedFilters,
   options: { cursor?: string; pageSize?: number } = {},
 ): Promise<SignalFeedResponse> {
-  const { view_mode: _viewMode, ...query } = buildSignalFeedQuery('personal', filters, options)
   const result = await withAuthRetry(
     (accessToken) =>
       apiClient.GET('/api/v1/cross/signal-feed/', {
         params: {
-          query,
+          query: buildSignalFeedQuery(null, filters, options),
         },
         headers: getAuthHeaders(accessToken),
       }),

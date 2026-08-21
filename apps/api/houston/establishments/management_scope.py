@@ -31,7 +31,10 @@ def list_management_memberships_for_user(user: User | None) -> list[Establishmen
 
 
 def management_establishment_ids_for_user(user: User | None) -> list[UUID]:
-    return [membership.establishment_id for membership in list_management_memberships_for_user(user)]
+    return [
+        membership.establishment_id
+        for membership in list_management_memberships_for_user(user)
+    ]
 
 
 def user_can_access_management_scope(user: User | None) -> bool:

@@ -516,7 +516,9 @@ def _canonical_pattern(assignment: SignalPatternAssignment) -> OperationalPatter
     return pattern
 
 
-def _duration_stats(values: list[float], *, include_p90: bool) -> tuple[float | None, float | None, float | None, int]:
+def _duration_stats(
+    values: list[float], *, include_p90: bool
+) -> tuple[float | None, float | None, float | None, int]:
     n = len(values)
     if n == 0:
         return None, None, None, 0
@@ -561,7 +563,9 @@ def _signal_measurable_terminal_at(
 
 
 def _execution_done_canonical_at(execution: ActionPlanExecution) -> datetime | None:
-    """DONE is dated by validate (`validated_at`) or mark-done without validation (`marked_done_at`)."""
+    """DONE is dated by validate (`validated_at`) or mark-done without
+    validation (`marked_done_at`).
+    """
     if execution.validated_at is not None:
         return execution.validated_at
     return execution.marked_done_at
