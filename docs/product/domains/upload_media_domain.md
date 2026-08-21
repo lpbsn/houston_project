@@ -1,7 +1,7 @@
 # Upload / Media Domain
 
 Status: authoritative
-Last reviewed: 2026-06-01
+Last reviewed: 2026-08-21
 Implementation status: implemented (Phase 3 MVP — temporary photos + private storage; audio via transcription endpoint only)
 
 ## 1. Purpose
@@ -149,8 +149,9 @@ Candidate API capabilities only:
 ## 10. Frontend Expectations
 
 - Frontend may collect text, photos, and audio for the Observation flow, but backend validation is authoritative.
-- Frontend should block obvious invalid states early, including photo-only Observation submit attempts.
-- Frontend should show temporary states such as selected, uploading, failed, or linked, but must not treat those UI states as business truth.
+- Observation photos stay local `File` objects in process memory until Envoyer. `POST …/temporary-uploads/` runs at send, not during compose. Task-origin Observation is text-only compose.
+- Frontend should block obvious invalid states early, including photo-only Observation submit attempts and Envoyer while offline.
+- Upload/link states after Envoyer starts are not business truth; a failed send must not treat the Observation as created and must keep the local draft.
 - Frontend must not assume media is linked until backend confirmation arrives through the API.
 - Frontend must not treat upload completion as Observation submit completion.
 - Audio should remain local or temporary and must not be stored durably in the browser.

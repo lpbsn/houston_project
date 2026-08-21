@@ -3,7 +3,7 @@
 Status: authoritative  
 Last reviewed: 2026-08-21
 
-Référence d’exécution pour les agents Cursor. **Capacitor Lots 1–10 are done** and are the Capacitor foundation for product work. **Capacitor Lot 11** (DX / CI / release mobile) is **deferred**, not abandoned. This document frames remaining Capacitor work; it does not prescribe implementation.
+Record of the delivered Capacitor foundation. **Capacitor Lots 1–10 are closed.** Resume product work on this socle. **Capacitor Lot 11** (DX / CI / release mobile) is **deferred**, not abandoned, and is **not** the next chantier. This document does not prescribe implementation.
 
 These **Capacitor Lots** (1–11) are distinct from product/domain lots (taxonomy Lot 5, test Lot 4 helpers, product Lot 11 stabilization). Write **Capacitor Lot N** when referring to this roadmap.
 
@@ -17,7 +17,7 @@ Construire Spore comme **client unique multi-runtime** :
 
 La **PWA n’est plus une cible produit ni un runtime à maintenir**. Le service worker, le manifeste PWA et les comportements d’installation PWA ne sont pas des contraintes à préserver par principe. Le chantier n’est pas un wrapping de l’existant dans Capacitor : il vise à supprimer les hypothèses trop spécifiques au navigateur (same-origin, proxy Vite, cookies HttpOnly, service worker, `history` navigateur) pour obtenir une base plus simple, propre et maintenable.
 
-Contexte d’exécution : un seul développeur, aucun utilisateur réel en production. L’architecture existante n’est pas une contrainte à préserver. Les lots doivent viser directement l’architecture cible et éviter les mécanismes transitoires de compatibilité lorsqu’ils n’apportent pas de valeur durable.
+Contexte : un seul développeur, aucun utilisateur réel en production. Les Lots 1–10 ont visé l’architecture cible sans mécanismes transitoires de compatibilité. Ne pas les rouvrir pour empiler des fallbacks.
 
 ## Cible produit
 
@@ -39,9 +39,9 @@ Cela n’implique pas un **offline-first généralisé** : pas de réplication l
 
 La protection ciblée retenue (checkpoint Offline capture, **done**) est la **survie de la saisie Observation tant que le process reste vivant** (blip, background sans kill, picker si le process reste intact, navigation interne), plus ne plus exiger l’upload photo pour composer. Elle est portée par le **Lot 10 (done)**. Elle ne promet pas la survie après process kill / cold start, ni une file, ni une sync. Audio, chat, commentaires, et commandes de cycle de vie (tâches, signaux, plans) restent online-only.
 
-## Besoins fonctionnels vs implémentation PWA actuelle
+## Besoins fonctionnels vs ancienne implémentation PWA
 
-Certains mécanismes PWA couvraient des besoins réels. La suppression de la PWA **ne doit pas** se transformer en chantier de reconstruction de toutes ses capacités ailleurs. Une capacité n’est conservée ou remplacée **que si un besoin fonctionnel réel le justifie**.
+Certains mécanismes PWA couvraient des besoins réels. La suppression de la PWA **ne doit pas** se transformer en chantier de reconstruction de toutes ses capacités ailleurs. Une capacité n’est conservée ou remplacée **que si un besoin fonctionnel réel le justifie**. PWA artefacts are already removed (Lot 4).
 
 | Besoin fonctionnel | Implémentation actuelle (PWA) | Décision / lot |
 |--------------------|-------------------------------|----------------|
@@ -52,35 +52,25 @@ Certains mécanismes PWA couvraient des besoins réels. La suppression de la PWA
 | Installation sur l’écran d’accueil | Manifeste PWA + prompts navigateur | Hors scope Web — distribution native (lot 5) |
 | Cache assets / shell offline | Service worker `injectManifest` | Lot 4 — **retrait** ; cache HTTP navigateur/CDN suffit ; pas de shell offline ni de stratégie offline dédiée |
 
-Retirer l’implémentation PWA au lot concerné. Ne pas la replacer par défaut.
+Ne pas replacer le service worker, le manifeste, ni l’installabilité PWA.
 
 ## Cible architecturale
 
 - Les features métier ne dépendent pas de Capacitor.
 - Les différences Web/Native sont isolées **uniquement lorsqu’elles deviennent concrètes**.
-- HTTP, WebSocket, auth, navigation et lifecycle doivent fonctionner dans les deux runtimes ; le push est traité au lot 7 selon le canal retenu.
-- Pas d’abstraction anticipée : chaque besoin est introduit au lot qui le rend nécessaire.
+- HTTP, WebSocket, auth, navigation et lifecycle fonctionnent dans les deux runtimes ; le push terrain est le canal FCM natif (Lot 7).
+- Pas d’abstraction anticipée : n’introduire une différence Web/Native que lorsqu’elle est concrète.
 - Backend, OpenAPI, RBAC, isolation tenant et cache frontend restent les sources de vérité existantes.
 
-Docs à relire selon le lot, après le code : [`engineering/frontend_architecture.md`](engineering/frontend_architecture.md), [`architecture/authentication_charter.md`](architecture/authentication_charter.md), [`product/domains/realtime_domain.md`](product/domains/realtime_domain.md), [`product/domains/notification_domain.md`](product/domains/notification_domain.md). Le code et les tests priment sur ces docs. La documentation historique PWA est nettoyée **progressivement**, lot par lot, avec le code concerné — pas en chantier séparé.
+Le code et les tests priment. Archi utile : [`engineering/frontend_architecture.md`](engineering/frontend_architecture.md), [`architecture/authentication_charter.md`](architecture/authentication_charter.md), [`product/domains/realtime_domain.md`](product/domains/realtime_domain.md), [`product/domains/notification_domain.md`](product/domains/notification_domain.md).
 
-## Règles d’exécution
+## Statut d’exécution
 
-Chaque lot est un chantier séparé. Un agent qui ouvre un lot doit :
+**Do not reopen Capacitor Lots 1–10.** They are closed. **Do not open Capacitor Lot 11** until real TestFlight and/or Google Play Internal Testing prep. If Lot 11 is later reopened, still do not open durable Observation storage, queue, or sync (régime B) inside it.
 
-1. **Inspecter le code réel** concerné (frontend, backend, tests, contrat API) avant toute proposition.
-2. **Challenger l’architecture existante** si un choix plus simple et durable est possible. La rétrocompatibilité n’est pas un objectif.
-3. **Planifier** (périmètre, décisions, validation) avant d’implémenter.
-4. **Implémenter et valider ce lot uniquement.** Ne pas anticiper les lots suivants.
-5. **Laisser le repository fonctionnel** à la fin du lot (Web au minimum ; Native dès qu’elle existe).
-6. **Choisir la solution la plus simple** compatible avec une architecture durable. Pas d’abstraction « pour plus tard ».
+Lots 1–10 were sequential. Remaining items under **Limitations non bloquantes** are external dependencies, a distinct ticket, or unfinished device QA — they do not reopen a lot.
 
-Les fichiers, interfaces, plugins Capacitor, librairies et migrations se décident **au début du lot**, après inspection — pas dans cette roadmap.
-
-Ordre des lots : Lots 1–10 étaient strictement séquentiels et sont **done**. Ils constituent le socle Capacitor pour **reprendre le développement produit**. **Capacitor Lot 11** is **deferred** — do not open it as the next Capacitor chantier. If Lot 11 is later reopened, still do not open durable Observation storage, queue, or sync (régime B) inside it.
-
-Contexte de migration. Le projet est développé par un seul développeur et n’a aucun utilisateur réel en production. Il n’est donc pas nécessaire de privilégier les stratégies de migration “safe” destinées à préserver temporairement l’existant : compatibilité ascendante, doubles chemins, feature flags, migrations progressives, fallbacks temporaires ou conservation d’anciennes abstractions. Si une rupture ou une refonte rend la cible plus simple, propre et maintenable, elle doit être privilégiée.
-Cela ne signifie pas ignorer la qualité ou la sécurité technique : le repository doit rester fonctionnel et validé à la fin de chaque lot.
+Contexte de migration (historique des lots 1–10, toujours vrai pour le produit) : un seul développeur, aucun utilisateur réel en production. Pas de stratégies “safe” destinées à préserver temporairement l’existant (doubles chemins, feature flags, fallbacks). Une rupture plus simple et durable reste préférable. Le repository doit rester fonctionnel.
 
 PAS BESOIN
 - backward compatibility
@@ -104,7 +94,7 @@ TOUJOURS BESOIN
 
 ## Lots
 
-Capacitor Lot status: **1–10 done** · checkpoint Offline capture terrain **done** · **11 deferred**.
+Capacitor Lot status: **1–10 closed** · checkpoint Offline capture terrain **done** · **11 deferred**.
 
 ### 1. Runtime / API / WebSocket — done
 
@@ -171,7 +161,7 @@ Ticket auth orthogonal (wipe refresh Native sur erreur réseau) : hors ce checkp
 
 **Fait (2026-08-19).** Canal unique FCM HTTP v1 + `@capacitor-firebase/messaging`. `PushDevice` user-scoped ; envoi filtré par membership `push_enabled`. Web Push / VAPID retirés. Web Push desktop **non**. Tap OS (foreground / background / terminated) : `establishment_id` + `url` du payload. Sync token si session + permission OS granted (pas le `push_enabled` de l’établissement actif). Device QA manuel iOS physique + Android.
 
-**Validation (2026-08-19).** Implémentation Lot 7 terminée. `npx cap sync` validé. Build Android avec Firebase validé. Build iOS avec `@capacitor-firebase/messaging` + Firebase validé (`GoogleService-Info.plist` embarqué dans la target iOS ; entitlement `aps-environment=development` présent et référencé). Push iOS sur device réel **non validé** : le compte Apple actuel est une Personal Team ; cette validation reste en attente jusqu’à l’adhésion à l’Apple Developer Program, nécessaire pour tester APNs proprement sur iPhone physique. La suite de validation immédiate se poursuit sur Android de bout en bout.
+**Validation (2026-08-19).** Implémentation Lot 7 terminée. `npx cap sync` validé. Build Android avec Firebase validé. Build iOS avec `@capacitor-firebase/messaging` + Firebase validé (`GoogleService-Info.plist` embarqué dans la target iOS ; entitlement `aps-environment=development` présent et référencé). Push iOS sur device réel **non validé** : le compte Apple actuel est une Personal Team ; APNs sur iPhone physique attend l’Apple Developer Program. That leftover does not reopen this lot.
 
 ### 8. Deep links / navigation native — done
 
@@ -191,7 +181,7 @@ Ticket auth orthogonal (wipe refresh Native sur erreur réseau) : hors ce checkp
 
 **Fait (2026-08-20).** Navigation produit inchangée : topbar « Retour » + `backPath`. Android : `backButton` → overlay dismissible → `backPath` → `minimizeApp()` (pas `history.back`, pas `exitApp`). iOS : pas de listener ; le topbar reste la navigation arrière. Safe areas : token `--app-safe-*` = `var(--safe-area-inset-*, env(...))` sur les paddings existants. Clavier : `@capacitor/keyboard` `resize: native` (iOS WKWebView / `h-dvh`) + Android `adjustResize`. Micro : `NSMicrophoneUsageDescription` + `RECORD_AUDIO` pour la transcription Observation déjà livrée. Pas de plugin Camera / StatusBar.
 
-**Validation (2026-08-20).** Tests jsdom du handler Android et de `resolveTerrainBackPath`. Device QA iOS (Personal Team) + Android : safe areas, clavier login/reporting/chat/commentaires (T0/T1/T2), retour Android vs topbar, prompt micro. Noter un blocage iPhone seulement s’il se produit. Double gutter iOS : investiguer, ne pas présumer `contentInset: never`.
+**Validation (2026-08-20).** Tests jsdom du handler Android et de `resolveTerrainBackPath`. Device QA iOS (Personal Team) + Android : safe areas, clavier login/reporting/chat/commentaires (T0/T1/T2), retour Android vs topbar, prompt micro.
 
 ### 10. Résilience terrain — done
 
@@ -239,9 +229,15 @@ Interdit : offline-first généralisé ; réplication locale complète ; cache d
 - **Capacitor Lot 10 implémentation (2026-08-20)** : draft in-memory ; photos uploadées seulement à Envoyer ; Envoyer désactivé hors ligne ; pas d’upload opportuniste ; pas de retry 404. Purge draft : 201, fin de session, nouvelle identité, switch établissement — pas un échec refresh.
 - **Capacitor Lot 11 (2026-08-21)** : DX / CI / release mobile **deferred** until real TestFlight / Google Play Internal Testing prep. Not abandoned. Local Web/Native builds and `cap sync` stay the daily workflow.
 
-### Encore ouvertes
+### Limitations non bloquantes (hors lots)
 
-_(App Links / Universal Links E2E — fichiers d’association ops + ADP iOS, hors commit Lot 8. Capacitor Lot 10 : iPhone physique offline → reconnect encore ouvert ; implémentation régime A done.)_
+These do **not** reopen Lots 1–10 or open Lot 11:
+
+- Push iOS physique / APNs : Apple Developer Program (Personal Team today).
+- App Links E2E : publication réelle de `assetlinks.json` (pas de placeholders TEAMID / fingerprint). Handler Android `adb` VIEW → app → navigation is the Lot 8 QA bar.
+- Universal Links iOS E2E : même barre ADP que l’APNs Lot 7.
+- Capacitor Lot 10 régime A is delivered. Device leftovers: iPhone physique offline → reconnect encore ouvert ; iOS Simulator avion → reconnect non testé (pas de signal Capacitor exploitable).
+- Native refresh wipe on network error — [issue #181](https://github.com/lpbsn/houston_project/issues/181) (distinct ticket).
 
 ---
 
@@ -256,4 +252,4 @@ _(App Links / Universal Links E2E — fichiers d’association ops + ADP iOS, ho
 - Décisions d’implémentation (fichiers, APIs internes, plugins, stores).
 - Wipe refresh token Native sur erreur réseau ([issue #181](https://github.com/lpbsn/houston_project/issues/181) ; pas ce checkpoint).
 
-Ces sujets se tranchent lot par lot, après lecture du code.
+Ne pas rouvrir un lot Capacitor pour ces sujets. Inspecter le code avant tout changement.

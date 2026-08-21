@@ -73,9 +73,9 @@ make migrate-prod-test
 BASE_URL=http://localhost:8080 ./scripts/smoke/readonly.sh
 ```
 
-## Photo submit guard (Railway)
+## Observation compose (Railway / local)
 
-Report page requires all attached photos `ready` before submit. Verify: invalid file → error; `uploading` / `failed` → submit disabled.
+Photos stay local `File` until Envoyer (`POST temporary-uploads` then `POST observations/`). Compose remains possible while offline; Envoyer is **disabled** while offline. A failed send keeps the draft (text + local photos). Do not require photos `ready` before compose.
 
 ## References
 
