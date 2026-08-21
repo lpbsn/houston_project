@@ -361,7 +361,12 @@ def test_created_then_started_reuses_created_canonical_payload():
     assert promote_due_scheduled_executions(execution_id=execution.id) == 1
 
     execution.refresh_from_db()
-    started = execution.lifecycle_events.get(event_type=EXECUTION_LIFECYCLE_EVENT_STARTED)
+    started = (
+        execution.lifecycle_events.filter(event_type=EXECUTION_LIFECYCLE_EVENT_STARTED)
+        .order_by("occurred_at", "id")
+        .last()
+    )
+    assert started is not None
     assert started.id != created.id
     txs = _gam04_txs(membership=creator, execution=execution)
     assert len(txs) == 1

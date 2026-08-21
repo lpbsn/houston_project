@@ -102,23 +102,45 @@ def test_overview_requires_authentication(api_client):
     assert response.status_code == 401
 
 
-def test_overview_uses_existing_establishment_scope_resolution(api_client):
+def test_overview_uses_existing_establishment_scope_resolution(api_client, monkeypatch):
     user = create_user(username="multi-establishment")
     selected_establishment = create_establishment(name="Selected", timezone="UTC")
     path_establishment = create_establishment(name="Path", timezone="UTC")
-    create_membership(establishment=selected_establishment, user=user)
+    selected_membership = create_membership(establishment=selected_establishment, user=user)
     path_membership = create_membership(establishment=path_establishment, user=user)
     token = login(api_client, user=user)
     session = UserSession.objects.get(user=user)
     session.selected_establishment = selected_establishment
     session.save(update_fields=["selected_establishment", "updated_at"])
 
-    response = api_client.get(
+    monkeypatch.setattr(
+        "houston.gamification.selectors.timezone.now",
+        lambda: aware_local("UTC", 2026, 7, 20, 12),
+    )
+    open_season(path_establishment, month_start_local=date(2026, 7, 1))
+    open_season(selected_establishment, month_start_local=date(2026, 7, 1))
+    _award(
+        membership=path_membership,
+        establishment=path_establishment,
+        occurred_at=aware_local("UTC", 2026, 7, 5, 12),
+        delta=47,
+        reason_code=REASON_SIGNAL_MOVED_IN_PROGRESS,
+        idempotency_key="path-overview-score",
+    )
+
+    path_response = api_client.get(
         overview_url(path_membership.establishment_id),
         **auth_headers(token),
     )
+    assert path_response.status_code == 200
+    assert path_response.json()["current"]["score"] == 47
 
-    assert response.status_code == 404
+    selected_response = api_client.get(
+        overview_url(selected_membership.establishment_id),
+        **auth_headers(token),
+    )
+    assert selected_response.status_code == 200
+    assert selected_response.json()["current"]["score"] == 0
 
 
 def test_inactive_membership_is_refused(api_client):

@@ -4,7 +4,6 @@ import uuid
 
 import pytest
 from django.db import IntegrityError, connection
-from django.db.migrations.executor import MigrationExecutor
 
 from houston.establishments.business_unit_identity import (
     build_business_unit_routing_key,
@@ -275,22 +274,15 @@ def test_bulk_create_activity_subject_with_explicit_establishment_derivation(imp
     assert all(subject.establishment_id == business_unit.establishment_id for subject in persisted)
 
 
-@pytest.mark.django_db(transaction=True)
+@pytest.mark.django_db
 def test_lot2_legacy_columns_dropped_after_0026():
-    executor = MigrationExecutor(connection)
-    try:
-        executor.migrate([("establishments", "0026_drop_bu_legacy_columns")])
-
-        table_name = BusinessUnit._meta.db_table
-        with connection.cursor() as cursor:
-            column_names = {
-                column.name
-                for column in connection.introspection.get_table_description(cursor, table_name)
-            }
-        assert "key" not in column_names
-        assert "label" not in column_names
-        assert "description" not in column_names
-        assert "unit_type" not in column_names
-    finally:
-        restore_executor = MigrationExecutor(connection)
-        restore_executor.migrate(restore_executor.loader.graph.leaf_nodes())
+    table_name = BusinessUnit._meta.db_table
+    with connection.cursor() as cursor:
+        column_names = {
+            column.name
+            for column in connection.introspection.get_table_description(cursor, table_name)
+        }
+    assert "key" not in column_names
+    assert "label" not in column_names
+    assert "description" not in column_names
+    assert "unit_type" not in column_names

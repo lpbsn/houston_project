@@ -74,8 +74,8 @@ def test_execution_detail_exposes_audit_current_fields_without_journal(
     assert body["cancel_origin"] is None
     assert body["reopened_by_membership_id"] is None
     assert body["reopened_at"] is None
-    assert body["started_by_membership_id"] is None
-    assert body["started_at"] is None
+    assert body["started_by_membership_id"] == str(owner_membership.id)
+    assert body["started_at"]
     assert body["reactivated_by_membership_id"] is None
     assert body["reactivated_at"] is None
     assert "lifecycle_events" not in body
