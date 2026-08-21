@@ -117,7 +117,10 @@ export async function fetchSignalFeed(
       apiClient.GET('/api/v1/establishments/{establishment_id}/signal-feed/', {
         params: {
           path: { establishment_id: establishmentId },
-          query: buildSignalFeedQuery(viewMode, filters, options),
+          query: {
+            ...buildSignalFeedQuery(viewMode, filters, options),
+            view_mode: viewMode,
+          },
         },
         headers: getAuthHeaders(accessToken),
       }),

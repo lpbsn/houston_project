@@ -177,22 +177,18 @@ function formatPeriod(start: string, end: string): string {
 function activePatternIssueReporterMemberships(
   bootstrap: BootstrapResponse | null | undefined,
 ): Membership[] {
-  return (
-    bootstrap?.memberships.filter(
-      (membership) =>
-        membership.status === 'active' && PATTERN_ISSUE_REPORT_ROLES.has(membership.role),
-    ) ?? []
+  return (bootstrap?.memberships ?? []).filter(
+    (membership) =>
+      membership.status === 'active' && PATTERN_ISSUE_REPORT_ROLES.has(membership.role),
   )
 }
 
 function activeOwnerGovernanceMemberships(
   bootstrap: BootstrapResponse | null | undefined,
 ): Membership[] {
-  return (
-    bootstrap?.memberships.filter(
-      (membership) =>
-        membership.status === 'active' && membership.role === OWNER_GOVERNANCE_ROLE,
-    ) ?? []
+  return (bootstrap?.memberships ?? []).filter(
+    (membership) =>
+      membership.status === 'active' && membership.role === OWNER_GOVERNANCE_ROLE,
   )
 }
 
@@ -207,7 +203,7 @@ function resolveSignalOrganizationId(
   establishmentId: string,
 ): string | null {
   return (
-    bootstrap?.memberships.find(
+    (bootstrap?.memberships ?? []).find(
       (membership) => membership.establishment_id === establishmentId,
     )?.organization_id ?? null
   )

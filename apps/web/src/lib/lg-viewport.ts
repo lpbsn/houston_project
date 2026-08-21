@@ -6,6 +6,10 @@ export function useLgViewport(): boolean {
   const [isLg, setIsLg] = useState(false)
 
   useEffect(() => {
+    if (typeof window.matchMedia !== 'function') {
+      return
+    }
+
     const media = window.matchMedia(LG_QUERY)
     const update = () => setIsLg(media.matches)
     update()

@@ -920,11 +920,13 @@ function App() {
       route.kind === 'scoped-terrain' && route.scope.type === 'establishment'
         ? route.scope.establishmentId
         : establishmentId
+    const fromList = (auth.bootstrap?.memberships ?? []).find(
+      (membership) =>
+        membership.establishment_id === realtimeEstablishmentId && membership.status === 'active',
+    )?.id
+    const active = auth.bootstrap?.active_membership
     const realtimeMembershipId =
-      auth.bootstrap?.memberships.find(
-        (membership) =>
-          membership.establishment_id === realtimeEstablishmentId && membership.status === 'active',
-      )?.id ?? auth.bootstrap?.active_membership?.id ?? null
+      fromList ?? (active?.establishment_id === realtimeEstablishmentId ? active.id : null) ?? null
 
     if (!auth.isAuthenticated || !realtimeEstablishmentId || !auth.hasOperationalAccess) {
       return terrainShell

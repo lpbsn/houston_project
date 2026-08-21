@@ -47,10 +47,13 @@ export function ChatPage({
   const auth = useAuth()
   const establishmentId =
     establishmentIdProp ?? auth.bootstrap?.active_membership?.establishment_id ?? null
+  const fromList = (auth.bootstrap?.memberships ?? []).find(
+    (membership) =>
+      membership.establishment_id === establishmentId && membership.status === 'active',
+  )?.id
+  const active = auth.bootstrap?.active_membership
   const viewerMembershipId =
-    auth.bootstrap?.memberships.find(
-      (membership) => membership.establishment_id === establishmentId && membership.status === 'active',
-    )?.id ?? auth.bootstrap?.active_membership?.id ?? null
+    fromList ?? (active?.establishment_id === establishmentId ? active.id : null) ?? null
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [actionsConversation, setActionsConversation] = useState<ChatConversationListItem | null>(
