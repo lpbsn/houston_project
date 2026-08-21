@@ -8,6 +8,7 @@ type ActionPlanExecutionObservationSheetProps = {
   open: boolean
   text: string
   isPending: boolean
+  isOnline: boolean
   onTextChange: (value: string) => void
   onConfirm: () => void
   onClose: () => void
@@ -17,6 +18,7 @@ export function ActionPlanExecutionObservationSheet({
   open,
   text,
   isPending,
+  isOnline,
   onTextChange,
   onConfirm,
   onClose,
@@ -36,7 +38,7 @@ export function ActionPlanExecutionObservationSheet({
               terrainBrandAction.bg,
               terrainBrandAction.hover,
             )}
-            disabled={isPending || !text.trim()}
+            disabled={isPending || !isOnline || !text.trim()}
             onClick={onConfirm}
           >
             Envoyer

@@ -32,7 +32,7 @@ Git is the only history. There is no `archive/` or `audits/` folder in active do
 | [`architecture/api_error_contract.md`](architecture/api_error_contract.md) | API errors |
 | [`engineering/local_development.md`](engineering/local_development.md) | Local workflow |
 | [`engineering/frontend_architecture.md`](engineering/frontend_architecture.md) | React / Vite map |
-| [`mobile-capacitor-roadmap.md`](mobile-capacitor-roadmap.md) | Web + Capacitor migration (Lots 1–9 done; next is Lot 10 Observation process-alive protection) |
+| [`mobile-capacitor-roadmap.md`](mobile-capacitor-roadmap.md) | Web + Capacitor migration (Lots 1–10 done; next is Lot 11 DX / CI / release) |
 | [`engineering/testing.md`](engineering/testing.md) | Test strategy |
 | [`engineering/api_pagination_standard.md`](engineering/api_pagination_standard.md) | Pagination |
 

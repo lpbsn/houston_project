@@ -14,8 +14,6 @@ describe('ReportPhotosSection', () => {
   const photo: ReportPhotoDraft = {
     localId: 'local-1',
     file: new File(['bytes'], 'photo.jpg', { type: 'image/jpeg' }),
-    uploadId: 'upload-1',
-    status: 'ready',
     previewUrl: 'blob:preview-1',
   }
 
@@ -23,7 +21,6 @@ describe('ReportPhotosSection', () => {
     render(
       <ReportPhotosSection
         photos={[photo]}
-        isUploadPending={false}
         onPhotoSelect={vi.fn()}
         onRemovePhoto={vi.fn()}
       />,

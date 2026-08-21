@@ -18,7 +18,9 @@ import {
 import { parseDetailDeepLink } from '@/features/comments/lib/detail-deep-link'
 import { TerrainFeedback } from '@/components/domain/terrain-feedback'
 import { trackObservation } from '@/features/observations/components/observation-processing-tracker-provider'
+import { useTaskObservationComposeDraft } from '@/features/observations/lib/use-observation-compose-draft'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { useNetworkStatus } from '@/lib/network-status'
 import { notifySuccess } from '@/lib/success-toast'
 import { cn } from '@/lib/utils'
 
@@ -76,6 +78,7 @@ function ActionPlanExecutionDetailPageContent({
 }: ActionPlanExecutionDetailPageContentProps) {
   const { navigate, search: locationSearch } = useAppRoute()
   const { activeMembership } = useAuth()
+  const { isOnline } = useNetworkStatus()
   const markDoneMutation = useMarkActionPlanExecutionDoneMutation(establishmentId, executionId)
   const validateMutation = useValidateActionPlanExecutionMutation(establishmentId, executionId)
   const reopenMutation = useReopenActionPlanExecutionMutation(establishmentId, executionId)
@@ -119,7 +122,7 @@ function ActionPlanExecutionDetailPageContent({
   const [skipTaskId, setSkipTaskId] = useState<string | null>(null)
   const [taskActionsTask, setTaskActionsTask] = useState<ActionPlanTaskExecution | null>(null)
   const [observationTaskId, setObservationTaskId] = useState<string | null>(null)
-  const [observationText, setObservationText] = useState('')
+  const observationDraft = useTaskObservationComposeDraft(establishmentId, observationTaskId)
   const [validationStars, setValidationStars] = useState<number | null>(null)
   const [validationComment, setValidationComment] = useState('')
   const [isValidationSheetOpen, setIsValidationSheetOpen] = useState(false)
@@ -318,7 +321,7 @@ function ActionPlanExecutionDetailPageContent({
     try {
       const response = await observationMutation.mutateAsync({
         taskExecutionId: observationTaskId,
-        body: { text: observationText.trim() },
+        body: { text: observationDraft.text.trim() },
       })
       trackObservation({
         observationId: response.observation_id,
@@ -327,8 +330,8 @@ function ActionPlanExecutionDetailPageContent({
         origin: 'action_plan_task',
         submittedAt: new Date().toISOString(),
       })
+      observationDraft.clear()
       setObservationTaskId(null)
-      setObservationText('')
       setFeedback({ variant: 'success', message: 'Observation créée.' })
     } catch (error) {
       setFeedback({
@@ -349,7 +352,6 @@ function ActionPlanExecutionDetailPageContent({
     }
 
     setObservationTaskId(taskActionsTask.id)
-    setObservationText('')
   }
 
   return (
@@ -490,13 +492,13 @@ function ActionPlanExecutionDetailPageContent({
 
       <ActionPlanExecutionObservationSheet
         open={observationTaskId != null}
-        text={observationText}
+        text={observationDraft.text}
         isPending={observationMutation.isPending}
-        onTextChange={setObservationText}
+        isOnline={isOnline}
+        onTextChange={observationDraft.setText}
         onConfirm={() => void handleCreateObservation()}
         onClose={() => {
           setObservationTaskId(null)
-          setObservationText('')
         }}
       />
 

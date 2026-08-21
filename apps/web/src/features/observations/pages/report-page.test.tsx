@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { __resetObservationComposeDraftStoreForTests } from '@/features/observations/lib/observation-compose-draft-store'
 import { OBSERVATION_TEXT_MIN_LENGTH } from '@/features/observations/types'
 import {
   collectOverflowYScrollElements,
@@ -13,9 +14,18 @@ import {
 
 import { ReportPage } from './report-page'
 
-const { mockSubmitPending, mockTranscribeAsync } = vi.hoisted(() => ({
+const {
+  mockSubmitPending,
+  mockTranscribeAsync,
+  mockUploadTemporaryPhoto,
+  mockSubmitObservation,
+  mockIsOnline,
+} = vi.hoisted(() => ({
   mockSubmitPending: { current: false },
   mockTranscribeAsync: vi.fn(),
+  mockUploadTemporaryPhoto: vi.fn(),
+  mockSubmitObservation: vi.fn(),
+  mockIsOnline: { current: true },
 }))
 
 const objectUrlState = vi.hoisted(() => ({
@@ -42,22 +52,28 @@ vi.mock('@/features/observations/components/observation-processing-tracker-provi
   trackObservation: vi.fn(),
 }))
 
+vi.mock('@/lib/network-status', () => ({
+  useNetworkStatus: () => ({ isOnline: mockIsOnline.current }),
+}))
+
 vi.mock('@/features/observations/hooks', () => ({
-  useUploadTemporaryPhotoMutation: () => ({
-    mutateAsync: vi.fn(),
-    isPending: false,
-  }),
-  useDeleteTemporaryPhotoMutation: () => ({
-    mutateAsync: vi.fn(),
-    isPending: false,
-  }),
   useTranscribeAudioMutation: () => ({
     mutateAsync: mockTranscribeAsync,
     isPending: false,
     data: undefined,
   }),
-  useSubmitObservationMutation: () => ({
-    mutateAsync: vi.fn(),
+  useSubmitObservationComposeMutation: () => ({
+    mutateAsync: async (input: { text: string; files: File[] }) => {
+      const { uploadThenSubmitObservation } = await import(
+        '@/features/observations/lib/observation-compose-submit'
+      )
+      return uploadThenSubmitObservation({
+        text: input.text,
+        files: input.files,
+        uploadPhoto: mockUploadTemporaryPhoto,
+        submit: mockSubmitObservation,
+      })
+    },
     get isPending() {
       return mockSubmitPending.current
     },
@@ -111,11 +127,19 @@ function renderPage() {
   )
 }
 
+function typeValidObservation() {
+  const textarea = screen.getByLabelText('Décrivez l’observation')
+  fireEvent.change(textarea, { target: { value: 'a'.repeat(OBSERVATION_TEXT_MIN_LENGTH) } })
+  return textarea as HTMLTextAreaElement
+}
+
 afterEach(() => {
   cleanup()
   mockSubmitPending.current = false
+  mockIsOnline.current = true
   objectUrlState.createdUrls = []
   objectUrlState.revokedUrls = []
+  __resetObservationComposeDraftStoreForTests()
   vi.clearAllMocks()
 })
 
@@ -128,6 +152,13 @@ describe('ReportPage', () => {
     })
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation((url) => {
       objectUrlState.revokedUrls.push(url)
+    })
+    mockUploadTemporaryPhoto.mockResolvedValue({ id: 'upload-1' })
+    mockSubmitObservation.mockResolvedValue({
+      id: 'obs-1',
+      submitted_at: '2026-08-20T10:00:00.000Z',
+      media_count: 0,
+      processing_status: 'queued',
     })
   })
 
@@ -177,12 +208,37 @@ describe('ReportPage', () => {
   it('enables submit when observation text meets minimum length', () => {
     renderPage()
 
-    const textarea = screen.getByLabelText('Décrivez l’observation')
-    const validText = 'a'.repeat(OBSERVATION_TEXT_MIN_LENGTH)
-    fireEvent.change(textarea, { target: { value: validText } })
+    typeValidObservation()
 
     const submitButton = screen.getByRole('button', { name: /Envoyer l’observation/ })
     expect((submitButton as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('keeps text and local photos after the page unmounts', () => {
+    const first = renderPage()
+    typeValidObservation()
+    fireEvent.change(document.querySelector('input[type="file"]') as HTMLInputElement, {
+      target: { files: [new File(['bytes'], 'photo.jpg', { type: 'image/jpeg' })] },
+    })
+    first.unmount()
+
+    renderPage()
+
+    expect((screen.getByLabelText('Décrivez l’observation') as HTMLTextAreaElement).value).toBe(
+      'a'.repeat(OBSERVATION_TEXT_MIN_LENGTH),
+    )
+    expect(screen.getByRole('img', { name: 'Aperçu de photo.jpg' })).toBeTruthy()
+    expect(mockUploadTemporaryPhoto).not.toHaveBeenCalled()
+  })
+
+  it('disables submit while offline even when text is valid', () => {
+    mockIsOnline.current = false
+    renderPage()
+
+    typeValidObservation()
+
+    const submitButton = screen.getByRole('button', { name: /Envoyer l’observation/ })
+    expect((submitButton as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('shows pending label when submit mutation is pending', () => {
@@ -202,7 +258,7 @@ describe('ReportPage', () => {
     ).toBeTruthy()
   })
 
-  it('creates preview thumbnail and revokes object url on removal', () => {
+  it('creates preview thumbnail without uploading and revokes object url on removal', () => {
     renderPage()
 
     const input = document.querySelector('input[type="file"]') as HTMLInputElement
@@ -211,12 +267,76 @@ describe('ReportPage', () => {
     fireEvent.change(input, { target: { files: [file] } })
 
     expect(URL.createObjectURL).toHaveBeenCalled()
+    expect(mockUploadTemporaryPhoto).not.toHaveBeenCalled()
     expect(screen.getByRole('img', { name: 'Aperçu de photo.jpg' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Supprimer photo.jpg' }))
 
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-1')
     expect(objectUrlState.revokedUrls).toEqual(['blob:mock-1'])
+  })
+
+  it('uploads local photos only when submitting then posts the observation', async () => {
+    mockUploadTemporaryPhoto.mockResolvedValue({ id: 'upload-1' })
+    mockSubmitObservation.mockResolvedValue({
+      id: 'obs-1',
+      submitted_at: '2026-08-20T10:00:00.000Z',
+      media_count: 1,
+      processing_status: 'queued',
+    })
+    renderPage()
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    fireEvent.change(input, {
+      target: { files: [new File(['bytes'], 'photo.jpg', { type: 'image/jpeg' })] },
+    })
+    expect(mockUploadTemporaryPhoto).not.toHaveBeenCalled()
+
+    typeValidObservation()
+    fireEvent.click(screen.getByRole('button', { name: /Envoyer l’observation/ }))
+
+    await waitFor(() => {
+      expect(mockSubmitObservation).toHaveBeenCalled()
+    })
+    expect(mockUploadTemporaryPhoto).toHaveBeenCalledTimes(1)
+    expect(mockSubmitObservation).toHaveBeenCalledWith({
+      text: 'a'.repeat(OBSERVATION_TEXT_MIN_LENGTH),
+      temporary_upload_ids: ['upload-1'],
+    })
+    expect(screen.queryByRole('img', { name: 'Aperçu de photo.jpg' })).toBeNull()
+    expect((screen.getByLabelText('Décrivez l’observation') as HTMLTextAreaElement).value).toBe('')
+  })
+
+  it('keeps local photos and text when submit fails', async () => {
+    mockUploadTemporaryPhoto.mockRejectedValue(new TypeError('Failed to fetch'))
+    renderPage()
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    fireEvent.change(input, {
+      target: { files: [new File(['bytes'], 'photo.jpg', { type: 'image/jpeg' })] },
+    })
+    typeValidObservation()
+    fireEvent.click(screen.getByRole('button', { name: /Envoyer l’observation/ }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/Connexion indisponible/)).toBeTruthy()
+    })
+    expect(mockSubmitObservation).not.toHaveBeenCalled()
+    expect(screen.getByRole('img', { name: 'Aperçu de photo.jpg' })).toBeTruthy()
+    expect((screen.getByLabelText('Décrivez l’observation') as HTMLTextAreaElement).value).toBe(
+      'a'.repeat(OBSERVATION_TEXT_MIN_LENGTH),
+    )
+  })
+
+  it('does not post while offline', () => {
+    mockIsOnline.current = false
+    renderPage()
+
+    typeValidObservation()
+    fireEvent.click(screen.getByRole('button', { name: /Envoyer l’observation/ }))
+
+    expect(mockUploadTemporaryPhoto).not.toHaveBeenCalled()
+    expect(mockSubmitObservation).not.toHaveBeenCalled()
   })
 
   it('replaces textarea content entirely on each new transcription', async () => {

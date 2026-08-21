@@ -2,6 +2,7 @@ import type { QueryClient } from '@tanstack/react-query'
 
 import { apiClient, withAuthRetry } from '@/api/client'
 import { clearAllPlanningSubmissionIntents } from '@/features/action-plans/lib/action-plan-planning-submission-intent'
+import { clearObservationComposeDrafts } from '@/features/observations/lib/observation-compose-draft-store'
 import { clearObservationProcessingTrackerOnLogout } from '@/features/observations/lib/observation-processing-tracker-store'
 import { clearRegistrationSessionSnapshot } from '@/features/onboarding/lib/registration-session-storage'
 import { runNativePushBeforeLogout } from '@/lib/native-push-session'
@@ -340,6 +341,7 @@ function clearPersistedRefreshTokenBestEffort() {
 
 export function clearAuthState() {
   clearVolatileAuthState()
+  clearObservationComposeDrafts()
   clearPersistedRefreshTokenBestEffort()
 }
 
@@ -495,6 +497,7 @@ async function commitCurrentAuthEnvelope(
   if (options.purgeNonAuth) {
     purgeNonAuthQueries(queryClient)
     clearAllPlanningSubmissionIntents()
+    clearObservationComposeDrafts()
     clearSuccessToasts()
   }
   setAccessToken(payload.access_token)
@@ -806,6 +809,7 @@ export async function switchEstablishment(input: SwitchEstablishmentRequest) {
 
   purgeNonAuthQueries(queryClient)
   clearAllPlanningSubmissionIntents()
+  clearObservationComposeDrafts()
   clearSuccessToasts()
   queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, result.data)
   return result.data

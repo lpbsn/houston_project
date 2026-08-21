@@ -2,6 +2,7 @@ import { useMutation } from '@tanstack/react-query'
 
 import { useAuth } from '@/app/auth-provider'
 
+import { uploadThenSubmitObservation } from './lib/observation-compose-submit'
 import {
   deleteTemporaryPhoto,
   submitObservation,
@@ -58,6 +59,24 @@ export function useSubmitObservationMutation(establishmentId: string | null) {
         throw new Error('Établissement non sélectionné.')
       }
       return submitObservation(establishmentId, body)
+    },
+  })
+}
+
+export function useSubmitObservationComposeMutation(establishmentId: string | null) {
+  useAuth()
+
+  return useMutation({
+    mutationFn: async (input: { text: string; files: File[] }) => {
+      if (!establishmentId) {
+        throw new Error('Établissement non sélectionné.')
+      }
+      return uploadThenSubmitObservation({
+        text: input.text,
+        files: input.files,
+        uploadPhoto: (file) => uploadTemporaryPhoto(establishmentId, file),
+        submit: (body) => submitObservation(establishmentId, body),
+      })
     },
   })
 }

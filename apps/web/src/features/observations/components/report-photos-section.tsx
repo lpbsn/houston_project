@@ -1,31 +1,26 @@
-import { Image, LoaderCircle, Trash2 } from 'lucide-react'
+import { Image, Trash2 } from 'lucide-react'
 
+import type { ObservationComposePhotoDraft } from '@/features/observations/lib/observation-compose-draft-store'
 import { MAX_OBSERVATION_PHOTOS } from '@/features/observations/types'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
-export type ReportPhotoDraft = {
-  localId: string
-  file: File
-  uploadId: string | null
-  status: 'uploading' | 'ready' | 'failed'
-  previewUrl: string
-}
+export type ReportPhotoDraft = ObservationComposePhotoDraft
 
 type ReportPhotosSectionProps = {
   photos: ReportPhotoDraft[]
-  isUploadPending: boolean
+  disabled?: boolean
   onPhotoSelect: (event: React.ChangeEvent<HTMLInputElement>) => void
   onRemovePhoto: (photo: ReportPhotoDraft) => void
 }
 
 export function ReportPhotosSection({
   photos,
-  isUploadPending,
+  disabled = false,
   onPhotoSelect,
   onRemovePhoto,
 }: ReportPhotosSectionProps) {
-  const canAddPhoto = photos.length < MAX_OBSERVATION_PHOTOS && !isUploadPending
+  const canAddPhoto = photos.length < MAX_OBSERVATION_PHOTOS && !disabled
 
   return (
     <section
@@ -52,15 +47,6 @@ export function ReportPhotosSection({
               alt={`Aperçu de ${photo.file.name}`}
               className="h-full w-full object-cover"
             />
-            {photo.status === 'uploading' ? (
-              <div className="absolute inset-0 flex items-center justify-center bg-white/70">
-                <LoaderCircle className={cn('h-5 w-5 animate-spin', terrain.muted)} />
-              </div>
-            ) : photo.status === 'failed' ? (
-              <div className="absolute inset-x-0 bottom-0 bg-[#fff5f3]/95 px-1 py-0.5 text-center text-[9px] font-medium text-[#9a3b2e]">
-                Échec
-              </div>
-            ) : null}
             <button
               type="button"
               className={cn(
@@ -70,6 +56,7 @@ export function ReportPhotosSection({
                 terrain.dangerBg,
                 'hover:bg-[#c93f3e]',
               )}
+              disabled={disabled}
               onClick={() => void onRemovePhoto(photo)}
               aria-label={`Supprimer ${photo.file.name}`}
             >
