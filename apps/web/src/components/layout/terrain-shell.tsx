@@ -1,7 +1,6 @@
 import type { PropsWithChildren, ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
-import type { AppPath } from '@/app/app-routes'
 import { BottomMobileNav } from '@/components/layout/bottom-mobile-nav'
 import { DesktopTerrainSidebar } from '@/components/layout/desktop-terrain-sidebar'
 import { TerrainErrorBoundary } from '@/components/layout/terrain-error-boundary'
@@ -22,7 +21,7 @@ type TerrainShellProps = PropsWithChildren<{
   showBottomNav: boolean
   activeNavPath?: TerrainNavPath
   bootstrap?: BootstrapResponse | null
-  desktopActivePath?: AppPath
+  desktopActivePath?: string
   mainScroll?: TerrainMainScroll
   navigate: (pathname: string, options?: { replace?: boolean }) => void
   showChatNav?: boolean
@@ -60,7 +59,7 @@ export function TerrainShell({
         navigate={navigate}
         showChat={showChatNav}
       />
-      <div className="relative flex min-h-0 flex-1 flex-col bg-[#F5F4F0]">
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[#F5F4F0]">
         <div className="pointer-events-none absolute inset-x-0 top-0 z-50 flex flex-col gap-2 px-2 pt-[max(0.5rem,var(--app-safe-top))]">
           <ObservationProcessingBanner navigate={navigate} />
           <SuccessToastHost />
@@ -72,7 +71,7 @@ export function TerrainShell({
         ) : null}
         <main
           className={cn(
-            'min-h-0 flex-1',
+            'min-h-0 min-w-0 flex-1',
             !topbar && 'pt-[var(--app-safe-top)] lg:pt-0',
             mainScroll === 'hidden'
               ? 'overflow-hidden'
@@ -80,14 +79,14 @@ export function TerrainShell({
           )}
         >
           {shouldReduceMotion ? (
-            <div className="h-full min-h-0">
+            <div className="h-full min-h-0 min-w-0">
               <TerrainErrorBoundary resetKey={contentKey} navigate={navigate}>
                 {children}
               </TerrainErrorBoundary>
             </div>
           ) : (
             <AnimatePresence initial={false}>
-              <motion.div key={contentKey} className="h-full min-h-0" {...pageMotion}>
+              <motion.div key={contentKey} className="h-full min-h-0 min-w-0" {...pageMotion}>
                 <TerrainErrorBoundary resetKey={contentKey} navigate={navigate}>
                   {children}
                 </TerrainErrorBoundary>
@@ -95,7 +94,7 @@ export function TerrainShell({
             </AnimatePresence>
           )}
         </main>
-        {showBottomNav && activeNavPath ? (
+        {showBottomNav ? (
           <BottomMobileNav
             className="shrink-0 lg:hidden"
             activePath={activeNavPath}

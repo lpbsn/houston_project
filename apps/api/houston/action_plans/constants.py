@@ -113,6 +113,8 @@ CANCEL_ORIGINS = frozenset(
 # ActionPlanExecutionLifecycleEvent.event_type — append-only execution lifecycle journal.
 EXECUTION_LIFECYCLE_EVENT_CREATED = "action_plan_execution.created"
 EXECUTION_LIFECYCLE_EVENT_STARTED = "action_plan_execution.started"
+EXECUTION_LIFECYCLE_EVENT_HISTORY_BASELINE = "action_plan_execution.history_baseline"
+EXECUTION_LIFECYCLE_EVENT_DEADLINE_CHANGED = "action_plan_execution.deadline_changed"
 EXECUTION_LIFECYCLE_EVENT_MARKED_DONE = "action_plan_execution.marked_done"
 EXECUTION_LIFECYCLE_EVENT_VALIDATED = "action_plan_execution.validated"
 EXECUTION_LIFECYCLE_EVENT_CANCELED = "action_plan_execution.canceled"
@@ -122,6 +124,8 @@ EXECUTION_LIFECYCLE_EVENT_TYPE_VALUES = frozenset(
     {
         EXECUTION_LIFECYCLE_EVENT_CREATED,
         EXECUTION_LIFECYCLE_EVENT_STARTED,
+        EXECUTION_LIFECYCLE_EVENT_HISTORY_BASELINE,
+        EXECUTION_LIFECYCLE_EVENT_DEADLINE_CHANGED,
         EXECUTION_LIFECYCLE_EVENT_MARKED_DONE,
         EXECUTION_LIFECYCLE_EVENT_VALIDATED,
         EXECUTION_LIFECYCLE_EVENT_CANCELED,
@@ -137,6 +141,16 @@ EXECUTION_LIFECYCLE_METADATA_SAFE_KEYS = frozenset(
         "cancel_origin",
         "reactivation_origin",
         "to_status",
+        "end_at",
+        "from_end_at",
+        "to_end_at",
+    }
+)
+EXECUTION_LIFECYCLE_NULLABLE_METADATA_KEYS = frozenset(
+    {
+        "end_at",
+        "from_end_at",
+        "to_end_at",
     }
 )
 

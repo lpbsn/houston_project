@@ -33,17 +33,27 @@ const SIGNAL_FEED_DEFAULT_COLLAPSED_SECTIONS = ['interesting', 'resolved', 'canc
 
 type SignalFeedPageProps = {
   onOpenSignal: (signalId: string) => void
+  establishmentId?: string | null
+  source?: 'establishment' | 'cross'
 }
 
-export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
+export function SignalFeedPage({
+  onOpenSignal,
+  establishmentId: establishmentIdProp,
+  source = 'establishment',
+}: SignalFeedPageProps) {
   const auth = useAuth()
-  const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
+  const establishmentId =
+    establishmentIdProp ?? auth.bootstrap?.active_membership?.establishment_id ?? null
   const membershipRole = auth.bootstrap?.active_membership?.role ?? null
+  const isCross = source === 'cross'
   const [viewMode, setViewMode] = useState<SignalViewMode>('personal')
   const [filters, setFilters] = useState<SignalFeedFilters>(EMPTY_SIGNAL_FEED_FILTERS)
 
   const normalizedFilters = normalizeSignalFeedFilters(filters)
-  const feedQuery = useSignalFeedQuery(establishmentId, viewMode, normalizedFilters)
+  const feedQuery = useSignalFeedQuery(establishmentId, viewMode, normalizedFilters, {
+    source,
+  })
   const filtersActive = hasActiveSignalFeedFilters(normalizedFilters)
   const quickActions = useSignalFeedQuickActions({
     establishmentId,
@@ -52,7 +62,7 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
   })
 
   const feedItems =
-    establishmentId &&
+    (establishmentId || isCross) &&
     feedQuery.isSuccess &&
     feedQuery.data.pages.some((page) => page.items.length > 0)
       ? feedQuery.data.pages.flatMap((page) => page.items)
@@ -72,7 +82,7 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
     resetToken: sectionExpansionResetToken,
   })
 
-  if (!establishmentId) {
+  if (!establishmentId && !isCross) {
     return (
       <p className="px-3 py-4 text-sm text-[#6b5f52]">Établissement non sélectionné.</p>
     )
@@ -88,7 +98,8 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
           item={item}
           variant={variant}
           onSelect={onOpenSignal}
-          onOpenActions={quickActions.openActions}
+          onOpenActions={isCross ? undefined : quickActions.openActions}
+          showEstablishment={isCross}
         />
       ))}
     </div>
@@ -101,26 +112,30 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <TerrainHubSubheader>
-        <TerrainHubViewToolbar>
-          <SignalFeedTabs viewMode={viewMode} onChange={setViewMode} />
-        </TerrainHubViewToolbar>
-        <SignalFeedFiltersBar
-          establishmentId={establishmentId}
-          filters={filters}
-          onFiltersChange={setFilters}
-          membershipRole={membershipRole}
-        />
-        {filtersActive ? (
-          <div className="border-t border-[#E8E6DF] px-3 pb-2 pt-0">
-            <button
-              type="button"
-              onClick={handleClearFilters}
-              className="text-[11px] font-semibold text-[#1B4FD8]"
-            >
-              Effacer les filtres
-            </button>
-          </div>
-        ) : null}
+        {isCross ? null : (
+          <>
+            <TerrainHubViewToolbar>
+              <SignalFeedTabs viewMode={viewMode} onChange={setViewMode} />
+            </TerrainHubViewToolbar>
+            <SignalFeedFiltersBar
+              establishmentId={establishmentId}
+              filters={filters}
+              onFiltersChange={setFilters}
+              membershipRole={membershipRole}
+            />
+            {filtersActive ? (
+              <div className="border-t border-[#E8E6DF] px-3 pb-2 pt-0">
+                <button
+                  type="button"
+                  onClick={handleClearFilters}
+                  className="text-[11px] font-semibold text-[#1B4FD8]"
+                >
+                  Effacer les filtres
+                </button>
+              </div>
+            ) : null}
+          </>
+        )}
       </TerrainHubSubheader>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-3">

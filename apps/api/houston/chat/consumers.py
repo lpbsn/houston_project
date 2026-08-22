@@ -326,6 +326,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             session_id=self.session_id,
             establishment_id=self.establishment_id,
             membership_id=self.membership_id,
+            require_selected_establishment=False,
         )
 
     async def _revoke_access_and_close(self, reason: str) -> None:

@@ -30,6 +30,8 @@ def sanitize_lifecycle_metadata_safe(metadata: dict[str, Any] | None) -> dict[st
             continue
         if isinstance(value, UUID):
             safe[key] = str(value)
+        elif isinstance(value, datetime):
+            safe[key] = value.isoformat()
         elif isinstance(value, (str, int, float, bool)):
             safe[key] = value
         else:

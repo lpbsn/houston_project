@@ -43,6 +43,7 @@ type SignalCardProps = {
   onSelect: (signalId: string) => void
   onOpenActions?: (item: SignalFeedItem) => void
   variant?: 'feed' | 'pinned'
+  showEstablishment?: boolean
 }
 
 function stopCardNavigation(event: { stopPropagation: () => void }) {
@@ -111,7 +112,7 @@ function SignalAggregationRow({ aggregationCount }: { aggregationCount: number }
   )
 }
 
-function FeedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
+function FeedSignalCard({ item, onSelect, onOpenActions, showEstablishment }: SignalCardProps) {
   const leftAccentColor = getSignalCardLeftAccentColor(item)
   const surfaceClass = getSignalCardSurfaceClass(item)
   const reporterName = item.reporter_display_name?.trim() ?? ''
@@ -139,6 +140,11 @@ function FeedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
       />
 
       <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
+      {showEstablishment && item.establishment_name ? (
+        <span className="mt-1 inline-flex rounded-full bg-[#F0EFE9] px-2 py-0.5 text-[10px] font-semibold text-[#7D7B75]">
+          {item.establishment_name}
+        </span>
+      ) : null}
       {item.location_text ? (
         <SignalLocationRow
           locationText={item.location_text}
@@ -230,9 +236,29 @@ function PinnedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
   )
 }
 
-export function SignalCard({ item, onSelect, onOpenActions, variant = 'feed' }: SignalCardProps) {
+export function SignalCard({
+  item,
+  onSelect,
+  onOpenActions,
+  variant = 'feed',
+  showEstablishment = false,
+}: SignalCardProps) {
   if (variant === 'pinned') {
-    return <PinnedSignalCard item={item} onSelect={onSelect} onOpenActions={onOpenActions} />
+    return (
+      <PinnedSignalCard
+        item={item}
+        onSelect={onSelect}
+        onOpenActions={onOpenActions}
+        showEstablishment={showEstablishment}
+      />
+    )
   }
-  return <FeedSignalCard item={item} onSelect={onSelect} onOpenActions={onOpenActions} />
+  return (
+    <FeedSignalCard
+      item={item}
+      onSelect={onSelect}
+      onOpenActions={onOpenActions}
+      showEstablishment={showEstablishment}
+    />
+  )
 }

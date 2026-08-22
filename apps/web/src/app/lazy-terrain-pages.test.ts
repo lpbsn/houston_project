@@ -10,6 +10,7 @@ const LAZY_EXPORTS = [
   'LazyExecutionUpcomingPage',
   'LazyChatPage',
   'LazyAnalyticsPage',
+  'LazyComingSoonPage',
   'LazyAnalyticsPatternDetailPage',
   'LazyChatConversationPage',
   'LazyProfilePage',

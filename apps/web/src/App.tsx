@@ -3,6 +3,12 @@ import { motion, useReducedMotion } from 'framer-motion'
 
 import { useAppRoute } from '@/app/app-routes'
 import {
+  serializeScopedExecutionDetailPath,
+  serializeScopedSignalDetailPath,
+} from '@/app/scoped-terrain'
+import { useLgViewport } from '@/lib/lg-viewport'
+import { canShowAnalyticsNavigation } from '@/features/navigation/lib/shared-navigation'
+import {
   LazyActionPlanCreatePage,
   LazyActionPlanExecutionDetailPage,
   LazyActionPlanExecutionEditPage,
@@ -10,6 +16,7 @@ import {
   LazyAnalyticsPatternDetailPage,
   LazyActionPlanTemplateDetailPage,
   LazyAnalyticsPage,
+  LazyComingSoonPage,
   LazyChatConversationPage,
   LazyChatPage,
   LazyChatRealtimeProvider,
@@ -33,6 +40,7 @@ import {
   getTerrainRouteConfig,
   isProtectedRoute,
   requiresActiveMembership,
+  resolveTerrainTopbarPlacement,
   resolveTerrainTopbarShowBottomBorder,
   usesTerrainShell,
 } from '@/app/terrain-routes'
@@ -100,6 +108,7 @@ function App() {
   const shouldReduceMotion = useReducedMotion()
   const auth = useAuth()
   const { route, navigate, search: locationSearch } = useAppRoute()
+  const isLgViewport = useLgViewport()
   const applyingOpenRef = useRef(false)
 
   const motionProps = shouldReduceMotion
@@ -244,6 +253,19 @@ function App() {
     }
   }, [route])
 
+  useEffect(() => {
+    if (
+      !isLgViewport ||
+      !auth.hasOperationalAccess ||
+      !canShowAnalyticsNavigation(auth.bootstrap)
+    ) {
+      return
+    }
+    if (route.kind === 'static' && route.path === '/analytics') {
+      navigate('/cross?period=7d', { replace: true })
+    }
+  }, [auth.bootstrap, auth.hasOperationalAccess, isLgViewport, navigate, route])
+
   const handleSignOut = useCallback(() => {
     void auth.logout().then(() => {
       navigate('/login', { replace: true })
@@ -254,7 +276,8 @@ function App() {
   const permissionHints = getBootstrapPermissionHints(auth.bootstrap)
   const isChatRoute =
     route.kind === 'chat-conversation-detail' ||
-    (route.kind === 'static' && route.path === '/chat')
+    (route.kind === 'static' && route.path === '/chat') ||
+    (route.kind === 'scoped-terrain' && route.page === 'chat')
   const chatAvailability = useChatAvailability({
     establishmentId,
     hasOperationalAccess: auth.hasOperationalAccess,
@@ -421,11 +444,16 @@ function App() {
     }
 
     if (route.kind === 'signal-detail') {
+      const scope = route.scope
       return (
         <LazySignalDetailPage
           signalId={route.signalId}
           onNavigate={navigate}
           analyticsSignalReturnContext={analyticsSignalReturnContext}
+          establishmentId={
+            scope?.type === 'establishment' ? scope.establishmentId : undefined
+          }
+          source={scope?.type === 'cross' ? 'cross' : 'establishment'}
         />
       )
     }
@@ -467,7 +495,16 @@ function App() {
     }
 
     if (route.kind === 'action-plan-execution-detail') {
-      return <LazyActionPlanExecutionDetailPage executionId={route.executionId} />
+      const scope = route.scope
+      return (
+        <LazyActionPlanExecutionDetailPage
+          executionId={route.executionId}
+          establishmentId={
+            scope?.type === 'establishment' ? scope.establishmentId : undefined
+          }
+          source={scope?.type === 'cross' ? 'cross' : 'establishment'}
+        />
+      )
     }
 
     if (route.kind === 'action-plan-execution-edit') {
@@ -499,6 +536,87 @@ function App() {
           onNavigate={navigate}
         />
       )
+    }
+
+    if (route.kind === 'scoped-terrain') {
+      const scope = route.scope
+      const establishmentIdForScope =
+        scope.type === 'establishment' ? scope.establishmentId : undefined
+      const source = scope.type === 'cross' ? 'cross' : 'establishment'
+
+      if (route.page === 'dashboard') {
+        return <LazyAnalyticsPage scope={scope} />
+      }
+      if (route.page === 'signals') {
+        return (
+          <LazySignalFeedPage
+            establishmentId={establishmentIdForScope ?? null}
+            source={source}
+            onOpenSignal={(id) => navigate(serializeScopedSignalDetailPath(scope, id))}
+          />
+        )
+      }
+      if (route.page === 'execution') {
+        return (
+          <LazyExecutionFeedPage
+            establishmentId={establishmentIdForScope ?? null}
+            source={source}
+            onOpenActionPlanExecution={(id) =>
+              navigate(serializeScopedExecutionDetailPath(scope, id))
+            }
+            onNavigate={navigate}
+          />
+        )
+      }
+      if (route.page === 'reporting') {
+        if (scope.type === 'cross') {
+          return (
+            <LazyComingSoonPage
+              title="Nouvelle observation"
+              description="La nouvelle observation Cross-établissement sera bientôt disponible."
+            />
+          )
+        }
+        return <LazyReportPage establishmentId={establishmentIdForScope ?? null} />
+      }
+      if (route.page === 'chat') {
+        if (scope.type === 'cross') {
+          return (
+            <LazyComingSoonPage
+              title="Chat"
+              description="Le chat Cross-établissement sera bientôt disponible."
+            />
+          )
+        }
+        return (
+          <LazyChatPage
+            establishmentId={establishmentIdForScope ?? null}
+            onOpenConversation={(conversationId) => navigate(`/chat/${conversationId}`)}
+          />
+        )
+      }
+      if (route.page === 'general') {
+        return (
+          <LazyProfilePage
+            onNavigate={navigate}
+            onSignOut={handleSignOut}
+            isLoggingOut={auth.isLoggingOut}
+          />
+        )
+      }
+      if (route.page === 'settings') {
+        return (
+          <LazyComingSoonPage
+            title="Paramètres Analytics"
+            description="Les paramètres Analytics seront bientôt disponibles."
+          />
+        )
+      }
+      return null
+    }
+
+    if (route.kind !== 'static') {
+      return null
     }
 
     if (route.path === '/login') {
@@ -798,14 +916,26 @@ function App() {
     route.kind === 'chat-conversation-detail' ? route.conversationId : null
 
   const wrapTerrainWithOperationalRealtime = (terrainShell: ReactNode) => {
-    if (!auth.isAuthenticated || !establishmentId || !auth.hasOperationalAccess) {
+    const realtimeEstablishmentId =
+      route.kind === 'scoped-terrain' && route.scope.type === 'establishment'
+        ? route.scope.establishmentId
+        : establishmentId
+    const fromList = (auth.bootstrap?.memberships ?? []).find(
+      (membership) =>
+        membership.establishment_id === realtimeEstablishmentId && membership.status === 'active',
+    )?.id
+    const active = auth.bootstrap?.active_membership
+    const realtimeMembershipId =
+      fromList ?? (active?.establishment_id === realtimeEstablishmentId ? active.id : null) ?? null
+
+    if (!auth.isAuthenticated || !realtimeEstablishmentId || !auth.hasOperationalAccess) {
       return terrainShell
     }
 
     return (
       <OperationalRealtimeProvider
-        establishmentId={establishmentId}
-        activeMembershipId={auth.bootstrap?.active_membership?.id ?? null}
+        establishmentId={realtimeEstablishmentId}
+        activeMembershipId={realtimeMembershipId}
         enabled={true}
         onActiveMembershipDeactivated={() => {
           navigate('/reporting', { replace: true })
@@ -821,10 +951,15 @@ function App() {
       return terrainShell
     }
 
+    const chatEstablishmentId =
+      route.kind === 'scoped-terrain' && route.scope.type === 'establishment'
+        ? route.scope.establishmentId
+        : establishmentId
+
     return (
       <Suspense fallback={<RoutePageLoading />}>
         <LazyChatRealtimeProvider
-          establishmentId={establishmentId}
+          establishmentId={chatEstablishmentId}
           activeConversationId={activeChatConversationId}
           onGlobalAccessRevoked={handleChatGlobalAccessRevoked}
           onConversationAccessRevoked={handleChatConversationAccessRevoked}
@@ -865,6 +1000,19 @@ function App() {
 
   if (usesTerrainShell(route)) {
     const terrainConfig = getTerrainRouteConfig(route)
+    const topbarPlacement = resolveTerrainTopbarPlacement(route, terrainConfig)
+    const terrainTopbar =
+      topbarPlacement === 'hidden' ? null : (
+        <TerrainTopbar
+          variant={terrainConfig.topbarVariant}
+          title={terrainConfig.title}
+          pageTitle={terrainConfig.pageTitle}
+          detailTitleLayout={terrainConfig.detailTitleLayout}
+          showBottomBorder={resolveTerrainTopbarShowBottomBorder(route, terrainConfig)}
+          onBack={terrainBackPath ? () => navigate(terrainBackPath) : undefined}
+          trailing={terrainTopbarTrailing}
+        />
+      )
     return wrapTerrainWithOperationalRealtime(
       wrapTerrainWithChatRealtime(
         <TerrainShell
@@ -878,16 +1026,10 @@ function App() {
           showChatNav={showChatNav}
           chatHasUnread={chatHasUnread}
           topbar={
-            terrainConfig.hideTopbar ? null : (
-              <TerrainTopbar
-                variant={terrainConfig.topbarVariant}
-                title={terrainConfig.title}
-                pageTitle={terrainConfig.pageTitle}
-                detailTitleLayout={terrainConfig.detailTitleLayout}
-                showBottomBorder={resolveTerrainTopbarShowBottomBorder(route, terrainConfig)}
-                onBack={terrainBackPath ? () => navigate(terrainBackPath) : undefined}
-                trailing={terrainTopbarTrailing}
-              />
+            topbarPlacement === 'mobile-only' && terrainTopbar ? (
+              <div className="lg:hidden">{terrainTopbar}</div>
+            ) : (
+              terrainTopbar
             )
           }
         >

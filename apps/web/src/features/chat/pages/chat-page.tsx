@@ -29,6 +29,7 @@ import type { ChatConversationListItem } from '../types'
 
 type ChatPageProps = {
   onOpenConversation: (conversationId: string) => void
+  establishmentId?: string | null
 }
 
 function ChatPageRoot({ children }: { children: ReactNode }) {
@@ -39,10 +40,20 @@ function ChatPageRoot({ children }: { children: ReactNode }) {
   )
 }
 
-export function ChatPage({ onOpenConversation }: ChatPageProps) {
+export function ChatPage({
+  onOpenConversation,
+  establishmentId: establishmentIdProp,
+}: ChatPageProps) {
   const auth = useAuth()
-  const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
-  const viewerMembershipId = auth.bootstrap?.active_membership?.id ?? null
+  const establishmentId =
+    establishmentIdProp ?? auth.bootstrap?.active_membership?.establishment_id ?? null
+  const fromList = (auth.bootstrap?.memberships ?? []).find(
+    (membership) =>
+      membership.establishment_id === establishmentId && membership.status === 'active',
+  )?.id
+  const active = auth.bootstrap?.active_membership
+  const viewerMembershipId =
+    fromList ?? (active?.establishment_id === establishmentId ? active.id : null) ?? null
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [actionsConversation, setActionsConversation] = useState<ChatConversationListItem | null>(

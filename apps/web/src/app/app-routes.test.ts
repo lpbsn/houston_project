@@ -212,7 +212,7 @@ describe('getAppRouteKey', () => {
 
   it('includes only route-identifying fields for detail routes', () => {
     expect(getAppRouteKey({ kind: 'signal-detail', signalId: 'sig-1' })).toBe(
-      'signal-detail:sig-1',
+      'signal-detail:sig-1:session',
     )
     expect(getAppRouteKey({ kind: 'chat-conversation-detail', conversationId: 'conv-1' })).toBe(
       'chat-conversation-detail:conv-1',
@@ -234,7 +234,7 @@ describe('getAppRouteKey', () => {
 
   it('matches parseAppRoute output', () => {
     const route = parseAppRoute('/signals/abc-123')
-    expect(getAppRouteKey(route)).toBe('signal-detail:abc-123')
+    expect(getAppRouteKey(route)).toBe('signal-detail:abc-123:session')
   })
 })
 
@@ -252,6 +252,11 @@ describe('serializeAppRoute', () => {
       '/action-plans/executions/exec-1',
       '/action-plans/executions/exec-1/edit',
       '/analytics/patterns/pattern-1',
+      '/cross',
+      '/cross/signals',
+      '/cross/signals/11111111-1111-4111-8111-111111111111',
+      '/e/11111111-1111-4111-8111-111111111111',
+      '/e/11111111-1111-4111-8111-111111111111/execution',
       '/chat/conv-1',
       '/team/member-1',
       '/organization/establishments/est-1',

@@ -46,6 +46,8 @@ type SignalDetailPageProps = {
   signalId: string
   onNavigate: (pathname: string, options?: { replace?: boolean }) => void
   analyticsSignalReturnContext?: AnalyticsSignalReturnContext | null
+  establishmentId?: string | null
+  source?: 'establishment' | 'cross'
 }
 
 function formatDescriptionContent(structuredSummary: string): string {
@@ -57,9 +59,12 @@ export function SignalDetailPage({
   signalId,
   onNavigate,
   analyticsSignalReturnContext = null,
+  establishmentId: establishmentIdProp,
+  source = 'establishment',
 }: SignalDetailPageProps) {
   const auth = useAuth()
-  const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
+  const sessionEstablishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
+  const establishmentId = establishmentIdProp ?? sessionEstablishmentId
   const locationSearch = useLocationSearch()
   const initialDeepLink = parseDetailDeepLink(locationSearch)
   const [activeTab, setActiveTab] = useState<SignalDetailTab>(
@@ -69,7 +74,7 @@ export function SignalDetailPage({
   const [requestActionError, setRequestActionError] = useState<string | null>(null)
   const highlightCommentId = initialDeepLink.commentId
 
-  const detailQuery = useSignalDetailQuery(establishmentId, signalId)
+  const detailQuery = useSignalDetailQuery(establishmentId, signalId, { source })
   const createRequestMutation = useCreateSignalResolutionRequestMutation(establishmentId)
   const approveRequestMutation = useApproveSignalResolutionRequestMutation(establishmentId)
   const rejectRequestMutation = useRejectSignalResolutionRequestMutation(establishmentId)
@@ -275,7 +280,7 @@ export function SignalDetailPage({
           ) : null}
         </div>
 
-        {hasOpenedComments && establishmentId ? (
+        {hasOpenedComments && (signal.establishment_id ?? establishmentId) ? (
           <div
             role="tabpanel"
             id="signal-detail-panel-comments"
@@ -283,7 +288,7 @@ export function SignalDetailPage({
             className={cn(activeTab !== 'comments' && 'hidden')}
           >
             <CommentSection
-              establishmentId={establishmentId}
+              establishmentId={signal.establishment_id ?? establishmentId ?? ''}
               targetType="signal"
               targetId={signalId}
               highlightCommentId={highlightCommentId}

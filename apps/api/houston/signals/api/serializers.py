@@ -116,6 +116,8 @@ class SignalFeedItemSerializer(serializers.Serializer):
     aggregation_count = serializers.IntegerField()
     permission_hints = PermissionHintsSerializer()
     resolution_request = SignalResolutionRequestSerializer(allow_null=True)
+    establishment_id = serializers.UUIDField(required=False)
+    establishment_name = serializers.CharField(required=False)
 
 
 class SignalFeedResponseSerializer(serializers.Serializer):
@@ -225,7 +227,7 @@ def _pending_resolution_request_for_serialize(signal: Signal):
     return get_pending_resolution_request_for_signal(signal)
 
 
-def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
+def serialize_signal_feed_item(*, signal: Signal, membership, read_only: bool = False) -> dict:
     from houston.action_plans.permissions import can_create_linked_action_plan
     from houston.signals.permissions import (
         can_approve_resolution_request,
@@ -241,6 +243,37 @@ def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
     )
 
     pending = _pending_resolution_request_for_serialize(signal)
+    if read_only:
+        hints = _read_only_signal_permission_hints()
+    else:
+        hints = {
+            "can_pin": can_pin_signal(membership, signal),
+            "can_mark_interesting": can_mark_signal_interesting(membership, signal),
+            "can_archive": can_archive_signal(membership, signal),
+            "can_cancel": can_cancel_signal(membership, signal),
+            "can_resolve": can_resolve_signal(membership, signal),
+            "can_create_linked_action_plan": can_create_linked_action_plan(
+                membership,
+                signal=signal,
+            ),
+            "can_qualify_routing": can_qualify_routing(
+                membership,
+                signal,
+                proposed_affected_business_unit=signal.affected_business_unit,
+                proposed_responsible_business_unit=signal.responsible_business_unit,
+                proposed_activity_subject=signal.activity_subject,
+            ),
+            "can_request_resolution": can_create_resolution_request(membership, signal),
+            "can_approve_resolution_request": (
+                can_approve_resolution_request(membership, pending) if pending else False
+            ),
+            "can_reject_resolution_request": (
+                can_reject_resolution_request(membership, pending) if pending else False
+            ),
+            "can_cancel_resolution_request": (
+                can_cancel_own_resolution_request(membership, pending) if pending else False
+            ),
+        }
 
     return {
         "id": signal.id,
@@ -288,34 +321,25 @@ def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
         "reporter_display_name": reporter_display_name_for_signal(signal),
         "aggregation_count": getattr(signal, "aggregation_count", 0) or 0,
         "resolution_request": serialize_resolution_request(pending),
-        "permission_hints": {
-            "can_pin": can_pin_signal(membership, signal),
-            "can_mark_interesting": can_mark_signal_interesting(membership, signal),
-            "can_archive": can_archive_signal(membership, signal),
-            "can_cancel": can_cancel_signal(membership, signal),
-            "can_resolve": can_resolve_signal(membership, signal),
-            "can_create_linked_action_plan": can_create_linked_action_plan(
-                membership,
-                signal=signal,
-            ),
-            "can_qualify_routing": can_qualify_routing(
-                membership,
-                signal,
-                proposed_affected_business_unit=signal.affected_business_unit,
-                proposed_responsible_business_unit=signal.responsible_business_unit,
-                proposed_activity_subject=signal.activity_subject,
-            ),
-            "can_request_resolution": can_create_resolution_request(membership, signal),
-            "can_approve_resolution_request": (
-                can_approve_resolution_request(membership, pending) if pending else False
-            ),
-            "can_reject_resolution_request": (
-                can_reject_resolution_request(membership, pending) if pending else False
-            ),
-            "can_cancel_resolution_request": (
-                can_cancel_own_resolution_request(membership, pending) if pending else False
-            ),
-        },
+        "establishment_id": signal.establishment_id,
+        "establishment_name": signal.establishment.name,
+        "permission_hints": hints,
+    }
+
+
+def _read_only_signal_permission_hints() -> dict:
+    return {
+        "can_pin": False,
+        "can_mark_interesting": False,
+        "can_archive": False,
+        "can_cancel": False,
+        "can_resolve": False,
+        "can_create_linked_action_plan": False,
+        "can_qualify_routing": False,
+        "can_request_resolution": False,
+        "can_approve_resolution_request": False,
+        "can_reject_resolution_request": False,
+        "can_cancel_resolution_request": False,
     }
 
 
@@ -357,14 +381,20 @@ def serialize_linked_action_plan_execution_for_signal_detail(
     }
 
 
-def serialize_signal_detail(*, signal: Signal, membership, request) -> dict:
+def serialize_signal_detail(
+    *, signal: Signal, membership, request, read_only: bool = False
+) -> dict:
     from houston.action_plans.selectors import linked_action_plan_executions_for_signal_detail
     from houston.signals.selectors import (
         build_resolution_request_events,
         list_resolution_requests_for_signal,
     )
 
-    payload = serialize_signal_feed_item(signal=signal, membership=membership)
+    payload = serialize_signal_feed_item(
+        signal=signal,
+        membership=membership,
+        read_only=read_only,
+    )
     # Detail keeps resolution_request as pending-only for actions; history is projected.
     requests = list_resolution_requests_for_signal(signal_id=signal.id)
     payload["resolution_request_events"] = build_resolution_request_events(requests)

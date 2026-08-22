@@ -731,6 +731,12 @@ def merge_operational_patterns(
             correction_id=correction_id,
             moved_signal_ids=moved_signal_ids,
         )
+        from houston.analytics.sightings import merge_pattern_establishment_sightings
+
+        merge_pattern_establishment_sightings(
+            source_pattern=source,
+            target_pattern=target,
+        )
         return PatternMergeResult(
             source_pattern=source,
             moved_signal_count=len(moved_signal_ids),
@@ -1705,6 +1711,19 @@ def _validate_and_save_assignment(
         assignment.save()
     else:
         assignment.save(update_fields=[*update_fields, "updated_at"])
+    if (
+        assignment.classification_status
+        == SignalPatternAssignment.ClassificationStatus.SUCCEEDED
+        and assignment.pattern_id is not None
+    ):
+        from houston.analytics.sightings import record_pattern_establishment_sighting
+
+        signal = assignment.signal
+        record_pattern_establishment_sighting(
+            pattern=assignment.pattern,
+            establishment=signal.establishment,
+            observed_at=assignment.assigned_at or timezone.now(),
+        )
     return assignment
 
 

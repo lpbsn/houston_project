@@ -18,6 +18,7 @@ from houston.signals.permissions import can_view_signal_detail
 ViewMode = Literal["personal", "general"]
 
 _SIGNAL_LIST_SELECT_RELATED = (
+    "establishment",
     "operational_unit",
     "affected_business_unit",
     "responsible_business_unit",
@@ -326,6 +327,51 @@ def get_signal_for_detail(
     if not can_view_signal_detail(membership, canceled_signal):
         return None
     return canceled_signal
+
+
+def cross_signal_feed_queryset(
+    *,
+    memberships: list[EstablishmentMembership],
+    filters: SignalFeedFilters | None = None,
+) -> QuerySet[Signal]:
+    signal_ids: list[uuid.UUID] = []
+    for membership in memberships:
+        signal_ids.extend(
+            signal_feed_queryset(
+                membership=membership,
+                view_mode="general",
+                filters=filters,
+            ).values_list("id", flat=True)
+        )
+    if not signal_ids:
+        return Signal.objects.none()
+    return apply_feed_sorting(
+        Signal.objects.filter(id__in=signal_ids)
+        .annotate(**_signal_list_annotations())
+        .annotate(
+            has_eligible_resolution_reviewers=Value(False, output_field=BooleanField()),
+        )
+        .select_related(*_SIGNAL_LIST_SELECT_RELATED, "establishment")
+        .prefetch_related(*_SIGNAL_LIST_PREFETCH)
+    )
+
+
+def get_cross_signal_for_detail(
+    *,
+    memberships: list[EstablishmentMembership],
+    signal_id: uuid.UUID,
+) -> tuple[Signal | None, EstablishmentMembership | None]:
+    by_establishment = {
+        membership.establishment_id: membership for membership in memberships
+    }
+    signal = Signal.objects.filter(
+        id=signal_id,
+        establishment_id__in=by_establishment,
+    ).only("id", "establishment_id").first()
+    if signal is None:
+        return None, None
+    membership = by_establishment[signal.establishment_id]
+    return get_signal_for_detail(membership=membership, signal_id=signal_id), membership
 
 
 def get_pending_resolution_request(

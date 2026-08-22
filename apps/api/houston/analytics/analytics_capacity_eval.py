@@ -28,6 +28,7 @@ from houston.analytics.api.views import (
     AnalyticsPatternListView,
     AnalyticsPatternSignalsView,
 )
+from houston.analytics.cutover import apply_analytics_history_cutover
 from houston.analytics.labels import normalize_pattern_label
 from houston.analytics.models import OperationalPattern, SignalPatternAssignment
 from houston.analytics.pattern_shortlist import (
@@ -44,7 +45,7 @@ from houston.establishments.models import (
 from houston.organizations.models import Organization
 from houston.signals.models import Signal
 
-ANALYTICS_CAPACITY_SCHEMA_VERSION = "analytics_capacity_eval_v1"
+ANALYTICS_CAPACITY_SCHEMA_VERSION = "analytics_capacity_eval_v2"
 ANALYTICS_CAPACITY_ARCHIVE_DIR = Path(".artifacts/analytics-capacity-eval")
 ANALYTICS_CAPACITY_NAMESPACE = "T35 Analytics Capacity"
 DEFAULT_SEED = 35
@@ -292,6 +293,7 @@ def seed_analytics_capacity_dataset(
         if include_shortlist_cases
         else ()
     )
+    apply_analytics_history_cutover(now=now)
     return CapacityDataset(
         profile=profile.name,
         seed=seed,
@@ -576,6 +578,16 @@ def _copy_capacity_signals_and_assignments(
                     if status == Signal.Status.RESOLVED
                     else None
                 )
+                canceled_at = (
+                    created_at + timedelta(hours=1 + index % 48)
+                    if status == Signal.Status.CANCELED
+                    else None
+                )
+                archived_at = (
+                    created_at + timedelta(hours=3 + index % 72)
+                    if status == Signal.Status.ARCHIVED
+                    else None
+                )
                 pattern_index = _assigned_pattern_index(index, len(patterns))
                 copy.write_row(
                     (
@@ -607,9 +619,9 @@ def _copy_capacity_signals_and_assignments(
                             else None
                         ),
                         None,
+                        canceled_at,
                         None,
-                        None,
-                        None,
+                        archived_at,
                         created_at,
                         created_at,
                     )

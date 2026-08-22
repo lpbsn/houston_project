@@ -184,3 +184,55 @@ def compare_metric_values(
         relative_change=absolute_delta / previous,
         relative_change_status=RELATIVE_CHANGE_COMPUTED,
     )
+
+
+@dataclass(frozen=True)
+class DashboardMetricComparison:
+    current_value: int | float | None
+    previous_value: int | float | None
+    absolute_delta: int | float | None
+    relative_change: float | None
+    relative_change_status: str
+    coverage: str
+
+
+def compare_dashboard_metric_values(
+    *,
+    current: int | float | None,
+    previous: int | float | None,
+    coverage: str,
+    points: bool = False,
+) -> DashboardMetricComparison:
+    from houston.analytics.journal import COVERAGE_COMPLETE
+
+    if coverage != COVERAGE_COMPLETE:
+        return DashboardMetricComparison(
+            current_value=current,
+            previous_value=previous,
+            absolute_delta=None,
+            relative_change=None,
+            relative_change_status=RELATIVE_CHANGE_NOT_APPLICABLE,
+            coverage=coverage,
+        )
+    base = compare_metric_values(current=current, previous=previous)
+    relative_change = base.relative_change
+    relative_status = base.relative_change_status
+    if (
+        points
+        and current is not None
+        and previous is not None
+        and previous != 0
+    ):
+        relative_change = current - previous
+        relative_status = RELATIVE_CHANGE_COMPUTED
+    elif points and current is not None and previous == 0:
+        relative_change = None
+        relative_status = RELATIVE_CHANGE_UNDEFINED_PREVIOUS_ZERO
+    return DashboardMetricComparison(
+        current_value=base.current_value,
+        previous_value=base.previous_value,
+        absolute_delta=base.absolute_delta,
+        relative_change=relative_change,
+        relative_change_status=relative_status,
+        coverage=coverage,
+    )

@@ -8,6 +8,17 @@ import {
 } from 'react'
 
 import { type AppHistory, getHrefSearch } from '@/app/app-history'
+import {
+  parseScopedTerrainRoute,
+  serializeScopedExecutionDetailPath,
+  serializeScopedSignalDetailPath,
+  serializeScopedTerrainPath,
+  terrainScopeKey,
+  type ScopedTerrainRoute,
+  type TerrainScope,
+} from '@/app/scoped-terrain'
+
+export type { ScopedTerrainPage, ScopedTerrainRoute, TerrainScope } from '@/app/scoped-terrain'
 
 export type AppPath =
   | '/'
@@ -35,12 +46,13 @@ export type ActionPlanCreateOrigin = 'library' | 'execution'
 
 export type AppRoute =
   | { kind: 'static'; path: AppPath }
-  | { kind: 'signal-detail'; signalId: string }
+  | ScopedTerrainRoute
+  | { kind: 'signal-detail'; signalId: string; scope?: TerrainScope }
   | { kind: 'signal-action-create'; signalId: string }
   | { kind: 'action-plan-create'; origin: ActionPlanCreateOrigin }
   | { kind: 'action-plan-template-detail'; actionPlanId: string }
   | { kind: 'action-plan-template-edit'; actionPlanId: string }
-  | { kind: 'action-plan-execution-detail'; executionId: string }
+  | { kind: 'action-plan-execution-detail'; executionId: string; scope?: TerrainScope }
   | { kind: 'action-plan-execution-edit'; executionId: string }
   | { kind: 'analytics-pattern-detail'; patternId: string }
   | { kind: 'chat-conversation-detail'; conversationId: string }
@@ -59,8 +71,10 @@ export function getAppRouteKey(route: AppRoute): string {
   switch (route.kind) {
     case 'static':
       return `static:${route.path}`
+    case 'scoped-terrain':
+      return `scoped-terrain:${terrainScopeKey(route.scope)}:${route.page}`
     case 'signal-detail':
-      return `signal-detail:${route.signalId}`
+      return `signal-detail:${route.signalId}:${terrainScopeKey(route.scope)}`
     case 'signal-action-create':
       return `signal-action-create:${route.signalId}`
     case 'action-plan-create':
@@ -70,7 +84,7 @@ export function getAppRouteKey(route: AppRoute): string {
     case 'action-plan-template-edit':
       return `action-plan-template-edit:${route.actionPlanId}`
     case 'action-plan-execution-detail':
-      return `action-plan-execution-detail:${route.executionId}`
+      return `action-plan-execution-detail:${route.executionId}:${terrainScopeKey(route.scope)}`
     case 'action-plan-execution-edit':
       return `action-plan-execution-edit:${route.executionId}`
     case 'analytics-pattern-detail':
@@ -195,6 +209,11 @@ function parseOrganizationEstablishmentId(pathname: string): string | null {
 export function parseAppRoute(input: string): AppRoute {
   const pathname = normalizeRoutePath(input)
 
+  const scopedRoute = parseScopedTerrainRoute(pathname)
+  if (scopedRoute) {
+    return scopedRoute
+  }
+
   const invitationToken = parseInvitationToken(pathname)
   if (invitationToken) {
     return { kind: 'invitation', token: invitationToken }
@@ -270,8 +289,12 @@ export function serializeAppRoute(route: AppRoute): string {
   switch (route.kind) {
     case 'static':
       return route.path
+    case 'scoped-terrain':
+      return serializeScopedTerrainPath(route.scope, route.page)
     case 'signal-detail':
-      return `/signals/${route.signalId}`
+      return route.scope
+        ? serializeScopedSignalDetailPath(route.scope, route.signalId)
+        : `/signals/${route.signalId}`
     case 'signal-action-create':
       return `/signals/${route.signalId}/plan`
     case 'action-plan-create':
@@ -283,7 +306,9 @@ export function serializeAppRoute(route: AppRoute): string {
     case 'action-plan-template-edit':
       return `/action-plans/${route.actionPlanId}/edit`
     case 'action-plan-execution-detail':
-      return `/action-plans/executions/${route.executionId}`
+      return route.scope
+        ? serializeScopedExecutionDetailPath(route.scope, route.executionId)
+        : `/action-plans/executions/${route.executionId}`
     case 'action-plan-execution-edit':
       return `/action-plans/executions/${route.executionId}/edit`
     case 'analytics-pattern-detail':

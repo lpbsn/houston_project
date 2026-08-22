@@ -23,6 +23,7 @@ import type {
   AnalyticsPatternSplitToExistingRequest,
   AnalyticsPatternSplitToNewRequest,
 } from './api'
+import type { DashboardPeriodDays } from './lib/dashboard-url-state'
 import type { AnalyticsUrlState } from './lib/analytics-url-state'
 
 type UseAnalyticsDashboardQueryOptions = {
@@ -30,13 +31,16 @@ type UseAnalyticsDashboardQueryOptions = {
 }
 
 export function useAnalyticsDashboardQuery(
-  state: AnalyticsUrlState,
-  options?: UseAnalyticsDashboardQueryOptions,
+  options: {
+    periodDays: DashboardPeriodDays
+    establishmentId: string | null
+  },
+  queryOptions?: UseAnalyticsDashboardQueryOptions,
 ) {
   return useQuery({
-    queryKey: analyticsQueryKeys.dashboard(state),
-    queryFn: () => fetchAnalyticsDashboard(state),
-    enabled: options?.enabled ?? true,
+    queryKey: analyticsQueryKeys.dashboard(options),
+    queryFn: () => fetchAnalyticsDashboard(options),
+    enabled: queryOptions?.enabled ?? true,
   })
 }
 

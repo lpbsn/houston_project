@@ -15,6 +15,8 @@ from houston.action_plans.constants import (
     CATALOG_STATUS_INACTIVE,
     EXECUTION_LIFECYCLE_EVENT_CANCELED,
     EXECUTION_LIFECYCLE_EVENT_CREATED,
+    EXECUTION_LIFECYCLE_EVENT_DEADLINE_CHANGED,
+    EXECUTION_LIFECYCLE_EVENT_HISTORY_BASELINE,
     EXECUTION_LIFECYCLE_EVENT_MARKED_DONE,
     EXECUTION_LIFECYCLE_EVENT_REACTIVATED,
     EXECUTION_LIFECYCLE_EVENT_REOPENED,
@@ -521,6 +523,8 @@ class ActionPlanExecutionLifecycleEvent(BaseModel):
     class EventType(models.TextChoices):
         CREATED = EXECUTION_LIFECYCLE_EVENT_CREATED, "Created"
         STARTED = EXECUTION_LIFECYCLE_EVENT_STARTED, "Started"
+        HISTORY_BASELINE = EXECUTION_LIFECYCLE_EVENT_HISTORY_BASELINE, "History baseline"
+        DEADLINE_CHANGED = EXECUTION_LIFECYCLE_EVENT_DEADLINE_CHANGED, "Deadline changed"
         MARKED_DONE = EXECUTION_LIFECYCLE_EVENT_MARKED_DONE, "Marked done"
         VALIDATED = EXECUTION_LIFECYCLE_EVENT_VALIDATED, "Validated"
         CANCELED = EXECUTION_LIFECYCLE_EVENT_CANCELED, "Canceled"
@@ -557,6 +561,13 @@ class ActionPlanExecutionLifecycleEvent(BaseModel):
             models.Index(
                 fields=["establishment", "occurred_at"],
                 name="ap_exec_lifecycle_est_at_idx",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["action_plan_execution"],
+                condition=Q(event_type=EXECUTION_LIFECYCLE_EVENT_HISTORY_BASELINE),
+                name="ap_exec_lifecycle_one_baseline",
             ),
         ]
 

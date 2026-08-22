@@ -148,8 +148,7 @@ describe('TerrainShell', () => {
     expect(screen.getAllByTestId('terrain-topbar')).toHaveLength(1)
     const sidebar = screen.getByLabelText('Navigation principale')
     expect(within(sidebar).getByRole('link', { name: 'Nouvelle observation' })).toBeTruthy()
-    expect(within(sidebar).getByRole('link', { name: 'Analyse' }).getAttribute('aria-current'))
-      .toBe('page')
+    expect(within(sidebar).getByRole('link', { name: 'Dashboard' })).toBeTruthy()
     expect(within(sidebar).queryByRole('link', { name: 'Chat' })).toBeNull()
     expect(within(sidebar).getByText('Marie Renaud')).toBeTruthy()
     expect(within(sidebar).getByText('Manager · Spore Paris')).toBeTruthy()
@@ -164,7 +163,7 @@ describe('TerrainShell', () => {
 
     const sidebar = screen.getByLabelText('Navigation principale')
     expect(within(sidebar).queryByRole('link', { name: 'Analyse' })).toBeNull()
-    expect(within(sidebar).getByRole('link', { name: 'Chat' })).toBeTruthy()
+    expect(within(sidebar).queryByRole('link', { name: 'Dashboard' })).toBeNull()
   })
 
   it('keeps bottom navigation mobile-only when enabled', () => {
@@ -175,6 +174,17 @@ describe('TerrainShell', () => {
 
     const bottomNav = screen.getByRole('navigation', { name: 'Navigation terrain' })
     expect(bottomNav.className).toContain('lg:hidden')
+  })
+
+  it('shows the shared mobile nav on a destination page without marking a tab current', () => {
+    renderTerrainShell('auto', {
+      showBottomNav: true,
+    })
+
+    const bottomNav = screen.getByRole('navigation', { name: 'Navigation terrain' })
+    expect(bottomNav).toBeTruthy()
+    expect(screen.queryByRole('link', { current: 'page' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Analyse' })).toBeNull()
   })
 
   it('scopes toast and processing overlays to the content column beside the sidebar', () => {

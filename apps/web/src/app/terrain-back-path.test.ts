@@ -62,12 +62,29 @@ describe('resolveTerrainBackPath', () => {
     ).toBe('/login')
   })
 
-  it('keeps /general as the analytics back path when operational access is present', () => {
+  it('keeps /analytics without a back path when operational access is present', () => {
     expect(
       resolveTerrainBackPath(
         { kind: 'static', path: '/analytics' },
         { hasOperationalAccess: true },
       ),
-    ).toBe('/general')
+    ).toBeNull()
+  })
+
+  it('does not treat scoped dashboards as nested details', () => {
+    expect(
+      resolveTerrainBackPath({
+        kind: 'scoped-terrain',
+        scope: { type: 'cross' },
+        page: 'dashboard',
+      }),
+    ).toBeNull()
+    expect(
+      resolveTerrainBackPath({
+        kind: 'scoped-terrain',
+        scope: { type: 'establishment', establishmentId: 'est-1' },
+        page: 'dashboard',
+      }),
+    ).toBeNull()
   })
 })

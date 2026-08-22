@@ -63,6 +63,8 @@ import type { ActionPlanExecutionDetail, ActionPlanTaskExecution } from '../type
 
 type ActionPlanExecutionDetailPageProps = {
   executionId: string
+  establishmentId?: string | null
+  source?: 'establishment' | 'cross'
 }
 
 type ActionPlanExecutionDetailPageContentProps = {
@@ -523,13 +525,18 @@ function ActionPlanExecutionDetailPageContent({
   )
 }
 
-export function ActionPlanExecutionDetailPage({ executionId }: ActionPlanExecutionDetailPageProps) {
+export function ActionPlanExecutionDetailPage({
+  executionId,
+  establishmentId: establishmentIdProp,
+  source = 'establishment',
+}: ActionPlanExecutionDetailPageProps) {
   const { activeMembership } = useAuth()
-  const establishmentId = activeMembership?.establishment_id ?? null
+  const sessionEstablishmentId = activeMembership?.establishment_id ?? null
+  const establishmentId = establishmentIdProp ?? sessionEstablishmentId
 
-  const detailQuery = useActionPlanExecutionDetailQuery(establishmentId, executionId)
+  const detailQuery = useActionPlanExecutionDetailQuery(establishmentId, executionId, { source })
 
-  if (!establishmentId) {
+  if (!establishmentId && source !== 'cross') {
     return null
   }
 
@@ -555,11 +562,22 @@ export function ActionPlanExecutionDetailPage({ executionId }: ActionPlanExecuti
     )
   }
 
+  const resolvedEstablishmentId =
+    detailQuery.data.establishment_id ?? establishmentId
+  if (!resolvedEstablishmentId) {
+    return (
+      <TerrainErrorState
+        className="mx-3 mt-3"
+        message="Cette exécution est introuvable ou inaccessible."
+      />
+    )
+  }
+
   return (
     <ActionPlanExecutionDetailPageContent
       key={executionId}
       executionId={executionId}
-      establishmentId={establishmentId}
+      establishmentId={resolvedEstablishmentId}
       execution={detailQuery.data}
     />
   )

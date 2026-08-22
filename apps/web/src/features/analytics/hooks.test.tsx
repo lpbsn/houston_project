@@ -76,6 +76,11 @@ function wrapper({ children }: { children: ReactNode }) {
   return createElement(QueryClientProvider, { client: queryClient }, children)
 }
 
+const dashboardOptions = {
+  periodDays: 7 as const,
+  establishmentId: null,
+}
+
 describe('useAnalyticsDashboardQuery', () => {
   afterEach(() => {
     fetchAnalyticsDashboardMock.mockReset()
@@ -91,59 +96,63 @@ describe('useAnalyticsDashboardQuery', () => {
     splitAnalyticsPatternToNewMock.mockReset()
   })
 
-  it('fetches the dashboard with the resolved URL state', async () => {
-    fetchAnalyticsDashboardMock.mockResolvedValue({ current_kpis: {} })
+  it('fetches the dashboard with period and establishment', async () => {
+    fetchAnalyticsDashboardMock.mockResolvedValue({ period_days: 7 })
 
-    const { result } = renderHook(() => useAnalyticsDashboardQuery(state), { wrapper })
+    const { result } = renderHook(() => useAnalyticsDashboardQuery(dashboardOptions), {
+      wrapper,
+    })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
     })
 
-    expect(fetchAnalyticsDashboardMock).toHaveBeenCalledWith(state)
+    expect(fetchAnalyticsDashboardMock).toHaveBeenCalledWith(dashboardOptions)
   })
 
   it('does not fetch when disabled', () => {
-    renderHook(() => useAnalyticsDashboardQuery(state, { enabled: false }), { wrapper })
+    renderHook(() => useAnalyticsDashboardQuery(dashboardOptions, { enabled: false }), {
+      wrapper,
+    })
 
     expect(fetchAnalyticsDashboardMock).not.toHaveBeenCalled()
   })
 
-  it('uses a stable query key derived from period and organization', () => {
-    expect(analyticsQueryKeys.dashboard(state)).toEqual([
+  it('uses a stable query key derived from period and establishment', () => {
+    expect(analyticsQueryKeys.dashboard(dashboardOptions)).toEqual([
       'analytics',
       'dashboard',
       {
-        periodStart: '2026-07-13T10:30:00.000Z',
-        periodEnd: '2026-08-12T10:30:00.000Z',
-        organizationId: null,
+        periodDays: 7,
+        establishmentId: null,
       },
     ])
   })
 
-  it('fetches a new dashboard when the search-derived state changes', async () => {
-    fetchAnalyticsDashboardMock.mockResolvedValue({ current_kpis: {} })
-    const nextState = {
-      ...state,
-      organizationId: '11111111-1111-4111-8111-111111111111',
+  it('fetches a new dashboard when period or establishment changes', async () => {
+    fetchAnalyticsDashboardMock.mockResolvedValue({ period_days: 7 })
+    const nextOptions = {
+      periodDays: 15 as const,
+      establishmentId: '11111111-1111-4111-8111-111111111111',
     }
 
     const { rerender } = renderHook(
-      ({ currentState }) => useAnalyticsDashboardQuery(currentState),
+      ({ currentOptions }: { currentOptions: typeof dashboardOptions | typeof nextOptions }) =>
+        useAnalyticsDashboardQuery(currentOptions),
       {
-        initialProps: { currentState: state },
+        initialProps: { currentOptions: dashboardOptions },
         wrapper,
       },
     )
 
     await waitFor(() => {
-      expect(fetchAnalyticsDashboardMock).toHaveBeenCalledWith(state)
+      expect(fetchAnalyticsDashboardMock).toHaveBeenCalledWith(dashboardOptions)
     })
 
-    rerender({ currentState: nextState })
+    rerender({ currentOptions: nextOptions })
 
     await waitFor(() => {
-      expect(fetchAnalyticsDashboardMock).toHaveBeenCalledWith(nextState)
+      expect(fetchAnalyticsDashboardMock).toHaveBeenCalledWith(nextOptions)
     })
   })
 })

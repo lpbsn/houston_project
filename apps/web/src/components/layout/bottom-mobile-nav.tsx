@@ -7,7 +7,7 @@ import { terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 type BottomMobileNavProps = {
-  activePath: TerrainNavPath
+  activePath?: TerrainNavPath
   navigate: (pathname: string, options?: { replace?: boolean }) => void
   className?: string
   showChat?: boolean
@@ -43,7 +43,7 @@ export function BottomMobileNav({
         style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
       >
         {visibleItems.map((item) => {
-          const isActive = activePath === item.path
+          const isActive = activePath != null && activePath === item.path
           const Icon = item.icon
 
           if (item.isPrimary) {

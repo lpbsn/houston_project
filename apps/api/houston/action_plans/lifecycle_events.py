@@ -11,8 +11,10 @@ from typing import Any
 from uuid import UUID
 
 from houston.action_plans.constants import (
+    EXECUTION_LIFECYCLE_EVENT_DEADLINE_CHANGED,
     EXECUTION_LIFECYCLE_EVENT_TYPE_VALUES,
     EXECUTION_LIFECYCLE_METADATA_SAFE_KEYS,
+    EXECUTION_LIFECYCLE_NULLABLE_METADATA_KEYS,
 )
 from houston.action_plans.models import ActionPlanExecution, ActionPlanExecutionLifecycleEvent
 from houston.establishments.models import EstablishmentMembership
@@ -27,9 +29,13 @@ def sanitize_lifecycle_metadata_safe(metadata: dict[str, Any] | None) -> dict[st
         if key not in EXECUTION_LIFECYCLE_METADATA_SAFE_KEYS:
             continue
         if value is None:
+            if key in EXECUTION_LIFECYCLE_NULLABLE_METADATA_KEYS:
+                safe[key] = None
             continue
         if isinstance(value, UUID):
             safe[key] = str(value)
+        elif isinstance(value, datetime):
+            safe[key] = value.isoformat()
         elif isinstance(value, (str, int, float, bool)):
             safe[key] = value
         else:
@@ -56,4 +62,30 @@ def record_execution_lifecycle_event(
         actor_membership=actor_membership,
         occurred_at=occurred_at,
         metadata_safe=sanitize_lifecycle_metadata_safe(metadata_safe),
+    )
+
+
+def execution_transition_metadata(*, status: str, end_at: datetime | None) -> dict[str, Any]:
+    return {"to_status": status, "end_at": end_at}
+
+
+def record_execution_deadline_changed(
+    *,
+    execution: ActionPlanExecution,
+    from_end_at: datetime | None,
+    to_end_at: datetime | None,
+    occurred_at: datetime,
+    actor_membership: EstablishmentMembership | None = None,
+) -> ActionPlanExecutionLifecycleEvent | None:
+    if from_end_at == to_end_at:
+        return None
+    return record_execution_lifecycle_event(
+        execution=execution,
+        event_type=EXECUTION_LIFECYCLE_EVENT_DEADLINE_CHANGED,
+        occurred_at=occurred_at,
+        actor_membership=actor_membership,
+        metadata_safe={
+            "from_end_at": from_end_at,
+            "to_end_at": to_end_at,
+        },
     )

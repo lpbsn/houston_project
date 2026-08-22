@@ -58,6 +58,7 @@ from houston.signals.constants import (
     SIGNAL_IN_PROGRESS_MANUAL_RESOLVE_DETAIL,
     SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
     SIGNAL_LIFECYCLE_EVENT_CANCELED,
+    SIGNAL_LIFECYCLE_EVENT_CREATED,
     SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING,
     SIGNAL_LIFECYCLE_EVENT_RESOLVED,
     SIGNAL_RESOLUTION_ORIGIN_ACTION_PLAN,
@@ -313,6 +314,12 @@ def create_signal_from_candidate(
         signal=signal,
         observation=observation,
         link_type=SignalSourceObservation.LinkType.CREATED_FROM,
+    )
+    record_signal_lifecycle_event(
+        signal=signal,
+        event_type=SIGNAL_LIFECYCLE_EVENT_CREATED,
+        occurred_at=signal.created_at,
+        metadata_safe={"to_status": Signal.Status.OPEN},
     )
     _schedule_signal_pattern_classification(signal=signal)
     _schedule_signal_invalidation(signal=signal, reason="signal.created")

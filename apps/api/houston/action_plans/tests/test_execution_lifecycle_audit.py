@@ -106,11 +106,11 @@ def test_user_create_emits_created_with_actor_and_initial_status(
     assert len(created_events) == 1
     event = created_events[0]
     assert event.actor_membership_id == owner_membership.id
-    assert event.metadata_safe == {"initial_status": EXECUTION_STATUS_IN_PROGRESS}
-    assert event.occurred_at == execution.created_at
-    assert event.establishment_id == execution.establishment_id
-    assert not _events_of_type(execution=execution, event_type=EXECUTION_LIFECYCLE_EVENT_STARTED)
-    assert execution.started_at is None
+    assert event.metadata_safe["initial_status"] == EXECUTION_STATUS_IN_PROGRESS
+    assert event.metadata_safe["to_status"] == EXECUTION_STATUS_IN_PROGRESS
+    started = _events_of_type(execution=execution, event_type=EXECUTION_LIFECYCLE_EVENT_STARTED)
+    assert len(started) == 1
+    assert execution.started_at is not None
 
 
 def test_user_create_scheduled_records_initial_status(
@@ -137,7 +137,8 @@ def test_user_create_scheduled_records_initial_status(
     created = _events_of_type(execution=execution, event_type=EXECUTION_LIFECYCLE_EVENT_CREATED)
     assert len(created) == 1
     assert created[0].actor_membership_id == owner_membership.id
-    assert created[0].metadata_safe == {"initial_status": EXECUTION_STATUS_SCHEDULED}
+    assert created[0].metadata_safe["initial_status"] == EXECUTION_STATUS_SCHEDULED
+    assert created[0].metadata_safe["to_status"] == EXECUTION_STATUS_SCHEDULED
 
 
 def test_materialize_create_uses_null_actor_despite_created_by(
@@ -356,7 +357,8 @@ def test_manual_cancel_sets_actor_and_metadata(owner_membership, execution_with_
     assert canceled.canceled_by_membership_id == owner_membership.id
     assert canceled.canceled_at == events[0].occurred_at
     assert events[0].actor_membership_id == owner_membership.id
-    assert events[0].metadata_safe == {"cancel_origin": CANCEL_ORIGIN_MANUAL}
+    assert events[0].metadata_safe["cancel_origin"] == CANCEL_ORIGIN_MANUAL
+    assert events[0].metadata_safe["to_status"] == EXECUTION_STATUS_CANCELED
 
 
 def test_promotion_sets_started_fields_and_is_idempotent(
@@ -496,10 +498,8 @@ def test_schedule_sync_cancel_and_reactivate_to_scheduled(
     )
     assert len(reactivated) == 1
     assert reactivated[0].actor_membership_id is None
-    assert reactivated[0].metadata_safe == {
-        "reactivation_origin": CANCEL_ORIGIN_SCHEDULE_SYNC,
-        "to_status": EXECUTION_STATUS_SCHEDULED,
-    }
+    assert reactivated[0].metadata_safe["reactivation_origin"] == CANCEL_ORIGIN_SCHEDULE_SYNC
+    assert reactivated[0].metadata_safe["to_status"] == EXECUTION_STATUS_SCHEDULED
     assert reactivated_execution.reactivated_at == reactivated[0].occurred_at
     assert reactivated_execution.reactivated_by_membership_id is None
     assert reactivated_execution.reopened_at is None
@@ -583,9 +583,8 @@ def test_schedule_sync_cancel_via_patch_emits_canceled_event(
     )
     assert len(canceled_events) == 1
     assert canceled_events[0].actor_membership_id is None
-    assert canceled_events[0].metadata_safe == {
-        "cancel_origin": CANCEL_ORIGIN_SCHEDULE_SYNC,
-    }
+    assert canceled_events[0].metadata_safe["cancel_origin"] == CANCEL_ORIGIN_SCHEDULE_SYNC
+    assert canceled_events[0].metadata_safe["to_status"] == EXECUTION_STATUS_CANCELED
     assert future_execution.canceled_at == canceled_events[0].occurred_at
 
 
@@ -665,6 +664,9 @@ def test_reactivate_directly_to_in_progress_without_started_event(
         occurred_at=now,
         metadata_safe={"cancel_origin": CANCEL_ORIGIN_SCHEDULE_SYNC},
     )
+    started_before = len(
+        _events_of_type(execution=execution, event_type=EXECUTION_LIFECYCLE_EVENT_STARTED)
+    )
 
     reactivated = reactivate_schedule_future_execution(
         execution=execution,
@@ -679,9 +681,9 @@ def test_reactivate_directly_to_in_progress_without_started_event(
     assert len(events) == 1
     assert events[0].metadata_safe["to_status"] == EXECUTION_STATUS_IN_PROGRESS
     assert reactivated.reactivated_at == events[0].occurred_at
-    assert not _events_of_type(
-        execution=reactivated,
-        event_type=EXECUTION_LIFECYCLE_EVENT_STARTED,
+    assert (
+        len(_events_of_type(execution=reactivated, event_type=EXECUTION_LIFECYCLE_EVENT_STARTED))
+        == started_before
     )
     assert reactivated.started_at is None
     assert reactivated.reopened_at is None

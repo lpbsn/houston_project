@@ -5,7 +5,6 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AppRoute } from '@/app/app-routes'
-import { getAuthenticatedLandingPath } from '@/features/auth/lib/authenticated-landing'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
 
 const navigate = vi.fn()
@@ -240,6 +239,7 @@ afterEach(() => {
   authState.hasOperationalAccess = false
   authState.memberships = []
   authState.pendingOnboardingMemberships = []
+  Reflect.deleteProperty(window, 'matchMedia')
 })
 
 describe('App terrain active membership routing', () => {
@@ -261,7 +261,7 @@ describe('App terrain active membership routing', () => {
     })
   })
 
-  it('sends analytics Back to /general when operational access is available', () => {
+  it('keeps analytics as a hub without a back control when operational access is available', () => {
     const bootstrap = bootstrapWithActiveMembership()
     authState.bootstrap = bootstrap
     authState.memberships = bootstrap.memberships
@@ -269,12 +269,12 @@ describe('App terrain active membership routing', () => {
 
     render(createElement(App))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Retour' }))
-
-    expect(navigate).toHaveBeenCalledWith('/general')
+    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Retour' })).toBeNull()
+    expect(navigate).not.toHaveBeenCalled()
   })
 
-  it('sends analytics Back to authenticated landing without active membership', () => {
+  it('keeps analytics as a hub without a back control without active membership', () => {
     const bootstrap = bootstrapWithoutActiveMembership()
     authState.bootstrap = bootstrap
     authState.memberships = bootstrap.memberships
@@ -282,14 +282,12 @@ describe('App terrain active membership routing', () => {
 
     render(createElement(App))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Retour' }))
-
-    expect(navigate).toHaveBeenCalledWith(getAuthenticatedLandingPath(bootstrap))
-    expect(navigate).toHaveBeenCalledWith('/select-establishment')
-    expect(navigate).not.toHaveBeenCalledWith('/general')
+    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Retour' })).toBeNull()
+    expect(navigate).not.toHaveBeenCalled()
   })
 
-  it('sends analytics Back to organization landing for org managers without selection', () => {
+  it('keeps analytics as a hub without a back control for org managers without selection', () => {
     const bootstrap = bootstrapWithoutActiveMembership({
       permission_hints: {
         chat_available: false,
@@ -309,11 +307,9 @@ describe('App terrain active membership routing', () => {
 
     render(createElement(App))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Retour' }))
-
-    expect(navigate).toHaveBeenCalledWith(getAuthenticatedLandingPath(bootstrap))
-    expect(navigate).toHaveBeenCalledWith('/organization')
-    expect(navigate).not.toHaveBeenCalledWith('/general')
+    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Retour' })).toBeNull()
+    expect(navigate).not.toHaveBeenCalled()
   })
 
   it('sends analytics pattern detail Back to the resolved Analytics URL state', () => {
@@ -459,5 +455,32 @@ describe('App terrain active membership routing', () => {
     expect(screen.getByTestId('action-plan-create').getAttribute('data-back-path')).toBe(
       '/signals/55555555-5555-4555-8555-555555555555',
     )
+  })
+
+  it('redirects /analytics to the cross dashboard on a large viewport', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    })
+    const bootstrap = bootstrapWithActiveMembership()
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+
+    render(createElement(App))
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith('/cross?period=7d', { replace: true })
+    })
   })
 })

@@ -271,7 +271,11 @@ def _cancel_linked_active_executions_for_signal_resolve(
             event_type=EXECUTION_LIFECYCLE_EVENT_CANCELED,
             occurred_at=now,
             actor_membership=None,
-            metadata_safe={"cancel_origin": CANCEL_ORIGIN_MANUAL},
+            metadata_safe={
+                "cancel_origin": CANCEL_ORIGIN_MANUAL,
+                "to_status": EXECUTION_STATUS_CANCELED,
+                "end_at": execution.end_at,
+            },
         )
         from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
         from houston.notifications.scheduling import (
@@ -1153,8 +1157,15 @@ def _create_execution_record(
     responsible_business_unit=None,
     activity_subject=None,
 ) -> ActionPlanExecution:
-    from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_CREATED
-    from houston.action_plans.lifecycle_events import record_execution_lifecycle_event
+    from houston.action_plans.constants import (
+        EXECUTION_LIFECYCLE_EVENT_CREATED,
+        EXECUTION_LIFECYCLE_EVENT_STARTED,
+        EXECUTION_STATUS_IN_PROGRESS,
+    )
+    from houston.action_plans.lifecycle_events import (
+        execution_transition_metadata,
+        record_execution_lifecycle_event,
+    )
 
     now = timezone.now()
     if use_shared_chronology:
@@ -1164,6 +1175,10 @@ def _create_execution_record(
             "Individual chronology requires a chronology owner membership.",
         )
     status = initial_execution_status(start_at=start_at, now=now)
+    started_at = now if status == EXECUTION_STATUS_IN_PROGRESS else None
+    started_by_membership = (
+        lifecycle_actor_membership if status == EXECUTION_STATUS_IN_PROGRESS else None
+    )
     execution = ActionPlanExecution.objects.create(
         action_plan=action_plan,
         action_plan_schedule=action_plan_schedule,
@@ -1184,15 +1199,29 @@ def _create_execution_record(
         start_at=start_at,
         visible_from=visible_from,
         end_at=end_at,
+        started_at=started_at,
+        started_by_membership=started_by_membership,
         last_activity_at=now,
     )
+    created_metadata = {
+        "initial_status": status,
+        **execution_transition_metadata(status=status, end_at=end_at),
+    }
     record_execution_lifecycle_event(
         execution=execution,
         event_type=EXECUTION_LIFECYCLE_EVENT_CREATED,
         occurred_at=execution.created_at,
         actor_membership=lifecycle_actor_membership,
-        metadata_safe={"initial_status": status},
+        metadata_safe=created_metadata,
     )
+    if status == EXECUTION_STATUS_IN_PROGRESS:
+        record_execution_lifecycle_event(
+            execution=execution,
+            event_type=EXECUTION_LIFECYCLE_EVENT_STARTED,
+            occurred_at=execution.created_at,
+            actor_membership=lifecycle_actor_membership,
+            metadata_safe=execution_transition_metadata(status=status, end_at=end_at),
+        )
     return execution
 
 
@@ -1834,7 +1863,10 @@ def mark_action_plan_execution_done(
         raise ActionPlanPermissionError("Not allowed to mark this execution done.")
 
     from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_MARKED_DONE
-    from houston.action_plans.lifecycle_events import record_execution_lifecycle_event
+    from houston.action_plans.lifecycle_events import (
+        execution_transition_metadata,
+        record_execution_lifecycle_event,
+    )
 
     now = timezone.now()
     execution.marked_done_at = now
@@ -1856,6 +1888,10 @@ def mark_action_plan_execution_done(
             event_type=EXECUTION_LIFECYCLE_EVENT_MARKED_DONE,
             occurred_at=now,
             actor_membership=actor_membership,
+            metadata_safe=execution_transition_metadata(
+                status=EXECUTION_STATUS_PENDING_VALIDATION,
+                end_at=execution.end_at,
+            ),
         )
         from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
         from houston.notifications.scheduling import (
@@ -1887,6 +1923,10 @@ def mark_action_plan_execution_done(
         event_type=EXECUTION_LIFECYCLE_EVENT_MARKED_DONE,
         occurred_at=now,
         actor_membership=actor_membership,
+        metadata_safe=execution_transition_metadata(
+            status=EXECUTION_STATUS_DONE,
+            end_at=execution.end_at,
+        ),
     )
     from houston.gamification.services import award_recurring_execution_done_points
 
@@ -1943,7 +1983,10 @@ def validate_action_plan_execution(
         raise ActionPlanStateError("Execution already has an active review.")
 
     from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_VALIDATED
-    from houston.action_plans.lifecycle_events import record_execution_lifecycle_event
+    from houston.action_plans.lifecycle_events import (
+        execution_transition_metadata,
+        record_execution_lifecycle_event,
+    )
 
     now = timezone.now()
     ActionPlanExecutionReview.objects.create(
@@ -1971,6 +2014,10 @@ def validate_action_plan_execution(
         event_type=EXECUTION_LIFECYCLE_EVENT_VALIDATED,
         occurred_at=now,
         actor_membership=actor_membership,
+        metadata_safe=execution_transition_metadata(
+            status=EXECUTION_STATUS_DONE,
+            end_at=execution.end_at,
+        ),
     )
     from houston.gamification.services import award_action_plan_execution_reviewed_points
 
@@ -2013,7 +2060,10 @@ def reopen_action_plan_execution(
         raise ActionPlanPermissionError("Not allowed to reopen this execution.")
 
     from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_REOPENED
-    from houston.action_plans.lifecycle_events import record_execution_lifecycle_event
+    from houston.action_plans.lifecycle_events import (
+        execution_transition_metadata,
+        record_execution_lifecycle_event,
+    )
 
     now = timezone.now()
     ActionPlanExecutionReview.objects.filter(
@@ -2052,6 +2102,10 @@ def reopen_action_plan_execution(
         event_type=EXECUTION_LIFECYCLE_EVENT_REOPENED,
         occurred_at=now,
         actor_membership=actor,
+        metadata_safe=execution_transition_metadata(
+            status=EXECUTION_STATUS_IN_PROGRESS,
+            end_at=execution.end_at,
+        ),
     )
     _reopen_linked_signal_after_execution_reopen(
         execution=execution,
@@ -2106,14 +2160,23 @@ def cancel_action_plan_execution(
         ]
     )
     from houston.action_plans.constants import EXECUTION_LIFECYCLE_EVENT_CANCELED
-    from houston.action_plans.lifecycle_events import record_execution_lifecycle_event
+    from houston.action_plans.lifecycle_events import (
+        execution_transition_metadata,
+        record_execution_lifecycle_event,
+    )
 
     record_execution_lifecycle_event(
         execution=execution,
         event_type=EXECUTION_LIFECYCLE_EVENT_CANCELED,
         occurred_at=now,
         actor_membership=actor,
-        metadata_safe={"cancel_origin": CANCEL_ORIGIN_MANUAL},
+        metadata_safe={
+            "cancel_origin": CANCEL_ORIGIN_MANUAL,
+            **execution_transition_metadata(
+                status=EXECUTION_STATUS_CANCELED,
+                end_at=execution.end_at,
+            ),
+        },
     )
     from houston.action_plans.feed_pin_services import delete_action_plan_execution_feed_pins
     _sync_linked_signal_after_execution_change(

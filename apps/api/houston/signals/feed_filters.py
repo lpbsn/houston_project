@@ -249,3 +249,62 @@ def _validate_activity_subject_ids_exist(
         raise SignalFeedFilterValidationError(
             f"Unknown or inactive activity_subject_ids: {', '.join(unknown)}.",
         )
+
+
+def parse_cross_signal_feed_filters(
+    *,
+    query_params: Any,
+    establishment_ids: tuple[uuid.UUID, ...],
+) -> SignalFeedFilters:
+    statuses = _parse_statuses(query_params.get("statuses"))
+    business_unit_ids = _parse_business_unit_ids(
+        raw=query_params.get("business_unit_ids"),
+    )
+    activity_subject_ids = _parse_activity_subject_ids(
+        raw=query_params.get("activity_subject_ids"),
+    )
+    needs_qualification = _parse_needs_qualification(
+        query_params.get("needs_qualification"),
+    )
+    _validate_ids_exist_in_establishments(
+        model=BusinessUnit,
+        establishment_ids=establishment_ids,
+        object_ids=business_unit_ids,
+        param_name="business_unit_ids",
+    )
+    _validate_ids_exist_in_establishments(
+        model=ActivitySubject,
+        establishment_ids=establishment_ids,
+        object_ids=activity_subject_ids,
+        param_name="activity_subject_ids",
+    )
+    return SignalFeedFilters(
+        statuses=statuses,
+        business_unit_ids=business_unit_ids,
+        activity_subject_ids=activity_subject_ids,
+        needs_qualification=needs_qualification,
+    )
+
+
+def _validate_ids_exist_in_establishments(
+    *,
+    model,
+    establishment_ids: tuple[uuid.UUID, ...],
+    object_ids: tuple[uuid.UUID, ...],
+    param_name: str,
+) -> None:
+    if not object_ids:
+        return
+    found = set(
+        model.objects.filter(
+            establishment_id__in=establishment_ids,
+            active=True,
+            id__in=object_ids,
+        ).values_list("id", flat=True),
+    )
+    unknown = [str(value) for value in object_ids if value not in found]
+    if unknown:
+        raise SignalFeedFilterValidationError(
+            f"Unknown or inactive {param_name}: {', '.join(unknown)}.",
+        )
+

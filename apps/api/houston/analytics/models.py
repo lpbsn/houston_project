@@ -546,3 +546,64 @@ class SignalPatternAssignment(BaseModel):
 
     def __str__(self) -> str:
         return f"SignalPatternAssignment {self.signal_id} [{self.classification_status}]"
+
+
+class AnalyticsHistoryCoverage(BaseModel):
+    """Singleton cutover instant: journal reconstruction is reliable from this timestamp."""
+
+    SINGLETON_KEY = 1
+
+    singleton_key = models.PositiveSmallIntegerField(default=1, editable=False)
+    reliable_from = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["singleton_key"],
+                name="analytics_history_coverage_singleton",
+            ),
+            models.CheckConstraint(
+                condition=Q(singleton_key=1),
+                name="analytics_history_coverage_key_one",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"AnalyticsHistoryCoverage {self.reliable_from.isoformat()}"
+
+
+class PatternEstablishmentSighting(BaseModel):
+    """Write-once first sighting of a motif in an establishment (cutover+)."""
+
+    pattern = models.ForeignKey(
+        OperationalPattern,
+        on_delete=models.CASCADE,
+        related_name="establishment_sightings",
+    )
+    establishment = models.ForeignKey(
+        "establishments.Establishment",
+        on_delete=models.CASCADE,
+        related_name="pattern_sightings",
+    )
+    observed_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["pattern", "establishment"],
+                name="analytics_pattern_est_sighting_uniq",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["establishment", "observed_at"],
+                name="analytics_sighting_est_at_idx",
+            ),
+            models.Index(
+                fields=["pattern", "observed_at"],
+                name="analytics_sighting_pat_at_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"PatternEstablishmentSighting {self.pattern_id}@{self.establishment_id}"

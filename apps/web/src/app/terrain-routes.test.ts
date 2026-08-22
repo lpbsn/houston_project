@@ -5,6 +5,7 @@ import {
   getTerrainRouteConfig,
   isProtectedRoute,
   requiresActiveMembership,
+  resolveTerrainTopbarPlacement,
   resolveTerrainTopbarShowBottomBorder,
   usesTerrainShell,
 } from '@/app/terrain-routes'
@@ -14,6 +15,19 @@ describe('usesTerrainShell', () => {
     for (const path of ['/reporting', '/signals', '/execution', '/chat', '/general'] as const) {
       expect(usesTerrainShell({ kind: 'static', path })).toBe(true)
     }
+  })
+
+  it('returns true for scoped desktop Cross and establishment hubs', () => {
+    expect(
+      usesTerrainShell({ kind: 'scoped-terrain', scope: { type: 'cross' }, page: 'dashboard' }),
+    ).toBe(true)
+    expect(
+      usesTerrainShell({
+        kind: 'scoped-terrain',
+        scope: { type: 'establishment', establishmentId: '11111111-1111-4111-8111-111111111111' },
+        page: 'signals',
+      }),
+    ).toBe(true)
   })
 
   it('returns true for signal detail', () => {
@@ -234,14 +248,33 @@ describe('getTerrainRouteConfig', () => {
     })
   })
 
-  it('configures analytics route as a minimal detail route', () => {
+  it('configures scoped Cross dashboard with the shared mobile hub nav and no active tab', () => {
+    expect(
+      getTerrainRouteConfig({
+        kind: 'scoped-terrain',
+        scope: { type: 'cross' },
+        page: 'dashboard',
+      }),
+    ).toEqual({
+      topbarVariant: 'hub',
+      pageTitle: 'Dashboard',
+      showBottomNav: true,
+      desktopActivePath: '/cross',
+      mainScroll: 'auto',
+      hideTopbar: true,
+      showTopbarBottomBorder: false,
+    })
+  })
+
+  it('configures analytics as a hub destination without an active bottom-nav tab', () => {
     expect(getTerrainRouteConfig({ kind: 'static', path: '/analytics' })).toEqual({
-      topbarVariant: 'detail',
-      title: 'Analyse',
-      backPath: '/general',
-      showBottomNav: false,
+      topbarVariant: 'hub',
+      pageTitle: 'Dashboard',
+      showBottomNav: true,
       desktopActivePath: '/analytics',
       mainScroll: 'auto',
+      hideTopbar: true,
+      showTopbarBottomBorder: false,
     })
   })
 
@@ -363,6 +396,51 @@ describe('getTerrainRouteConfig', () => {
     expect(() => getTerrainRouteConfig({ kind: 'static', path: '/organization' })).toThrow(
       'getTerrainRouteConfig called for a non-terrain route',
     )
+  })
+})
+
+describe('resolveTerrainTopbarPlacement', () => {
+  it('keeps a mobile-only shell topbar on scoped dashboards', () => {
+    const cross = {
+      kind: 'scoped-terrain' as const,
+      scope: { type: 'cross' as const },
+      page: 'dashboard' as const,
+    }
+    const establishment = {
+      kind: 'scoped-terrain' as const,
+      scope: {
+        type: 'establishment' as const,
+        establishmentId: '11111111-1111-4111-8111-111111111111',
+      },
+      page: 'dashboard' as const,
+    }
+    expect(resolveTerrainTopbarPlacement(cross, getTerrainRouteConfig(cross))).toBe('mobile-only')
+    expect(resolveTerrainTopbarPlacement(establishment, getTerrainRouteConfig(establishment))).toBe(
+      'mobile-only',
+    )
+  })
+
+  it('keeps a mobile-only shell topbar on /analytics', () => {
+    const route = { kind: 'static' as const, path: '/analytics' as const }
+    expect(resolveTerrainTopbarPlacement(route, getTerrainRouteConfig(route))).toBe('mobile-only')
+  })
+
+  it('hides the shared topbar on pages that own an in-page back control', () => {
+    const teamMember = { kind: 'team-member-detail' as const, membershipId: 'member-1' }
+    const templateEdit = { kind: 'action-plan-template-edit' as const, actionPlanId: 'plan-1' }
+    const executionEdit = {
+      kind: 'action-plan-execution-edit' as const,
+      executionId: 'exec-1',
+    }
+    expect(resolveTerrainTopbarPlacement(teamMember, getTerrainRouteConfig(teamMember))).toBe(
+      'hidden',
+    )
+    expect(resolveTerrainTopbarPlacement(templateEdit, getTerrainRouteConfig(templateEdit))).toBe(
+      'hidden',
+    )
+    expect(
+      resolveTerrainTopbarPlacement(executionEdit, getTerrainRouteConfig(executionEdit)),
+    ).toBe('hidden')
   })
 })
 
