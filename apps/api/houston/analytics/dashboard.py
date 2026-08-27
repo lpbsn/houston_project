@@ -518,6 +518,32 @@ def _canonical_pattern(assignment: SignalPatternAssignment) -> OperationalPatter
     return pattern
 
 
+def _pattern_merge_sources_by_target(
+    patterns: dict[UUID, OperationalPattern],
+) -> dict[UUID, list[UUID]]:
+    by_target: dict[UUID, list[UUID]] = defaultdict(list)
+    for pattern_id, pattern in patterns.items():
+        if pattern.merged_into_id is not None:
+            by_target[pattern.merged_into_id].append(pattern_id)
+    return by_target
+
+
+def _pattern_merge_lineage_ids(
+    *,
+    canonical_id: UUID,
+    sources_by_target: dict[UUID, list[UUID]],
+) -> set[UUID]:
+    lineage = {canonical_id}
+    stack = [canonical_id]
+    while stack:
+        current = stack.pop()
+        for source_id in sources_by_target.get(current, ()):
+            if source_id not in lineage:
+                lineage.add(source_id)
+                stack.append(source_id)
+    return lineage
+
+
 def _duration_stats(
     values: list[float], *, include_p90: bool
 ) -> tuple[float | None, float | None, float | None, int]:
@@ -1210,6 +1236,7 @@ def _new_patterns(
         for signal in signals
         if getattr(signal, "pattern_assignment", None) is not None
         and signal.pattern_assignment.pattern_id is not None
+        and (establishment_id is None or signal.establishment_id == establishment_id)
     ]
     if not assigned:
         return ()
@@ -1218,94 +1245,103 @@ def _new_patterns(
         pattern.id: pattern
         for pattern in OperationalPattern.objects.filter(organization_id__in=org_ids)
     }
-    canonical_of = {
-        pattern_id: (pattern.merged_into_id or pattern_id)
-        for pattern_id, pattern in patterns.items()
-    }
-    created_events = PatternLifecycleEvent.objects.filter(
-        event_type=PatternLifecycleEvent.EventType.CREATED,
-        organization_id__in=org_ids,
+    related_by_canonical: dict[UUID, list[Signal]] = defaultdict(list)
+    assignment_min: dict[UUID, datetime] = {}
+    for signal in assigned:
+        pattern = _canonical_pattern(signal.pattern_assignment)
+        if pattern is None:
+            continue
+        related_by_canonical[pattern.id].append(signal)
+        assigned_at = signal.pattern_assignment.assigned_at
+        if assigned_at is None:
+            continue
+        previous = assignment_min.get(pattern.id)
+        if previous is None or assigned_at < previous:
+            assignment_min[pattern.id] = assigned_at
+    if not related_by_canonical:
+        return ()
+
+    canonical_ids = set(related_by_canonical)
+    sighting_qs = PatternEstablishmentSighting.objects.filter(
+        pattern_id__in=canonical_ids,
+        pattern__organization_id__in=org_ids,
     )
-    cross_first_seen: dict[UUID, datetime] = {}
-    for event in created_events:
-        canonical_id = canonical_of.get(event.pattern_id, event.pattern_id)
-        previous = cross_first_seen.get(canonical_id)
-        if previous is None or event.occurred_at < previous:
-            cross_first_seen[canonical_id] = event.occurred_at
+    if establishment_id is not None:
+        sighting_qs = sighting_qs.filter(establishment_id=establishment_id)
+    sighting_min: dict[UUID, datetime] = {}
+    for sighting in sighting_qs:
+        previous = sighting_min.get(sighting.pattern_id)
+        if previous is None or sighting.observed_at < previous:
+            sighting_min[sighting.pattern_id] = sighting.observed_at
+
+    sources_by_target = _pattern_merge_sources_by_target(patterns)
+    lineage_ids: set[UUID] = set()
+    for canonical_id in canonical_ids:
+        lineage_ids.update(
+            _pattern_merge_lineage_ids(
+                canonical_id=canonical_id,
+                sources_by_target=sources_by_target,
+            )
+        )
+    split_created_ids = {
+        event.pattern_id
+        for event in PatternLifecycleEvent.objects.filter(
+            event_type=PatternLifecycleEvent.EventType.CREATED,
+            pattern_id__in=lineage_ids,
+            organization_id__in=org_ids,
+        )
+        if event.metadata_safe.get("created_for_split") is True
+    }
+    entirely_split = {
+        canonical_id
+        for canonical_id in canonical_ids
+        if _pattern_merge_lineage_ids(
+            canonical_id=canonical_id,
+            sources_by_target=sources_by_target,
+        ).issubset(split_created_ids)
+    }
 
     items: list[NewPatternItem] = []
-    if establishment_id is None:
-        for canonical_id, first_seen in cross_first_seen.items():
-            if not _in_period(first_seen, current_period):
-                continue
-            pattern = patterns.get(canonical_id)
-            if pattern is None:
-                continue
-            related_signals = [
-                signal
-                for signal in assigned
-                if canonical_of.get(signal.pattern_assignment.pattern_id) == canonical_id
-            ]
-            if not related_signals:
-                continue
-            establishments = {signal.establishment_id for signal in related_signals}
+    for canonical_id, related_signals in related_by_canonical.items():
+        if canonical_id in entirely_split:
+            continue
+        pattern = patterns.get(canonical_id)
+        if pattern is None:
+            continue
+        candidates = [
+            ts
+            for ts in (sighting_min.get(canonical_id), assignment_min.get(canonical_id))
+            if ts is not None
+        ]
+        first_seen = min(candidates) if candidates else None
+        if first_seen is None or not _in_period(first_seen, current_period):
+            continue
+        if establishment_id is None:
             items.append(
                 NewPatternItem(
                     pattern_id=canonical_id,
                     name=pattern.label,
                     first_seen_at=first_seen,
                     observation_count=len(related_signals),
-                    establishment_count=len(establishments),
+                    establishment_count=len(
+                        {signal.establishment_id for signal in related_signals}
+                    ),
                     establishment_id=None,
                     establishment_name=None,
                 )
             )
-    else:
-        sightings = {
-            sighting.pattern_id: sighting.observed_at
-            for sighting in PatternEstablishmentSighting.objects.filter(
+            continue
+        items.append(
+            NewPatternItem(
+                pattern_id=canonical_id,
+                name=pattern.label,
+                first_seen_at=first_seen,
+                observation_count=len(related_signals),
+                establishment_count=None,
                 establishment_id=establishment_id,
+                establishment_name=related_signals[0].establishment.name,
             )
-        }
-        current_assignment_min: dict[UUID, datetime] = {}
-        observation_counts: dict[UUID, int] = defaultdict(int)
-        names: dict[UUID, str] = {}
-        establishment_name = None
-        for signal in assigned:
-            if signal.establishment_id != establishment_id:
-                continue
-            canonical_id = canonical_of.get(
-                signal.pattern_assignment.pattern_id,
-                signal.pattern_assignment.pattern_id,
-            )
-            pattern = patterns.get(canonical_id)
-            if pattern is None:
-                continue
-            names[canonical_id] = pattern.label
-            establishment_name = signal.establishment.name
-            observation_counts[canonical_id] += 1
-            assigned_at = signal.pattern_assignment.assigned_at
-            if assigned_at is None:
-                continue
-            previous = current_assignment_min.get(canonical_id)
-            if previous is None or assigned_at < previous:
-                current_assignment_min[canonical_id] = assigned_at
-        for canonical_id, earliest_assigned in current_assignment_min.items():
-            observed = sightings.get(canonical_id)
-            first_seen = observed if observed is not None else earliest_assigned
-            if not _in_period(first_seen, current_period):
-                continue
-            items.append(
-                NewPatternItem(
-                    pattern_id=canonical_id,
-                    name=names[canonical_id],
-                    first_seen_at=first_seen,
-                    observation_count=observation_counts[canonical_id],
-                    establishment_count=None,
-                    establishment_id=establishment_id,
-                    establishment_name=establishment_name,
-                )
-            )
+        )
 
     items.sort(key=lambda item: item.first_seen_at, reverse=True)
     return tuple(items)
