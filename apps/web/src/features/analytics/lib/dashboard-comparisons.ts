@@ -231,6 +231,14 @@ export function medianDurationHint(durationLabel: string): string {
   return `La moitié des cas en ${durationLabel} ou moins`
 }
 
+export function observationTransformDelayHint(): string {
+  return 'Délai jusqu’à la première association à un plan, indépendant des délais de résolution ou d’annulation'
+}
+
+export function canonicalRoutingVolumeHint(): string {
+  return 'Volumes selon la classification actuelle : une requalification déplace aussi les périodes passées'
+}
+
 export function emptyObservationDelayMessage(
   kind: 'canceled' | 'resolved' | 'transformed',
   undatableInScope = 0,

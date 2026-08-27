@@ -342,11 +342,11 @@ Carte compacte.
 
 > **Combien de temps faut-il pour traiter une observation ?**
 
-Trois chemins :
+Trois **métriques concurrentes** (pas trois issues exclusives d’une observation) :
 
 - résolution ;
 - annulation ;
-- mise en plan.
+- mise en plan (première association historique à un plan).
 
 ## 11.2 Heroes
 

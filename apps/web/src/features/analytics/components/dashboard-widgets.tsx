@@ -19,6 +19,8 @@ import {
   dashboardTrendTone,
   emptyObservationDelayMessage,
   emptyPlanDelayMessage,
+  observationTransformDelayHint,
+  canonicalRoutingVolumeHint,
   closureResolvedShareHint,
   delayExclusionNote,
   formatContributorEstablishments,
@@ -186,12 +188,14 @@ function DurationHero({
   stats,
   sense,
   emptyLabel,
+  hint,
   unit = 'observation',
 }: {
   label: string
   stats: AnalyticsDelayStats
   sense: DashboardTrendSense
   emptyLabel: string
+  hint?: string
   unit?: 'observation' | 'plan'
 }) {
   if (stats.n === 0 || stats.median_seconds == null) {
@@ -199,6 +203,7 @@ function DurationHero({
       <div className="min-w-0">
         <p className="text-[12px] font-medium text-[#7D7B75]">{label}</p>
         <p className="mt-1 text-sm text-[#7D7B75]">{emptyLabel}</p>
+        {hint ? <p className="mt-2 text-[12px] text-[#7D7B75]">{hint}</p> : null}
       </div>
     )
   }
@@ -244,6 +249,7 @@ function DurationHero({
           .filter(Boolean)
           .join(' · ')}
       </p>
+      {hint ? <p className="mt-2 text-[12px] text-[#7D7B75]">{hint}</p> : null}
     </div>
   )
 }
@@ -662,6 +668,7 @@ export function ObservationTreatmentCard({ data }: { data: AnalyticsDashboardRes
           stats={data.observation_delay_transformed}
           sense="negative-up"
           emptyLabel={emptyObservationDelayMessage('transformed')}
+          hint={observationTransformDelayHint()}
         />
       </div>
       <div className="mt-5 grid min-w-0 gap-4 border-t border-[#F0EFE9] pt-4 lg:grid-cols-3">
@@ -960,6 +967,7 @@ export function ZonesCard({
 }) {
   return (
     <DashboardCard title="Zones les plus signalées">
+      <p className="mb-3 text-[12px] text-[#7D7B75]">{canonicalRoutingVolumeHint()}</p>
       {items.length === 0 ? (
         <p className="text-sm text-[#7D7B75]">Aucune zone signalée sur la période.</p>
       ) : (
@@ -981,6 +989,7 @@ export function PolesCard({
       title="Activité du pôle"
       footer={dashboardPreviousPeriodFooter(items.map((item) => item.comparison))}
     >
+      <p className="mb-3 text-[12px] text-[#7D7B75]">{canonicalRoutingVolumeHint()}</p>
       {items.length === 0 ? (
         <p className="text-sm text-[#7D7B75]">Aucune activité de pôle sur la période.</p>
       ) : (

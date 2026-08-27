@@ -263,7 +263,7 @@ Titre :
 
 ### 8.1 Définition
 
-Un motif récurrent est un **motif canonique associé à au moins 2 Signals métier distincts** dans le scope et la période sélectionnés.
+Un motif récurrent est un **motif canonique associé à au moins 2 Signals métier distincts survivants** (`merged_into` vide) dans le scope et la période sélectionnés.
 
 La mécanique existante de récurrence / dédoublonnage d’un même Signal ne constitue **pas** une récurrence de motif.
 
@@ -403,9 +403,9 @@ Un Signal n’ayant jamais atteint l’événement cible est exclu de cette mét
 - création du Signal → première transition vers `Résolu`
 
 **Transformation en plan**
-- création du Signal → création / association du premier plan d’action issu de ce Signal
+- `created_at` du Signal survivor → `first_action_plan_associated_at` (première association historique à un plan, immuable).
 
-Ne pas utiliser simplement `in_progress` si la création du plan constitue l’événement métier plus exact.
+Ce délai n’est **pas** une issue exclusive face à la résolution ou à l’annulation. Un même Signal peut entrer dans plusieurs de ces métriques. Ne pas utiliser simplement `in_progress` si la création du plan constitue l’événement métier plus exact.
 
 ### 11.3 Statistiques de délai
 
@@ -468,7 +468,7 @@ Formule :
 
 `Résolus / (Résolus + Annulés)`
 
-La population est basée sur les transitions terminales intervenues pendant la période.
+La population est le **dernier** event journal terminal (`résolu` ou `annulé`) par Signal distinct pendant la période. Un Signal resolve → réouverture → resolve ne compte qu’une fois. Sur une fenêtre historiquement complète, les colonnes current-state `resolved_at` / `canceled_at` ne suppléent pas l’absence d’event.
 
 Afficher :
 - taux actuel ;
@@ -637,7 +637,7 @@ Le volume brut de Signals ne constitue pas une mesure de risque : certaines zone
 
 ### 16.1 Mesure
 
-Nombre de **Signals distincts** associés à chaque zone opérationnelle sur la période actuelle.
+Nombre de **Signals distincts survivants** (`merged_into` vide) associés à chaque zone opérationnelle **canonique actuelle** sur la période actuelle (`created_at` dans la période). Une requalification déplace le volume y compris dans les périodes passées : correction de vérité, pas un historique as-of. Coverage : `complete`.
 
 Afficher aussi l’évolution par rapport à la même zone sur la période précédente.
 
@@ -679,7 +679,7 @@ Titre :
 
 ### 17.1 Définition
 
-Mesurer le nombre de **Signals distincts** par pôle responsable auquel l’observation a été routée.
+Mesurer le nombre de **Signals distincts survivants** par pôle responsable **canonique actuel** (`responsible_business_unit`). Une requalification Cuisine → Maintenance déplace le volume des périodes où le Signal a été créé. Coverage : `complete`.
 
 Ne pas utiliser le pôle du contributeur ayant créé le Signal.
 
