@@ -340,8 +340,6 @@ def get_analytics_dashboard(
     )
     obs_transformed = _plan_transform_delay_stats(
         signals=signals,
-        events_by_signal=events_by_signal,
-        executions=executions,
         current_period=current_period,
         previous_period=previous_period,
         coverage=complete_coverage,
@@ -758,34 +756,20 @@ def _signal_delay_stats(
 def _plan_transform_delay_stats(
     *,
     signals: list[Signal],
-    events_by_signal: dict[UUID, list[JournalEvent]],
-    executions: list[ActionPlanExecution],
     current_period: AnalyticsComparisonPeriod,
     previous_period: AnalyticsComparisonPeriod,
     coverage: str,
     include_p90: bool,
     undatable_in_scope: int = 0,
 ) -> DelayStats:
-    first_plan_at: dict[UUID, datetime] = {}
-    for execution in executions:
-        if execution.source_signal_id is None:
-            continue
-        existing = first_plan_at.get(execution.source_signal_id)
-        if existing is None or execution.created_at < existing:
-            first_plan_at[execution.source_signal_id] = execution.created_at
     current: list[float] = []
     previous: list[float] = []
     for signal in signals:
-        plan_at = first_plan_at.get(signal.id)
-        if plan_at is None:
+        plan_at = signal.first_action_plan_associated_at
+        start_at = signal.created_at
+        if plan_at is None or start_at is None or plan_at < start_at:
             continue
-        created_at = first_signal_created_at(
-            events_by_signal.get(signal.id, []),
-            fallback=signal.created_at,
-        )
-        if created_at is None or plan_at < created_at:
-            continue
-        duration = (plan_at - created_at).total_seconds()
+        duration = (plan_at - start_at).total_seconds()
         if _in_period(plan_at, current_period):
             current.append(duration)
         elif _in_period(plan_at, previous_period):

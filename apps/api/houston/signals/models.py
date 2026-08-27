@@ -173,6 +173,7 @@ class Signal(BaseModel):
         blank=True,
     )
     archived_at = models.DateTimeField(null=True, blank=True)
+    first_action_plan_associated_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         indexes = [

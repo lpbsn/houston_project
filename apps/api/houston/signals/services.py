@@ -1995,6 +1995,21 @@ def _lock_signals_by_uuid_order(*signals: Signal) -> list[Signal]:
     return [by_id[signal_id] for signal_id in ordered_ids]
 
 
+def record_first_action_plan_associated_at(
+    *,
+    signal_id: uuid.UUID,
+    associated_at,
+) -> None:
+    """Set first association timestamp if still unset. Race-safe; never clears."""
+    Signal.objects.filter(
+        pk=signal_id,
+        first_action_plan_associated_at__isnull=True,
+    ).update(
+        first_action_plan_associated_at=associated_at,
+        updated_at=timezone.now(),
+    )
+
+
 def merge_signal_into_resolved(
     *,
     source: Signal,
@@ -2079,8 +2094,41 @@ def merge_signal_into_resolved(
                 "source_signal_id": source.id,
             },
         )
+    associated_times = [
+        timestamp
+        for timestamp in (
+            source.first_action_plan_associated_at,
+            target.first_action_plan_associated_at,
+        )
+        if timestamp is not None
+    ]
+    if associated_times:
+        target.first_action_plan_associated_at = min(associated_times)
+    birth = min(source.created_at, target.created_at)
+    created_at_rewound = birth < target.created_at
+    if created_at_rewound:
+        target.created_at = birth
+    if not target.lifecycle_events.filter(
+        event_type=SIGNAL_LIFECYCLE_EVENT_CREATED,
+        occurred_at__lte=birth,
+    ).exists():
+        record_signal_lifecycle_event(
+            signal=target,
+            event_type=SIGNAL_LIFECYCLE_EVENT_CREATED,
+            occurred_at=birth,
+            metadata_safe={
+                "to_status": Signal.Status.OPEN,
+                "origin": "qualify_merge",
+                "source_signal_id": source.id,
+            },
+        )
     touch_signal_activity(signal=target)
-    target.save(update_fields=["last_activity_at", "updated_at"])
+    target_update_fields = ["last_activity_at", "updated_at"]
+    if associated_times:
+        target_update_fields.append("first_action_plan_associated_at")
+    if created_at_rewound:
+        target_update_fields.append("created_at")
+    target.save(update_fields=target_update_fields)
     _schedule_signal_invalidation(signal=source, reason="signal.updated")
     _schedule_signal_invalidation(signal=target, reason="signal.updated")
     return target

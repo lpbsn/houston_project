@@ -1203,6 +1203,13 @@ def _create_execution_record(
         started_by_membership=started_by_membership,
         last_activity_at=now,
     )
+    if source_signal_id is not None:
+        from houston.signals.services import record_first_action_plan_associated_at
+
+        record_first_action_plan_associated_at(
+            signal_id=source_signal_id,
+            associated_at=execution.created_at,
+        )
     created_metadata = {
         "initial_status": status,
         **execution_transition_metadata(status=status, end_at=end_at),

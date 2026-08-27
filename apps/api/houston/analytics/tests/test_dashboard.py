@@ -18,7 +18,10 @@ from houston.establishments.models import EstablishmentMembership
 from houston.gamification.constants import CURRENT_RULE_VERSION
 from houston.gamification.models import PointTransaction
 from houston.gamification.services import open_season
+from houston.signals.constants import SIGNAL_LIFECYCLE_EVENT_CREATED
+from houston.signals.lifecycle_events import record_signal_lifecycle_event
 from houston.signals.models import Signal
+from houston.signals.services import merge_signal_into_resolved
 from houston.testing.auth import auth_headers, build_api_membership, login
 from houston.testing.factories import create_establishment, create_membership, create_user
 from houston.testing.taxonomy import (
@@ -375,3 +378,96 @@ def test_manager_dashboard_plan_metrics_exclude_out_of_scope_executions():
     assert result.undatable_execution_terminals.done == 1
     assert result.plan_delay_resolved.undatable_in_scope == 1
     assert result.plan_delay_resolved.n == 0
+
+
+def test_transform_delay_uses_association_field_minus_signal_created_at():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    apply_analytics_history_cutover()
+    now = timezone.now()
+    created_at = now - timedelta(days=4)
+    plan_at = now - timedelta(days=1)
+    journal_created = now - timedelta(days=10)
+    signal = _create_signal(membership, title="Transform field", created_at=created_at)
+    Signal.objects.filter(pk=signal.pk).update(first_action_plan_associated_at=plan_at)
+    record_signal_lifecycle_event(
+        signal=signal,
+        event_type=SIGNAL_LIFECYCLE_EVENT_CREATED,
+        occurred_at=journal_created,
+    )
+
+    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
+
+    assert result.observation_delay_transformed.n == 1
+    assert result.observation_delay_transformed.median_seconds == 3 * 24 * 3600
+
+
+def test_transform_delay_excludes_signal_with_live_execution_but_null_association():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    apply_analytics_history_cutover()
+    now = timezone.now()
+    business_unit = create_business_unit(
+        establishment=membership.establishment,
+        key="analytics_transform_null_field",
+    )
+    signal = _create_signal(
+        membership,
+        title="Legacy execution",
+        created_at=now - timedelta(days=2),
+    )
+    ActionPlanExecution.objects.create(
+        establishment=membership.establishment,
+        created_by=membership,
+        title="Live without stamp",
+        source_signal=signal,
+        pilot_business_unit=business_unit,
+        last_activity_at=now,
+        use_shared_chronology=True,
+        status=EXECUTION_STATUS_DONE,
+    )
+    signal.refresh_from_db()
+    assert signal.first_action_plan_associated_at is None
+
+    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
+
+    assert result.observation_delay_transformed.n == 0
+    assert result.observation_delay_transformed.median_seconds is None
+
+
+def test_transform_and_aging_after_older_source_merged_into_newer_survivor():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    apply_analytics_history_cutover()
+    now = timezone.now()
+    source_created = now - timedelta(days=6)
+    plan_at = now - timedelta(days=5)
+    target_created = now - timedelta(days=1)
+    source = _create_signal(
+        membership,
+        title="Older merged source",
+        created_at=source_created,
+    )
+    target = _create_signal(
+        membership,
+        title="Newer survivor",
+        created_at=target_created,
+    )
+    Signal.objects.filter(pk=source.pk).update(first_action_plan_associated_at=plan_at)
+    source.refresh_from_db()
+    merge_signal_into_resolved(
+        source=source,
+        target=target,
+        resolution_audit={},
+        candidate_expected_action=None,
+    )
+    target.refresh_from_db()
+
+    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
+
+    assert target.created_at == source_created
+    assert target.first_action_plan_associated_at == plan_at
+    assert result.observation_delay_transformed.n == 2
+    assert result.observation_delay_transformed.median_seconds == 24 * 3600
+    assert result.open_observation_count == 1
+    aging_by_key = {bucket.key: bucket.count for bucket in result.aging_buckets}
+    assert aging_by_key["3–7 j"] == 1
+    assert aging_by_key["< 3 j"] == 0
+
