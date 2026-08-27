@@ -14,6 +14,8 @@ import {
   dashboardPreviousPeriodFooter,
   DASHBOARD_VS_PREVIOUS_PERIOD,
   emptyObservationDelayMessage,
+  observationTransformDelayHint,
+  canonicalRoutingVolumeHint,
   formatContributorEstablishments,
   formatContributorPoles,
   formatDashboardDurationDelta,
@@ -305,6 +307,15 @@ describe('empty delay copy', () => {
     )
     expect(emptyObservationDelayMessage('transformed')).toBe(
       'Aucune observation mise en plan sur la période',
+    )
+  })
+
+  it('states first association and live routing as independent of exclusive outcomes', () => {
+    expect(observationTransformDelayHint()).toBe(
+      'Délai jusqu’à la première association à un plan, indépendant des délais de résolution ou d’annulation',
+    )
+    expect(canonicalRoutingVolumeHint()).toBe(
+      'Volumes selon la classification actuelle : une requalification déplace aussi les périodes passées',
     )
   })
 

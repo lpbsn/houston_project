@@ -257,6 +257,7 @@ def get_analytics_dashboard(
     )
     signals = list(
         read_scope.readable_signals_queryset()
+        .filter(merged_into__isnull=True)
         .select_related(
             "establishment",
             "operational_unit",
@@ -359,6 +360,8 @@ def get_analytics_dashboard(
         events_by_signal=events_by_signal,
         current_period=current_period,
         previous_period=previous_period,
+        current_coverage=journal_current,
+        previous_coverage=journal_previous,
         coverage=journal_coverage,
         undatable_resolved=undatable_signals.resolved,
         undatable_canceled=undatable_signals.canceled,
@@ -940,35 +943,64 @@ def _operational_resolution(
     )
 
 
+_CLOSURE_TERMINAL_EVENTS = frozenset(
+    {
+        SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+        SIGNAL_LIFECYCLE_EVENT_CANCELED,
+    }
+)
+
+
+def _last_journal_closure_event(
+    events: list[JournalEvent],
+    period: AnalyticsComparisonPeriod,
+) -> JournalEvent | None:
+    last = None
+    for event in events:
+        if event.event_type in _CLOSURE_TERMINAL_EVENTS and _in_period(
+            event.occurred_at, period
+        ):
+            last = event
+    return last
+
+
+def _last_column_closure_event_type(
+    signal: Signal,
+    period: AnalyticsComparisonPeriod,
+) -> str | None:
+    candidates: list[tuple[datetime, str]] = []
+    if signal.resolved_at is not None and _in_period(signal.resolved_at, period):
+        candidates.append((signal.resolved_at, SIGNAL_LIFECYCLE_EVENT_RESOLVED))
+    if signal.canceled_at is not None and _in_period(signal.canceled_at, period):
+        candidates.append((signal.canceled_at, SIGNAL_LIFECYCLE_EVENT_CANCELED))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item[0])
+    return candidates[-1][1]
+
+
 def _closure_counts_for_period(
     *,
     signals: list[Signal],
     events_by_signal: dict[UUID, list[JournalEvent]],
     period: AnalyticsComparisonPeriod,
+    coverage: str,
 ) -> tuple[int, int]:
     resolved = 0
     canceled = 0
+    allow_column_fallback = coverage != COVERAGE_COMPLETE
     for signal in signals:
         events = events_by_signal.get(signal.id, [])
-        resolved_events = [
-            event
-            for event in events
-            if event.event_type == SIGNAL_LIFECYCLE_EVENT_RESOLVED
-            and _in_period(event.occurred_at, period)
-        ]
-        canceled_events = [
-            event
-            for event in events
-            if event.event_type == SIGNAL_LIFECYCLE_EVENT_CANCELED
-            and _in_period(event.occurred_at, period)
-        ]
-        if resolved_events:
-            resolved += len(resolved_events)
-        elif signal.resolved_at is not None and _in_period(signal.resolved_at, period):
+        last_event = _last_journal_closure_event(events, period)
+        if last_event is not None:
+            event_type = last_event.event_type
+        elif allow_column_fallback:
+            event_type = _last_column_closure_event_type(signal, period)
+        else:
+            event_type = None
+        if event_type == SIGNAL_LIFECYCLE_EVENT_RESOLVED:
             resolved += 1
-        if canceled_events:
-            canceled += len(canceled_events)
-        elif signal.canceled_at is not None and _in_period(signal.canceled_at, period):
+        elif event_type == SIGNAL_LIFECYCLE_EVENT_CANCELED:
             canceled += 1
     return resolved, canceled
 
@@ -979,6 +1011,8 @@ def _closure_resolved_share(
     events_by_signal: dict[UUID, list[JournalEvent]],
     current_period: AnalyticsComparisonPeriod,
     previous_period: AnalyticsComparisonPeriod,
+    current_coverage: str,
+    previous_coverage: str,
     coverage: str,
     undatable_resolved: int,
     undatable_canceled: int,
@@ -987,11 +1021,13 @@ def _closure_resolved_share(
         signals=signals,
         events_by_signal=events_by_signal,
         period=current_period,
+        coverage=current_coverage,
     )
     previous_resolved, previous_canceled = _closure_counts_for_period(
         signals=signals,
         events_by_signal=events_by_signal,
         period=previous_period,
+        coverage=previous_coverage,
     )
     withhold_ratio = (undatable_resolved + undatable_canceled) > 0
 

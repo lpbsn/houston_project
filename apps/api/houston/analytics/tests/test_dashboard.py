@@ -12,13 +12,19 @@ from houston.action_plans.constants import EXECUTION_STATUS_DONE
 from houston.action_plans.models import ActionPlanExecution
 from houston.analytics.cutover import apply_analytics_history_cutover
 from houston.analytics.dashboard import get_analytics_dashboard
-from houston.analytics.models import SignalPatternAssignment
+from houston.analytics.journal import COVERAGE_COMPLETE
+from houston.analytics.models import AnalyticsHistoryCoverage, SignalPatternAssignment
 from houston.analytics.services import create_operational_pattern
-from houston.establishments.models import EstablishmentMembership
+from houston.establishments.models import EstablishmentMembership, OperationalUnit
 from houston.gamification.constants import CURRENT_RULE_VERSION
 from houston.gamification.models import PointTransaction
 from houston.gamification.services import open_season
-from houston.signals.constants import SIGNAL_LIFECYCLE_EVENT_CREATED
+from houston.signals.constants import (
+    SIGNAL_LIFECYCLE_EVENT_CANCELED,
+    SIGNAL_LIFECYCLE_EVENT_CREATED,
+    SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
+    SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+)
 from houston.signals.lifecycle_events import record_signal_lifecycle_event
 from houston.signals.models import Signal
 from houston.signals.services import merge_signal_into_resolved
@@ -37,7 +43,15 @@ def api_client():
     return APIClient(enforce_csrf_checks=True)
 
 
-def _create_signal(membership, *, title="Signal", created_at=None, status=Signal.Status.OPEN):
+def _create_signal(
+    membership,
+    *,
+    title="Signal",
+    created_at=None,
+    status=Signal.Status.OPEN,
+    operational_unit=None,
+    responsible_business_unit=None,
+):
     moment = created_at or timezone.now()
     signal = Signal.objects.create(
         establishment=membership.establishment,
@@ -47,11 +61,22 @@ def _create_signal(membership, *, title="Signal", created_at=None, status=Signal
         structured_summary=f"Summary for {title}.",
         issue_focus=title.lower().replace(" ", "-"),
         last_activity_at=moment,
+        operational_unit=operational_unit,
+        responsible_business_unit=responsible_business_unit,
     )
     if created_at is not None:
         Signal.objects.filter(pk=signal.pk).update(created_at=created_at)
         signal.refresh_from_db()
     return signal
+
+
+def _cutover_complete_for_period(*, now, period_days=7):
+    reliable_from = now - timedelta(days=period_days + 3)
+    apply_analytics_history_cutover(now=reliable_from)
+    AnalyticsHistoryCoverage.objects.filter(
+        singleton_key=AnalyticsHistoryCoverage.SINGLETON_KEY,
+    ).update(reliable_from=reliable_from)
+    return reliable_from
 
 
 def _assign(signal, pattern, *, assigned_at=None):
@@ -440,18 +465,71 @@ def test_transform_and_aging_after_older_source_merged_into_newer_survivor():
     source_created = now - timedelta(days=6)
     plan_at = now - timedelta(days=5)
     target_created = now - timedelta(days=1)
+    cuisine = create_business_unit(
+        establishment=membership.establishment,
+        key="cuisine",
+        label="Cuisine",
+    )
+    maintenance = create_business_unit(
+        establishment=membership.establishment,
+        key="maintenance",
+        label="Maintenance",
+    )
+    zone_a = OperationalUnit.objects.create(
+        establishment=membership.establishment,
+        key="zone_a",
+        label="Zone A",
+        active=True,
+    )
+    zone_b = OperationalUnit.objects.create(
+        establishment=membership.establishment,
+        key="zone_b",
+        label="Zone B",
+        active=True,
+    )
     source = _create_signal(
         membership,
         title="Older merged source",
         created_at=source_created,
+        operational_unit=zone_a,
+        responsible_business_unit=cuisine,
     )
     target = _create_signal(
         membership,
         title="Newer survivor",
         created_at=target_created,
+        operational_unit=zone_b,
+        responsible_business_unit=maintenance,
     )
-    Signal.objects.filter(pk=source.pk).update(first_action_plan_associated_at=plan_at)
+    resolved_at = now - timedelta(days=4)
+    reopened_at = now - timedelta(days=3)
+    Signal.objects.filter(pk=source.pk).update(
+        first_action_plan_associated_at=plan_at,
+        status=Signal.Status.RESOLVED,
+        resolved_at=resolved_at,
+    )
     source.refresh_from_db()
+    record_signal_lifecycle_event(
+        signal=source,
+        event_type=SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+        occurred_at=resolved_at,
+        metadata_safe={"to_status": Signal.Status.RESOLVED},
+    )
+    Signal.objects.filter(pk=source.pk).update(
+        status=Signal.Status.OPEN,
+        resolved_at=None,
+    )
+    source.refresh_from_db()
+    record_signal_lifecycle_event(
+        signal=source,
+        event_type=SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
+        occurred_at=reopened_at,
+        metadata_safe={
+            "from_status": Signal.Status.RESOLVED,
+            "to_status": Signal.Status.OPEN,
+        },
+    )
+    assert source.status == Signal.Status.OPEN
     merge_signal_into_resolved(
         source=source,
         target=target,
@@ -460,14 +538,191 @@ def test_transform_and_aging_after_older_source_merged_into_newer_survivor():
     )
     target.refresh_from_db()
 
-    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
 
     assert target.created_at == source_created
     assert target.first_action_plan_associated_at == plan_at
-    assert result.observation_delay_transformed.n == 2
+    assert result.observation_delay_transformed.n == 1
     assert result.observation_delay_transformed.median_seconds == 24 * 3600
     assert result.open_observation_count == 1
     aging_by_key = {bucket.key: bucket.count for bucket in result.aging_buckets}
     assert aging_by_key["3–7 j"] == 1
     assert aging_by_key["< 3 j"] == 0
+    assert {item.name for item in result.poles} == {"Maintenance"}
+    assert {item.name for item in result.zones} == {"Zone B"}
+    assert result.poles[0].count == 1
+    assert result.zones[0].count == 1
+    assert result.closure_measured_resolved_count == 0
+    assert result.closure_measured_canceled_count == 0
+
+
+def test_closure_counts_last_journal_terminal_after_reopen_and_resolve():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    _cutover_complete_for_period(now=now)
+    signal = _create_signal(
+        membership,
+        title="Reopened",
+        created_at=now - timedelta(days=3),
+        status=Signal.Status.RESOLVED,
+    )
+    first_resolved = now - timedelta(hours=6)
+    reopened = now - timedelta(hours=4)
+    second_resolved = now - timedelta(hours=1)
+    Signal.objects.filter(pk=signal.pk).update(resolved_at=second_resolved)
+    record_signal_lifecycle_event(
+        signal=signal,
+        event_type=SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+        occurred_at=first_resolved,
+        metadata_safe={"to_status": Signal.Status.RESOLVED},
+    )
+    record_signal_lifecycle_event(
+        signal=signal,
+        event_type=SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
+        occurred_at=reopened,
+        metadata_safe={
+            "from_status": Signal.Status.RESOLVED,
+            "to_status": Signal.Status.OPEN,
+        },
+    )
+    record_signal_lifecycle_event(
+        signal=signal,
+        event_type=SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+        occurred_at=second_resolved,
+        metadata_safe={"to_status": Signal.Status.RESOLVED},
+    )
+
+    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
+
+    assert result.closure_measured_resolved_count == 1
+    assert result.closure_measured_canceled_count == 0
+    assert result.closure_resolved_share.current_value == 1.0
+
+
+def test_closure_counts_last_journal_terminal_when_resolve_then_cancel():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    _cutover_complete_for_period(now=now)
+    signal = _create_signal(
+        membership,
+        title="Resolved then canceled",
+        created_at=now - timedelta(days=2),
+        status=Signal.Status.CANCELED,
+    )
+    resolved_at = now - timedelta(hours=5)
+    canceled_at = now - timedelta(hours=1)
+    Signal.objects.filter(pk=signal.pk).update(
+        resolved_at=resolved_at,
+        canceled_at=canceled_at,
+    )
+    record_signal_lifecycle_event(
+        signal=signal,
+        event_type=SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+        occurred_at=resolved_at,
+        metadata_safe={"to_status": Signal.Status.RESOLVED},
+    )
+    record_signal_lifecycle_event(
+        signal=signal,
+        event_type=SIGNAL_LIFECYCLE_EVENT_CANCELED,
+        occurred_at=canceled_at,
+        metadata_safe={"to_status": Signal.Status.CANCELED},
+    )
+
+    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
+
+    assert result.closure_measured_resolved_count == 0
+    assert result.closure_measured_canceled_count == 1
+    assert result.closure_resolved_share.current_value == 0.0
+
+
+def test_complete_window_does_not_count_column_only_closure():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    _cutover_complete_for_period(now=now)
+    signal = _create_signal(
+        membership,
+        title="Column only resolve",
+        created_at=now - timedelta(days=2),
+        status=Signal.Status.RESOLVED,
+    )
+    Signal.objects.filter(pk=signal.pk).update(resolved_at=now - timedelta(hours=2))
+    signal.refresh_from_db()
+    assert not signal.lifecycle_events.filter(
+        event_type=SIGNAL_LIFECYCLE_EVENT_RESOLVED
+    ).exists()
+
+    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
+
+    assert result.current_period.period_start >= result.history_reliable_from
+    assert result.closure_measured_resolved_count == 0
+    assert result.closure_measured_canceled_count == 0
+    assert result.undatable_signal_terminals.resolved == 0
+    assert result.closure_resolved_share.current_value is None
+
+
+def test_qualify_moves_period_volume_to_current_pole_and_zone():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    _cutover_complete_for_period(now=now)
+    cuisine = create_business_unit(
+        establishment=membership.establishment,
+        key="cuisine",
+        label="Cuisine",
+    )
+    maintenance = create_business_unit(
+        establishment=membership.establishment,
+        key="maintenance",
+        label="Maintenance",
+    )
+    zone_a = OperationalUnit.objects.create(
+        establishment=membership.establishment,
+        key="zone_a",
+        label="Zone A",
+        active=True,
+    )
+    zone_b = OperationalUnit.objects.create(
+        establishment=membership.establishment,
+        key="zone_b",
+        label="Zone B",
+        active=True,
+    )
+    current = _create_signal(
+        membership,
+        title="Requalified current",
+        created_at=now - timedelta(days=1),
+        operational_unit=zone_a,
+        responsible_business_unit=cuisine,
+    )
+    previous = _create_signal(
+        membership,
+        title="Requalified previous",
+        created_at=now - timedelta(days=10),
+        operational_unit=zone_a,
+        responsible_business_unit=cuisine,
+    )
+    Signal.objects.filter(pk__in=[current.pk, previous.pk]).update(
+        operational_unit=zone_b,
+        responsible_business_unit=maintenance,
+    )
+
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
+
+    assert {item.name for item in result.poles} == {"Maintenance"}
+    assert {item.name for item in result.zones} == {"Zone B"}
+    assert result.poles[0].count == 1
+    assert result.zones[0].count == 1
+    assert result.poles[0].comparison.previous_value == 1
+    assert result.zones[0].comparison.previous_value == 1
+    assert result.poles[0].comparison.coverage == COVERAGE_COMPLETE
+    assert result.zones[0].comparison.coverage == COVERAGE_COMPLETE
 
