@@ -13,9 +13,23 @@ from houston.action_plans.models import ActionPlanExecution
 from houston.analytics.cutover import apply_analytics_history_cutover
 from houston.analytics.dashboard import get_analytics_dashboard
 from houston.analytics.journal import COVERAGE_COMPLETE
-from houston.analytics.models import AnalyticsHistoryCoverage, SignalPatternAssignment
-from houston.analytics.services import create_operational_pattern
-from houston.establishments.models import EstablishmentMembership, OperationalUnit
+from houston.analytics.models import (
+    AnalyticsHistoryCoverage,
+    PatternEstablishmentSighting,
+    SignalPatternAssignment,
+)
+from houston.analytics.services import (
+    create_operational_pattern,
+    mark_assignment_processing,
+    mark_assignment_succeeded,
+    merge_operational_patterns,
+    split_operational_pattern_to_new,
+)
+from houston.establishments.models import (
+    Establishment,
+    EstablishmentMembership,
+    OperationalUnit,
+)
 from houston.gamification.constants import CURRENT_RULE_VERSION
 from houston.gamification.models import PointTransaction
 from houston.gamification.services import open_season
@@ -88,6 +102,26 @@ def _assign(signal, pattern, *, assigned_at=None):
         assigned_classifier_version="classifier-v1",
         assigned_at=assigned_at or timezone.now(),
     )
+
+
+def _succeed_assign(signal, pattern, *, assigned_at=None):
+    processing = mark_assignment_processing(
+        signal=signal,
+        pending_signature=f"sig-{signal.id}-{uuid.uuid4()}",
+        pending_classifier_version="classifier-v1",
+    )
+    return mark_assignment_succeeded(
+        signal=signal,
+        pattern=pattern,
+        assigned_signature=processing.pending_signature,
+        assigned_classifier_version="classifier-v1",
+        expected_attempt_count=processing.attempt_count,
+        assigned_at=assigned_at,
+    )
+
+
+def _new_pattern_names(result):
+    return {item.name for item in result.new_patterns}
 
 
 def test_dashboard_period_days_and_scope_payload():
@@ -170,6 +204,449 @@ def test_pattern_correction_does_not_give_target_source_first_seen():
     assert "Motif B" in names
     motif_b = next(item for item in result.new_patterns if item.name == "Motif B")
     assert motif_b.first_seen_at > earlier
+
+
+def test_pattern_correction_cross_does_not_give_target_source_first_seen():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    earlier = now - timedelta(days=20)
+    create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Motif A",
+        created_by_membership=membership,
+        occurred_at=earlier,
+    )
+    pattern_b = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Motif B",
+        created_by_membership=membership,
+        occurred_at=now - timedelta(days=1),
+    )
+    signal = _create_signal(membership, title="Moved", created_at=earlier)
+    _assign(signal, pattern_b, assigned_at=now - timedelta(hours=1))
+
+    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
+    motif_b = next(item for item in result.new_patterns if item.name == "Motif B")
+    assert motif_b.first_seen_at > earlier
+
+
+def test_cross_new_patterns_use_assignment_not_created_event():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    created_at = now - timedelta(days=20)
+    assigned_at = now - timedelta(hours=2)
+    pattern = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Backdated create",
+        created_by_membership=membership,
+        occurred_at=created_at,
+    )
+    _succeed_assign(
+        _create_signal(membership, title="Seen now", created_at=assigned_at),
+        pattern,
+        assigned_at=assigned_at,
+    )
+
+    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
+    item = next(row for row in result.new_patterns if row.name == "Backdated create")
+    assert item.first_seen_at == assigned_at
+
+
+def test_cross_new_patterns_use_earlier_assignment_without_sighting():
+    user = create_user(username="cross-first-seen")
+    first = create_establishment(name="Nord")
+    second = Establishment.objects.create(
+        name="Sud",
+        organization=first.organization,
+        status=Establishment.Status.ACTIVE,
+    )
+    membership_a = create_membership(
+        establishment=first,
+        user=user,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    membership_b = create_membership(
+        establishment=second,
+        user=user,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    now = timezone.now()
+    earlier = now - timedelta(days=20)
+    seen = now - timedelta(days=1)
+    pattern = create_operational_pattern(
+        organization=first.organization,
+        label="Shared motif",
+        created_by_membership=membership_a,
+        occurred_at=earlier,
+    )
+    _assign(
+        _create_signal(membership_a, title="Old site", created_at=earlier),
+        pattern,
+        assigned_at=earlier,
+    )
+    _succeed_assign(
+        _create_signal(membership_b, title="New site", created_at=seen),
+        pattern,
+        assigned_at=seen,
+    )
+    assert not PatternEstablishmentSighting.objects.filter(
+        pattern=pattern,
+        establishment=first,
+    ).exists()
+
+    cross = get_analytics_dashboard(user, period_days=7, now=now)
+    establishment_b = get_analytics_dashboard(
+        user,
+        period_days=7,
+        now=now,
+        establishment_id=second.id,
+    )
+    assert "Shared motif" not in _new_pattern_names(cross)
+    item = next(row for row in establishment_b.new_patterns if row.name == "Shared motif")
+    assert item.first_seen_at == seen
+
+
+def test_split_to_new_is_not_listed_as_new_pattern():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    earlier = now - timedelta(days=20)
+    source = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Broad source",
+        created_by_membership=membership,
+        occurred_at=earlier,
+    )
+    signal = _create_signal(membership, title="Stock", created_at=earlier)
+    _succeed_assign(signal, source, assigned_at=earlier)
+
+    split = split_operational_pattern_to_new(
+        actor_membership=membership,
+        source_pattern=source,
+        label="Split pasted",
+        signal_ids=[signal.id],
+        occurred_at=now - timedelta(hours=1),
+    )
+
+    cross = get_analytics_dashboard(membership.user, period_days=7, now=now)
+    establishment = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
+    assert split.target_pattern is not None
+    assert "Split pasted" not in _new_pattern_names(cross)
+    assert "Split pasted" not in _new_pattern_names(establishment)
+
+
+def test_establishment_sighting_write_once_ignores_later_assignment():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    earlier = now - timedelta(days=20)
+    later = now - timedelta(hours=1)
+    pattern = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Already seen",
+        created_by_membership=membership,
+        occurred_at=earlier,
+    )
+    signal = _create_signal(membership, title="Reclassified", created_at=earlier)
+    _succeed_assign(signal, pattern, assigned_at=earlier)
+    processing = mark_assignment_processing(
+        signal=signal,
+        pending_signature=f"sig-later-{signal.id}",
+        pending_classifier_version="classifier-v2",
+    )
+    mark_assignment_succeeded(
+        signal=signal,
+        pattern=pattern,
+        assigned_signature=processing.pending_signature,
+        assigned_classifier_version="classifier-v2",
+        expected_attempt_count=processing.attempt_count,
+        assigned_at=later,
+    )
+
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
+    assert "Already seen" not in _new_pattern_names(result)
+    sighting = PatternEstablishmentSighting.objects.get(
+        pattern=pattern,
+        establishment=membership.establishment,
+    )
+    assert sighting.observed_at == earlier
+
+
+def test_pattern_merge_keeps_earliest_sighting_not_merge_clock():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    first_seen = now - timedelta(days=3)
+    later_seen = now - timedelta(days=1)
+    merge_at = now - timedelta(hours=1)
+    source = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Older identity",
+        created_by_membership=membership,
+        occurred_at=first_seen,
+    )
+    target = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Newer survivor",
+        created_by_membership=membership,
+        occurred_at=later_seen,
+    )
+    _succeed_assign(
+        _create_signal(membership, title="From source", created_at=first_seen),
+        source,
+        assigned_at=first_seen,
+    )
+    _succeed_assign(
+        _create_signal(membership, title="On target", created_at=later_seen),
+        target,
+        assigned_at=later_seen,
+    )
+    merge_operational_patterns(
+        actor_membership=membership,
+        source_pattern=source,
+        target_pattern=target,
+        occurred_at=merge_at,
+    )
+
+    cross = get_analytics_dashboard(membership.user, period_days=7, now=now)
+    establishment = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
+    for result in (cross, establishment):
+        item = next(row for row in result.new_patterns if row.pattern_id == target.id)
+        assert item.first_seen_at == first_seen
+        assert item.first_seen_at < merge_at
+    assert "Older identity" not in _new_pattern_names(cross)
+
+
+def test_pattern_merge_hides_survivor_when_earliest_sighting_is_outside_period():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    earlier = now - timedelta(days=20)
+    source = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Legacy source",
+        created_by_membership=membership,
+        occurred_at=earlier,
+    )
+    target = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Born in period",
+        created_by_membership=membership,
+        occurred_at=now - timedelta(days=1),
+    )
+    _succeed_assign(
+        _create_signal(membership, title="Legacy", created_at=earlier),
+        source,
+        assigned_at=earlier,
+    )
+    _succeed_assign(
+        _create_signal(membership, title="Fresh", created_at=now - timedelta(days=1)),
+        target,
+        assigned_at=now - timedelta(days=1),
+    )
+    merge_operational_patterns(
+        actor_membership=membership,
+        source_pattern=source,
+        target_pattern=target,
+        occurred_at=now - timedelta(hours=1),
+    )
+
+    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
+    assert "Born in period" not in _new_pattern_names(result)
+
+
+def test_real_pattern_merged_into_split_created_can_appear():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    earlier = now - timedelta(days=20)
+    seen = now - timedelta(days=2)
+    stock = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Stock to split",
+        created_by_membership=membership,
+        occurred_at=earlier,
+    )
+    real = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Real origin",
+        created_by_membership=membership,
+        occurred_at=seen,
+    )
+    stock_signal = _create_signal(membership, title="Stock", created_at=earlier)
+    real_signal = _create_signal(membership, title="Real", created_at=seen)
+    _succeed_assign(stock_signal, stock, assigned_at=earlier)
+    _succeed_assign(real_signal, real, assigned_at=seen)
+    split = split_operational_pattern_to_new(
+        actor_membership=membership,
+        source_pattern=stock,
+        label="Split vessel",
+        signal_ids=[stock_signal.id],
+        occurred_at=now - timedelta(hours=2),
+    )
+    merge_operational_patterns(
+        actor_membership=membership,
+        source_pattern=real,
+        target_pattern=split.target_pattern,
+        occurred_at=now - timedelta(hours=1),
+    )
+
+    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
+    item = next(row for row in result.new_patterns if row.pattern_id == split.target_pattern.id)
+    assert item.first_seen_at == seen
+
+
+def test_real_pattern_outside_period_merged_into_split_created_is_absent():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    earlier = now - timedelta(days=20)
+    stock = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Stock to split",
+        created_by_membership=membership,
+        occurred_at=earlier,
+    )
+    real = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Real origin outside period",
+        created_by_membership=membership,
+        occurred_at=earlier,
+    )
+    stock_signal = _create_signal(membership, title="Stock", created_at=earlier)
+    real_signal = _create_signal(membership, title="Real", created_at=earlier)
+    _succeed_assign(stock_signal, stock, assigned_at=earlier)
+    _succeed_assign(real_signal, real, assigned_at=earlier)
+    split = split_operational_pattern_to_new(
+        actor_membership=membership,
+        source_pattern=stock,
+        label="Split vessel",
+        signal_ids=[stock_signal.id],
+        occurred_at=now - timedelta(hours=2),
+    )
+    merge_operational_patterns(
+        actor_membership=membership,
+        source_pattern=real,
+        target_pattern=split.target_pattern,
+        occurred_at=now - timedelta(hours=1),
+    )
+
+    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
+    assert split.target_pattern is not None
+    assert split.target_pattern.id not in {row.pattern_id for row in result.new_patterns}
+    assert "Split vessel" not in _new_pattern_names(result)
+
+
+def test_split_created_chain_is_not_entirely_split_when_real_origin_is_two_hops():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    earlier = now - timedelta(days=20)
+    seen = now - timedelta(days=2)
+    stock_b = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Stock B",
+        created_by_membership=membership,
+        occurred_at=earlier,
+    )
+    stock_c = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Stock C",
+        created_by_membership=membership,
+        occurred_at=earlier,
+    )
+    real = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Real A",
+        created_by_membership=membership,
+        occurred_at=seen,
+    )
+    signal_b = _create_signal(membership, title="For B", created_at=earlier)
+    signal_c = _create_signal(membership, title="For C", created_at=earlier)
+    signal_a = _create_signal(membership, title="Real A", created_at=seen)
+    _succeed_assign(signal_b, stock_b, assigned_at=earlier)
+    _succeed_assign(signal_c, stock_c, assigned_at=earlier)
+    _succeed_assign(signal_a, real, assigned_at=seen)
+    split_b = split_operational_pattern_to_new(
+        actor_membership=membership,
+        source_pattern=stock_b,
+        label="Split B",
+        signal_ids=[signal_b.id],
+        occurred_at=now - timedelta(hours=3),
+    )
+    merge_operational_patterns(
+        actor_membership=membership,
+        source_pattern=real,
+        target_pattern=split_b.target_pattern,
+        occurred_at=now - timedelta(hours=2),
+    )
+    split_c = split_operational_pattern_to_new(
+        actor_membership=membership,
+        source_pattern=stock_c,
+        label="Split C",
+        signal_ids=[signal_c.id],
+        occurred_at=now - timedelta(hours=2),
+    )
+    merge_operational_patterns(
+        actor_membership=membership,
+        source_pattern=split_b.target_pattern,
+        target_pattern=split_c.target_pattern,
+        occurred_at=now - timedelta(hours=1),
+    )
+    real.refresh_from_db()
+    split_b.target_pattern.refresh_from_db()
+    assert real.merged_into_id == split_b.target_pattern.id
+    assert split_b.target_pattern.merged_into_id == split_c.target_pattern.id
+
+    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
+    item = next(
+        row for row in result.new_patterns if row.pattern_id == split_c.target_pattern.id
+    )
+    assert item.first_seen_at == seen
+
+
+def test_recurring_patterns_follow_canonical_after_pattern_merge():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    source = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Source count",
+        created_by_membership=membership,
+    )
+    target = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Survivor count",
+        created_by_membership=membership,
+    )
+    _succeed_assign(
+        _create_signal(membership, title="S1", created_at=now - timedelta(days=1)),
+        source,
+        assigned_at=now - timedelta(days=1),
+    )
+    _succeed_assign(
+        _create_signal(membership, title="S2", created_at=now - timedelta(hours=2)),
+        target,
+        assigned_at=now - timedelta(hours=2),
+    )
+    merge_operational_patterns(
+        actor_membership=membership,
+        source_pattern=source,
+        target_pattern=target,
+    )
+
+    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
+    assert len(result.recurring_patterns) == 1
+    assert result.recurring_patterns[0].pattern_id == target.id
+    assert result.recurring_patterns[0].name == "Survivor count"
+    assert result.recurring_patterns[0].signal_count == 2
 
 
 def test_cross_homonyms_stay_separated_by_establishment():
