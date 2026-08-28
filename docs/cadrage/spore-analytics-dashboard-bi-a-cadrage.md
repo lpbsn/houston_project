@@ -1114,7 +1114,7 @@ Le backend reste la source de vérité.
 
 Le frontend ne recalcule pas la coverage depuis les timestamps.
 
-Le bandeau global agrège uniquement les états backend affichés.
+Le bandeau global agrège uniquement les états backend affichés. Il concerne les métriques de **cycle** (journaux / `reliable_from`). Les volumes pôle, localisation et motifs récurrents sont une identité canonique **live** (`complete`) ; **Nouveaux motifs** utilise cette identité pour le motif, et des timestamps persistés (`sighting` / `assigned_at`) pour le `first_seen`, hors journaux de cycle et hors `reliable_from`. La récurrence du widget Dashboard (≥ 2 Signals survivants sur la période) n’est pas celle de la liste Patterns 30 j.
 
 Affichage cible :
 

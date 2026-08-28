@@ -1,4 +1,17 @@
-"""Decision dashboard aggregations over operational journals (no warehouse)."""
+"""Decision dashboard aggregations (no warehouse).
+
+Two coverage regimes:
+
+- Live canonical identity (coverage ``complete``): recurring motifs (widget 8.1),
+  poles (current ``responsible_business_unit``), locations (current
+  ``location_text``). A qualify moves historical period bars. Not gated by
+  ``reliable_from``. New motifs share this identity for the pattern; ``first_seen``
+  comes from persisted sighting / ``assigned_at`` — not cycle journals, not
+  ``reliable_from``, and not a current-state-only read.
+- Cycle journals: delays, resolution rate, closures, reopenings, aging, plan
+  deadlines. ``history_reliable_from`` applies only here. Transform uses
+  ``first_action_plan_associated_at`` (complete), not a classification journal.
+"""
 
 from __future__ import annotations
 
@@ -1177,6 +1190,7 @@ def _recurring_patterns(
     current_period: AnalyticsComparisonPeriod,
     previous_period: AnalyticsComparisonPeriod,
 ) -> tuple[RecurringPatternItem, ...]:
+    """Widget 8.1: ≥2 surviving Signals in the dashboard period, live canonical motif."""
     def counts_for(period: AnalyticsComparisonPeriod) -> dict[UUID, dict]:
         grouped: dict[UUID, dict] = {}
         for signal in signals:
