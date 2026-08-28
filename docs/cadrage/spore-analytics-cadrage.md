@@ -216,6 +216,18 @@ La période s’applique à **tout le Dashboard Analytics**, y compris au futur 
 
 Seule l’**ancienneté des observations ouvertes** utilise une logique de stock spécifique définie plus bas afin de ne pas masquer les observations anciennes.
 
+### 6.5 Couverture historique — deux régimes
+
+Le Dashboard n’a **pas** un seul mode d’historique. Distinguer :
+
+**1. Identité canonique live** (coverage `complete`). Motifs récurrents (widget §8.1), activité du pôle (`responsible_business_unit` **actuel**), localisations (`location_text` **actuel**). Les calculs lisent l’état canonique **courant** du survivor et l’appliquent aux Signals dont `created_at` tombe dans la période. Une requalification Cuisine → Maintenance **déplace** le volume des périodes passées : correction de vérité, pas journal de classification. Pas de `classification_reliable_from`. `reliable_from` **ne** s’applique **pas** à ces barres. La carte « zones » du Dashboard est le texte de localisation courant, pas un as-of de `operational_unit`.
+
+**Nouveaux motifs** (même régime d’identité, pas le régime journaux de cycle) : le motif affiché est l’identité canonique **courante**. Le `first_seen` de période n’est **pas** une lecture current-state seule : il repose sur des timestamps **persistés** (`PatternEstablishmentSighting` / `assigned_at`). Hors journaux de **cycle** (statuts Signal / Execution) et hors gate `reliable_from`.
+
+**2. Journaux de cycle.** Délais observations et plans, taux de résolution opérationnel, part des clôtures, réouvertures, ancienneté des ouvertes, respect des échéances. `history_reliable_from` / `AnalyticsHistoryCoverage.reliable_from` s’applique **uniquement** à ces métriques. La transformation en plan utilise `first_action_plan_associated_at` (coverage `complete`), pas un journal de classification.
+
+Le bandeau de coverage frontend reflète le pire état backend des comparaisons affichées. Les barres pôle / localisation / motifs récurrents étant `complete`, le bandeau est piloté par les métriques journalisées.
+
 ---
 
 ## 7. Comparaisons et sémantique des évolutions
@@ -293,6 +305,8 @@ Renommer ou fusionner un motif ne doit pas créer artificiellement un nouveau mo
 
 Les calculs utilisent l’identité canonique du motif.
 
+Ce widget **n’est pas** la récurrence de la liste / du détail Patterns (`occurrence_count_30d`, `is_recurrent`) : fenêtre glissante 30 jours, au moins 3 occurrences et 2 jours distincts. Ne pas unifier les deux définitions.
+
 ---
 
 ## 9. Nouveaux motifs
@@ -308,6 +322,8 @@ Un nouveau motif est un motif dont la **première apparition historique connue d
 - Établissement : jamais vu auparavant dans cet établissement, même s’il est déjà connu ailleurs.
 
 La nouveauté est évaluée relativement à l’historique réellement disponible dans Spore.
+
+Le motif est l’identité canonique **courante**. La date de première apparition (`first_seen`) repose sur des timestamps persistés (sighting établissement / `assigned_at`), pas sur l’état courant seul, pas sur les journaux de cycle Signal/Execution, et n’est pas bornée par `reliable_from`.
 
 ### 9.2 Affichage
 

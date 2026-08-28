@@ -1,3 +1,9 @@
+"""Pattern-list / detail recurrence on a rolling 30-day window.
+
+This is not Dashboard widget 8.1 (canonical motif with at least two surviving
+Signals in the selected dashboard period). Do not unify the two definitions.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
