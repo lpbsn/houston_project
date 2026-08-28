@@ -104,8 +104,8 @@ function dashboard(
       on_time_comparison: comparison(),
       late_comparison: comparison(),
     },
-    zones: [],
-    zones_preview_limit: 7,
+    locations: [],
+    locations_preview_limit: 7,
     poles: [],
     ...overrides,
   }
@@ -209,7 +209,7 @@ describe('dashboardPreviousPeriodFooter', () => {
 })
 
 describe('dashboardNewBadgeTone', () => {
-  it('keeps Nouveau visually neutral on zones and poles', () => {
+  it('keeps Nouveau visually neutral on locations and poles', () => {
     expect(dashboardNewBadgeTone('neutral')).toBe('neutral')
     expect(dashboardNewBadgeTone('negative-up')).toBe('positive')
     expect(dashboardNewBadgeTone('positive-up')).toBe('positive')

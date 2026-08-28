@@ -9767,11 +9767,11 @@ components:
           $ref: '#/components/schemas/AnalyticsDelayStats'
         plan_deadlines:
           $ref: '#/components/schemas/AnalyticsDeadlineShare'
-        zones:
+        locations:
           type: array
           items:
             $ref: '#/components/schemas/AnalyticsNamedCountItem'
-        zones_preview_limit:
+        locations_preview_limit:
           type: integer
         poles:
           type: array
@@ -9788,6 +9788,8 @@ components:
       - establishment_id
       - establishment_ids
       - history_reliable_from
+      - locations
+      - locations_preview_limit
       - new_patterns
       - new_patterns_preview_limit
       - observation_delay_canceled
@@ -9807,8 +9809,6 @@ components:
       - scope_type
       - undatable_execution_terminals
       - undatable_signal_terminals
-      - zones
-      - zones_preview_limit
     AnalyticsDashboardResponseScopeTypeEnum:
       enum:
       - cross

@@ -3003,8 +3003,8 @@ export interface components {
             plan_delay_resolved: components["schemas"]["AnalyticsDelayStats"];
             plan_validation: components["schemas"]["AnalyticsDelayStats"];
             plan_deadlines: components["schemas"]["AnalyticsDeadlineShare"];
-            zones: components["schemas"]["AnalyticsNamedCountItem"][];
-            zones_preview_limit: number;
+            locations: components["schemas"]["AnalyticsNamedCountItem"][];
+            locations_preview_limit: number;
             poles: components["schemas"]["AnalyticsNamedCountItem"][];
         };
         /**

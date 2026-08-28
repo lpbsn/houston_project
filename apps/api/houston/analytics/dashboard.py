@@ -71,13 +71,14 @@ from houston.signals.models import Signal, SignalLifecycleEvent
 DASHBOARD_PERIOD_DAYS = frozenset({3, 7, 15, 30, 90})
 DEFAULT_DASHBOARD_PERIOD_DAYS = 7
 NEW_PATTERNS_PREVIEW_LIMIT = 5
-ZONES_PREVIEW_LIMIT = 7
+LOCATIONS_PREVIEW_LIMIT = 7
 RECURRING_PATTERNS_LIMIT = 5
 CONTRIBUTORS_LIMIT = 5
 P90_MIN_SAMPLE = 10
 AGING_OVER_15_DAYS = 15
 UNASSIGNED_LABEL = "Sans pôle"
-UNASSIGNED_ZONE_LABEL = "Sans zone"
+UNASSIGNED_LOCATION_KEY = "unassigned"
+UNASSIGNED_LOCATION_LABEL = "Sans localisation"
 
 SIGNAL_TERMINAL_STATUSES = frozenset(
     {
@@ -209,8 +210,8 @@ class AnalyticsDashboardResult:
     plan_delay_resolved: DelayStats
     plan_validation: DelayStats
     plan_deadlines: DeadlineShare
-    zones: tuple[NamedCountItem, ...]
-    zones_preview_limit: int
+    locations: tuple[NamedCountItem, ...]
+    locations_preview_limit: int
     poles: tuple[NamedCountItem, ...]
 
 
@@ -421,18 +422,16 @@ def get_analytics_dashboard(
         now=moment,
         coverage=journal_coverage,
     )
-    zones = _dimension_counts(
+    locations = _location_counts(
         signals=signals,
         current_period=current_period,
         previous_period=previous_period,
-        dimension="zone",
         cross=establishment_id is None,
     )
     poles = _dimension_counts(
         signals=signals,
         current_period=current_period,
         previous_period=previous_period,
-        dimension="pole",
         cross=establishment_id is None,
     )
 
@@ -465,8 +464,8 @@ def get_analytics_dashboard(
         plan_delay_resolved=plan_resolved,
         plan_validation=plan_validation,
         plan_deadlines=deadlines,
-        zones=zones,
-        zones_preview_limit=ZONES_PREVIEW_LIMIT,
+        locations=locations,
+        locations_preview_limit=LOCATIONS_PREVIEW_LIMIT,
         poles=poles,
     )
 
@@ -1421,29 +1420,90 @@ def _contributors(
     return tuple(items)
 
 
+def _normalized_location_key(location_text: str) -> str:
+    stripped = (location_text or "").strip()
+    if not stripped:
+        return UNASSIGNED_LOCATION_KEY
+    return stripped.casefold()
+
+
+def _location_display_name(*, dim_id: str, spellings: dict[str, int]) -> str:
+    if dim_id == UNASSIGNED_LOCATION_KEY or not spellings:
+        return UNASSIGNED_LOCATION_LABEL
+    return min(spellings.items(), key=lambda item: (-item[1], item[0]))[0]
+
+
+def _location_counts(
+    *,
+    signals: list[Signal],
+    current_period: AnalyticsComparisonPeriod,
+    previous_period: AnalyticsComparisonPeriod,
+    cross: bool,
+) -> tuple[NamedCountItem, ...]:
+    def key_for(signal: Signal) -> tuple:
+        dim_id = _normalized_location_key(signal.location_text)
+        if cross:
+            return (signal.establishment_id, dim_id, signal.establishment.name)
+        return (None, dim_id, None)
+
+    def counts_for(
+        period: AnalyticsComparisonPeriod,
+    ) -> tuple[dict[tuple, int], dict[tuple, dict[str, int]]]:
+        grouped: dict[tuple, int] = defaultdict(int)
+        spellings: dict[tuple, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        for signal in signals:
+            if not _in_period(signal.created_at, period):
+                continue
+            key = key_for(signal)
+            grouped[key] += 1
+            stripped = (signal.location_text or "").strip()
+            if key[1] != UNASSIGNED_LOCATION_KEY:
+                spellings[key][stripped] += 1
+        return grouped, spellings
+
+    current, current_spellings = counts_for(current_period)
+    previous, _ = counts_for(previous_period)
+    items = []
+    for key, count in current.items():
+        establishment_id, dim_id, establishment_name = key
+        item_id = dim_id
+        if establishment_id is not None:
+            item_id = f"{establishment_id}:{item_id}"
+        items.append(
+            NamedCountItem(
+                id=item_id,
+                name=_location_display_name(
+                    dim_id=dim_id,
+                    spellings=current_spellings.get(key, {}),
+                ),
+                count=count,
+                establishment_id=establishment_id,
+                establishment_name=establishment_name,
+                comparison=compare_dashboard_metric_values(
+                    current=count,
+                    previous=previous.get(key, 0),
+                    coverage=COVERAGE_COMPLETE,
+                ),
+            )
+        )
+    items.sort(key=lambda item: (-item.count, item.name))
+    return tuple(items)
+
+
 def _dimension_counts(
     *,
     signals: list[Signal],
     current_period: AnalyticsComparisonPeriod,
     previous_period: AnalyticsComparisonPeriod,
-    dimension: str,
     cross: bool,
 ) -> tuple[NamedCountItem, ...]:
     def key_for(signal: Signal) -> tuple:
-        if dimension == "zone":
-            dim_id = signal.operational_unit_id
-            name = (
-                signal.operational_unit.label
-                if signal.operational_unit_id
-                else UNASSIGNED_ZONE_LABEL
-            )
-        else:
-            dim_id = signal.responsible_business_unit_id
-            name = (
-                _dimension_label(signal.responsible_business_unit)
-                if signal.responsible_business_unit_id
-                else UNASSIGNED_LABEL
-            )
+        dim_id = signal.responsible_business_unit_id
+        name = (
+            _dimension_label(signal.responsible_business_unit)
+            if signal.responsible_business_unit_id
+            else UNASSIGNED_LABEL
+        )
         if cross:
             return (signal.establishment_id, dim_id, name, signal.establishment.name)
         return (None, dim_id, name, None)
