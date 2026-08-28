@@ -593,11 +593,11 @@ Pas de nouvelle grosse carte.
 
 ---
 
-# 16. Zones les plus signalées
+# 16. Localisations les plus signalées
 
 ## 16.1 Question métier
 
-> **Dans quelles zones les observations se concentrent-elles ?**
+> **Dans quelles localisations les observations se concentrent-elles ?**
 
 ## 16.2 Visualisation
 
@@ -608,18 +608,18 @@ Cuisine                   ██████████████████
 Réserve                   █████████████         17
 Accueil                   █████████              12
 Vestiaires                ██████                  7
-Sans zone                 ███                     3
+Sans localisation         ███                     3
 ```
 
-Le count reste la donnée principale.
+Le count reste la donnée principale. Les libellés viennent de `location_text` (pas d’`OperationalUnit`).
 
 ## 16.3 Cross
 
 Le couple reste :
 
-`(établissement, zone)`
+`(établissement, texte normalisé)`
 
-Deux zones du même nom dans deux établissements restent deux lignes distinctes.
+Deux localisations du même nom dans deux établissements restent deux lignes distinctes.
 
 Le nom d’établissement est secondaire.
 
@@ -645,7 +645,7 @@ Top 7 + `Autres`.
 
 CTA :
 
-`Voir toutes les zones`
+`Voir tout`
 
 ---
 

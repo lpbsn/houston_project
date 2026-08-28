@@ -133,8 +133,8 @@ class AnalyticsDashboardResponseSerializer(serializers.Serializer):
     plan_delay_resolved = AnalyticsDelayStatsSerializer()
     plan_validation = AnalyticsDelayStatsSerializer()
     plan_deadlines = AnalyticsDeadlineShareSerializer()
-    zones = AnalyticsNamedCountItemSerializer(many=True)
-    zones_preview_limit = serializers.IntegerField()
+    locations = AnalyticsNamedCountItemSerializer(many=True)
+    locations_preview_limit = serializers.IntegerField()
     poles = AnalyticsNamedCountItemSerializer(many=True)
 
 

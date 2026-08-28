@@ -956,7 +956,7 @@ function VolumeBarList({
   )
 }
 
-export function ZonesCard({
+export function LocationsCard({
   items,
   previewLimit,
   isCross,
@@ -966,10 +966,9 @@ export function ZonesCard({
   isCross: boolean
 }) {
   return (
-    <DashboardCard title="Zones les plus signalées">
-      <p className="mb-3 text-[12px] text-[#7D7B75]">{canonicalRoutingVolumeHint()}</p>
+    <DashboardCard title="Localisations les plus signalées">
       {items.length === 0 ? (
-        <p className="text-sm text-[#7D7B75]">Aucune zone signalée sur la période.</p>
+        <p className="text-sm text-[#7D7B75]">Aucune localisation signalée sur la période.</p>
       ) : (
         <VolumeBarList items={items} previewLimit={previewLimit} showEstablishment={isCross} />
       )}

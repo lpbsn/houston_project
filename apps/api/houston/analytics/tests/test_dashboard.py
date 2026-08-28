@@ -10,6 +10,7 @@ from rest_framework.test import APIClient
 
 from houston.action_plans.constants import EXECUTION_STATUS_DONE
 from houston.action_plans.models import ActionPlanExecution
+from houston.analytics.comparisons import RELATIVE_CHANGE_COMPUTED
 from houston.analytics.cutover import apply_analytics_history_cutover
 from houston.analytics.dashboard import get_analytics_dashboard
 from houston.analytics.journal import COVERAGE_COMPLETE
@@ -65,6 +66,7 @@ def _create_signal(
     status=Signal.Status.OPEN,
     operational_unit=None,
     responsible_business_unit=None,
+    location_text="",
 ):
     moment = created_at or timezone.now()
     signal = Signal.objects.create(
@@ -77,6 +79,7 @@ def _create_signal(
         last_activity_at=moment,
         operational_unit=operational_unit,
         responsible_business_unit=responsible_business_unit,
+        location_text=location_text,
     )
     if created_at is not None:
         Signal.objects.filter(pk=signal.pk).update(created_at=created_at)
@@ -1031,9 +1034,9 @@ def test_transform_and_aging_after_older_source_merged_into_newer_survivor():
     assert aging_by_key["3–7 j"] == 1
     assert aging_by_key["< 3 j"] == 0
     assert {item.name for item in result.poles} == {"Maintenance"}
-    assert {item.name for item in result.zones} == {"Zone B"}
+    assert {item.name for item in result.locations} == {"Sans localisation"}
     assert result.poles[0].count == 1
-    assert result.zones[0].count == 1
+    assert result.locations[0].count == 1
     assert result.closure_measured_resolved_count == 0
     assert result.closure_measured_canceled_count == 0
 
@@ -1195,11 +1198,170 @@ def test_qualify_moves_period_volume_to_current_pole_and_zone():
     )
 
     assert {item.name for item in result.poles} == {"Maintenance"}
-    assert {item.name for item in result.zones} == {"Zone B"}
+    assert {item.name for item in result.locations} == {"Sans localisation"}
     assert result.poles[0].count == 1
-    assert result.zones[0].count == 1
+    assert result.locations[0].count == 1
     assert result.poles[0].comparison.previous_value == 1
-    assert result.zones[0].comparison.previous_value == 1
+    assert result.locations[0].comparison.previous_value == 1
     assert result.poles[0].comparison.coverage == COVERAGE_COMPLETE
-    assert result.zones[0].comparison.coverage == COVERAGE_COMPLETE
+    assert result.locations[0].comparison.coverage == COVERAGE_COMPLETE
+
+
+def test_dashboard_locations_merge_case_variants_in_current_period():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    _cutover_complete_for_period(now=now)
+    _create_signal(
+        membership,
+        title="Kitchen uppercase",
+        created_at=now - timedelta(days=1),
+        location_text="Cuisine",
+    )
+    _create_signal(
+        membership,
+        title="Kitchen lowercase",
+        created_at=now - timedelta(hours=2),
+        location_text="cuisine",
+    )
+
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
+
+    assert len(result.locations) == 1
+    assert result.locations[0].name == "Cuisine"
+    assert result.locations[0].count == 2
+    assert result.locations[0].id == "cuisine"
+
+
+def test_dashboard_locations_keep_distinct_texts_separate():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    _cutover_complete_for_period(now=now)
+    _create_signal(
+        membership,
+        title="Kitchen",
+        created_at=now - timedelta(days=1),
+        location_text="Cuisine",
+    )
+    _create_signal(
+        membership,
+        title="Toilets",
+        created_at=now - timedelta(hours=2),
+        location_text="toilettes clients",
+    )
+
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
+
+    names = {item.name: item.count for item in result.locations}
+    assert names == {"Cuisine": 1, "toilettes clients": 1}
+
+
+def test_dashboard_locations_empty_text_ignores_operational_unit():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    _cutover_complete_for_period(now=now)
+    unit = OperationalUnit.objects.create(
+        establishment=membership.establishment,
+        key="zone_a",
+        label="Zone A",
+        active=True,
+    )
+    _create_signal(
+        membership,
+        title="No location text",
+        created_at=now - timedelta(days=1),
+        operational_unit=unit,
+        location_text="",
+    )
+
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
+
+    assert len(result.locations) == 1
+    assert result.locations[0].name == "Sans localisation"
+    assert result.locations[0].id == "unassigned"
+    assert result.locations[0].count == 1
+
+
+def test_dashboard_locations_cross_keeps_same_text_per_establishment():
+    user = create_user(username="cross-location-owner")
+    first = create_establishment(name="Nord")
+    second = create_establishment(name="Sud")
+    membership_a = create_membership(
+        establishment=first,
+        user=user,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    membership_b = create_membership(
+        establishment=second,
+        user=user,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    now = timezone.now()
+    _cutover_complete_for_period(now=now)
+    _create_signal(
+        membership_a,
+        title="Kitchen north",
+        created_at=now - timedelta(hours=1),
+        location_text="Cuisine",
+    )
+    _create_signal(
+        membership_b,
+        title="Kitchen south",
+        created_at=now - timedelta(hours=1),
+        location_text="Cuisine",
+    )
+
+    result = get_analytics_dashboard(user, period_days=7, now=now)
+
+    assert result.scope_type == "cross"
+    assert len(result.locations) == 2
+    assert {item.name for item in result.locations} == {"Cuisine"}
+    assert {item.establishment_name for item in result.locations} == {"Nord", "Sud"}
+    assert {item.count for item in result.locations} == {1}
+
+
+def test_dashboard_locations_period_comparison_uses_normalized_key():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    _cutover_complete_for_period(now=now)
+    _create_signal(
+        membership,
+        title="Kitchen previous",
+        created_at=now - timedelta(days=10),
+        location_text="Cuisine",
+    )
+    _create_signal(
+        membership,
+        title="Kitchen current",
+        created_at=now - timedelta(days=1),
+        location_text=" cuisine ",
+    )
+
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
+
+    assert len(result.locations) == 1
+    item = result.locations[0]
+    assert item.count == 1
+    assert item.comparison.previous_value == 1
+    assert item.comparison.relative_change_status == RELATIVE_CHANGE_COMPUTED
+    assert item.comparison.coverage == COVERAGE_COMPLETE
 

@@ -180,7 +180,7 @@ export function collectDashboardComparisons(
     data.plan_deadlines.on_time_comparison,
     data.plan_deadlines.late_comparison,
     ...data.recurring_patterns.map((item) => item.comparison),
-    ...data.zones.map((item) => item.comparison),
+    ...data.locations.map((item) => item.comparison),
     ...data.poles.map((item) => item.comparison),
   ]
 }

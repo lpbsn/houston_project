@@ -252,7 +252,7 @@ Une hausse n’est pas automatiquement positive.
 - volume d’observations : neutre ;
 - activité par pôle : neutre ;
 - nouveaux motifs : neutre ;
-- zones les plus signalées : volume et évolution neutres tant qu’aucun indicateur de risque fiable n’existe.
+- localisations les plus signalées : volume et évolution neutres tant qu’aucun indicateur de risque fiable n’existe.
 
 ---
 
@@ -626,20 +626,26 @@ Comparer les proportions à la période précédente en **points de pourcentage*
 
 ---
 
-## 16. Zones les plus signalées
+## 16. Localisations les plus signalées
 
 Remplacer la notion de `Carte de chaleur des zones à risque`.
 
 Titre recommandé :
-> **Zones les plus signalées**
+> **Localisations les plus signalées**
 
-Le volume brut de Signals ne constitue pas une mesure de risque : certaines zones produisent naturellement plus d’activité que d’autres et Spore ne possède pas nécessairement de dénominateur d’exposition fiable.
+Le volume brut de Signals ne constitue pas une mesure de risque : certaines localisations produisent naturellement plus d’activité que d’autres et Spore ne possède pas nécessairement de dénominateur d’exposition fiable.
+
+`OperationalUnit` reste dans le modèle (localisation structurée, réutilisable plus tard) mais **n’alimente pas** ce widget.
 
 ### 16.1 Mesure
 
-Nombre de **Signals distincts survivants** (`merged_into` vide) associés à chaque zone opérationnelle **canonique actuelle** sur la période actuelle (`created_at` dans la période). Une requalification déplace le volume y compris dans les périodes passées : correction de vérité, pas un historique as-of. Coverage : `complete`.
+Nombre de **Signals distincts survivants** (`merged_into` vide) associés à chaque `location_text` **courant** sur la période actuelle (`created_at` dans la période).
 
-Afficher aussi l’évolution par rapport à la même zone sur la période précédente.
+Clé de comptage et de comparaison inter-périodes : `location_text` après `strip` + `casefold`. Chaîne vide → **Sans localisation**. Les variantes de casse ou d’espaces (`Cuisine` / `cuisine`) partagent la même clé ; ne pas les traiter comme une série nouvelle (`undefined_previous_zero` / badge Nouveau). Pas de fusion floue (`Cuisine` ≠ `cuisine principale`).
+
+Une requalification d’`operational_unit` **ne déplace pas** ce volume (le texte de localisation n’est pas mis à jour). Coverage : `complete`.
+
+Afficher aussi l’évolution par rapport à la même localisation normalisée sur la période précédente.
 
 Cette évolution reste visuellement **neutre** : plus de Signals peut signifier plus de problèmes ou une meilleure adoption du reporting.
 
@@ -647,9 +653,9 @@ Cette évolution reste visuellement **neutre** : plus de Signals peut signifier 
 
 En Cross, une ligne représente un couple :
 
-> `(établissement, zone)`
+> `(établissement, texte normalisé)`
 
-Ne pas fusionner des zones uniquement parce qu’elles portent le même nom.
+Ne pas fusionner des localisations uniquement parce qu’elles portent le même nom.
 
 Afficher un badge avec le nom de l’établissement.
 
@@ -662,7 +668,7 @@ Vue repliée :
 Prévoir :
 > `Voir tout / Réduire`
 
-pour afficher toutes les zones.
+pour afficher toutes les localisations.
 
 ### 16.4 Couleurs
 
@@ -867,7 +873,7 @@ La V1 est considérée conforme lorsque :
 - l’ancienneté des observations ouvertes reste visible même pour des Signals antérieurs à la période ;
 - les délais Plans exposent moyenne et médiane ;
 - le temps de validation et le respect des échéances suivent les événements métier définis ;
-- les zones affichent du volume, pas un faux score de risque ;
+- les localisations affichent du volume, pas un faux score de risque ;
 - les vues Cross distinguent explicitement les établissements ;
 - Observations et Exécution Cross sont réellement read-only ;
 - tous les placeholders restent des placeholders sans backend fictif ;

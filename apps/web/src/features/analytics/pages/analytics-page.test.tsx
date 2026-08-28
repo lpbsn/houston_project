@@ -217,8 +217,8 @@ function dashboard(
       on_time_comparison: comparison(0.54),
       late_comparison: comparison(0.25),
     },
-    zones: [],
-    zones_preview_limit: 7,
+    locations: [],
+    locations_preview_limit: 7,
     poles: [],
     ...overrides,
   }

@@ -17,7 +17,7 @@ import {
   PlanDeadlinesCard,
   PolesCard,
   RecurringPatternsCard,
-  ZonesCard,
+  LocationsCard,
 } from '@/features/analytics/components/dashboard-widgets'
 import { useAnalyticsDashboardQuery } from '@/features/analytics/hooks'
 import {
@@ -214,9 +214,9 @@ export function AnalyticsPage({ scope = { type: 'session' } }: AnalyticsPageProp
                 <OpenObservationsCard data={dashboardQuery.data} />
               </div>
               <div className="order-6 min-w-0 lg:order-none">
-                <ZonesCard
-                  items={dashboardQuery.data.zones}
-                  previewLimit={dashboardQuery.data.zones_preview_limit}
+                <LocationsCard
+                  items={dashboardQuery.data.locations}
+                  previewLimit={dashboardQuery.data.locations_preview_limit}
                   isCross={isCross}
                 />
               </div>
