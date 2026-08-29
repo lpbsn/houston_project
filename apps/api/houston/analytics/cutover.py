@@ -57,6 +57,16 @@ def apply_analytics_history_cutover(*, now: datetime | None = None) -> datetime:
     return reliable_from
 
 
+def reset_history_reliable_from(*, now: datetime | None = None) -> datetime:
+    """Overwrite the coverage singleton. Does not insert journal baselines."""
+    occurred_at = now or timezone.now()
+    coverage, _created = AnalyticsHistoryCoverage.objects.update_or_create(
+        singleton_key=AnalyticsHistoryCoverage.SINGLETON_KEY,
+        defaults={"reliable_from": occurred_at},
+    )
+    return coverage.reliable_from
+
+
 def _require_postgresql(connection) -> None:
     if connection.vendor != "postgresql":
         raise RuntimeError("Analytics history cutover requires PostgreSQL.")

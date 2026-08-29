@@ -26,7 +26,7 @@ from houston.action_plans.lifecycle_events import record_execution_deadline_chan
 from houston.action_plans.models import ActionPlanExecution, ActionPlanExecutionLifecycleEvent
 from houston.action_plans.services import create_action_plan_with_execution
 from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
-from houston.analytics.cutover import apply_analytics_history_cutover
+from houston.analytics.cutover import apply_analytics_history_cutover, reset_history_reliable_from
 from houston.analytics.journal import (
     COVERAGE_COMPLETE,
     COVERAGE_NOT_COMPARABLE,
@@ -354,6 +354,40 @@ def test_cutover_is_idempotent_and_does_not_invent_created():
         )
         == Signal.Status.IN_PROGRESS
     )
+
+
+def test_reset_history_reliable_from_overwrites_singleton_without_baselines():
+    establishment = create_establishment()
+    signal = Signal.objects.create(
+        establishment=establishment,
+        status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.RESOLVED,
+        title="Reset coverage",
+        structured_summary="Summary.",
+        issue_focus="reset-coverage",
+        last_activity_at=timezone.now(),
+    )
+    first = apply_analytics_history_cutover()
+    baseline_count = SignalLifecycleEvent.objects.filter(
+        event_type=SIGNAL_LIFECYCLE_EVENT_HISTORY_BASELINE,
+    ).count()
+    later = first + timedelta(days=3)
+
+    reset = reset_history_reliable_from(now=later)
+    after_apply = apply_analytics_history_cutover(now=later + timedelta(days=1))
+
+    assert reset == later
+    assert after_apply == later
+    assert AnalyticsHistoryCoverage.objects.get().reliable_from == later
+    assert (
+        SignalLifecycleEvent.objects.filter(
+            event_type=SIGNAL_LIFECYCLE_EVENT_HISTORY_BASELINE,
+        ).count()
+        == baseline_count
+    )
+    assert signal.lifecycle_events.filter(
+        event_type=SIGNAL_LIFECYCLE_EVENT_HISTORY_BASELINE,
+    ).exists()
 
 
 def test_cutover_signal_terminals_skip_missing_timestamps():

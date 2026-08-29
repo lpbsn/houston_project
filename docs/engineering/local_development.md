@@ -92,8 +92,11 @@ make clean-operational-test-data ARGS='--confirm'
 
 Calls `manage.py clean_operational_test_data` (local/dev only). Requires `--dry-run` or `--confirm`.
 
-- **Deletes:** notifications, comments/mentions, observations (+ media/processing/candidates/source links), signals, action plans (templates, tasks, schedules, executions, assignees), temporary uploads, media files.
-- **Preserves:** users, establishments, memberships, business units, catalog infra (`Catalog*`), chat, `ai_usage_logs`.
+- **Deletes:** notifications, comments/mentions, observations (+ media/processing/candidates/source links), signals, action plans (templates, tasks, schedules, executions, assignees), temporary uploads, media files, analytics patterns / sightings / issue reports / pattern lifecycle events, `PointTransaction`, `BadgeAward`.
+- **Preserves:** users, establishments, memberships, business units, catalog infra (`Catalog*`), chat, `ai_usage_logs`, `GamificationSeason`.
+- **Cutover:** overwrites `AnalyticsHistoryCoverage.reliable_from` to the cleanup instant (lifecycle journals only). Does not insert history baselines.
+
+Lot 5 sequence: `--dry-run` then `--confirm`, then recreate the operational loop (observations → signals → plans). Dashboard **pôle** = current `responsible_business_unit`; **localisation** = `location_text` (not `OperationalUnit`). Journal / cycle coverage can stay `partial` while the selected period starts before `history_reliable_from`. Contributors stay empty until new point awards.
 
 ## Automatic checks
 

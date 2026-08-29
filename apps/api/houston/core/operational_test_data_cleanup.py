@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
+from datetime import datetime
 
 from django.db import transaction
 from django.db.models import Count
@@ -15,8 +16,17 @@ from houston.action_plans.models import (
     ActionPlanScheduleAssignee,
     ActionPlanTask,
 )
+from houston.analytics.cutover import reset_history_reliable_from
+from houston.analytics.models import (
+    OperationalPattern,
+    PatternEstablishmentSighting,
+    PatternIssueReport,
+    PatternLifecycleEvent,
+    SignalPatternAssignment,
+)
 from houston.comments.models import Comment, CommentMention
 from houston.core.dev_guards import assert_local_dev_environment
+from houston.gamification.models import BadgeAward, PointTransaction
 from houston.notifications.models import Notification
 from houston.observations.media_services import schedule_storage_files_deletion
 from houston.observations.models import Observation, ObservationMedia, ObservationProcessing
@@ -45,21 +55,23 @@ class OperationalCleanupCounts:
     signals: int = 0
     temporary_uploads: int = 0
     media_files: int = 0
+    pattern_issue_reports: int = 0
+    pattern_sightings: int = 0
+    pattern_lifecycle_events: int = 0
+    signal_pattern_assignments: int = 0
+    operational_patterns: int = 0
+    point_transactions: int = 0
+    badge_awards: int = 0
 
 
 @dataclass(frozen=True)
 class OperationalCleanupResult:
     counts: OperationalCleanupCounts
     dry_run: bool
+    history_reliable_from: datetime | None = None
 
 
-def _delete_queryset_count(queryset) -> int:
-    deleted_count, _ = queryset.delete()
-    return deleted_count
-
-
-def _delete_comments() -> int:
-    deleted_total = 0
+def _delete_comments() -> None:
     while Comment.objects.exists():
         leaf_ids = list(
             Comment.objects.annotate(reply_count=Count("replies"))
@@ -68,8 +80,22 @@ def _delete_comments() -> int:
         )
         if not leaf_ids:
             break
-        deleted_total += _delete_queryset_count(Comment.objects.filter(id__in=leaf_ids))
-    return deleted_total
+        Comment.objects.filter(id__in=leaf_ids).delete()
+
+
+def _delete_operational_patterns() -> None:
+    while OperationalPattern.objects.exists():
+        referenced_ids = OperationalPattern.objects.filter(
+            merged_into_id__isnull=False,
+        ).values_list("merged_into_id", flat=True)
+        leaf_ids = list(
+            OperationalPattern.objects.exclude(id__in=referenced_ids).values_list("id", flat=True)[
+                :1000
+            ]
+        )
+        if not leaf_ids:
+            raise RuntimeError("OperationalPattern merged_into dependencies prevent cleanup.")
+        OperationalPattern.objects.filter(id__in=leaf_ids).delete()
 
 
 def _collect_observation_media_storage_keys() -> list[str]:
@@ -90,7 +116,7 @@ def _collect_temporary_upload_storage_keys() -> list[str]:
     return storage_keys
 
 
-def _count_dry_run() -> OperationalCleanupCounts:
+def _count_named_model_rows() -> OperationalCleanupCounts:
     media_file_count = ObservationMedia.objects.count() + TemporaryUpload.objects.count()
     return OperationalCleanupCounts(
         notifications=Notification.objects.count(),
@@ -112,72 +138,74 @@ def _count_dry_run() -> OperationalCleanupCounts:
         signals=Signal.objects.count(),
         temporary_uploads=TemporaryUpload.objects.count(),
         media_files=media_file_count,
+        pattern_issue_reports=PatternIssueReport.objects.count(),
+        pattern_sightings=PatternEstablishmentSighting.objects.count(),
+        pattern_lifecycle_events=PatternLifecycleEvent.objects.count(),
+        signal_pattern_assignments=SignalPatternAssignment.objects.count(),
+        operational_patterns=OperationalPattern.objects.count(),
+        point_transactions=PointTransaction.objects.count(),
+        badge_awards=BadgeAward.objects.count(),
     )
 
 
 @transaction.atomic
-def _delete_operational_data() -> tuple[OperationalCleanupCounts, list[str]]:
+def _delete_operational_data() -> tuple[list[str], datetime]:
     storage_keys_to_delete: list[str] = []
-    counts = OperationalCleanupCounts()
 
-    counts = replace(counts, notifications=_delete_queryset_count(Notification.objects.all()))
-    counts = replace(counts, comment_mentions=_delete_queryset_count(CommentMention.objects.all()))
-    counts = replace(counts, comments=_delete_comments())
+    Notification.objects.all().delete()
+    CommentMention.objects.all().delete()
+    _delete_comments()
 
     Observation.objects.update(
         action_plan_execution_id=None,
         action_plan_execution_task_id=None,
     )
 
-    counts = replace(
-        counts,
-        signal_source_observations=_delete_queryset_count(SignalSourceObservation.objects.all()),
-        candidate_signals=_delete_queryset_count(CandidateSignal.objects.all()),
-    )
+    SignalSourceObservation.objects.all().delete()
+    CandidateSignal.objects.all().delete()
 
     storage_keys_to_delete.extend(_collect_observation_media_storage_keys())
-    counts = replace(
-        counts,
-        observation_media=_delete_queryset_count(ObservationMedia.objects.all()),
-    )
-    counts = replace(
-        counts,
-        observation_processing=_delete_queryset_count(ObservationProcessing.objects.all()),
-        observations=_delete_queryset_count(Observation.objects.all()),
-    )
+    ObservationMedia.objects.all().delete()
+    ObservationProcessing.objects.all().delete()
+    Observation.objects.all().delete()
 
-    counts = replace(
-        counts,
-        action_plan_execution_tasks=_delete_queryset_count(ActionPlanExecutionTask.objects.all()),
-        action_plan_execution_teams=_delete_queryset_count(ActionPlanExecutionTeam.objects.all()),
-        action_plan_assignees=_delete_queryset_count(ActionPlanAssignee.objects.all()),
-        action_plan_executions=_delete_queryset_count(ActionPlanExecution.objects.all()),
-        action_plan_schedule_assignees=_delete_queryset_count(
-            ActionPlanScheduleAssignee.objects.all()
-        ),
-        action_plan_schedules=_delete_queryset_count(ActionPlanSchedule.objects.all()),
-        action_plan_tasks=_delete_queryset_count(ActionPlanTask.objects.all()),
-        action_plans=_delete_queryset_count(ActionPlan.objects.all()),
-    )
+    ActionPlanExecutionTask.objects.all().delete()
+    ActionPlanExecutionTeam.objects.all().delete()
+    ActionPlanAssignee.objects.all().delete()
+    ActionPlanExecution.objects.all().delete()
+    ActionPlanScheduleAssignee.objects.all().delete()
+    ActionPlanSchedule.objects.all().delete()
+    ActionPlanTask.objects.all().delete()
+    ActionPlan.objects.all().delete()
 
-    counts = replace(counts, signals=_delete_queryset_count(Signal.objects.all()))
+    Signal.objects.all().delete()
+    SignalPatternAssignment.objects.all().delete()
+    PatternIssueReport.objects.all().delete()
+    PatternEstablishmentSighting.objects.all().delete()
+    PatternLifecycleEvent.objects.all().delete()
+    _delete_operational_patterns()
+    PointTransaction.objects.filter(reversed_transaction_id__isnull=False).delete()
+    PointTransaction.objects.all().delete()
+    BadgeAward.objects.all().delete()
 
     storage_keys_to_delete.extend(_collect_temporary_upload_storage_keys())
-    counts = replace(
-        counts,
-        temporary_uploads=_delete_queryset_count(TemporaryUpload.objects.all()),
-        media_files=len(storage_keys_to_delete),
-    )
+    TemporaryUpload.objects.all().delete()
 
-    return counts, storage_keys_to_delete
+    history_reliable_from = reset_history_reliable_from()
+    return storage_keys_to_delete, history_reliable_from
 
 
 def clean_operational_test_data(*, dry_run: bool = False) -> OperationalCleanupResult:
     assert_local_dev_environment()
 
+    counts = _count_named_model_rows()
     if dry_run:
-        return OperationalCleanupResult(counts=_count_dry_run(), dry_run=True)
+        return OperationalCleanupResult(counts=counts, dry_run=True)
 
-    counts, storage_keys_to_delete = _delete_operational_data()
+    storage_keys_to_delete, history_reliable_from = _delete_operational_data()
     schedule_storage_files_deletion(storage_keys=storage_keys_to_delete)
-    return OperationalCleanupResult(counts=counts, dry_run=False)
+    return OperationalCleanupResult(
+        counts=counts,
+        dry_run=False,
+        history_reliable_from=history_reliable_from,
+    )
