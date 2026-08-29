@@ -98,6 +98,15 @@ Calls `manage.py clean_operational_test_data` (local/dev only). Requires `--dry-
 
 Lot 5 sequence: `--dry-run` then `--confirm`, then recreate the operational loop (observations → signals → plans). Dashboard **pôle** = current `responsible_business_unit`; **localisation** = `location_text` (not `OperationalUnit`). Journal / cycle coverage can stay `partial` while the selected period starts before `history_reliable_from`. Contributors stay empty until new point awards.
 
+### Provision KONOHA dataset actors (not operational data)
+
+```bash
+make provision-konoha-dataset-actors ARGS='--dry-run'
+make provision-konoha-dataset-actors ARGS='--confirm'
+```
+
+Calls `manage.py provision_konoha_dataset_actors` (local/dev only). Requires `--dry-run` or `--confirm`. Invites the missing ANBU + AKATSUKI manager/staff seats via the product invite/reinvite/accept path (Naruto owner, unchanged). Does **not** create observations, signals, or plans.
+
 ## Automatic checks
 
 | Command | Expected |
@@ -139,7 +148,7 @@ Automated pytest uses fake provider. After env change: `make recreate-backend`.
 
 ## Makefile reference
 
-Run `make` from repo root. Full target list is in the root [`Makefile`](../../Makefile). Common targets: `build-backend`, `up-backend`, `up`, `up-build`, `down`, `migrate`, `import-catalog`, `catalog-check`, `bootstrap-dev`, `reset-dev-db`, `clean-operational-test-data`, `test`, `lint`, `schema`, `web-dev`, `web-test`, `verify`, `infra-check`.
+Run `make` from repo root. Full target list is in the root [`Makefile`](../../Makefile). Common targets: `build-backend`, `up-backend`, `up`, `up-build`, `down`, `migrate`, `import-catalog`, `catalog-check`, `bootstrap-dev`, `reset-dev-db`, `clean-operational-test-data`, `provision-konoha-dataset-actors`, `test`, `lint`, `schema`, `web-dev`, `web-test`, `verify`, `infra-check`.
 
 ## Private media
 

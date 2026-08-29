@@ -8,7 +8,8 @@
 	docs-check agent-config-check agent-config-sync \
 	import-catalog catalog-check \
 	preflight-organizational-owners repair-organizational-owners \
-	bootstrap-dev reset-dev-db assert-local-dev-db clean-operational-test-data
+	bootstrap-dev reset-dev-db assert-local-dev-db clean-operational-test-data \
+	provision-konoha-dataset-actors
 
 # -----------------------------------------------------------------------------
 # Compose / env
@@ -202,6 +203,9 @@ reset-dev-db: assert-local-dev-db
 
 clean-operational-test-data: assert-local-dev-db
 	$(API_CMD) 'cd $(API_DIR) && uv run python manage.py clean_operational_test_data $(ARGS)'
+
+provision-konoha-dataset-actors: assert-local-dev-db
+	$(API_CMD) 'cd $(API_DIR) && uv run python manage.py provision_konoha_dataset_actors $(ARGS)'
 
 # -----------------------------------------------------------------------------
 # Frontend — native Mac
