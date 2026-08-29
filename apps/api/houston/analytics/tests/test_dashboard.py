@@ -17,7 +17,6 @@ from houston.analytics.comparisons import RELATIVE_CHANGE_COMPUTED
 from houston.analytics.cutover import apply_analytics_history_cutover
 from houston.analytics.dashboard import get_analytics_dashboard
 from houston.analytics.journal import COVERAGE_COMPLETE
-from houston.core.operational_test_data_cleanup import clean_operational_test_data
 from houston.analytics.models import (
     AnalyticsHistoryCoverage,
     PatternEstablishmentSighting,
@@ -30,6 +29,7 @@ from houston.analytics.services import (
     merge_operational_patterns,
     split_operational_pattern_to_new,
 )
+from houston.core.operational_test_data_cleanup import clean_operational_test_data
 from houston.establishments.models import (
     Establishment,
     EstablishmentMembership,

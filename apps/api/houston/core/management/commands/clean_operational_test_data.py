@@ -57,7 +57,9 @@ class Command(BaseCommand):
             "Preserved: users, establishments, memberships, business_units, "
             "catalog_infra (Catalog*), chat, ai_usage_logs, gamification_seasons"
         )
-        self.stdout.write("Deleted includes: ActionPlan templates, analytics patterns, point ledger")
+        self.stdout.write(
+            "Deleted includes: ActionPlan templates, analytics patterns, point ledger"
+        )
 
         if result.history_reliable_from is not None:
             self.stdout.write(
