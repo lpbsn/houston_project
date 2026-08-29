@@ -5,15 +5,19 @@ from datetime import timedelta
 from urllib.parse import urlencode
 
 import pytest
+from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from houston.action_plans.constants import EXECUTION_STATUS_DONE
 from houston.action_plans.models import ActionPlanExecution
+from houston.action_plans.services import create_action_plan_with_execution
+from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
 from houston.analytics.comparisons import RELATIVE_CHANGE_COMPUTED
 from houston.analytics.cutover import apply_analytics_history_cutover
 from houston.analytics.dashboard import get_analytics_dashboard
 from houston.analytics.journal import COVERAGE_COMPLETE
+from houston.core.operational_test_data_cleanup import clean_operational_test_data
 from houston.analytics.models import (
     AnalyticsHistoryCoverage,
     PatternEstablishmentSighting,
@@ -42,12 +46,14 @@ from houston.signals.constants import (
 )
 from houston.signals.lifecycle_events import record_signal_lifecycle_event
 from houston.signals.models import Signal
-from houston.signals.services import merge_signal_into_resolved
+from houston.signals.services import merge_signal_into_resolved, qualify_signal_routing
 from houston.testing.auth import auth_headers, build_api_membership, login
 from houston.testing.factories import create_establishment, create_membership, create_user
 from houston.testing.taxonomy import (
     create_business_unit,
     create_membership_with_business_unit_scope,
+    create_restaurant_v3_taxonomy,
+    create_signal_v3_for_membership,
 )
 
 pytestmark = pytest.mark.django_db
@@ -1364,4 +1370,111 @@ def test_dashboard_locations_period_comparison_uses_normalized_key():
     assert item.comparison.previous_value == 1
     assert item.comparison.relative_change_status == RELATIVE_CHANGE_COMPUTED
     assert item.comparison.coverage == COVERAGE_COMPLETE
+
+
+_LOCAL_DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "houston",
+        "USER": "houston",
+        "PASSWORD": "houston",
+        "HOST": "postgres",
+        "PORT": "5432",
+    }
+}
+
+
+@override_settings(DEBUG=True, DATABASES=_LOCAL_DATABASES)
+def test_dashboard_after_operational_cleanup_reset():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    _award_points(membership=membership, occurred_at=timezone.now() - timedelta(hours=2))
+    stale = get_analytics_dashboard(membership.user, period_days=7)
+    assert stale.contributors
+
+    cleanup = clean_operational_test_data(dry_run=False)
+    reliable_from = cleanup.history_reliable_from
+    assert reliable_from is not None
+    assert not PointTransaction.objects.exists()
+
+    taxonomy = create_restaurant_v3_taxonomy(
+        membership.establishment,
+        include_restaurant_subject=True,
+    )
+    assert taxonomy.maintenance is not None
+    assert taxonomy.lighting_subject is not None
+    assert taxonomy.restaurant_subject is not None
+    survivor = create_signal_v3_for_membership(
+        membership,
+        affected_business_unit=taxonomy.restaurant,
+        responsible_business_unit=taxonomy.restaurant,
+        activity_subject=taxonomy.restaurant_subject,
+        title="Survivor after reset",
+        location_text="Chambre 12",
+    )
+    source = create_signal_v3_for_membership(
+        membership,
+        affected_business_unit=taxonomy.restaurant,
+        responsible_business_unit=taxonomy.restaurant,
+        activity_subject=taxonomy.restaurant_subject,
+        title="Merged source after reset",
+        location_text="Chambre 12",
+    )
+    qualify_signal_routing(
+        signal=survivor,
+        membership=membership,
+        patch={
+            "responsible_business_unit_id": taxonomy.maintenance.id,
+            "activity_subject_id": taxonomy.lighting_subject.id,
+        },
+    )
+    survivor.refresh_from_db()
+    _, execution = create_action_plan_with_execution(
+        establishment_id=membership.establishment_id,
+        created_by=membership,
+        pilot_business_unit_id=taxonomy.maintenance.id,
+        title="Plan after reset",
+        source_signal_id=survivor.id,
+        requires_validation=False,
+        tasks=[
+            build_task_payload(task="Task after reset", business_unit=taxonomy.maintenance)
+        ],
+        assignees=[
+            build_assignee_payload(membership=membership, business_unit=taxonomy.maintenance)
+        ],
+        use_shared_chronology=True,
+    )
+    survivor.refresh_from_db()
+    merge_signal_into_resolved(
+        source=source,
+        target=survivor,
+        resolution_audit={},
+        candidate_expected_action=None,
+    )
+    source.refresh_from_db()
+
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        establishment_id=membership.establishment_id,
+    )
+
+    assert survivor.first_action_plan_associated_at == execution.created_at
+    assert result.observation_delay_transformed.n == 1
+    assert {item.name for item in result.poles} == {"Maintenance"}
+    assert {item.name for item in result.locations} == {"Chambre 12"}
+    assert result.poles[0].count == 1
+    assert result.poles[0].comparison.coverage == COVERAGE_COMPLETE
+    assert result.locations[0].comparison.coverage == COVERAGE_COMPLETE
+    assert result.contributors == ()
+    assert source.merged_into_id == survivor.id
+
+    later = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=reliable_from + timedelta(days=15),
+        establishment_id=membership.establishment_id,
+    )
+    assert later.current_period.period_start >= reliable_from
+    assert later.observation_delay_resolved.comparison.coverage == COVERAGE_COMPLETE
+    assert later.operational_resolution_rate.coverage == COVERAGE_COMPLETE
 

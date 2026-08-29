@@ -13,8 +13,10 @@ from houston.core.operational_test_data_cleanup import (
 class Command(BaseCommand):
     help = (
         "Local/dev only: delete operational test data (comments, notifications, "
-        "observations, action plans, signals) while preserving users, establishments, "
-        "memberships, business units, and catalog infra (Catalog*). ActionPlan "
+        "observations, action plans, signals, analytics patterns/sightings, "
+        "point transactions, badge awards) while preserving users, establishments, "
+        "memberships, business units, catalog infra (Catalog*), and gamification "
+        "seasons. Resets AnalyticsHistoryCoverage.reliable_from. ActionPlan "
         "templates are removed. Requires --confirm unless --dry-run."
     )
 
@@ -53,9 +55,14 @@ class Command(BaseCommand):
         self.stdout.write("")
         self.stdout.write(
             "Preserved: users, establishments, memberships, business_units, "
-            "catalog_infra (Catalog*), chat, ai_usage_logs"
+            "catalog_infra (Catalog*), chat, ai_usage_logs, gamification_seasons"
         )
-        self.stdout.write("Deleted includes: ActionPlan templates")
+        self.stdout.write("Deleted includes: ActionPlan templates, analytics patterns, point ledger")
+
+        if result.history_reliable_from is not None:
+            self.stdout.write(
+                f"history_reliable_from: {result.history_reliable_from.isoformat()}"
+            )
 
         if result.dry_run:
             self.stdout.write(self.style.SUCCESS("Dry run complete. No database changes applied."))
@@ -84,4 +91,11 @@ def _iter_count_lines(counts: OperationalCleanupCounts):
         ("signals", counts.signals),
         ("temporary_uploads", counts.temporary_uploads),
         ("media_files", counts.media_files),
+        ("pattern_issue_reports", counts.pattern_issue_reports),
+        ("pattern_sightings", counts.pattern_sightings),
+        ("pattern_lifecycle_events", counts.pattern_lifecycle_events),
+        ("signal_pattern_assignments", counts.signal_pattern_assignments),
+        ("operational_patterns", counts.operational_patterns),
+        ("point_transactions", counts.point_transactions),
+        ("badge_awards", counts.badge_awards),
     )
