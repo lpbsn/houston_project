@@ -1,0 +1,222 @@
+{
+  "schema_version": "konoha_dataset_workflow_overrides_v1",
+  "workflows": {
+    "anbu.hotel.sg.05": {
+      "interesting": {
+        "actor_email": "anbu.hotel.mgr2@konoha.test",
+        "at": "2025-09-14T18:30:00+02:00"
+      }
+    },
+    "anbu.hotel.sg.20": {
+      "interesting": {
+        "actor_email": "anbu.hotel.mgr1@konoha.test",
+        "at": "2026-02-22T10:00:00+01:00"
+      }
+    },
+    "anbu.coworking.sg.11": {
+      "interesting": {
+        "actor_email": "anbu.coworking.mgr1@konoha.test",
+        "at": "2026-01-29T12:00:00+01:00"
+      }
+    },
+    "anbu.maintenance.sg.02": {
+      "interesting": {
+        "actor_email": "anbu.maintenance.mgr1@konoha.test",
+        "at": "2025-09-25T16:00:00+02:00"
+      }
+    },
+    "anbu.maintenance.sg.14": {
+      "interesting": {
+        "actor_email": "anbu.maintenance.mgr2@konoha.test",
+        "at": "2026-07-17T14:00:00+02:00"
+      }
+    },
+    "akatsuki.commerce.sg.13": {
+      "interesting": {
+        "actor_email": "akatsuki.commerce.mgr1@konoha.test",
+        "at": "2026-06-30T16:00:00+02:00"
+      }
+    },
+    "akatsuki.emea.sg.09": {
+      "interesting": {
+        "actor_email": "akatsuki.emea.mgr2@konoha.test",
+        "at": "2026-05-16T16:00:00+02:00"
+      }
+    },
+    "akatsuki.maintenance.sg.06": {
+      "interesting": {
+        "actor_email": "akatsuki.maintenance.mgr2@konoha.test",
+        "at": "2026-04-11T12:00:00+02:00"
+      }
+    },
+    "anbu.coworking.sg.10": {
+      "qualify": {
+        "at": "2026-01-13T11:00:00+01:00",
+        "actor_email": "anbu.coworking.mgr1@konoha.test",
+        "initial_candidate": {
+          "title": "Isolation phonique salle vitrée",
+          "structured_summary": "Les conversations de la salle voisine passent porte fermée, joint décollé.",
+          "issue_focus": "isolation phonique salle vitree faible",
+          "canonical_object": "joint de porte vitrée",
+          "signal_kind": "actionable",
+          "expected_action": "repair",
+          "information_type": null,
+          "affected_catalog_bu_key": "coworking",
+          "affected_pole_specific_name": "Coworking",
+          "responsible_catalog_bu_key": "coworking",
+          "responsible_pole_specific_name": "Coworking",
+          "activity_subject_catalog_key": null,
+          "operational_unit_key": null,
+          "location_text": "Zone calme / salle vitrée"
+        }
+      }
+    },
+    "anbu.maintenance.sg.05": {
+      "qualify": {
+        "at": "2025-12-04T16:00:00+01:00",
+        "actor_email": "anbu.maintenance.mgr1@konoha.test",
+        "initial_candidate": {
+          "title": "Compte-rendu ascenseur manquant",
+          "structured_summary": "Aucun compte-rendu reçu après la visite préventive ascenseur.",
+          "issue_focus": "compte-rendu visite ascenseur manquant",
+          "canonical_object": "dossier prestataire",
+          "signal_kind": "actionable",
+          "expected_action": "coordinate",
+          "information_type": null,
+          "affected_catalog_bu_key": "maintenance",
+          "affected_pole_specific_name": "Maintenance",
+          "responsible_catalog_bu_key": "maintenance",
+          "responsible_pole_specific_name": "Maintenance",
+          "activity_subject_catalog_key": null,
+          "operational_unit_key": null,
+          "location_text": "Suivi prestataires"
+        }
+      }
+    },
+    "akatsuki.emea.sg.05": {
+      "qualify": {
+        "at": "2025-12-18T10:05:00+01:00",
+        "actor_email": "akatsuki.emea.mgr2@konoha.test",
+        "initial_candidate": {
+          "title": "Zone loisirs non nettoyée à l'ouverture",
+          "structured_summary": "Le prestataire n'a pas traité la zone prévue avant ouverture.",
+          "issue_focus": "zone loisirs non nettoyee ouverture",
+          "canonical_object": "prestation nettoyage",
+          "signal_kind": "actionable",
+          "expected_action": "coordinate",
+          "information_type": null,
+          "affected_catalog_bu_key": "loisirs",
+          "affected_pole_specific_name": "EMEA",
+          "responsible_catalog_bu_key": "loisirs",
+          "responsible_pole_specific_name": "EMEA",
+          "activity_subject_catalog_key": null,
+          "operational_unit_key": null,
+          "location_text": "Espace loisirs principal"
+        }
+      }
+    },
+    "akatsuki.evenements.sg.03": {
+      "qualify": {
+        "at": "2025-12-18T13:40:00+01:00",
+        "actor_email": "akatsuki.evenements.mgr1@konoha.test",
+        "initial_candidate": {
+          "title": "Panneau d'entrée inversé",
+          "structured_summary": "Le panneau directionnel indique l'entrée opposée au brief final.",
+          "issue_focus": "panneau entree evenement inverse",
+          "canonical_object": "panneau directionnel",
+          "signal_kind": "actionable",
+          "expected_action": "inform",
+          "information_type": null,
+          "affected_catalog_bu_key": "evenements_privatisations",
+          "affected_pole_specific_name": "Événements & privatisations",
+          "responsible_catalog_bu_key": "evenements_privatisations",
+          "responsible_pole_specific_name": "Événements & privatisations",
+          "activity_subject_catalog_key": null,
+          "operational_unit_key": null,
+          "location_text": "Accueil événement"
+        }
+      }
+    },
+    "anbu.ishiraku.sg.17": {
+      "qualify": {
+        "at": "2026-04-11T14:40:00+02:00",
+        "actor_email": "ishiraku@konoha.com",
+        "initial_candidate": {
+          "title": "Prix vitrine obsolète",
+          "structured_summary": "Le support extérieur présente encore l'ancien prix d'une formule alors que carte et caisse sont à jour.",
+          "issue_focus": "prix formule vitrine obsolete",
+          "canonical_object": "support menu extérieur",
+          "signal_kind": "actionable",
+          "expected_action": "inform",
+          "information_type": null,
+          "affected_catalog_bu_key": "restaurant",
+          "affected_pole_specific_name": "Ishiraku Ramen",
+          "responsible_catalog_bu_key": "restaurant",
+          "responsible_pole_specific_name": "Ishiraku Ramen",
+          "activity_subject_catalog_key": "restaurant__menu",
+          "operational_unit_key": null,
+          "location_text": "Vitrine / menu extérieur"
+        }
+      }
+    },
+    "akatsuki.commerce.sg.08": {
+      "qualify": {
+        "at": "2025-12-12T14:55:00+01:00",
+        "actor_email": "akatsuki.commerce.mgr1@konoha.test",
+        "initial_candidate": {
+          "title": "Tablette rayon affaissée",
+          "structured_summary": "Une tablette s'affaisse côté droit, fixation arrière avec du jeu.",
+          "issue_focus": "tablette rayon affaissee droite",
+          "canonical_object": "tablette d'étagère",
+          "signal_kind": "actionable",
+          "expected_action": "repair",
+          "information_type": null,
+          "affected_catalog_bu_key": "commerce",
+          "affected_pole_specific_name": "Commerce",
+          "responsible_catalog_bu_key": "commerce",
+          "responsible_pole_specific_name": "Commerce",
+          "activity_subject_catalog_key": "commerce__stock",
+          "operational_unit_key": null,
+          "location_text": "Rayon central"
+        }
+      }
+    },
+    "anbu.hotel.sg.21": {
+      "resolution_request": {
+        "requested_at": "2026-03-05T09:00:00+01:00",
+        "requester_email": "anbu.hotel.staff1@konoha.test",
+        "reviewed_at": "2026-03-05T11:00:00+01:00",
+        "reviewer_email": "anbu.hotel.mgr1@konoha.test",
+        "decision": "approve"
+      }
+    },
+    "akatsuki.emea.sg.03": {
+      "resolution_request": {
+        "requested_at": "2025-10-17T16:00:00+02:00",
+        "requester_email": "akatsuki.emea.staff2@konoha.test",
+        "reviewed_at": "2025-10-18T12:00:00+02:00",
+        "reviewer_email": "akatsuki.emea.mgr1@konoha.test",
+        "decision": "approve"
+      }
+    },
+    "anbu.communication.sg.02": {
+      "resolution_request": {
+        "requested_at": "2025-10-19T10:00:00+02:00",
+        "requester_email": "tobirama@konoha.com",
+        "reviewed_at": "2025-10-20T11:00:00+02:00",
+        "reviewer_email": "kakashi@konoha.com",
+        "decision": "approve"
+      }
+    },
+    "anbu.ishiraku.sg.08": {
+      "resolution_request": {
+        "requested_at": "2025-11-15T11:00:00+01:00",
+        "requester_email": "anbu.ishiraku.staff3@konoha.test",
+        "reviewed_at": "2025-11-15T13:00:00+01:00",
+        "reviewer_email": "anbu.ishiraku.mgr2@konoha.test",
+        "decision": "reject",
+        "resolve_actor_email": "ishiraku@konoha.com"
+      }
+    }
+  }
+}

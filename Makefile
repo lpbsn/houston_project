@@ -9,7 +9,8 @@
 	import-catalog catalog-check \
 	preflight-organizational-owners repair-organizational-owners \
 	bootstrap-dev reset-dev-db assert-local-dev-db clean-operational-test-data \
-	provision-konoha-dataset-actors
+	provision-konoha-dataset-actors \
+	provision-konoha-dataset-replay
 
 # -----------------------------------------------------------------------------
 # Compose / env
@@ -206,6 +207,9 @@ clean-operational-test-data: assert-local-dev-db
 
 provision-konoha-dataset-actors: assert-local-dev-db
 	$(API_CMD) 'cd $(API_DIR) && uv run python manage.py provision_konoha_dataset_actors $(ARGS)'
+
+provision-konoha-dataset-replay: assert-local-dev-db
+	$(API_CMD) 'cd $(API_DIR) && uv run python manage.py replay_konoha_dataset_observations $(ARGS)'
 
 # -----------------------------------------------------------------------------
 # Frontend — native Mac
