@@ -98,6 +98,42 @@ Calls `manage.py clean_operational_test_data` (local/dev only). Requires `--dry-
 
 Lot 5 sequence: `--dry-run` then `--confirm`, then recreate the operational loop (observations → signals → plans). Dashboard **pôle** = current `responsible_business_unit`; **localisation** = `location_text` (not `OperationalUnit`). Journal / cycle coverage can stay `partial` while the selected period starts before `history_reliable_from`. Contributors stay empty until new point awards.
 
+### Provision KONOHA dataset actors (not operational data)
+
+```bash
+make provision-konoha-dataset-actors ARGS='--dry-run'
+make provision-konoha-dataset-actors ARGS='--confirm'
+```
+
+Calls `manage.py provision_konoha_dataset_actors` (local/dev only). Requires `--dry-run` or `--confirm`. Invites the missing ANBU + AKATSUKI manager/staff seats via the product invite/reinvite/accept path (Naruto owner, unchanged). Does **not** create observations, signals, or plans.
+
+The versioned observation corpus lives in `apps/api/houston/establishments/data/konoha_anbu_observations.json` and `konoha_akatsuki_observations.json` (`schema_version` `konoha_dataset_observations_v1`). Human scenario tables are in [`docs/datasets/konoha/`](../datasets/konoha/). The JSON is the machine source of truth. Static validation is `validate_konoha_dataset_observations()` — it does **not** call `submit_observation`, write Signals, or log `raw_text`. Instance `routing_key` values are not stored; replay remaps them from catalogue keys + pole `specific_name`.
+
+### KONOHA dataset replay
+
+```bash
+make clean-operational-test-data
+make provision-konoha-dataset-actors ARGS='--confirm'
+make provision-konoha-dataset-replay ARGS='--dry-run'
+make provision-konoha-dataset-replay ARGS='--confirm'
+make provision-konoha-dataset-replay ARGS='--confirm --resume'
+```
+
+Calls `manage.py replay_konoha_dataset_observations` (local/dev only). Requires `--dry-run` or `--confirm`. Replays the corpus through `submit_observation` + `run_observation_pipeline` with deterministic candidates, then product writers for qualification, resolution requests, `mark_signal_interesting`, ActionPlan cycles (`create_action_plan_with_execution` with `end_at` / `deadline_at`), execution transitions, or `resolve_signal` (manual after RR reject, otherwise Naruto owner). Comments/Mentions are out of the KONOHA replay. Do **not** write `AnalyticsHistoryCoverage.reliable_from`. A first pass wipes ANBU/AKATSUKI `GamificationSeason` rows and their point ledger so historical transitions can open months in order; `--resume` skips an event only when that writer’s fingerprint is already persisted at the same instant. A full MATCH resume is a no-op on KONOHA seasons and the point ledger. If `--resume` still has remaining events **and** KONOHA seasons exist after that remaining month, replay fail-fasts (`KonohaDatasetReplayError`) — run operational clean then `--confirm`; it does not prune or rebuild the ledger. `make clean-operational-test-data` is **required** before the first `--confirm` after switching from an observations-only replay: leftover manual resolves are incompatible with `linked_plan` groups. The command does not wipe operational observations/signals itself.
+
+After a validated `clean` + `--confirm` + `--resume`, restore Analytics coverage to the corpus start **outside** replay:
+
+```python
+from houston.analytics.cutover import reset_history_reliable_from
+from houston.analytics.models import AnalyticsHistoryCoverage
+from houston.establishments.konoha_dataset_observations import OCCURRED_AT_MIN
+
+reset_history_reliable_from(now=OCCURRED_AT_MIN)
+assert AnalyticsHistoryCoverage.objects.get().reliable_from == OCCURRED_AT_MIN
+```
+
+Clean still resets `reliable_from` to `timezone.now()`; replay never writes it.
+
 ## Automatic checks
 
 | Command | Expected |
@@ -139,7 +175,7 @@ Automated pytest uses fake provider. After env change: `make recreate-backend`.
 
 ## Makefile reference
 
-Run `make` from repo root. Full target list is in the root [`Makefile`](../../Makefile). Common targets: `build-backend`, `up-backend`, `up`, `up-build`, `down`, `migrate`, `import-catalog`, `catalog-check`, `bootstrap-dev`, `reset-dev-db`, `clean-operational-test-data`, `test`, `lint`, `schema`, `web-dev`, `web-test`, `verify`, `infra-check`.
+Run `make` from repo root. Full target list is in the root [`Makefile`](../../Makefile). Common targets: `build-backend`, `up-backend`, `up`, `up-build`, `down`, `migrate`, `import-catalog`, `catalog-check`, `bootstrap-dev`, `reset-dev-db`, `clean-operational-test-data`, `provision-konoha-dataset-actors`, `provision-konoha-dataset-replay`, `test`, `lint`, `schema`, `web-dev`, `web-test`, `verify`, `infra-check`.
 
 ## Private media
 

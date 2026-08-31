@@ -12,9 +12,19 @@ const COVERAGE_SEVERITY: Record<DashboardCoverage, number> = {
   not_comparable: 2,
 }
 
-export const DASHBOARD_VS_PREVIOUS_PERIOD = 'VS PÉRIODE PRÉCÉDENTE'
-export const DASHBOARD_INSUFFICIENT_P90_COPY =
-  'Pas assez de cas pour estimer les délais longs'
+const DASHBOARD_LOW_VOLUME_DEADLINE_N = 5
+
+export function formatDashboardPeriodSubtitle(days: number): string {
+  return `${days} derniers jours · jusqu’à maintenant · comparé aux ${days} jours précédents`
+}
+
+export function formatAbsentPreviousPeriodLabel(days: number): string {
+  return `Absent des ${days} jours précédents`
+}
+
+export function formatVsPreviousPeriod(days: number): string {
+  return `vs ${days} j d’avant`
+}
 
 export function canShowDashboardDelta(
   comparison: Pick<AnalyticsDashboardMetricComparison, 'coverage' | 'relative_change_status'>,
@@ -69,7 +79,10 @@ export function formatDashboardPercentDelta(value: number | null): string | null
   return `${formatted} %`
 }
 
-export function formatDashboardPointsDelta(value: number | null): string | null {
+export function formatDashboardPointsDelta(
+  value: number | null,
+  days: number,
+): string | null {
   if (value == null) {
     return null
   }
@@ -77,13 +90,14 @@ export function formatDashboardPointsDelta(value: number | null): string | null 
   const formatted = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(
     Math.abs(points),
   )
+  const vs = formatVsPreviousPeriod(days)
   if (points > 0) {
-    return `+${formatted} pts`
+    return `+${formatted} points ${vs}`
   }
   if (points < 0) {
-    return `-${formatted} pts`
+    return `-${formatted} points ${vs}`
   }
-  return `${formatted} pts`
+  return `${formatted} points ${vs}`
 }
 
 export function formatDashboardCountDelta(value: number | null): string | null {
@@ -203,40 +217,65 @@ export function dashboardCoverageBannerMessage(options: {
   }
   const date = formatDashboardHistoryDate(options.historyReliableFrom)
   if (options.hasDisplayableDelta) {
-    return `Pas encore assez d’historique pour comparer certaines évolutions. Historique fiable depuis le ${date}.`
+    return `Certaines comparaisons ne sont pas encore disponibles. Données comparables depuis le ${date}.`
   }
-  return `Pas encore assez d’historique pour comparer à la période précédente. Historique fiable à partir du ${date}.`
-}
-
-export function dashboardPreviousPeriodFooter(
-  comparisons: Array<
-    Pick<AnalyticsDashboardMetricComparison, 'coverage' | 'relative_change_status'>
-  >,
-): string | undefined {
-  return comparisons.some(canShowDashboardDelta) ? DASHBOARD_VS_PREVIOUS_PERIOD : undefined
+  return `Comparaison indisponible pour cette période. Données comparables depuis le ${date}.`
 }
 
 export function formatMeasuredSample(
   n: number,
   unit: 'observation' | 'plan' = 'observation',
 ): string {
-  const formatted = new Intl.NumberFormat('fr-FR').format(n)
   if (unit === 'plan') {
-    return n === 1 ? '1 plan mesuré' : `${formatted} plans mesurés`
+    return n === 1 ? 'sur 1 plan' : `sur ${new Intl.NumberFormat('fr-FR').format(n)} plans`
   }
-  return n === 1 ? '1 observation mesurée' : `${formatted} observations mesurées`
+  return n === 1
+    ? 'sur 1 observation'
+    : `sur ${new Intl.NumberFormat('fr-FR').format(n)} observations`
 }
 
 export function medianDurationHint(durationLabel: string): string {
-  return `La moitié des cas en ${durationLabel} ou moins`
+  return `La moitié des cas en ${durationLabel} ou moins.`
+}
+
+export function longTailDurationHint(durationLabel: string): string {
+  return `9 sur 10 en ${durationLabel} ou moins`
 }
 
 export function observationTransformDelayHint(): string {
-  return 'Délai jusqu’à la première association à un plan, indépendant des délais de résolution ou d’annulation'
+  return 'Jusqu’au premier plan. La même observation peut ensuite être résolue ou annulée.'
+}
+
+export function observationCancellationDelayHint(): string {
+  return 'Temps jusqu’à l’annulation. Ce n’est pas un jugement de qualité.'
 }
 
 export function canonicalRoutingVolumeHint(): string {
-  return 'Volumes selon la classification actuelle : une requalification déplace aussi les périodes passées'
+  return 'Si on reclasse un sujet, il change aussi de pôle sur les périodes passées.'
+}
+
+export function newPatternsVolumeTooltip(): string {
+  return 'Le volume compte depuis la première fois que ce sujet a été vu, pas seulement sur la période affichée.'
+}
+
+export function resolutionStripTooltip(): string {
+  return 'Parmi les observations déjà résolues sur la période, pas le temps d’attente actuel.'
+}
+
+export function planDeadlinesStripTooltip(): string {
+  return 'Uniquement les plans déjà dus ou déjà terminés. Ceux encore dans les délais ne sont pas comptés.'
+}
+
+export function planDeadlinesDenominatorCopy(): string {
+  return 'Parmi les plans déjà dus ou déjà terminés. Les plans encore dans les délais ne sont pas comptés.'
+}
+
+export function operationalResolutionRateHint(): string {
+  return 'Des sujets à traiter sur la période, ceux qui sont résolus maintenant.'
+}
+
+export function reopeningsHint(): string {
+  return 'Résolues puis rouvertes sur la période.'
 }
 
 export function emptyObservationDelayMessage(
@@ -252,12 +291,12 @@ export function emptyObservationDelayMessage(
       kind === 'canceled' ? 'observation annulée' : 'observation résolue',
       kind === 'canceled' ? 'observations annulées' : 'observations résolues',
     )
-    return `${stock} dans ce périmètre, sans date historisée. Elles ne peuvent pas entrer dans cette métrique.`
+    return `${stock}, sans date fiable.`
   }
   if (kind === 'canceled') {
-    return 'Aucune annulation mesurée sur la période'
+    return 'Aucune annulation sur la période'
   }
-  return 'Aucune résolution mesurée sur la période'
+  return 'Aucune résolution sur la période'
 }
 
 export function emptyPlanDelayMessage(
@@ -268,40 +307,37 @@ export function emptyPlanDelayMessage(
   const unstarted = options.unstartedInScope ?? 0
   if (kind === 'canceled' && undatable > 0) {
     const stock = formatCountedNoun(undatable, 'plan annulé', 'plans annulés')
-    return `${stock} dans ce périmètre, sans date historisée. Ils ne peuvent pas entrer dans cette métrique.`
+    return `${stock}, sans date fiable.`
   }
   if (kind === 'canceled' && unstarted > 0) {
     return 'Des plans ont été annulés avant d’être démarrés ; ils n’entrent pas dans ce délai.'
   }
   if (kind === 'resolved' && undatable > 0) {
     const stock = formatCountedNoun(undatable, 'plan résolu', 'plans résolus')
-    return `${stock} dans ce périmètre, sans date historisée. Ils ne peuvent pas entrer dans cette métrique.`
+    return `${stock}, sans date fiable.`
   }
   if (kind === 'validated' && undatable > 0) {
     return emptyPlanDelayMessage('resolved', { undatableInScope: undatable })
   }
   if (kind === 'canceled') {
-    return 'Aucune annulation de plan mesurée sur la période'
+    return 'Aucune annulation de plan sur la période'
   }
   if (kind === 'resolved') {
-    return 'Aucune résolution de plan mesurée sur la période'
+    return 'Aucune résolution de plan sur la période'
   }
   return 'Aucune validation sur la période'
 }
 
-export function delayExclusionNote(
-  undatableInScope: number,
-  unit: 'observation' | 'plan',
-): string | null {
+export function delayExclusionNote(undatableInScope: number): string | null {
   if (undatableInScope <= 0) {
     return null
   }
   const stock = formatCountedNoun(
     undatableInScope,
-    unit === 'plan' ? 'plan non datable exclu' : 'observation non datable exclue',
-    unit === 'plan' ? 'plans non datables exclus' : 'observations non datables exclues',
+    'dossier sans date fiable, non inclus',
+    'dossiers sans date fiable, non inclus',
   )
-  return `${stock} de ce périmètre.`
+  return stock
 }
 
 export function closureResolvedShareHint(options: {
@@ -312,27 +348,32 @@ export function closureResolvedShareHint(options: {
 }): string {
   const undatable = options.undatableResolved + options.undatableCanceled
   if (undatable > 0) {
-    const excluded = formatCountedNoun(
-      undatable,
-      'clôture non datable est exclue',
-      'clôtures non datables sont exclues',
-    )
+    const excluded = delayExclusionNote(undatable) ?? ''
     const measured = options.measuredResolvedCount + options.measuredCanceledCount
     if (measured === 0) {
-      return `${excluded} ; aucune clôture mesurable sur la période.`
+      return `${excluded} ; aucun dossier fermé mesurable sur la période.`
     }
-    return `${options.measuredResolvedCount} résolution${options.measuredResolvedCount === 1 ? '' : 's'} et ${options.measuredCanceledCount} annulation${options.measuredCanceledCount === 1 ? '' : 's'} mesurées. ${excluded}.`
+    return `Parmi les dossiers fermés sur la période. Le stock ouvert n’entre pas. ${excluded}.`
   }
-  return 'des clôtures mesurées sont des résolutions plutôt que des annulations'
+  return 'Parmi les dossiers fermés sur la période. Le stock ouvert n’entre pas.'
 }
 
-const DASHBOARD_LOW_VOLUME_DEADLINE_N = 5
-
-export function formatDashboardDurationDelta(seconds: number | null): string | null {
+export function formatDashboardDurationDelta(
+  seconds: number | null,
+  days: number,
+): string | null {
   if (seconds == null) {
     return null
   }
-  return formatDashboardDuration(Math.abs(seconds))
+  const duration = formatDashboardDuration(Math.abs(seconds))
+  const vs = formatVsPreviousPeriod(days)
+  if (seconds > 0) {
+    return `+${duration} ${vs}`
+  }
+  if (seconds < 0) {
+    return `-${duration} ${vs}`
+  }
+  return `${duration} ${vs}`
 }
 
 export function shouldShowDashboardDelayMean(n: number): boolean {
@@ -351,20 +392,20 @@ export function formatCountedNoun(count: number, singular: string, plural: strin
   return `${formatted} ${count === 1 ? singular : plural}`
 }
 
+export function formatDashboardObservationCount(count: number): string {
+  return formatCountedNoun(count, 'observation', 'observations')
+}
+
 export function formatNewPatternVolume(options: {
   isCross: boolean
   observationCount: number
   establishmentCount: number | null
 }): string {
-  const observations = formatCountedNoun(
-    options.observationCount,
-    'observation',
-    'observations',
-  )
+  const observations = formatDashboardObservationCount(options.observationCount)
   if (!options.isCross) {
     return options.observationCount === 1
-      ? '1 observation depuis sa détection'
-      : `${observations} depuis sa détection`
+      ? '1 observation depuis ce premier signalement'
+      : `${observations} depuis ce premier signalement`
   }
   const establishments = formatCountedNoun(
     options.establishmentCount ?? 0,
@@ -424,13 +465,50 @@ export function formatLateDeadlineHero(options: {
   if (options.n > 0 && options.n < DASHBOARD_LOW_VOLUME_DEADLINE_N) {
     return formatLateCountOnMeasured(options.lateCount, options.n)
   }
-  return `${formatDashboardPercent(options.lateShare)} des plans sont en retard`
+  return `${formatDashboardPercent(options.lateShare)} en retard`
 }
 
 export function formatLateCountOnMeasured(lateCount: number, n: number): string {
-  const lateLabel = formatCountedNoun(lateCount, 'plan en retard', 'plans en retard')
-  const measured = n === 1 ? '1 mesuré' : `${new Intl.NumberFormat('fr-FR').format(n)} mesurés`
-  return `${lateLabel} sur ${measured}`
+  if (n > 0 && n < DASHBOARD_LOW_VOLUME_DEADLINE_N) {
+    return `${formatCountedNoun(lateCount, 'en retard', 'en retard')} sur ${
+      n === 1 ? '1 concerné' : `${new Intl.NumberFormat('fr-FR').format(n)} concernés`
+    }`
+  }
+  return `${new Intl.NumberFormat('fr-FR').format(lateCount)} sur ${new Intl.NumberFormat(
+    'fr-FR',
+  ).format(n)} déjà dus ou terminés`
+}
+
+export function formatAgingBucketLabel(bucket: { key: string; label: string }): string {
+  const token = `${bucket.key} ${bucket.label}`
+  if (
+    bucket.key === 'lt_3d' ||
+    bucket.key === '< 3 j' ||
+    bucket.label === '< 3 j' ||
+    token.includes('< 3')
+  ) {
+    return 'Moins de 3 jours'
+  }
+  if (
+    bucket.key === '3–7 j' ||
+    bucket.label === '3–7 j' ||
+    token.includes('3–7') ||
+    token.includes('3-7')
+  ) {
+    return '3 à 7 jours'
+  }
+  if (
+    bucket.key === '8–15 j' ||
+    bucket.label === '8–15 j' ||
+    token.includes('8–15') ||
+    token.includes('8-15')
+  ) {
+    return '8 à 15 jours'
+  }
+  if (isOver15dAgingBucket(bucket)) {
+    return 'Plus de 15 jours'
+  }
+  return bucket.label
 }
 
 export function isOver15dAgingBucket(bucket: { key: string; label: string }): boolean {

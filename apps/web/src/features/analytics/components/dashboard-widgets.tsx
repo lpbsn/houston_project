@@ -15,29 +15,39 @@ import {
   contributorInitials,
   dashboardNewBadgeTone,
   dashboardNewLabel,
-  dashboardPreviousPeriodFooter,
   dashboardTrendTone,
   emptyObservationDelayMessage,
   emptyPlanDelayMessage,
+  observationCancellationDelayHint,
   observationTransformDelayHint,
   canonicalRoutingVolumeHint,
   closureResolvedShareHint,
   delayExclusionNote,
+  formatAgingBucketLabel,
   formatContributorEstablishments,
   formatContributorPoles,
   formatCountedNoun,
   formatDashboardCountDelta,
   formatDashboardDuration,
   formatDashboardDurationDelta,
+  formatDashboardObservationCount,
   formatDashboardPercent,
   formatDashboardPercentDelta,
   formatDashboardPointsDelta,
+  formatAbsentPreviousPeriodLabel,
   formatLateCountOnMeasured,
   formatMeasuredSample,
   formatNewPatternVolume,
   formatRelativeDaysAgo,
   isOver15dAgingBucket,
+  longTailDurationHint,
   medianDurationHint,
+  newPatternsVolumeTooltip,
+  operationalResolutionRateHint,
+  planDeadlinesDenominatorCopy,
+  planDeadlinesStripTooltip,
+  reopeningsHint,
+  resolutionStripTooltip,
   shouldShowDashboardDelayMean,
   shouldShowDashboardDelayP90,
   type DashboardTrendSense,
@@ -47,14 +57,16 @@ import { cn } from '@/lib/utils'
 
 function DashboardCard({
   title,
+  subtitle,
   children,
-  footer,
   className,
+  titleTooltip,
 }: {
   title: string
+  subtitle?: string
   children: ReactNode
-  footer?: string
   className?: string
+  titleTooltip?: string
 }) {
   return (
     <section
@@ -62,26 +74,38 @@ function DashboardCard({
         'flex h-auto min-w-0 max-w-full flex-col rounded-2xl border border-[#E8E6DF] bg-white p-5 lg:p-6',
         className,
       )}
+      title={titleTooltip}
     >
       <h2 className="text-base font-semibold tracking-tight text-[#1a1a1a]">{title}</h2>
+      {subtitle ? <p className="mt-1 text-[12px] text-[#7D7B75]">{subtitle}</p> : null}
       <div className="mt-4 min-w-0">{children}</div>
-      {footer ? (
-        <p className="mt-4 text-[10px] font-medium uppercase tracking-[0.16em] text-[#A8A59E]">
-          {footer}
-        </p>
-      ) : null}
     </section>
   )
 }
 
-function TrendBadge({
+function isDisplayedTrendFlat(
+  delta: number | null,
+  format: 'percent' | 'points' | 'count' | 'duration',
+): boolean {
+  if (delta == null) {
+    return false
+  }
+  if (format === 'percent' || format === 'points') {
+    return Math.round(Math.abs(delta) * 100) === 0
+  }
+  return delta === 0
+}
+
+export function TrendBadge({
   comparison,
   sense,
   format = 'percent',
+  periodDays,
 }: {
   comparison: AnalyticsDashboardMetricComparison
   sense: DashboardTrendSense
   format?: 'percent' | 'points' | 'count' | 'duration'
+  periodDays: number
 }) {
   if (!canShowDashboardDelta(comparison)) {
     return null
@@ -95,7 +119,7 @@ function TrendBadge({
           newTone === 'neutral' ? 'text-[#7D7B75]' : 'text-[#1F7A4D]',
         )}
       >
-        Nouveau
+        {formatAbsentPreviousPeriodLabel(periodDays)}
       </span>
     )
   }
@@ -105,13 +129,13 @@ function TrendBadge({
       : comparison.relative_change
   const label =
     format === 'points'
-      ? formatDashboardPointsDelta(comparison.relative_change)
+      ? formatDashboardPointsDelta(comparison.relative_change, periodDays)
       : format === 'count'
         ? formatDashboardCountDelta(comparison.absolute_delta)
         : format === 'duration'
-          ? formatDashboardDurationDelta(comparison.absolute_delta)
+          ? formatDashboardDurationDelta(comparison.absolute_delta, periodDays)
           : formatDashboardPercentDelta(comparison.relative_change)
-  if (!label) {
+  if (!label || isDisplayedTrendFlat(delta, format)) {
     return null
   }
   const tone = dashboardTrendTone(delta, sense)
@@ -142,7 +166,13 @@ type ShareSegment = {
   emphasize?: boolean
 }
 
-function StackedShareBar({ segments }: { segments: ShareSegment[] }) {
+function StackedShareBar({
+  segments,
+  periodDays,
+}: {
+  segments: ShareSegment[]
+  periodDays: number
+}) {
   return (
     <div className="min-w-0">
       <div className="flex h-3.5 min-w-0 overflow-hidden rounded-full bg-[#F0EFE9]">
@@ -174,7 +204,12 @@ function StackedShareBar({ segments }: { segments: ShareSegment[] }) {
               </span>
             </span>
             {segment.comparison && segment.sense ? (
-              <TrendBadge comparison={segment.comparison} sense={segment.sense} format="points" />
+              <TrendBadge
+                comparison={segment.comparison}
+                sense={segment.sense}
+                format="points"
+                periodDays={periodDays}
+              />
             ) : null}
           </li>
         ))}
@@ -189,14 +224,18 @@ function DurationHero({
   sense,
   emptyLabel,
   hint,
+  extraHint,
   unit = 'observation',
+  periodDays,
 }: {
   label: string
   stats: AnalyticsDelayStats
   sense: DashboardTrendSense
   emptyLabel: string
   hint?: string
+  extraHint?: string
   unit?: 'observation' | 'plan'
+  periodDays: number
 }) {
   if (stats.n === 0 || stats.median_seconds == null) {
     return (
@@ -204,6 +243,7 @@ function DurationHero({
         <p className="text-[12px] font-medium text-[#7D7B75]">{label}</p>
         <p className="mt-1 text-sm text-[#7D7B75]">{emptyLabel}</p>
         {hint ? <p className="mt-2 text-[12px] text-[#7D7B75]">{hint}</p> : null}
+        {extraHint ? <p className="mt-2 text-[12px] text-[#7D7B75]">{extraHint}</p> : null}
       </div>
     )
   }
@@ -213,34 +253,28 @@ function DurationHero({
   const showP90 =
     shouldShowDashboardDelayP90(stats.n) && stats.p90_seconds != null
   const sample = formatMeasuredSample(stats.n, unit)
-  const exclusion = delayExclusionNote(stats.undatable_in_scope, unit)
+  const exclusion = delayExclusionNote(stats.undatable_in_scope)
 
   return (
-    <div
-      className="min-w-0"
-      title={[
-        medianDurationHint(duration),
-        showMean ? `Moyenne ${formatDashboardDuration(stats.mean_seconds)}` : null,
-        showP90 ? `P90 ${formatDashboardDuration(stats.p90_seconds)}` : null,
-        sample,
-      ]
-        .filter(Boolean)
-        .join(' · ')}
-    >
+    <div className="min-w-0">
       <p className="text-[12px] font-medium text-[#7D7B75]">{label}</p>
       <p className="mt-1 flex min-w-0 flex-wrap items-baseline gap-2 text-[1.75rem] font-semibold leading-none tabular-nums tracking-tight text-[#1a1a1a] lg:text-[2rem]">
         {duration}
-        <TrendBadge comparison={stats.comparison} sense={sense} format="duration" />
+        <TrendBadge
+          comparison={stats.comparison}
+          sense={sense}
+          format="duration"
+          periodDays={periodDays}
+        />
       </p>
       <p className="mt-2 min-w-0 break-words text-[12px] text-[#7D7B75]">
         {[
           stats.n === 1
-            ? sample
+            ? `médiane · ${sample}`
             : [
-                'Médiane',
-                showMean ? `moy. ${formatDashboardDuration(stats.mean_seconds)}` : null,
-                showP90 ? `P90 ${formatDashboardDuration(stats.p90_seconds)}` : null,
-                sample,
+                `médiane · ${sample}`,
+                showMean ? `en moyenne ${formatDashboardDuration(stats.mean_seconds)}` : null,
+                showP90 ? longTailDurationHint(formatDashboardDuration(stats.p90_seconds)) : null,
               ]
                 .filter(Boolean)
                 .join(' · '),
@@ -250,6 +284,7 @@ function DurationHero({
           .join(' · ')}
       </p>
       {hint ? <p className="mt-2 text-[12px] text-[#7D7B75]">{hint}</p> : null}
+      {extraHint ? <p className="mt-2 text-[12px] text-[#7D7B75]">{extraHint}</p> : null}
     </div>
   )
 }
@@ -260,12 +295,14 @@ function CompactDuration({
   sense,
   emptyLabel,
   unit = 'plan',
+  periodDays,
 }: {
   label: string
   stats: AnalyticsDelayStats
   sense: DashboardTrendSense
   emptyLabel: string
   unit?: 'observation' | 'plan'
+  periodDays: number
 }) {
   if (stats.n === 0 || stats.median_seconds == null) {
     return (
@@ -276,14 +313,19 @@ function CompactDuration({
     )
   }
 
-  const exclusion = delayExclusionNote(stats.undatable_in_scope, unit)
+  const exclusion = delayExclusionNote(stats.undatable_in_scope)
 
   return (
     <div className="min-w-0">
       <p className="text-[12px] text-[#7D7B75]">{label}</p>
       <p className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-1.5 text-base font-semibold tabular-nums text-[#1a1a1a]">
         {formatDashboardDuration(stats.median_seconds)}
-        <TrendBadge comparison={stats.comparison} sense={sense} format="duration" />
+        <TrendBadge
+          comparison={stats.comparison}
+          sense={sense}
+          format="duration"
+          periodDays={periodDays}
+        />
         <span className="text-[12px] font-medium text-[#7D7B75]">
           {formatMeasuredSample(stats.n, unit)}
         </span>
@@ -300,6 +342,8 @@ function SecondaryMetric({
   sense,
   format,
   hint,
+  tooltip,
+  periodDays,
 }: {
   label: string
   value: string
@@ -307,13 +351,15 @@ function SecondaryMetric({
   sense: DashboardTrendSense
   format: 'percent' | 'points' | 'count' | 'duration'
   hint?: string
+  tooltip?: string
+  periodDays: number
 }) {
   return (
-    <div className="min-w-0">
+    <div className="min-w-0" title={tooltip}>
       <p className="text-[12px] font-medium text-[#7D7B75]">{label}</p>
       <p className="mt-1 flex min-w-0 flex-wrap items-baseline gap-2 text-lg font-semibold tabular-nums text-[#1a1a1a]">
         {value}
-        <TrendBadge comparison={comparison} sense={sense} format={format} />
+        <TrendBadge comparison={comparison} sense={sense} format={format} periodDays={periodDays} />
       </p>
       {hint ? <p className="mt-0.5 text-[12px] text-[#A8A59E]">{hint}</p> : null}
     </div>
@@ -350,7 +396,7 @@ export function DashboardRevenuePlaceholder() {
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-base font-semibold tracking-tight text-[#1a1a1a]">
-            CA vs Observations
+            Chiffre d’affaires vs observations
           </h2>
           <p className="mt-1 text-[13px] text-[#7D7B75]">
             Croisement avec les données d’activité à venir.
@@ -368,19 +414,29 @@ export function DashboardExportButton() {
       type="button"
       disabled
       className="inline-flex h-9 min-w-0 items-center gap-2 rounded-lg bg-[#1F7A4D] px-3.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
-      title="Bientôt disponible"
     >
       <Download className="h-4 w-4" aria-hidden />
       Exporter
+      <span className="text-[11px] font-medium opacity-90">Bientôt</span>
     </button>
   )
 }
 
-export function OperationalSummaryStrip({ data }: { data: AnalyticsDashboardResponse }) {
+export function OperationalSummaryStrip({
+  data,
+  periodDays,
+}: {
+  data: AnalyticsDashboardResponse
+  periodDays: number
+}) {
   const over15 = data.aging_buckets.find(isOver15dAgingBucket)
   const over15Count = over15?.count ?? 0
   const resolved = data.observation_delay_resolved
   const deadlines = data.plan_deadlines
+  const openLabel =
+    data.open_observation_count <= 1
+      ? 'observation encore ouverte'
+      : 'observations encore ouvertes'
 
   return (
     <section className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-4 rounded-2xl border border-[#E8E6DF] bg-white px-5 py-4 lg:grid-cols-4 lg:gap-6 lg:px-6 lg:py-5">
@@ -388,13 +444,8 @@ export function OperationalSummaryStrip({ data }: { data: AnalyticsDashboardResp
         <p className="text-[1.75rem] font-semibold leading-none tabular-nums tracking-tight text-[#1a1a1a] lg:text-[2rem]">
           {data.open_observation_count}
         </p>
-        <p className="mt-1.5 text-[13px] text-[#7D7B75]">
-          {data.open_observation_count === 0
-            ? 'observation en attente'
-            : data.open_observation_count === 1
-              ? 'encore ouverte'
-              : 'encore ouvertes'}
-        </p>
+        <p className="mt-1.5 text-[13px] text-[#7D7B75]">{openLabel}</p>
+        <p className="mt-0.5 text-[12px] text-[#A8A59E]">En ce moment</p>
       </div>
       <div className="min-w-0">
         <p className="flex min-w-0 flex-wrap items-baseline gap-1.5 text-[1.75rem] font-semibold leading-none tabular-nums tracking-tight text-[#1a1a1a] lg:text-[2rem]">
@@ -405,14 +456,14 @@ export function OperationalSummaryStrip({ data }: { data: AnalyticsDashboardResp
             </span>
           ) : null}
         </p>
-        <p className="mt-1.5 text-[13px] text-[#7D7B75]">
-          depuis +15 jours
-          {data.open_observation_count > 0
-            ? ` · ${formatCountedNoun(data.open_observation_count, 'ouverte', 'ouvertes')}`
-            : null}
-        </p>
+        <p className="mt-1.5 text-[13px] text-[#7D7B75]">depuis plus de 15 jours</p>
+        {data.open_observation_count > 0 ? (
+          <p className="mt-0.5 text-[12px] text-[#A8A59E]">
+            parmi les {formatCountedNoun(data.open_observation_count, 'ouverte', 'ouvertes')}
+          </p>
+        ) : null}
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0" title={resolutionStripTooltip()}>
         {resolved.n === 0 || resolved.median_seconds == null ? (
           <>
             <p className="text-[1.75rem] font-semibold leading-none text-[#1a1a1a] lg:text-[2rem]">
@@ -430,23 +481,25 @@ export function OperationalSummaryStrip({ data }: { data: AnalyticsDashboardResp
                 comparison={resolved.comparison}
                 sense="negative-up"
                 format="duration"
+                periodDays={periodDays}
               />
             </p>
             <p className="mt-1.5 text-[13px] text-[#7D7B75]">
-              avant résolution · médiane · {formatMeasuredSample(resolved.n)}
+              pour résoudre · médiane
+            </p>
+            <p className="mt-0.5 text-[12px] text-[#A8A59E]">
+              {formatMeasuredSample(resolved.n)} · sur la période
             </p>
           </>
         )}
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0" title={planDeadlinesStripTooltip()}>
         {deadlines.n === 0 ? (
           <>
             <p className="text-[1.75rem] font-semibold leading-none text-[#1a1a1a] lg:text-[2rem]">
               —
             </p>
-            <p className="mt-1.5 text-[13px] text-[#7D7B75]">
-              Aucun plan avec échéance mesurable
-            </p>
+            <p className="mt-1.5 text-[13px] text-[#7D7B75]">Aucun plan avec date d’échéance</p>
           </>
         ) : (
           <>
@@ -458,6 +511,7 @@ export function OperationalSummaryStrip({ data }: { data: AnalyticsDashboardResp
                 comparison={deadlines.late_comparison}
                 sense="negative-up"
                 format="points"
+                periodDays={periodDays}
               />
             </p>
             <p className="mt-1.5 min-w-0 break-words text-[13px] text-[#7D7B75]">
@@ -474,15 +528,19 @@ export function OperationalSummaryStrip({ data }: { data: AnalyticsDashboardResp
 
 export function RecurringPatternsCard({
   items,
+  isCross,
+  periodDays,
 }: {
   items: AnalyticsRecurringPatternItem[]
+  isCross: boolean
+  periodDays: number
 }) {
   const max = Math.max(...items.map((item) => item.signal_count), 1)
+  const subtitle = isCross
+    ? 'Sujets vus au moins 2 fois sur la période · Tous établissements'
+    : 'Sujets vus au moins 2 fois sur la période'
   return (
-    <DashboardCard
-      title="Motifs récurrents"
-      footer={dashboardPreviousPeriodFooter(items.map((item) => item.comparison))}
-    >
+    <DashboardCard title="Motifs récurrents" subtitle={subtitle}>
       {items.length === 0 ? (
         <div>
           <p className="text-sm font-medium text-[#1a1a1a]">Aucun problème récurrent détecté</p>
@@ -502,8 +560,13 @@ export function RecurringPatternsCard({
                   {item.name}
                 </span>
                 <span className="flex shrink-0 flex-wrap items-center justify-end gap-2 text-sm font-semibold tabular-nums text-[#1a1a1a]">
-                  {item.signal_count}
-                  <TrendBadge comparison={item.comparison} sense="negative-up" />
+                  {formatDashboardObservationCount(item.signal_count)}
+                  <TrendBadge
+                    comparison={item.comparison}
+                    sense="negative-up"
+                    format="count"
+                    periodDays={periodDays}
+                  />
                 </span>
               </div>
               <span className="mt-1.5 block h-2.5 overflow-hidden rounded-full bg-[#F0EFE9]">
@@ -532,7 +595,11 @@ export function NewPatternsCard({
   const [expanded, setExpanded] = useState(false)
   const visible = expanded ? items : items.slice(0, previewLimit)
   return (
-    <DashboardCard title="Nouveaux motifs">
+    <DashboardCard
+      title="Nouveaux motifs"
+      subtitle="Première apparition ici"
+      titleTooltip={newPatternsVolumeTooltip()}
+    >
       {items.length === 0 ? (
         <div>
           <p className="text-sm font-medium text-[#1a1a1a]">Aucun nouveau motif détecté</p>
@@ -587,7 +654,7 @@ export function ContributorsCard({
   isCross: boolean
 }) {
   return (
-    <DashboardCard title="Classement des contributeurs">
+    <DashboardCard title="Qui a le plus contribué">
       {items.length === 0 ? (
         <p className="text-sm text-[#7D7B75]">
           Aucune contribution comptabilisée sur cette période
@@ -630,7 +697,7 @@ export function ContributorsCard({
                   </span>
                 </span>
                 <span className="shrink-0 text-sm font-semibold tabular-nums text-[#7D7B75]">
-                  {item.pts} pts
+                  {item.pts} points
                 </span>
               </li>
             )
@@ -641,47 +708,80 @@ export function ContributorsCard({
   )
 }
 
-export function ObservationTreatmentCard({ data }: { data: AnalyticsDashboardResponse }) {
+export function ObservationTreatmentCard({
+  data,
+  periodDays,
+}: {
+  data: AnalyticsDashboardResponse
+  periodDays: number
+}) {
+  const resolvedDuration =
+    data.observation_delay_resolved.median_seconds != null
+      ? formatDashboardDuration(data.observation_delay_resolved.median_seconds)
+      : null
+  const canceledDuration =
+    data.observation_delay_canceled.median_seconds != null
+      ? formatDashboardDuration(data.observation_delay_canceled.median_seconds)
+      : null
+  const closureHint = closureResolvedShareHint({
+    measuredResolvedCount: data.closure_measured_resolved_count,
+    measuredCanceledCount: data.closure_measured_canceled_count,
+    undatableResolved: data.undatable_signal_terminals.resolved,
+    undatableCanceled: data.undatable_signal_terminals.canceled,
+  })
+  const resolutionHint = operationalResolutionRateHint()
+
   return (
-    <DashboardCard title="Temps de traitement">
+    <DashboardCard
+      title="Temps de traitement"
+      subtitle="Sur la période, parmi les cas déjà clôturés ou mis en plan"
+    >
       <div className="flex min-w-0 flex-col gap-5 lg:grid lg:grid-cols-3 lg:gap-6">
         <DurationHero
-          label="Temps avant résolution"
+          label="Délai pour résoudre"
           stats={data.observation_delay_resolved}
           sense="negative-up"
           emptyLabel={emptyObservationDelayMessage(
             'resolved',
             data.observation_delay_resolved.undatable_in_scope,
           )}
+          hint={resolvedDuration ? medianDurationHint(resolvedDuration) : undefined}
+          periodDays={periodDays}
         />
         <DurationHero
-          label="Temps avant annulation"
+          label="Délai avant annulation"
           stats={data.observation_delay_canceled}
           sense="negative-up"
           emptyLabel={emptyObservationDelayMessage(
             'canceled',
             data.observation_delay_canceled.undatable_in_scope,
           )}
+          hint={canceledDuration ? medianDurationHint(canceledDuration) : undefined}
+          extraHint={observationCancellationDelayHint()}
+          periodDays={periodDays}
         />
         <DurationHero
-          label="Temps avant mise en plan"
+          label="Délai avant plan d’action"
           stats={data.observation_delay_transformed}
           sense="negative-up"
           emptyLabel={emptyObservationDelayMessage('transformed')}
           hint={observationTransformDelayHint()}
+          periodDays={periodDays}
         />
       </div>
       <div className="mt-5 grid min-w-0 gap-4 border-t border-[#F0EFE9] pt-4 lg:grid-cols-3">
         <SecondaryMetric
-          label="Part de la charge résolue"
+          label="Part des sujets résolus"
           value={formatDashboardPercent(data.operational_resolution_rate.current_value)}
           comparison={data.operational_resolution_rate}
           sense="positive-up"
           format="points"
-          hint="des observations à traiter sont résolues en fin de période"
+          hint={resolutionHint}
+          tooltip={resolutionHint}
+          periodDays={periodDays}
         />
         <SecondaryMetric
-          label="Part résolue parmi les clôtures"
+          label="Résolutions parmi les dossiers fermés"
           value={
             data.closure_resolved_share.current_value == null
               ? '—'
@@ -690,12 +790,9 @@ export function ObservationTreatmentCard({ data }: { data: AnalyticsDashboardRes
           comparison={data.closure_resolved_share}
           sense="positive-up"
           format="points"
-          hint={closureResolvedShareHint({
-            measuredResolvedCount: data.closure_measured_resolved_count,
-            measuredCanceledCount: data.closure_measured_canceled_count,
-            undatableResolved: data.undatable_signal_terminals.resolved,
-            undatableCanceled: data.undatable_signal_terminals.canceled,
-          })}
+          hint={closureHint}
+          tooltip={closureHint}
+          periodDays={periodDays}
         />
         <SecondaryMetric
           label="Observations rouvertes"
@@ -703,7 +800,8 @@ export function ObservationTreatmentCard({ data }: { data: AnalyticsDashboardRes
           comparison={data.reopenings}
           sense="negative-up"
           format="count"
-          hint="observations résolues ont été rouvertes"
+          hint={reopeningsHint()}
+          periodDays={periodDays}
         />
       </div>
     </DashboardCard>
@@ -712,15 +810,24 @@ export function ObservationTreatmentCard({ data }: { data: AnalyticsDashboardRes
 
 const AGING_BAR_TONES = ['bg-[#D4D1C8]', 'bg-[#B4B1A8]', 'bg-[#7D7B75]', 'bg-[#1a1a1a]']
 
-export function OpenObservationsCard({ data }: { data: AnalyticsDashboardResponse }) {
+export function OpenObservationsCard({
+  data,
+  periodDays,
+}: {
+  data: AnalyticsDashboardResponse
+  periodDays: number
+}) {
   const over15 = data.aging_buckets.find(isOver15dAgingBucket)
   const max = Math.max(...data.aging_buckets.map((bucket) => bucket.count), 1)
 
   return (
-    <DashboardCard title="Observations encore ouvertes">
+    <DashboardCard
+      title="Observations encore ouvertes"
+      subtitle="En ce moment · toutes les ouvertes, pas seulement la période"
+    >
       {data.open_observation_count === 0 ? (
         <div>
-          <p className="text-sm font-medium text-[#1a1a1a]">Aucune observation en attente</p>
+          <p className="text-sm font-medium text-[#1a1a1a]">Aucune observation encore ouverte</p>
           <p className="mt-1 text-[13px] text-[#7D7B75]">
             Toutes les observations sont actuellement clôturées.
           </p>
@@ -741,7 +848,7 @@ export function OpenObservationsCard({ data }: { data: AnalyticsDashboardRespons
                       isOver15dAgingBucket(bucket) && 'font-medium text-[#1a1a1a]',
                     )}
                   >
-                    {bucket.label}
+                    {formatAgingBucketLabel(bucket)}
                   </span>
                   <span className="shrink-0 font-semibold tabular-nums text-[#1a1a1a]">
                     {bucket.count}
@@ -764,18 +871,18 @@ export function OpenObservationsCard({ data }: { data: AnalyticsDashboardRespons
               <p className="flex min-w-0 flex-wrap items-baseline gap-2 text-sm font-medium text-[#1a1a1a]">
                 {formatCountedNoun(
                   over15.count,
-                  'observation ouverte depuis plus de 15 j',
-                  'observations ouvertes depuis plus de 15 j',
+                  'observation ouverte depuis plus de 15 jours',
+                  'observations ouvertes depuis plus de 15 jours',
                 )}
                 <TrendBadge
                   comparison={data.aging_over_15d_share}
                   sense="negative-up"
                   format="points"
+                  periodDays={periodDays}
                 />
               </p>
               <p className="mt-0.5 text-[12px] text-[#7D7B75]">
-                {formatDashboardPercent(data.aging_over_15d_share.current_value)} des observations
-                ouvertes
+                {formatDashboardPercent(data.aging_over_15d_share.current_value)} des ouvertes
               </p>
             </div>
           ) : null}
@@ -785,7 +892,13 @@ export function OpenObservationsCard({ data }: { data: AnalyticsDashboardRespons
   )
 }
 
-export function PlanDeadlinesCard({ data }: { data: AnalyticsDashboardResponse }) {
+export function PlanDeadlinesCard({
+  data,
+  periodDays,
+}: {
+  data: AnalyticsDashboardResponse
+  periodDays: number
+}) {
   const deadlines = data.plan_deadlines
   const segments: ShareSegment[] = [
     {
@@ -821,9 +934,7 @@ export function PlanDeadlinesCard({ data }: { data: AnalyticsDashboardResponse }
   return (
     <DashboardCard title="Respect des échéances">
       {deadlines.n === 0 ? (
-        <p className="text-sm text-[#7D7B75]">
-          Aucun plan avec échéance mesurable sur la période
-        </p>
+        <p className="text-sm text-[#7D7B75]">Aucun plan avec date d’échéance sur la période</p>
       ) : (
         <>
           <p className="text-[1.75rem] font-semibold leading-none tracking-tight text-[#1a1a1a] lg:text-[2rem]">
@@ -831,51 +942,63 @@ export function PlanDeadlinesCard({ data }: { data: AnalyticsDashboardResponse }
               ? formatLateCountOnMeasured(deadlines.late_count, deadlines.n)
               : formatDashboardPercent(deadlines.late)}
           </p>
-          <p className="mt-2 flex min-w-0 flex-wrap items-center gap-2 text-[13px] text-[#7D7B75]">
-            {deadlines.n < 5
-              ? null
-              : `des plans sont en retard · ${formatCountedNoun(
-                  deadlines.late_count,
-                  'plan concerné',
-                  'plans concernés',
-                )}`}
-            <TrendBadge
-              comparison={deadlines.late_comparison}
-              sense="negative-up"
-              format="points"
-            />
+          <p className="mt-2 min-w-0 break-words text-[13px] text-[#7D7B75]">
+            {planDeadlinesDenominatorCopy()}
           </p>
+          {deadlines.n >= 5 ? (
+            <p className="mt-1 flex min-w-0 flex-wrap items-center gap-2 text-[13px] text-[#7D7B75]">
+              {`en retard · ${formatLateCountOnMeasured(deadlines.late_count, deadlines.n)}`}
+              <TrendBadge
+                comparison={deadlines.late_comparison}
+                sense="negative-up"
+                format="points"
+                periodDays={periodDays}
+              />
+            </p>
+          ) : (
+            <p className="mt-1">
+              <TrendBadge
+                comparison={deadlines.late_comparison}
+                sense="negative-up"
+                format="points"
+                periodDays={periodDays}
+              />
+            </p>
+          )}
           <div className="mt-4">
-            <StackedShareBar segments={segments} />
+            <StackedShareBar segments={segments} periodDays={periodDays} />
           </div>
         </>
       )}
       <div className="mt-5 grid min-w-0 gap-3 border-t border-[#F0EFE9] pt-4">
         <CompactDuration
-          label="Temps avant validation"
+          label="Attente de validation une fois le plan terminé"
           stats={data.plan_validation}
           sense="negative-up"
           emptyLabel={emptyPlanDelayMessage('validated', {
             undatableInScope: data.plan_validation.undatable_in_scope,
           })}
+          periodDays={periodDays}
         />
         <div className="grid min-w-0 gap-3 sm:grid-cols-2">
           <CompactDuration
-            label="Plans — annulation"
+            label="Délai d’annulation des plans"
             stats={data.plan_delay_canceled}
             sense="negative-up"
             emptyLabel={emptyPlanDelayMessage('canceled', {
               undatableInScope: data.plan_delay_canceled.undatable_in_scope,
               unstartedInScope: data.plan_delay_canceled.unstarted_in_scope,
             })}
+            periodDays={periodDays}
           />
           <CompactDuration
-            label="Plans — résolution"
+            label="Délai de clôture des plans"
             stats={data.plan_delay_resolved}
             sense="negative-up"
             emptyLabel={emptyPlanDelayMessage('resolved', {
               undatableInScope: data.plan_delay_resolved.undatable_in_scope,
             })}
+            periodDays={periodDays}
           />
         </div>
       </div>
@@ -887,10 +1010,12 @@ function VolumeBarList({
   items,
   previewLimit,
   showEstablishment,
+  periodDays,
 }: {
   items: AnalyticsNamedCountItem[]
   previewLimit?: number
   showEstablishment: boolean
+  periodDays: number
 }) {
   const [expanded, setExpanded] = useState(false)
   const limit = previewLimit ?? items.length
@@ -928,9 +1053,14 @@ function VolumeBarList({
                 ) : null}
               </span>
               <span className="flex shrink-0 flex-wrap items-center justify-end gap-2 font-semibold tabular-nums text-[#1a1a1a]">
-                {item.count}
+                {formatDashboardObservationCount(item.count)}
                 {item.id !== 'others' ? (
-                  <TrendBadge comparison={item.comparison} sense="neutral" />
+                  <TrendBadge
+                    comparison={item.comparison}
+                    sense="neutral"
+                    format="count"
+                    periodDays={periodDays}
+                  />
                 ) : null}
               </span>
             </div>
@@ -960,17 +1090,27 @@ export function LocationsCard({
   items,
   previewLimit,
   isCross,
+  periodDays,
 }: {
   items: AnalyticsNamedCountItem[]
   previewLimit: number
   isCross: boolean
+  periodDays: number
 }) {
   return (
-    <DashboardCard title="Localisations les plus signalées">
+    <DashboardCard
+      title="Lieux les plus cités"
+      subtitle="Observations créées sur la période, pas les dossiers encore ouverts"
+    >
       {items.length === 0 ? (
-        <p className="text-sm text-[#7D7B75]">Aucune localisation signalée sur la période.</p>
+        <p className="text-sm text-[#7D7B75]">Aucun lieu cité sur la période</p>
       ) : (
-        <VolumeBarList items={items} previewLimit={previewLimit} showEstablishment={isCross} />
+        <VolumeBarList
+          items={items}
+          previewLimit={previewLimit}
+          showEstablishment={isCross}
+          periodDays={periodDays}
+        />
       )}
     </DashboardCard>
   )
@@ -979,18 +1119,22 @@ export function LocationsCard({
 export function PolesCard({
   items,
   isCross,
+  periodDays,
 }: {
   items: AnalyticsNamedCountItem[]
   isCross: boolean
+  periodDays: number
 }) {
   return (
     <DashboardCard
       title="Activité du pôle"
-      footer={dashboardPreviousPeriodFooter(items.map((item) => item.comparison))}
+      subtitle="Observations créées sur la période, selon le pôle responsable aujourd’hui"
     >
       <p className="mb-3 text-[12px] text-[#7D7B75]">{canonicalRoutingVolumeHint()}</p>
       {items.length === 0 ? (
-        <p className="text-sm text-[#7D7B75]">Aucune activité de pôle sur la période.</p>
+        <p className="text-sm text-[#7D7B75]">
+          Aucune observation rattachée à un pôle sur la période
+        </p>
       ) : (
         <ol className="flex flex-col">
           {items.map((item, index) => (
@@ -1012,10 +1156,15 @@ export function PolesCard({
                 ) : null}
               </span>
               <span className="text-right text-sm font-semibold tabular-nums text-[#1a1a1a]">
-                {item.count}
+                {formatDashboardObservationCount(item.count)}
               </span>
               <span className="justify-self-end empty:hidden max-sm:col-start-3 max-sm:row-start-2">
-                <TrendBadge comparison={item.comparison} sense="neutral" />
+                <TrendBadge
+                  comparison={item.comparison}
+                  sense="neutral"
+                  format="count"
+                  periodDays={periodDays}
+                />
               </span>
             </li>
           ))}

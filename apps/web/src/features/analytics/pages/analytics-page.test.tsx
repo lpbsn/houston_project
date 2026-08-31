@@ -364,11 +364,13 @@ describe('AnalyticsPage', () => {
     renderAnalyticsPage()
     expect(screen.getByText('Résumé IA')).toBeTruthy()
     expect(screen.getAllByText('Bientôt disponible').length).toBeGreaterThan(0)
-    expect(screen.getByText('CA vs Observations')).toBeTruthy()
+    expect(screen.getByText('Chiffre d’affaires vs observations')).toBeTruthy()
     const headings = screen.getAllByRole('heading').map((node) => node.textContent)
     expect(headings.indexOf('Motifs récurrents')).toBeGreaterThan(-1)
     expect(headings.indexOf('Motifs récurrents')).toBeLessThan(headings.indexOf('Résumé IA'))
-    expect(headings.indexOf('Résumé IA')).toBeLessThan(headings.indexOf('CA vs Observations'))
+    expect(headings.indexOf('Résumé IA')).toBeLessThan(
+      headings.indexOf('Chiffre d’affaires vs observations'),
+    )
   })
 
   it('exposes period controls and dashboard widgets without fake confidence copy', () => {
@@ -384,13 +386,15 @@ describe('AnalyticsPage', () => {
     for (const days of ['3 j', '7 j', '15 j', '30 j', '90 j']) {
       expect(screen.getByRole('button', { name: days })).toBeTruthy()
     }
-    expect(screen.getByRole('button', { name: 'Exporter' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Exporter/ })).toBeTruthy()
+    expect(screen.getByText('Bientôt')).toBeTruthy()
+    expect(screen.getByText('7 derniers jours · jusqu’à maintenant · comparé aux 7 jours précédents')).toBeTruthy()
     expect(screen.getByText('4 observations · 1 établissement')).toBeTruthy()
     expect(screen.getByText('ANBU · AKATSUKI')).toBeTruthy()
     expect(screen.getByText('En avance')).toBeTruthy()
     expect(screen.getByText('À temps')).toBeTruthy()
     expect(screen.getByText('En retard')).toBeTruthy()
     expect(screen.queryByText(/confiance/i)).toBeNull()
-    expect(screen.queryByText(/qualité/i)).toBeNull()
+    expect(screen.queryByText(/taux de confiance/i)).toBeNull()
   })
 })

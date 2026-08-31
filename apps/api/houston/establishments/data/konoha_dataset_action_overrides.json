@@ -1,0 +1,102 @@
+{
+  "schema_version": "konoha_dataset_action_overrides_v1",
+  "overrides": {
+    "anbu.hotel.sg.35": {
+      "requires_validation": true,
+      "created_at": "2026-08-29T09:00:00+02:00",
+      "start_at": "2026-10-05T09:00:00+02:00",
+      "end_at": "2026-10-05T17:00:00+02:00",
+      "cutoff_execution_status": "scheduled"
+    },
+    "anbu.coworking.sg.23": {
+      "requires_validation": true,
+      "created_at": "2026-08-28T16:00:00+02:00",
+      "start_at": "2026-08-29T08:00:00+02:00",
+      "end_at": "2026-08-29T18:00:00+02:00",
+      "cutoff_execution_status": "in_progress"
+    },
+    "anbu.ishiraku.sg.24": {
+      "requires_validation": true,
+      "created_at": "2026-08-28T09:00:00+02:00",
+      "marked_done_at": "2026-08-29T11:00:00+02:00",
+      "end_at": "2026-08-29T10:00:00+02:00",
+      "cutoff_execution_status": "pending_validation"
+    },
+    "anbu.yakinuku.sg.25": {
+      "requires_validation": true,
+      "created_at": "2026-08-29T19:15:00+02:00",
+      "canceled_at": "2026-08-29T20:30:00+02:00",
+      "end_at": "2026-10-20T09:00:00+02:00",
+      "cutoff_execution_status": "canceled"
+    },
+    "anbu.hotel.sg.01": {
+      "end_at": "2025-08-08T06:00:00+02:00"
+    },
+    "anbu.hotel.sg.22": {
+      "end_at": "2026-03-19T15:00:00+01:00"
+    },
+    "anbu.hotel.sg.23": {
+      "end_at": "2026-04-03T18:00:00+02:00"
+    },
+    "anbu.ishiraku.sg.03": {
+      "end_at": "2025-09-09T08:00:00+02:00"
+    },
+    "anbu.ishiraku.sg.10": {
+      "end_at": "2025-12-14T14:00:00+01:00"
+    },
+    "anbu.yakinuku.sg.08": {
+      "end_at": "2025-12-20T22:00:00+01:00"
+    },
+    "anbu.coworking.sg.05": {
+      "end_at": "2025-10-24T10:00:00+02:00"
+    },
+    "anbu.coworking.sg.19": {
+      "end_at": "2026-06-19T11:00:00+02:00"
+    },
+    "anbu.maintenance.sg.09": {
+      "end_at": "2026-04-22T11:00:00+02:00"
+    },
+    "anbu.maintenance.sg.15": {
+      "end_at": "2026-08-07T16:00:00+02:00"
+    },
+    "akatsuki.commerce.sg.06": {
+      "end_at": "2025-11-20T04:00:00+01:00"
+    },
+    "akatsuki.commerce.sg.14": {
+      "end_at": "2026-07-27T11:00:00+02:00"
+    },
+    "akatsuki.basic_fit.sg.04": {
+      "end_at": "2025-10-09T14:00:00+02:00"
+    },
+    "akatsuki.basic_fit.sg.10": {
+      "end_at": "2026-04-22T12:00:00+02:00"
+    },
+    "akatsuki.emea.sg.04": {
+      "end_at": "2025-11-23T23:00:00+01:00"
+    },
+    "akatsuki.emea.sg.06": {
+      "end_at": "2026-01-07T14:00:00+01:00"
+    },
+    "akatsuki.evenements.sg.04": {
+      "end_at": "2026-02-06T11:30:00+01:00"
+    },
+    "akatsuki.maintenance.sg.03": {
+      "end_at": "2025-12-05T14:00:00+01:00"
+    },
+    "anbu.yakinuku.sg.15": {
+      "end_at": null
+    },
+    "akatsuki.commerce.sg.03": {
+      "end_at": null
+    },
+    "anbu.maintenance.sg.05": {
+      "end_at": null
+    },
+    "anbu.hotel.sg.08": {
+      "end_at": null
+    },
+    "akatsuki.commerce.sg.10": {
+      "end_at": null
+    }
+  }
+}
