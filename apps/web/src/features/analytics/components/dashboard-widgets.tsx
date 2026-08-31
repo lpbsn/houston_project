@@ -83,7 +83,20 @@ function DashboardCard({
   )
 }
 
-function TrendBadge({
+function isDisplayedTrendFlat(
+  delta: number | null,
+  format: 'percent' | 'points' | 'count' | 'duration',
+): boolean {
+  if (delta == null) {
+    return false
+  }
+  if (format === 'percent' || format === 'points') {
+    return Math.round(Math.abs(delta) * 100) === 0
+  }
+  return delta === 0
+}
+
+export function TrendBadge({
   comparison,
   sense,
   format = 'percent',
@@ -122,7 +135,7 @@ function TrendBadge({
         : format === 'duration'
           ? formatDashboardDurationDelta(comparison.absolute_delta, periodDays)
           : formatDashboardPercentDelta(comparison.relative_change)
-  if (!label) {
+  if (!label || isDisplayedTrendFlat(delta, format)) {
     return null
   }
   const tone = dashboardTrendTone(delta, sense)
@@ -240,7 +253,7 @@ function DurationHero({
   const showP90 =
     shouldShowDashboardDelayP90(stats.n) && stats.p90_seconds != null
   const sample = formatMeasuredSample(stats.n, unit)
-  const exclusion = delayExclusionNote(stats.undatable_in_scope, unit)
+  const exclusion = delayExclusionNote(stats.undatable_in_scope)
 
   return (
     <div className="min-w-0">
@@ -300,7 +313,7 @@ function CompactDuration({
     )
   }
 
-  const exclusion = delayExclusionNote(stats.undatable_in_scope, unit)
+  const exclusion = delayExclusionNote(stats.undatable_in_scope)
 
   return (
     <div className="min-w-0">

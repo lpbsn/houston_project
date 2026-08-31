@@ -328,10 +328,7 @@ export function emptyPlanDelayMessage(
   return 'Aucune validation sur la période'
 }
 
-export function delayExclusionNote(
-  undatableInScope: number,
-  _unit: 'observation' | 'plan' = 'observation',
-): string | null {
+export function delayExclusionNote(undatableInScope: number): string | null {
   if (undatableInScope <= 0) {
     return null
   }
