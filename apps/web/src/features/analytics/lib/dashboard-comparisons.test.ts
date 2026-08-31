@@ -11,19 +11,23 @@ import {
   contributorInitials,
   dashboardCoverageBannerMessage,
   dashboardNewBadgeTone,
-  dashboardPreviousPeriodFooter,
-  DASHBOARD_VS_PREVIOUS_PERIOD,
   emptyObservationDelayMessage,
   observationTransformDelayHint,
   canonicalRoutingVolumeHint,
+  formatAbsentPreviousPeriodLabel,
+  formatAgingBucketLabel,
   formatContributorEstablishments,
   formatContributorPoles,
   formatDashboardDurationDelta,
   formatDashboardHistoryDate,
+  formatDashboardPeriodSubtitle,
+  formatDashboardPointsDelta,
   formatCountedNoun,
+  formatLateCountOnMeasured,
   formatLateDeadlineHero,
   formatMeasuredSample,
   formatNewPatternVolume,
+  longTailDurationHint,
   medianDurationHint,
   shouldShowDashboardDelayMean,
   shouldShowDashboardDelayP90,
@@ -136,7 +140,7 @@ describe('dashboardCoverageBannerMessage', () => {
     ).toBeNull()
   })
 
-  it('uses cadrage copy when some deltas remain displayable', () => {
+  it('uses UX copy when some deltas remain displayable', () => {
     const date = formatDashboardHistoryDate('2026-01-01T00:00:00.000Z')
     expect(
       dashboardCoverageBannerMessage({
@@ -145,7 +149,7 @@ describe('dashboardCoverageBannerMessage', () => {
         hasDisplayableDelta: true,
       }),
     ).toBe(
-      `Pas encore assez d’historique pour comparer certaines évolutions. Historique fiable depuis le ${date}.`,
+      `Certaines comparaisons ne sont pas encore disponibles. Données comparables depuis le ${date}.`,
     )
     expect(
       dashboardCoverageBannerMessage({
@@ -154,11 +158,11 @@ describe('dashboardCoverageBannerMessage', () => {
         hasDisplayableDelta: true,
       }),
     ).toBe(
-      `Pas encore assez d’historique pour comparer certaines évolutions. Historique fiable depuis le ${date}.`,
+      `Certaines comparaisons ne sont pas encore disponibles. Données comparables depuis le ${date}.`,
     )
   })
 
-  it('uses previous-period copy when no delta is displayable', () => {
+  it('uses unavailable copy when no delta is displayable', () => {
     const date = formatDashboardHistoryDate('2026-03-15T00:00:00.000Z')
     expect(
       dashboardCoverageBannerMessage({
@@ -167,7 +171,7 @@ describe('dashboardCoverageBannerMessage', () => {
         hasDisplayableDelta: false,
       }),
     ).toBe(
-      `Pas encore assez d’historique pour comparer à la période précédente. Historique fiable à partir du ${date}.`,
+      `Comparaison indisponible pour cette période. Données comparables depuis le ${date}.`,
     )
   })
 })
@@ -197,14 +201,19 @@ describe('canShowDashboardDelta', () => {
   })
 })
 
-describe('dashboardPreviousPeriodFooter', () => {
-  it('keeps the footer only when a card has a displayable comparison', () => {
-    expect(dashboardPreviousPeriodFooter([comparison('complete')])).toBe(
-      DASHBOARD_VS_PREVIOUS_PERIOD,
+describe('period and absence copy', () => {
+  it('interpolates the rolling window subtitle', () => {
+    expect(formatDashboardPeriodSubtitle(7)).toBe(
+      '7 derniers jours · jusqu’à maintenant · comparé aux 7 jours précédents',
     )
-    expect(dashboardPreviousPeriodFooter([comparison('partial'), comparison('not_comparable')])).toBe(
-      undefined,
+    expect(formatDashboardPeriodSubtitle(30)).toBe(
+      '30 derniers jours · jusqu’à maintenant · comparé aux 30 jours précédents',
     )
+  })
+
+  it('labels a first appearance versus the previous window', () => {
+    expect(formatAbsentPreviousPeriodLabel(7)).toBe('Absent des 7 jours précédents')
+    expect(formatAbsentPreviousPeriodLabel(15)).toBe('Absent des 15 jours précédents')
   })
 })
 
@@ -217,12 +226,12 @@ describe('dashboardNewBadgeTone', () => {
 })
 
 describe('formatMeasuredSample', () => {
-  it('pluralizes observations and plans', () => {
-    expect(formatMeasuredSample(0)).toBe('0 observations mesurées')
-    expect(formatMeasuredSample(1)).toBe('1 observation mesurée')
-    expect(formatMeasuredSample(12)).toBe('12 observations mesurées')
-    expect(formatMeasuredSample(1, 'plan')).toBe('1 plan mesuré')
-    expect(formatMeasuredSample(3, 'plan')).toBe('3 plans mesurés')
+  it('pluralizes observations and plans without lab jargon', () => {
+    expect(formatMeasuredSample(0)).toBe('sur 0 observations')
+    expect(formatMeasuredSample(1)).toBe('sur 1 observation')
+    expect(formatMeasuredSample(12)).toBe('sur 12 observations')
+    expect(formatMeasuredSample(1, 'plan')).toBe('sur 1 plan')
+    expect(formatMeasuredSample(3, 'plan')).toBe('sur 3 plans')
   })
 })
 
@@ -239,10 +248,10 @@ describe('formatNewPatternVolume', () => {
   it('uses detection copy on an establishment dashboard', () => {
     expect(
       formatNewPatternVolume({ isCross: false, observationCount: 1, establishmentCount: 1 }),
-    ).toBe('1 observation depuis sa détection')
+    ).toBe('1 observation depuis ce premier signalement')
     expect(
       formatNewPatternVolume({ isCross: false, observationCount: 3, establishmentCount: 1 }),
-    ).toBe('3 observations depuis sa détection')
+    ).toBe('3 observations depuis ce premier signalement')
   })
 })
 
@@ -254,22 +263,30 @@ describe('duration visibility and absolute delta', () => {
     expect(shouldShowDashboardDelayP90(10)).toBe(true)
   })
 
-  it('formats an absolute duration delta without a percent sign', () => {
-    expect(formatDashboardDurationDelta(4 * 86400)).toBe('4 j')
-    expect(formatDashboardDurationDelta(-4 * 86400)).toBe('4 j')
-    expect(formatDashboardDurationDelta(0)).toBe('0 min')
-    expect(formatDashboardDurationDelta(null)).toBeNull()
+  it('formats a signed duration delta against the previous window', () => {
+    expect(formatDashboardDurationDelta(4 * 86400, 7)).toBe('+4 j vs 7 j d’avant')
+    expect(formatDashboardDurationDelta(-4 * 86400, 7)).toBe('-4 j vs 7 j d’avant')
+    expect(formatDashboardDurationDelta(0, 7)).toBe('0 min vs 7 j d’avant')
+    expect(formatDashboardDurationDelta(null, 7)).toBeNull()
+  })
+
+  it('formats rate deltas in points against the previous window', () => {
+    expect(formatDashboardPointsDelta(0.07, 7)).toBe('+7 points vs 7 j d’avant')
+    expect(formatDashboardPointsDelta(-0.07, 30)).toBe('-7 points vs 30 j d’avant')
+  })
+
+  it('states the long-tail duration without P90', () => {
+    expect(longTailDurationHint('12 j')).toBe('9 sur 10 en 12 j ou moins')
   })
 })
 
 describe('deadline and contributor copy', () => {
   it('prefers a count formulation at low volume', () => {
     expect(formatLateDeadlineHero({ lateShare: 1, lateCount: 1, n: 1 })).toBe(
-      '1 plan en retard sur 1 mesuré',
+      '1 en retard sur 1 concerné',
     )
-    expect(formatLateDeadlineHero({ lateShare: 0.22, lateCount: 8, n: 17 })).toContain(
-      'des plans sont en retard',
-    )
+    expect(formatLateCountOnMeasured(3, 17)).toBe('3 sur 17 déjà dus ou terminés')
+    expect(formatLateDeadlineHero({ lateShare: 0.22, lateCount: 8, n: 17 })).toMatch(/22\s*% en retard/)
   })
 
   it('derives initials and pole overflow from payload fields', () => {
@@ -296,15 +313,11 @@ describe('formatCountedNoun', () => {
 
 describe('empty delay copy', () => {
   it('distinguishes a measured empty period from undatable terminal stock', () => {
-    expect(emptyObservationDelayMessage('canceled')).toBe(
-      'Aucune annulation mesurée sur la période',
-    )
+    expect(emptyObservationDelayMessage('canceled')).toBe('Aucune annulation sur la période')
     expect(emptyObservationDelayMessage('canceled', 24)).toBe(
-      '24 observations annulées dans ce périmètre, sans date historisée. Elles ne peuvent pas entrer dans cette métrique.',
+      '24 observations annulées, sans date fiable.',
     )
-    expect(emptyObservationDelayMessage('resolved')).toBe(
-      'Aucune résolution mesurée sur la période',
-    )
+    expect(emptyObservationDelayMessage('resolved')).toBe('Aucune résolution sur la période')
     expect(emptyObservationDelayMessage('transformed')).toBe(
       'Aucune observation mise en plan sur la période',
     )
@@ -312,14 +325,23 @@ describe('empty delay copy', () => {
 
   it('states first association and live routing as independent of exclusive outcomes', () => {
     expect(observationTransformDelayHint()).toBe(
-      'Délai jusqu’à la première association à un plan, indépendant des délais de résolution ou d’annulation',
+      'Jusqu’au premier plan. La même observation peut ensuite être résolue ou annulée.',
     )
     expect(canonicalRoutingVolumeHint()).toBe(
-      'Volumes selon la classification actuelle : une requalification déplace aussi les périodes passées',
+      'Si on reclasse un sujet, il change aussi de pôle sur les périodes passées.',
     )
   })
 
   it('keeps the median hint oriented to the duration', () => {
-    expect(medianDurationHint('1,8 j')).toBe('La moitié des cas en 1,8 j ou moins')
+    expect(medianDurationHint('1,8 j')).toBe('La moitié des cas en 1,8 j ou moins.')
+  })
+})
+
+describe('formatAgingBucketLabel', () => {
+  it('maps backend bucket keys to full-day labels', () => {
+    expect(formatAgingBucketLabel({ key: 'lt_3d', label: '< 3 j' })).toBe('Moins de 3 jours')
+    expect(formatAgingBucketLabel({ key: '3–7 j', label: '3–7 j' })).toBe('3 à 7 jours')
+    expect(formatAgingBucketLabel({ key: '8–15 j', label: '8–15 j' })).toBe('8 à 15 jours')
+    expect(formatAgingBucketLabel({ key: 'gt_15d', label: '> 15 j' })).toBe('Plus de 15 jours')
   })
 })

@@ -24,6 +24,7 @@ import {
   canShowDashboardDelta,
   collectDashboardComparisons,
   dashboardCoverageBannerMessage,
+  formatDashboardPeriodSubtitle,
   worstDashboardCoverage,
 } from '@/features/analytics/lib/dashboard-comparisons'
 import {
@@ -134,25 +135,30 @@ export function AnalyticsPage({ scope = { type: 'session' } }: AnalyticsPageProp
               : 'Vue de l’établissement courant'}
           </p>
         </div>
-        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 lg:w-auto">
-          <div className="flex min-w-0 flex-wrap gap-1 rounded-lg bg-white p-1 ring-1 ring-[#E8E6DF]">
-            {DASHBOARD_PERIOD_DAYS.map((days) => (
-              <button
-                key={days}
-                type="button"
-                onClick={() => setPeriod(days)}
-                className={cn(
-                  'h-8 min-w-0 rounded-md px-2.5 text-[12px] font-semibold',
-                  periodDays === days
-                    ? 'bg-[#1F7A4D] text-white'
-                    : 'text-[#7D7B75] hover:bg-[#F5F4F0]',
-                )}
-              >
-                {days} j
-              </button>
-            ))}
+        <div className="flex w-full min-w-0 flex-col gap-1.5 lg:w-auto lg:items-end">
+          <div className="flex w-full min-w-0 flex-wrap items-center gap-2 lg:w-auto lg:justify-end">
+            <div className="flex min-w-0 flex-wrap gap-1 rounded-lg bg-white p-1 ring-1 ring-[#E8E6DF]">
+              {DASHBOARD_PERIOD_DAYS.map((days) => (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() => setPeriod(days)}
+                  className={cn(
+                    'h-8 min-w-0 rounded-md px-2.5 text-[12px] font-semibold',
+                    periodDays === days
+                      ? 'bg-[#1F7A4D] text-white'
+                      : 'text-[#7D7B75] hover:bg-[#F5F4F0]',
+                  )}
+                >
+                  {days} j
+                </button>
+              ))}
+            </div>
+            <DashboardExportButton />
           </div>
-          <DashboardExportButton />
+          <p className="min-w-0 text-[12px] text-[#7D7B75]">
+            {formatDashboardPeriodSubtitle(periodDays)}
+          </p>
         </div>
       </header>
 
@@ -186,20 +192,28 @@ export function AnalyticsPage({ scope = { type: 'session' } }: AnalyticsPageProp
 
       {dashboardQuery.data ? (
         <>
-          <OperationalSummaryStrip data={dashboardQuery.data} />
+          <OperationalSummaryStrip data={dashboardQuery.data} periodDays={periodDays} />
           <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:gap-5">
             <div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col lg:gap-5">
               <div className="order-1 min-w-0 lg:order-none">
-                <RecurringPatternsCard items={dashboardQuery.data.recurring_patterns} />
+                <RecurringPatternsCard
+                  items={dashboardQuery.data.recurring_patterns}
+                  isCross={isCross}
+                  periodDays={periodDays}
+                />
               </div>
               <div className="order-4 min-w-0 lg:order-none">
-                <ObservationTreatmentCard data={dashboardQuery.data} />
+                <ObservationTreatmentCard data={dashboardQuery.data} periodDays={periodDays} />
               </div>
               <div className="order-5 min-w-0 lg:order-none">
-                <PlanDeadlinesCard data={dashboardQuery.data} />
+                <PlanDeadlinesCard data={dashboardQuery.data} periodDays={periodDays} />
               </div>
               <div className="order-7 min-w-0 lg:order-none">
-                <PolesCard items={dashboardQuery.data.poles} isCross={isCross} />
+                <PolesCard
+                  items={dashboardQuery.data.poles}
+                  isCross={isCross}
+                  periodDays={periodDays}
+                />
               </div>
             </div>
             <div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col lg:gap-5">
@@ -211,13 +225,14 @@ export function AnalyticsPage({ scope = { type: 'session' } }: AnalyticsPageProp
                 />
               </div>
               <div className="order-3 min-w-0 lg:order-none">
-                <OpenObservationsCard data={dashboardQuery.data} />
+                <OpenObservationsCard data={dashboardQuery.data} periodDays={periodDays} />
               </div>
               <div className="order-6 min-w-0 lg:order-none">
                 <LocationsCard
                   items={dashboardQuery.data.locations}
                   previewLimit={dashboardQuery.data.locations_preview_limit}
                   isCross={isCross}
+                  periodDays={periodDays}
                 />
               </div>
               <div className="order-8 min-w-0 lg:order-none">
