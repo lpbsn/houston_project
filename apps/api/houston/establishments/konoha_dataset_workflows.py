@@ -148,7 +148,12 @@ def _validate_interesting(
         return
     if cycle.get("resolution") != RESOLUTION_INTERESTING:
         errors.append(f"{group}: interesting overlay requires cycle.resolution=interesting")
-    _validate_email(spec.get("actor_email"), group=group, field="interesting.actor_email", errors=errors)
+    _validate_email(
+        spec.get("actor_email"),
+        group=group,
+        field="interesting.actor_email",
+        errors=errors,
+    )
     marked = _validate_instant(
         spec.get("at"), group=group, field="interesting.at", errors=errors
     )
@@ -170,7 +175,12 @@ def _validate_qualify(
     if not isinstance(spec, dict):
         errors.append(f"{group}: qualify must be an object")
         return
-    _validate_email(spec.get("actor_email"), group=group, field="qualify.actor_email", errors=errors)
+    _validate_email(
+        spec.get("actor_email"),
+        group=group,
+        field="qualify.actor_email",
+        errors=errors,
+    )
     at = _validate_instant(spec.get("at"), group=group, field="qualify.at", errors=errors)
     last_obs = last.get("occurred_at")
     if at is not None and isinstance(last_obs, str) and spec.get("at") <= last_obs:
@@ -266,7 +276,6 @@ def extend_replay_events_with_workflows(
         EVENT_RR_APPROVE,
         EVENT_RR_CREATE,
         EVENT_RR_REJECT,
-        KonohaDatasetReplayError,
         ReplayEvent,
         parse_corpus_datetime,
     )
@@ -283,7 +292,10 @@ def extend_replay_events_with_workflows(
     for signal_group, spec in workflows.items():
         if signal_group not in groups or not isinstance(spec, dict):
             continue
-        last = max(groups[signal_group], key=lambda item: parse_corpus_datetime(item["occurred_at"]))
+        last = max(
+            groups[signal_group],
+            key=lambda item: parse_corpus_datetime(item["occurred_at"]),
+        )
         if spec.get("qualify"):
             qualify = spec["qualify"]
             events.append(

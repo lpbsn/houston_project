@@ -54,6 +54,7 @@ from houston.establishments.konoha_dataset_replay import (
     FINGERPRINT_MATCH,
     FINGERPRINT_MISSING,
     KonohaDatasetReplayError,
+    ReplayEvent,
     ReplayResult,
     ReplayRuntime,
     _event_fingerprint,
@@ -1112,12 +1113,6 @@ def test_resolve_fingerprint_conflicts_when_origin_is_resolution_request(
         runtime=runtime,
         skip_corpus_validation=True,
         overrides={},
-    )
-    from houston.establishments.konoha_dataset_replay import (
-        EVENT_RESOLVE,
-        ReplayEvent,
-        _event_fingerprint,
-        FINGERPRINT_CONFLICT,
     )
 
     event = ReplayEvent(
