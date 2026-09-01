@@ -6,28 +6,41 @@ import {
   buildOnboardingUrl,
   resolvePendingLanding,
 } from '@/features/auth/lib/pending-onboarding'
+import { hasTrueCrossEstablishmentScope } from '@/features/navigation/lib/shared-navigation'
+
+export const CROSS_DASHBOARD_LANDING_PATH = '/cross?period=7d'
 
 export type AuthenticatedLanding =
   | { kind: 'operational'; path: '/reporting' }
   | { kind: 'establishment-selection'; path: '/select-establishment' }
+  | { kind: 'cross'; path: typeof CROSS_DASHBOARD_LANDING_PATH }
   | { kind: 'organization'; path: '/organization' }
   | { kind: 'pending'; path: string }
   | { kind: 'empty'; path: '/no-establishment' }
 
+export type AuthenticatedLandingContext = {
+  isDesktop?: boolean
+}
+
 export function resolveAuthenticatedLanding(
   bootstrap: BootstrapResponse,
+  context: AuthenticatedLandingContext = {},
 ): AuthenticatedLanding {
+  const activeMembershipCount = bootstrap.memberships.length
+
+  if (!bootstrap.active_membership && activeMembershipCount > 1) {
+    if (context.isDesktop && hasTrueCrossEstablishmentScope(bootstrap)) {
+      return { kind: 'cross', path: CROSS_DASHBOARD_LANDING_PATH }
+    }
+    return { kind: 'establishment-selection', path: '/select-establishment' }
+  }
+
   if (canManageOrganizationFromBootstrapHints(bootstrap.permission_hints)) {
     return { kind: 'organization', path: '/organization' }
   }
 
   if (bootstrap.active_membership) {
     return { kind: 'operational', path: '/reporting' }
-  }
-
-  const activeMembershipCount = bootstrap.memberships.length
-  if (activeMembershipCount > 1) {
-    return { kind: 'establishment-selection', path: '/select-establishment' }
   }
 
   if (activeMembershipCount === 1) {
@@ -49,17 +62,19 @@ export function resolveAuthenticatedLanding(
 
 export function getAuthenticatedLandingPath(
   bootstrap: BootstrapResponse | null | undefined,
+  context: AuthenticatedLandingContext = {},
 ): string | null {
   if (!bootstrap) {
     return null
   }
 
-  return resolveAuthenticatedLanding(bootstrap).path
+  return resolveAuthenticatedLanding(bootstrap, context).path
 }
 
 export const AUTHENTICATED_LANDING_PATHS = new Set<string>([
   '/reporting',
   '/select-establishment',
+  '/cross',
   '/pending-onboarding',
   '/onboarding',
   '/organization',

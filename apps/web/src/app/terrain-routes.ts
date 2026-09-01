@@ -123,16 +123,18 @@ export function requiresActiveMembership(route: AppRoute): boolean {
   }
 
   if (route.kind === 'scoped-terrain') {
-    return true
+    return route.scope.type !== 'cross'
+  }
+
+  if (route.kind === 'signal-detail' || route.kind === 'action-plan-execution-detail') {
+    return route.scope?.type !== 'cross'
   }
 
   if (
-    route.kind === 'signal-detail' ||
     route.kind === 'signal-action-create' ||
     route.kind === 'action-plan-create' ||
     route.kind === 'action-plan-template-detail' ||
     route.kind === 'action-plan-template-edit' ||
-    route.kind === 'action-plan-execution-detail' ||
     route.kind === 'action-plan-execution-edit' ||
     route.kind === 'chat-conversation-detail' ||
     route.kind === 'team-member-detail'

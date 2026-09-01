@@ -53,10 +53,10 @@ afterEach(() => {
 })
 
 describe('DesktopTerrainSidebar', () => {
-  it('renders scoped Cross and establishment sections for managers', () => {
+  it('renders the establishment section for a single-establishment manager without Cross', () => {
     render(
       <DesktopTerrainSidebar
-        activePath="/cross"
+        activePath="/analytics"
         bootstrap={bootstrap([membership({ role: 'manager' })])}
         navigate={vi.fn()}
         showChat={true}
@@ -65,22 +65,52 @@ describe('DesktopTerrainSidebar', () => {
 
     const sidebar = screen.getByLabelText('Navigation principale')
     expect(within(sidebar).getByText('Spore Analytics')).toBeTruthy()
-    expect(within(sidebar).getByText('Cross-établissement')).toBeTruthy()
-    expect(within(sidebar).getByRole('link', { name: 'Dashboard' })).toBeTruthy()
+    expect(within(sidebar).queryByText('Cross-établissement')).toBeNull()
     expect(within(sidebar).getByText('Spore Paris')).toBeTruthy()
+    expect(within(sidebar).getByRole('link', { name: 'Dashboard' })).toBeTruthy()
+    expect(within(sidebar).getByRole('link', { name: 'Observations' })).toBeTruthy()
+    expect(within(sidebar).getByRole('link', { name: 'Nouvelle observation' })).toBeTruthy()
   })
 
-  it('navigates to the Cross observations feed', () => {
+  it('navigates to the establishment observations feed for a single-establishment manager', () => {
     const navigate = vi.fn()
     render(
       <DesktopTerrainSidebar
-        activePath="/cross"
-        bootstrap={bootstrap([membership({ role: 'manager' })] )}
+        activePath="/analytics"
+        bootstrap={bootstrap([membership({ role: 'manager' })])}
         navigate={navigate}
         showChat={false}
       />,
     )
 
+    fireEvent.click(screen.getByRole('link', { name: 'Observations' }))
+    expect(navigate).toHaveBeenCalledWith('/e/est-1/signals')
+  })
+
+  it('navigates to the Cross observations feed when Cross scope is real', () => {
+    const navigate = vi.fn()
+    render(
+      <DesktopTerrainSidebar
+        activePath="/cross"
+        bootstrap={bootstrap([
+          membership({
+            role: 'manager',
+            establishment_id: 'est-1',
+            establishment_name: 'Spore Paris',
+          }),
+          membership({
+            role: 'manager',
+            establishment_id: 'est-2',
+            establishment_name: 'Spore Lyon',
+          }),
+        ])}
+        navigate={navigate}
+        showChat={false}
+      />,
+    )
+
+    const sidebar = screen.getByLabelText('Navigation principale')
+    expect(within(sidebar).getByText('Cross-établissement')).toBeTruthy()
     fireEvent.click(screen.getByRole('link', { name: 'Observations' }))
     expect(navigate).toHaveBeenCalledWith('/cross/signals')
   })

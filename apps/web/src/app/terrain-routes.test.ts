@@ -607,6 +607,37 @@ describe('requiresActiveMembership', () => {
     expect(requiresActiveMembership({ kind: 'static', path: '/analytics' })).toBe(false)
     expect(requiresActiveMembership({ kind: 'analytics-pattern-detail', patternId: 'pattern-1' }))
       .toBe(false)
+    expect(
+      requiresActiveMembership({
+        kind: 'scoped-terrain',
+        scope: { type: 'cross' },
+        page: 'dashboard',
+      }),
+    ).toBe(false)
+    expect(
+      requiresActiveMembership({
+        kind: 'signal-detail',
+        signalId: 'abc',
+        scope: { type: 'cross' },
+      }),
+    ).toBe(false)
+    expect(
+      requiresActiveMembership({
+        kind: 'action-plan-execution-detail',
+        executionId: 'exec-1',
+        scope: { type: 'cross' },
+      }),
+    ).toBe(false)
+  })
+
+  it('requires a selected establishment for establishment-scoped terrain', () => {
+    expect(
+      requiresActiveMembership({
+        kind: 'scoped-terrain',
+        scope: { type: 'establishment', establishmentId: 'est-1' },
+        page: 'dashboard',
+      }),
+    ).toBe(true)
   })
 
   it('returns true for operational detail routes', () => {

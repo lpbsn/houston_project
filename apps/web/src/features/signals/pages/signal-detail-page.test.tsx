@@ -931,6 +931,78 @@ describe('SignalDetailPage linked action plans', () => {
     expect(navigate).toHaveBeenCalledWith('/action-plans/executions/exec-1')
   })
 
+  it('keeps linked execution navigation in the cross scope', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({
+        linked_action_plan_executions: [buildLinkedExecution()],
+      }),
+      refetch: vi.fn(),
+    })
+
+    const history = createBrowserHistory()
+    render(
+      createElement(
+        AppRouteProvider,
+        { history },
+        createElement(SignalDetailPage, {
+          signalId: 'signal-1',
+          onNavigate: navigate,
+          source: 'cross',
+        }),
+      ),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Plan fuite/i }))
+
+    expect(navigate).toHaveBeenCalledWith('/cross/execution/exec-1')
+  })
+
+  it('keeps cross detail read-only from permission hints', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({
+        establishment_id: 'est-2',
+        linked_action_plan_executions: [buildLinkedExecution()],
+      }),
+      refetch: vi.fn(),
+    })
+
+    const history = createBrowserHistory()
+    render(
+      createElement(
+        AppRouteProvider,
+        { history },
+        createElement(SignalDetailPage, {
+          signalId: 'signal-1',
+          onNavigate: navigate,
+          source: 'cross',
+        }),
+      ),
+    )
+
+    expect(screen.queryByRole('button', { name: "+ Plan d'action" })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Qualifier' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Demander la résolution' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Approuver' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Refuser la demande' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Annuler la demande' })).toBeNull()
+
+    fireEvent.click(getCommentsTab())
+
+    expect(CommentSectionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        establishmentId: 'est-2',
+        targetType: 'signal',
+        targetId: 'signal-1',
+        readOnly: true,
+      }),
+      undefined,
+    )
+  })
+
   it('shows all linked executions', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,

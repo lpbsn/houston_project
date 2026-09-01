@@ -62,7 +62,7 @@ Ne pas replacer le service worker, le manifeste, ni l’installabilité PWA.
 - Pas d’abstraction anticipée : n’introduire une différence Web/Native que lorsqu’elle est concrète.
 - Backend, OpenAPI, RBAC, isolation tenant et cache frontend restent les sources de vérité existantes.
 
-Le code et les tests priment. Archi utile : [`engineering/frontend_architecture.md`](engineering/frontend_architecture.md), [`architecture/authentication_charter.md`](architecture/authentication_charter.md), [`product/domains/realtime_domain.md`](product/domains/realtime_domain.md), [`product/domains/notification_domain.md`](product/domains/notification_domain.md).
+Le code et les tests priment. Archi utile : [`../engineering/frontend_architecture.md`](../engineering/frontend_architecture.md), [`../architecture/authentication_charter.md`](../architecture/authentication_charter.md), [`../product/domains/realtime_domain.md`](../product/domains/realtime_domain.md), [`../product/domains/notification_domain.md`](../product/domains/notification_domain.md).
 
 ## Statut d’exécution
 
@@ -151,7 +151,7 @@ Hors périmètre de capture : audio (transcription online-only, jamais persisté
 
 Cette protection Observation régime A est un **prérequis avant un vrai usage ou pilote terrain à connectivité intermittente**. **Capacitor Lot 10 (done)** : draft in-memory process-scoped ; photos `File` locales ; upload uniquement à Envoyer ; bouton Envoyer désactivé hors ligne.
 
-Ticket auth orthogonal (wipe refresh Native sur erreur réseau) : hors ce checkpoint, hors Lot 10, hors séquencement Push — [issue #181](https://github.com/lpbsn/houston_project/issues/181), [`architecture/authentication_charter.md`](architecture/authentication_charter.md).
+Ticket auth orthogonal (wipe refresh Native sur erreur réseau) : hors ce checkpoint, hors Lot 10, hors séquencement Push — [issue #181](https://github.com/lpbsn/houston_project/issues/181), [`../architecture/authentication_charter.md`](../architecture/authentication_charter.md).
 
 ### 7. Push multi-channel — done
 
@@ -206,7 +206,7 @@ Interdit : offline-first généralisé ; réplication locale complète ; cache d
 
 **Pourquoi deferred.** Lots 1–10 sont le socle nécessaire pour reprendre le développement produit. Le projet se développe et se valide localement sur Web + Capacitor iOS/Android. La distribution bêta iOS/Android n’est pas ouverte ; l’Apple Developer Program et les canaux Google Play ne sont pas activés. Construire maintenant une automatisation de release / signing / store qui ne peut pas être validée de bout en bout n’apporte pas de valeur pour un développeur unique. Deferred does not mean abandoned.
 
-**Déclencheur de reprise.** Préparation **réelle** de TestFlight et/ou Google Play Internal Testing (comptes et canaux utilisables). Not a hypothetical “later”.
+**Déclencheur de reprise.** Préparation **réelle** de TestFlight et/ou Google Play Internal Testing (comptes et canaux utilisables). Not a hypothetical “later”. Store Readiness Phase 1 is a separate `cadrage cible` for preparatory store work; it can advance without automatically reopening this lot — see [`../roadmap_spore/spore-store-readiness-phase-1-v3.md`](../roadmap_spore/spore-store-readiness-phase-1-v3.md).
 
 **À traiter à la reprise** (périmètre du lot, pas de design d’implémentation) : signing / distribution ; identifiers et credentials nécessaires ; version / build numbers ; archives iOS / AAB Android ; procédures de publication ; checks CI/release réellement utiles à ce moment-là ; documentation opératoire.
 

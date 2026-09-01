@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   canShowAnalyticsNavigation,
+  hasTrueCrossEstablishmentScope,
   resolveBottomMobileNavigationItems,
   resolveDesktopNavigation,
   resolveSharedNavigationItems,
@@ -88,6 +89,28 @@ describe('shared navigation', () => {
     const payload = bootstrap([membership({ role: 'owner', status: 'deactivated' })])
 
     expect(canShowAnalyticsNavigation(payload)).toBe(false)
+  })
+
+  it('requires two distinct analytics establishments for a true cross scope', () => {
+    expect(hasTrueCrossEstablishmentScope(bootstrap([membership({ role: 'director' })], null))).toBe(
+      false,
+    )
+    expect(
+      hasTrueCrossEstablishmentScope(
+        bootstrap([
+          membership({ role: 'manager', establishment_id: 'est-manager' }),
+          membership({ role: 'staff', establishment_id: 'est-staff' }),
+        ]),
+      ),
+    ).toBe(false)
+    expect(
+      hasTrueCrossEstablishmentScope(
+        bootstrap([
+          membership({ role: 'director', establishment_id: 'est-1' }),
+          membership({ role: 'owner', establishment_id: 'est-2' }),
+        ]),
+      ),
+    ).toBe(true)
   })
 
   it('keeps chat controlled by the existing chat availability input', () => {

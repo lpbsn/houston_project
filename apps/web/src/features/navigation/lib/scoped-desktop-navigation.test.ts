@@ -17,7 +17,10 @@ function membership(overrides: Partial<Membership>): Membership {
   }
 }
 
-function bootstrap(memberships: Membership[]): BootstrapResponse {
+function bootstrap(
+  memberships: Membership[],
+  activeMembership: Membership | null = memberships[0] ?? null,
+): BootstrapResponse {
   return {
     authenticated: true,
     user: {
@@ -29,7 +32,7 @@ function bootstrap(memberships: Membership[]): BootstrapResponse {
       last_name: 'Renaud',
     },
     memberships,
-    active_membership: memberships[0] ?? null,
+    active_membership: activeMembership,
     pending_onboarding_memberships: [],
     permission_hints: {
       chat_available: false,
@@ -70,8 +73,71 @@ describe('scoped desktop navigation', () => {
     ])
     expect(sections[0]?.defaultExpanded).toBe(true)
     expect(sections[1]?.defaultExpanded).toBe(false)
+    expect(sections[2]?.defaultExpanded).toBe(false)
     expect(sections[0]?.items.map((item) => item.id)).toContain('dashboard')
     expect(sections[0]?.items.find((item) => item.id === 'signals')?.readOnly).toBe(true)
+  })
+
+  it('expands the only establishment section when Cross is hidden', () => {
+    const sections = resolveScopedDesktopNavigation({
+      bootstrap: bootstrap([membership({ role: 'manager' })]),
+      showChat: false,
+    })
+
+    expect(sections.map((section) => section.id)).toEqual(['establishment:est-1'])
+    expect(sections[0]?.defaultExpanded).toBe(true)
+  })
+
+  it('hides Cross when only one establishment is management-eligible', () => {
+    const paris = membership({
+      role: 'manager',
+      establishment_id: 'est-1',
+      establishment_name: 'Spore Paris',
+    })
+    const lyon = membership({
+      role: 'staff',
+      establishment_id: 'est-2',
+      establishment_name: 'Spore Lyon',
+    })
+    const sections = resolveScopedDesktopNavigation({
+      bootstrap: bootstrap([paris, lyon], paris),
+      showChat: false,
+    })
+
+    expect(sections.map((section) => section.id)).toEqual([
+      'establishment:est-2',
+      'establishment:est-1',
+    ])
+    expect(sections.find((section) => section.id === 'establishment:est-1')?.defaultExpanded).toBe(
+      true,
+    )
+    expect(sections.find((section) => section.id === 'establishment:est-2')?.defaultExpanded).toBe(
+      false,
+    )
+  })
+
+  it('expands the active membership establishment when Cross is hidden', () => {
+    const paris = membership({
+      role: 'manager',
+      establishment_id: 'est-1',
+      establishment_name: 'Spore Paris',
+    })
+    const lyon = membership({
+      role: 'staff',
+      establishment_id: 'est-2',
+      establishment_name: 'Spore Lyon',
+    })
+    const sections = resolveScopedDesktopNavigation({
+      bootstrap: bootstrap([paris, lyon], lyon),
+      showChat: false,
+    })
+
+    expect(sections.find((section) => section.id === 'establishment:est-2')?.defaultExpanded).toBe(
+      true,
+    )
+    expect(sections.find((section) => section.id === 'establishment:est-1')?.defaultExpanded).toBe(
+      false,
+    )
   })
 
   it('hides Cross and Dashboard for staff-only users', () => {
@@ -81,6 +147,7 @@ describe('scoped desktop navigation', () => {
     })
 
     expect(sections.map((section) => section.id)).toEqual(['establishment:est-1'])
+    expect(sections[0]?.defaultExpanded).toBe(true)
     expect(sections[0]?.items.map((item) => item.id)).not.toContain('dashboard')
     expect(sections[0]?.items.map((item) => item.id)).toContain('reporting')
   })

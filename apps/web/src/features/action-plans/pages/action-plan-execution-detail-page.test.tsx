@@ -570,6 +570,117 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
     expect(navigateMock).toHaveBeenCalledWith('/signals/signal-42')
   })
 
+  it('keeps linked signal navigation in the cross scope', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildExecution({
+        signal_summary: {
+          id: 'signal-42',
+          title: 'Fuite terrasse',
+          status: 'open',
+          affected_business_unit_id: null,
+          affected_business_unit_key: null,
+          affected_business_unit_label: null,
+          responsible_business_unit_id: null,
+          responsible_business_unit_key: null,
+          responsible_business_unit_label: null,
+          activity_subject_id: null,
+          activity_subject_normalized_name: null,
+          activity_subject_label: null,
+          location_text: 'Terrasse',
+        },
+      }),
+      error: null,
+      refetch: vi.fn(),
+    })
+
+    render(
+      createElement(ActionPlanExecutionDetailPage, {
+        executionId: 'exec-1',
+        source: 'cross',
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Voir l’observation liée' }))
+
+    expect(navigateMock).toHaveBeenCalledWith('/cross/signals/signal-42')
+  })
+
+  it('keeps cross detail read-only from permission hints', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildExecution({
+        establishment_id: 'est-2',
+        permission_hints: {
+          can_mark_done: false,
+          can_validate: false,
+          can_reopen: false,
+          can_cancel: false,
+          can_update: false,
+          is_pilot_pole_assignee: false,
+          can_pin: false,
+        },
+        task_executions: [
+          buildTaskExecution({
+            id: 'task-1',
+            task: 'Contrôler la terrasse',
+            position: 1,
+            business_unit: {
+              id: 'bu-1',
+              specific_name: 'Restaurant',
+              instance_description: '',
+              active: true,
+              generic: {
+                key: 'restaurant',
+                label: 'Restaurant',
+                description: '',
+                unit_type: 'dedicated',
+              },
+            },
+            permission_hints: {
+              can_mark_done: false,
+              can_unmark_done: false,
+              can_skip: false,
+              can_create_observation: false,
+            },
+          }),
+        ],
+      }),
+      error: null,
+      refetch: vi.fn(),
+    })
+
+    render(
+      createElement(ActionPlanExecutionDetailPage, {
+        executionId: 'exec-1',
+        source: 'cross',
+      }),
+    )
+
+    expect(screen.queryByRole('button', { name: 'Marquer terminé' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Valider' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Rouvrir' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Annuler' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Actions sur la tâche' })).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: 'Marquer « Contrôler la terrasse » comme terminée' }),
+    ).toBeNull()
+
+    fireEvent.click(getCommentsTab())
+
+    expect(CommentSectionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        establishmentId: 'est-2',
+        targetType: 'action-plan-execution',
+        targetId: 'exec-1',
+        readOnly: true,
+      }),
+      undefined,
+    )
+  })
+
   it('preserves Analytics context when opening the linked Signal from execution detail', () => {
     window.history.replaceState(
       null,
