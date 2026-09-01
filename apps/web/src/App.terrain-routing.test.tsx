@@ -9,7 +9,7 @@ import type { BootstrapResponse, Membership } from '@/features/auth/types'
 
 const navigate = vi.fn()
 const switchEstablishment = vi.hoisted(() =>
-  vi.fn(async (_payload: { establishment_id: string }) => undefined),
+  vi.fn(async () => undefined),
 )
 const routeState = vi.hoisted(() => ({
   route: { kind: 'static', path: '/analytics' } as AppRoute,
