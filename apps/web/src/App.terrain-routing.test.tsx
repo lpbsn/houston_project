@@ -10,7 +10,7 @@ import { buildSelectEstablishmentRedirectHref } from '@/lib/app-open-target'
 
 const navigate = vi.fn()
 const switchEstablishment = vi.hoisted(() =>
-  vi.fn(async (..._args: unknown[]) => undefined),
+  vi.fn(async () => undefined),
 )
 const routeState = vi.hoisted(() => ({
   route: { kind: 'static', path: '/analytics' } as AppRoute,
