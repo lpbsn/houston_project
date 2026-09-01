@@ -170,6 +170,7 @@ export function resolveScopedDesktopNavigation(options: {
   const memberships = options.bootstrap?.memberships ?? []
   const establishments = uniqueEstablishments(memberships)
   const showCross = hasTrueCrossEstablishmentScope(options.bootstrap)
+  const activeEstablishmentId = options.bootstrap?.active_membership?.establishment_id
   const sections: ScopedDesktopNavSection[] = []
 
   if (showCross) {
@@ -194,7 +195,9 @@ export function resolveScopedDesktopNavigation(options: {
       title: membership.establishment_name,
       subtitle: null,
       scope: { type: 'establishment', establishmentId: membership.establishment_id },
-      defaultExpanded: false,
+      defaultExpanded:
+        !showCross &&
+        (establishments.length === 1 || membership.establishment_id === activeEstablishmentId),
       items: establishmentItems(membership.establishment_id, {
         showDashboard,
         showChat: options.showChat,
