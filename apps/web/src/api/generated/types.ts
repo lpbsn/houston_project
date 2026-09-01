@@ -303,6 +303,40 @@ export interface paths {
         patch: operations["v1_auth_me_partial_update"];
         trace?: never;
     };
+    "/api/v1/auth/me/delete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Deletes the authenticated account after password confirmation. Last sole owners must confirm close_organizations. Cookie transport requires CSRF and clears the refresh cookie. */
+        post: operations["v1_auth_me_delete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/me/deletion-preview/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns account-deletion consequences for the authenticated user, including whether organization closure is required. */
+        get: operations["v1_auth_me_deletion_preview_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/refresh/": {
         parameters: {
             query?: never;
@@ -2382,6 +2416,29 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AccountDeletionEstablishment: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        AccountDeletionOrganization: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            establishment_names: string[];
+        };
+        AccountDeletionPreviewResponse: {
+            requires_organization_closure: boolean;
+            organizations: components["schemas"]["AccountDeletionOrganization"][];
+            leaves_establishments_without_director: components["schemas"]["AccountDeletionEstablishment"][];
+        };
+        AccountDeletionRequest: {
+            refresh_token_transport: components["schemas"]["RefreshTokenTransportEnum"];
+            password: string;
+            /** @default false */
+            close_organizations: boolean;
+            refresh_token?: string;
+        };
         ActionPlanActiveExecutionConflict: {
             code: string;
             detail: string;
@@ -5822,6 +5879,81 @@ export interface operations {
                 };
             };
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_auth_me_delete_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountDeletionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AccountDeletionRequest"];
+                "multipart/form-data": components["schemas"]["AccountDeletionRequest"];
+            };
+        };
+        responses: {
+            /** @description Account deleted; cookie cleared for cookie transport. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_auth_me_deletion_preview_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountDeletionPreviewResponse"];
+                };
+            };
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

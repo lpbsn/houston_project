@@ -56,4 +56,11 @@ describe('LandingPage', () => {
     const legal = screen.getByRole('link', { name: 'Mentions légales' })
     expect(legal.getAttribute('href')).toBe('/mentions-legales/')
   })
+
+  it('links to the account deletion page path', () => {
+    render(<LandingPage />)
+
+    const deletion = screen.getByRole('link', { name: 'Supprimer un compte' })
+    expect(deletion.getAttribute('href')).toBe('/supprimer-compte/')
+  })
 })

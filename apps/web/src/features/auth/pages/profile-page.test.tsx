@@ -159,6 +159,24 @@ vi.mock('@/lib/native-push-session', () => ({
   optInNativePush: () => optInNativePush(),
 }))
 
+vi.mock('@/features/auth/api', () => ({
+  AuthApiError: class AuthApiError extends Error {
+    status: number
+    code: string | null
+    constructor(message: string, status: number, code: string | null = null) {
+      super(message)
+      this.status = status
+      this.code = code
+    }
+  },
+  fetchAccountDeletionPreview: vi.fn(async () => ({
+    requires_organization_closure: false,
+    organizations: [],
+    leaves_establishments_without_director: [],
+  })),
+  deleteAccount: vi.fn(async () => undefined),
+}))
+
 vi.mock('@/features/gamification/hooks', () => ({
   useGamificationOverviewQuery: () => gamificationQueryState.current,
   useGamificationTransactionsInfiniteQuery: () => ({
@@ -243,6 +261,7 @@ describe('ProfilePage', () => {
     expect(screen.getByText('Bronze')).toBeTruthy()
     expect(screen.getByText('Argent')).toBeTruthy()
     expect(screen.getByText('Plus que 3 pts')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Supprimer mon compte' })).toBeTruthy()
   })
 
   it('renders no unlocked grade state from gamification API data', () => {

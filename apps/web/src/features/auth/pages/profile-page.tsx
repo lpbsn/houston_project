@@ -18,6 +18,7 @@ import {
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
 import { canSwitchEstablishment } from '@/features/auth/lib/establishment-switch'
+import { AccountDeletionCard } from '@/features/auth/pages/account-deletion-card'
 import { toRoleEnum } from '@/features/auth/lib/role'
 import type { RoleEnum } from '@/features/auth/types'
 import { canShowAnalyticsNavigation } from '@/features/navigation/lib/shared-navigation'
@@ -442,6 +443,13 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
           </button>
         </TerrainCard>
       ) : null}
+
+      <AccountDeletionCard
+        disabled={isLoggingOut}
+        onDeleted={async () => {
+          await onSignOut?.()
+        }}
+      />
     </div>
   )
 }

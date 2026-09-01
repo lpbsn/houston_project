@@ -34,6 +34,9 @@ export default defineConfig({
         mentionsLegales: fileURLToPath(
           new URL('./landing/mentions-legales/index.html', import.meta.url),
         ),
+        supprimerCompte: fileURLToPath(
+          new URL('./landing/supprimer-compte/index.html', import.meta.url),
+        ),
       },
     },
   },

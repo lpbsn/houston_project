@@ -769,6 +769,51 @@ export async function logout() {
   }
 }
 
+export async function fetchAccountDeletionPreview() {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/auth/me/deletion-preview/', {
+        headers: accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+            }
+          : undefined,
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildAuthError(result.response, result.error, 'Account deletion preview failed.')
+  }
+
+  return result.data
+}
+
+export async function deleteAccount(input: {
+  password: string
+  close_organizations: boolean
+}) {
+  const accessToken = getAccessToken()
+  const prepared = await prepareLogoutTransport()
+  const { error, response } = await apiClient.POST('/api/v1/auth/me/delete/', {
+    body: {
+      password: input.password,
+      close_organizations: input.close_organizations,
+      refresh_token_transport: prepared.transport,
+      ...(prepared.refreshToken ? { refresh_token: prepared.refreshToken } : {}),
+    },
+    credentials: prepared.credentials,
+    headers: buildTransportHeaders(prepared, accessToken),
+  })
+
+  if (error || response.status !== 204) {
+    throw buildAuthError(response, error, 'Account deletion failed.')
+  }
+
+  await runNativePushBeforeLogout()
+  clearPendingNativeDeepLink()
+}
+
 export async function fetchBootstrap() {
   const result = await withAuthRetry(
     (accessToken) =>

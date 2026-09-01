@@ -125,7 +125,12 @@ class ChatEligibleMembershipsResponseSerializer(serializers.Serializer):
 
 
 def membership_display_name(membership: EstablishmentMembership) -> str:
+    from houston.accounts.display import DELETED_ACCOUNT_DISPLAY_NAME
+    from houston.accounts.models import User
+
     user = membership.user
+    if user.status == User.Status.ANONYMIZED:
+        return DELETED_ACCOUNT_DISPLAY_NAME
     full_name = f"{user.first_name} {user.last_name}".strip()
     if full_name:
         return full_name

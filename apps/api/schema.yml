@@ -1076,6 +1076,71 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/auth/me/delete/:
+    post:
+      operationId: v1_auth_me_delete_create
+      description: Deletes the authenticated account after password confirmation.
+        Last sole owners must confirm close_organizations. Cookie transport requires
+        CSRF and clears the refresh cookie.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountDeletionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AccountDeletionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AccountDeletionRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '204':
+          description: Account deleted; cookie cleared for cookie transport.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/auth/me/deletion-preview/:
+    get:
+      operationId: v1_auth_me_deletion_preview_retrieve
+      description: Returns account-deletion consequences for the authenticated user,
+        including whether organization closure is required.
+      tags:
+      - auth
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountDeletionPreviewResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/auth/refresh/:
     post:
       operationId: v1_auth_refresh_create
@@ -8177,6 +8242,65 @@ paths:
           description: ''
 components:
   schemas:
+    AccountDeletionEstablishment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+      required:
+      - id
+      - name
+    AccountDeletionOrganization:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        establishment_names:
+          type: array
+          items:
+            type: string
+      required:
+      - establishment_names
+      - id
+      - name
+    AccountDeletionPreviewResponse:
+      type: object
+      properties:
+        requires_organization_closure:
+          type: boolean
+        organizations:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountDeletionOrganization'
+        leaves_establishments_without_director:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountDeletionEstablishment'
+      required:
+      - leaves_establishments_without_director
+      - organizations
+      - requires_organization_closure
+    AccountDeletionRequest:
+      type: object
+      properties:
+        refresh_token_transport:
+          $ref: '#/components/schemas/RefreshTokenTransportEnum'
+        password:
+          type: string
+        close_organizations:
+          type: boolean
+          default: false
+        refresh_token:
+          type: string
+      required:
+      - password
+      - refresh_token_transport
     ActionPlanActiveExecutionConflict:
       type: object
       properties:

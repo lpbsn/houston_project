@@ -8,13 +8,16 @@ const distRoot = resolve(webRoot, 'dist-landing')
 const requiredFiles = [
   'index.html',
   'mentions-legales/index.html',
+  'supprimer-compte/index.html',
   'robots.txt',
   'sitemap.xml',
+  '_redirects',
 ]
 
 const expectedCanonicals = {
   'index.html': 'https://spore-os.com/',
   'mentions-legales/index.html': 'https://spore-os.com/mentions-legales/',
+  'supprimer-compte/index.html': 'https://spore-os.com/supprimer-compte/',
 }
 
 function fail(message) {
@@ -40,6 +43,22 @@ for (const [relativePath, canonical] of Object.entries(expectedCanonicals)) {
   if (!html.includes('rel="canonical"') || !html.includes(needle)) {
     fail(`${relativePath} missing canonical ${canonical}`)
   }
+}
+
+const redirects = readFileSync(resolve(distRoot, '_redirects'), 'utf8')
+const requiredRedirects = [
+  '/mentions-legales /mentions-legales/index.html 200',
+  '/mentions-legales/ /mentions-legales/index.html 200',
+  '/supprimer-compte /supprimer-compte/index.html 200',
+  '/supprimer-compte/ /supprimer-compte/index.html 200',
+]
+for (const rule of requiredRedirects) {
+  if (!redirects.includes(rule)) {
+    fail(`_redirects missing ${rule}`)
+  }
+}
+if (redirects.includes('/* /index.html 200')) {
+  fail('_redirects must not SPA-fallback all routes to index.html')
 }
 
 console.log('landing build validation ok')

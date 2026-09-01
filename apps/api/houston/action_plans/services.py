@@ -94,8 +94,9 @@ class AssigneeChronologyDefaults:
 
 
 def _membership_display_name(membership: EstablishmentMembership) -> str:
-    user = membership.user
-    return user.get_full_name() or user.email or user.username
+    from houston.accounts.display import membership_display_name
+
+    return membership_display_name(membership) or ""
 
 
 def _normalize_skipped_reason(skipped_reason: str | None) -> str | None:

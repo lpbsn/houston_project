@@ -1,1 +1,5 @@
 /login https://app.spore-os.com/login 301
+/mentions-legales /mentions-legales/index.html 200
+/mentions-legales/ /mentions-legales/index.html 200
+/supprimer-compte /supprimer-compte/index.html 200
+/supprimer-compte/ /supprimer-compte/index.html 200

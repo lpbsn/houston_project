@@ -418,10 +418,9 @@ _EVENT_TYPE_SORT_ORDER = {
 
 
 def _membership_display_name(membership) -> str | None:
-    if membership is None:
-        return None
-    user = membership.user
-    return user.get_full_name() or user.email or user.username or None
+    from houston.accounts.display import membership_display_name
+
+    return membership_display_name(membership)
 
 
 def build_resolution_request_events(requests) -> list[dict]:

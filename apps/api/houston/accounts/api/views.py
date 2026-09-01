@@ -13,6 +13,8 @@ from rest_framework.views import APIView
 from houston.accounts.api.serializers import (
     REFRESH_TOKEN_TRANSPORT_BODY,
     REFRESH_TOKEN_TRANSPORT_COOKIE,
+    AccountDeletionPreviewResponseSerializer,
+    AccountDeletionRequestSerializer,
     ApiErrorResponseSerializer,
     AuthResponseSerializer,
     BootstrapResponseSerializer,
@@ -34,6 +36,12 @@ from houston.accounts.api.serializers import (
 from houston.accounts.authentication import (
     BearerAccessTokenAuthentication,
     OptionalBearerAccessTokenAuthentication,
+)
+from houston.accounts.deletion_services import (
+    InvalidAccountDeletionPasswordError,
+    OrganizationClosureRequiredError,
+    build_account_deletion_preview,
+    delete_authenticated_account,
 )
 from houston.accounts.selectors import build_bootstrap_payload
 from houston.accounts.services import (
@@ -493,6 +501,80 @@ class UserProfileView(APIView):
             )
 
         return Response(build_bootstrap_payload(request.user, session=request.auth.session))
+
+
+class AccountDeletionPreviewView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["auth"],
+        responses={
+            200: AccountDeletionPreviewResponseSerializer,
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+        description=(
+            "Returns account-deletion consequences for the authenticated user, "
+            "including whether organization closure is required."
+        ),
+    )
+    def get(self, request):
+        return Response(build_account_deletion_preview(user=request.user))
+
+
+class AccountDeletionView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["auth"],
+        request=AccountDeletionRequestSerializer,
+        responses={
+            204: OpenApiResponse(
+                description="Account deleted; cookie cleared for cookie transport."
+            ),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            409: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+        description=(
+            "Deletes the authenticated account after password confirmation. "
+            "Last sole owners must confirm close_organizations. Cookie transport "
+            "requires CSRF and clears the refresh cookie."
+        ),
+    )
+    def post(self, request):
+        serializer = AccountDeletionRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        transport = serializer.validated_data["refresh_token_transport"]
+
+        csrf_failure = _enforce_csrf_for_transport(request, transport=transport)
+        if csrf_failure is not None:
+            return csrf_failure
+
+        try:
+            delete_authenticated_account(
+                user=request.user,
+                password=serializer.validated_data["password"],
+                close_organizations=serializer.validated_data["close_organizations"],
+            )
+        except InvalidAccountDeletionPasswordError as exc:
+            return _api_error_response(
+                code="invalid_credentials",
+                detail=exc.detail,
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        except OrganizationClosureRequiredError as exc:
+            return _api_error_response(
+                code="organization_closure_required",
+                detail=exc.detail,
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        response = Response(status=status.HTTP_204_NO_CONTENT)
+        if transport == REFRESH_TOKEN_TRANSPORT_COOKIE:
+            clear_refresh_cookie(response=response)
+        return response
 
 
 class SwitchEstablishmentView(APIView):

@@ -32,8 +32,9 @@ def _truncate_short(text: str, *, max_length: int) -> str:
 
 
 def _membership_display_name(membership) -> str:
-    user = membership.user
-    return user.get_full_name() or user.email or user.username
+    from houston.accounts.display import membership_display_name
+
+    return membership_display_name(membership) or ""
 
 
 def description_short(text: str) -> str:

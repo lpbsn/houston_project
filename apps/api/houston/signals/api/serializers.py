@@ -421,9 +421,10 @@ def serialize_signal_detail(
         }
         payload["media_items"] = []
     else:
+        from houston.accounts.display import user_display_name
+
         observation = link.observation
-        user = observation.submitted_by_membership.user
-        display = user.get_full_name() or user.email or user.username
+        display = user_display_name(observation.submitted_by_membership.user)
         payload["source_context"] = {
             "submitted_at": observation.submitted_at,
             "reporter_display_name": display,
