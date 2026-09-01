@@ -49,10 +49,9 @@ def _schedule_notification_invalidation(
 
 
 def _membership_display_name(membership: EstablishmentMembership | None) -> str | None:
-    if membership is None:
-        return None
-    user = membership.user
-    return user.get_full_name() or user.email or user.username
+    from houston.accounts.display import membership_display_name
+
+    return membership_display_name(membership)
 
 
 def _is_duplicate_notification(

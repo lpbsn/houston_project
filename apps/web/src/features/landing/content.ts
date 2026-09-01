@@ -1,4 +1,6 @@
 export const APP_LOGIN_URL = 'https://app.spore-os.com/login' as const
+export const APP_PROFILE_URL = 'https://app.spore-os.com/general' as const
+export const ACCOUNT_DELETION_SUPPORT_EMAIL = 'leonard.p.boisson@gmail.com' as const
 
 export const landingSeo = {
   home: {
@@ -12,6 +14,12 @@ export const landingSeo = {
     description:
       'Mentions légales du site Spore : éditeur, responsable de publication, hébergeur et informations de conformité.',
     canonical: 'https://spore-os.com/mentions-legales/',
+  },
+  accountDeletion: {
+    title: 'Supprimer un compte Spore',
+    description:
+      'Comment demander la suppression de votre compte Spore et des données personnelles associées.',
+    canonical: 'https://spore-os.com/supprimer-compte/',
   },
 } as const
 
@@ -158,6 +166,8 @@ export const footerContent = {
   loginHref: APP_LOGIN_URL,
   legalLabel: 'Mentions légales',
   legalHref: '/mentions-legales/',
+  accountDeletionLabel: 'Supprimer un compte',
+  accountDeletionHref: '/supprimer-compte/',
   copyright: '© 2026 Spore. Tous droits réservés.',
 } as const
 
@@ -206,5 +216,30 @@ export const legalContent = {
         'Le contenu, l’identité visuelle et le logo Spore sont protégés. Toute reproduction non autorisée est interdite.',
       ],
     },
+  ] as const,
+} as const
+
+export const accountDeletionContent = {
+  pageTitle: 'Supprimer un compte Spore',
+  backLabel: 'Retour à l’accueil',
+  backHref: '/',
+  intro:
+    'Si vous avez un compte Spore, vous pouvez demander la suppression de ce compte et des données personnelles associées.',
+  inAppTitle: 'Depuis l’application',
+  inAppParagraphs: [
+    'Connectez-vous à Spore, ouvrez Profil, puis choisissez « Supprimer mon compte ».',
+    'Confirmez avec votre mot de passe. Si vous êtes le seul propriétaire d’une organisation, la suppression ferme aussi cette organisation.',
+  ] as const,
+  loginLabel: 'Ouvrir Spore',
+  loginHref: APP_PROFILE_URL,
+  emailTitle: 'Si vous ne pouvez plus vous connecter',
+  emailIntro:
+    'Écrivez-nous. Indiquez l’adresse e-mail du compte. Nous traitons la demande sous 30 jours.',
+  emailLabel: ACCOUNT_DELETION_SUPPORT_EMAIL,
+  emailHref: `mailto:${ACCOUNT_DELETION_SUPPORT_EMAIL}?subject=Suppression%20de%20compte%20Spore`,
+  retainedTitle: 'Ce qui est retiré et ce qui peut rester',
+  retainedParagraphs: [
+    'Nous retirons l’identifiant du compte (e-mail, nom, mot de passe, sessions, notifications push) et le contenu que vous avez soumis (texte d’observation, photos, commentaires, messages de chat encore présents).',
+    'Le travail d’établissement déjà structuré (signaux, plans d’action) peut être conservé. Votre nom n’y est plus affiché. Des extraits peuvent encore apparaître dans des synthèses ou dans les textes écrits par d’autres personnes.',
   ] as const,
 } as const

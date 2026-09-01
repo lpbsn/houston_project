@@ -99,6 +99,44 @@ class UserProfileUpdateRequestSerializer(serializers.Serializer):
         return attrs
 
 
+class AccountDeletionOrganizationSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    name = serializers.CharField()
+    establishment_names = serializers.ListField(child=serializers.CharField())
+
+
+class AccountDeletionEstablishmentSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    name = serializers.CharField()
+
+
+class AccountDeletionPreviewResponseSerializer(serializers.Serializer):
+    requires_organization_closure = serializers.BooleanField()
+    organizations = AccountDeletionOrganizationSerializer(many=True)
+    leaves_establishments_without_director = AccountDeletionEstablishmentSerializer(many=True)
+
+
+class AccountDeletionRequestSerializer(RefreshTokenTransportSerializerMixin):
+    password = serializers.CharField(trim_whitespace=False)
+    close_organizations = serializers.BooleanField(required=False, default=False)
+    refresh_token = serializers.CharField(required=False, trim_whitespace=False)
+
+    def validate_password(self, value: str) -> str:
+        if not value:
+            raise serializers.ValidationError("This field may not be blank.")
+        return value
+
+    def validate(self, attrs):
+        if (
+            attrs["refresh_token_transport"] == REFRESH_TOKEN_TRANSPORT_COOKIE
+            and attrs.get("refresh_token") is not None
+        ):
+            raise serializers.ValidationError(
+                {"refresh_token": "Must not be provided for cookie transport."}
+            )
+        return attrs
+
+
 @extend_schema_serializer(component_name="AuthMembershipScopeItem")
 class MembershipScopeItemSerializer(serializers.Serializer):
     scope_type = serializers.CharField()

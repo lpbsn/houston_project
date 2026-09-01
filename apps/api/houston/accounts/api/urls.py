@@ -1,6 +1,8 @@
 from django.urls import path
 
 from houston.accounts.api.views import (
+    AccountDeletionPreviewView,
+    AccountDeletionView,
     BootstrapView,
     CsrfCookieView,
     LoginView,
@@ -25,6 +27,12 @@ urlpatterns = [
     path("logout/", LogoutView.as_view(), name="auth-logout"),
     path("bootstrap/", BootstrapView.as_view(), name="auth-bootstrap"),
     path("me/", UserProfileView.as_view(), name="auth-profile"),
+    path(
+        "me/deletion-preview/",
+        AccountDeletionPreviewView.as_view(),
+        name="auth-deletion-preview",
+    ),
+    path("me/delete/", AccountDeletionView.as_view(), name="auth-delete"),
     path(
         "switch_establishment/",
         SwitchEstablishmentView.as_view(),

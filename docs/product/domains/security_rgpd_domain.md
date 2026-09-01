@@ -21,7 +21,7 @@ Identity / Membership defines who the user is and which establishment they belon
 - Temporary transcription audio must not be preserved as a `TemporaryUpload`-like persistent artifact; only validated transcription text is persisted in MVP.
 - AI input/output privacy boundaries: only validated pipeline inputs may be sent to AI; Chat and images are excluded from AI analysis in MVP.
 - Minimal technical logging, minimal notification payloads, and minimal realtime payloads.
-- High-level incident handling and DSAR/export/delete expectations only.
+- High-level incident handling and DSAR/export expectations. Self-service account deletion is implemented (see [`data_inventory.md`](../data_inventory.md)).
 
 ## 3. Out of Scope
 
@@ -123,19 +123,20 @@ Implemented endpoints confirmed in `apps/api/schema.yml`:
 - `POST /api/v1/auth/refresh/`
 - `POST /api/v1/auth/logout/`
 - `GET /api/v1/auth/bootstrap/`
+- `GET /api/v1/auth/me/deletion-preview/`
+- `POST /api/v1/auth/me/delete/`
 
 Implemented security truths confirmed today:
 
 - Login, refresh, and logout require CSRF for cookie transport and omit CSRF for body transport.
 - Bootstrap is bearer-authenticated.
 - Auth responses expose backend-approved membership context.
-- No export, delete, privacy-admin, support, or security-admin endpoint is currently confirmed as implemented. Media privacy endpoints (temporary photos + transcription audio) are covered by [`upload_media_domain.md`](upload_media_domain.md).
+- Account deletion is implemented as identity anonymization plus submitted-content tombstones; see [`data_inventory.md`](../data_inventory.md). Media privacy endpoints (temporary photos + transcription audio) are covered by [`upload_media_domain.md`](upload_media_domain.md).
 
 Candidate endpoints only:
 
 - Media signed URL endpoint
 - Data export request endpoint
-- Data deletion or offboarding endpoint
 - Incident reporting endpoint
 - Support or audit access endpoint
 - Retention or privacy admin endpoint

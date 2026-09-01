@@ -23,8 +23,10 @@ Sortie validée :
 apps/web/dist-landing/
 ├── index.html
 ├── mentions-legales/index.html
+├── supprimer-compte/index.html
 ├── robots.txt
 ├── sitemap.xml
+├── _redirects
 └── assets/
 ```
 
@@ -43,9 +45,11 @@ Commandes utiles :
    - **Build output directory** : `dist-landing` (si root = `apps/web`) ou `apps/web/dist-landing`
 3. Attacher le domaine custom `spore-os.com` (et `www` si besoin) au projet Pages.
 4. Laisser `app.spore-os.com` sur Railway uniquement.
-5. Vérifier après déploiement :
+5. **Ne pas** activer le fallback SPA 404 vers `index.html` (sinon `/supprimer-compte/` sert l’accueil). Le fichier `_redirects` du build réécrit explicitement `/mentions-legales/` et `/supprimer-compte/` vers leurs HTML.
+6. Vérifier après déploiement :
    - `https://spore-os.com/`
-   - `https://spore-os.com/mentions-legales/` (accès direct)
+   - `https://spore-os.com/mentions-legales/` (accès direct, titre mentions légales)
+   - `https://spore-os.com/supprimer-compte/` (titre **Supprimer un compte Spore**, pas le hero landing)
    - `https://spore-os.com/robots.txt`
    - `https://spore-os.com/sitemap.xml`
    - `https://app.spore-os.com/`

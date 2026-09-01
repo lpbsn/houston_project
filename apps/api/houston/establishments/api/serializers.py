@@ -33,17 +33,9 @@ class MembershipUserSummarySerializer(serializers.Serializer):
     last_name = serializers.CharField(allow_blank=True)
 
     def get_display_name(self, user) -> str:
-        full_name = user.get_full_name().strip()
-        if full_name:
-            return full_name
+        from houston.accounts.display import user_display_name
 
-        if user.username:
-            return user.username
-
-        if user.email:
-            return user.email
-
-        return str(user.id)
+        return user_display_name(user)
 
 
 @extend_schema_serializer(component_name="EstablishmentMembershipScopeItem")

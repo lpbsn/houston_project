@@ -81,6 +81,9 @@ Validated MVP access implications:
 - Access resolution uses only active user + active membership + active establishment + active organization.
 - `invited` memberships do not count as active access.
 - Deactivated memberships are excluded from access resolution and bootstrap results.
+- Self-service account deletion anonymizes the `User` (no hard delete) and deactivates that user’s memberships. Submitted UGC is tombstoned; see [`data_inventory.md`](../data_inventory.md).
+- Last sole owner must confirm organization closure (`close_organizations`) so the organization is `archived` and its draft/active establishments are `deactivated`.
+- Last director who is not last owner may delete their account. Team membership management still cannot remove the last director (`DirectorCoverageInvariantError`).
 - Current code validates access state, but this document does not define additional lifecycle workflows or transition APIs beyond what is implemented.
 
 ## 7. Permissions
@@ -114,6 +117,8 @@ Implemented endpoints confirmed in `apps/api/schema.yml`:
 - `POST /api/v1/auth/refresh/`
 - `POST /api/v1/auth/logout/`
 - `GET /api/v1/auth/bootstrap/`
+- `GET /api/v1/auth/me/deletion-preview/`
+- `POST /api/v1/auth/me/delete/`
 - `POST /api/v1/auth/switch_establishment/`
 - `GET /api/v1/establishments/{establishment_id}/memberships/`
 - `GET /api/v1/establishments/{establishment_id}/memberships/{membership_id}/`
@@ -147,7 +152,6 @@ Implemented response truths:
 Candidate endpoints only:
 
 - Password reset endpoints
-- Current-user endpoints beyond the implemented bootstrap contract
 
 ## 10. Frontend Expectations
 
