@@ -123,5 +123,14 @@ describe('AccountDeletionCard', () => {
       'disabled',
       true,
     )
+
+    fetchAccountDeletionPreview.mockResolvedValueOnce(ownerPreview)
+    fireEvent.click(screen.getByRole('button', { name: 'Recharger les conséquences' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox')).toBeTruthy()
+    })
+    expect(screen.queryByRole('button', { name: 'Recharger les conséquences' })).toBeNull()
+    expect(screen.getByText('Cochez la fermeture de votre organisation pour continuer.')).toBeTruthy()
   })
 })

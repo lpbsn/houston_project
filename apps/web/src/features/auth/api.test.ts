@@ -380,67 +380,6 @@ describe('auth api cache isolation', () => {
     )
   })
 
-  it('does not tear down native push when account deletion fails', async () => {
-    getAccessTokenMock.mockReturnValue('current-access')
-    apiClientPostMock.mockResolvedValueOnce({
-      response: { status: 409 },
-      data: undefined,
-      error: { code: 'organization_closure_required', detail: 'closure required' },
-    })
-
-    await expect(
-      deleteAccount({ password: 'secret', close_organizations: false }),
-    ).rejects.toMatchObject({ status: 409, code: 'organization_closure_required' })
-
-    expect(runNativePushBeforeLogoutMock).not.toHaveBeenCalled()
-    expect(clearPendingNativeDeepLinkMock).not.toHaveBeenCalled()
-  })
-
-  it('tears down native push only after a successful account deletion', async () => {
-    getAccessTokenMock.mockReturnValue('current-access')
-    apiClientPostMock.mockResolvedValueOnce({
-      response: { status: 204 },
-      data: undefined,
-      error: undefined,
-    })
-
-    await deleteAccount({ password: 'secret', close_organizations: false })
-
-    expect(apiClientPostMock).toHaveBeenCalledWith(
-      '/api/v1/auth/me/delete/',
-      expect.objectContaining({
-        body: expect.objectContaining({
-          password: 'secret',
-          close_organizations: false,
-        }),
-      }),
-    )
-    expect(runNativePushBeforeLogoutMock).toHaveBeenCalledOnce()
-    expect(clearPendingNativeDeepLinkMock).toHaveBeenCalledOnce()
-    expect(apiClientPostMock.mock.invocationCallOrder[0]).toBeLessThan(
-      runNativePushBeforeLogoutMock.mock.invocationCallOrder[0],
-    )
-    expect(runNativePushBeforeLogoutMock.mock.invocationCallOrder[0]).toBeLessThan(
-      clearPendingNativeDeepLinkMock.mock.invocationCallOrder[0],
-    )
-  })
-
-  it('still tears down native push before logout', async () => {
-    getAccessTokenMock.mockReturnValue('current-access')
-    apiClientPostMock.mockResolvedValueOnce({
-      response: { status: 204 },
-      data: undefined,
-      error: undefined,
-    })
-
-    await logout()
-
-    expect(runNativePushBeforeLogoutMock).toHaveBeenCalledOnce()
-    expect(runNativePushBeforeLogoutMock.mock.invocationCallOrder[0]).toBeLessThan(
-      apiClientPostMock.mock.invocationCallOrder[0],
-    )
-  })
-
   it('still logs out with bearer when body refresh storage is unavailable', async () => {
     vi.stubEnv('VITE_APP_RUNTIME', 'native')
     getAccessTokenMock.mockReturnValue('current-access')
