@@ -1,7 +1,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 
-import { serializeAppRoute, useAppRoute, type AppRoute } from '@/app/app-routes'
+import { parseAppRoute, serializeAppRoute, useAppRoute, type AppRoute } from '@/app/app-routes'
 import {
   serializeScopedExecutionDetailPath,
   serializeScopedSignalDetailPath,
@@ -177,21 +177,35 @@ function App() {
 
     if (shouldRedirectAuthenticatedPublicRoute(route) && landingPath) {
       const pending = parsePendingAppOpenFromSearch(locationSearch)
-      if (pending?.establishmentId || (pending && auth.hasOperationalAccess)) {
-        if (applyingOpenRef.current) {
+      if (pending) {
+        const pendingRoute = parseAppRoute(pending.href)
+        const destEstablishmentId =
+          pending.establishmentId ?? establishmentIdRequiringSwitch(pendingRoute) ?? undefined
+        const canOpenNow =
+          Boolean(destEstablishmentId) ||
+          auth.hasOperationalAccess ||
+          !requiresActiveMembership(pendingRoute)
+
+        if (canOpenNow) {
+          if (applyingOpenRef.current) {
+            return
+          }
+          applyingOpenRef.current = true
+          void applyAppOpenTarget(
+            destEstablishmentId
+              ? { ...pending, establishmentId: destEstablishmentId }
+              : pending,
+            openSession,
+          )
+            .catch(() => {
+              navigate(landingPath, { replace: true })
+            })
+            .finally(() => {
+              applyingOpenRef.current = false
+            })
           return
         }
-        applyingOpenRef.current = true
-        void applyAppOpenTarget(pending, openSession)
-          .catch(() => {
-            navigate(landingPath, { replace: true })
-          })
-          .finally(() => {
-            applyingOpenRef.current = false
-          })
-        return
-      }
-      if (pending && landingPath === '/select-establishment') {
+
         navigate(buildSelectEstablishmentRedirectHref(pending), { replace: true })
         return
       }

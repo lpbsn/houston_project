@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AppRoute } from '@/app/app-routes'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
+import { buildSelectEstablishmentRedirectHref } from '@/lib/app-open-target'
 
 const navigate = vi.fn()
 const switchEstablishment = vi.hoisted(() =>
@@ -561,6 +562,108 @@ describe('App terrain active membership routing', () => {
       )
     })
     expect(navigate).not.toHaveBeenCalledWith('/cross?period=7d', { replace: true })
+  })
+
+  it('carries a membership-required login next without a hint to the selector on a large viewport', async () => {
+    stubLgViewport(true)
+    window.history.replaceState(
+      null,
+      '',
+      '/login?next=%2Fsignals%2F11111111-1111-4111-8111-111111111111',
+    )
+    const bootstrap = bootstrapWithoutActiveMembership()
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = false
+    routeState.route = { kind: 'static', path: '/login' }
+
+    render(createElement(App))
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith(
+        buildSelectEstablishmentRedirectHref({
+          href: '/signals/11111111-1111-4111-8111-111111111111',
+        }),
+        { replace: true },
+      )
+    })
+    expect(switchEstablishment).not.toHaveBeenCalled()
+    expect(navigate).not.toHaveBeenCalledWith('/cross?period=7d', { replace: true })
+  })
+
+  it('opens a cross login next without a hint instead of the selector', async () => {
+    stubLgViewport(true)
+    window.history.replaceState(null, '', '/login?next=%2Fcross%3Fperiod%3D7d')
+    const bootstrap = bootstrapWithoutActiveMembership()
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = false
+    routeState.route = { kind: 'static', path: '/login' }
+
+    render(createElement(App))
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith('/cross?period=7d', { replace: true })
+    })
+    expect(switchEstablishment).not.toHaveBeenCalled()
+    expect(navigate).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^\/select-establishment/),
+      expect.anything(),
+    )
+  })
+
+  it('switches from a login next that encodes an establishment without a query hint', async () => {
+    stubLgViewport(true)
+    const establishmentId = '11111111-1111-4111-8111-111111111111'
+    window.history.replaceState(
+      null,
+      '',
+      `/login?next=${encodeURIComponent(`/e/${establishmentId}/signals`)}`,
+    )
+    const bootstrap = bootstrapWithoutActiveMembership()
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = false
+    routeState.route = { kind: 'static', path: '/login' }
+
+    render(createElement(App))
+
+    await waitFor(() => {
+      expect(switchEstablishment).toHaveBeenCalledWith({ establishment_id: establishmentId })
+    })
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith(`/e/${establishmentId}/signals`, { replace: true })
+    })
+    expect(navigate).not.toHaveBeenCalledWith('/cross?period=7d', { replace: true })
+    expect(navigate).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^\/select-establishment/),
+      expect.anything(),
+    )
+  })
+
+  it('carries a membership-required login next without a hint to the selector on a small viewport', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/login?next=%2Fsignals%2F11111111-1111-4111-8111-111111111111',
+    )
+    const bootstrap = bootstrapWithoutActiveMembership()
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = false
+    routeState.route = { kind: 'static', path: '/login' }
+
+    render(createElement(App))
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith(
+        buildSelectEstablishmentRedirectHref({
+          href: '/signals/11111111-1111-4111-8111-111111111111',
+        }),
+        { replace: true },
+      )
+    })
+    expect(switchEstablishment).not.toHaveBeenCalled()
   })
 
   it('switches when entering an establishment-scoped route without a session', async () => {
