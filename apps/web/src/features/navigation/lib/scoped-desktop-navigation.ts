@@ -1,7 +1,7 @@
 import type { TerrainScope } from '@/app/scoped-terrain'
 import { serializeScopedTerrainPath } from '@/app/scoped-terrain'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
-import { canShowAnalyticsNavigation } from '@/features/navigation/lib/shared-navigation'
+import { hasTrueCrossEstablishmentScope } from '@/features/navigation/lib/shared-navigation'
 
 const ANALYTICS_ROLES = new Set(['owner', 'director', 'manager'])
 
@@ -169,7 +169,7 @@ export function resolveScopedDesktopNavigation(options: {
 }): ScopedDesktopNavSection[] {
   const memberships = options.bootstrap?.memberships ?? []
   const establishments = uniqueEstablishments(memberships)
-  const showCross = canShowAnalyticsNavigation(options.bootstrap)
+  const showCross = hasTrueCrossEstablishmentScope(options.bootstrap)
   const sections: ScopedDesktopNavSection[] = []
 
   if (showCross) {

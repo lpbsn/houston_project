@@ -74,6 +74,29 @@ describe('scoped desktop navigation', () => {
     expect(sections[0]?.items.find((item) => item.id === 'signals')?.readOnly).toBe(true)
   })
 
+  it('hides Cross when only one establishment is management-eligible', () => {
+    const sections = resolveScopedDesktopNavigation({
+      bootstrap: bootstrap([
+        membership({
+          role: 'manager',
+          establishment_id: 'est-1',
+          establishment_name: 'Spore Paris',
+        }),
+        membership({
+          role: 'staff',
+          establishment_id: 'est-2',
+          establishment_name: 'Spore Lyon',
+        }),
+      ]),
+      showChat: false,
+    })
+
+    expect(sections.map((section) => section.id)).toEqual([
+      'establishment:est-2',
+      'establishment:est-1',
+    ])
+  })
+
   it('hides Cross and Dashboard for staff-only users', () => {
     const sections = resolveScopedDesktopNavigation({
       bootstrap: bootstrap([membership({ role: 'staff' })]),

@@ -1,13 +1,13 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 
-import { useAppRoute } from '@/app/app-routes'
+import { serializeAppRoute, useAppRoute, type AppRoute } from '@/app/app-routes'
 import {
   serializeScopedExecutionDetailPath,
   serializeScopedSignalDetailPath,
 } from '@/app/scoped-terrain'
 import { useLgViewport } from '@/lib/lg-viewport'
-import { canShowAnalyticsNavigation } from '@/features/navigation/lib/shared-navigation'
+import { hasTrueCrossEstablishmentScope } from '@/features/navigation/lib/shared-navigation'
 import {
   LazyActionPlanCreatePage,
   LazyActionPlanExecutionDetailPage,
@@ -104,6 +104,19 @@ import {
 } from '@/lib/native-deep-link-session'
 import { setNativeSystemBackAuthGetter } from '@/lib/native-system-back'
 
+function establishmentIdRequiringSwitch(route: AppRoute): string | null {
+  if (route.kind === 'scoped-terrain' && route.scope.type === 'establishment') {
+    return route.scope.establishmentId
+  }
+  if (
+    (route.kind === 'signal-detail' || route.kind === 'action-plan-execution-detail') &&
+    route.scope?.type === 'establishment'
+  ) {
+    return route.scope.establishmentId
+  }
+  return null
+}
+
 function App() {
   const shouldReduceMotion = useReducedMotion()
   const auth = useAuth()
@@ -150,23 +163,26 @@ function App() {
       return
     }
 
-    const landingPath = getAuthenticatedLandingPath(auth.bootstrap)
+    const landingPath = getAuthenticatedLandingPath(auth.bootstrap, {
+      isDesktop: isLgViewport,
+    })
+    const openSession = {
+      getActiveEstablishmentId: () =>
+        auth.bootstrap?.active_membership?.establishment_id ?? null,
+      switchEstablishment: async (establishmentId: string) => {
+        await switchEstablishment({ establishment_id: establishmentId })
+      },
+      navigate,
+    }
 
     if (shouldRedirectAuthenticatedPublicRoute(route) && landingPath) {
       const pending = parsePendingAppOpenFromSearch(locationSearch)
-      if (pending && auth.hasOperationalAccess) {
+      if (pending?.establishmentId || (pending && auth.hasOperationalAccess)) {
         if (applyingOpenRef.current) {
           return
         }
         applyingOpenRef.current = true
-        void applyAppOpenTarget(pending, {
-          getActiveEstablishmentId: () =>
-            auth.bootstrap?.active_membership?.establishment_id ?? null,
-          switchEstablishment: async (establishmentId) => {
-            await switchEstablishment({ establishment_id: establishmentId })
-          },
-          navigate,
-        })
+        void applyAppOpenTarget(pending, openSession)
           .catch(() => {
             navigate(landingPath, { replace: true })
           })
@@ -206,14 +222,7 @@ function App() {
           return
         }
         applyingOpenRef.current = true
-        void applyAppOpenTarget(hinted, {
-          getActiveEstablishmentId: () =>
-            auth.bootstrap?.active_membership?.establishment_id ?? null,
-          switchEstablishment: async (establishmentId) => {
-            await switchEstablishment({ establishment_id: establishmentId })
-          },
-          navigate,
-        })
+        void applyAppOpenTarget(hinted, openSession)
           .catch(() => {
             // Stay on the selector when the hinted establishment cannot be opened.
           })
@@ -222,6 +231,34 @@ function App() {
           })
         return
       }
+    }
+
+    const switchEstablishmentId = establishmentIdRequiringSwitch(route)
+    if (
+      switchEstablishmentId &&
+      auth.memberships.some(
+        (membership) =>
+          membership.status === 'active' && membership.establishment_id === switchEstablishmentId,
+      )
+    ) {
+      if (applyingOpenRef.current) {
+        return
+      }
+      applyingOpenRef.current = true
+      void applyAppOpenTarget(
+        {
+          href: `${serializeAppRoute(route)}${locationSearch}`,
+          establishmentId: switchEstablishmentId,
+        },
+        openSession,
+      )
+        .catch(() => {
+          navigate(landingPath ?? '/select-establishment', { replace: true })
+        })
+        .finally(() => {
+          applyingOpenRef.current = false
+        })
+      return
     }
 
     if (route.kind === 'organization-establishment-detail') {
@@ -242,6 +279,7 @@ function App() {
     auth.isReady,
     auth.memberships,
     auth.pendingOnboardingMemberships,
+    isLgViewport,
     locationSearch,
     navigate,
     route,
@@ -254,17 +292,13 @@ function App() {
   }, [route])
 
   useEffect(() => {
-    if (
-      !isLgViewport ||
-      !auth.hasOperationalAccess ||
-      !canShowAnalyticsNavigation(auth.bootstrap)
-    ) {
+    if (!isLgViewport || !hasTrueCrossEstablishmentScope(auth.bootstrap)) {
       return
     }
     if (route.kind === 'static' && route.path === '/analytics') {
       navigate('/cross?period=7d', { replace: true })
     }
-  }, [auth.bootstrap, auth.hasOperationalAccess, isLgViewport, navigate, route])
+  }, [auth.bootstrap, isLgViewport, navigate, route])
 
   const handleSignOut = useCallback(() => {
     void auth.logout().then(() => {

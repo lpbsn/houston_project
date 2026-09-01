@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { createElement } from 'react'
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { useLgViewport } from './lg-viewport'
@@ -47,14 +47,13 @@ describe('useLgViewport', () => {
     expect(values.at(-1)).toBe(false)
   })
 
-  it('becomes true when the lg media query matches', async () => {
+  it('is true on first render when the lg media query matches', () => {
     stubMatchMedia(true)
 
     const values: boolean[] = []
     render(createElement(ViewportProbe, { onValue: (value) => values.push(value) }))
 
-    await waitFor(() => {
-      expect(values.at(-1)).toBe(true)
-    })
+    expect(values[0]).toBe(true)
+    expect(values.at(-1)).toBe(true)
   })
 })

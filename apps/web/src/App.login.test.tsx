@@ -31,6 +31,7 @@ vi.mock('@/app/app-routes', () => ({
     navigate,
     search: window.location.search,
   }),
+  serializeAppRoute: () => '/',
 }))
 
 vi.mock('@/app/auth-provider', () => ({

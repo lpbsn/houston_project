@@ -25,6 +25,7 @@ type CommentSectionProps = {
   targetType: 'signal' | 'action-plan-execution'
   targetId: string
   highlightCommentId?: string | null
+  readOnly?: boolean
 }
 
 function CommentUnavailableMessage() {
@@ -43,6 +44,7 @@ export function CommentSection({
   targetType,
   targetId,
   highlightCommentId = null,
+  readOnly = false,
 }: CommentSectionProps) {
   const composerRef = useRef<CommentComposerHandle>(null)
   const [replyErrorCommentId, setReplyErrorCommentId] = useState<string | null>(null)
@@ -141,6 +143,7 @@ export function CommentSection({
           mode="execution"
           comments={executionQuery.data}
           {...threadListProps}
+          disabled={readOnly || threadListProps.disabled}
           replyErrorMessage={
             replyErrorCommentId && createExecutionReplyMutation.error
               ? resolveApiErrorMessage(
@@ -154,6 +157,9 @@ export function CommentSection({
             resolveExecutionMutation.isPending || unresolveExecutionMutation.isPending
           }
           onReply={(payload, callbacks) => {
+            if (readOnly) {
+              return
+            }
             const parentCommentId = payload.parent_comment_id ?? null
             setPendingReplyCommentId(parentCommentId)
             setReplyErrorCommentId(parentCommentId)
@@ -169,14 +175,21 @@ export function CommentSection({
             })
           }}
           onResolve={(commentId) => {
+            if (readOnly) {
+              return
+            }
             resolveExecutionMutation.mutate(commentId)
           }}
           onUnresolve={(commentId) => {
+            if (readOnly) {
+              return
+            }
             unresolveExecutionMutation.mutate(commentId)
           }}
         />
       ) : null}
 
+      {readOnly ? null : (
       <CommentComposer
         ref={composerRef}
         establishmentId={establishmentId}
@@ -204,6 +217,7 @@ export function CommentSection({
           )
         }}
       />
+      )}
     </TerrainCard>
   )
 }

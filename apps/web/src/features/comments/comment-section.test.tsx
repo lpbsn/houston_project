@@ -185,6 +185,21 @@ describe('CommentSection', () => {
     expect(screen.getByLabelText('Publier le commentaire')).toHaveProperty('disabled', true)
   })
 
+  it('hides the composer in read-only mode without posting', () => {
+    render(
+      <CommentSection
+        establishmentId="est-1"
+        targetType="signal"
+        targetId="signal-1"
+        readOnly
+      />,
+    )
+
+    expect(screen.getByText("Aucun commentaire pour l'instant.")).toBeTruthy()
+    expect(screen.queryByPlaceholderText('Ajouter un commentaire...')).toBeNull()
+    expect(createRootMutate).not.toHaveBeenCalled()
+  })
+
   it('renders execution threads without reply/resolve on inherited signal comments', () => {
     render(
       <CommentSection

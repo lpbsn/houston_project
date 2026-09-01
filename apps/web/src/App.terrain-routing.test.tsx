@@ -8,6 +8,9 @@ import type { AppRoute } from '@/app/app-routes'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
 
 const navigate = vi.fn()
+const switchEstablishment = vi.hoisted(() =>
+  vi.fn(async (_payload: { establishment_id: string }) => undefined),
+)
 const routeState = vi.hoisted(() => ({
   route: { kind: 'static', path: '/analytics' } as AppRoute,
 }))
@@ -158,6 +161,15 @@ vi.mock('@/features/chat/lib/apply-chat-availability-cache', () => ({
   purgeEstablishmentChatOperationalQueries: vi.fn(),
 }))
 
+vi.mock('@/features/auth/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/auth/api')>()
+  return {
+    ...actual,
+    switchEstablishment: (payload: { establishment_id: string }) =>
+      switchEstablishment(payload),
+  }
+})
+
 vi.mock('framer-motion', () => ({
   AnimatePresence: ({ children }: { children: React.ReactNode }) => children,
   motion: {
@@ -231,15 +243,38 @@ function bootstrapWithActiveMembership(): BootstrapResponse {
   }
 }
 
+function stubLgViewport(matches: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+}
+
 afterEach(() => {
-  cleanup()
-  navigate.mockReset()
-  routeState.route = { kind: 'static', path: '/analytics' }
-  authState.bootstrap = null
-  authState.hasOperationalAccess = false
-  authState.memberships = []
-  authState.pendingOnboardingMemberships = []
-  Reflect.deleteProperty(window, 'matchMedia')
+  try {
+    cleanup()
+  } finally {
+    navigate.mockReset()
+    routeState.route = { kind: 'static', path: '/analytics' }
+    authState.bootstrap = null
+    authState.hasOperationalAccess = false
+    authState.memberships = []
+    authState.pendingOnboardingMemberships = []
+    switchEstablishment.mockReset()
+    switchEstablishment.mockResolvedValue(undefined)
+    window.history.replaceState(null, '', '/')
+    Reflect.deleteProperty(window, 'matchMedia')
+  }
 })
 
 describe('App terrain active membership routing', () => {
@@ -457,21 +492,39 @@ describe('App terrain active membership routing', () => {
     )
   })
 
-  it('redirects /analytics to the cross dashboard on a large viewport', async () => {
-    Object.defineProperty(window, 'matchMedia', {
-      configurable: true,
-      writable: true,
-      value: vi.fn().mockImplementation((query: string) => ({
-        matches: true,
-        media: query,
-        onchange: null,
-        addListener: vi.fn(),
-        removeListener: vi.fn(),
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        dispatchEvent: vi.fn(),
-      })),
+  it('keeps the cross dashboard without a selected establishment', () => {
+    const bootstrap = bootstrapWithoutActiveMembership()
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = false
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'cross' },
+      page: 'dashboard',
+    }
+
+    render(createElement(App))
+
+    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeTruthy()
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it('redirects /analytics to the cross dashboard on a large viewport without selection', async () => {
+    stubLgViewport(true)
+    const bootstrap = bootstrapWithoutActiveMembership()
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = false
+
+    render(createElement(App))
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith('/cross?period=7d', { replace: true })
     })
+  })
+
+  it('does not redirect /analytics to cross when only one establishment is eligible', () => {
+    stubLgViewport(true)
     const bootstrap = bootstrapWithActiveMembership()
     authState.bootstrap = bootstrap
     authState.memberships = bootstrap.memberships
@@ -479,8 +532,52 @@ describe('App terrain active membership routing', () => {
 
     render(createElement(App))
 
+    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeTruthy()
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it('switches to a pending establishment before opening the target from login', async () => {
+    stubLgViewport(true)
+    window.history.replaceState(
+      null,
+      '',
+      '/login?next=%2Fsignals%2F11111111-1111-4111-8111-111111111111&establishment_id=est-1',
+    )
+    const bootstrap = bootstrapWithoutActiveMembership()
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = false
+    routeState.route = { kind: 'static', path: '/login' }
+
+    render(createElement(App))
+
     await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith('/cross?period=7d', { replace: true })
+      expect(switchEstablishment).toHaveBeenCalledWith({ establishment_id: 'est-1' })
+    })
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith(
+        '/signals/11111111-1111-4111-8111-111111111111',
+        { replace: true },
+      )
+    })
+    expect(navigate).not.toHaveBeenCalledWith('/cross?period=7d', { replace: true })
+  })
+
+  it('switches when entering an establishment-scoped route without a session', async () => {
+    const bootstrap = bootstrapWithoutActiveMembership()
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = false
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: 'est-2' },
+      page: 'signals',
+    }
+
+    render(createElement(App))
+
+    await waitFor(() => {
+      expect(switchEstablishment).toHaveBeenCalledWith({ establishment_id: 'est-2' })
     })
   })
 })

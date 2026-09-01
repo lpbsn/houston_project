@@ -2,6 +2,7 @@ import { LoaderCircle } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useAppRoute } from '@/app/app-routes'
+import { serializeScopedSignalDetailPath } from '@/app/scoped-terrain'
 import { useAuth } from '@/app/auth-provider'
 import { TerrainEmptyState, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
 import {
@@ -71,12 +72,14 @@ type ActionPlanExecutionDetailPageContentProps = {
   executionId: string
   establishmentId: string
   execution: ActionPlanExecutionDetail
+  source: 'establishment' | 'cross'
 }
 
 function ActionPlanExecutionDetailPageContent({
   executionId,
   establishmentId,
   execution,
+  source,
 }: ActionPlanExecutionDetailPageContentProps) {
   const { navigate, search: locationSearch } = useAppRoute()
   const { activeMembership } = useAuth()
@@ -163,9 +166,11 @@ function ActionPlanExecutionDetailPageContent({
           patternId: analyticsSignalReturnContext.patternId,
           state: analyticsSignalReturnContext.state,
         })
-      : signalSummary
-        ? `/signals/${signalSummary.id}`
-        : null
+      : signalSummary && source === 'cross'
+        ? serializeScopedSignalDetailPath({ type: 'cross' }, signalSummary.id)
+        : signalSummary
+          ? `/signals/${signalSummary.id}`
+          : null
   const canShowLifecycleFooter =
     permissionHints.can_mark_done ||
     permissionHints.can_validate ||
@@ -471,6 +476,7 @@ function ActionPlanExecutionDetailPageContent({
               targetType="action-plan-execution"
               targetId={executionId}
               highlightCommentId={highlightCommentId}
+              readOnly={source === 'cross'}
             />
           </div>
         ) : null}
@@ -579,6 +585,7 @@ export function ActionPlanExecutionDetailPage({
       executionId={executionId}
       establishmentId={resolvedEstablishmentId}
       execution={detailQuery.data}
+      source={source}
     />
   )
 }

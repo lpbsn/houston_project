@@ -87,7 +87,7 @@ describe('resolveAuthenticatedLanding', () => {
     ).toEqual({ kind: 'organization', path: '/organization' })
   })
 
-  it('returns organization for owner with multiple ACTIVE memberships without selection', () => {
+  it('returns select-establishment for owner with multiple ACTIVE memberships without selection', () => {
     expect(
       resolveAuthenticatedLanding(
         bootstrap({
@@ -95,7 +95,19 @@ describe('resolveAuthenticatedLanding', () => {
           permission_hints: ownerOrgHints,
         }),
       ),
-    ).toEqual({ kind: 'organization', path: '/organization' })
+    ).toEqual({ kind: 'establishment-selection', path: '/select-establishment' })
+  })
+
+  it('returns cross dashboard for owner with multiple ACTIVE memberships on desktop', () => {
+    expect(
+      resolveAuthenticatedLanding(
+        bootstrap({
+          memberships: [membership('Nice', 'est-1'), membership('Cannes', 'est-2')],
+          permission_hints: ownerOrgHints,
+        }),
+        { isDesktop: true },
+      ),
+    ).toEqual({ kind: 'cross', path: '/cross?period=7d' })
   })
 
   it('returns organization for owner DRAFT-only', () => {
@@ -130,6 +142,48 @@ describe('resolveAuthenticatedLanding', () => {
             { ...membership('Cannes', 'est-2'), role: 'director' as const },
           ],
         }),
+      ),
+    ).toEqual({ kind: 'establishment-selection', path: '/select-establishment' })
+  })
+
+  it('returns cross dashboard for director with multiple ACTIVE memberships on desktop', () => {
+    expect(
+      resolveAuthenticatedLanding(
+        bootstrap({
+          memberships: [
+            { ...membership('Nice', 'est-1'), role: 'director' as const },
+            { ...membership('Cannes', 'est-2'), role: 'director' as const },
+          ],
+        }),
+        { isDesktop: true },
+      ),
+    ).toEqual({ kind: 'cross', path: '/cross?period=7d' })
+  })
+
+  it('returns select-establishment on desktop when only one establishment is cross-eligible', () => {
+    expect(
+      resolveAuthenticatedLanding(
+        bootstrap({
+          memberships: [
+            { ...membership('Nice', 'est-1'), role: 'manager' as const },
+            { ...membership('Cannes', 'est-2'), role: 'staff' as const },
+          ],
+        }),
+        { isDesktop: true },
+      ),
+    ).toEqual({ kind: 'establishment-selection', path: '/select-establishment' })
+  })
+
+  it('returns select-establishment on desktop for staff-only multi memberships', () => {
+    expect(
+      resolveAuthenticatedLanding(
+        bootstrap({
+          memberships: [
+            { ...membership('Nice', 'est-1'), role: 'staff' as const },
+            { ...membership('Cannes', 'est-2'), role: 'staff' as const },
+          ],
+        }),
+        { isDesktop: true },
       ),
     ).toEqual({ kind: 'establishment-selection', path: '/select-establishment' })
   })

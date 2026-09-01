@@ -103,6 +103,24 @@ export function canShowAnalyticsNavigation(
   )
 }
 
+export function countCrossEstablishments(
+  bootstrap: BootstrapResponse | null | undefined,
+): number {
+  const establishmentIds = new Set<string>()
+  for (const membership of bootstrap?.memberships ?? []) {
+    if (membership.status === 'active' && ANALYTICS_ROLES.has(membership.role)) {
+      establishmentIds.add(membership.establishment_id)
+    }
+  }
+  return establishmentIds.size
+}
+
+export function hasTrueCrossEstablishmentScope(
+  bootstrap: BootstrapResponse | null | undefined,
+): boolean {
+  return countCrossEstablishments(bootstrap) >= 2
+}
+
 export function resolveSharedNavigationItems(options: {
   bootstrap?: BootstrapResponse | null
   showChat: boolean

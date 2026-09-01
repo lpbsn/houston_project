@@ -1,6 +1,7 @@
 import { LoaderCircle } from 'lucide-react'
 import { useState } from 'react'
 
+import { serializeScopedExecutionDetailPath } from '@/app/scoped-terrain'
 import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainErrorState } from '@/components/ui/terrain'
 import { parseDetailDeepLink } from '@/features/comments/lib/detail-deep-link'
@@ -268,7 +269,13 @@ export function SignalDetailPage({
           <div className="lg:col-start-2">
             <SignalLinkedActionPlansSection
               executions={signal.linked_action_plan_executions}
-              onSelect={(executionId) => onNavigate(`/action-plans/executions/${executionId}`)}
+              onSelect={(executionId) =>
+                onNavigate(
+                  source === 'cross'
+                    ? serializeScopedExecutionDetailPath({ type: 'cross' }, executionId)
+                    : `/action-plans/executions/${executionId}`,
+                )
+              }
             />
           </div>
 
@@ -292,6 +299,7 @@ export function SignalDetailPage({
               targetType="signal"
               targetId={signalId}
               highlightCommentId={highlightCommentId}
+              readOnly={source === 'cross'}
             />
           </div>
         ) : null}
