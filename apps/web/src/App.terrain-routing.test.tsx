@@ -10,7 +10,7 @@ import { buildSelectEstablishmentRedirectHref } from '@/lib/app-open-target'
 
 const navigate = vi.fn()
 const switchEstablishment = vi.hoisted(() =>
-  vi.fn(async () => undefined),
+  vi.fn(async (_input: { establishment_id: string }) => undefined),
 )
 const routeState = vi.hoisted(() => ({
   route: { kind: 'static', path: '/analytics' } as AppRoute,
@@ -166,7 +166,8 @@ vi.mock('@/features/auth/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/features/auth/api')>()
   return {
     ...actual,
-    switchEstablishment: (...args: unknown[]) => switchEstablishment(...args),
+    switchEstablishment: (input: { establishment_id: string }) =>
+      switchEstablishment(input),
   }
 })
 
