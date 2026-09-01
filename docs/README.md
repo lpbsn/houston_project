@@ -32,7 +32,7 @@ Git is the only history. There is no `archive/` or `audits/` folder in active do
 | [`architecture/api_error_contract.md`](architecture/api_error_contract.md) | API errors |
 | [`engineering/local_development.md`](engineering/local_development.md) | Local workflow |
 | [`engineering/frontend_architecture.md`](engineering/frontend_architecture.md) | React / Vite map |
-| [`mobile-capacitor-roadmap.md`](mobile-capacitor-roadmap.md) | Capacitor foundation (Lots 1–10 closed; Lot 11 DX / CI / release deferred) |
+| [`cadrage/mobile-capacitor-roadmap.md`](cadrage/mobile-capacitor-roadmap.md) | Capacitor foundation (Lots 1–10 closed; Lot 11 DX / CI / release deferred) |
 | [`engineering/testing.md`](engineering/testing.md) | Test strategy |
 | [`engineering/api_pagination_standard.md`](engineering/api_pagination_standard.md) | Pagination |
 
@@ -46,6 +46,13 @@ Git is the only history. There is no `archive/` or `audits/` folder in active do
 | [`deploy/railway_architecture.md`](deploy/railway_architecture.md) | Railway topology |
 | [`deploy/railway_variables.md`](deploy/railway_variables.md) | Env matrix |
 | [`deploy/railway_security.md`](deploy/railway_security.md) | Security notes |
+
+## Cadrage
+
+Planning docs, not live product state. Distinct from Capacitor Lot 11 (still deferred on the foundation record).
+
+- [`cadrage/`](cadrage/) — Capacitor foundation record (authoritative) and Analytics cible
+- [`roadmap_spore/spore-store-readiness-phase-1-v3.md`](roadmap_spore/spore-store-readiness-phase-1-v3.md) — Store Readiness Phase 1 (`cadrage cible`); preparatory store work that can advance without automatically reopening Capacitor Lot 11
 
 ## Policy
 
