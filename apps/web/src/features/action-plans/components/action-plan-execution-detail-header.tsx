@@ -20,7 +20,7 @@ export function ActionPlanExecutionDetailHeader({
   const isTerminal = isActionPlanExecutionTerminal(execution.status)
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <>
       <ActionPlanExecutionDetailTitleSection execution={execution} />
       {execution.active_review != null ? (
         <ActionPlanExecutionDetailReviewSection activeReview={execution.active_review} />
@@ -35,6 +35,6 @@ export function ActionPlanExecutionDetailHeader({
         currentMembershipId={currentMembershipId}
       />
       <ActionPlanExecutionDetailDescriptionSection execution={execution} />
-    </div>
+    </>
   )
 }

@@ -367,6 +367,29 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
     fireEvent.click(getCommentsTab())
 
     expect(screen.queryByRole('button', { name: 'Marquer terminé' })).toBeNull()
+    fireEvent.click(getDetailsTab())
+    expect(screen.getByRole('button', { name: 'Marquer terminé' })).toBeTruthy()
+  })
+
+  it('does not write tab query params when clicking tabs', () => {
+    window.history.replaceState(null, '', '/action-plans/executions/exec-1')
+    renderPage()
+
+    fireEvent.click(getCommentsTab())
+    expect(window.location.search).toBe('')
+    fireEvent.click(getDetailsTab())
+    expect(window.location.search).toBe('')
+  })
+
+  it('hides the details panel while comments are active', () => {
+    renderPage()
+
+    fireEvent.click(getCommentsTab())
+
+    expect(screen.getByTestId('execution-detail-details-panel').className).toContain('hidden')
+    expect(screen.getByTestId('execution-detail-comments-panel').className).not.toContain('hidden')
+    expect(getCommentsTab().getAttribute('aria-selected')).toBe('true')
+    expect(getDetailsTab().getAttribute('aria-selected')).toBe('false')
   })
 
   it('renders a single lifecycle footer inside the responsive desktop panel', () => {
@@ -375,9 +398,12 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
     const footer = screen.getByTestId('execution-validation-actions')
     expect(footer.tagName).toBe('FOOTER')
     expect(screen.getAllByTestId('execution-validation-actions')).toHaveLength(1)
-    expect(footer.className).toContain('lg:col-start-2')
-    expect(footer.className).not.toContain('lg:row-start')
-    expect(footer.parentElement?.className).not.toContain('px-3')
+    expect(screen.getByTestId('execution-detail-tab-bar').className).toContain('lg:sticky')
+    expect(screen.getByTestId('execution-detail-details-panel').className).not.toContain('hidden')
+    const frame = screen.getByTestId('execution-detail-frame')
+    expect(frame.className).not.toContain('max-w-7xl')
+    expect(frame.contains(screen.getByTestId('execution-detail-tab-bar'))).toBe(true)
+    expect(frame.contains(screen.getByTestId('execution-detail-details-panel'))).toBe(true)
   })
 
   it('renders a flat task list without pole section headers', () => {
@@ -528,7 +554,15 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
     expect(screen.getByText('Paul B.')).toBeTruthy()
     expect(screen.getByText('Description')).toBeTruthy()
     expect(screen.getByText('Vérifier le disjoncteur en local technique.')).toBeTruthy()
-    expect(screen.getByText('Tâches par pôle')).toBeTruthy()
+    const descriptionLabel = screen.getByText('Description')
+    const poleTasksLabel = screen.getByText('Tâches par pôle')
+    expect(
+      descriptionLabel.compareDocumentPosition(poleTasksLabel) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(
+      poleTasksLabel.compareDocumentPosition(screen.getByRole('button', { name: 'Marquer terminé' })) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
     expect(screen.getByText(/Pôle pilote :/)).toBeTruthy()
     expect(screen.getByText(/Pôle contributeur :/)).toBeTruthy()
     expect(screen.getByText(/Tâche 0\/1/)).toBeTruthy()

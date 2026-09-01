@@ -16,7 +16,7 @@ type SignalDetailPhotoSectionProps = {
 }
 
 const tileClassName =
-  'flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-[12px] bg-[#EEF2FF]'
+  'flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-[12px] bg-[#EEF2FF] lg:h-28 lg:w-28'
 
 function PhotoTile({
   item,

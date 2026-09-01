@@ -2,7 +2,7 @@ import type { CommentItem, ExecutionCommentListItem } from '../types'
 import { isExecutionInheritedSignalItem, isExecutionThreadItem } from '../types'
 
 export const COMMENT_DOM_ID_PREFIX = 'comment-'
-export const COMMENT_SCROLL_ANCHOR_CLASS = 'scroll-mt-16'
+export const COMMENT_SCROLL_ANCHOR_CLASS = 'scroll-mt-16 lg:scroll-mt-28'
 export const SCROLL_RETRY_MAX_ATTEMPTS = 10
 
 export function commentDomId(commentId: string): string {

@@ -26,6 +26,7 @@ type CommentComposerProps = {
   errorMessage?: string | null
   placeholder?: string
   variant?: 'default' | 'reply'
+  compactOnLg?: boolean
   onSubmit: (payload: { body: string; mentionedMembershipIds: string[] }) => void
 }
 
@@ -37,6 +38,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
       errorMessage = null,
       placeholder = 'Ajouter un commentaire...',
       variant = 'default',
+      compactOnLg = false,
       onSubmit,
     },
     ref,
@@ -140,7 +142,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
     }
 
     return (
-      <div className={isReply ? undefined : 'mt-4'}>
+      <div className={isReply || compactOnLg ? undefined : 'mt-4'}>
         {isReply ? (
           <div
             className={cn(
@@ -176,16 +178,26 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
           </div>
         ) : (
           <div className="flex items-end gap-2">
-            <textarea
-              {...textareaProps}
-              rows={3}
-              className={cn(
-                'min-h-24 max-h-40 flex-1 resize-y rounded-2xl border border-[#E8E6DF] bg-white px-3 py-3',
-                'text-base text-[#1a1a1a] placeholder:text-[#65676B] md:text-sm',
-                'focus-visible:outline-none focus-visible:ring-2',
-                terrainBrandAction.ring,
-              )}
-            />
+            <div className={cn('min-w-0 flex-1', compactOnLg && 'relative')}>
+              <textarea
+                {...textareaProps}
+                rows={compactOnLg ? 2 : 3}
+                className={cn(
+                  'w-full max-h-40 resize-y rounded-2xl border border-[#E8E6DF] bg-white px-3 py-3',
+                  'text-base text-[#1a1a1a] placeholder:text-[#65676B] md:text-sm',
+                  'focus-visible:outline-none focus-visible:ring-2',
+                  terrainBrandAction.ring,
+                  compactOnLg
+                    ? 'min-h-16 lg:min-h-14 lg:py-2 lg:pb-7'
+                    : 'min-h-24',
+                )}
+              />
+              {compactOnLg ? (
+                <p className="mt-1 px-1 text-[10px] text-[#a3a19a] lg:pointer-events-none lg:absolute lg:bottom-1.5 lg:left-3 lg:mt-0">
+                  {draft.length}/{MAX_COMMENT_LENGTH}
+                </p>
+              ) : null}
+            </div>
             <Button
               type="button"
               size="icon"
@@ -203,7 +215,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
           </div>
         )}
 
-        {!isReply ? (
+        {!isReply && !compactOnLg ? (
           <p className="mt-1 px-1 text-[10px] text-[#a3a19a]">
             {draft.length}/{MAX_COMMENT_LENGTH}
           </p>
