@@ -8,7 +8,7 @@ from rest_framework.test import APIClient
 
 from houston.accounts.deletion_services import _anonymize_user
 from houston.accounts.legal_constants import CURRENT_AI_CONSENT_VERSION, CURRENT_TERMS_VERSION
-from houston.accounts.legal_services import grant_current_legal_defaults
+from houston.accounts.legal_services import grant_current_legal_defaults, withdraw_ai_consent
 from houston.accounts.models import User
 from houston.analytics.classifier import PatternClassifierProviderResponse
 from houston.analytics.models import SignalPatternAssignment
@@ -27,8 +27,10 @@ from houston.establishments.safety_services import (
     block_membership,
     create_content_report,
 )
+from houston.observations.models import ObservationProcessing
 from houston.observations.services import submit_observation
-from houston.signals.models import SignalSourceObservation
+from houston.signals.models import CandidateSignal, Signal, SignalSourceObservation
+from houston.signals.services import run_observation_pipeline
 from houston.testing.auth import TEST_PASSWORD, auth_headers, build_api_membership, login
 from houston.testing.pipeline import create_observation
 from houston.testing.taxonomy import create_signal_v3_for_membership, hotel_maintenance_setup
@@ -270,6 +272,35 @@ def test_openai_pattern_classifier_skips_without_source_author_ai_consent():
     assert payload["signal"]["title"] == "Clim en panne"
     assert "structured_summary" in payload["signal"]
     assert "raw_text" not in payload["signal"]
+
+
+def test_openai_observation_pipeline_skips_without_author_ai_consent():
+    membership = build_api_membership(role=EstablishmentMembership.Role.STAFF)
+    hotel_maintenance_setup(membership.establishment)
+    observation = create_observation(membership=membership)
+    withdraw_ai_consent(user=membership.user)
+
+    class RecordingOpenAIPipelineProvider:
+        provider = "openai"
+        model = "test-model"
+
+        def __init__(self):
+            self.propose_calls: list[dict] = []
+
+        def propose(self, *, input_payload):
+            self.propose_calls.append(input_payload)
+            raise AssertionError("OpenAI propose must not run without AI consent")
+
+    provider = RecordingOpenAIPipelineProvider()
+    run_observation_pipeline(observation.id, provider=provider)
+
+    assert provider.propose_calls == []
+    processing = observation.processing
+    processing.refresh_from_db()
+    assert processing.status == ObservationProcessing.Status.FAILED
+    assert processing.last_error_code == "ai_consent_required"
+    assert CandidateSignal.objects.filter(observation=observation).count() == 0
+    assert Signal.objects.filter(establishment=membership.establishment).count() == 0
 
 
 def test_group_chat_and_comment_without_mention_survive_membership_block():

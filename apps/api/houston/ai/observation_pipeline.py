@@ -10,6 +10,9 @@ from typing import Any, Protocol
 from django.conf import settings
 from pydantic import ValidationError as PydanticValidationError
 
+from houston.accounts.legal_constants import AI_CONSENT_REQUIRED_CODE
+from houston.accounts.legal_services import has_current_ai_consent
+from houston.accounts.models import User
 from houston.ai.models import AIUsageLog
 from houston.ai.observation_pipeline_diagnostics import (
     build_invalid_output_error_context,
@@ -412,6 +415,14 @@ def call_observation_pipeline(
             model=provider_model,
         ),
     )
+
+    if provider_name == "openai":
+        author = User.objects.get(pk=observation.submitted_by_membership.user_id)
+        if not has_current_ai_consent(author):
+            raise ObservationPipelineSkippedError(
+                "OpenAI observation pipeline requires current AI consent.",
+                error_code=AI_CONSENT_REQUIRED_CODE,
+            )
 
     provider_started_at = time.monotonic()
     try:

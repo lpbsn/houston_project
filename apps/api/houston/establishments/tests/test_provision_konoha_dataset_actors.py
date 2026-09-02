@@ -78,7 +78,7 @@ def _create_named_user(
     last_name: str,
     status: str = User.Status.ACTIVE,
 ) -> User:
-    return User.objects.create_user(
+    user = User.objects.create_user(
         username=username,
         email=email,
         password=TEST_PASSWORD,
@@ -86,6 +86,11 @@ def _create_named_user(
         last_name=last_name,
         status=status,
     )
+    if status == User.Status.ACTIVE:
+        from houston.accounts.legal_services import grant_current_legal_defaults
+
+        grant_current_legal_defaults(user=user)
+    return user
 
 
 def _create_scoped_member(
