@@ -10,6 +10,8 @@ import { terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 import { ChatApiError } from '../api'
+import { blockMembership } from '@/features/safety/api'
+import { SafetyReportSheet } from '@/features/safety/safety-report-sheet'
 import { ChatConversationActionsSheet } from '../components/chat-conversation-actions-sheet'
 import { ChatCreateSheet } from '../components/chat-create-sheet'
 import { ChatReconnectBanner } from '../components/chat-reconnect-banner'
@@ -59,6 +61,7 @@ export function ChatPage({
   const [actionsConversation, setActionsConversation] = useState<ChatConversationListItem | null>(
     null,
   )
+  const [reportPeerId, setReportPeerId] = useState<string | null>(null)
 
   const statusQuery = useChatStatusQuery(establishmentId)
   const conversationsQuery = useChatConversationsQuery(establishmentId, {
@@ -117,6 +120,19 @@ export function ChatPage({
 
   async function handleDeleteGroup(conversationId: string) {
     await deleteMutation.mutateAsync(conversationId)
+    closeActions()
+  }
+
+  const actionsPeerMembershipId = actionsConversation
+    ? actionsConversation.participants.find((participant) => participant.membership_id !== viewerMembershipId)
+        ?.membership_id ?? null
+    : null
+
+  async function handleBlockPeer() {
+    if (!establishmentId || !actionsPeerMembershipId) {
+      return
+    }
+    await blockMembership(establishmentId, actionsPeerMembershipId)
     closeActions()
   }
 
@@ -294,6 +310,28 @@ export function ChatPage({
         onDeleteGroup={(conversationId) => {
           void handleDeleteGroup(conversationId)
         }}
+        onBlockPeer={
+          actionsConversation?.type === 'dm' && actionsPeerMembershipId
+            ? () => {
+                void handleBlockPeer()
+              }
+            : undefined
+        }
+        onReportPeer={
+          actionsConversation?.type === 'dm' && actionsPeerMembershipId
+            ? () => {
+                setReportPeerId(actionsPeerMembershipId)
+                closeActions()
+              }
+            : undefined
+        }
+      />
+      <SafetyReportSheet
+        open={reportPeerId !== null}
+        establishmentId={establishmentId}
+        contentKind="user"
+        targetMembershipId={reportPeerId ?? undefined}
+        onClose={() => setReportPeerId(null)}
       />
     </ChatPageRoot>
   )

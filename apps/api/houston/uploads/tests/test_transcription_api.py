@@ -45,6 +45,9 @@ def _staff(api_client: APIClient, establishment: Establishment) -> tuple[User, s
         password=TEST_PASSWORD,
         status=User.Status.ACTIVE,
     )
+    from houston.accounts.legal_services import grant_current_legal_defaults
+
+    grant_current_legal_defaults(user=user)
     EstablishmentMembership.objects.create(
         user=user,
         establishment=establishment,
@@ -152,3 +155,43 @@ def test_transcription_rejects_invalid_audio_upload(api_client):
         "code": "invalid_audio",
         "detail": "Invalid audio upload.",
     }
+
+
+def test_transcription_requires_ai_consent_not_terms(api_client):
+    establishment = _establishment()
+    user, token = _staff(api_client, establishment)
+    user.terms_version = None
+    user.terms_accepted_at = None
+    user.save(update_fields=["terms_version", "terms_accepted_at", "updated_at"])
+
+    audio = SimpleUploadedFile("note.webm", b"fake-audio", content_type="audio/webm")
+    with patch(
+        "houston.uploads.api.transcription_views.transcribe_audio_file",
+        return_value=TranscriptionResult(
+            text="Clim en panne.",
+            language="fr",
+            correlation_id=uuid.uuid4(),
+            provider="openai",
+            model="gpt-4o-transcribe",
+            latency_ms=50,
+        ),
+    ):
+        response = api_client.post(
+            transcriptions_url(establishment.id),
+            {"file": audio},
+            format="multipart",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+    assert response.status_code == 200
+
+    user.ai_consent_version = None
+    user.ai_processing_consented_at = None
+    user.save(update_fields=["ai_consent_version", "ai_processing_consented_at", "updated_at"])
+    denied = api_client.post(
+        transcriptions_url(establishment.id),
+        {"file": SimpleUploadedFile("note.webm", b"fake-audio", content_type="audio/webm")},
+        format="multipart",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert denied.status_code == 403
+    assert denied.json()["code"] == "ai_consent_required"

@@ -262,6 +262,7 @@ describe('ProfilePage', () => {
     expect(screen.getByText('Argent')).toBeTruthy()
     expect(screen.getByText('Plus que 3 pts')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Supprimer mon compte' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Politique de confidentialité' })).toBeTruthy()
   })
 
   it('renders no unlocked grade state from gamification API data', () => {

@@ -4,10 +4,12 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { TermsAcceptCheckbox } from '@/features/auth/components/terms-accept-checkbox'
 import {
   InvitationAcceptApiError,
   acceptDirectorInvitation,
 } from '@/features/invitations/api'
+import { CURRENT_TERMS_VERSION } from '@/lib/legal'
 
 type InvitationAcceptPageProps = {
   token: string
@@ -31,6 +33,7 @@ export function InvitationAcceptPage({ token, onAccepted }: InvitationAcceptPage
   const [passwordConfirmation, setPasswordConfirmation] = useState('')
   const [fieldError, setFieldError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [acceptTerms, setAcceptTerms] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -54,6 +57,7 @@ export function InvitationAcceptPage({ token, onAccepted }: InvitationAcceptPage
       await acceptDirectorInvitation(token, {
         password,
         password_confirmation: passwordConfirmation,
+        ...(acceptTerms ? { terms_version: CURRENT_TERMS_VERSION } : {}),
       })
 
       onAccepted()
@@ -112,6 +116,8 @@ export function InvitationAcceptPage({ token, onAccepted }: InvitationAcceptPage
               className="h-11 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
             />
           </div>
+
+          <TermsAcceptCheckbox checked={acceptTerms} onCheckedChange={setAcceptTerms} />
 
           {fieldError ? <p className="text-sm text-destructive">{fieldError}</p> : null}
           {submitError ? <p className="text-sm text-destructive">{submitError}</p> : null}

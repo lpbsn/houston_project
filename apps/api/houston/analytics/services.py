@@ -2177,6 +2177,23 @@ def claim_signal_pattern_classification(
     )
 
 
+def _openai_signal_pattern_share_allowed(signal: Signal) -> bool:
+    from houston.accounts.legal_services import has_current_ai_consent
+
+    author_ids = list(
+        signal.source_observation_links.values_list(
+            "observation__submitted_by_membership__user_id",
+            flat=True,
+        ).distinct()
+    )
+    if not author_ids:
+        return False
+    users_by_id = User.objects.in_bulk(author_ids)
+    if len(users_by_id) != len(author_ids):
+        return False
+    return all(has_current_ai_consent(users_by_id[user_id]) for user_id in author_ids)
+
+
 def classify_signal_pattern(
     signal_id: uuid.UUID,
     *,
@@ -2190,6 +2207,13 @@ def classify_signal_pattern(
         return None
 
     provider = provider or get_pattern_classifier_provider()
+    if provider.provider == "openai" and not _openai_signal_pattern_share_allowed(signal):
+        assignment = SignalPatternAssignment.objects.filter(signal=signal).first()
+        if assignment is not None:
+            setattr(assignment, "_analytics_claim_status", "skipped")
+            setattr(assignment, "_analytics_claim_reason", "ai_consent_required")
+        return assignment
+
     signature = build_signal_pattern_signature(signal)
     classifier_version = classifier_version_for_provider(provider)
     claim = claim_signal_pattern_classification(

@@ -10,6 +10,8 @@ import {
 } from '@/features/auth/api'
 import { resolvePendingLanding } from '@/features/auth/lib/pending-onboarding'
 import { OnboardingStepper } from '@/features/onboarding/components/onboarding-stepper'
+import { TermsAcceptCheckbox } from '@/features/auth/components/terms-accept-checkbox'
+import { CURRENT_TERMS_VERSION } from '@/lib/legal'
 import {
   clearRegistrationSessionSnapshot,
   loadRegistrationSessionSnapshot,
@@ -58,6 +60,7 @@ export function OwnerOrgOnboardingStep({
     }
   })
   const [fieldError, setFieldError] = useState<string | null>(null)
+  const [acceptTerms, setAcceptTerms] = useState(false)
   const [showLoginCta, setShowLoginCta] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -144,6 +147,7 @@ export function OwnerOrgOnboardingStep({
         password,
         password_confirmation: form.password_confirmation,
         organization_name: form.organization_name.trim(),
+        ...(acceptTerms ? { terms_version: CURRENT_TERMS_VERSION } : {}),
       })
       clearRegistrationSessionSnapshot()
       onRegistered({
@@ -318,6 +322,8 @@ export function OwnerOrgOnboardingStep({
             required
           />
         </label>
+
+        <TermsAcceptCheckbox checked={acceptTerms} onCheckedChange={setAcceptTerms} />
 
         {fieldError ? (
           <div

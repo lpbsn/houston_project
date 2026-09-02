@@ -8,11 +8,15 @@ import { clearRegistrationSessionSnapshot } from '@/features/onboarding/lib/regi
 import { runNativePushBeforeLogout } from '@/lib/native-push-session'
 import { clearPendingNativeDeepLink } from '@/lib/native-deep-link-session'
 import { queryClient } from '@/lib/query-client'
+import { clearSuccessToasts } from '@/lib/success-toast/store'
 import {
   clearAuthenticatedQueryCache,
   purgeNonAuthQueries,
 } from '@/lib/query-invalidation'
-import { clearSuccessToasts } from '@/lib/success-toast'
+import {
+  CURRENT_AI_CONSENT_VERSION,
+  CURRENT_TERMS_VERSION,
+} from '@/lib/legal'
 
 import { clearCsrfTokenCache, ensureCsrfToken } from './csrf'
 import {
@@ -831,6 +835,65 @@ export async function fetchBootstrap() {
     throw buildAuthError(result.response, result.error, 'Your session is not available.')
   }
 
+  return result.data
+}
+
+export async function acceptCurrentTerms() {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/auth/me/terms/', {
+        body: { version: CURRENT_TERMS_VERSION },
+        headers: accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+            }
+          : undefined,
+      }),
+    { refreshable: true },
+  )
+  if (result.error || !result.data) {
+    throw buildAuthError(result.response, result.error, 'Terms could not be accepted.')
+  }
+  queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, result.data)
+  return result.data
+}
+
+export async function acceptCurrentAiConsent() {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/auth/me/ai-consent/', {
+        body: { version: CURRENT_AI_CONSENT_VERSION },
+        headers: accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+            }
+          : undefined,
+      }),
+    { refreshable: true },
+  )
+  if (result.error || !result.data) {
+    throw buildAuthError(result.response, result.error, 'AI consent could not be recorded.')
+  }
+  queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, result.data)
+  return result.data
+}
+
+export async function withdrawAiConsent() {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/auth/me/ai-consent/withdraw/', {
+        headers: accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+            }
+          : undefined,
+      }),
+    { refreshable: true },
+  )
+  if (result.error || !result.data) {
+    throw buildAuthError(result.response, result.error, 'AI consent could not be withdrawn.')
+  }
+  queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, result.data)
   return result.data
 }
 

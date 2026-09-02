@@ -6,6 +6,8 @@ import { resolveApiErrorMessage } from '@/lib/error-message'
 import { terrainCardClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
+import { LegalConsentSheet, legalConsentKindFromError } from '@/features/auth/components/legal-consent-sheet'
+import { SafetyReportSheet } from '@/features/safety/safety-report-sheet'
 import { CommentsApiError } from '../api'
 import {
   commentExistsInExecutionList,
@@ -91,6 +93,11 @@ export function CommentSection({
   const composerRef = useRef<CommentComposerHandle>(null)
   const [replyErrorCommentId, setReplyErrorCommentId] = useState<string | null>(null)
   const [pendingReplyCommentId, setPendingReplyCommentId] = useState<string | null>(null)
+  const [legalKind, setLegalKind] = useState<ReturnType<typeof legalConsentKindFromError>>(null)
+  const [reportComment, setReportComment] = useState<{
+    contentId: string
+    membershipId: string
+  } | null>(null)
 
   const isSignal = targetType === 'signal'
   const isExecution = targetType === 'action-plan-execution'
@@ -177,6 +184,10 @@ export function CommentSection({
           mode="signal"
           comments={commentsQuery.data}
           highlightCommentId={highlightCommentId}
+          establishmentId={establishmentId}
+          onReportComment={(contentId, membershipId) => {
+            setReportComment({ contentId, membershipId })
+          }}
         />
       ) : null}
 
@@ -258,11 +269,34 @@ export function CommentSection({
             onSuccess: () => {
               composerRef.current?.reset()
             },
+            onError: (error) => {
+              const kind = legalConsentKindFromError(error)
+              if (kind) {
+                setLegalKind(kind)
+              }
+            },
           },
         )
       }}
     />
   )
 
-  return <OperationalCommentsLayout list={list} composer={composer} />
+  return (
+    <>
+      <OperationalCommentsLayout list={list} composer={composer} />
+      <LegalConsentSheet
+        kind={legalKind}
+        onClose={() => setLegalKind(null)}
+        onAccepted={() => undefined}
+      />
+      <SafetyReportSheet
+        open={reportComment !== null}
+        establishmentId={establishmentId}
+        contentKind="comment"
+        contentId={reportComment?.contentId}
+        targetMembershipId={reportComment?.membershipId}
+        onClose={() => setReportComment(null)}
+      />
+    </>
+  )
 }

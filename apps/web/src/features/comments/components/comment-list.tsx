@@ -49,6 +49,8 @@ type CommentListProps =
   | ({
       mode: 'signal'
       comments: CommentItem[]
+      establishmentId?: string
+      onReportComment?: (contentId: string, membershipId: string) => void
     } & HighlightableListProps)
   | ({
       mode: 'execution'
@@ -83,9 +85,11 @@ function CommentOriginBadge({ origin }: { origin: CommentItem['origin'] }) {
 function SignalCommentItem({
   comment,
   highlightCommentId = null,
+  onReportComment,
 }: {
   comment: CommentItem
   highlightCommentId?: string | null
+  onReportComment?: (contentId: string, membershipId: string) => void
 }) {
   const showBadge = useMentionDeepLinkBadge(comment.id, highlightCommentId)
 
@@ -101,6 +105,15 @@ function SignalCommentItem({
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-[13px] font-semibold text-[#1a1a1a]">{comment.author.display_name}</p>
         <span className="text-[11px] text-[#aaa]">{formatCommentRelativeTime(comment.created_at)}</span>
+        {onReportComment ? (
+          <button
+            type="button"
+            className="text-[11px] text-[#7D7B75] underline"
+            onClick={() => onReportComment(comment.id, comment.author.membership_id)}
+          >
+            Signaler
+          </button>
+        ) : null}
       </div>
       <p className="mt-2 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-[#444]">
         {comment.body}
@@ -117,9 +130,11 @@ function SignalCommentItem({
 function SignalCommentList({
   comments,
   highlightCommentId = null,
+  onReportComment,
 }: {
   comments: CommentItem[]
   highlightCommentId?: string | null
+  onReportComment?: (contentId: string, membershipId: string) => void
 }) {
   useScrollToHighlightedComment(highlightCommentId, comments)
 
@@ -144,6 +159,7 @@ function SignalCommentList({
           key={comment.id}
           comment={comment}
           highlightCommentId={highlightCommentId}
+          onReportComment={onReportComment}
         />
       ))}
     </ul>
@@ -223,6 +239,7 @@ export function CommentList(props: CommentListProps) {
       <SignalCommentList
         comments={props.comments}
         highlightCommentId={props.highlightCommentId}
+        onReportComment={props.onReportComment}
       />
     )
   }

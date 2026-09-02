@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 
 from houston.accounts.api.serializers import ApiErrorResponseSerializer, DetailResponseSerializer
 from houston.accounts.authentication import BearerAccessTokenAuthentication
+from houston.accounts.legal_services import TermsAcceptanceRequiredError
 from houston.comments.api.serializers import (
     CommentCreateRequestSerializer,
     CommentItemSerializer,
@@ -114,6 +115,10 @@ class SignalCommentsView(EstablishmentScopedObservationMixin, APIView):
                 ),
                 parent_comment_id=request_serializer.validated_data.get("parent_comment_id"),
             )
+        except TermsAcceptanceRequiredError as exc:
+            from houston.accounts.api.legal_errors import legal_error_response
+
+            return legal_error_response(exc)
         except CommentValidationError as exc:
             return Response(
                 {"code": "validation_error", "detail": exc.detail},
@@ -208,6 +213,10 @@ class ActionPlanExecutionCommentsView(EstablishmentScopedObservationMixin, APIVi
                 ),
                 parent_comment_id=request_serializer.validated_data.get("parent_comment_id"),
             )
+        except TermsAcceptanceRequiredError as exc:
+            from houston.accounts.api.legal_errors import legal_error_response
+
+            return legal_error_response(exc)
         except CommentValidationError as exc:
             return Response(
                 {"code": "validation_error", "detail": exc.detail},

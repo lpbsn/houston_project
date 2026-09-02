@@ -23,6 +23,7 @@ from houston.accounts.api.serializers import (
     DirectorInvitationAcceptErrorResponseSerializer,
     DirectorInvitationAcceptRequestSerializer,
     DirectorInvitationAcceptResponseSerializer,
+    LegalVersionRequestSerializer,
     LoginRequestSerializer,
     LogoutRequestSerializer,
     RefreshRequestSerializer,
@@ -43,7 +44,7 @@ from houston.accounts.deletion_services import (
     build_account_deletion_preview,
     delete_authenticated_account,
 )
-from houston.accounts.selectors import build_bootstrap_payload
+from houston.accounts.selectors import _serialize_user, build_bootstrap_payload
 from houston.accounts.services import (
     AUTHENTICATION_FAILED_DETAIL,
     INVALID_CREDENTIALS_DETAIL,
@@ -187,6 +188,10 @@ class RegisterView(AuthRateLimitedMixin, APIView):
         serializer = RegistrationRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         transport = serializer.validated_data.pop("refresh_token_transport")
+        terms_version = serializer.validated_data.pop("terms_version", None)
+        version_error = _reject_invalid_terms_version(terms_version)
+        if version_error is not None:
+            return version_error
 
         csrf_failure = _enforce_csrf_for_transport(request, transport=transport)
         if csrf_failure is not None:
@@ -207,6 +212,14 @@ class RegisterView(AuthRateLimitedMixin, APIView):
             )
         except RegistrationDuplicateEmailError:
             return _registration_duplicate_email_response()
+
+        terms_error = _apply_optional_terms(
+            user=bundle.registration.user,
+            payload=bundle.payload,
+            terms_version=terms_version,
+        )
+        if terms_error is not None:
+            return terms_error
 
         return _build_auth_response(
             payload=bundle.payload,
@@ -285,6 +298,10 @@ class DirectorInvitationAcceptView(AuthRateLimitedMixin, APIView):
         serializer = DirectorInvitationAcceptRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         transport = serializer.validated_data.pop("refresh_token_transport")
+        terms_version = serializer.validated_data.pop("terms_version", None)
+        version_error = _reject_invalid_terms_version(terms_version)
+        if version_error is not None:
+            return version_error
 
         csrf_failure = _enforce_csrf_for_transport(request, transport=transport)
         if csrf_failure is not None:
@@ -328,6 +345,14 @@ class DirectorInvitationAcceptView(AuthRateLimitedMixin, APIView):
                 },
                 status=status.HTTP_409_CONFLICT,
             )
+
+        terms_error = _apply_optional_terms(
+            user=result.auth.session.user,
+            payload=result.payload,
+            terms_version=terms_version,
+        )
+        if terms_error is not None:
+            return terms_error
 
         return _build_auth_response(
             payload=result.payload,
@@ -577,6 +602,88 @@ class AccountDeletionView(APIView):
         return response
 
 
+class TermsAcceptView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["auth"],
+        request=LegalVersionRequestSerializer,
+        responses={
+            200: BootstrapResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+        description="Records acceptance of the current terms of use version.",
+    )
+    def post(self, request):
+        serializer = LegalVersionRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        from houston.accounts.legal_services import InvalidLegalVersionError, accept_current_terms
+
+        try:
+            accept_current_terms(user=request.user, version=serializer.validated_data["version"])
+        except InvalidLegalVersionError as exc:
+            from houston.accounts.api.legal_errors import legal_error_response
+
+            return legal_error_response(exc)
+        return Response(build_bootstrap_payload(user=request.user, session=request.auth.session))
+
+
+class AiConsentAcceptView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["auth"],
+        request=LegalVersionRequestSerializer,
+        responses={
+            200: BootstrapResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+        description="Records consent to the current OpenAI processing disclosure.",
+    )
+    def post(self, request):
+        serializer = LegalVersionRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        from houston.accounts.legal_services import (
+            InvalidLegalVersionError,
+            accept_current_ai_consent,
+        )
+
+        try:
+            accept_current_ai_consent(
+                user=request.user,
+                version=serializer.validated_data["version"],
+            )
+        except InvalidLegalVersionError as exc:
+            from houston.accounts.api.legal_errors import legal_error_response
+
+            return legal_error_response(exc)
+        return Response(build_bootstrap_payload(user=request.user, session=request.auth.session))
+
+
+class AiConsentWithdrawView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["auth"],
+        request=None,
+        responses={
+            200: BootstrapResponseSerializer,
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+        description="Withdraws OpenAI processing consent.",
+    )
+    def post(self, request):
+        from houston.accounts.legal_services import withdraw_ai_consent
+
+        withdraw_ai_consent(user=request.user)
+        return Response(build_bootstrap_payload(user=request.user, session=request.auth.session))
+
+
 class SwitchEstablishmentView(APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [permissions.IsAuthenticated]
@@ -626,6 +733,32 @@ def _registration_duplicate_email_response() -> Response:
 
 def _api_error_response(*, code: str, detail: str, status: int) -> Response:
     return Response({"code": code, "detail": detail}, status=status)
+
+
+def _reject_invalid_terms_version(terms_version: str | None) -> Response | None:
+    from houston.accounts.legal_constants import (
+        CURRENT_TERMS_VERSION,
+        INVALID_TERMS_VERSION_CODE,
+    )
+
+    if terms_version is None or terms_version == CURRENT_TERMS_VERSION:
+        return None
+    return Response(
+        {
+            "code": INVALID_TERMS_VERSION_CODE,
+            "detail": "This terms version is not current.",
+        },
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
+def _apply_optional_terms(*, user, payload: dict, terms_version: str | None) -> Response | None:
+    from houston.accounts.legal_services import maybe_accept_terms_version
+
+    maybe_accept_terms_version(user=user, terms_version=terms_version)
+    user.refresh_from_db()
+    payload["user"] = _serialize_user(user)
+    return None
 
 
 def _build_auth_response(

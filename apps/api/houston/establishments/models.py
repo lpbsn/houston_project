@@ -394,6 +394,82 @@ class EstablishmentMembership(BaseModel):
         return f"{self.user} @ {self.establishment}"
 
 
+class MembershipBlock(BaseModel):
+    establishment = models.ForeignKey(
+        Establishment,
+        on_delete=models.CASCADE,
+        related_name="membership_blocks",
+    )
+    blocker_membership = models.ForeignKey(
+        EstablishmentMembership,
+        on_delete=models.CASCADE,
+        related_name="blocks_created",
+    )
+    blocked_membership = models.ForeignKey(
+        EstablishmentMembership,
+        on_delete=models.CASCADE,
+        related_name="blocks_received",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["blocker_membership", "blocked_membership"],
+                name="unique_membership_block_pair",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(blocker_membership=models.F("blocked_membership")),
+                name="membership_block_not_self",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["establishment"], name="membership_block_est_idx"),
+        ]
+
+
+class ContentReport(BaseModel):
+    class ContentKind(models.TextChoices):
+        OBSERVATION = "observation", "Observation"
+        COMMENT = "comment", "Comment"
+        CHAT_MESSAGE = "chat_message", "Chat message"
+        USER = "user", "User"
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        ACKNOWLEDGED = "acknowledged", "Acknowledged"
+
+    establishment = models.ForeignKey(
+        Establishment,
+        on_delete=models.CASCADE,
+        related_name="content_reports",
+    )
+    reporter_membership = models.ForeignKey(
+        EstablishmentMembership,
+        on_delete=models.CASCADE,
+        related_name="content_reports_filed",
+    )
+    target_membership = models.ForeignKey(
+        EstablishmentMembership,
+        on_delete=models.CASCADE,
+        related_name="content_reports_received",
+        null=True,
+        blank=True,
+    )
+    content_kind = models.CharField(max_length=32, choices=ContentKind.choices)
+    content_id = models.UUIDField(null=True, blank=True)
+    reason = models.CharField(max_length=500)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.OPEN,
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["establishment", "status"], name="content_report_est_status_idx"),
+        ]
+
+
 class EstablishmentInvitation(BaseModel):
     membership = models.ForeignKey(
         EstablishmentMembership,

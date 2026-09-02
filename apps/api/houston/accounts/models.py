@@ -33,6 +33,10 @@ class User(AbstractUser):
         choices=Status.choices,
         default=Status.PENDING,
     )
+    terms_version = models.CharField(max_length=32, null=True, blank=True)
+    terms_accepted_at = models.DateTimeField(null=True, blank=True)
+    ai_consent_version = models.CharField(max_length=32, null=True, blank=True)
+    ai_processing_consented_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

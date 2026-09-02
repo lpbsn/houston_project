@@ -9,6 +9,8 @@ const requiredFiles = [
   'index.html',
   'mentions-legales/index.html',
   'supprimer-compte/index.html',
+  'politique-de-confidentialite/index.html',
+  'conditions-d-utilisation/index.html',
   'robots.txt',
   'sitemap.xml',
   '_redirects',
@@ -18,6 +20,9 @@ const expectedCanonicals = {
   'index.html': 'https://spore-os.com/',
   'mentions-legales/index.html': 'https://spore-os.com/mentions-legales/',
   'supprimer-compte/index.html': 'https://spore-os.com/supprimer-compte/',
+  'politique-de-confidentialite/index.html':
+    'https://spore-os.com/politique-de-confidentialite/',
+  'conditions-d-utilisation/index.html': 'https://spore-os.com/conditions-d-utilisation/',
 }
 
 function fail(message) {
@@ -51,6 +56,10 @@ const requiredRedirects = [
   '/mentions-legales/ /mentions-legales/index.html 200',
   '/supprimer-compte /supprimer-compte/index.html 200',
   '/supprimer-compte/ /supprimer-compte/index.html 200',
+  '/politique-de-confidentialite /politique-de-confidentialite/index.html 200',
+  '/politique-de-confidentialite/ /politique-de-confidentialite/index.html 200',
+  '/conditions-d-utilisation /conditions-d-utilisation/index.html 200',
+  '/conditions-d-utilisation/ /conditions-d-utilisation/index.html 200',
 ]
 for (const rule of requiredRedirects) {
   if (!redirects.includes(rule)) {

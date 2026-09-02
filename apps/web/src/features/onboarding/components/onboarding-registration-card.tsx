@@ -10,7 +10,9 @@ import {
   registerOnboarding,
   validateRegistrationOwner,
 } from '@/features/auth/api'
+import { TermsAcceptCheckbox } from '@/features/auth/components/terms-accept-checkbox'
 import type { RegistrationRequest } from '@/features/auth/types'
+import { CURRENT_TERMS_VERSION } from '@/lib/legal'
 
 type OnboardingRegistrationCardProps = {
   onRegistered: (result: { establishmentId: string; sessionId: string }) => void
@@ -72,6 +74,7 @@ export function OnboardingRegistrationCard({ onRegistered }: OnboardingRegistrat
   const [fieldError, setFieldError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [acceptTerms, setAcceptTerms] = useState(false)
   const [isValidatingOwner, setIsValidatingOwner] = useState(false)
 
   const meta = stepMeta[step]
@@ -182,6 +185,7 @@ export function OnboardingRegistrationCard({ onRegistered }: OnboardingRegistrat
       password_confirmation: form.password_confirmation,
       organization_name: form.organization_name.trim(),
       establishment_name: form.establishment_name.trim(),
+      ...(acceptTerms ? { terms_version: CURRENT_TERMS_VERSION } : {}),
     }
 
     setIsSubmitting(true)
@@ -234,6 +238,7 @@ export function OnboardingRegistrationCard({ onRegistered }: OnboardingRegistrat
         >
           {step === 1 ? (
             <>
+              <TermsAcceptCheckbox checked={acceptTerms} onCheckedChange={setAcceptTerms} />
               <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="invite_code">
                   Invitation code

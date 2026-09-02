@@ -61,6 +61,10 @@ def submit_observation(
     action_plan_execution=None,
     action_plan_execution_task=None,
 ) -> Observation:
+    from houston.accounts.legal_services import require_current_ai_consent, require_current_terms
+
+    require_current_terms(user=membership.user)
+    require_current_ai_consent(user=membership.user)
     raw_text = validate_observation_text(text)
 
     has_action_plan_context = (

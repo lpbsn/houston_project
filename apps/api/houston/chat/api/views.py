@@ -810,6 +810,11 @@ class ChatEligibleMembershipsView(EstablishmentScopedChatMixin, APIView):
             query=query,
             exclude_active_conversation_id=exclude_active_conversation_id,
         ).exclude(id=membership.id)
+        from houston.establishments.safety_services import blocked_membership_ids_for
+
+        blocked_ids = blocked_membership_ids_for(membership_id=membership.id)
+        if blocked_ids:
+            memberships = memberships.exclude(id__in=blocked_ids)
         items = [serialize_membership_summary(item) for item in memberships[:100]]
         return Response(ChatEligibleMembershipsResponseSerializer({"items": items}).data)
 

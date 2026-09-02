@@ -293,6 +293,17 @@ def create_or_get_dm_conversation(
             participant.save(update_fields=["list_hidden_at", "updated_at"])
         return existing, False
 
+    from houston.establishments.safety_constants import MEMBERSHIP_BLOCKED_DETAIL
+    from houston.establishments.safety_services import MembershipBlockedError, require_not_blocked
+
+    try:
+        require_not_blocked(
+            actor_membership_id=actor_membership.id,
+            other_membership_id=target_membership.id,
+        )
+    except MembershipBlockedError:
+        raise ChatPermissionError(MEMBERSHIP_BLOCKED_DETAIL, code="membership_blocked")
+
     conversation = ChatConversation.objects.create(
         establishment_id=actor_membership.establishment_id,
         type=ChatConversation.Type.DM,
@@ -845,6 +856,34 @@ def create_message(
         raise ChatNotFoundError()
     if not can_send_message(author_membership, conversation):
         raise ChatPermissionError()
+
+    from houston.accounts.legal_constants import TERMS_ACCEPTANCE_REQUIRED_DETAIL
+    from houston.accounts.legal_services import TermsAcceptanceRequiredError, require_current_terms
+    from houston.establishments.safety_constants import MEMBERSHIP_BLOCKED_DETAIL
+    from houston.establishments.safety_services import MembershipBlockedError, require_not_blocked
+
+    try:
+        require_current_terms(user=author_membership.user)
+    except TermsAcceptanceRequiredError:
+        raise ChatPermissionError(
+            TERMS_ACCEPTANCE_REQUIRED_DETAIL,
+            code="terms_acceptance_required",
+        )
+
+    if conversation.type == ChatConversation.Type.DM:
+        other_id = (
+            conversation.dm_membership_b_id
+            if conversation.dm_membership_a_id == author_membership.id
+            else conversation.dm_membership_a_id
+        )
+        if other_id is not None:
+            try:
+                require_not_blocked(
+                    actor_membership_id=author_membership.id,
+                    other_membership_id=other_id,
+                )
+            except MembershipBlockedError:
+                raise ChatPermissionError(MEMBERSHIP_BLOCKED_DETAIL, code="membership_blocked")
 
     normalized_body = normalize_message_body(body)
     recipient_membership_ids = _active_recipient_membership_ids(conversation_id=conversation.id)

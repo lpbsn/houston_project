@@ -18,6 +18,10 @@ from houston.establishments.api.organization_admin_views import (
     OrganizationAdminOwnerInvitationView,
     OrganizationAdminOwnerListView,
 )
+from houston.establishments.api.safety_views import (
+    ContentReportCreateView,
+    MembershipBlockView,
+)
 from houston.establishments.api.views import (
     CatalogActivitySubjectSuggestView,
     CatalogBusinessUnitSuggestView,
@@ -283,5 +287,15 @@ urlpatterns = [
         "establishments/<uuid:establishment_id>/users/search/",
         ScopedUserSearchView.as_view(),
         name="establishment-user-search",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/memberships/<uuid:membership_id>/block/",
+        MembershipBlockView.as_view(),
+        name="establishment-membership-block",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/content-reports/",
+        ContentReportCreateView.as_view(),
+        name="establishment-content-report-create",
     ),
 ]

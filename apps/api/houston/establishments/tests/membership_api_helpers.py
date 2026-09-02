@@ -16,12 +16,17 @@ def create_user(
     email: str | None = None,
     status: str = User.Status.ACTIVE,
 ) -> User:
-    return User.objects.create_user(
+    user = User.objects.create_user(
         username=username,
         email=email or f"{username}@example.com",
         password=TEST_PASSWORD,
         status=status,
     )
+    if status == User.Status.ACTIVE:
+        from houston.accounts.legal_services import grant_current_legal_defaults
+
+        grant_current_legal_defaults(user=user)
+    return user
 
 
 def create_membership(

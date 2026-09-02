@@ -1076,6 +1076,66 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/auth/me/ai-consent/:
+    post:
+      operationId: v1_auth_me_ai_consent_create
+      description: Records consent to the current OpenAI processing disclosure.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LegalVersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LegalVersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LegalVersionRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BootstrapResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/auth/me/ai-consent/withdraw/:
+    post:
+      operationId: v1_auth_me_ai_consent_withdraw_create
+      description: Withdraws OpenAI processing consent.
+      tags:
+      - auth
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BootstrapResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/auth/me/delete/:
     post:
       operationId: v1_auth_me_delete_create
@@ -1134,6 +1194,45 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AccountDeletionPreviewResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/auth/me/terms/:
+    post:
+      operationId: v1_auth_me_terms_create
+      description: Records acceptance of the current terms of use version.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LegalVersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LegalVersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LegalVersionRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BootstrapResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '401':
           content:
@@ -5002,6 +5101,59 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/content-reports/:
+    post:
+      operationId: v1_establishments_content_reports_create
+      description: Files an in-app content or user report. Operator is notified with
+        identifiers only.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - safety
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContentReportCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ContentReportCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ContentReportCreateRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentReportResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/gamification/me/:
     get:
       operationId: v1_establishments_gamification_me_retrieve
@@ -5381,6 +5533,87 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DirectorInvitationErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/memberships/{membership_id}/block/:
+    post:
+      operationId: v1_establishments_memberships_block_create
+      description: Blocks 1:1 DMs and mentions with another membership in this establishment.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - safety
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipBlockResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+    delete:
+      operationId: v1_establishments_memberships_block_destroy
+      description: Removes a block created by the current membership.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - safety
+      security:
+      - BearerAccessToken: []
+      responses:
+        '204':
+          description: Block removed.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
           description: ''
   /api/v1/establishments/{establishment_id}/memberships/{membership_id}/deactivate/:
     post:
@@ -11313,6 +11546,49 @@ components:
       required:
       - can_reply
       - can_resolve
+    ContentKindEnum:
+      enum:
+      - observation
+      - comment
+      - chat_message
+      - user
+      type: string
+      description: |-
+        * `observation` - Observation
+        * `comment` - Comment
+        * `chat_message` - Chat message
+        * `user` - User
+    ContentReportCreateRequest:
+      type: object
+      properties:
+        content_kind:
+          $ref: '#/components/schemas/ContentKindEnum'
+        reason:
+          type: string
+          maxLength: 500
+        target_membership_id:
+          type: string
+          format: uuid
+        content_id:
+          type: string
+          format: uuid
+      required:
+      - content_kind
+      - reason
+    ContentReportResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        content_kind:
+          type: string
+      required:
+      - content_kind
+      - id
+      - status
     CoverageEnum:
       enum:
       - complete
@@ -11358,6 +11634,8 @@ components:
         password:
           type: string
         password_confirmation:
+          type: string
+        terms_version:
           type: string
       required:
       - password
@@ -12280,6 +12558,13 @@ components:
       description: |-
         * `execution` - execution
         * `schedule` - schedule
+    LegalVersionRequest:
+      type: object
+      properties:
+        version:
+          type: string
+      required:
+      - version
     LoginRequest:
       type: object
       properties:
@@ -12355,6 +12640,18 @@ components:
       - scope_summary
       - scopes
       - status
+    MembershipBlockResponse:
+      type: object
+      properties:
+        blocker_membership_id:
+          type: string
+          format: uuid
+        blocked_membership_id:
+          type: string
+          format: uuid
+      required:
+      - blocked_membership_id
+      - blocker_membership_id
     MembershipInvitationRequest:
       type: object
       description: Session Team invite body. Owner invites use organization-admin
@@ -13688,6 +13985,8 @@ components:
         establishment_name:
           type: string
           default: ''
+        terms_version:
+          type: string
       required:
       - email
       - first_name
@@ -14543,12 +14842,42 @@ components:
           type: string
         last_name:
           type: string
+        terms_version:
+          type: string
+          nullable: true
+        terms_accepted_at:
+          type: string
+          format: date-time
+          nullable: true
+        current_terms_version:
+          type: string
+        needs_terms_acceptance:
+          type: boolean
+        ai_consent_version:
+          type: string
+          nullable: true
+        ai_processing_consented_at:
+          type: string
+          format: date-time
+          nullable: true
+        current_ai_consent_version:
+          type: string
+        needs_ai_consent:
+          type: boolean
       required:
+      - ai_consent_version
+      - ai_processing_consented_at
+      - current_ai_consent_version
+      - current_terms_version
       - email
       - first_name
       - id
       - identity_type
       - last_name
+      - needs_ai_consent
+      - needs_terms_acceptance
+      - terms_accepted_at
+      - terms_version
       - username
     ValidationErrorResponse:
       type: object

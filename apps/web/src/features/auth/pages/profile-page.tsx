@@ -19,6 +19,12 @@ import {
 } from '@/features/auth/lib/bootstrap-permission-hints'
 import { canSwitchEstablishment } from '@/features/auth/lib/establishment-switch'
 import { AccountDeletionCard } from '@/features/auth/pages/account-deletion-card'
+import {
+  AuthApiError,
+  acceptCurrentAiConsent,
+  withdrawAiConsent,
+} from '@/features/auth/api'
+import { PUBLIC_PRIVACY_POLICY_URL, PUBLIC_TERMS_URL } from '@/lib/legal'
 import { toRoleEnum } from '@/features/auth/lib/role'
 import type { RoleEnum } from '@/features/auth/types'
 import { canShowAnalyticsNavigation } from '@/features/navigation/lib/shared-navigation'
@@ -163,6 +169,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   const firstName = readOptionalUserName(user, 'first_name')
   const lastName = readOptionalUserName(user, 'last_name')
   const identityLabel = user ? (user.email ?? user.username) : null
+  const needsAiConsent = Boolean(user?.needs_ai_consent)
   const role = toRoleEnum(activeMembership?.role)
   const canAccessManagement = canAccessManagementSpace(permissionHints)
   const canViewTeam = canViewTeamFromBootstrapHints(permissionHints)
@@ -193,6 +200,8 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   const isNativeRuntime = getAppRuntime() === 'native'
   const [pushOptInError, setPushOptInError] = useState<string | null>(null)
   const [isPushOptingIn, setIsPushOptingIn] = useState(false)
+  const [aiConsentPending, setAiConsentPending] = useState(false)
+  const [aiConsentError, setAiConsentError] = useState<string | null>(null)
   const [osReceive, setOsReceive] = useState<'granted' | 'denied' | 'prompt' | 'unavailable'>(
     'unavailable',
   )
@@ -443,6 +452,54 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
           </button>
         </TerrainCard>
       ) : null}
+
+      <TerrainCard padding="sm" className="space-y-3">
+        <p className="text-sm font-medium text-[#1a1a1a]">Confidentialité</p>
+        <a
+          href={PUBLIC_PRIVACY_POLICY_URL}
+          className="block text-sm text-[#5c5a54] underline"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Politique de confidentialité
+        </a>
+        <a
+          href={PUBLIC_TERMS_URL}
+          className="block text-sm text-[#5c5a54] underline"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Conditions d’utilisation
+        </a>
+        {aiConsentError ? <p className="text-sm text-[#E24B4A]">{aiConsentError}</p> : null}
+        <button
+          type="button"
+          className="flex min-h-11 w-full items-center justify-center text-sm font-medium text-[#1a1a1a]"
+          disabled={aiConsentPending}
+          onClick={() => {
+            setAiConsentError(null)
+            setAiConsentPending(true)
+            const action = needsAiConsent ? acceptCurrentAiConsent() : withdrawAiConsent()
+            void action
+              .catch((caught) => {
+                setAiConsentError(
+                  caught instanceof AuthApiError
+                    ? caught.message
+                    : 'Mise à jour du consentement impossible.',
+                )
+              })
+              .finally(() => {
+                setAiConsentPending(false)
+              })
+          }}
+        >
+          {aiConsentPending
+            ? 'Enregistrement...'
+            : needsAiConsent
+              ? 'Autoriser le traitement OpenAI'
+              : 'Retirer le consentement OpenAI'}
+        </button>
+      </TerrainCard>
 
       <AccountDeletionCard
         disabled={isLoggingOut}

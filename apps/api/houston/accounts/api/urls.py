@@ -3,6 +3,8 @@ from django.urls import path
 from houston.accounts.api.views import (
     AccountDeletionPreviewView,
     AccountDeletionView,
+    AiConsentAcceptView,
+    AiConsentWithdrawView,
     BootstrapView,
     CsrfCookieView,
     LoginView,
@@ -10,6 +12,7 @@ from houston.accounts.api.views import (
     RefreshView,
     RegisterView,
     SwitchEstablishmentView,
+    TermsAcceptView,
     UserProfileView,
     ValidateOwnerRegistrationView,
 )
@@ -33,6 +36,13 @@ urlpatterns = [
         name="auth-deletion-preview",
     ),
     path("me/delete/", AccountDeletionView.as_view(), name="auth-delete"),
+    path("me/terms/", TermsAcceptView.as_view(), name="auth-terms-accept"),
+    path("me/ai-consent/", AiConsentAcceptView.as_view(), name="auth-ai-consent-accept"),
+    path(
+        "me/ai-consent/withdraw/",
+        AiConsentWithdrawView.as_view(),
+        name="auth-ai-consent-withdraw",
+    ),
     path(
         "switch_establishment/",
         SwitchEstablishmentView.as_view(),

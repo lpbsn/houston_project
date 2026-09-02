@@ -23,6 +23,9 @@ Git is the only history. There is no `archive/` or `audits/` folder in active do
 | [`product/decisions/action_plan.md`](product/decisions/action_plan.md) | Action plan §26 + schedules |
 | [`product/domains/`](product/domains/) | Domain specs (16 files) |
 | [`product/domains/business_unit_taxonomy_domain.md`](product/domains/business_unit_taxonomy_domain.md) | BU/AS identity, `routing_key`, contracted storage, Lot 5 public shapes |
+| [`product/data_inventory.md`](product/data_inventory.md) | Collected data, deletion, store privacy SoT |
+| [`product/store_privacy_declarations.md`](product/store_privacy_declarations.md) | Apple / Google privacy worksheet |
+| [`product/store_compliance.md`](product/store_compliance.md) | Store compliance hors privacy |
 
 ## Architecture & engineering
 
