@@ -1,7 +1,7 @@
 # Houston — Current product state
 
 Status: authoritative  
-Last reviewed: 2026-08-21
+Last reviewed: 2026-09-02
 
 ## Branding
 
@@ -87,7 +87,7 @@ Post-core gaps (non-blocking pilot): some bootstrap hints, no REST message write
 
 Details: [`../engineering/frontend_architecture.md`](../engineering/frontend_architecture.md).
 
-**Capacitor Lots 1–10 are closed.** Resume product work. Capacitor Lot 11 (DX / CI / store release) is deferred — see [`../cadrage/mobile-capacitor-roadmap.md`](../cadrage/mobile-capacitor-roadmap.md).
+**Capacitor Lots 1–10 are closed.** Resume product work. Capacitor Lot 11 (CI `cap sync` / publication pipeline) is deferred — see [`../cadrage/mobile-capacitor-roadmap.md`](../cadrage/mobile-capacitor-roadmap.md). Local Play AAB: [`../deploy/native_release.md`](../deploy/native_release.md).
 
 ## Product Lot 11 stabilization (preserved contracts)
 

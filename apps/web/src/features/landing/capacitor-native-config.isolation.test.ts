@@ -44,4 +44,32 @@ describe('capacitor native config isolation', () => {
     expect(debugNetwork).toContain('10.0.2.2')
     expect(debugNetwork).toContain('cleartextTrafficPermitted="true"')
   })
+
+  it('ignores Android upload keystores and requires google-services.json locally', () => {
+    const gitignore = readFileSync(resolve(process.cwd(), 'android/.gitignore'), 'utf8')
+    expect(gitignore).toMatch(/^\*\.jks$/m)
+    expect(gitignore).toMatch(/^\*\.keystore$/m)
+    expect(gitignore).toContain('keystore.properties')
+    expect(gitignore).toContain('google-services.json')
+    expect(gitignore).not.toMatch(/^#\*\.jks$/m)
+  })
+
+  it('refuses unsigned or debug-signed Android release packaging', () => {
+    const gradle = readFileSync(resolve(process.cwd(), 'android/app/build.gradle'), 'utf8')
+    expect(gradle).toContain('signingConfigs')
+    expect(gradle).toContain('keystore.properties')
+    expect(gradle).toContain('Refusing to produce a debug-signed release AAB/APK')
+    expect(gradle).toContain('google-services.json')
+    expect(gradle).toContain('Push would be missing in the Closed Testing AAB')
+  })
+
+  it('sets CAPACITOR_DEBUG false on iOS Release', () => {
+    const releaseXcconfig = readFileSync(resolve(process.cwd(), 'ios/release.xcconfig'), 'utf8')
+    const pbxproj = readFileSync(
+      resolve(process.cwd(), 'ios/App/App.xcodeproj/project.pbxproj'),
+      'utf8',
+    )
+    expect(releaseXcconfig).toMatch(/CAPACITOR_DEBUG\s*=\s*false/)
+    expect(pbxproj).toContain('release.xcconfig')
+  })
 })

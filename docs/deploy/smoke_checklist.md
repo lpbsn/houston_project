@@ -1,7 +1,7 @@
 # Smoke checklist
 
 Status: authoritative  
-Last reviewed: 2026-08-21
+Last reviewed: 2026-09-02
 
 Unified smoke validation for local pilot and Railway prod-test.
 
@@ -15,7 +15,7 @@ Unified smoke validation for local pilot and Railway prod-test.
 
 ## Local pilot — native (simulator / emulator)
 
-Optional. Not CI. Local `make web-cap-sync` already exists. Store publication and `cap sync` **in pipeline** are Capacitor Lot 11 (**deferred** until real TestFlight / Play Internal Testing prep).
+Optional. Not CI. Local `make web-cap-sync` already exists. Store AAB procedure: [`native_release.md`](native_release.md). CI `cap sync` remains Capacitor Lot 11 (**deferred**).
 
 - [ ] Xcode (iOS Simulator) and/or Android Studio (emulator) installed — see [`INSTALL_MAC.md`](../../INSTALL_MAC.md)
 - [ ] iOS: `VITE_API_BASE_URL=http://localhost:8000` then `make web-cap-sync`; login + one terrain flow + WS

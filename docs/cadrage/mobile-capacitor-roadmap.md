@@ -1,9 +1,9 @@
 # Spore — Roadmap Web + Capacitor
 
 Status: authoritative  
-Last reviewed: 2026-08-21
+Last reviewed: 2026-09-02
 
-Record of the delivered Capacitor foundation. **Capacitor Lots 1–10 are closed.** Resume product work on this socle. **Capacitor Lot 11** (DX / CI / release mobile) is **deferred**, not abandoned, and is **not** the next chantier. This document does not prescribe implementation.
+Record of the delivered Capacitor foundation. **Capacitor Lots 1–10 are closed.** Resume product work on this socle. **Capacitor Lot 11** (DX / CI `cap sync` / publication pipeline) is **deferred**, not abandoned. A local Play AAB procedure exists at [`docs/deploy/native_release.md`](../deploy/native_release.md); it does not reopen Lot 11.
 
 These **Capacitor Lots** (1–11) are distinct from product/domain lots (taxonomy Lot 5, test Lot 4 helpers, product Lot 11 stabilization). Write **Capacitor Lot N** when referring to this roadmap.
 
@@ -66,7 +66,7 @@ Le code et les tests priment. Archi utile : [`../engineering/frontend_architectu
 
 ## Statut d’exécution
 
-**Do not reopen Capacitor Lots 1–10.** They are closed. **Do not open Capacitor Lot 11** until real TestFlight and/or Google Play Internal Testing prep. If Lot 11 is later reopened, still do not open durable Observation storage, queue, or sync (régime B) inside it.
+**Do not reopen Capacitor Lots 1–10.** They are closed. **Do not open Capacitor Lot 11** (CI `cap sync` / publication pipeline) for Fastlane or store CI. Local Play AAB prep is [`docs/deploy/native_release.md`](../deploy/native_release.md) and does not reopen Lot 11. If Lot 11 is later reopened, still do not open durable Observation storage, queue, or sync (régime B) inside it.
 
 Lots 1–10 were sequential. Remaining items under **Limitations non bloquantes** are external dependencies, a distinct ticket, or unfinished device QA — they do not reopen a lot.
 
@@ -227,7 +227,7 @@ Interdit : offline-first généralisé ; réplication locale complète ; cache d
 - Suppression PWA ≠ reconstruction systématique des capacités PWA ailleurs.
 - **Offline capture terrain (checkpoint done, 2026-08-19)** : seule capture critique = Observation. **Capacitor Lot 10 done** : régime process-vivant seulement (pas de survie après kill). Audio / chat / commentaires / commandes de cycle de vie exclus. Pas de file, sync, ni persistance hors process.
 - **Capacitor Lot 10 implémentation (2026-08-20)** : draft in-memory ; photos uploadées seulement à Envoyer ; Envoyer désactivé hors ligne ; pas d’upload opportuniste ; pas de retry 404. Purge draft : 201, fin de session, nouvelle identité, switch établissement — pas un échec refresh.
-- **Capacitor Lot 11 (2026-08-21)** : DX / CI / release mobile **deferred** until real TestFlight / Google Play Internal Testing prep. Not abandoned. Local Web/Native builds and `cap sync` stay the daily workflow.
+- **Capacitor Lot 11 (2026-08-21)** : DX / CI `cap sync` / publication pipeline **deferred**. Not abandoned. Daily `cap sync` unchanged. Local signed AAB: [`docs/deploy/native_release.md`](../deploy/native_release.md) (2026-09-02).
 
 ### Limitations non bloquantes (hors lots)
 

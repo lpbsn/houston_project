@@ -3,7 +3,7 @@
 	up up-build up-backend up-scheduler up-prod-test down-prod-test migrate-prod-test restart-backend recreate-backend down \
 	check test lint schema schema-check shell migrate migrations-check \
 	backend-lint backend-migrations-check backend-schema backend-schema-check backend-deploy-check backend-test backend-check backend-rebuild \
-	web-install web-dev web-dev-native web-dev-landing web-build web-build-native web-build-native-check web-cap-sync web-build-landing web-typecheck web-lint web-test web-api-generate web-api-generate-check web-check \
+	web-install web-dev web-dev-native web-dev-landing web-build web-build-native web-build-native-check web-cap-sync web-cap-sync-release android-bundle-release web-build-landing web-typecheck web-lint web-test web-api-generate web-api-generate-check web-check \
 	verify local-check docker-verify-security infra-check \
 	docs-check agent-config-check agent-config-sync \
 	import-catalog catalog-check \
@@ -24,6 +24,7 @@ API_CMD := $(API_EXEC) sh -lc
 API_DIR := /app/apps/api
 
 WEB_DIR := apps/web
+NATIVE_RELEASE_ORIGIN := https://app.spore-os.com
 
 PYTEST_MARKERS := not openai_observation_smoke and not openai_smoke and not slow
 PYTEST_ARGS := -m "$(PYTEST_MARKERS)" -q
@@ -238,6 +239,12 @@ web-build-native-check:
 
 web-cap-sync:
 	cd $(WEB_DIR) && npm run cap:sync
+
+web-cap-sync-release:
+	cd $(WEB_DIR) && VITE_API_BASE_URL=$(NATIVE_RELEASE_ORIGIN) VITE_PUBLIC_APP_URL=$(NATIVE_RELEASE_ORIGIN) npm run cap:sync:release
+
+android-bundle-release: web-cap-sync-release
+	cd $(WEB_DIR)/android && ./gradlew :app:bundleRelease
 
 web-build-landing:
 	cd $(WEB_DIR) && npm run build:landing
