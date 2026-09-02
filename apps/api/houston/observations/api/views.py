@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 from drf_spectacular.utils import OpenApiResponse, extend_schema
+from houston.accounts.api.legal_errors import legal_error_response
 from houston.accounts.api.serializers import (
     ApiErrorResponseSerializer,
     DetailResponseSerializer,
 )
 from houston.accounts.authentication import BearerAccessTokenAuthentication
+from houston.accounts.legal_services import (
+    AiConsentRequiredError,
+    TermsAcceptanceRequiredError,
+)
 from houston.establishments.permissions import HasActiveMembership
 from houston.observations.api.serializers import (
     ObservationProcessingStatusResponseSerializer,
@@ -70,6 +75,8 @@ class ObservationSubmitView(EstablishmentScopedObservationMixin, APIView):
                     [],
                 ),
             )
+        except (TermsAcceptanceRequiredError, AiConsentRequiredError) as exc:
+            return legal_error_response(exc)
         except ObservationValidationError as exc:
             return Response(
                 {"code": exc.error_code, "detail": "Invalid observation submission."},

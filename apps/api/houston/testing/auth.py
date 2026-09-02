@@ -37,6 +37,9 @@ def build_api_membership_on_establishment(
         password=TEST_PASSWORD,
         status=User.Status.ACTIVE,
     )
+    from houston.accounts.legal_services import grant_current_legal_defaults
+
+    grant_current_legal_defaults(user=user)
     return EstablishmentMembership.objects.create(
         user=user,
         establishment=establishment_membership.establishment,

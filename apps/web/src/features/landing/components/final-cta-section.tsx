@@ -43,6 +43,18 @@ export function LandingFooter() {
             {footerContent.legalLabel}
           </a>
           <a
+            href={footerContent.privacyHref}
+            className="transition hover:text-white focus-visible:text-white"
+          >
+            {footerContent.privacyLabel}
+          </a>
+          <a
+            href={footerContent.termsHref}
+            className="transition hover:text-white focus-visible:text-white"
+          >
+            {footerContent.termsLabel}
+          </a>
+          <a
             href={footerContent.accountDeletionHref}
             className="transition hover:text-white focus-visible:text-white"
           >

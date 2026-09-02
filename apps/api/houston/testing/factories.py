@@ -27,6 +27,10 @@ def build_membership(
         password=TEST_PASSWORD,
         status=user_status,
     )
+    if user_status == User.Status.ACTIVE:
+        from houston.accounts.legal_services import grant_current_legal_defaults
+
+        grant_current_legal_defaults(user=user)
     establishment = Establishment.objects.create(
         name=f"Establishment {uuid.uuid4().hex[:8]}",
         organization=organization,
@@ -45,12 +49,17 @@ def build_membership(
 def create_user(
     *, username: str, status: str = User.Status.ACTIVE, password: str = TEST_PASSWORD
 ) -> User:
-    return User.objects.create_user(
+    user = User.objects.create_user(
         username=username,
         email=f"{username}@example.com",
         password=password,
         status=status,
     )
+    if status == User.Status.ACTIVE:
+        from houston.accounts.legal_services import grant_current_legal_defaults
+
+        grant_current_legal_defaults(user=user)
+    return user
 
 
 def create_establishment(

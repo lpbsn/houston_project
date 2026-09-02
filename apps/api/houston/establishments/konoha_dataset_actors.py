@@ -831,12 +831,18 @@ def preflight_konoha_dataset_actors() -> PreflightResult:
     )
 
 
-def _accept_invitation(*, invitation_token: str) -> None:
+def _accept_invitation(*, invitation_token: str, email: str) -> None:
     accept_establishment_invitation(
         request=RequestFactory().post("/"),
         raw_token=invitation_token,
         password=LOCAL_DATASET_PASSWORD,
     )
+    from houston.accounts.legal_services import grant_current_legal_defaults
+
+    user = User.objects.filter(email__iexact=email).first()
+    if user is None:
+        raise KonohaDatasetActorsError((f"{email}: user missing after invitation accept.",))
+    grant_current_legal_defaults(user=user)
 
 
 def _provision_classified_seat(
@@ -868,7 +874,7 @@ def _provision_classified_seat(
             role=seat.role,
             scopes=scopes,
         )
-        _accept_invitation(invitation_token=invitation.invitation_token)
+        _accept_invitation(invitation_token=invitation.invitation_token, email=seat.email)
         return SeatAction.INVITE_ACCEPT
 
     if classification.action == SeatAction.REINVITE_ACCEPT:
@@ -879,7 +885,7 @@ def _provision_classified_seat(
             establishment_id=establishment.id,
             membership_id=classification.membership_id,
         )
-        _accept_invitation(invitation_token=invitation.invitation_token)
+        _accept_invitation(invitation_token=invitation.invitation_token, email=seat.email)
         return SeatAction.REINVITE_ACCEPT
 
     raise KonohaDatasetActorsError((f"{seat.email}: unexpected action {classification.action}.",))

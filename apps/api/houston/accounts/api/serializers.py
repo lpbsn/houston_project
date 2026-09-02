@@ -86,6 +86,14 @@ class UserPublicSerializer(serializers.Serializer):
     identity_type = serializers.CharField()
     first_name = serializers.CharField(allow_blank=True)
     last_name = serializers.CharField(allow_blank=True)
+    terms_version = serializers.CharField(allow_null=True)
+    terms_accepted_at = serializers.DateTimeField(allow_null=True)
+    current_terms_version = serializers.CharField()
+    needs_terms_acceptance = serializers.BooleanField()
+    ai_consent_version = serializers.CharField(allow_null=True)
+    ai_processing_consented_at = serializers.DateTimeField(allow_null=True)
+    current_ai_consent_version = serializers.CharField()
+    needs_ai_consent = serializers.BooleanField()
 
 
 class UserProfileUpdateRequestSerializer(serializers.Serializer):
@@ -284,6 +292,7 @@ class RegistrationRequestSerializer(RefreshTokenTransportSerializerMixin):
         allow_blank=True,
         default="",
     )
+    terms_version = serializers.CharField(required=False, allow_blank=False)
 
     def validate_first_name(self, value: str) -> str:
         if not value:
@@ -337,6 +346,7 @@ class RegistrationResponseSerializer(AuthResponseSerializer):
 class DirectorInvitationAcceptRequestSerializer(RefreshTokenTransportSerializerMixin):
     password = serializers.CharField(trim_whitespace=False)
     password_confirmation = serializers.CharField(trim_whitespace=False)
+    terms_version = serializers.CharField(required=False, allow_blank=False)
 
     def validate_password(self, value: str) -> str:
         if not value:
@@ -372,3 +382,7 @@ class DirectorInvitationAcceptResponseSerializer(AuthResponseSerializer):
 class DirectorInvitationAcceptErrorResponseSerializer(serializers.Serializer):
     code = serializers.CharField()
     detail = serializers.CharField()
+
+
+class LegalVersionRequestSerializer(serializers.Serializer):
+    version = serializers.CharField()

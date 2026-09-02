@@ -1,7 +1,7 @@
 # Data inventory — Spore
 
-Status: authoritative for store privacy work (P1.1)
-Last reviewed: 2026-09-01
+Status: authoritative for store privacy work (P1.1 / PR2)
+Last reviewed: 2026-09-02
 
 This document describes **what the product actually collects and retains**, what account deletion does, and remaining uncertainties. It is the source of truth for Privacy Policy and store declarations (PR2). It is not a legal opinion.
 
@@ -33,18 +33,33 @@ This document describes **what the product actually collects and retains**, what
 
 ### Device
 
-- Microphone: transcription audio is request-scoped and deleted after the request; only text is kept.
-- Photos: private storage, authorized reads, signed preview TTL.
-- Native push: FCM token (`PushDevice`), membership `push_enabled`. Firebase Messaging SDK is present on native builds.
+- Microphone: transcription audio is request-scoped and deleted after the request; only text is kept. Native strings: `NSMicrophoneUsageDescription`; Android `RECORD_AUDIO`. Android also declares `POST_NOTIFICATIONS`.
+- Photos: private storage, authorized reads, signed preview TTL. Photo UI is `<input type="file" accept="image/...">` without `capture`. iOS WKWebView can still offer Take Photo; `NSCameraUsageDescription` was added as a crash-avoidance qualification.
+- Native push: FCM token (`PushDevice`), membership `push_enabled`. Native iOS SPM links **FirebaseCore + FirebaseMessaging only**. Android Gradle: `firebase-messaging` only. The JS `firebase` npm package is present but unused; no `firebase/analytics`. FCM auto-init is disabled on iOS and Android. `GoogleAppMeasurement` appears in iOS `Package.resolved` but is **not linked** and was not in the inspected `.app` binary.
 - No geolocation, contacts, biometric, advertising ID, or product analytics SDK.
 
 ### Third parties
 
-- **OpenAI**: observation pipeline, transcription, some onboarding/analytics AI. Usage metadata in `AIUsageLog` (no prompt/raw output stored locally). Provider retention is **not** controlled in this repo.
-- **Resend**: invitation emails when enabled.
-- **Firebase Cloud Messaging / APNs**: push delivery.
+- **OpenAI** (verified production paths in this repo): observation pipeline (`HOUSTON_AI_OBSERVATION_PROVIDER`), transcription (`HOUSTON_AI_TRANSCRIPTION_PROVIDER`), analytics pattern classifier (`HOUSTON_AI_ANALYTICS_PATTERN_PROVIDER`). Usage metadata in `AIUsageLog` (no prompt/raw output stored locally). Provider retention is **not** controlled in this repo.
+- **openai-v1 user consent** (product, PR2): gates observation text pipeline, request-scoped transcription audio, and the analytics pattern classifier (structured signal title / summary / issue_focus, plus duplicate-guard follow-up). Photos and chat are not sent. OpenAI pattern classification is skipped when any source-observation author lacks current consent.
+- **Resend**: invitation emails when enabled; content-report operator mail uses the same client and sends **identifiers only** (no UGC body).
+- **Firebase Cloud Messaging / APNs**: push delivery. Not Analytics in the current native link set.
 - **PostgreSQL, Redis, Railway**: hosting. Railway legal entity US; execution region currently EU West (Amsterdam) as stated on mentions légales.
 - No Sentry, no marketing analytics.
+
+### Legal records (PR2)
+
+- `User.terms_version` / `terms_accepted_at` (`cgu-v1`).
+- `User.ai_consent_version` / `ai_processing_consented_at` (`openai-v1`).
+- `MembershipBlock` (establishment-scoped, symmetric effect on new DMs and new mentions).
+- `ContentReport` (persisted; operator e-mail with IDs only).
+
+### Public legal URLs
+
+- Privacy Policy: `https://spore-os.com/politique-de-confidentialite/`
+- Terms: `https://spore-os.com/conditions-d-utilisation/`
+- Legal notice: `https://spore-os.com/mentions-legales/`
+- Account deletion: `https://spore-os.com/supprimer-compte/`
 
 ### Logging
 
@@ -102,7 +117,9 @@ Not a hard `User.delete()` (operational FKs use `PROTECT` on membership).
 
 No advertising, tracking, IDFA/ATT, Web Push, geolocation, or Sign in with Apple.
 
-## Uncertainties
+## Uncertainties (still not facts)
 
-- OpenAI and Railway log retention policies.
-- Exact FCM/SDK device-data practices: follow current Firebase documentation when filling Data Safety (PR2).
+- OpenAI and Railway log retention policies (read current vendor terms at console fill time).
+- Exact FCM/SDK device-data practices beyond what this repo links: follow current Firebase documentation when filling Data Safety.
+- Whether a given iOS WKWebView build actually presents Take Photo for `<input type="file">` (usage string added as qualification, not as proof that the camera API is always used).
+- Session IP: stored as `ip_metadata`. Apple has no dedicated “IP address” collected-data type; see store worksheets. Not used in this repo to infer location.

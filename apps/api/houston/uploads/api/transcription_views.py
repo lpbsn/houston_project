@@ -67,6 +67,17 @@ class TranscriptionCreateView(EstablishmentScopedObservationMixin, APIView):
         if membership is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        from houston.accounts.api.legal_errors import legal_error_response
+        from houston.accounts.legal_services import (
+            AiConsentRequiredError,
+            require_current_ai_consent,
+        )
+
+        try:
+            require_current_ai_consent(user=membership.user)
+        except AiConsentRequiredError as exc:
+            return legal_error_response(exc)
+
         uploaded_file = request.FILES.get("file")
         if uploaded_file is None:
             return Response(

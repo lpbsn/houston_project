@@ -15,6 +15,7 @@ from rest_framework.views import APIView
 
 from houston.accounts.api.serializers import ApiErrorResponseSerializer
 from houston.accounts.authentication import BearerAccessTokenAuthentication
+from houston.accounts.legal_services import AiConsentRequiredError, TermsAcceptanceRequiredError
 from houston.action_plans.api.serializers import (
     ActionPlanActiveExecutionConflictSerializer,
     ActionPlanCreateRequestSerializer,
@@ -1346,6 +1347,10 @@ class ActionPlanExecutionTaskCreateObservationView(EstablishmentScopedActionPlan
                 text=body.validated_data["text"],
                 temporary_upload_ids=body.validated_data.get("temporary_upload_ids", []),
             )
+        except (TermsAcceptanceRequiredError, AiConsentRequiredError) as exc:
+            from houston.accounts.api.legal_errors import legal_error_response
+
+            return legal_error_response(exc)
         except (ActionPlanPermissionError, ActionPlanValidationError) as exc:
             return _action_plan_error_response(exc)
 

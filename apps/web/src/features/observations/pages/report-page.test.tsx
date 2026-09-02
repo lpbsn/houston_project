@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { __resetObservationComposeDraftStoreForTests } from '@/features/observations/lib/observation-compose-draft-store'
 import { OBSERVATION_TEXT_MIN_LENGTH } from '@/features/observations/types'
+import { PUBLIC_PRIVACY_POLICY_URL } from '@/lib/legal'
 import {
   collectOverflowYScrollElements,
   expectSinglePageScrollZone,
@@ -167,8 +168,11 @@ describe('ReportPage', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: /Une observation/ })).toBeTruthy()
     expect(
-      screen.getByText('Soyez précis mais ne perdez pas de temps avec la forme.'),
+      screen.getByText(/Soyez précis mais ne perdez pas de temps avec la forme/),
     ).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'confidentialité' }).getAttribute('href')).toBe(
+      PUBLIC_PRIVACY_POLICY_URL,
+    )
     expect(screen.getByText('0/1000')).toBeTruthy()
   })
 

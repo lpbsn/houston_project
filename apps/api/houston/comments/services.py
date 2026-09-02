@@ -57,6 +57,7 @@ def _dedupe_membership_ids(
 def _validate_mention_memberships(
     *,
     establishment_id: uuid.UUID,
+    author_membership_id: uuid.UUID,
     mentioned_membership_ids: list[uuid.UUID],
 ) -> list[EstablishmentMembership]:
     if not mentioned_membership_ids:
@@ -76,6 +77,16 @@ def _validate_mention_memberships(
     )
     if len(memberships) != len(mentioned_membership_ids):
         raise CommentValidationError(INVALID_MENTIONS_ERROR_DETAIL)
+    from houston.establishments.safety_services import MembershipBlockedError, require_not_blocked
+
+    for membership in memberships:
+        try:
+            require_not_blocked(
+                actor_membership_id=author_membership_id,
+                other_membership_id=membership.id,
+            )
+        except MembershipBlockedError as exc:
+            raise CommentValidationError(exc.detail) from exc
     return memberships
 
 
@@ -135,10 +146,14 @@ def create_signal_comment(
     if parent_comment_id is not None:
         raise CommentValidationError(SIGNAL_COMMENT_PARENT_NOT_ALLOWED_ERROR_DETAIL)
 
+    from houston.accounts.legal_services import require_current_terms
+
+    require_current_terms(user=author_membership.user)
     normalized_body = normalize_comment_body(body)
     deduped_ids = _dedupe_membership_ids(mentioned_membership_ids)
     mentioned_memberships = _validate_mention_memberships(
         establishment_id=signal.establishment_id,
+        author_membership_id=author_membership.id,
         mentioned_membership_ids=deduped_ids,
     )
 
@@ -227,10 +242,14 @@ def create_action_plan_execution_comment(
     mentioned_membership_ids: list[uuid.UUID] | None = None,
     parent_comment_id: uuid.UUID | None = None,
 ) -> Comment:
+    from houston.accounts.legal_services import require_current_terms
+
+    require_current_terms(user=author_membership.user)
     normalized_body = normalize_comment_body(body)
     deduped_ids = _dedupe_membership_ids(mentioned_membership_ids)
     mentioned_memberships = _validate_mention_memberships(
         establishment_id=execution.establishment_id,
+        author_membership_id=author_membership.id,
         mentioned_membership_ids=deduped_ids,
     )
 

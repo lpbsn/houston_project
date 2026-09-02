@@ -303,6 +303,40 @@ export interface paths {
         patch: operations["v1_auth_me_partial_update"];
         trace?: never;
     };
+    "/api/v1/auth/me/ai-consent/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Records consent to the current OpenAI processing disclosure. */
+        post: operations["v1_auth_me_ai_consent_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/me/ai-consent/withdraw/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Withdraws OpenAI processing consent. */
+        post: operations["v1_auth_me_ai_consent_withdraw_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/me/delete/": {
         parameters: {
             query?: never;
@@ -331,6 +365,23 @@ export interface paths {
         get: operations["v1_auth_me_deletion_preview_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/me/terms/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Records acceptance of the current terms of use version. */
+        post: operations["v1_auth_me_terms_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1405,6 +1456,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/content-reports/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Files an in-app content or user report. Operator is notified with identifiers only. */
+        post: operations["v1_establishments_content_reports_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/gamification/me/": {
         parameters: {
             query?: never;
@@ -1503,6 +1571,24 @@ export interface paths {
         /** @description Activates one membership in the current active establishment context. Owner reactivation fans out across draft and active establishments in the organization without issuing an invitation email. Invited memberships cannot be activated until the invitation is accepted. */
         post: operations["v1_establishments_memberships_activate_create"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/memberships/{membership_id}/block/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Blocks 1:1 DMs and mentions with another membership in this establishment. */
+        post: operations["v1_establishments_memberships_block_create"];
+        /** @description Removes a block created by the current membership. */
+        delete: operations["v1_establishments_memberships_block_destroy"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3603,6 +3689,28 @@ export interface components {
             can_resolve: boolean;
         };
         /**
+         * @description * `observation` - Observation
+         *     * `comment` - Comment
+         *     * `chat_message` - Chat message
+         *     * `user` - User
+         * @enum {string}
+         */
+        ContentKindEnum: "observation" | "comment" | "chat_message" | "user";
+        ContentReportCreateRequest: {
+            content_kind: components["schemas"]["ContentKindEnum"];
+            reason: string;
+            /** Format: uuid */
+            target_membership_id?: string;
+            /** Format: uuid */
+            content_id?: string;
+        };
+        ContentReportResponse: {
+            /** Format: uuid */
+            id: string;
+            status: string;
+            content_kind: string;
+        };
+        /**
          * @description * `complete` - complete
          *     * `partial` - partial
          *     * `not_comparable` - not_comparable
@@ -3624,6 +3732,7 @@ export interface components {
             refresh_token_transport: components["schemas"]["RefreshTokenTransportEnum"];
             password: string;
             password_confirmation: string;
+            terms_version?: string;
         };
         DirectorInvitationAcceptResponse: {
             authenticated: boolean;
@@ -3992,6 +4101,9 @@ export interface components {
          * @enum {string}
          */
         KindEnum: "execution" | "schedule";
+        LegalVersionRequest: {
+            version: string;
+        };
         LoginRequest: {
             refresh_token_transport: components["schemas"]["RefreshTokenTransportEnum"];
             identifier: string;
@@ -4021,6 +4133,12 @@ export interface components {
             status: string;
             scopes: components["schemas"]["AuthMembershipScopeItem"][];
             scope_summary: components["schemas"]["AuthMembershipScopeSummary"];
+        };
+        MembershipBlockResponse: {
+            /** Format: uuid */
+            blocker_membership_id: string;
+            /** Format: uuid */
+            blocked_membership_id: string;
         };
         /** @description Session Team invite body. Owner invites use organization-admin endpoints. */
         MembershipInvitationRequest: {
@@ -4588,6 +4706,7 @@ export interface components {
             organization_name: string;
             /** @default  */
             establishment_name: string;
+            terms_version?: string;
         };
         RegistrationResponse: {
             authenticated: boolean;
@@ -4931,6 +5050,16 @@ export interface components {
             identity_type: string;
             first_name: string;
             last_name: string;
+            terms_version: string | null;
+            /** Format: date-time */
+            terms_accepted_at: string | null;
+            current_terms_version: string;
+            needs_terms_acceptance: boolean;
+            ai_consent_version: string | null;
+            /** Format: date-time */
+            ai_processing_consented_at: string | null;
+            current_ai_consent_version: string;
+            needs_ai_consent: boolean;
         };
         ValidationErrorResponse: {
             code: string;
@@ -5888,6 +6017,74 @@ export interface operations {
             };
         };
     };
+    v1_auth_me_ai_consent_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LegalVersionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["LegalVersionRequest"];
+                "multipart/form-data": components["schemas"]["LegalVersionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BootstrapResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_auth_me_ai_consent_withdraw_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BootstrapResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     v1_auth_me_delete_create: {
         parameters: {
             query?: never;
@@ -5951,6 +6148,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AccountDeletionPreviewResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_auth_me_terms_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LegalVersionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["LegalVersionRequest"];
+                "multipart/form-data": components["schemas"]["LegalVersionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BootstrapResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             401: {
@@ -9914,6 +10152,57 @@ export interface operations {
             };
         };
     };
+    v1_establishments_content_reports_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContentReportCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ContentReportCreateRequest"];
+                "multipart/form-data": components["schemas"]["ContentReportCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentReportResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
     v1_establishments_gamification_me_retrieve: {
         parameters: {
             query?: never;
@@ -10292,6 +10581,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DirectorInvitationErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_memberships_block_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MembershipBlockResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_memberships_block_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Block removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
                 };
             };
         };

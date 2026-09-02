@@ -1,0 +1,11 @@
+Signalement Spore
+
+Identifiant : {{ report_id }}
+Établissement : {{ establishment_id }}
+Auteur du signalement (membership) : {{ reporter_membership_id }}
+Cible (membership) : {{ target_membership_id }}
+Type : {{ content_kind }}
+Contenu : {{ content_id }}
+Statut : {{ status }}
+
+Aucun corps de contenu n’est inclus dans cet e-mail.

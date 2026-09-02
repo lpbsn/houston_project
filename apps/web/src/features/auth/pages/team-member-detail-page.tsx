@@ -44,6 +44,8 @@ import {
   normalizeTeamRole,
 } from '@/features/auth/lib/team-members'
 import { toRoleEnum } from '@/features/auth/lib/role'
+import { blockMembership } from '@/features/safety/api'
+import { SafetyReportSheet } from '@/features/safety/safety-report-sheet'
 import type { EstablishmentMembershipDetailResponse, RoleEnum } from '@/features/auth/types'
 import { terrain, terrainBackButtonClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -115,6 +117,7 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [invitationLink, setInvitationLink] = useState<string | null>(null)
   const [copyMessage, setCopyMessage] = useState<string | null>(null)
+  const [reportOpen, setReportOpen] = useState(false)
 
   const updateMembershipMutation = useUpdateMembershipMutation(membershipId)
   const activateMutation = useActivateMembershipMutation(membershipId)
@@ -633,6 +636,48 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
               Annuler
             </Button>
           </div>
+        ) : null}
+        {membership && activeMembership && membership.id !== activeMembership.id ? (
+          <section className="space-y-2">
+            <TerrainSectionLabel>Sécurité</TerrainSectionLabel>
+            <TerrainCard padding="sm" className="space-y-2">
+              <button
+                type="button"
+                className="flex min-h-11 w-full items-center justify-center text-sm font-medium text-[#B42318]"
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      'Bloquer ce membre ? Nouveaux messages privés et mentions interdits. L’historique reste lisible.',
+                    )
+                  ) {
+                    return
+                  }
+                  if (!establishmentId) {
+                    return
+                  }
+                  void blockMembership(establishmentId, membership.id).catch(() => {
+                    setErrorMessage('Blocage impossible.')
+                  })
+                }}
+              >
+                Bloquer
+              </button>
+              <button
+                type="button"
+                className="flex min-h-11 w-full items-center justify-center text-sm font-medium text-[#1a1a1a]"
+                onClick={() => setReportOpen(true)}
+              >
+                Signaler
+              </button>
+            </TerrainCard>
+            <SafetyReportSheet
+              open={reportOpen}
+              establishmentId={establishmentId}
+              contentKind="user"
+              targetMembershipId={membership.id}
+              onClose={() => setReportOpen(false)}
+            />
+          </section>
         ) : null}
       </div>
     </div>

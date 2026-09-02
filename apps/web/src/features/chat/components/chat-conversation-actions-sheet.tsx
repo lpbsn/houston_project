@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { LoaderCircle, Pin, PinOff, LogOut, Trash2 } from 'lucide-react'
+import { Flag, LoaderCircle, Pin, PinOff, LogOut, Trash2, Ban } from 'lucide-react'
 
 import { TerrainBottomSheet } from '@/components/ui/terrain'
 
@@ -24,6 +24,8 @@ type ChatConversationActionsSheetProps = {
   onHideDm: (conversationId: string) => void
   onLeaveGroup: (conversationId: string) => void
   onDeleteGroup: (conversationId: string) => void
+  onBlockPeer?: () => void
+  onReportPeer?: () => void
 }
 
 export function ChatConversationActionsSheet({
@@ -36,6 +38,8 @@ export function ChatConversationActionsSheet({
   onHideDm,
   onLeaveGroup,
   onDeleteGroup,
+  onBlockPeer,
+  onReportPeer,
 }: ChatConversationActionsSheetProps) {
   const title = useMemo(() => {
     if (!conversation) {
@@ -87,6 +91,38 @@ export function ChatConversationActionsSheet({
         </li>
 
         {!isGroup ? (
+          <>
+            {onBlockPeer ? (
+              <li>
+                <button
+                  type="button"
+                  disabled={isPending}
+                  className="flex w-full items-center gap-3 rounded-2xl border border-[#E8E6DF] bg-white px-4 py-3 text-left text-sm font-medium text-[#B42318] disabled:opacity-60"
+                  onClick={() =>
+                    runConfirmed(
+                      'Bloquer ce membre ? Vous ne pourrez plus vous envoyer de nouveaux messages privés ni vous mentionner. L’historique reste lisible.',
+                      onBlockPeer,
+                    )
+                  }
+                >
+                  <Ban className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+                  <span>Bloquer</span>
+                </button>
+              </li>
+            ) : null}
+            {onReportPeer ? (
+              <li>
+                <button
+                  type="button"
+                  disabled={isPending}
+                  className="flex w-full items-center gap-3 rounded-2xl border border-[#E8E6DF] bg-white px-4 py-3 text-left text-sm font-medium text-[#1a1a1a] disabled:opacity-60"
+                  onClick={onReportPeer}
+                >
+                  <Flag className="h-4 w-4 shrink-0 text-[#7D7B75]" strokeWidth={2.25} />
+                  <span>Signaler</span>
+                </button>
+              </li>
+            ) : null}
           <li>
             <button
               type="button"
@@ -102,6 +138,7 @@ export function ChatConversationActionsSheet({
               <span>Supprimer la conversation</span>
             </button>
           </li>
+          </>
         ) : null}
 
         {isGroup ? (

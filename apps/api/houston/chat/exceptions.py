@@ -23,9 +23,14 @@ class ChatValidationError(DomainValidationError, ChatError):
 class ChatPermissionError(ChatError):
     default_code = "permission_denied"
 
-    def __init__(self, message: str = "You do not have permission to perform this action.") -> None:
+    def __init__(
+        self,
+        message: str = "You do not have permission to perform this action.",
+        *,
+        code: str | None = None,
+    ) -> None:
         self.message = message
-        self.code = self.default_code
+        self.code = code or self.default_code
         super().__init__(message)
 
 

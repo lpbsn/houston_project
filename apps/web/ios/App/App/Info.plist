@@ -73,6 +73,10 @@
 	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Spore utilise le microphone pour transcrire vos observations audio.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Spore peut utiliser l’appareil photo si vous choisissez de prendre une photo d’observation.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 </dict>

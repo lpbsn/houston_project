@@ -37,6 +37,12 @@ export default defineConfig({
         supprimerCompte: fileURLToPath(
           new URL('./landing/supprimer-compte/index.html', import.meta.url),
         ),
+        politiqueConfidentialite: fileURLToPath(
+          new URL('./landing/politique-de-confidentialite/index.html', import.meta.url),
+        ),
+        conditionsUtilisation: fileURLToPath(
+          new URL('./landing/conditions-d-utilisation/index.html', import.meta.url),
+        ),
       },
     },
   },

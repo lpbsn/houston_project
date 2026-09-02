@@ -480,6 +480,10 @@ HOUSTON_INVITATION_EMAIL_FROM = env_str(
     "HOUSTON_INVITATION_EMAIL_FROM",
     default="Spore <invitation@notify.spore-os.com>",
 )
+HOUSTON_OPERATOR_EMAIL = env_str(
+    "HOUSTON_OPERATOR_EMAIL",
+    default="leonard.p.boisson@gmail.com",
+)
 RESEND_API_KEY = env_str("RESEND_API_KEY", default="")
 
 OPENAI_API_KEY = env_str("OPENAI_API_KEY", "")

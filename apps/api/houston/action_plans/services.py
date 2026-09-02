@@ -8,6 +8,7 @@ from django.db import transaction
 from django.db.models import Prefetch
 from django.utils import timezone
 
+from houston.accounts.legal_services import AiConsentRequiredError, TermsAcceptanceRequiredError
 from houston.action_plans.constants import (
     ACTION_PLAN_DESCRIPTION_MAX_LENGTH,
     ACTION_PLAN_EXECUTION_REVIEW_COMMENT_MAX_LENGTH,
@@ -2357,6 +2358,8 @@ def create_observation_from_execution_task(
             action_plan_execution=execution,
             action_plan_execution_task=task_execution,
         )
+    except (TermsAcceptanceRequiredError, AiConsentRequiredError):
+        raise
     except ObservationValidationError as exc:
         raise ActionPlanValidationError(str(exc)) from exc
 

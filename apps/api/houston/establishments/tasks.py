@@ -60,3 +60,39 @@ def send_establishment_invitation_email_task(
             "invitation_id": invitation_id,
         },
     )
+
+
+@shared_task(
+    bind=True,
+    ignore_result=True,
+    max_retries=3,
+    default_retry_delay=30,
+)
+def send_content_report_operator_email_task(self, report_id: str) -> None:
+    from houston.establishments.report_email import send_content_report_operator_email
+
+    try:
+        send_content_report_operator_email(report_id=report_id)
+    except InvitationEmailTemporaryError as exc:
+        logger.warning(
+            "content_report_email_task_retrying",
+            extra={
+                "event": "content_report_email_task_retrying",
+                "report_id": report_id,
+                "exception_class": type(exc).__name__,
+                "retry_count": self.request.retries,
+            },
+        )
+        raise self.retry() from None
+    except InvitationEmailPermanentError as exc:
+        logger.error(
+            "content_report_email_task_failed_permanent",
+            extra={
+                "event": "content_report_email_task_failed_permanent",
+                "report_id": report_id,
+                "exception_class": type(exc).__name__,
+                "retry_count": self.request.retries,
+            },
+            exc_info=False,
+        )
+

@@ -183,6 +183,9 @@ def _anonymize_user(*, user: User) -> None:
     user.last_name = ""
     user.username = f"anon_{uuid.uuid4().hex}"
     user.set_unusable_password()
+    from houston.accounts.legal_services import clear_legal_fields
+
+    clear_legal_fields(user=user)
     user.save(
         update_fields=[
             "status",
@@ -192,6 +195,10 @@ def _anonymize_user(*, user: User) -> None:
             "last_name",
             "username",
             "password",
+            "terms_version",
+            "terms_accepted_at",
+            "ai_consent_version",
+            "ai_processing_consented_at",
             "updated_at",
         ]
     )

@@ -19,7 +19,9 @@ import {
   OBSERVATION_TEXT_MAX_LENGTH,
   OBSERVATION_TEXT_MIN_LENGTH,
 } from '@/features/observations/types'
+import { LegalConsentSheet, legalConsentKindFromError } from '@/features/auth/components/legal-consent-sheet'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { PUBLIC_PRIVACY_POLICY_URL } from '@/lib/legal'
 import { useNetworkStatus } from '@/lib/network-status'
 import { terrain, terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -41,6 +43,7 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
     useReportingComposeDraft(establishmentId)
 
   const [formError, setFormError] = useState<string | null>(null)
+  const [legalKind, setLegalKind] = useState<ReturnType<typeof legalConsentKindFromError>>(null)
   const [isRecording, setIsRecording] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
 
@@ -105,6 +108,10 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
           })
           setText(result.text.slice(0, OBSERVATION_TEXT_MAX_LENGTH))
         } catch (error) {
+          const kind = legalConsentKindFromError(error)
+          if (kind) {
+            setLegalKind(kind)
+          }
           setFormError(resolveReportError(error))
         } finally {
           setIsTranscribing(false)
@@ -154,6 +161,10 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
         submittedAt: response.submitted_at,
       })
     } catch (error) {
+      const kind = legalConsentKindFromError(error)
+      if (kind) {
+        setLegalKind(kind)
+      }
       setFormError(resolveReportError(error))
     }
   }
@@ -179,7 +190,17 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
           <header className="flex flex-col gap-1">
             <h1 className="text-2xl font-bold text-[#1a1a1a]">Une observation ?</h1>
             <p className={cn('text-sm', terrain.muted)}>
-              Soyez précis mais ne perdez pas de temps avec la forme.
+              Soyez précis mais ne perdez pas de temps avec la forme. La transcription et
+              l’analyse envoient texte ou audio à OpenAI (
+              <a
+                href={PUBLIC_PRIVACY_POLICY_URL}
+                className="underline"
+                target="_blank"
+                rel="noreferrer"
+              >
+                confidentialité
+              </a>
+              ).
             </p>
           </header>
 
@@ -231,6 +252,11 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
           )}
         </Button>
       </TerrainStickyFooter>
+      <LegalConsentSheet
+        kind={legalKind}
+        onClose={() => setLegalKind(null)}
+        onAccepted={() => setFormError(null)}
+      />
     </div>
   )
 }

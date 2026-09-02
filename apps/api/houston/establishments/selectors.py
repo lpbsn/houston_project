@@ -178,6 +178,12 @@ def search_users_for_establishment(
     )
 
     if context == "mention":
+        from houston.establishments.safety_services import blocked_membership_ids_for
+
+        blocked_ids = blocked_membership_ids_for(membership_id=current_membership.id)
+        memberships = [
+            membership for membership in memberships if membership.id not in blocked_ids
+        ]
         if business_unit is not None:
             return [
                 membership
