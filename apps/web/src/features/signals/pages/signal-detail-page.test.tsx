@@ -276,11 +276,12 @@ describe('SignalDetailPage tabs', () => {
     renderPage()
 
     const detailsPanel = screen.getByTestId('signal-detail-details-panel')
-    expect(detailsPanel.className).toContain('lg:grid')
-    expect(detailsPanel.className).toContain(
-      'lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]',
-    )
-    expect(detailsPanel.querySelector('.lg\\:row-start-2')).toBeNull()
+    expect(detailsPanel.className).not.toContain('hidden')
+    const frame = screen.getByTestId('signal-detail-frame')
+    expect(frame.className).not.toContain('max-w-7xl')
+    expect(frame.contains(screen.getByTestId('signal-detail-tab-bar'))).toBe(true)
+    expect(frame.contains(detailsPanel)).toBe(true)
+    expect(screen.getByTestId('signal-detail-tab-bar').className).toContain('lg:sticky')
     expect(screen.getAllByRole('button', { name: "+ Plan d'action" })).toHaveLength(1)
     expect(detailQueryMock).toHaveBeenCalledTimes(1)
     expect(CommentSectionMock).not.toHaveBeenCalled()
@@ -353,6 +354,29 @@ describe('SignalDetailPage tabs', () => {
     fireEvent.click(getCommentsTab())
 
     expect(screen.queryByRole('button', { name: "+ Plan d'action" })).toBeNull()
+    fireEvent.click(getDetailsTab())
+    expect(screen.getAllByRole('button', { name: "+ Plan d'action" })).toHaveLength(1)
+  })
+
+  it('does not write tab query params when clicking tabs', () => {
+    window.history.replaceState(null, '', '/signals/signal-1')
+    renderPage()
+
+    fireEvent.click(getCommentsTab())
+    expect(window.location.search).toBe('')
+    fireEvent.click(getDetailsTab())
+    expect(window.location.search).toBe('')
+  })
+
+  it('hides the details panel while comments are active', () => {
+    renderPage()
+
+    fireEvent.click(getCommentsTab())
+
+    expect(screen.getByTestId('signal-detail-details-panel').className).toContain('hidden')
+    expect(screen.getByTestId('signal-detail-comments-panel').className).not.toContain('hidden')
+    expect(getCommentsTab().getAttribute('aria-selected')).toBe('true')
+    expect(getDetailsTab().getAttribute('aria-selected')).toBe('false')
   })
 
   it('preserves Analytics context when opening Signal-linked Plan creation', () => {
@@ -903,6 +927,56 @@ describe('SignalDetailPage linked action plans', () => {
     expect(
       screen.getByText('Cette observation sera résolue via son plan d’action.'),
     ).toBeTruthy()
+  })
+
+  it('keeps photos, linked plans, and create-plan action consecutive before resolution', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({
+        status: 'in_progress',
+        media_items: [
+          {
+            id: '11111111-1111-4111-8111-111111111111',
+            preview_url: 'https://example.com/photo-1.jpg',
+            content_type: 'image/jpeg',
+            size_bytes: 1024,
+            position: 1,
+            observation_id: '22222222-2222-4222-8222-222222222222',
+          },
+        ],
+        linked_action_plan_executions: [buildLinkedExecution()],
+        permission_hints: {
+          can_pin: false,
+          can_mark_interesting: false,
+          can_archive: false,
+          can_cancel: false,
+          can_resolve: false,
+          can_create_linked_action_plan: true,
+          can_qualify_routing: false,
+          can_request_resolution: true,
+          can_approve_resolution_request: false,
+          can_reject_resolution_request: false,
+          can_cancel_resolution_request: false,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    const description = screen.getByText('Description')
+    const hint = screen.getByText('Cette observation sera résolue via son plan d’action.')
+    const photo = screen.getByText('Photo')
+    const plans = screen.getByText("Plans d'action")
+    const createPlan = screen.getByRole('button', { name: "+ Plan d'action" })
+    const resolution = screen.getByText('Demande de résolution')
+
+    expect(description.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(hint.compareDocumentPosition(photo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(photo.compareDocumentPosition(plans) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(plans.compareDocumentPosition(createPlan) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(createPlan.compareDocumentPosition(resolution) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('does not show resolve-via-action-plan hint when status is open', () => {

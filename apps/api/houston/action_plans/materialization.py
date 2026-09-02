@@ -666,17 +666,17 @@ def _schedule_materialization_visibility_q(
     membership: EstablishmentMembership,
     view_mode: str,
 ) -> Q:
-    if view_mode == "personal":
-        return Q(
-            schedule_assignees__membership_id=membership.id,
-            establishment_id=membership.establishment_id,
-        )
-
     if membership.role in {
         EstablishmentMembership.Role.OWNER,
         EstablishmentMembership.Role.DIRECTOR,
     }:
         return Q(establishment_id=membership.establishment_id)
+
+    if view_mode == "personal":
+        return Q(
+            schedule_assignees__membership_id=membership.id,
+            establishment_id=membership.establishment_id,
+        )
 
     personal_q = Q(schedule_assignees__membership_id=membership.id)
 

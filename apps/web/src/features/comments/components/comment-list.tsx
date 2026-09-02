@@ -1,5 +1,7 @@
 import { useEffect } from 'react'
 
+import { MessageCircle } from 'lucide-react'
+
 import { HoustonBadge, TerrainEmptyState } from '@/components/ui/terrain'
 import { cn } from '@/lib/utils'
 
@@ -122,11 +124,21 @@ function SignalCommentList({
   useScrollToHighlightedComment(highlightCommentId, comments)
 
   if (comments.length === 0) {
-    return <TerrainEmptyState title="Aucun commentaire pour l'instant." />
+    return (
+      <TerrainEmptyState
+        className="flex flex-1 flex-col items-center justify-center border-0 bg-transparent p-6"
+        icon={<MessageCircle className="h-10 w-10" strokeWidth={1.5} />}
+        title="Aucun commentaire pour l'instant."
+        description="Soyez le premier à laisser un commentaire sur cette observation."
+      />
+    )
   }
 
   return (
-    <ul className="mt-3 flex flex-col gap-3" aria-label="Liste des commentaires">
+    <ul
+      className="mt-3 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto"
+      aria-label="Liste des commentaires"
+    >
       {comments.map((comment) => (
         <SignalCommentItem
           key={comment.id}
@@ -154,11 +166,21 @@ function ExecutionCommentList({
   useScrollToHighlightedComment(highlightCommentId, comments)
 
   if (comments.length === 0) {
-    return <TerrainEmptyState title="Aucun commentaire pour l'instant." />
+    return (
+      <TerrainEmptyState
+        className="flex flex-1 flex-col items-center justify-center border-0 bg-transparent p-6"
+        icon={<MessageCircle className="h-10 w-10" strokeWidth={1.5} />}
+        title="Aucun commentaire pour l'instant."
+        description="Soyez le premier à laisser un commentaire sur ce plan d'action."
+      />
+    )
   }
 
   return (
-    <ul className="mt-4 flex flex-col gap-5" aria-label="Liste des commentaires">
+    <ul
+      className="mt-4 flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto"
+      aria-label="Liste des commentaires"
+    >
       {comments.map((item) => {
         if (isExecutionInheritedSignalItem(item)) {
           return (

@@ -1,7 +1,7 @@
 # Feed Domain
 
 Status: authoritative  
-Last reviewed: 2026-07-05  
+Last reviewed: 2026-09-01  
 Implementation status: implemented (Signal Feed Phase 4 + Action Plan Execution Feed Lot 5/10). Legacy polymorphic Action/Checklist execution feed removed in Lot 10.
 
 ## 1. Purpose
@@ -126,7 +126,7 @@ Frontend display states may include:
 - Feed access is establishment-scoped and backend-authorized.
 - Current code proves active members can view Signal Feed through `can_view_signal_feed(...)`. See [`signal_domain.md`](signal_domain.md) §7 for detail access and command scope rules.
 - Action Plan Execution Feed applies `view_mode` in selectors before returning items (`action_plan_execution_feed_queryset`).
-- **Ma vue** (`view_mode=personal`): executions where the user is an assignee, or (Manager) executions in scoped business units via execution teams, or executions where the user was **mentioned on an execution comment** (`CommentMention` on `action_plan_execution_id`).
+- **Ma vue** (`view_mode=personal`): Owner/Director see all feed-visible establishment executions (same as Vue générale, same as Signal Feed Ma vue). Manager/Staff: executions where the user is an assignee, or (Manager) executions in scoped business units via execution teams, or executions where the user was **mentioned on an execution comment** (`CommentMention` on `action_plan_execution_id`).
 - **Vue générale** (`view_mode=general`): Owner/Director see all feed-visible establishment executions; Manager sees scoped BUs + own assignments; Staff sees own assignments only.
 - Feed subscription is **deferred** (future: BU-only first, then ActivitySubject subscribe/unsubscribe) — see [`feed_subscription_domain.md`](feed_subscription_domain.md). **Today:** Signal Feed Ma vue uses `MembershipScope` only.
 - RBAC (`MembershipScope`) governs actionability; feed Ma vue uses the same scope rows for filtering where applicable.
@@ -140,7 +140,7 @@ Frontend display states may include:
 | Feed | Ma vue (`view_mode=personal`) | Vue générale (`view_mode=general`) |
 | --- | --- | --- |
 | **Signal Feed** | Feed-visible Signals (`open`, `in_progress`, `resolved`) matching **`MembershipScope`** (Owner/Director: all feed-visible). Empty if manager/staff has no scopes. | All feed-visible establishment Signals (`open`, `in_progress`, `resolved`). RBAC feed access only. |
-| **Action Plan Execution Feed** | Executions where user is **assignee**, plus Manager scope via execution teams, plus **mention on execution comment** (`action_plan_execution_personal_feed_q`). Owner/Director Ma vue is not all establishment executions (unlike Signal Feed general). | **Owner/Director:** all feed-visible establishment executions. **Manager:** scoped BUs + own assignments. **Staff:** own assignments only. |
+| **Action Plan Execution Feed** | **Owner/Director:** all feed-visible establishment executions (same as Vue générale). **Manager/Staff:** assignee, plus Manager scope via execution teams, plus **mention on execution comment** (`action_plan_execution_personal_feed_q`). | **Owner/Director:** all feed-visible establishment executions. **Manager:** scoped BUs + own assignments. **Staff:** own assignments only. |
 
 **Action Plan Execution Feed — inclusion rules (implemented):**
 - Cursor items: `status IN (pending_validation, in_progress, done, canceled)` (`EXECUTION_FEED_CURSOR_STATUSES`; `scheduled` is preview-only via `scheduled_items`).

@@ -1,8 +1,10 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 import { TerrainCard, TerrainErrorState, TerrainFieldLabel } from '@/components/ui/terrain'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { terrainCardClassName } from '@/lib/terrain-styles'
+import { cn } from '@/lib/utils'
 
 import { CommentsApiError } from '../api'
 import {
@@ -36,6 +38,46 @@ function CommentUnavailableMessage() {
     >
       Ce commentaire n&apos;est plus disponible.
     </p>
+  )
+}
+
+function OperationalCommentsLayout({
+  list,
+  composer,
+}: {
+  list: ReactNode
+  composer: ReactNode
+}) {
+  return (
+    <div
+      data-testid="comment-section"
+      className="flex min-h-0 flex-1 flex-col gap-2.5 lg:gap-4"
+    >
+      <TerrainCard className="flex min-h-0 flex-1 flex-col lg:contents">
+        <div
+          className={cn(
+            'flex min-h-0 flex-1 flex-col lg:min-h-[min(28rem,55vh)]',
+            terrainCardClassName(
+              'p-4 max-lg:rounded-none max-lg:border-0 max-lg:bg-transparent max-lg:p-0',
+            ),
+          )}
+        >
+          {list}
+        </div>
+        {composer ? (
+          <div
+            className={cn(
+              'shrink-0',
+              terrainCardClassName(
+                'p-4 max-lg:rounded-none max-lg:border-0 max-lg:bg-transparent max-lg:p-0',
+              ),
+            )}
+          >
+            {composer}
+          </div>
+        ) : null}
+      </TerrainCard>
+    </div>
   )
 }
 
@@ -106,9 +148,9 @@ export function CommentSection({
     highlightCommentId,
   }
 
-  return (
-    <TerrainCard>
-      <TerrainFieldLabel>Commentaires</TerrainFieldLabel>
+  const list = (
+    <>
+      <TerrainFieldLabel className="lg:hidden">Commentaires</TerrainFieldLabel>
 
       {commentsQuery.isLoading ? (
         <div className="mt-4 flex items-center justify-center py-6 text-[#7D7B75]">
@@ -188,36 +230,39 @@ export function CommentSection({
           }}
         />
       ) : null}
-
-      {readOnly ? null : (
-      <CommentComposer
-        ref={composerRef}
-        establishmentId={establishmentId}
-        disabled={createMutation.isPending || commentsQuery.isLoading || commentsQuery.isError}
-        errorMessage={
-          createMutation.error
-            ? resolveApiErrorMessage(
-                createMutation.error,
-                CommentsApiError,
-                'Impossible d’envoyer le commentaire.',
-              )
-            : null
-        }
-        onSubmit={({ body, mentionedMembershipIds }) => {
-          createMutation.mutate(
-            {
-              body,
-              mentioned_membership_ids: mentionedMembershipIds,
-            },
-            {
-              onSuccess: () => {
-                composerRef.current?.reset()
-              },
-            },
-          )
-        }}
-      />
-      )}
-    </TerrainCard>
+    </>
   )
+
+  const composer = readOnly ? null : (
+    <CommentComposer
+      ref={composerRef}
+      establishmentId={establishmentId}
+      compactOnLg
+      disabled={createMutation.isPending || commentsQuery.isLoading || commentsQuery.isError}
+      errorMessage={
+        createMutation.error
+          ? resolveApiErrorMessage(
+              createMutation.error,
+              CommentsApiError,
+              'Impossible d’envoyer le commentaire.',
+            )
+          : null
+      }
+      onSubmit={({ body, mentionedMembershipIds }) => {
+        createMutation.mutate(
+          {
+            body,
+            mentioned_membership_ids: mentionedMembershipIds,
+          },
+          {
+            onSuccess: () => {
+              composerRef.current?.reset()
+            },
+          },
+        )
+      }}
+    />
+  )
+
+  return <OperationalCommentsLayout list={list} composer={composer} />
 }

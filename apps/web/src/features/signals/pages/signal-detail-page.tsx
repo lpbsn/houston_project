@@ -12,7 +12,6 @@ import {
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { useLocationSearch } from '@/lib/location-search'
 import { CommentSection } from '@/features/comments/components/comment-section'
-import { cn } from '@/lib/utils'
 
 import { SignalDetailPhotoSection } from '../components/signal-detail-photo-section'
 import { SignalDetailStickyFooter } from '../components/signal-detail-sticky-footer'
@@ -176,27 +175,30 @@ export function SignalDetailPage({
 
   return (
     <div className="flex min-h-full flex-col">
-      <div className="px-3 pt-2 lg:px-6">
+      <div
+        data-testid="signal-detail-frame"
+        className="flex min-h-full w-full flex-1 flex-col"
+      >
+      <div
+        data-testid="signal-detail-tab-bar"
+        className="px-3 pt-2 lg:sticky lg:top-0 lg:z-20 lg:border-b lg:border-[#E8E6DF] lg:bg-[#F5F4F0] lg:px-6 lg:py-3"
+      >
         <SignalDetailTabs activeTab={activeTab} onChange={handleTabChange} />
       </div>
 
-      <div
-        className={cn(
-          'mx-auto flex w-full flex-1 flex-col gap-2.5 px-3 pt-2 pb-4',
-          'lg:max-w-7xl lg:gap-4 lg:px-6 lg:pt-4 lg:pb-6',
-        )}
-      >
+      <div className="flex w-full flex-1 flex-col gap-2.5 px-3 pt-2 pb-4 lg:gap-4 lg:px-6 lg:pt-4 lg:pb-6">
         <div
           role="tabpanel"
           id="signal-detail-panel-details"
           aria-labelledby="signal-detail-tab-details"
           data-testid="signal-detail-details-panel"
-          className={cn(
-            'flex flex-col gap-2.5 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] lg:items-start lg:gap-4',
-            activeTab !== 'details' && 'hidden',
-          )}
+          className={
+            activeTab === 'details'
+              ? 'flex flex-col gap-2.5 lg:gap-4'
+              : 'hidden'
+          }
         >
-          <TerrainCard className="lg:col-span-2 lg:p-5">
+          <TerrainCard className="max-lg:order-1 lg:p-5">
             <h2 className="text-[17px] font-semibold leading-snug text-[#1a1a1a] lg:text-2xl">
               {signal.title}
             </h2>
@@ -220,7 +222,7 @@ export function SignalDetailPage({
             ) : null}
           </TerrainCard>
 
-          <div className="lg:col-start-1">
+          <div className="max-lg:order-2 empty:hidden">
             <SignalDetailClassificationSection
               signal={signal}
               canQualify={canQualifyRouting}
@@ -230,14 +232,46 @@ export function SignalDetailPage({
             />
           </div>
 
-          <TerrainCard className="lg:col-start-1">
+          <TerrainCard className="max-lg:order-3">
             <SignalDetailLabel>Description</SignalDetailLabel>
             <p className="mt-2 text-[13px] leading-relaxed text-[#1a1a1a]">
               {formatDescriptionContent(signal.structured_summary)}
             </p>
           </TerrainCard>
 
-          <div className="lg:col-start-2">
+          {signal.status === 'in_progress' ? (
+            <TerrainCard className="max-lg:order-6">
+              <p className="text-[13px] leading-relaxed text-[#7D7B75]">
+                {SIGNAL_IN_PROGRESS_RESOLVE_VIA_ACTION_PLAN_HINT}
+              </p>
+            </TerrainCard>
+          ) : null}
+
+          <div className="max-lg:order-5 empty:hidden">
+            <SignalDetailPhotoSection mediaItems={signal.media_items ?? []} />
+          </div>
+
+          <div className="max-lg:order-7 empty:hidden">
+            <SignalLinkedActionPlansSection
+              executions={signal.linked_action_plan_executions}
+              onSelect={(executionId) =>
+                onNavigate(
+                  source === 'cross'
+                    ? serializeScopedExecutionDetailPath({ type: 'cross' }, executionId)
+                    : `/action-plans/executions/${executionId}`,
+                )
+              }
+            />
+          </div>
+
+          {activeTab === 'details' && showCreateActionPlan ? (
+            <SignalDetailStickyFooter
+              className="max-lg:order-8 lg:relative lg:bottom-auto lg:mt-0 lg:rounded-2xl lg:border lg:border-[#E8E6DF] lg:bg-white lg:p-4 lg:shadow-none"
+              onCreateActionPlan={() => onNavigate(createActionPlanPath)}
+            />
+          ) : null}
+
+          <div className="max-lg:order-4 empty:hidden">
             <SignalResolutionRequestSection
               events={resolutionRequestEvents}
               permissionHints={signal.permission_hints}
@@ -253,38 +287,6 @@ export function SignalDetailPage({
               onReject={() => void handleRejectResolutionRequest()}
             />
           </div>
-
-          <div className="lg:col-start-1">
-            <SignalDetailPhotoSection mediaItems={signal.media_items ?? []} />
-          </div>
-
-          {signal.status === 'in_progress' ? (
-            <TerrainCard className="lg:col-start-1">
-              <p className="text-[13px] leading-relaxed text-[#7D7B75]">
-                {SIGNAL_IN_PROGRESS_RESOLVE_VIA_ACTION_PLAN_HINT}
-              </p>
-            </TerrainCard>
-          ) : null}
-
-          <div className="lg:col-start-2">
-            <SignalLinkedActionPlansSection
-              executions={signal.linked_action_plan_executions}
-              onSelect={(executionId) =>
-                onNavigate(
-                  source === 'cross'
-                    ? serializeScopedExecutionDetailPath({ type: 'cross' }, executionId)
-                    : `/action-plans/executions/${executionId}`,
-                )
-              }
-            />
-          </div>
-
-          {activeTab === 'details' && showCreateActionPlan ? (
-            <SignalDetailStickyFooter
-              className="lg:col-start-2 lg:top-4 lg:bottom-auto lg:mt-0 lg:rounded-2xl lg:border lg:border-[#E8E6DF] lg:bg-white lg:p-4 lg:shadow-none"
-              onCreateActionPlan={() => onNavigate(createActionPlanPath)}
-            />
-          ) : null}
         </div>
 
         {hasOpenedComments && (signal.establishment_id ?? establishmentId) ? (
@@ -292,7 +294,10 @@ export function SignalDetailPage({
             role="tabpanel"
             id="signal-detail-panel-comments"
             aria-labelledby="signal-detail-tab-comments"
-            className={cn(activeTab !== 'comments' && 'hidden')}
+            data-testid="signal-detail-comments-panel"
+            className={
+              activeTab === 'comments' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'
+            }
           >
             <CommentSection
               establishmentId={signal.establishment_id ?? establishmentId ?? ''}
@@ -303,6 +308,7 @@ export function SignalDetailPage({
             />
           </div>
         ) : null}
+      </div>
       </div>
 
       {establishmentId && qualifySheet.open && qualifySheet.signal ? (
