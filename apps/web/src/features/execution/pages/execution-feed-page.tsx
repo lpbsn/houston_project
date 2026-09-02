@@ -228,7 +228,10 @@ export function ExecutionFeedPage({
               <TerrainEmptyState
                 className="mx-3 mt-3"
                 title="Aucune exécution"
-                description={getEmptyFeedDescription(viewMode)}
+                description={getEmptyFeedDescription(
+                  viewMode,
+                  auth.bootstrap?.active_membership?.role,
+                )}
               />
             ) : null}
 

@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --configLoader native",
     "dev:native": "VITE_APP_RUNTIME=native vite",
     "dev:landing": "vite --config vite.landing.config.ts",
     "typecheck": "tsc -b",

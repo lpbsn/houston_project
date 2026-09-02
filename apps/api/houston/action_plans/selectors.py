@@ -425,6 +425,12 @@ def action_plan_execution_personal_feed_q(
     *,
     membership: EstablishmentMembership,
 ) -> Q:
+    if membership.role in {
+        EstablishmentMembership.Role.OWNER,
+        EstablishmentMembership.Role.DIRECTOR,
+    }:
+        return Q(establishment_id=membership.establishment_id)
+
     now = timezone.now()
     assigned_visible = _assignee_visible_to_membership_now_q(membership=membership, now=now)
     personal_q = Q(created_by_id=membership.id) | assigned_visible | _mentioned_on_execution_q(

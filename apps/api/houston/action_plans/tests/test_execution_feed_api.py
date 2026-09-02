@@ -1030,6 +1030,39 @@ def test_upcoming_materializes_schedule_executions(
     assert ActionPlanExecution.objects.filter(action_plan_schedule=schedule).exists()
 
 
+def test_owner_personal_upcoming_materializes_staff_assigned_schedule(
+    api_client,
+    owner_membership,
+    catalog_action_plan,
+    staff_membership,
+    business_unit,
+):
+    schedule = create_action_plan_schedule(
+        action_plan=catalog_action_plan,
+        actor=owner_membership,
+        recurrence_days=recurrence_days_for_visible_today(),
+        assignees=[
+            build_schedule_assignee_payload(
+                membership=staff_membership,
+                business_unit=business_unit,
+            )
+        ],
+        use_shared_chronology=True,
+        **visible_schedule_window(),
+    )
+    ActionPlanExecution.objects.filter(action_plan_schedule=schedule).delete()
+    assert not ActionPlanExecution.objects.filter(action_plan_schedule=schedule).exists()
+
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_execution_upcoming_url(owner_membership.establishment_id)
+        + feed_query("personal"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    assert ActionPlanExecution.objects.filter(action_plan_schedule=schedule).exists()
+
+
 def test_feed_survives_invalid_visible_schedule(
     api_client,
     owner_membership,
@@ -1388,31 +1421,43 @@ def test_staff_does_not_see_pilot_open_pole_task_execution_in_personal_feed(
     assert str(pilot_open_execution.id) not in ids
 
 
-def test_owner_personal_feed_includes_all_establishment_executions(
+def test_owner_personal_feed_matches_general_including_others_executions(
     api_client,
     owner_membership,
+    staff_membership,
     business_unit,
     maintenance_business_unit,
 ):
-    restaurant_execution = create_execution(
-        owner_membership,
+    others_execution = create_execution(
+        staff_membership,
         business_unit=business_unit,
-        title="Restaurant execution",
+        title="Staff restaurant execution",
+        assignees=[
+            build_assignee_payload(membership=staff_membership, business_unit=business_unit),
+        ],
     )
-    maintenance_execution = create_execution(
+    own_execution = create_execution(
         owner_membership,
         business_unit=maintenance_business_unit,
-        title="Maintenance execution",
+        title="Owner maintenance execution",
     )
 
     token = login(api_client, user=owner_membership.user)
-    response = api_client.get(
+    personal = api_client.get(
         action_plan_execution_feed_url(owner_membership.establishment_id) + feed_query("personal"),
         **auth_headers(token),
     )
-    assert response.status_code == 200
-    ids = {item["action_plan_execution"]["id"] for item in response.json()["items"]}
-    assert ids == {str(restaurant_execution.id), str(maintenance_execution.id)}
+    general = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id) + feed_query("general"),
+        **auth_headers(token),
+    )
+    assert personal.status_code == 200
+    assert general.status_code == 200
+    personal_ids = set(feed_execution_ids(personal.json()))
+    general_ids = set(feed_execution_ids(general.json()))
+    expected = {str(others_execution.id), str(own_execution.id)}
+    assert personal_ids == expected
+    assert personal_ids == general_ids
 
 
 def test_mentioned_out_of_scope_staff_sees_execution_in_personal_feed(
@@ -1491,9 +1536,10 @@ def test_mentioned_out_of_scope_staff_does_not_see_execution_in_general_feed(
     assert str(execution.id) not in ids
 
 
-def test_director_personal_feed_includes_all_establishment_executions(
+def test_director_personal_feed_matches_general_including_others_executions(
     api_client,
     owner_membership,
+    staff_membership,
     business_unit,
     maintenance_business_unit,
 ):
@@ -1503,25 +1549,36 @@ def test_director_personal_feed_includes_all_establishment_executions(
         establishment=owner_membership.establishment,
         role=EstablishmentMembership.Role.DIRECTOR,
     )
-    restaurant_execution = create_execution(
-        director,
+    others_execution = create_execution(
+        staff_membership,
         business_unit=business_unit,
-        title="Restaurant execution",
+        title="Staff restaurant execution",
+        assignees=[
+            build_assignee_payload(membership=staff_membership, business_unit=business_unit),
+        ],
     )
-    maintenance_execution = create_execution(
-        director,
+    owner_execution = create_execution(
+        owner_membership,
         business_unit=maintenance_business_unit,
-        title="Maintenance execution",
+        title="Owner maintenance execution",
     )
 
     token = login(api_client, user=director.user)
-    response = api_client.get(
+    personal = api_client.get(
         action_plan_execution_feed_url(director.establishment_id) + feed_query("personal"),
         **auth_headers(token),
     )
-    assert response.status_code == 200
-    ids = {item["action_plan_execution"]["id"] for item in response.json()["items"]}
-    assert ids == {str(restaurant_execution.id), str(maintenance_execution.id)}
+    general = api_client.get(
+        action_plan_execution_feed_url(director.establishment_id) + feed_query("general"),
+        **auth_headers(token),
+    )
+    assert personal.status_code == 200
+    assert general.status_code == 200
+    personal_ids = set(feed_execution_ids(personal.json()))
+    general_ids = set(feed_execution_ids(general.json()))
+    expected = {str(others_execution.id), str(owner_execution.id)}
+    assert personal_ids == expected
+    assert personal_ids == general_ids
 
 
 def test_scheduled_preview_and_upcoming_ignore_cursor_saturation(

@@ -9,6 +9,15 @@ describe('getEmptyFeedDescription', () => {
     )
   })
 
+  it('describes personal empty feed as establishment-wide for owner and director', () => {
+    expect(getEmptyFeedDescription('personal', 'owner')).toBe(
+      'Aucun plan d’action en cours dans l’établissement.',
+    )
+    expect(getEmptyFeedDescription('personal', 'director')).toBe(
+      'Aucun plan d’action en cours dans l’établissement.',
+    )
+  })
+
   it('describes general empty feed', () => {
     expect(getEmptyFeedDescription('general')).toBe(
       'Aucun plan d’action en cours dans l’établissement.',
