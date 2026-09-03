@@ -63,7 +63,7 @@ The Capacitor handler, Android `autoVerify` host `app.spore-os.com`, and iOS Ass
 
 ### Android (`assetlinks.json`)
 
-Production reference: **Play App Signing** certificate SHA-256 fingerprints (all of them Play lists for this app — some Play apps have more than one app-signing cert). Copy the Digital Asset Links snippet from Play Console (Play App Signing / App integrity). Put the real JSON at [`apps/web/public/.well-known/assetlinks.json`](../../apps/web/public/.well-known/assetlinks.json) and **redeploy the web** host. Do not use placeholders. Do not treat the upload-key fingerprint as the Play target. You may add the upload-key SHA-256 to the same `sha256_cert_fingerprints` array later so a sideloaded Release can verify; that does not replace Play certs. Never add the debug certificate.
+Production reference: **Play App Signing** certificate SHA-256 fingerprints (all of them Play lists for this app — some Play apps have more than one app-signing cert). Copy the Digital Asset Links snippet from Play Console (Play App Signing / App integrity). Put the real JSON at `apps/web/public/.well-known/assetlinks.json` and **redeploy the web** host. Do not use placeholders. Do not treat the upload-key fingerprint as the Play target. You may add the upload-key SHA-256 to the same `sha256_cert_fingerprints` array later so a sideloaded Release can verify; that does not replace Play certs. Never add the debug certificate.
 
 Until that Play snippet exists, leave the file **unpublished**. nginx 404 on `/.well-known/assetlinks.json` is correct.
 
