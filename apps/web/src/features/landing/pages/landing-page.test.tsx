@@ -73,5 +73,6 @@ describe('LandingPage', () => {
     expect(screen.getByRole('link', { name: 'Conditions d’utilisation' }).getAttribute('href')).toBe(
       '/conditions-d-utilisation/',
     )
+    expect(screen.getByRole('link', { name: 'Support' }).getAttribute('href')).toBe('/support/')
   })
 })

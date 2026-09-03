@@ -3,6 +3,8 @@ export const PUBLIC_PRIVACY_POLICY_URL =
 export const PUBLIC_TERMS_URL = 'https://spore-os.com/conditions-d-utilisation/' as const
 export const PUBLIC_LEGAL_NOTICE_URL = 'https://spore-os.com/mentions-legales/' as const
 export const PUBLIC_ACCOUNT_DELETION_URL = 'https://spore-os.com/supprimer-compte/' as const
+export const PUBLIC_SUPPORT_URL = 'https://spore-os.com/support/' as const
+export const PUBLIC_MARKETING_URL = 'https://spore-os.com/' as const
 
 export const CURRENT_TERMS_VERSION = 'cgu-v1' as const
 export const CURRENT_AI_CONSENT_VERSION = 'openai-v1' as const

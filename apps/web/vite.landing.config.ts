@@ -43,6 +43,7 @@ export default defineConfig({
         conditionsUtilisation: fileURLToPath(
           new URL('./landing/conditions-d-utilisation/index.html', import.meta.url),
         ),
+        support: fileURLToPath(new URL('./landing/support/index.html', import.meta.url)),
       },
     },
   },

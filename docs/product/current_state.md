@@ -29,6 +29,8 @@ API contract: [`apps/api/schema.yml`](../../apps/api/schema.yml).
 | Identity / memberships / RBAC | Live | Bootstrap, establishment scoping |
 | Account deletion | Live | Profil `/general` + public `https://spore-os.com/supprimer-compte/`; last-owner org closure; see [`data_inventory.md`](data_inventory.md) |
 | Privacy Policy / CGU | Live | `https://spore-os.com/politique-de-confidentialite/` · `https://spore-os.com/conditions-d-utilisation/`; UGC gate + OpenAI consent in-app |
+| Public support | Live in repo | `https://spore-os.com/support/` after landing deploy; see [`store_listing.md`](store_listing.md) |
+| Store listing / review pack | Prepared | [`store_listing.md`](store_listing.md) · [`store_review.md`](store_review.md) · [`store_assets/`](store_assets/). Console paste is Phase 2. Screenshots of the app in use are still an operator capture. |
 | Runtime config / onboarding | Live | Lot 1: `OnboardingDraft` + `…/draft/` + `…/complete/` additive; legacy `onboarding_proposal_v4` until Lot 3; description 10–5000 in readiness |
 | BusinessUnit / ActivitySubject taxonomy | Live | Identity: `specific_name` + internal `routing_key`; catalog FK required (`PROTECT`); public API Lot 5 (no `routing_key`); legacy instance columns removed |
 | Observations + media + transcription | Live | Celery pipeline |

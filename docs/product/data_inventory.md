@@ -60,6 +60,7 @@ This document describes **what the product actually collects and retains**, what
 - Terms: `https://spore-os.com/conditions-d-utilisation/`
 - Legal notice: `https://spore-os.com/mentions-legales/`
 - Account deletion: `https://spore-os.com/supprimer-compte/`
+- Support: `https://spore-os.com/support/`
 
 ### Logging
 
