@@ -1,7 +1,7 @@
 # MVP Scope — Pilot
 
 Status: authoritative  
-Last reviewed: 2026-08-21
+Last reviewed: 2026-09-02
 
 ## Objective
 
@@ -35,7 +35,7 @@ Observation → Signal → Action Plan → Execution → Validation → Feed upd
 
 - Billing, SSO, MFA (unless already present)
 - Legacy Action / Checklist domains (removed)
-- App Store / Play Store release and CI `cap sync` (Capacitor Lot 11 — **deferred**, not abandoned; resume when preparing TestFlight / Google Play Internal Testing — see [`../cadrage/mobile-capacitor-roadmap.md`](../cadrage/mobile-capacitor-roadmap.md))
+- App Store / Play Store console upload and CI `cap sync` (Capacitor Lot 11 — **deferred**, not abandoned). Local Android AAB: [`../deploy/native_release.md`](../deploy/native_release.md).
 - Durable offline mutation queue (universal mutation outbox / sync). Distinct from Capacitor Lot 10 (done), which protects **Observation compose while the process is alive** only — not a queue, not post-kill restore.
 - Observation survival after process kill / cold start (requires durable persistence + security policy exception + possibly offline auth)
 - Offline capture of chat, comments, audio, signal/task/plan lifecycle commands, or feed reads

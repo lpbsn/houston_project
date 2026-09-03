@@ -74,4 +74,5 @@ Run from repo root unless needed:
 - `cd apps/web && npm run build`
 - `cd apps/web && npm run build:native` (requires `VITE_API_BASE_URL` and `VITE_PUBLIC_APP_URL`)
 - `make web-cap-sync` / `make web-dev-native` (`web-dev-native` is a compile-time runtime pin, not authentication)
+- `make web-cap-sync-release` / `make android-bundle-release` — production Native bake + signed AAB; see [`docs/deploy/native_release.md`](../../docs/deploy/native_release.md)
 - `make web-api-generate` after `make schema`

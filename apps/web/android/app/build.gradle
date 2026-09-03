@@ -1,5 +1,12 @@
 apply plugin: 'com.android.application'
 
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def googleServicesFile = file("google-services.json")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace = "app.spore"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,10 +23,27 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    if (keystorePropertiesFile.exists()) {
+        signingConfigs {
+            release {
+                def storePath = keystoreProperties['storeFile']
+                if (storePath == null || storePath.toString().trim().isEmpty()) {
+                    throw new GradleException("keystore.properties is missing storeFile.")
+                }
+                storeFile rootProject.file(storePath.toString().trim())
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (keystorePropertiesFile.exists()) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }
@@ -51,4 +75,34 @@ try {
     }
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
+
+gradle.taskGraph.whenReady { graph ->
+    def wantsRelease = graph.allTasks.any { task ->
+        def n = task.name.toLowerCase()
+        return n.contains("bundlerelease") || n.contains("assemblerelease") || n.contains("packagerelease")
+    }
+    if (!wantsRelease) {
+        return
+    }
+    if (!keystorePropertiesFile.exists()) {
+        throw new GradleException(
+            "Android release packaging requires apps/web/android/keystore.properties " +
+            "(copy from keystore.properties.example) and an upload keystore. " +
+            "Refusing to produce a debug-signed release AAB/APK."
+        )
+    }
+    def storeFile = android.signingConfigs.release.storeFile
+    if (storeFile == null || !storeFile.exists()) {
+        throw new GradleException(
+            "Release storeFile does not exist: ${storeFile}. " +
+            "Create the upload keystore and point storeFile in keystore.properties."
+        )
+    }
+    if (!googleServicesFile.exists() || !googleServicesFile.text.trim()) {
+        throw new GradleException(
+            "Android release packaging requires apps/web/android/app/google-services.json " +
+            "(Firebase, gitignored). Push would be missing in the Closed Testing AAB."
+        )
+    }
 }

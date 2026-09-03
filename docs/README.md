@@ -1,7 +1,7 @@
 # Houston documentation
 
 Status: authoritative  
-Last reviewed: 2026-08-21
+Last reviewed: 2026-09-02
 
 Git is the only history. There is no `archive/` or `audits/` folder in active docs.
 
@@ -35,7 +35,7 @@ Git is the only history. There is no `archive/` or `audits/` folder in active do
 | [`architecture/api_error_contract.md`](architecture/api_error_contract.md) | API errors |
 | [`engineering/local_development.md`](engineering/local_development.md) | Local workflow |
 | [`engineering/frontend_architecture.md`](engineering/frontend_architecture.md) | React / Vite map |
-| [`cadrage/mobile-capacitor-roadmap.md`](cadrage/mobile-capacitor-roadmap.md) | Capacitor foundation (Lots 1–10 closed; Lot 11 DX / CI / release deferred) |
+| [`cadrage/mobile-capacitor-roadmap.md`](cadrage/mobile-capacitor-roadmap.md) | Capacitor foundation (Lots 1–10 closed; Lot 11 CI `cap sync` deferred; local AAB: [`deploy/native_release.md`](deploy/native_release.md)) |
 | [`engineering/testing.md`](engineering/testing.md) | Test strategy |
 | [`engineering/api_pagination_standard.md`](engineering/api_pagination_standard.md) | Pagination |
 
@@ -43,6 +43,7 @@ Git is the only history. There is no `archive/` or `audits/` folder in active do
 
 | Doc | Purpose |
 |-----|---------|
+| [`deploy/native_release.md`](deploy/native_release.md) | Native store bake + signed Android AAB (manual) |
 | [`deploy/smoke_checklist.md`](deploy/smoke_checklist.md) | Smoke (local + Railway) |
 | [`deploy/prod_test_runbook.md`](deploy/prod_test_runbook.md) | Operator runbook |
 | [`deploy/railway_deploy_contract.md`](deploy/railway_deploy_contract.md) | Deploy contract |
@@ -52,7 +53,7 @@ Git is the only history. There is no `archive/` or `audits/` folder in active do
 
 ## Cadrage
 
-Planning docs, not live product state. Distinct from Capacitor Lot 11 (still deferred on the foundation record).
+Planning docs, not live product state. Distinct from Capacitor Lot 11 (CI `cap sync` still deferred on the foundation record).
 
 - [`cadrage/`](cadrage/) — Capacitor foundation record (authoritative) and Analytics cible
 - [`roadmap_spore/spore-store-readiness-phase-1-v3.md`](roadmap_spore/spore-store-readiness-phase-1-v3.md) — Store Readiness Phase 1 (`cadrage cible`); preparatory store work that can advance without automatically reopening Capacitor Lot 11
