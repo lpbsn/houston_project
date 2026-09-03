@@ -58,7 +58,8 @@ Not offered (**fait repo** of product surfaces).
 ## Manual actions still required in consoles
 
 - Paste Privacy Policy + (Apple) terms URL `https://spore-os.com/conditions-d-utilisation/`.
+- Support URL: `https://spore-os.com/support/` (landing deploy). Pack: [`store_listing.md`](store_listing.md).
 - Fill App Privacy / Data Safety from the privacy worksheet after an Xcode Privacy Report.
 - Confirm encryption exemption checkbox.
 - Complete age rating questionnaires.
-- App Review notes: workplace UGC, report+block scope, no public social graph.
+- App Review / Play App access: [`store_review.md`](store_review.md) (credentials stay off git). Workplace UGC, report+block scope, no public social graph.

@@ -21,6 +21,11 @@ export const landingSeo = {
       'Comment demander la suppression de votre compte Spore et des données personnelles associées.',
     canonical: 'https://spore-os.com/supprimer-compte/',
   },
+  support: {
+    title: 'Support — Spore',
+    description: 'Contacter le support Spore pour une question sur le compte ou l’application.',
+    canonical: 'https://spore-os.com/support/',
+  },
 } as const
 
 export const heroContent = {
@@ -172,6 +177,8 @@ export const footerContent = {
   termsHref: '/conditions-d-utilisation/',
   accountDeletionLabel: 'Supprimer un compte',
   accountDeletionHref: '/supprimer-compte/',
+  supportLabel: 'Support',
+  supportHref: '/support/',
   copyright: '© 2026 Spore. Tous droits réservés.',
 } as const
 
@@ -247,6 +254,39 @@ export const accountDeletionContent = {
     'Nous retirons l’identifiant du compte (e-mail, nom, mot de passe, sessions, notifications push) et le contenu que vous avez soumis (texte d’observation, photos, commentaires, messages de chat encore présents).',
     'Le travail d’établissement déjà structuré (signaux, plans d’action) peut être conservé. Votre nom n’y est plus affiché. Des extraits peuvent encore apparaître dans des synthèses ou dans les textes écrits par d’autres personnes.',
   ] as const,
+} as const
+
+export const supportContent = {
+  pageTitle: 'Support',
+  backLabel: 'Retour à l’accueil',
+  backHref: '/',
+  intro:
+    'Cette page est le contact support de Spore, pour les utilisateurs de l’application et pour les stores.',
+  sections: [
+    {
+      title: 'Nous écrire',
+      paragraphs: [
+        `Email : ${ACCOUNT_DELETION_SUPPORT_EMAIL}`,
+        'Indiquez l’adresse e-mail du compte concerné et le sujet (connexion, suppression, question sur l’application).',
+        'Objectif de réponse : 30 jours. Les demandes urgentes de sécurité (compte compromis) sont traitées en priorité.',
+      ],
+    },
+    {
+      title: 'Compte et données',
+      paragraphs: [
+        'Suppression de compte : depuis Profil dans l’application, ou via https://spore-os.com/supprimer-compte/.',
+        'Politique de confidentialité : https://spore-os.com/politique-de-confidentialite/.',
+        'Conditions d’utilisation : https://spore-os.com/conditions-d-utilisation/.',
+      ],
+    },
+    {
+      title: 'Application',
+      paragraphs: [
+        'Spore est un outil d’exploitation pour des établissements identifiés. L’accès opérationnel nécessite un compte et une appartenance à un établissement actif.',
+        'Connexion : https://app.spore-os.com/login',
+      ],
+    },
+  ],
 } as const
 
 export const privacyPolicyContent = {

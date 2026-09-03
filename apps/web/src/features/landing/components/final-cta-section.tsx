@@ -60,6 +60,12 @@ export function LandingFooter() {
           >
             {footerContent.accountDeletionLabel}
           </a>
+          <a
+            href={footerContent.supportHref}
+            className="transition hover:text-white focus-visible:text-white"
+          >
+            {footerContent.supportLabel}
+          </a>
         </div>
         <p>{footerContent.copyright}</p>
       </div>

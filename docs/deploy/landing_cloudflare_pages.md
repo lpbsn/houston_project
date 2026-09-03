@@ -26,6 +26,7 @@ apps/web/dist-landing/
 ├── politique-de-confidentialite/index.html
 ├── conditions-d-utilisation/index.html
 ├── supprimer-compte/index.html
+├── support/index.html
 ├── robots.txt
 ├── sitemap.xml
 ├── _redirects
@@ -54,6 +55,7 @@ Commandes utiles :
    - `https://spore-os.com/politique-de-confidentialite/`
    - `https://spore-os.com/conditions-d-utilisation/`
    - `https://spore-os.com/supprimer-compte/` (titre **Supprimer un compte Spore**, pas le hero landing)
+   - `https://spore-os.com/support/`
    - `https://spore-os.com/robots.txt`
    - `https://spore-os.com/sitemap.xml`
    - `https://app.spore-os.com/`

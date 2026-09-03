@@ -11,6 +11,7 @@ const requiredFiles = [
   'supprimer-compte/index.html',
   'politique-de-confidentialite/index.html',
   'conditions-d-utilisation/index.html',
+  'support/index.html',
   'robots.txt',
   'sitemap.xml',
   '_redirects',
@@ -23,6 +24,7 @@ const expectedCanonicals = {
   'politique-de-confidentialite/index.html':
     'https://spore-os.com/politique-de-confidentialite/',
   'conditions-d-utilisation/index.html': 'https://spore-os.com/conditions-d-utilisation/',
+  'support/index.html': 'https://spore-os.com/support/',
 }
 
 function fail(message) {
@@ -60,6 +62,8 @@ const requiredRedirects = [
   '/politique-de-confidentialite/ /politique-de-confidentialite/index.html 200',
   '/conditions-d-utilisation /conditions-d-utilisation/index.html 200',
   '/conditions-d-utilisation/ /conditions-d-utilisation/index.html 200',
+  '/support /support/index.html 200',
+  '/support/ /support/index.html 200',
 ]
 for (const rule of requiredRedirects) {
   if (!redirects.includes(rule)) {

@@ -89,6 +89,6 @@ Universal Links E2E and Play-verified App Links remain **identity** work (sectio
 
 ## Explicitly not in this path
 
-CI publication, Fastlane, secret managers, R8/minify, changing `app.spore`, store icons/listing (separate store-readiness lots), App Store export.
+CI publication, Fastlane, secret managers, R8/minify, changing `app.spore`, App Store export. Store listing copy, review notes, and brand assets: [`docs/product/store_listing.md`](../product/store_listing.md), [`docs/product/store_review.md`](../product/store_review.md), [`docs/product/store_assets/`](../product/store_assets/).
 
 Capacitor Lot 11 CI `cap sync` remains deferred. This file is the local store-build procedure only.
