@@ -34,6 +34,26 @@ if (!html.includes('src="/assets/') && !html.includes("src='/assets/")) {
 
 assertNoPwaBuildArtifacts(distRoot, html, fail)
 
+const publicWellKnown = resolve(webRoot, 'public/.well-known')
+const distWellKnown = resolve(distRoot, '.well-known')
+if (!existsSync(resolve(publicWellKnown, '.gitkeep'))) {
+  fail('missing public/.well-known serving path')
+}
+if (!existsSync(resolve(distWellKnown, '.gitkeep'))) {
+  fail('Vite did not copy public/.well-known into dist/')
+}
+if (
+  existsSync(resolve(publicWellKnown, 'apple-app-site-association')) ||
+  existsSync(resolve(distWellKnown, 'apple-app-site-association'))
+) {
+  fail('do not publish apple-app-site-association until the App Store Team ID exists')
+}
+const publicAssetLinks = resolve(publicWellKnown, 'assetlinks.json')
+const distAssetLinks = resolve(distWellKnown, 'assetlinks.json')
+if (existsSync(publicAssetLinks) !== existsSync(distAssetLinks)) {
+  fail('assetlinks.json must copy from public/.well-known to dist/')
+}
+
 for (const file of hashedJs) {
   const source = readFileSync(resolve(assetsDir, file), 'utf8')
   if (source.includes('capacitor-secure-storage') || source.includes('@aparajita')) {

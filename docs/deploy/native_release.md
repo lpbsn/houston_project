@@ -1,7 +1,7 @@
 # Native release V1 (Android AAB + iOS pre-ADP)
 
 Status: authoritative  
-Last reviewed: 2026-09-02
+Last reviewed: 2026-09-03
 
 Manual, reproducible path from this repo to a **Play-ready Android App Bundle**. No Fastlane, no CI `cap sync`, no store upload automation.
 
@@ -57,6 +57,20 @@ Before the first Play upload:
 - Upload the `.aab` (not an APK) in Play Console. First time: enroll **Play App Signing** (this keystore is the upload key).
 - Closed Testing for a recent personal Play account (tester count / duration) is a **console** operation. Recheck Play Help at upload time.
 
+## App Links / Universal Links (identities, not the Native handler)
+
+The Capacitor handler, Android `autoVerify` host `app.spore-os.com`, and iOS Associated Domains entitlement are already in the repo. **Verified** OS association is a **console** follow-up.
+
+### Android (`assetlinks.json`)
+
+Production reference: **Play App Signing** certificate SHA-256 fingerprints (all of them Play lists for this app — some Play apps have more than one app-signing cert). Copy the Digital Asset Links snippet from Play Console (Play App Signing / App integrity). Put the real JSON at `apps/web/public/.well-known/assetlinks.json` and **redeploy the web** host. Do not use placeholders. Do not treat the upload-key fingerprint as the Play target. You may add the upload-key SHA-256 to the same `sha256_cert_fingerprints` array later so a sideloaded Release can verify; that does not replace Play certs. Never add the debug certificate.
+
+Until that Play snippet exists, leave the file **unpublished**. nginx 404 on `/.well-known/assetlinks.json` is correct.
+
+### iOS (`apple-app-site-association`)
+
+Keep the existing `applinks:app.spore-os.com` entitlement. Do **not** publish an AASA with Personal Team `PBJM37TNDU`. After the Apple Developer Program, use the Team ID that will ship on the App Store, enable Associated Domains on the App ID, then host AASA on `app.spore-os.com` (modern `appIDs` + `components`). Until then, nginx 404 on `/.well-known/apple-app-site-association` is correct.
+
 ## iOS (as far as this repo can go without ADP)
 
 Ready in-repo: bundle id `app.spore`, Release `CAPACITOR_DEBUG=false` ([`apps/web/ios/release.xcconfig`](../../apps/web/ios/release.xcconfig)), usage strings, `ITSAppUsesNonExemptEncryption`, PrivacyInfo collected-data types, Associated Domains `applinks:app.spore-os.com`, `aps-environment=development` for the Personal Team.
@@ -71,7 +85,7 @@ After Apple Developer Program (Phase 2, not this procedure):
 4. Upload an APNs `.p8` to Firebase.
 5. Archive / upload from Xcode (App Store Connect). TestFlight is optional.
 
-Universal Links E2E still need a real `apple-app-site-association` (and Android App Links `assetlinks.json`) — not this runbook.
+Universal Links E2E and Play-verified App Links remain **identity** work (section above), not this AAB procedure.
 
 ## Explicitly not in this path
 
