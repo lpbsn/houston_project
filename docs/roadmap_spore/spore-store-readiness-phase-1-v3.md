@@ -1,6 +1,8 @@
 # Spore --- Roadmap Store Readiness --- Phase 1
 
-> **Statut :** cadrage cible\
+> **Statut :** cadrage cible — **Phase 1 gate GO** (2026-09-03), see
+> [`../product/store_phase1_gate.md`](../product/store_phase1_gate.md).
+> Remaining work is Store / console / identity (Phase 2).\
 > **Projet :** `houston_project`\
 > **Application :** Spore\
 > **Cible :** préparation App Store + Google Play avant les opérations

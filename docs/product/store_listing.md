@@ -19,7 +19,7 @@ Related: [`store_review.md`](store_review.md) · [`store_compliance.md`](store_c
 | Account deletion (Play) | https://spore-os.com/supprimer-compte/ |
 | App login | https://app.spore-os.com/login |
 
-Support is live only after the landing Cloudflare Pages deploy that includes `/support/`.
+Support URL was live at this address as of the Phase 1 gate (2026-09-03).
 
 ## Google Play
 

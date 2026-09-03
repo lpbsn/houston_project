@@ -87,6 +87,18 @@ After Apple Developer Program (Phase 2, not this procedure):
 
 Universal Links E2E and Play-verified App Links remain **identity** work (section above), not this AAB procedure.
 
+## Release Candidate checks (P1.15)
+
+Short, Release-specific. Do not substitute [`smoke_checklist.md`](smoke_checklist.md) or a full product recipe. Phase 1 gate record: [`../product/store_phase1_gate.md`](../product/store_phase1_gate.md).
+
+1. `make android-bundle-release` (runs `validate-native-release-build.mjs`). Confirm the AAB exists at the path above. Do not commit it.
+2. Confirm the bundle is a store identity: `applicationId` / package `app.spore`, `targetSdk` 36, Release signing (Gradle fails closed without the upload keystore and `google-services.json`).
+3. Do **not** use `make web-cap-sync` (loopback `.env`) for this artefact.
+4. iOS: `make web-cap-sync-release` is enough in Phase 1. No App Store IPA. Production push and archive wait on ADP.
+5. Device login against production on a sideloaded Release binary is optional QA. OS-verified App Links, Play Closed Testing, and App Review sandbox are Phase 2.
+
+Existing tests that guard this path: `src/lib/native-release-origins.test.ts`, `src/features/landing/app-links-association.isolation.test.ts`.
+
 ## Explicitly not in this path
 
 CI publication, Fastlane, secret managers, R8/minify, changing `app.spore`, App Store export. Store listing copy, review notes, and brand assets: [`docs/product/store_listing.md`](../product/store_listing.md), [`docs/product/store_review.md`](../product/store_review.md), [`docs/product/store_assets/`](../product/store_assets/).

@@ -29,8 +29,9 @@ API contract: [`apps/api/schema.yml`](../../apps/api/schema.yml).
 | Identity / memberships / RBAC | Live | Bootstrap, establishment scoping |
 | Account deletion | Live | Profil `/general` + public `https://spore-os.com/supprimer-compte/`; last-owner org closure; see [`data_inventory.md`](data_inventory.md) |
 | Privacy Policy / CGU | Live | `https://spore-os.com/politique-de-confidentialite/` · `https://spore-os.com/conditions-d-utilisation/`; UGC gate + OpenAI consent in-app |
-| Public support | Live in repo | `https://spore-os.com/support/` after landing deploy; see [`store_listing.md`](store_listing.md) |
+| Public support | Live | `https://spore-os.com/support/` |
 | Store listing / review pack | Prepared | [`store_listing.md`](store_listing.md) · [`store_review.md`](store_review.md) · [`store_assets/`](store_assets/). Console paste is Phase 2. Screenshots of the app in use are still an operator capture. |
+| Store Readiness Phase 1 gate | GO | [`store_phase1_gate.md`](store_phase1_gate.md) (2026-09-03). Remaining work is consoles / identities, not a product chantier. |
 | Runtime config / onboarding | Live | Lot 1: `OnboardingDraft` + `…/draft/` + `…/complete/` additive; legacy `onboarding_proposal_v4` until Lot 3; description 10–5000 in readiness |
 | BusinessUnit / ActivitySubject taxonomy | Live | Identity: `specific_name` + internal `routing_key`; catalog FK required (`PROTECT`); public API Lot 5 (no `routing_key`); legacy instance columns removed |
 | Observations + media + transcription | Live | Celery pipeline |
@@ -89,7 +90,7 @@ Post-core gaps (non-blocking pilot): some bootstrap hints, no REST message write
 
 Details: [`../engineering/frontend_architecture.md`](../engineering/frontend_architecture.md).
 
-**Capacitor Lots 1–10 are closed.** Resume product work. Capacitor Lot 11 (CI `cap sync` / publication pipeline) is deferred — see [`../cadrage/mobile-capacitor-roadmap.md`](../cadrage/mobile-capacitor-roadmap.md). Local Play AAB: [`../deploy/native_release.md`](../deploy/native_release.md).
+**Capacitor Lots 1–10 are closed.** Resume product work. Capacitor Lot 11 (CI `cap sync` / publication pipeline) is deferred — see [`../cadrage/mobile-capacitor-roadmap.md`](../cadrage/mobile-capacitor-roadmap.md). Local Play AAB: [`../deploy/native_release.md`](../deploy/native_release.md). Store Phase 1 gate: [`store_phase1_gate.md`](store_phase1_gate.md).
 
 ## Product Lot 11 stabilization (preserved contracts)
 

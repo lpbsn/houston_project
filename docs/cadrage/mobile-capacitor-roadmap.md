@@ -208,7 +208,7 @@ Interdit : offline-first généralisé ; réplication locale complète ; cache d
 
 **Pourquoi deferred.** Lots 1–10 sont le socle nécessaire pour reprendre le développement produit. Le projet se développe et se valide localement sur Web + Capacitor iOS/Android. La distribution bêta iOS/Android n’est pas ouverte ; l’Apple Developer Program et les canaux Google Play ne sont pas activés. Construire maintenant une automatisation de release / signing / store qui ne peut pas être validée de bout en bout n’apporte pas de valeur pour un développeur unique. Deferred does not mean abandoned.
 
-**Déclencheur de reprise.** Préparation **réelle** de TestFlight et/ou Google Play Internal Testing (comptes et canaux utilisables). Not a hypothetical “later”. Store Readiness Phase 1 is a separate `cadrage cible` for preparatory store work; it can advance without automatically reopening this lot — see [`../roadmap_spore/spore-store-readiness-phase-1-v3.md`](../roadmap_spore/spore-store-readiness-phase-1-v3.md).
+**Déclencheur de reprise.** Préparation **réelle** de TestFlight et/ou Google Play Internal Testing (comptes et canaux utilisables). Not a hypothetical “later”. Store Readiness Phase 1 gate is **GO** ([`../product/store_phase1_gate.md`](../product/store_phase1_gate.md)); it does not reopen this lot. Cadrage: [`../roadmap_spore/spore-store-readiness-phase-1-v3.md`](../roadmap_spore/spore-store-readiness-phase-1-v3.md).
 
 **À traiter à la reprise** (périmètre du lot, pas de design d’implémentation) : signing / distribution ; identifiers et credentials nécessaires ; version / build numbers ; archives iOS / AAB Android ; procédures de publication ; checks CI/release réellement utiles à ce moment-là ; documentation opératoire.
 
