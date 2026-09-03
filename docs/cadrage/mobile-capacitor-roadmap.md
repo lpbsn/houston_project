@@ -1,7 +1,7 @@
 # Spore — Roadmap Web + Capacitor
 
 Status: authoritative  
-Last reviewed: 2026-09-02
+Last reviewed: 2026-09-03
 
 Record of the delivered Capacitor foundation. **Capacitor Lots 1–10 are closed.** Resume product work on this socle. **Capacitor Lot 11** (DX / CI `cap sync` / publication pipeline) is **deferred**, not abandoned. A local Play AAB procedure exists at [`docs/deploy/native_release.md`](../deploy/native_release.md); it does not reopen Lot 11.
 
@@ -171,7 +171,9 @@ Ticket auth orthogonal (wipe refresh Native sur erreur réseau) : hors ce checkp
 
 **Fait (2026-08-19).** Universal Links / App Links HTTPS sur `app.spore-os.com` (`getLaunchUrl` + `appUrlOpen`, dédup handshake seulement). Parser : origine HTTPS exacte + `parseAppRoute`. Destination `{ href, establishmentId? }` portée via `/login` et `/select-establishment`. Switch établissement seulement si l’id est explicite. Pas de custom scheme, pas de fichiers AASA/assetlinks placeholder.
 
-**Validation (2026-08-19).** Handler Android (`adb` VIEW intent → app → navigation) est le niveau de QA du lot. **App Links E2E** (ouverture automatique depuis le Web) bloqués tant que `assetlinks.json` n’est pas publié. **Universal Links iOS E2E** bloqués par l’Apple Developer Program (même barre que l’APNs Lot 7).
+**Validation (2026-08-19).** Handler Android (`adb` VIEW intent → app → navigation) est le niveau de QA du lot.
+
+Store Readiness P1.10 (2026-09-03) : **socle** de publication web fermé (`public/.well-known/`, nginx 404 dédié). Association Play (`assetlinks.json` avec les SHA-256 App Signing listées par la console) et AASA (Team ID App Store, pas Personal Team) restent des **dépendances d’identité store** — voir [`docs/deploy/native_release.md`](../deploy/native_release.md). Ne pas rouvrir ce lot.
 
 ### 9. UX native — done
 
@@ -234,8 +236,8 @@ Interdit : offline-first généralisé ; réplication locale complète ; cache d
 These do **not** reopen Lots 1–10 or open Lot 11:
 
 - Push iOS physique / APNs : Apple Developer Program (Personal Team today).
-- App Links E2E : publication réelle de `assetlinks.json` (pas de placeholders TEAMID / fingerprint). Handler Android `adb` VIEW → app → navigation is the Lot 8 QA bar.
-- Universal Links iOS E2E : même barre ADP que l’APNs Lot 7.
+- App Links Play vérifiés : empreintes **Play App Signing** (toutes celles listées) dans `assetlinks.json` + redéploy web. Pas de placeholders. La clé upload n’est pas la cible store. Handler Android `adb` VIEW → app → navigation is the Lot 8 QA bar.
+- Universal Links iOS E2E : Team ID App Store + AASA (même barre ADP que l’APNs Lot 7). Pas d’AASA Personal Team.
 - Capacitor Lot 10 régime A is delivered. Device leftovers: iPhone physique offline → reconnect encore ouvert ; iOS Simulator avion → reconnect non testé (pas de signal Capacitor exploitable).
 - Native refresh wipe on network error — [issue #181](https://github.com/lpbsn/houston_project/issues/181) (distinct ticket).
 

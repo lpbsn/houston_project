@@ -1,7 +1,7 @@
 # Local development
 
 Status: authoritative  
-Last reviewed: 2026-09-02
+Last reviewed: 2026-09-03
 
 Daily workflow for Houston on macOS / OrbStack. Install from scratch: [`INSTALL_MAC.md`](../../INSTALL_MAC.md).
 
@@ -43,13 +43,20 @@ Native Capacitor (`make web-cap-sync`) copies `dist-native/` into the iOS and An
 
 Set `VITE_PUBLIC_APP_URL` to the public HTTP(S) origin (same value as `HOUSTON_PUBLIC_APP_URL`, no path/query/hash) so in-app invitation copy links are usable outside the WebView. Native builds require it. Native deep-link parsing is strict HTTPS against that origin.
 
-Android handler QA (intent → app → navigation), without claiming a verified App Link:
+Android **handler** QA (intent → app → navigation). This is the Native deep-link socle; it does **not** prove Play/Apple website association:
 
 ```bash
 adb shell am start -W -a android.intent.action.VIEW -d "https://app.spore-os.com/invitations/…" app.spore
 ```
 
-That proves the Capacitor listener and `AppRoute` resolution. It does **not** prove Digital Asset Links. Automatic open from Chrome/email (App Links E2E) stays blocked until a real `assetlinks.json` is published. iOS Universal Links E2E stay blocked on the Apple Developer Program (same as APNs). Do not commit TEAMID or signing-fingerprint placeholders; nginx already serves `/.well-known/apple-app-site-association` and `/.well-known/assetlinks.json` as `404` (not the SPA) until those files exist.
+Association files are served from the **web** deploy (`apps/web/public/.well-known/` → Vite `dist/` → nginx), not from the Capacitor bundle. Until store identities exist, nginx must return **404** (not the SPA) for:
+
+- `https://app.spore-os.com/.well-known/assetlinks.json`
+- `https://app.spore-os.com/.well-known/apple-app-site-association`
+
+That 404 is expected. Do **not** commit placeholder fingerprints, `TEAMID`, or a Personal Team AASA. A 200 with fake statements is worse than 404.
+
+`pm get-app-links app.spore` **verified** only matches the certificate of the **installed** binary to `assetlinks.json`. Play-distributed builds use Play App Signing certificate(s), not the local upload key. Upload-key SHA-256 is optional later for a sideloaded Release; it is not the Play App Links target. iOS Universal Links wait on the App Store Team ID (not the Personal Team in Xcode today). Details: [`docs/deploy/native_release.md`](../deploy/native_release.md).
 
 `DJANGO_ALLOWED_HOSTS` must include `10.0.2.2` so Django accepts the emulator `Host` header. `HOUSTON_CLIENT_ORIGINS` must include `capacitor://localhost` and `https://localhost`. Debug Android allows mixed content / local cleartext only via `android/app/src/debug/` (not the committed `capacitor.config.ts`). iOS Simulator and Android emulator require Xcode / Android Studio on the machine. Native validation uses `build:native` / `cap:sync`, not the Vite `dev:native` server (`base: '/'` vs packaged `'./'`).
 

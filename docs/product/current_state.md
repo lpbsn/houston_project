@@ -1,7 +1,7 @@
 # Houston — Current product state
 
 Status: authoritative  
-Last reviewed: 2026-09-02
+Last reviewed: 2026-09-03
 
 ## Branding
 
@@ -38,7 +38,7 @@ API contract: [`apps/api/schema.yml`](../../apps/api/schema.yml).
 | Comments (signal + execution threads) | Live | REST + mention picker |
 | Notifications in-app | Live | List, preferences, mark read |
 | Native push (FCM) | Live | Capacitor Lot 7; membership `push_enabled`; Web Push removed |
-| Native HTTPS deep links | Live | Capacitor Lot 8 handler (`getLaunchUrl` / `appUrlOpen`); lot QA = Android `adb` VIEW intent; App Links / Universal Links E2E blocked ops/ADP |
+| Native HTTPS deep links | Live | Capacitor Lot 8 handler (`getLaunchUrl` / `appUrlOpen`); lot QA = Android `adb` VIEW intent. Store-readiness P1.10 **socle** closed (nginx `.well-known` 404, Vite `public/.well-known`). **Play** `assetlinks.json` and **App Store** AASA wait on store identities |
 | Operational realtime (invalidation) | Live | WS ticket + `OperationalRealtimeProvider` on terrain routes |
 | Chat V1 core | Live | DM + groups, WS messages, Terrain UI `/chat` |
 | Upload / private media | Live | Authorized reads only |
@@ -103,7 +103,7 @@ Preserved names (do not rename without explicit decision):
 - Production-grade polish on all terrain screens.
 - Chat post-core UI (group admin, settings).
 - Push notifications: native FCM live (Capacitor Lot 7 closed). Physical iOS APNs QA waits on the Apple Developer Program. Web Push desktop is out.
-- Native HTTPS deep links: handler live (Capacitor Lot 8 closed). Lot QA bar is Android `adb` VIEW intent → app → navigation. App Links / Universal Links E2E blocked until association files are published and Apple Developer Program (same bar as Lot 7 APNs).
+- Native HTTPS deep links: handler live (Capacitor Lot 8 closed). Lot QA bar is Android `adb` VIEW intent → app → navigation. P1.10 socle closed. Play-verified App Links wait on Play App Signing SHA-256 list in `assetlinks.json`. iOS Universal Links wait on the App Store Team ID (not Personal Team AASA).
 - Observation compose is process-memory (`/reporting` text + local `File` photos; task-observation text). Photos upload only at Envoyer. Envoyer is disabled while offline. Draft clears on 201, session end, new identity, and establishment switch — not on refresh network/401. Capacitor Lot 10 (régime A) is closed. Device leftovers that do not reopen the lot: iOS Simulator avion → reconnect not tested; iPhone physical offline → reconnect still open. Survival after process kill is not in that lot. Android emulator nav / background / avion → reconnect / picker: PASS.
 - Native refresh: body-transport `performRefresh` can clear a still-valid Keychain refresh token on network error — [issue #181](https://github.com/lpbsn/houston_project/issues/181), not Offline capture and not Lot 10. See [`../architecture/authentication_charter.md`](../architecture/authentication_charter.md).
 - Full device QA matrix not automated in CI.
