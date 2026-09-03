@@ -1,7 +1,7 @@
 # Houston documentation
 
 Status: authoritative  
-Last reviewed: 2026-09-02
+Last reviewed: 2026-09-03
 
 Git is the only history. There is no `archive/` or `audits/` folder in active docs.
 
@@ -26,6 +26,9 @@ Git is the only history. There is no `archive/` or `audits/` folder in active do
 | [`product/data_inventory.md`](product/data_inventory.md) | Collected data, deletion, store privacy SoT |
 | [`product/store_privacy_declarations.md`](product/store_privacy_declarations.md) | Apple / Google privacy worksheet |
 | [`product/store_compliance.md`](product/store_compliance.md) | Store compliance hors privacy |
+| [`product/store_listing.md`](product/store_listing.md) | Store listing copy pack (FR) |
+| [`product/store_review.md`](product/store_review.md) | Store review runbook |
+| [`product/store_phase1_gate.md`](product/store_phase1_gate.md) | Store Readiness Phase 1 gate (P1.15 / P1.16) |
 
 ## Architecture & engineering
 
@@ -43,7 +46,7 @@ Git is the only history. There is no `archive/` or `audits/` folder in active do
 
 | Doc | Purpose |
 |-----|---------|
-| [`deploy/native_release.md`](deploy/native_release.md) | Native store bake + signed Android AAB (manual) |
+| [`deploy/native_release.md`](deploy/native_release.md) | Native store bake + signed Android AAB (manual); RC checks in-file |
 | [`deploy/smoke_checklist.md`](deploy/smoke_checklist.md) | Smoke (local + Railway) |
 | [`deploy/prod_test_runbook.md`](deploy/prod_test_runbook.md) | Operator runbook |
 | [`deploy/railway_deploy_contract.md`](deploy/railway_deploy_contract.md) | Deploy contract |
@@ -56,7 +59,7 @@ Git is the only history. There is no `archive/` or `audits/` folder in active do
 Planning docs, not live product state. Distinct from Capacitor Lot 11 (CI `cap sync` still deferred on the foundation record).
 
 - [`cadrage/`](cadrage/) — Capacitor foundation record (authoritative) and Analytics cible
-- [`roadmap_spore/spore-store-readiness-phase-1-v3.md`](roadmap_spore/spore-store-readiness-phase-1-v3.md) — Store Readiness Phase 1 (`cadrage cible`); preparatory store work that can advance without automatically reopening Capacitor Lot 11
+- [`roadmap_spore/spore-store-readiness-phase-1-v3.md`](roadmap_spore/spore-store-readiness-phase-1-v3.md) — Store Readiness Phase 1 cadrage; **gate GO** 2026-09-03 — [`product/store_phase1_gate.md`](product/store_phase1_gate.md). Does not reopen Capacitor Lot 11.
 
 ## Policy
 
