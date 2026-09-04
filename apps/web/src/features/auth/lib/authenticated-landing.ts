@@ -10,6 +10,7 @@ import {
   canShowAnalyticsNavigation,
   hasTrueCrossEstablishmentScope,
 } from '@/features/navigation/lib/shared-navigation'
+import { getAppRuntime } from '@/lib/runtime'
 
 export const CROSS_DASHBOARD_LANDING_PATH = '/cross?period=7d'
 
@@ -24,6 +25,10 @@ export type AuthenticatedLanding =
 
 export type AuthenticatedLandingContext = {
   isDesktop?: boolean
+}
+
+export function isDesktopWebLanding(isLgViewport: boolean): boolean {
+  return getAppRuntime() === 'web' && isLgViewport
 }
 
 export function resolveAuthenticatedLanding(

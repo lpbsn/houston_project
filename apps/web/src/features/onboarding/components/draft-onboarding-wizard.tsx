@@ -11,7 +11,10 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 
 import { bootstrapQueryKey, fetchBootstrap } from '@/features/auth/api'
-import { getAuthenticatedLandingPath } from '@/features/auth/lib/authenticated-landing'
+import {
+  getAuthenticatedLandingPath,
+  isDesktopWebLanding,
+} from '@/features/auth/lib/authenticated-landing'
 import { useLgViewport } from '@/lib/lg-viewport'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -914,7 +917,9 @@ export function DraftOnboardingWizard({ sessionId, onNavigate }: DraftOnboarding
         queryFn: fetchBootstrap,
       })
       const landing =
-        getAuthenticatedLandingPath(bootstrap, { isDesktop: isLgViewport }) ?? '/reporting'
+        getAuthenticatedLandingPath(bootstrap, {
+          isDesktop: isDesktopWebLanding(isLgViewport),
+        }) ?? '/reporting'
       onNavigate?.(landing)
     } catch (error) {
       setNavError(getCompleteErrorMessage(error, 'Impossible de terminer l’onboarding.'))

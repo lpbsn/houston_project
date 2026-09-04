@@ -6,7 +6,10 @@ import {
   canManageOrganizationFromBootstrapHints,
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
-import { getAuthenticatedLandingPath } from '@/features/auth/lib/authenticated-landing'
+import {
+  getAuthenticatedLandingPath,
+  isDesktopWebLanding,
+} from '@/features/auth/lib/authenticated-landing'
 import { Button } from '@/components/ui/button'
 import { useLgViewport } from '@/lib/lg-viewport'
 import { terrain } from '@/lib/terrain-styles'
@@ -102,7 +105,9 @@ export function OrganizationEstablishmentPage({
         return
       }
       onNavigate(
-        getAuthenticatedLandingPath(bootstrap, { isDesktop: isLgViewport }) ?? '/reporting',
+        getAuthenticatedLandingPath(bootstrap, {
+          isDesktop: isDesktopWebLanding(isLgViewport),
+        }) ?? '/reporting',
         { replace: true },
       )
     }
@@ -125,7 +130,9 @@ export function OrganizationEstablishmentPage({
       return
     }
     onNavigate(
-      getAuthenticatedLandingPath(bootstrap, { isDesktop: isLgViewport }) ?? '/reporting',
+      getAuthenticatedLandingPath(bootstrap, {
+        isDesktop: isDesktopWebLanding(isLgViewport),
+      }) ?? '/reporting',
       { replace: true },
     )
   }, [bootstrap, canManageOrganization, isLgViewport, onNavigate, overviewQuery.isError])

@@ -7,7 +7,10 @@ import {
   canManageOrganizationFromBootstrapHints,
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
-import { getAuthenticatedLandingPath } from '@/features/auth/lib/authenticated-landing'
+import {
+  getAuthenticatedLandingPath,
+  isDesktopWebLanding,
+} from '@/features/auth/lib/authenticated-landing'
 import { buildOnboardingUrlFromIds } from '@/features/auth/lib/pending-onboarding'
 import { useLgViewport } from '@/lib/lg-viewport'
 import { terrain } from '@/lib/terrain-styles'
@@ -78,7 +81,9 @@ export function OrganizationPage({ onNavigate }: OrganizationPageProps) {
 
     if (!canManageOrganization) {
       onNavigate(
-        getAuthenticatedLandingPath(bootstrap, { isDesktop: isLgViewport }) ?? '/reporting',
+        getAuthenticatedLandingPath(bootstrap, {
+          isDesktop: isDesktopWebLanding(isLgViewport),
+        }) ?? '/reporting',
         { replace: true },
       )
     }

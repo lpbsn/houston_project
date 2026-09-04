@@ -66,6 +66,98 @@ vi.mock('@/features/auth/api', async (importOriginal) => {
 
 import { DraftOnboardingWizard } from '../components/draft-onboarding-wizard'
 
+function stubLgViewport(matches: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+}
+
+function multiMembershipBootstrapWithoutActive() {
+  const membership = (establishmentId: string) => ({
+    id: `membership-${establishmentId}`,
+    establishment_id: establishmentId,
+    establishment_name: `Hotel ${establishmentId}`,
+    organization_id: 'org-1',
+    organization_name: 'Org',
+    role: 'director' as const,
+    status: 'active' as const,
+    scopes: [],
+    scope_summary: { business_unit_count: 0 },
+  })
+  return {
+    authenticated: true,
+    user: {
+      id: '11111111-1111-1111-1111-111111111111',
+      username: 'director',
+      email: 'director@example.com',
+      identity_type: 'human',
+    },
+    memberships: [membership('est-1'), membership('est-2')],
+    active_membership: null,
+    pending_onboarding_memberships: [],
+    permission_hints: {
+      chat_available: false,
+      can_create_action_plan: false,
+      can_create_catalog_action_plan: false,
+      can_view_action_plan_catalog: false,
+      can_invite: false,
+      can_manage_runtime_config: false,
+      can_view_team: false,
+      can_manage_organization: false,
+      can_create_establishment: false,
+    },
+  }
+}
+
+async function fillAndFinishWizard() {
+  await screen.findByTestId('draft-onboarding-wizard')
+
+  fireEvent.click(screen.getByRole('button', { name: /Ajouter un pôle/i }))
+  fireEvent.change(screen.getByPlaceholderText(/Le Grand Hôtel Central/i), {
+    target: { value: 'Hôtel Test' },
+  })
+  fireEvent.change(screen.getByPlaceholderText(/Décrivez votre établissement/i), {
+    target: { value: 'Description assez longue pour valider le minimum requis.' },
+  })
+
+  const catalogChip = await screen.findByRole('button', { name: /Restaurant/i })
+  fireEvent.click(catalogChip)
+
+  await waitFor(() => {
+    expect(screen.getByText(/Stock/i)).toBeTruthy()
+  })
+
+  const continueButton = screen.getByRole('button', { name: /Continuer/i })
+  await waitFor(() => {
+    expect((continueButton as HTMLButtonElement).disabled).toBe(false)
+  })
+  fireEvent.click(continueButton)
+
+  await screen.findByRole('heading', { name: /Invitez votre équipe/i })
+  const directorSection = screen.getByText(/Directeur \(obligatoire\)/i).parentElement!
+  const inputs = directorSection.querySelectorAll('input')
+  fireEvent.change(inputs[0]!, { target: { value: 'Ada' } })
+  fireEvent.change(inputs[1]!, { target: { value: 'Lovelace' } })
+  fireEvent.change(inputs[2]!, { target: { value: 'ada@example.com' } })
+
+  const finishButton = screen.getByRole('button', { name: /Terminer/i })
+  await waitFor(() => {
+    expect((finishButton as HTMLButtonElement).disabled).toBe(false)
+  })
+  fireEvent.click(finishButton)
+}
+
 function renderWizard() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -109,6 +201,7 @@ describe('draft onboarding integration', () => {
 
   afterEach(() => {
     cleanup()
+    vi.unstubAllEnvs()
   })
 
   it('supports hydrate → edit → catalog seed → continue → complete → redirect', async () => {
@@ -168,6 +261,21 @@ describe('draft onboarding integration', () => {
       expect(completeMock).toHaveBeenCalled()
       expect(navigate).toHaveBeenCalledWith('/reporting')
     })
+  })
+
+  it('lands native large-viewport complete on the selector, not desktop cross', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    stubLgViewport(true)
+    fetchBootstrapMock.mockResolvedValue(multiMembershipBootstrapWithoutActive())
+
+    renderWizard()
+    await fillAndFinishWizard()
+
+    await waitFor(() => {
+      expect(completeMock).toHaveBeenCalled()
+      expect(navigate).toHaveBeenCalledWith('/select-establishment')
+    })
+    expect(navigate).not.toHaveBeenCalledWith('/cross?period=7d')
   })
 
   it('blocks complete after deleting a pole that removed member scopes', () => {

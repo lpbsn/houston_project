@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { parseAppRoute } from '@/app/app-routes'
 import { isProtectedRoute } from '@/app/terrain-routes'
 import {
   allowsUnauthenticatedAccess,
+  getAuthenticatedLandingPath,
+  isDesktopWebLanding,
   isPublicAuthRoute,
   resolveAuthenticatedLanding,
   routeAllowsMissingActiveMembership,
@@ -73,7 +75,29 @@ const ownerOrgHints = {
   can_create_establishment: true,
 } as const
 
+describe('isDesktopWebLanding', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('is true only for web on a large viewport', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    expect(isDesktopWebLanding(true)).toBe(true)
+    expect(isDesktopWebLanding(false)).toBe(false)
+  })
+
+  it('is false on native regardless of viewport', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    expect(isDesktopWebLanding(true)).toBe(false)
+    expect(isDesktopWebLanding(false)).toBe(false)
+  })
+})
+
 describe('resolveAuthenticatedLanding', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   it('returns organization for owner with an ACTIVE membership selected', () => {
     const active = membership('Nice')
     expect(
@@ -96,6 +120,17 @@ describe('resolveAuthenticatedLanding', () => {
         }),
       ),
     ).toEqual({ kind: 'establishment-selection', path: '/select-establishment' })
+  })
+
+  it('keeps native large-viewport multi-membership landing on the selector', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    const multiOwner = bootstrap({
+      memberships: [membership('Nice', 'est-1'), membership('Cannes', 'est-2')],
+      permission_hints: ownerOrgHints,
+    })
+    expect(
+      getAuthenticatedLandingPath(multiOwner, { isDesktop: isDesktopWebLanding(true) }),
+    ).toBe('/select-establishment')
   })
 
   it('returns cross dashboard for owner with multiple ACTIVE memberships on desktop', () => {
