@@ -11,6 +11,8 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 
 import { useAuth } from '@/app/auth-provider'
+import { LegalConsentSheet } from '@/features/auth/components/legal-consent-sheet'
+import { isTermsAcceptanceRequired } from '@/lib/legal'
 
 import { chatQueryKeys, markConversationSeen } from '../api'
 import {
@@ -19,6 +21,10 @@ import {
   useChatStatusQuery,
 } from '../hooks'
 import { useChatWebSocket } from '../hooks/use-chat-websocket'
+import {
+  asPendingLocalChatMessage,
+  selectLocalMessagesToRetryAfterTermsAccept,
+} from '../lib/chat-terms-retry'
 import { purgeConversationClientState } from '../lib/purge-conversation-client-state'
 import type {
   ChatConnectionStatus,
@@ -74,6 +80,7 @@ export function ChatRealtimeProvider({
     enabled: Boolean(statusQuery.data?.can_access),
   })
   const [localMessages, setLocalMessages] = useState<LocalChatMessage[]>([])
+  const [legalKind, setLegalKind] = useState<'terms' | null>(null)
   const sendMessageRef = useRef<
     (payload: { conversationId: string; clientMessageId: string; body: string }) => boolean
   >(() => false)
@@ -121,10 +128,38 @@ export function ChatRealtimeProvider({
     setLocalMessages((current) =>
       current.map((message) =>
         message.clientMessageId === event.client_message_id
-          ? { ...message, status: 'failed' }
+          ? { ...message, status: 'failed', rejectCode: event.code }
           : message,
       ),
     )
+
+    if (isTermsAcceptanceRequired({ code: event.code })) {
+      setLegalKind('terms')
+    }
+  }, [])
+
+  const handleTermsAccepted = useCallback(() => {
+    setLocalMessages((current) => {
+      const retryIds = new Set(
+        selectLocalMessagesToRetryAfterTermsAccept(current).map(
+          (message) => message.clientMessageId,
+        ),
+      )
+
+      return current.map((message) => {
+        if (!retryIds.has(message.clientMessageId)) {
+          return message
+        }
+
+        const queued = sendMessageRef.current({
+          conversationId: message.conversationId,
+          clientMessageId: message.clientMessageId,
+          body: message.body,
+        })
+
+        return queued ? asPendingLocalChatMessage(message) : { ...message, status: 'failed' }
+      })
+    })
   }, [])
 
   const clearLocalMessagesForConversation = useCallback((conversationId: string) => {
@@ -189,7 +224,7 @@ export function ChatRealtimeProvider({
           body: message.body,
         })
 
-        return queued ? { ...message, status: 'pending' } : message
+        return queued ? asPendingLocalChatMessage(message) : message
       }),
     )
   }, [activeConversationId, establishmentId, queryClient])
@@ -262,7 +297,7 @@ export function ChatRealtimeProvider({
 
       setLocalMessages((current) =>
         current.map((item) =>
-          item.clientMessageId === clientMessageId ? { ...item, status: 'pending' } : item,
+          item.clientMessageId === clientMessageId ? asPendingLocalChatMessage(item) : item,
         ),
       )
 
@@ -275,7 +310,7 @@ export function ChatRealtimeProvider({
       if (!queued) {
         setLocalMessages((current) =>
           current.map((item) =>
-            item.clientMessageId === clientMessageId ? { ...item, status: 'failed' } : item,
+            item.clientMessageId === clientMessageId ? { ...message, status: 'failed' } : item,
           ),
         )
         if (connectionStatus === 'disconnected' || connectionStatus === 'reconnecting') {
@@ -310,7 +345,14 @@ export function ChatRealtimeProvider({
   )
 
   return (
-    <ChatRealtimeContext.Provider value={value}>{children}</ChatRealtimeContext.Provider>
+    <ChatRealtimeContext.Provider value={value}>
+      {children}
+      <LegalConsentSheet
+        kind={legalKind}
+        onClose={() => setLegalKind(null)}
+        onAccepted={handleTermsAccepted}
+      />
+    </ChatRealtimeContext.Provider>
   )
 }
 

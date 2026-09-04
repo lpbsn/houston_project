@@ -1,37 +1,79 @@
+// @vitest-environment jsdom
+
 import { createElement } from 'react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { chatQueryKeys } from '../api'
 import type {
   ChatConversationListItem,
   ChatWsConversationUpdatedEvent,
   ChatWsMessageCreatedEvent,
+  ChatWsMessageRejectedEvent,
+  LocalChatMessage,
 } from '../types'
-import { ChatRealtimeProvider } from './chat-realtime-provider'
+import { ChatRealtimeProvider, useChatRealtime } from './chat-realtime-provider'
 
 const ESTABLISHMENT_ID = 'est-1'
 const VIEWER_MEMBERSHIP_ID = 'mbr-viewer'
 
 let capturedOnMessageCreated: ((event: ChatWsMessageCreatedEvent) => void) | undefined
+let capturedOnMessageRejected: ((event: ChatWsMessageRejectedEvent) => void) | undefined
 let capturedOnConversationUpdated: ((event: ChatWsConversationUpdatedEvent) => void) | undefined
 let capturedOnReconnect: (() => void) | undefined
+const sendMessageMock = vi.fn(() => true)
 
 vi.mock('../hooks/use-chat-websocket', () => ({
   useChatWebSocket: (options: {
     onMessageCreated?: (event: ChatWsMessageCreatedEvent) => void
+    onMessageRejected?: (event: ChatWsMessageRejectedEvent) => void
     onConversationUpdated?: (event: ChatWsConversationUpdatedEvent) => void
     onReconnect?: () => void
   }) => {
     capturedOnMessageCreated = options.onMessageCreated
+    capturedOnMessageRejected = options.onMessageRejected
     capturedOnConversationUpdated = options.onConversationUpdated
     capturedOnReconnect = options.onReconnect
     return {
       connectionStatus: 'connected',
-      sendMessage: () => true,
+      sendMessage: sendMessageMock,
       reconnect: vi.fn(),
     }
+  },
+}))
+
+vi.mock('@/features/auth/components/legal-consent-sheet', () => ({
+  LegalConsentSheet: ({
+    kind,
+    onClose,
+    onAccepted,
+  }: {
+    kind: 'terms' | 'ai' | null
+    onClose: () => void
+    onAccepted: () => void
+  }) => {
+    if (!kind) {
+      return null
+    }
+    return createElement(
+      'div',
+      { 'data-testid': 'legal-consent-sheet', 'data-kind': kind },
+      createElement('button', {
+        type: 'button',
+        'data-testid': 'legal-accept',
+        onClick: () => {
+          onAccepted()
+          onClose()
+        },
+      }),
+      createElement('button', {
+        type: 'button',
+        'data-testid': 'legal-close',
+        onClick: onClose,
+      }),
+    )
   },
 }))
 
@@ -76,11 +118,62 @@ const sampleConversation = (): ChatConversationListItem => ({
   can_delete: false,
 })
 
+function Probe() {
+  const { localMessages, sendChatMessage } = useChatRealtime()
+  return createElement(
+    'div',
+    null,
+    createElement(
+      'button',
+      {
+        type: 'button',
+        onClick: () =>
+          sendChatMessage({
+            conversationId: 'conv-1',
+            body: 'Hello',
+            authorMembershipId: VIEWER_MEMBERSHIP_ID,
+            authorDisplayName: 'Viewer',
+          }),
+      },
+      'send',
+    ),
+    createElement('pre', { 'data-testid': 'local-messages' }, JSON.stringify(localMessages)),
+  )
+}
+
+function readLocalMessages(): LocalChatMessage[] {
+  return JSON.parse(screen.getByTestId('local-messages').textContent ?? '[]') as LocalChatMessage[]
+}
+
+function renderProviderWithProbe() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  return render(
+    createElement(
+      QueryClientProvider,
+      { client: queryClient },
+      createElement(
+        ChatRealtimeProvider,
+        { establishmentId: ESTABLISHMENT_ID, activeConversationId: 'conv-1' },
+        createElement(Probe),
+      ),
+    ),
+  )
+}
+
 describe('ChatRealtimeProvider', () => {
   beforeEach(() => {
     capturedOnMessageCreated = undefined
+    capturedOnMessageRejected = undefined
     capturedOnConversationUpdated = undefined
     capturedOnReconnect = undefined
+    sendMessageMock.mockReset()
+    sendMessageMock.mockReturnValue(true)
+  })
+
+  afterEach(() => {
+    cleanup()
   })
 
   it('patches conversations cache on message.created', () => {
@@ -282,5 +375,122 @@ describe('ChatRealtimeProvider', () => {
     expect(invalidateSpy).toHaveBeenNthCalledWith(2, {
       queryKey: chatQueryKeys.conversation(ESTABLISHMENT_ID, conversationId),
     })
+  })
+
+  it('opens terms consent on terms_acceptance_required and retries only those failed messages', () => {
+    renderProviderWithProbe()
+    fireEvent.click(screen.getByText('send'))
+    fireEvent.click(screen.getByText('send'))
+
+    const [termsMessage, validationMessage] = readLocalMessages()
+    expect(termsMessage).toBeDefined()
+    expect(validationMessage).toBeDefined()
+
+    sendMessageMock.mockClear()
+
+    act(() => {
+      capturedOnMessageRejected?.({
+        type: 'message.rejected',
+        client_message_id: termsMessage.clientMessageId,
+        code: 'terms_acceptance_required',
+        detail: 'Accept the current terms of use.',
+      })
+      capturedOnMessageRejected?.({
+        type: 'message.rejected',
+        client_message_id: validationMessage.clientMessageId,
+        code: 'validation_error',
+        detail: 'Invalid message.send payload.',
+      })
+    })
+
+    const afterReject = readLocalMessages()
+    expect(afterReject).toEqual([
+      expect.objectContaining({
+        clientMessageId: termsMessage.clientMessageId,
+        status: 'failed',
+        rejectCode: 'terms_acceptance_required',
+      }),
+      expect.objectContaining({
+        clientMessageId: validationMessage.clientMessageId,
+        status: 'failed',
+        rejectCode: 'validation_error',
+      }),
+    ])
+    expect(screen.getByTestId('legal-consent-sheet').getAttribute('data-kind')).toBe('terms')
+    expect(sendMessageMock).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByTestId('legal-accept'))
+
+    expect(sendMessageMock).toHaveBeenCalledTimes(1)
+    expect(sendMessageMock).toHaveBeenCalledWith({
+      conversationId: 'conv-1',
+      clientMessageId: termsMessage.clientMessageId,
+      body: 'Hello',
+    })
+    expect(readLocalMessages()).toEqual([
+      expect.objectContaining({
+        clientMessageId: termsMessage.clientMessageId,
+        status: 'pending',
+      }),
+      expect.objectContaining({
+        clientMessageId: validationMessage.clientMessageId,
+        status: 'failed',
+        rejectCode: 'validation_error',
+      }),
+    ])
+    expect(readLocalMessages()[0]?.rejectCode).toBeUndefined()
+    expect(screen.queryByTestId('legal-consent-sheet')).toBeNull()
+  })
+
+  it('does not open terms consent for permission_denied', () => {
+    renderProviderWithProbe()
+    fireEvent.click(screen.getByText('send'))
+
+    const [message] = readLocalMessages()
+    sendMessageMock.mockClear()
+
+    act(() => {
+      capturedOnMessageRejected?.({
+        type: 'message.rejected',
+        client_message_id: message.clientMessageId,
+        code: 'permission_denied',
+        detail: 'You do not have permission to send messages in this conversation.',
+      })
+    })
+
+    expect(readLocalMessages()[0]).toEqual(
+      expect.objectContaining({
+        status: 'failed',
+        rejectCode: 'permission_denied',
+      }),
+    )
+    expect(screen.queryByTestId('legal-consent-sheet')).toBeNull()
+    expect(sendMessageMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps terms-failed messages after dismissing consent', () => {
+    renderProviderWithProbe()
+    fireEvent.click(screen.getByText('send'))
+
+    const [message] = readLocalMessages()
+    act(() => {
+      capturedOnMessageRejected?.({
+        type: 'message.rejected',
+        client_message_id: message.clientMessageId,
+        code: 'terms_acceptance_required',
+        detail: 'Accept the current terms of use.',
+      })
+    })
+
+    fireEvent.click(screen.getByTestId('legal-close'))
+
+    expect(screen.queryByTestId('legal-consent-sheet')).toBeNull()
+    expect(readLocalMessages()[0]).toEqual(
+      expect.objectContaining({
+        clientMessageId: message.clientMessageId,
+        status: 'failed',
+        rejectCode: 'terms_acceptance_required',
+      }),
+    )
   })
 })

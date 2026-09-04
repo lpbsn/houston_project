@@ -160,3 +160,16 @@ export function resolveSelectEstablishmentHintTarget(
   }
   return pending
 }
+
+export function resolveSelectEstablishmentResumeHref(
+  pending: AppOpenTarget | null,
+  selectedEstablishmentId: string,
+): string {
+  if (!pending) {
+    return '/reporting'
+  }
+  if (pending.establishmentId && pending.establishmentId !== selectedEstablishmentId) {
+    return '/reporting'
+  }
+  return pending.href
+}
