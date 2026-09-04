@@ -160,6 +160,11 @@ vi.mock('@/features/chat/lib/apply-chat-availability-cache', () => ({
   purgeEstablishmentChatOperationalQueries: vi.fn(),
 }))
 
+vi.mock('@/features/auth/pages/select-establishment-page', () => ({
+  SelectEstablishmentPage: () =>
+    createElement('div', { 'data-testid': 'select-establishment-page' }, 'select-establishment'),
+}))
+
 vi.mock('@/features/auth/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/features/auth/api')>()
   return {
@@ -290,6 +295,7 @@ afterEach(() => {
     switchEstablishment.mockResolvedValue(undefined)
     window.history.replaceState(null, '', '/')
     Reflect.deleteProperty(window, 'matchMedia')
+    vi.unstubAllEnvs()
   }
 })
 
@@ -874,5 +880,147 @@ describe('App terrain active membership routing', () => {
       )
     })
     expect(switchEstablishment).not.toHaveBeenCalled()
+  })
+
+  it('redirects operational desktop web users away from the establishment selector', async () => {
+    stubLgViewport(true)
+    const active = membership('membership-1', 'est-1', 'owner')
+    const bootstrap = bootstrapWithoutActiveMembership({
+      memberships: [active],
+      active_membership: active,
+      permission_hints: {
+        chat_available: false,
+        can_create_action_plan: false,
+        can_create_catalog_action_plan: false,
+        can_view_action_plan_catalog: false,
+        can_invite: false,
+        can_manage_runtime_config: false,
+        can_view_team: false,
+        can_manage_organization: true,
+        can_create_establishment: true,
+      },
+    })
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = { kind: 'static', path: '/select-establishment' }
+
+    render(createElement(App))
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith('/organization', { replace: true })
+    })
+    expect(switchEstablishment).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the desktop landing when a selector hint cannot be opened', async () => {
+    stubLgViewport(true)
+    switchEstablishment.mockRejectedValue(new Error('cannot open'))
+    window.history.replaceState(
+      null,
+      '',
+      '/select-establishment?next=/signals/s1&establishment_id=est-2',
+    )
+    const bootstrap = bootstrapWithoutActiveMembership()
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = false
+    routeState.route = { kind: 'static', path: '/select-establishment' }
+
+    render(createElement(App))
+
+    await waitFor(() => {
+      expect(switchEstablishment).toHaveBeenCalledWith({ establishment_id: 'est-2' })
+      expect(navigate).toHaveBeenCalledWith('/cross?period=7d', { replace: true })
+    })
+  })
+
+  it('keeps operational mobile users on the selector even with an establishment hint', async () => {
+    stubLgViewport(false)
+    window.history.replaceState(
+      null,
+      '',
+      '/select-establishment?next=/signals/s1&establishment_id=est-2',
+    )
+    const bootstrap = bootstrapWithSelectedEstablishment('est-1')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = { kind: 'static', path: '/select-establishment' }
+
+    render(createElement(App))
+
+    expect(await screen.findByTestId('select-establishment-page')).toBeTruthy()
+    expect(switchEstablishment).not.toHaveBeenCalled()
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it('keeps operational mobile users on the selector without a hint', async () => {
+    stubLgViewport(false)
+    const bootstrap = bootstrapWithSelectedEstablishment('est-1')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = { kind: 'static', path: '/select-establishment' }
+
+    render(createElement(App))
+
+    expect(await screen.findByTestId('select-establishment-page')).toBeTruthy()
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it('does not auto-open a hinted establishment for operational native users on a large viewport', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    stubLgViewport(true)
+    window.history.replaceState(
+      null,
+      '',
+      '/select-establishment?next=/signals/s1&establishment_id=est-2',
+    )
+    const bootstrap = bootstrapWithSelectedEstablishment('est-1')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = { kind: 'static', path: '/select-establishment' }
+
+    render(createElement(App))
+
+    expect(await screen.findByTestId('select-establishment-page')).toBeTruthy()
+    expect(switchEstablishment).not.toHaveBeenCalled()
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it('keeps native large-viewport users on the selector without operational access', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    stubLgViewport(true)
+    const bootstrap = bootstrapWithoutActiveMembership()
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = false
+    routeState.route = { kind: 'static', path: '/select-establishment' }
+
+    render(createElement(App))
+
+    expect(await screen.findByTestId('select-establishment-page')).toBeTruthy()
+    expect(navigate).not.toHaveBeenCalledWith('/cross?period=7d', { replace: true })
+    expect(switchEstablishment).not.toHaveBeenCalled()
+  })
+
+  it('lands authenticated native login on the mobile selector even on a large viewport', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    stubLgViewport(true)
+    window.history.replaceState(null, '', '/login')
+    const bootstrap = bootstrapWithoutActiveMembership()
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = false
+    routeState.route = { kind: 'static', path: '/login' }
+
+    render(createElement(App))
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith('/select-establishment', { replace: true })
+    })
+    expect(navigate).not.toHaveBeenCalledWith('/cross?period=7d', { replace: true })
   })
 })

@@ -103,6 +103,7 @@ import {
   peekPendingNativeDeepLink,
 } from '@/lib/native-deep-link-session'
 import { setNativeSystemBackAuthGetter } from '@/lib/native-system-back'
+import { getAppRuntime } from '@/lib/runtime'
 
 function establishmentIdRequiringSwitch(route: AppRoute): string | null {
   if (route.kind === 'scoped-terrain' && route.scope.type === 'establishment') {
@@ -132,6 +133,7 @@ function App() {
   const auth = useAuth()
   const { route, navigate, search: locationSearch } = useAppRoute()
   const isLgViewport = useLgViewport()
+  const isDesktopWeb = getAppRuntime() === 'web' && isLgViewport
   const applyingOpenRef = useRef(false)
 
   const motionProps = shouldReduceMotion
@@ -174,7 +176,7 @@ function App() {
     }
 
     const landingPath = getAuthenticatedLandingPath(auth.bootstrap, {
-      isDesktop: isLgViewport,
+      isDesktop: isDesktopWeb,
     })
     const openSession = {
       getActiveEstablishmentId: () =>
@@ -218,7 +220,7 @@ function App() {
           return
         }
 
-        if (isLgViewport) {
+        if (isDesktopWeb) {
           if (landingPath) {
             navigate(landingPath, { replace: true })
           }
@@ -257,14 +259,14 @@ function App() {
         href: `${serializeAppRoute(route)}${locationSearch}`,
         establishmentId: routeEstablishmentId,
       }
-      if (isLgViewport) {
+      if (isDesktopWeb) {
         if (applyingOpenRef.current) {
           return
         }
         applyingOpenRef.current = true
         void applyAppOpenTarget(target, openSession)
           .catch(() => {
-            const fallback = landingPath ?? (isLgViewport ? null : '/select-establishment')
+            const fallback = landingPath ?? (isDesktopWeb ? null : '/select-establishment')
             if (fallback) {
               navigate(fallback, { replace: true })
             }
@@ -276,6 +278,30 @@ function App() {
       }
 
       navigate(buildSelectEstablishmentRedirectHref(target), { replace: true })
+      return
+    }
+
+    if (isDesktopWeb && route.kind === 'static' && route.path === '/select-establishment') {
+      const hinted = resolveSelectEstablishmentHintTarget(locationSearch, auth.memberships)
+      if (hinted) {
+        if (applyingOpenRef.current) {
+          return
+        }
+        applyingOpenRef.current = true
+        void applyAppOpenTarget(hinted, openSession)
+          .catch(() => {
+            if (landingPath) {
+              navigate(landingPath, { replace: true })
+            }
+          })
+          .finally(() => {
+            applyingOpenRef.current = false
+          })
+        return
+      }
+      if (landingPath) {
+        navigate(landingPath, { replace: true })
+      }
       return
     }
 
@@ -297,10 +323,6 @@ function App() {
           .finally(() => {
             applyingOpenRef.current = false
           })
-        return
-      }
-      if (isLgViewport && landingPath) {
-        navigate(landingPath, { replace: true })
         return
       }
     }
@@ -325,7 +347,7 @@ function App() {
         openSession,
       )
         .catch(() => {
-          const fallback = landingPath ?? (isLgViewport ? null : '/select-establishment')
+          const fallback = landingPath ?? (isDesktopWeb ? null : '/select-establishment')
           if (fallback) {
             navigate(fallback, { replace: true })
           }
@@ -354,6 +376,7 @@ function App() {
     auth.isReady,
     auth.memberships,
     auth.pendingOnboardingMemberships,
+    isDesktopWeb,
     isLgViewport,
     locationSearch,
     navigate,
@@ -436,10 +459,10 @@ function App() {
         now: analyticsNow,
         hasOperationalAccess: auth.hasOperationalAccess,
         authenticatedLandingPath: getAuthenticatedLandingPath(auth.bootstrap, {
-          isDesktop: isLgViewport,
+          isDesktop: isDesktopWeb,
         }),
       }),
-    [analyticsNow, auth.bootstrap, auth.hasOperationalAccess, isLgViewport, locationSearch, route],
+    [analyticsNow, auth.bootstrap, auth.hasOperationalAccess, isDesktopWeb, locationSearch, route],
   )
 
   useEffect(() => {
@@ -520,7 +543,7 @@ function App() {
 
   const routeContent = useMemo(() => {
     const isDesktopEstablishmentSelector =
-      isLgViewport && route.kind === 'static' && route.path === '/select-establishment'
+      isDesktopWeb && route.kind === 'static' && route.path === '/select-establishment'
     if (
       auth.isReady &&
       auth.isAuthenticated &&
@@ -543,7 +566,7 @@ function App() {
             const bootstrap =
               queryClient.getQueryData<BootstrapResponse>(bootstrapQueryKey) ?? auth.bootstrap
             navigate(
-              getAuthenticatedLandingPath(bootstrap, { isDesktop: isLgViewport }) ??
+              getAuthenticatedLandingPath(bootstrap, { isDesktop: isDesktopWeb }) ??
                 '/pending-onboarding',
               { replace: true },
             )
@@ -557,7 +580,7 @@ function App() {
         ? '/login'
         : auth.hasOperationalAccess
           ? '/reporting'
-          : (getAuthenticatedLandingPath(auth.bootstrap, { isDesktop: isLgViewport }) ?? '/login')
+          : (getAuthenticatedLandingPath(auth.bootstrap, { isDesktop: isDesktopWeb }) ?? '/login')
       const backLabel = !auth.isAuthenticated ? 'Retour à la connexion' : "Retour à l'accueil"
 
       return (
@@ -865,7 +888,7 @@ function App() {
     handleSignOut,
     analyticsPatternDetailState,
     analyticsSignalReturnContext,
-    isLgViewport,
+    isDesktopWeb,
     navigate,
     route,
   ])
