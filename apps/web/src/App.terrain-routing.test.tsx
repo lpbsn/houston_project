@@ -579,7 +579,7 @@ describe('App terrain active membership routing', () => {
     expect(navigate).not.toHaveBeenCalledWith('/cross?period=7d', { replace: true })
   })
 
-  it('carries a membership-required login next without a hint to the selector on a large viewport', async () => {
+  it('lands a membership-required login next without a hint on the desktop landing', async () => {
     stubLgViewport(true)
     window.history.replaceState(
       null,
@@ -595,15 +595,13 @@ describe('App terrain active membership routing', () => {
     render(createElement(App))
 
     await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith(
-        buildSelectEstablishmentRedirectHref({
-          href: '/signals/11111111-1111-4111-8111-111111111111',
-        }),
-        { replace: true },
-      )
+      expect(navigate).toHaveBeenCalledWith('/cross?period=7d', { replace: true })
     })
     expect(switchEstablishment).not.toHaveBeenCalled()
-    expect(navigate).not.toHaveBeenCalledWith('/cross?period=7d', { replace: true })
+    expect(navigate).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^\/select-establishment/),
+      expect.anything(),
+    )
   })
 
   it('opens a cross login next without a hint instead of the selector', async () => {
@@ -718,6 +716,22 @@ describe('App terrain active membership routing', () => {
       expect.stringMatching(/^\/select-establishment/),
       expect.anything(),
     )
+  })
+
+  it('redirects desktop users away from the establishment selector', async () => {
+    stubLgViewport(true)
+    const bootstrap = bootstrapWithoutActiveMembership()
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = false
+    routeState.route = { kind: 'static', path: '/select-establishment' }
+
+    render(createElement(App))
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith('/cross?period=7d', { replace: true })
+    })
+    expect(switchEstablishment).not.toHaveBeenCalled()
   })
 
   it('silently switches on desktop when a scoped route differs from the session', async () => {

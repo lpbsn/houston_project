@@ -160,7 +160,7 @@ describe('resolveAuthenticatedLanding', () => {
     ).toEqual({ kind: 'cross', path: '/cross?period=7d' })
   })
 
-  it('returns select-establishment on desktop when only one establishment is cross-eligible', () => {
+  it('returns analytics hub on desktop when only one establishment is cross-eligible', () => {
     expect(
       resolveAuthenticatedLanding(
         bootstrap({
@@ -171,21 +171,21 @@ describe('resolveAuthenticatedLanding', () => {
         }),
         { isDesktop: true },
       ),
-    ).toEqual({ kind: 'establishment-selection', path: '/select-establishment' })
+    ).toEqual({ kind: 'analytics', path: '/analytics' })
   })
 
-  it('returns select-establishment on desktop for staff-only multi memberships', () => {
-    expect(
-      resolveAuthenticatedLanding(
-        bootstrap({
-          memberships: [
-            { ...membership('Nice', 'est-1'), role: 'staff' as const },
-            { ...membership('Cannes', 'est-2'), role: 'staff' as const },
-          ],
-        }),
-        { isDesktop: true },
-      ),
-    ).toEqual({ kind: 'establishment-selection', path: '/select-establishment' })
+  it('does not return the selector on desktop for staff-only multi memberships', () => {
+    const landing = resolveAuthenticatedLanding(
+      bootstrap({
+        memberships: [
+          { ...membership('Nice', 'est-1'), role: 'staff' as const },
+          { ...membership('Cannes', 'est-2'), role: 'staff' as const },
+        ],
+      }),
+      { isDesktop: true },
+    )
+    expect(landing.path).not.toBe('/select-establishment')
+    expect(landing).toEqual({ kind: 'empty', path: '/no-establishment' })
   })
 
   it('returns reporting for non-owner with ACTIVE membership selected', () => {

@@ -208,11 +208,20 @@ function App() {
             openSession,
           )
             .catch(() => {
-              navigate(landingPath, { replace: true })
+              if (landingPath) {
+                navigate(landingPath, { replace: true })
+              }
             })
             .finally(() => {
               applyingOpenRef.current = false
             })
+          return
+        }
+
+        if (isLgViewport) {
+          if (landingPath) {
+            navigate(landingPath, { replace: true })
+          }
           return
         }
 
@@ -255,7 +264,10 @@ function App() {
         applyingOpenRef.current = true
         void applyAppOpenTarget(target, openSession)
           .catch(() => {
-            navigate(landingPath ?? '/select-establishment', { replace: true })
+            const fallback = landingPath ?? (isLgViewport ? null : '/select-establishment')
+            if (fallback) {
+              navigate(fallback, { replace: true })
+            }
           })
           .finally(() => {
             applyingOpenRef.current = false
@@ -287,6 +299,10 @@ function App() {
           })
         return
       }
+      if (isLgViewport && landingPath) {
+        navigate(landingPath, { replace: true })
+        return
+      }
     }
 
     const switchEstablishmentId = establishmentIdRequiringSwitch(route)
@@ -309,7 +325,10 @@ function App() {
         openSession,
       )
         .catch(() => {
-          navigate(landingPath ?? '/select-establishment', { replace: true })
+          const fallback = landingPath ?? (isLgViewport ? null : '/select-establishment')
+          if (fallback) {
+            navigate(fallback, { replace: true })
+          }
         })
         .finally(() => {
           applyingOpenRef.current = false
@@ -416,9 +435,11 @@ function App() {
         search: locationSearch,
         now: analyticsNow,
         hasOperationalAccess: auth.hasOperationalAccess,
-        authenticatedLandingPath: getAuthenticatedLandingPath(auth.bootstrap),
+        authenticatedLandingPath: getAuthenticatedLandingPath(auth.bootstrap, {
+          isDesktop: isLgViewport,
+        }),
       }),
-    [analyticsNow, auth.bootstrap, auth.hasOperationalAccess, locationSearch, route],
+    [analyticsNow, auth.bootstrap, auth.hasOperationalAccess, isLgViewport, locationSearch, route],
   )
 
   useEffect(() => {
@@ -498,11 +519,14 @@ function App() {
   ])
 
   const routeContent = useMemo(() => {
+    const isDesktopEstablishmentSelector =
+      isLgViewport && route.kind === 'static' && route.path === '/select-establishment'
     if (
       auth.isReady &&
       auth.isAuthenticated &&
-      requiresActiveMembership(route) &&
-      (establishmentRouteSessionMismatch || !auth.hasOperationalAccess)
+      (isDesktopEstablishmentSelector ||
+        (requiresActiveMembership(route) &&
+          (establishmentRouteSessionMismatch || !auth.hasOperationalAccess)))
     ) {
       return (
         <div className="flex min-h-[16rem] items-center justify-center text-sm text-muted-foreground">
@@ -518,9 +542,11 @@ function App() {
           onAccepted={() => {
             const bootstrap =
               queryClient.getQueryData<BootstrapResponse>(bootstrapQueryKey) ?? auth.bootstrap
-            navigate(getAuthenticatedLandingPath(bootstrap) ?? '/pending-onboarding', {
-              replace: true,
-            })
+            navigate(
+              getAuthenticatedLandingPath(bootstrap, { isDesktop: isLgViewport }) ??
+                '/pending-onboarding',
+              { replace: true },
+            )
           }}
         />
       )
@@ -531,7 +557,7 @@ function App() {
         ? '/login'
         : auth.hasOperationalAccess
           ? '/reporting'
-          : (getAuthenticatedLandingPath(auth.bootstrap) ?? '/login')
+          : (getAuthenticatedLandingPath(auth.bootstrap, { isDesktop: isLgViewport }) ?? '/login')
       const backLabel = !auth.isAuthenticated ? 'Retour à la connexion' : "Retour à l'accueil"
 
       return (
@@ -839,6 +865,7 @@ function App() {
     handleSignOut,
     analyticsPatternDetailState,
     analyticsSignalReturnContext,
+    isLgViewport,
     navigate,
     route,
   ])

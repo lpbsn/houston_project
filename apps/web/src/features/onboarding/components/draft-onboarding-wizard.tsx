@@ -12,6 +12,7 @@ import { useQueryClient } from '@tanstack/react-query'
 
 import { bootstrapQueryKey, fetchBootstrap } from '@/features/auth/api'
 import { getAuthenticatedLandingPath } from '@/features/auth/lib/authenticated-landing'
+import { useLgViewport } from '@/lib/lg-viewport'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -786,6 +787,7 @@ function TeamStepView({
 
 export function DraftOnboardingWizard({ sessionId, onNavigate }: DraftOnboardingWizardProps) {
   const queryClient = useQueryClient()
+  const isLgViewport = useLgViewport()
   const draftQuery = useOnboardingDraft(sessionId)
   const catalogQuery = useCatalogBusinessUnitChips()
   const completeMutation = useCompleteOnboardingSession(sessionId)
@@ -911,7 +913,8 @@ export function DraftOnboardingWizard({ sessionId, onNavigate }: DraftOnboarding
         queryKey: bootstrapQueryKey,
         queryFn: fetchBootstrap,
       })
-      const landing = getAuthenticatedLandingPath(bootstrap) ?? '/reporting'
+      const landing =
+        getAuthenticatedLandingPath(bootstrap, { isDesktop: isLgViewport }) ?? '/reporting'
       onNavigate?.(landing)
     } catch (error) {
       setNavError(getCompleteErrorMessage(error, 'Impossible de terminer l’onboarding.'))
