@@ -1,10 +1,12 @@
 # Store listing assets
 
-Generated from the Spore mark [`apps/web/src/assets/brand/spore-icon-source.png`](../../../apps/web/src/assets/brand/spore-icon-source.png) (stippled ring) on cream `#F5F0E8`, matching the web favicon. Regenerate native + these files with:
+Generated from the Spore mark [`apps/web/src/assets/brand/spore-icon-source.png`](../../../apps/web/src/assets/brand/spore-icon-source.png) (stippled ring) on cream `#F5F0E8`, matching the web favicon. Regenerate these listing intermediates (and iOS xcassets) with:
 
 ```bash
 apps/web/scripts/generate-store-brand-assets.sh
 ```
+
+That invocation does not write Android. Android launcher/splash: `apps/web/scripts/generate-store-brand-assets.sh --android` — see [`apps/web/resources/README.md`](../../../apps/web/resources/README.md).
 
 | File | Use |
 |------|-----|
