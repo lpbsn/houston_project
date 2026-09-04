@@ -117,6 +117,16 @@ function establishmentIdRequiringSwitch(route: AppRoute): string | null {
   return null
 }
 
+function hasActiveMembershipForEstablishment(
+  memberships: ReadonlyArray<{ status: string; establishment_id: string }>,
+  establishmentId: string,
+): boolean {
+  return memberships.some(
+    (membership) =>
+      membership.status === 'active' && membership.establishment_id === establishmentId,
+  )
+}
+
 function App() {
   const shouldReduceMotion = useReducedMotion()
   const auth = useAuth()
@@ -225,6 +235,38 @@ function App() {
       }
     }
 
+    const routeEstablishmentId = establishmentIdRequiringSwitch(route)
+    const sessionEstablishmentId =
+      auth.bootstrap.active_membership?.establishment_id ?? null
+    if (
+      auth.hasOperationalAccess &&
+      routeEstablishmentId &&
+      sessionEstablishmentId !== routeEstablishmentId &&
+      hasActiveMembershipForEstablishment(auth.memberships, routeEstablishmentId)
+    ) {
+      const target = {
+        href: `${serializeAppRoute(route)}${locationSearch}`,
+        establishmentId: routeEstablishmentId,
+      }
+      if (isLgViewport) {
+        if (applyingOpenRef.current) {
+          return
+        }
+        applyingOpenRef.current = true
+        void applyAppOpenTarget(target, openSession)
+          .catch(() => {
+            navigate(landingPath ?? '/select-establishment', { replace: true })
+          })
+          .finally(() => {
+            applyingOpenRef.current = false
+          })
+        return
+      }
+
+      navigate(buildSelectEstablishmentRedirectHref(target), { replace: true })
+      return
+    }
+
     if (auth.hasOperationalAccess) {
       return
     }
@@ -321,6 +363,13 @@ function App() {
   }, [auth, navigate])
 
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
+  const routeEstablishmentId = establishmentIdRequiringSwitch(route)
+  const establishmentRouteSessionMismatch = Boolean(
+    routeEstablishmentId &&
+      establishmentId &&
+      routeEstablishmentId !== establishmentId &&
+      hasActiveMembershipForEstablishment(auth.memberships, routeEstablishmentId),
+  )
   const permissionHints = getBootstrapPermissionHints(auth.bootstrap)
   const isChatRoute =
     route.kind === 'chat-conversation-detail' ||
@@ -333,7 +382,7 @@ function App() {
   })
   const showChatNav = chatAvailability.isNavVisible
   const chatConversationsQuery = useChatConversationsQuery(establishmentId, {
-    enabled: showChatNav,
+    enabled: showChatNav && !establishmentRouteSessionMismatch,
   })
   const chatHasUnread = (chatConversationsQuery.data?.items ?? []).some((item) => item.unread)
 
@@ -427,6 +476,9 @@ function App() {
   ])
 
   useEffect(() => {
+    if (establishmentRouteSessionMismatch) {
+      return
+    }
     if (
       !shouldRedirectFromUnavailableChat({
         isChatRoute,
@@ -440,6 +492,7 @@ function App() {
   }, [
     chatAvailability.isRuntimeAvailable,
     chatAvailability.statusResolved,
+    establishmentRouteSessionMismatch,
     isChatRoute,
     navigate,
   ])
@@ -448,8 +501,8 @@ function App() {
     if (
       auth.isReady &&
       auth.isAuthenticated &&
-      !auth.hasOperationalAccess &&
-      requiresActiveMembership(route)
+      requiresActiveMembership(route) &&
+      (establishmentRouteSessionMismatch || !auth.hasOperationalAccess)
     ) {
       return (
         <div className="flex min-h-[16rem] items-center justify-center text-sm text-muted-foreground">
@@ -782,6 +835,7 @@ function App() {
     auth.memberships,
     auth.pendingOnboardingMemberships,
     establishmentId,
+    establishmentRouteSessionMismatch,
     handleSignOut,
     analyticsPatternDetailState,
     analyticsSignalReturnContext,
@@ -976,7 +1030,12 @@ function App() {
     const realtimeMembershipId =
       fromList ?? (active?.establishment_id === realtimeEstablishmentId ? active.id : null) ?? null
 
-    if (!auth.isAuthenticated || !realtimeEstablishmentId || !auth.hasOperationalAccess) {
+    if (
+      !auth.isAuthenticated ||
+      !realtimeEstablishmentId ||
+      !auth.hasOperationalAccess ||
+      establishmentRouteSessionMismatch
+    ) {
       return terrainShell
     }
 
@@ -995,7 +1054,7 @@ function App() {
   }
 
   const wrapTerrainWithChatRealtime = (terrainShell: ReactNode) => {
-    if (!showChatNav && !isChatRoute) {
+    if (establishmentRouteSessionMismatch || (!showChatNav && !isChatRoute)) {
       return terrainShell
     }
 

@@ -249,6 +249,16 @@ function bootstrapWithActiveMembership(): BootstrapResponse {
   }
 }
 
+function bootstrapWithSelectedEstablishment(establishmentId: string): BootstrapResponse {
+  const memberships = [membership('membership-1', 'est-1'), membership('membership-2', 'est-2')]
+  const active =
+    memberships.find((item) => item.establishment_id === establishmentId) ?? memberships[0]
+  return bootstrapWithoutActiveMembership({
+    memberships,
+    active_membership: active,
+  })
+}
+
 function stubLgViewport(matches: boolean) {
   Object.defineProperty(window, 'matchMedia', {
     configurable: true,
@@ -687,5 +697,168 @@ describe('App terrain active membership routing', () => {
     await waitFor(() => {
       expect(switchEstablishment).toHaveBeenCalledWith({ establishment_id: 'est-2' })
     })
+  })
+
+  it('lands desktop cross users without a session on the cross dashboard', async () => {
+    stubLgViewport(true)
+    window.history.replaceState(null, '', '/login')
+    const bootstrap = bootstrapWithoutActiveMembership()
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = false
+    routeState.route = { kind: 'static', path: '/login' }
+
+    render(createElement(App))
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith('/cross?period=7d', { replace: true })
+    })
+    expect(switchEstablishment).not.toHaveBeenCalled()
+    expect(navigate).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^\/select-establishment/),
+      expect.anything(),
+    )
+  })
+
+  it('silently switches on desktop when a scoped route differs from the session', async () => {
+    stubLgViewport(true)
+    const bootstrap = bootstrapWithSelectedEstablishment('est-1')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: 'est-2' },
+      page: 'chat',
+    }
+
+    render(createElement(App))
+
+    await waitFor(() => {
+      expect(switchEstablishment).toHaveBeenCalledWith({ establishment_id: 'est-2' })
+    })
+    expect(navigate).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^\/select-establishment/),
+      expect.anything(),
+    )
+  })
+
+  it('silently switches on desktop for a scoped signals hub that differs from the session', async () => {
+    stubLgViewport(true)
+    const bootstrap = bootstrapWithSelectedEstablishment('est-1')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: 'est-2' },
+      page: 'signals',
+    }
+
+    render(createElement(App))
+
+    await waitFor(() => {
+      expect(switchEstablishment).toHaveBeenCalledWith({ establishment_id: 'est-2' })
+    })
+    expect(navigate).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^\/select-establishment/),
+      expect.anything(),
+    )
+  })
+
+  it('does not switch when the scoped route already matches the session', async () => {
+    stubLgViewport(true)
+    const bootstrap = bootstrapWithSelectedEstablishment('est-2')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: 'est-2' },
+      page: 'signals',
+    }
+
+    render(createElement(App))
+
+    expect(switchEstablishment).not.toHaveBeenCalled()
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it('does not switch on a session-scoped chat route', async () => {
+    stubLgViewport(true)
+    const bootstrap = bootstrapWithSelectedEstablishment('est-1')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = { kind: 'static', path: '/chat' }
+
+    render(createElement(App))
+
+    expect(switchEstablishment).not.toHaveBeenCalled()
+  })
+
+  it('does not switch on a cross route', async () => {
+    stubLgViewport(true)
+    const bootstrap = bootstrapWithSelectedEstablishment('est-1')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'cross' },
+      page: 'signals',
+    }
+
+    render(createElement(App))
+
+    expect(switchEstablishment).not.toHaveBeenCalled()
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it('does not switch a scoped route the user cannot join', async () => {
+    stubLgViewport(true)
+    const bootstrap = bootstrapWithSelectedEstablishment('est-1')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: 'est-unknown' },
+      page: 'signals',
+    }
+
+    render(createElement(App))
+
+    expect(switchEstablishment).not.toHaveBeenCalled()
+    expect(navigate).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^\/select-establishment/),
+      expect.anything(),
+    )
+  })
+
+  it('sends a mobile scoped mismatch to the selector without switching', async () => {
+    stubLgViewport(false)
+    const bootstrap = bootstrapWithSelectedEstablishment('est-1')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: 'est-2' },
+      page: 'chat',
+    }
+
+    render(createElement(App))
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith(
+        buildSelectEstablishmentRedirectHref({
+          href: '/e/est-2/chat',
+          establishmentId: 'est-2',
+        }),
+        { replace: true },
+      )
+    })
+    expect(switchEstablishment).not.toHaveBeenCalled()
   })
 })

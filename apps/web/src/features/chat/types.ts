@@ -29,6 +29,7 @@ export type LocalChatMessage = {
   createdAt: string
   authorMembershipId: string
   authorDisplayName: string
+  rejectCode?: string
 }
 
 export type ChatWsMessageCreatedEvent = {

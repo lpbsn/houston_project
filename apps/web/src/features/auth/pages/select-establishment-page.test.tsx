@@ -158,4 +158,34 @@ describe('SelectEstablishmentPage', () => {
       expect(onNavigate).toHaveBeenCalledWith('/signals/s1')
     })
   })
+
+  it('resumes a hinted establishment destination after selecting that establishment', async () => {
+    mockSearch =
+      '?next=%2Fe%2F11111111-1111-4111-8111-111111111111%2Fchat&establishment_id=est-2'
+    switchEstablishment.mockResolvedValueOnce({})
+
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: /Brasserie Metz/i }))
+
+    await waitFor(() => {
+      expect(onNavigate).toHaveBeenCalledWith(
+        '/e/11111111-1111-4111-8111-111111111111/chat',
+      )
+    })
+  })
+
+  it('navigates to reporting when the selected establishment differs from the hinted dest', async () => {
+    mockSearch =
+      '?next=%2Fe%2F11111111-1111-4111-8111-111111111111%2Fchat&establishment_id=est-2'
+    switchEstablishment.mockResolvedValueOnce({})
+
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: /Le Palais Nancy/i }))
+
+    await waitFor(() => {
+      expect(onNavigate).toHaveBeenCalledWith('/reporting')
+    })
+  })
 })

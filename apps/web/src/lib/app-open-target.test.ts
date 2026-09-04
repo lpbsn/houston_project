@@ -12,6 +12,7 @@ import {
   parseExternalAppUrl,
   parsePendingAppOpenFromSearch,
   resolveSelectEstablishmentHintTarget,
+  resolveSelectEstablishmentResumeHref,
 } from './app-open-target'
 
 const PUBLIC_ORIGIN = 'https://app.example.test'
@@ -158,5 +159,32 @@ describe('resolveSelectEstablishmentHintTarget', () => {
     expect(
       resolveSelectEstablishmentHintTarget('?next=/signals/s1&establishment_id=est-9', memberships),
     ).toBeNull()
+  })
+})
+
+describe('resolveSelectEstablishmentResumeHref', () => {
+  it('resumes next when the selected establishment matches the hint', () => {
+    expect(
+      resolveSelectEstablishmentResumeHref(
+        { href: '/e/est-2/chat', establishmentId: 'est-2' },
+        'est-2',
+      ),
+    ).toBe('/e/est-2/chat')
+  })
+
+  it('falls back to reporting when the selected establishment differs from the hint', () => {
+    expect(
+      resolveSelectEstablishmentResumeHref(
+        { href: '/e/est-2/chat', establishmentId: 'est-2' },
+        'est-1',
+      ),
+    ).toBe('/reporting')
+  })
+
+  it('resumes next without a hint and reporting when there is no pending dest', () => {
+    expect(resolveSelectEstablishmentResumeHref({ href: '/signals/s1' }, 'est-1')).toBe(
+      '/signals/s1',
+    )
+    expect(resolveSelectEstablishmentResumeHref(null, 'est-1')).toBe('/reporting')
   })
 })
