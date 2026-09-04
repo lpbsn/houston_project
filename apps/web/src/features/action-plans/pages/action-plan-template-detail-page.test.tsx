@@ -167,9 +167,10 @@ describe('ActionPlanTemplateDetailPage', () => {
     expect(headerCard!.contains(deactivateButton)).toBe(true)
     expect(deactivateButton.closest('footer')).toBeNull()
     expect(footer).toBeTruthy()
-    expect(footer?.className).toContain('lg:col-start-2')
-    expect(footer?.className).not.toContain('lg:row-start')
-    expect(footer?.parentElement?.className).not.toContain('px-3')
+    expect(screen.getByTestId('action-plan-template-detail-frame').className).not.toContain(
+      'max-w-7xl',
+    )
+    expect(footer?.className).not.toContain('lg:col-start-2')
     expect(screen.getAllByRole('button', { name: 'Exécution' })).toHaveLength(1)
     expect(executionButton.className).toContain('bg-[#114660]')
     expect(screen.queryByRole('button', { name: 'Activer' })).toBeNull()
@@ -307,6 +308,9 @@ describe('ActionPlanTemplateDetailPage', () => {
     expect(screen.getByRole('button', { name: "Lancer l'exécution" })).toBeTruthy()
     expect(screen.getByText('Répéter')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Exécution' })).toBeNull()
+    expect(screen.getByText('Planification').closest('section')?.parentElement?.className).not.toContain(
+      'max-w-',
+    )
   })
 
   it('hides repeat toggle when schedule is not allowed', () => {

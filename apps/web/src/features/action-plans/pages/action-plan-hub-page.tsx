@@ -99,12 +99,12 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
   const usePlan = catalogQuery.data?.find((item) => item.id === usePlanId) ?? null
 
   if (!isReady || isBootstrapping) {
-    return <p className={cn('px-3 py-4 text-sm', terrain.muted)}>Chargement...</p>
+    return <p className={cn('px-3 py-4 text-sm lg:px-6', terrain.muted)}>Chargement...</p>
   }
 
   if (!canAccessLibrary) {
     return (
-      <div className="px-3 py-4">
+      <div className="px-3 py-4 lg:px-6">
         <TerrainCard>
           <p className={cn('text-sm', terrain.muted)}>
             Vous n&apos;avez pas accès à la bibliothèque de plans d&apos;action.
@@ -118,7 +118,7 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
     const status = (catalogQuery.error as { status?: number }).status
     if (status === 403 || status === 404) {
       return (
-        <div className="px-3 py-4">
+        <div className="px-3 py-4 lg:px-6">
           <TerrainCard>
             <p className={cn('text-sm', terrain.muted)}>
               Vous n&apos;avez pas accès à la bibliothèque de plans d&apos;action.
@@ -168,7 +168,10 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
   }
 
   return (
-    <div className="space-y-4 px-4 pb-24 pt-2">
+    <div
+      data-testid="action-plan-hub-frame"
+      className="space-y-4 px-3 pb-24 pt-2 lg:px-6 lg:pt-4 lg:pb-8"
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-bold text-[#1a1a1a]">Bibliothèque</h1>
@@ -179,9 +182,8 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
         {canCreate ? (
           <Button
             type="button"
-            size="icon"
             className={cn(
-              'h-10 w-10 shrink-0 rounded-full text-white',
+              'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white lg:w-auto lg:gap-2 lg:px-4',
               terrainBrandAction.bg,
               terrainBrandAction.hover,
               terrainBrandAction.shadow,
@@ -190,6 +192,9 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
             onClick={() => navigateTo('/action-plans/new')}
           >
             <Plus className="h-5 w-5" aria-hidden />
+            <span className="hidden lg:inline" aria-hidden>
+              Créer un plan d’action
+            </span>
           </Button>
         ) : null}
       </div>
