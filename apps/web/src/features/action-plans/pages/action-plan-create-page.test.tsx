@@ -393,6 +393,10 @@ describe('ActionPlanCreatePage', () => {
     expect(
       optionsLabel.compareDocumentPosition(addTaskButton) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
+    expect(optionsLabel.closest('section')?.className).not.toContain('max-w-')
+    expect(screen.getByTestId('event-planning-form').parentElement?.className).not.toContain(
+      'max-w-',
+    )
   })
 
   it('keeps planning form visible when save to library is enabled', () => {
@@ -1014,7 +1018,7 @@ describe('ActionPlanCreatePage', () => {
     expect(createMutateAsync).not.toHaveBeenCalled()
   })
 
-  it('keeps Signal-linked create return path and a single primary action in the desktop panel', () => {
+  it('keeps Signal-linked create return path and a single primary action in the desktop frame', () => {
     renderPage({
       mode: 'signal-linked',
       signalId: 'sig-1',
@@ -1026,9 +1030,13 @@ describe('ActionPlanCreatePage', () => {
     expect(createButtons).toHaveLength(1)
     const footer = createButtons[0]?.closest('footer')
     const form = footer?.closest('form')
-    expect(footer?.className).toContain('lg:col-start-2')
-    expect(footer?.className).not.toContain('lg:row-start')
-    expect(footer?.parentElement?.className).not.toContain('px-3')
+    const frame = screen.getByTestId('action-plan-create-frame')
+    expect(frame.className).not.toContain('max-w-7xl')
+    expect(footer?.className).not.toContain('lg:col-start-2')
+    expect(screen.getByText('Options').closest('section')?.className).not.toContain('max-w-')
+    expect(screen.getByTestId('event-planning-form').parentElement?.className).not.toContain(
+      'max-w-',
+    )
     expect(form).toBeTruthy()
     expect(form!.contains(screen.getAllByRole('textbox')[0]!)).toBe(true)
   })

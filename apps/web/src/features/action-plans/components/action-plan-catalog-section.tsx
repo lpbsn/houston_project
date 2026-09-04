@@ -42,7 +42,7 @@ export function ActionPlanCatalogSectionView({
       <TerrainSectionLabel className="px-0 py-0 text-[10px] font-bold text-[#1a1a1a]">
         {section.businessUnitLabel}
       </TerrainSectionLabel>
-      <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
         {section.items.map((item) => (
           <ActionPlanCatalogCard
             key={item.id}

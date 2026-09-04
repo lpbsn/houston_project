@@ -598,12 +598,13 @@ export function ActionPlanCreatePage({
 
       <form
         ref={formRootRef}
-        className="flex w-full flex-1 flex-col lg:mx-auto lg:grid lg:max-w-7xl lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)] lg:items-start lg:gap-4 lg:px-6 lg:pt-4 lg:pb-6"
+        data-testid="action-plan-create-frame"
+        className="flex w-full flex-1 flex-col"
         onSubmit={handleFormSubmit}
       >
-        <div className="grid grid-cols-1 gap-3 px-3 pb-28 pt-2 lg:contents">
+        <div className="flex flex-col gap-3 px-3 pb-28 pt-2 lg:gap-4 lg:px-6 lg:pt-4">
           {signalDetail ? (
-            <section className="flex flex-col gap-1.5 lg:col-start-1">
+            <section className="flex flex-col gap-1.5">
               <TerrainSectionLabel>Classification héritée de l’observation</TerrainSectionLabel>
               <TerrainCard className="px-3 py-2.5">
                 <SignalClassificationBadges signal={signalDetail} />
@@ -611,7 +612,7 @@ export function ActionPlanCreatePage({
             </section>
           ) : null}
 
-          <TerrainCard className="space-y-3 lg:col-start-1">
+          <TerrainCard className="space-y-3">
             <div data-action-plan-field="title">
               <TerrainFieldLabel>Titre</TerrainFieldLabel>
               <Input
@@ -699,7 +700,7 @@ export function ActionPlanCreatePage({
           </TerrainCard>
 
           {showToggleSection ? (
-            <section className="space-y-2 lg:col-start-2">
+            <section className="space-y-2">
               <TerrainSectionLabel>Options</TerrainSectionLabel>
               <TerrainCard className="divide-y divide-[#E8E6DF] p-0">
                 {modeConfig.showValidationToggle ? (
@@ -726,7 +727,7 @@ export function ActionPlanCreatePage({
             </section>
           ) : null}
 
-          <div className="lg:col-start-1">
+          <div>
             <ActionPlanTaskDraftEditor
               tasks={tasks}
               establishmentId={establishmentId ?? ''}
@@ -753,7 +754,7 @@ export function ActionPlanCreatePage({
           </div>
 
           {showPlanningForm ? (
-            <div className="lg:col-start-2">
+            <div>
               <ActionPlanEventPlanningForm
                 draft={{ ...planningDraft, assignees: effectiveAssignees }}
                 config={{
@@ -782,13 +783,13 @@ export function ActionPlanCreatePage({
           ) : null}
 
           {resolvedSubmitError ? (
-            <div className="lg:col-span-2">
+            <div>
               <TerrainFeedback variant="error" message={resolvedSubmitError} />
             </div>
           ) : null}
         </div>
 
-        <TerrainStickyFooter className="lg:col-start-2 lg:top-4 lg:bottom-auto lg:mt-0 lg:rounded-2xl lg:border lg:border-[#E8E6DF] lg:bg-white lg:p-4 lg:shadow-none">
+        <TerrainStickyFooter className="lg:px-6">
           {isTemplateEdit ? (
             <div className="flex gap-2">
               <Button

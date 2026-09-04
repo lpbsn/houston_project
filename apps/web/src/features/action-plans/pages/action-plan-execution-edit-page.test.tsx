@@ -210,9 +210,13 @@ describe('ActionPlanExecutionEditPage guards', () => {
     expect(saveButtons).toHaveLength(1)
     const footer = saveButtons[0]?.closest('footer')
     const form = footer?.closest('form')
-    expect(footer?.className).toContain('lg:col-start-2')
-    expect(footer?.className).not.toContain('lg:row-start')
-    expect(footer?.parentElement?.className).not.toContain('px-3')
+    const frame = screen.getByTestId('action-plan-execution-edit-frame')
+    expect(frame.className).not.toContain('max-w-7xl')
+    expect(footer?.className).not.toContain('lg:col-start-2')
+    expect(screen.getByText('Options').closest('section')?.className).not.toContain('max-w-')
+    expect(screen.getByText('Planification').closest('section')?.parentElement?.className).not.toContain(
+      'max-w-',
+    )
     expect(form).toBeTruthy()
     expect(form!.contains(screen.getAllByRole('textbox')[0]!)).toBe(true)
   })

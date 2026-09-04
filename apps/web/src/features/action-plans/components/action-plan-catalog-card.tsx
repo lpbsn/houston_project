@@ -24,8 +24,8 @@ export function ActionPlanCatalogCard({ item, onOpen, onUse }: ActionPlanCatalog
   const isInactive = item.catalog_status === 'inactive'
 
   return (
-    <TerrainCard className="space-y-3 rounded-[20px] p-3.5">
-      <button type="button" className="w-full space-y-2 text-left" onClick={() => onOpen(item.id)}>
+    <TerrainCard className="flex h-full flex-col space-y-3 rounded-[20px] p-3.5">
+      <button type="button" className="w-full flex-1 space-y-2 text-left" onClick={() => onOpen(item.id)}>
         <div className="flex items-center gap-2">
           <p className="flex-1 text-sm font-semibold text-[#1a1a1a]">{item.title}</p>
           <ChevronRight className="h-4 w-4 shrink-0 text-[#a3a19a]" aria-hidden />
@@ -71,7 +71,7 @@ export function ActionPlanCatalogCard({ item, onOpen, onUse }: ActionPlanCatalog
         <Button
           type="button"
           className={cn(
-            'h-9 w-full rounded-full text-sm font-semibold text-white',
+            'mt-auto h-9 w-full rounded-full text-sm font-semibold text-white',
             terrainBrandAction.bg,
             terrainBrandAction.hover,
           )}

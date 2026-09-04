@@ -251,19 +251,17 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   return (
     <div className="flex min-h-full flex-col">
       <div
-        className={cn(
-          'mx-auto flex w-full flex-1 flex-col',
-          'lg:grid lg:max-w-7xl lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)] lg:items-start lg:gap-4 lg:px-6 lg:pt-4 lg:pb-6',
-        )}
+        data-testid="action-plan-template-detail-frame"
+        className="flex min-h-full w-full flex-1 flex-col"
       >
         <div
           className={cn(
-            'grid grid-cols-1 gap-3 px-3 pt-2 lg:contents',
-            showStickyFooter ? 'pb-40' : 'pb-4',
+            'flex flex-col gap-3 px-3 pt-2 lg:gap-4 lg:px-6 lg:pt-4',
+            showStickyFooter ? 'pb-40' : 'pb-4 lg:pb-6',
           )}
         >
           {displayedFeedback ? (
-            <div className="lg:col-span-2">
+            <div>
               <TerrainFeedback
                 variant={displayedFeedback.variant}
                 message={displayedFeedback.message}
@@ -271,7 +269,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
             </div>
           ) : null}
 
-          <div className="space-y-3 lg:col-span-2">
+          <div className="space-y-3">
             <ActionPlanTemplateDetailHeader
               plan={plan}
               showActivate={canShowActionPlanActivate(hints)}
@@ -283,7 +281,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
             />
           </div>
 
-          <div className="space-y-3 lg:col-start-1">
+          <div className="space-y-3">
             <section className="space-y-2">
               <TerrainSectionLabel>Tâches</TerrainSectionLabel>
               {sortedTasks.length === 0 ? (
@@ -303,7 +301,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
           </div>
 
           {executionPanelOpen ? (
-            <div ref={planningFormRootRef} className="lg:col-start-2">
+            <div ref={planningFormRootRef}>
               <ActionPlanEventPlanningForm
                 draft={planningDraft}
                 config={{
@@ -330,7 +328,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
 
         {showStickyFooter ? (
           <ActionPlanTemplateDetailStickyFooter
-            className="lg:col-start-2 lg:top-4 lg:bottom-auto lg:mt-0 lg:rounded-2xl lg:border lg:border-[#E8E6DF] lg:bg-white lg:p-4 lg:shadow-none"
+            className="lg:px-6"
             hints={hints}
             executionPanelOpen={executionPanelOpen}
             canUse={canUse}
