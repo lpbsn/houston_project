@@ -6,8 +6,12 @@ import {
   canManageOrganizationFromBootstrapHints,
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
-import { getAuthenticatedLandingPath } from '@/features/auth/lib/authenticated-landing'
+import {
+  getAuthenticatedLandingPath,
+  isDesktopWebLanding,
+} from '@/features/auth/lib/authenticated-landing'
 import { Button } from '@/components/ui/button'
+import { useLgViewport } from '@/lib/lg-viewport'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -48,6 +52,7 @@ export function OrganizationEstablishmentPage({
   onNavigate,
 }: OrganizationEstablishmentPageProps) {
   const { activeMembership, bootstrap, isBootstrapping, isReady } = useAuth()
+  const isLgViewport = useLgViewport()
   const permissionHints = getBootstrapPermissionHints(bootstrap)
   const canManageOrganization = canManageOrganizationFromBootstrapHints(permissionHints)
   const canAccess = canAccessEstablishmentAdminPage({
@@ -99,13 +104,19 @@ export function OrganizationEstablishmentPage({
         onNavigate('/organization', { replace: true })
         return
       }
-      onNavigate(getAuthenticatedLandingPath(bootstrap) ?? '/reporting', { replace: true })
+      onNavigate(
+        getAuthenticatedLandingPath(bootstrap, {
+          isDesktop: isDesktopWebLanding(isLgViewport),
+        }) ?? '/reporting',
+        { replace: true },
+      )
     }
   }, [
     bootstrap,
     canAccess,
     canManageOrganization,
     isBootstrapping,
+    isLgViewport,
     isReady,
     onNavigate,
   ])
@@ -118,8 +129,13 @@ export function OrganizationEstablishmentPage({
       onNavigate('/organization', { replace: true })
       return
     }
-    onNavigate(getAuthenticatedLandingPath(bootstrap) ?? '/reporting', { replace: true })
-  }, [bootstrap, canManageOrganization, onNavigate, overviewQuery.isError])
+    onNavigate(
+      getAuthenticatedLandingPath(bootstrap, {
+        isDesktop: isDesktopWebLanding(isLgViewport),
+      }) ?? '/reporting',
+      { replace: true },
+    )
+  }, [bootstrap, canManageOrganization, isLgViewport, onNavigate, overviewQuery.isError])
 
   async function handleOpenOperationalConfig() {
     setOpsError(null)

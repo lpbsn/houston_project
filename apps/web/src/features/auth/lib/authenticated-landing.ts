@@ -6,7 +6,11 @@ import {
   buildOnboardingUrl,
   resolvePendingLanding,
 } from '@/features/auth/lib/pending-onboarding'
-import { hasTrueCrossEstablishmentScope } from '@/features/navigation/lib/shared-navigation'
+import {
+  canShowAnalyticsNavigation,
+  hasTrueCrossEstablishmentScope,
+} from '@/features/navigation/lib/shared-navigation'
+import { getAppRuntime } from '@/lib/runtime'
 
 export const CROSS_DASHBOARD_LANDING_PATH = '/cross?period=7d'
 
@@ -14,12 +18,17 @@ export type AuthenticatedLanding =
   | { kind: 'operational'; path: '/reporting' }
   | { kind: 'establishment-selection'; path: '/select-establishment' }
   | { kind: 'cross'; path: typeof CROSS_DASHBOARD_LANDING_PATH }
+  | { kind: 'analytics'; path: '/analytics' }
   | { kind: 'organization'; path: '/organization' }
   | { kind: 'pending'; path: string }
   | { kind: 'empty'; path: '/no-establishment' }
 
 export type AuthenticatedLandingContext = {
   isDesktop?: boolean
+}
+
+export function isDesktopWebLanding(isLgViewport: boolean): boolean {
+  return getAppRuntime() === 'web' && isLgViewport
 }
 
 export function resolveAuthenticatedLanding(
@@ -29,10 +38,15 @@ export function resolveAuthenticatedLanding(
   const activeMembershipCount = bootstrap.memberships.length
 
   if (!bootstrap.active_membership && activeMembershipCount > 1) {
-    if (context.isDesktop && hasTrueCrossEstablishmentScope(bootstrap)) {
+    if (!context.isDesktop) {
+      return { kind: 'establishment-selection', path: '/select-establishment' }
+    }
+    if (hasTrueCrossEstablishmentScope(bootstrap)) {
       return { kind: 'cross', path: CROSS_DASHBOARD_LANDING_PATH }
     }
-    return { kind: 'establishment-selection', path: '/select-establishment' }
+    if (canShowAnalyticsNavigation(bootstrap)) {
+      return { kind: 'analytics', path: '/analytics' }
+    }
   }
 
   if (canManageOrganizationFromBootstrapHints(bootstrap.permission_hints)) {
@@ -75,6 +89,7 @@ export const AUTHENTICATED_LANDING_PATHS = new Set<string>([
   '/reporting',
   '/select-establishment',
   '/cross',
+  '/analytics',
   '/pending-onboarding',
   '/onboarding',
   '/organization',

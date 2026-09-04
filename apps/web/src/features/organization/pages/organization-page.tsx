@@ -7,8 +7,12 @@ import {
   canManageOrganizationFromBootstrapHints,
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
-import { getAuthenticatedLandingPath } from '@/features/auth/lib/authenticated-landing'
+import {
+  getAuthenticatedLandingPath,
+  isDesktopWebLanding,
+} from '@/features/auth/lib/authenticated-landing'
 import { buildOnboardingUrlFromIds } from '@/features/auth/lib/pending-onboarding'
+import { useLgViewport } from '@/lib/lg-viewport'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -40,6 +44,7 @@ type OrganizationPageProps = {
 
 export function OrganizationPage({ onNavigate }: OrganizationPageProps) {
   const { activeMembership, bootstrap, isBootstrapping, isReady } = useAuth()
+  const isLgViewport = useLgViewport()
   const permissionHints = getBootstrapPermissionHints(bootstrap)
   const canManageOrganization = canManageOrganizationFromBootstrapHints(permissionHints)
   const canCreateEstablishment = canCreateEstablishmentFromBootstrapHints(permissionHints)
@@ -75,9 +80,14 @@ export function OrganizationPage({ onNavigate }: OrganizationPageProps) {
     }
 
     if (!canManageOrganization) {
-      onNavigate(getAuthenticatedLandingPath(bootstrap) ?? '/reporting', { replace: true })
+      onNavigate(
+        getAuthenticatedLandingPath(bootstrap, {
+          isDesktop: isDesktopWebLanding(isLgViewport),
+        }) ?? '/reporting',
+        { replace: true },
+      )
     }
-  }, [bootstrap, canManageOrganization, isBootstrapping, isReady, onNavigate])
+  }, [bootstrap, canManageOrganization, isBootstrapping, isLgViewport, isReady, onNavigate])
 
   async function handleAccessApp(establishmentId: string) {
     setAccessError(null)
