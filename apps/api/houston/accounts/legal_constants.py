@@ -15,6 +15,10 @@ AI_CONSENT_REQUIRED_DETAIL = (
 INVALID_TERMS_VERSION_CODE = "invalid_terms_version"
 INVALID_AI_CONSENT_VERSION_CODE = "invalid_ai_consent_version"
 
+AI_CONSENT_STATUS_UNDECIDED = "undecided"
+AI_CONSENT_STATUS_GRANTED = "granted"
+AI_CONSENT_STATUS_DECLINED = "declined"
+
 # openai-v1 scope (source of truth for disclosure copy):
 # - observation text to OpenAI for the signal pipeline
 # - request-scoped audio to OpenAI for transcription (not stored)

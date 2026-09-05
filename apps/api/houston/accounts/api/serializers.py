@@ -94,6 +94,9 @@ class UserPublicSerializer(serializers.Serializer):
     ai_processing_consented_at = serializers.DateTimeField(allow_null=True)
     current_ai_consent_version = serializers.CharField()
     needs_ai_consent = serializers.BooleanField()
+    ai_consent_status = serializers.ChoiceField(
+        choices=("undecided", "granted", "declined"),
+    )
 
 
 class UserProfileUpdateRequestSerializer(serializers.Serializer):

@@ -1115,10 +1115,49 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/auth/me/ai-consent/decline/:
+    post:
+      operationId: v1_auth_me_ai_consent_decline_create
+      description: Records an initial decline of the current OpenAI processing disclosure.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LegalVersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LegalVersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LegalVersionRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BootstrapResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/auth/me/ai-consent/withdraw/:
     post:
       operationId: v1_auth_me_ai_consent_withdraw_create
-      description: Withdraws OpenAI processing consent.
+      description: Withdraws OpenAI processing consent after a prior grant.
       tags:
       - auth
       security:
@@ -9974,6 +10013,16 @@ components:
       - is_generic
       - label
       - source
+    AiConsentStatusEnum:
+      enum:
+      - undecided
+      - granted
+      - declined
+      type: string
+      description: |-
+        * `undecided` - undecided
+        * `granted` - granted
+        * `declined` - declined
     AnalyticsAgingBucket:
       type: object
       properties:
@@ -14864,7 +14913,10 @@ components:
           type: string
         needs_ai_consent:
           type: boolean
+        ai_consent_status:
+          $ref: '#/components/schemas/AiConsentStatusEnum'
       required:
+      - ai_consent_status
       - ai_consent_version
       - ai_processing_consented_at
       - current_ai_consent_version

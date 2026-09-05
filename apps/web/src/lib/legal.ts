@@ -19,3 +19,32 @@ export function isTermsAcceptanceRequired(error: { code?: string | null }): bool
 export function isAiConsentRequired(error: { code?: string | null }): boolean {
   return error.code === AI_CONSENT_REQUIRED_CODE
 }
+
+export type AiConsentStatus = 'undecided' | 'granted' | 'declined'
+
+export const OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE =
+  'Activez le traitement OpenAI dans Général pour envoyer une observation.' as const
+
+export function readAiConsentStatus(
+  user: { ai_consent_status?: string | null } | null | undefined,
+): AiConsentStatus {
+  if (
+    user?.ai_consent_status === 'granted' ||
+    user?.ai_consent_status === 'declined' ||
+    user?.ai_consent_status === 'undecided'
+  ) {
+    return user.ai_consent_status
+  }
+  return 'undecided'
+}
+
+export function isLegalError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+  const code = 'code' in error && typeof error.code === 'string' ? error.code : null
+  if (!code) {
+    return false
+  }
+  return isTermsAcceptanceRequired({ code }) || isAiConsentRequired({ code })
+}

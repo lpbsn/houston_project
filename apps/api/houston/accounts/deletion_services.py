@@ -199,6 +199,7 @@ def _anonymize_user(*, user: User) -> None:
             "terms_accepted_at",
             "ai_consent_version",
             "ai_processing_consented_at",
+            "ai_declined_version",
             "updated_at",
         ]
     )

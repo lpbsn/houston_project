@@ -225,6 +225,7 @@ function bootstrapWithoutActiveMembership(
       ai_processing_consented_at: '2026-01-01T00:00:00.000Z',
       current_ai_consent_version: 'openai-v1',
       needs_ai_consent: false,
+      ai_consent_status: 'granted',
     },
     memberships,
     active_membership: null,

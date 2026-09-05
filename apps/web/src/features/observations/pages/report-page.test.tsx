@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { __resetObservationComposeDraftStoreForTests } from '@/features/observations/lib/observation-compose-draft-store'
 import { OBSERVATION_TEXT_MIN_LENGTH } from '@/features/observations/types'
-import { PUBLIC_PRIVACY_POLICY_URL } from '@/lib/legal'
+import { OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE, PUBLIC_PRIVACY_POLICY_URL } from '@/lib/legal'
 import {
   collectOverflowYScrollElements,
   expectSinglePageScrollZone,
@@ -38,9 +38,19 @@ vi.mock('framer-motion', () => ({
   useReducedMotion: () => true,
 }))
 
+const { authUser } = vi.hoisted(() => ({
+  authUser: {
+    current: {
+      ai_consent_status: 'granted' as 'granted' | 'declined' | 'undecided',
+    },
+  },
+}))
+
 vi.mock('@/app/auth-provider', () => ({
   useAuth: () => ({
+    user: authUser.current,
     bootstrap: {
+      user: authUser.current,
       active_membership: {
         id: 'mem-1',
         establishment_id: 'est-1',
@@ -141,6 +151,7 @@ afterEach(() => {
   objectUrlState.createdUrls = []
   objectUrlState.revokedUrls = []
   __resetObservationComposeDraftStoreForTests()
+  authUser.current.ai_consent_status = 'granted'
   vi.clearAllMocks()
 })
 
@@ -161,6 +172,15 @@ describe('ReportPage', () => {
       media_count: 0,
       processing_status: 'queued',
     })
+  })
+
+  it('blocks submit when AI consent is declined', () => {
+    authUser.current.ai_consent_status = 'declined'
+    renderPage()
+    typeValidObservation()
+    expect(screen.getByText(OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer l’observation' }))
+    expect(mockSubmitObservation).not.toHaveBeenCalled()
   })
 
   it('renders hero and initial counter', () => {

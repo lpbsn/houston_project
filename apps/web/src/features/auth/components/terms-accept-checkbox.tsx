@@ -24,8 +24,8 @@ export function TermsAcceptCheckbox({
         J’accepte les{' '}
         <a href={PUBLIC_TERMS_URL} className="underline" target="_blank" rel="noreferrer">
           conditions d’utilisation
-        </a>{' '}
-        (optionnel maintenant ; requis avant de publier un contenu visible par l’équipe).
+        </a>
+        .
       </span>
     </label>
   )

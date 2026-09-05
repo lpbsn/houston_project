@@ -24,7 +24,7 @@ import {
   acceptCurrentAiConsent,
   withdrawAiConsent,
 } from '@/features/auth/api'
-import { PUBLIC_PRIVACY_POLICY_URL, PUBLIC_TERMS_URL } from '@/lib/legal'
+import { PUBLIC_PRIVACY_POLICY_URL, PUBLIC_TERMS_URL, readAiConsentStatus } from '@/lib/legal'
 import { toRoleEnum } from '@/features/auth/lib/role'
 import type { RoleEnum } from '@/features/auth/types'
 import { canShowAnalyticsNavigation } from '@/features/navigation/lib/shared-navigation'
@@ -169,7 +169,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   const firstName = readOptionalUserName(user, 'first_name')
   const lastName = readOptionalUserName(user, 'last_name')
   const identityLabel = user ? (user.email ?? user.username) : null
-  const needsAiConsent = Boolean(user?.needs_ai_consent)
+  const aiConsentGranted = readAiConsentStatus(user) === 'granted'
   const role = toRoleEnum(activeMembership?.role)
   const canAccessManagement = canAccessManagementSpace(permissionHints)
   const canViewTeam = canViewTeamFromBootstrapHints(permissionHints)
@@ -472,14 +472,18 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
           Conditions d’utilisation
         </a>
         {aiConsentError ? <p className="text-sm text-[#E24B4A]">{aiConsentError}</p> : null}
-        <button
-          type="button"
-          className="flex min-h-11 w-full items-center justify-center text-sm font-medium text-[#1a1a1a]"
+        <TerrainSwitch
+          label={
+            aiConsentPending
+              ? 'Enregistrement...'
+              : 'Traitement OpenAI'
+          }
+          checked={aiConsentGranted}
           disabled={aiConsentPending}
-          onClick={() => {
+          onCheckedChange={(checked) => {
             setAiConsentError(null)
             setAiConsentPending(true)
-            const action = needsAiConsent ? acceptCurrentAiConsent() : withdrawAiConsent()
+            const action = checked ? acceptCurrentAiConsent() : withdrawAiConsent()
             void action
               .catch((caught) => {
                 setAiConsentError(
@@ -492,13 +496,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
                 setAiConsentPending(false)
               })
           }}
-        >
-          {aiConsentPending
-            ? 'Enregistrement...'
-            : needsAiConsent
-              ? 'Autoriser le traitement OpenAI'
-              : 'Retirer le consentement OpenAI'}
-        </button>
+        />
       </TerrainCard>
 
       <AccountDeletionCard

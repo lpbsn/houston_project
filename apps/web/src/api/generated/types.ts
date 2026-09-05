@@ -320,6 +320,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/me/ai-consent/decline/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Records an initial decline of the current OpenAI processing disclosure. */
+        post: operations["v1_auth_me_ai_consent_decline_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/me/ai-consent/withdraw/": {
         parameters: {
             query?: never;
@@ -329,7 +346,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Withdraws OpenAI processing consent. */
+        /** @description Withdraws OpenAI processing consent after a prior grant. */
         post: operations["v1_auth_me_ai_consent_withdraw_create"];
         delete?: never;
         options?: never;
@@ -3087,6 +3104,13 @@ export interface components {
             active: boolean;
             is_generic: boolean;
         };
+        /**
+         * @description * `undecided` - undecided
+         *     * `granted` - granted
+         *     * `declined` - declined
+         * @enum {string}
+         */
+        AiConsentStatusEnum: "undecided" | "granted" | "declined";
         AnalyticsAgingBucket: {
             key: string;
             label: string;
@@ -5060,6 +5084,7 @@ export interface components {
             ai_processing_consented_at: string | null;
             current_ai_consent_version: string;
             needs_ai_consent: boolean;
+            ai_consent_status: components["schemas"]["AiConsentStatusEnum"];
         };
         ValidationErrorResponse: {
             code: string;
@@ -6018,6 +6043,47 @@ export interface operations {
         };
     };
     v1_auth_me_ai_consent_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LegalVersionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["LegalVersionRequest"];
+                "multipart/form-data": components["schemas"]["LegalVersionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BootstrapResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_auth_me_ai_consent_decline_create: {
         parameters: {
             query?: never;
             header?: never;

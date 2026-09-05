@@ -1,6 +1,11 @@
 import { useState } from 'react'
 
-import { AuthApiError, acceptCurrentAiConsent, acceptCurrentTerms } from '@/features/auth/api'
+import {
+  AuthApiError,
+  acceptCurrentAiConsent,
+  acceptCurrentTerms,
+  declineCurrentAiConsent,
+} from '@/features/auth/api'
 import { TerrainBottomSheet } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import {
@@ -28,11 +33,17 @@ export function legalConsentKindFromError(error: unknown): LegalConsentKind {
 
 type LegalConsentSheetProps = {
   kind: LegalConsentKind
+  allowDismiss?: boolean
   onClose: () => void
   onAccepted: () => void
 }
 
-export function LegalConsentSheet({ kind, onClose, onAccepted }: LegalConsentSheetProps) {
+export function LegalConsentSheet({
+  kind,
+  allowDismiss = true,
+  onClose,
+  onAccepted,
+}: LegalConsentSheetProps) {
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -62,17 +73,33 @@ export function LegalConsentSheet({ kind, onClose, onAccepted }: LegalConsentShe
     }
   }
 
+  async function declineAi() {
+    setPending(true)
+    setError(null)
+    try {
+      await declineCurrentAiConsent()
+      onAccepted()
+      onClose()
+    } catch (caught) {
+      setError(
+        caught instanceof AuthApiError ? caught.message : 'Enregistrement impossible.',
+      )
+    } finally {
+      setPending(false)
+    }
+  }
+
   return (
     <TerrainBottomSheet
       title={isTerms ? 'Conditions d’utilisation' : 'Traitement OpenAI'}
       open
-      onClose={onClose}
+      dismissible={allowDismiss}
+      onClose={allowDismiss ? onClose : () => undefined}
     >
       <div className="space-y-3 text-sm text-[#5c5a54]">
         {isTerms ? (
           <p>
-            Pour publier une observation, un commentaire ou un message visible par l’équipe,
-            acceptez les{' '}
+            Pour utiliser Houston, acceptez les{' '}
             <a href={PUBLIC_TERMS_URL} className="underline" target="_blank" rel="noreferrer">
               conditions d’utilisation
             </a>
@@ -91,13 +118,24 @@ export function LegalConsentSheet({ kind, onClose, onAccepted }: LegalConsentShe
             >
               politique de confidentialité
             </a>
-            .
+            . Vous pouvez continuer sans IA, puis activer le traitement depuis Général.
           </p>
         )}
         {error ? <p className="text-[#E24B4A]">{error}</p> : null}
         <Button className="h-11 w-full rounded-xl" disabled={pending} onClick={() => void accept()}>
-          {pending ? 'Enregistrement...' : isTerms ? 'Accepter' : 'Consentir'}
+          {pending ? 'Enregistrement...' : isTerms ? 'Accepter' : 'Activer les fonctionnalités IA'}
         </Button>
+        {isTerms ? null : (
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 w-full rounded-xl"
+            disabled={pending}
+            onClick={() => void declineAi()}
+          >
+            Continuer sans IA
+          </Button>
+        )}
       </div>
     </TerrainBottomSheet>
   )
