@@ -1,6 +1,6 @@
 import { LoaderCircle } from 'lucide-react'
 
-import sporeIconSrc from '@/assets/brand/spore-icon-source.png'
+import sporeIconSrc from '@/assets/brand/spore-icon-green.png'
 import { useAuth } from '@/app/auth-provider'
 import { LoginForm } from '@/features/auth/components/login-form'
 import { Button } from '@/components/ui/button'
@@ -70,7 +70,7 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
             src={sporeIconSrc}
             alt=""
             aria-hidden
-            className="size-10 object-contain"
+            className="size-20 object-contain"
           />
         </div>
         <LoginForm />
