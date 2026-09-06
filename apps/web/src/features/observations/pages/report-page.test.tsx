@@ -5,9 +5,14 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ObservationsApiError } from '@/features/observations/api'
 import { __resetObservationComposeDraftStoreForTests } from '@/features/observations/lib/observation-compose-draft-store'
 import { OBSERVATION_TEXT_MIN_LENGTH } from '@/features/observations/types'
-import { OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE, PUBLIC_PRIVACY_POLICY_URL } from '@/lib/legal'
+import {
+  AI_CONSENT_REQUIRED_CODE,
+  OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE,
+  PUBLIC_PRIVACY_POLICY_URL,
+} from '@/lib/legal'
 import {
   collectOverflowYScrollElements,
   expectSinglePageScrollZone,
@@ -21,12 +26,14 @@ const {
   mockUploadTemporaryPhoto,
   mockSubmitObservation,
   mockIsOnline,
+  resyncBootstrapAfterLegalError,
 } = vi.hoisted(() => ({
   mockSubmitPending: { current: false },
   mockTranscribeAsync: vi.fn(),
   mockUploadTemporaryPhoto: vi.fn(),
   mockSubmitObservation: vi.fn(),
   mockIsOnline: { current: true },
+  resyncBootstrapAfterLegalError: vi.fn(async () => null),
 }))
 
 const objectUrlState = vi.hoisted(() => ({
@@ -57,6 +64,10 @@ vi.mock('@/app/auth-provider', () => ({
       },
     },
   }),
+}))
+
+vi.mock('@/features/auth/api', () => ({
+  resyncBootstrapAfterLegalError,
 }))
 
 vi.mock('@/features/observations/components/observation-processing-tracker-provider', () => ({
@@ -153,6 +164,7 @@ afterEach(() => {
   __resetObservationComposeDraftStoreForTests()
   authUser.current.ai_consent_status = 'granted'
   vi.clearAllMocks()
+  resyncBootstrapAfterLegalError.mockResolvedValue(null)
 })
 
 describe('ReportPage', () => {
@@ -181,6 +193,49 @@ describe('ReportPage', () => {
     expect(screen.getByText(OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Envoyer l’observation' }))
     expect(mockSubmitObservation).not.toHaveBeenCalled()
+  })
+
+  it('uses the resynced bootstrap after a legal submit error', async () => {
+    resyncBootstrapAfterLegalError.mockResolvedValue({
+      user: { ai_consent_status: 'declined' },
+    })
+    mockSubmitObservation.mockRejectedValue(
+      new ObservationsApiError({
+        status: 403,
+        detail: 'Le traitement OpenAI n’est pas autorisé.',
+        code: AI_CONSENT_REQUIRED_CODE,
+      }),
+    )
+    renderPage()
+    typeValidObservation()
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer l’observation' }))
+
+    await waitFor(() => {
+      expect(screen.getByText(OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE)).toBeTruthy()
+    })
+    expect(screen.queryByText('Le traitement OpenAI n’est pas autorisé.')).toBeNull()
+  })
+
+  it('uses the resynced bootstrap after a legal transcription error', async () => {
+    resyncBootstrapAfterLegalError.mockResolvedValue({
+      user: { ai_consent_status: 'declined' },
+    })
+    mockTranscribeAsync.mockRejectedValue(
+      new ObservationsApiError({
+        status: 403,
+        detail: 'Le traitement OpenAI n’est pas autorisé.',
+        code: AI_CONSENT_REQUIRED_CODE,
+      }),
+    )
+    setupMediaRecorderMock()
+    renderPage()
+
+    await recordAndStop()
+
+    await waitFor(() => {
+      expect(screen.getByText(OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE)).toBeTruthy()
+    })
+    expect(screen.queryByText('Le traitement OpenAI n’est pas autorisé.')).toBeNull()
   })
 
   it('renders hero and initial counter', () => {

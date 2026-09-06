@@ -113,9 +113,9 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
           })
           setText(result.text.slice(0, OBSERVATION_TEXT_MAX_LENGTH))
         } catch (error) {
-          await resyncBootstrapAfterLegalError(error)
+          const bootstrap = await resyncBootstrapAfterLegalError(error)
           setFormError(
-            readAiConsentStatus(auth.user ?? auth.bootstrap?.user) === 'declined'
+            readAiConsentStatus(bootstrap?.user ?? auth.user ?? auth.bootstrap?.user) === 'declined'
               ? OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE
               : resolveReportError(error),
           )
@@ -172,9 +172,9 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
         submittedAt: response.submitted_at,
       })
     } catch (error) {
-      await resyncBootstrapAfterLegalError(error)
+      const bootstrap = await resyncBootstrapAfterLegalError(error)
       setFormError(
-        readAiConsentStatus(auth.user ?? auth.bootstrap?.user) === 'declined'
+        readAiConsentStatus(bootstrap?.user ?? auth.user ?? auth.bootstrap?.user) === 'declined'
           ? OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE
           : resolveReportError(error),
       )

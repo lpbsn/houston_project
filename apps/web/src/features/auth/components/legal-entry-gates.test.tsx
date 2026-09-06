@@ -72,4 +72,16 @@ describe('LegalEntryGates', () => {
     expect(screen.queryByTestId('legal-entry-sheet')).toBeNull()
     expect(screen.getByText('app')).toBeTruthy()
   })
+
+  it('marks app content inert while a legal gate is open', () => {
+    authState.current.bootstrap.user.needs_terms_acceptance = true
+    renderGates()
+    expect(screen.getByText('app').parentElement?.hasAttribute('inert')).toBe(true)
+  })
+
+  it('leaves app content interactive when no legal gate is shown', () => {
+    renderGates()
+    expect(screen.queryByTestId('legal-entry-sheet')).toBeNull()
+    expect(screen.getByText('app').parentElement?.hasAttribute('inert')).toBe(false)
+  })
 })

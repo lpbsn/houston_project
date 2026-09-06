@@ -4,8 +4,10 @@ import { createElement } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ActionPlansApiError } from '@/features/action-plans/api'
 import type { ActionPlanExecutionDetail } from '@/features/action-plans/types'
 import { __resetObservationComposeDraftStoreForTests } from '@/features/observations/lib/observation-compose-draft-store'
+import { AI_CONSENT_REQUIRED_CODE, OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE } from '@/lib/legal'
 
 import { ActionPlanExecutionDetailPage } from './action-plan-execution-detail-page'
 
@@ -14,8 +16,14 @@ const navigateMock = vi.fn()
 const validateMutateAsyncMock = vi.fn()
 const observationMutateAsyncMock = vi.fn()
 
-const { CommentSectionMock } = vi.hoisted(() => ({
+const { CommentSectionMock, authUser, resyncBootstrapAfterLegalError } = vi.hoisted(() => ({
   CommentSectionMock: vi.fn(() => createElement('div', { 'data-testid': 'comment-section' })),
+  authUser: {
+    current: {
+      ai_consent_status: 'granted' as 'granted' | 'declined' | 'undecided',
+    },
+  },
+  resyncBootstrapAfterLegalError: vi.fn(async () => null),
 }))
 
 function buildExecution(
@@ -93,7 +101,13 @@ vi.mock('@/app/auth-provider', () => ({
       establishment_id: 'est-1',
       id: 'membership-1',
     },
+    user: authUser.current,
+    bootstrap: { user: authUser.current },
   }),
+}))
+
+vi.mock('@/features/auth/api', () => ({
+  resyncBootstrapAfterLegalError,
 }))
 
 vi.mock('../hooks', () => ({
@@ -208,7 +222,9 @@ afterEach(() => {
   window.history.replaceState(null, '', '/')
   cleanup()
   __resetObservationComposeDraftStoreForTests()
+  authUser.current.ai_consent_status = 'granted'
   vi.clearAllMocks()
+  resyncBootstrapAfterLegalError.mockResolvedValue(null)
 })
 
 describe('ActionPlanExecutionDetailPage tabs', () => {
@@ -1108,5 +1124,32 @@ describe('ActionPlanExecutionDetailPage observation compose', () => {
     expect(
       (screen.getByPlaceholderText('Décrivez l’observation...') as HTMLTextAreaElement).value,
     ).toBe('')
+  })
+
+  it('uses the resynced bootstrap after a legal observation error', async () => {
+    resyncBootstrapAfterLegalError.mockResolvedValue({
+      user: { ai_consent_status: 'declined' },
+    })
+    observationMutateAsyncMock.mockRejectedValue(
+      new ActionPlansApiError({
+        status: 403,
+        detail: 'Le traitement OpenAI n’est pas autorisé.',
+        code: AI_CONSENT_REQUIRED_CODE,
+      }),
+    )
+    mockPendingTask()
+    renderPage()
+
+    await openObservationSheet()
+    fireEvent.change(screen.getByPlaceholderText('Décrivez l’observation...'), {
+      target: { value: 'Tache visible sur le mur.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer' }))
+
+    await waitFor(() => {
+      expect(screen.getByText(OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE)).toBeTruthy()
+    })
+    expect(screen.queryByText('Le traitement OpenAI n’est pas autorisé.')).toBeNull()
+    expect(screen.queryByText('L’observation n’a pas pu être créée.')).toBeNull()
   })
 })

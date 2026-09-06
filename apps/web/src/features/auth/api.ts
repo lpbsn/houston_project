@@ -903,9 +903,13 @@ export async function resyncBootstrapAfterLegalError(error: unknown) {
   if (!isLegalError(error)) {
     return null
   }
-  const data = await fetchBootstrap()
-  queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, data)
-  return data
+  try {
+    const data = await fetchBootstrap()
+    queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, data)
+    return data
+  } catch {
+    return null
+  }
 }
 
 export async function withdrawAiConsent() {

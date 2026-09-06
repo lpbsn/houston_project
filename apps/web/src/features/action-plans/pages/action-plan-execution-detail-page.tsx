@@ -351,11 +351,11 @@ function ActionPlanExecutionDetailPageContent({
       setObservationTaskId(null)
       setFeedback({ variant: 'success', message: 'Observation créée.' })
     } catch (error) {
-      await resyncBootstrapAfterLegalError(error)
+      const resynced = await resyncBootstrapAfterLegalError(error)
       setFeedback({
         variant: 'error',
         message:
-          readAiConsentStatus(user ?? bootstrap?.user) === 'declined'
+          readAiConsentStatus(resynced?.user ?? user ?? bootstrap?.user) === 'declined'
             ? OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE
             : resolveActionPlanErrorMessage(error, 'L’observation n’a pas pu être créée.'),
       })
