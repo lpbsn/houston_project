@@ -99,7 +99,7 @@ export function LegalConsentSheet({
       <div className="space-y-3 text-sm text-[#5c5a54]">
         {isTerms ? (
           <p>
-            Pour utiliser Houston, acceptez les{' '}
+            Pour utiliser Spore, acceptez les{' '}
             <a href={PUBLIC_TERMS_URL} className="underline" target="_blank" rel="noreferrer">
               conditions d’utilisation
             </a>
