@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from houston.accounts.legal_constants import CURRENT_AI_CONSENT_VERSION, CURRENT_TERMS_VERSION
-from houston.accounts.legal_services import has_current_ai_consent, has_current_terms
+from houston.accounts.legal_services import (
+    has_current_ai_consent,
+    has_current_terms,
+    resolve_ai_consent_status,
+)
 from houston.accounts.models import User, UserSession
 from houston.accounts.permission_hints import build_bootstrap_permission_hints
 from houston.establishments.membership_scope import (
@@ -189,6 +193,7 @@ def _serialize_user(user: User) -> dict:
         "ai_processing_consented_at": user.ai_processing_consented_at,
         "current_ai_consent_version": CURRENT_AI_CONSENT_VERSION,
         "needs_ai_consent": not has_current_ai_consent(user),
+        "ai_consent_status": resolve_ai_consent_status(user),
     }
 
 

@@ -5,6 +5,9 @@ from django.utils import timezone
 from houston.accounts.legal_constants import (
     AI_CONSENT_REQUIRED_CODE,
     AI_CONSENT_REQUIRED_DETAIL,
+    AI_CONSENT_STATUS_DECLINED,
+    AI_CONSENT_STATUS_GRANTED,
+    AI_CONSENT_STATUS_UNDECIDED,
     CURRENT_AI_CONSENT_VERSION,
     CURRENT_TERMS_VERSION,
     INVALID_AI_CONSENT_VERSION_CODE,
@@ -45,6 +48,18 @@ def has_current_ai_consent(user: User) -> bool:
     )
 
 
+def has_current_ai_decline(user: User) -> bool:
+    return user.ai_declined_version == CURRENT_AI_CONSENT_VERSION
+
+
+def resolve_ai_consent_status(user: User) -> str:
+    if has_current_ai_consent(user):
+        return AI_CONSENT_STATUS_GRANTED
+    if has_current_ai_decline(user):
+        return AI_CONSENT_STATUS_DECLINED
+    return AI_CONSENT_STATUS_UNDECIDED
+
+
 def require_current_terms(*, user: User) -> None:
     if not has_current_terms(user):
         raise TermsAcceptanceRequiredError
@@ -75,19 +90,40 @@ def accept_current_ai_consent(*, user: User, version: str) -> User:
         )
     user.ai_consent_version = CURRENT_AI_CONSENT_VERSION
     user.ai_processing_consented_at = timezone.now()
+    user.ai_declined_version = None
     user.save(
-        update_fields=["ai_consent_version", "ai_processing_consented_at", "updated_at"]
+        update_fields=[
+            "ai_consent_version",
+            "ai_processing_consented_at",
+            "ai_declined_version",
+            "updated_at",
+        ]
+    )
+    return user
+
+
+def decline_current_ai_consent(*, user: User, version: str) -> User:
+    if version != CURRENT_AI_CONSENT_VERSION:
+        raise InvalidLegalVersionError(
+            code=INVALID_AI_CONSENT_VERSION_CODE,
+            detail="This AI consent version is not current.",
+        )
+    user.ai_consent_version = None
+    user.ai_processing_consented_at = None
+    user.ai_declined_version = CURRENT_AI_CONSENT_VERSION
+    user.save(
+        update_fields=[
+            "ai_consent_version",
+            "ai_processing_consented_at",
+            "ai_declined_version",
+            "updated_at",
+        ]
     )
     return user
 
 
 def withdraw_ai_consent(*, user: User) -> User:
-    user.ai_consent_version = None
-    user.ai_processing_consented_at = None
-    user.save(
-        update_fields=["ai_consent_version", "ai_processing_consented_at", "updated_at"]
-    )
-    return user
+    return decline_current_ai_consent(user=user, version=CURRENT_AI_CONSENT_VERSION)
 
 
 def maybe_accept_terms_version(*, user: User, terms_version: str | None) -> None:
@@ -101,6 +137,7 @@ def clear_legal_fields(*, user: User) -> None:
     user.terms_accepted_at = None
     user.ai_consent_version = None
     user.ai_processing_consented_at = None
+    user.ai_declined_version = None
 
 
 def grant_current_legal_defaults(*, user: User) -> User:
@@ -109,12 +146,14 @@ def grant_current_legal_defaults(*, user: User) -> User:
     user.terms_accepted_at = now
     user.ai_consent_version = CURRENT_AI_CONSENT_VERSION
     user.ai_processing_consented_at = now
+    user.ai_declined_version = None
     user.save(
         update_fields=[
             "terms_version",
             "terms_accepted_at",
             "ai_consent_version",
             "ai_processing_consented_at",
+            "ai_declined_version",
             "updated_at",
         ]
     )

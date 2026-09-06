@@ -18,6 +18,7 @@ import {
 
 const {
   withAuthRetryMock,
+  apiClientGetMock,
   apiClientPostMock,
   clearAccessTokenMock,
   setAccessTokenMock,
@@ -26,6 +27,7 @@ const {
   clearPendingNativeDeepLinkMock,
 } = vi.hoisted(() => ({
   withAuthRetryMock: vi.fn(),
+  apiClientGetMock: vi.fn(),
   apiClientPostMock: vi.fn(),
   clearAccessTokenMock: vi.fn(),
   setAccessTokenMock: vi.fn(),
@@ -36,6 +38,7 @@ const {
 
 vi.mock('@/api/client', () => ({
   apiClient: {
+    GET: (...args: unknown[]) => apiClientGetMock(...args),
     POST: (...args: unknown[]) => apiClientPostMock(...args),
   },
   withAuthRetry: (...args: unknown[]) => withAuthRetryMock(...args),
@@ -62,6 +65,8 @@ vi.mock('@/lib/native-deep-link-session', () => ({
   clearPendingNativeDeepLink: () => clearPendingNativeDeepLinkMock(),
 }))
 
+import { AI_CONSENT_REQUIRED_CODE } from '@/lib/legal'
+
 import {
   acceptInvitationSession,
   bootstrapQueryKey,
@@ -71,6 +76,7 @@ import {
   logout,
   refreshAccessToken,
   registerOnboarding,
+  resyncBootstrapAfterLegalError,
   switchEstablishment,
 } from '@/features/auth/api'
 
@@ -1509,6 +1515,51 @@ describe('auth api cache isolation', () => {
       await switchEstablishment({ establishment_id: 'est-b' })
 
       expectComposeDraftCleared()
+    })
+  })
+
+  describe('resyncBootstrapAfterLegalError', () => {
+    it('returns null without fetching bootstrap for a non-legal error', async () => {
+      const result = await resyncBootstrapAfterLegalError({ code: 'permission_denied' })
+
+      expect(result).toBeNull()
+      expect(apiClientGetMock).not.toHaveBeenCalled()
+    })
+
+    it('writes a successful bootstrap fetch into the query cache', async () => {
+      const staleBootstrap = {
+        ...bootstrapPayload,
+        user: { ...bootstrapPayload.user, ai_consent_status: 'granted' },
+      }
+      const nextBootstrap = {
+        ...bootstrapPayload,
+        user: { ...bootstrapPayload.user, ai_consent_status: 'declined' },
+      }
+      queryClient.setQueryData(bootstrapQueryKey, staleBootstrap)
+      apiClientGetMock.mockResolvedValueOnce({
+        response: { status: 200 },
+        data: nextBootstrap,
+        error: undefined,
+      })
+
+      const result = await resyncBootstrapAfterLegalError({ code: AI_CONSENT_REQUIRED_CODE })
+
+      expect(result).toEqual(nextBootstrap)
+      expect(queryClient.getQueryData(bootstrapQueryKey)).toEqual(nextBootstrap)
+    })
+
+    it('returns null without throwing when bootstrap fetch fails', async () => {
+      queryClient.setQueryData(bootstrapQueryKey, bootstrapPayload)
+      apiClientGetMock.mockResolvedValueOnce({
+        response: { status: 401 },
+        data: undefined,
+        error: { detail: 'Unauthorized' },
+      })
+
+      await expect(
+        resyncBootstrapAfterLegalError({ code: AI_CONSENT_REQUIRED_CODE }),
+      ).resolves.toBeNull()
+      expect(queryClient.getQueryData(bootstrapQueryKey)).toEqual(bootstrapPayload)
     })
   })
 })

@@ -50,6 +50,7 @@ import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import { Button } from '@/components/ui/button'
 import { bootstrapQueryKey, clearAuthState, switchEstablishment } from '@/features/auth/api'
 import { AuthRoutingLoading } from '@/features/auth/components/auth-routing-loading'
+import { LegalEntryGates } from '@/features/auth/components/legal-entry-gates'
 import { PendingOnboardingPage } from '@/features/auth/pages/pending-onboarding-page'
 import { TeamInvitePage } from '@/features/auth/pages/team-invite-page'
 import { LoginPage } from '@/features/auth/pages/login-page'
@@ -941,7 +942,7 @@ function App() {
   }
 
   if (route.kind === 'static' && route.path === '/onboarding') {
-    return (
+    const onboardingPage = (
       <div
         className="min-h-dvh bg-spore-cream pt-[var(--app-safe-top)] pb-[var(--app-safe-bottom)] text-spore-forest"
         data-testid="onboarding-shell"
@@ -949,6 +950,7 @@ function App() {
         <OnboardingPage onNavigate={navigate} />
       </div>
     )
+    return auth.isAuthenticated ? <LegalEntryGates>{onboardingPage}</LegalEntryGates> : onboardingPage
   }
 
   const signOutAction = (
@@ -1127,8 +1129,11 @@ function App() {
     )
   }
 
+  const wrapAuthenticated = (node: ReactNode) =>
+    auth.isAuthenticated ? <LegalEntryGates>{node}</LegalEntryGates> : node
+
   if (route.kind === 'unknown' && auth.hasOperationalAccess) {
-    return wrapTerrainWithOperationalRealtime(
+    return wrapAuthenticated(wrapTerrainWithOperationalRealtime(
       wrapTerrainWithChatRealtime(
         <TerrainShell
           contentKey="not-found"
@@ -1152,7 +1157,7 @@ function App() {
           <Suspense fallback={<RoutePageLoading />}>{routeContent}</Suspense>
         </TerrainShell>,
       ),
-    )
+    ))
   }
 
   if (usesTerrainShell(route)) {
@@ -1170,33 +1175,35 @@ function App() {
           trailing={terrainTopbarTrailing}
         />
       )
-    return wrapTerrainWithOperationalRealtime(
-      wrapTerrainWithChatRealtime(
-        <TerrainShell
-          contentKey={getTerrainContentKey(route)}
-          showBottomNav={terrainConfig.showBottomNav}
-          activeNavPath={terrainConfig.activeNavPath}
-          bootstrap={auth.bootstrap}
-          desktopActivePath={terrainConfig.desktopActivePath ?? terrainConfig.activeNavPath}
-          mainScroll={terrainConfig.mainScroll}
-          navigate={navigate}
-          showChatNav={showChatNav}
-          chatHasUnread={chatHasUnread}
-          topbar={
-            topbarPlacement === 'mobile-only' && terrainTopbar ? (
-              <div className="lg:hidden">{terrainTopbar}</div>
-            ) : (
-              terrainTopbar
-            )
-          }
-        >
-          <Suspense fallback={<RoutePageLoading />}>{routeContent}</Suspense>
-        </TerrainShell>,
+    return wrapAuthenticated(
+      wrapTerrainWithOperationalRealtime(
+        wrapTerrainWithChatRealtime(
+          <TerrainShell
+            contentKey={getTerrainContentKey(route)}
+            showBottomNav={terrainConfig.showBottomNav}
+            activeNavPath={terrainConfig.activeNavPath}
+            bootstrap={auth.bootstrap}
+            desktopActivePath={terrainConfig.desktopActivePath ?? terrainConfig.activeNavPath}
+            mainScroll={terrainConfig.mainScroll}
+            navigate={navigate}
+            showChatNav={showChatNav}
+            chatHasUnread={chatHasUnread}
+            topbar={
+              topbarPlacement === 'mobile-only' && terrainTopbar ? (
+                <div className="lg:hidden">{terrainTopbar}</div>
+              ) : (
+                terrainTopbar
+              )
+            }
+          >
+            <Suspense fallback={<RoutePageLoading />}>{routeContent}</Suspense>
+          </TerrainShell>,
+        ),
       ),
     )
   }
 
-  return (
+  return wrapAuthenticated(
     <motion.main
       {...motionProps}
       className="mx-auto flex min-h-screen w-full max-w-7xl px-4 pt-[max(1.5rem,var(--app-safe-top))] pb-[max(1.5rem,var(--app-safe-bottom))] sm:px-6"

@@ -19,9 +19,13 @@ import {
   OBSERVATION_TEXT_MAX_LENGTH,
   OBSERVATION_TEXT_MIN_LENGTH,
 } from '@/features/observations/types'
-import { LegalConsentSheet, legalConsentKindFromError } from '@/features/auth/components/legal-consent-sheet'
+import { resyncBootstrapAfterLegalError } from '@/features/auth/api'
 import { resolveApiErrorMessage } from '@/lib/error-message'
-import { PUBLIC_PRIVACY_POLICY_URL } from '@/lib/legal'
+import {
+  OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE,
+  PUBLIC_PRIVACY_POLICY_URL,
+  readAiConsentStatus,
+} from '@/lib/legal'
 import { useNetworkStatus } from '@/lib/network-status'
 import { terrain, terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -43,8 +47,8 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
     useReportingComposeDraft(establishmentId)
 
   const [formError, setFormError] = useState<string | null>(null)
-  const [legalKind, setLegalKind] = useState<ReturnType<typeof legalConsentKindFromError>>(null)
   const [isRecording, setIsRecording] = useState(false)
+  const aiConsentGranted = readAiConsentStatus(auth.user ?? auth.bootstrap?.user) === 'granted'
   const [isTranscribing, setIsTranscribing] = useState(false)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -58,6 +62,7 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
   const trimmedText = text.trim()
   const textLength = trimmedText.length
   const canSubmit =
+    aiConsentGranted &&
     textLength >= OBSERVATION_TEXT_MIN_LENGTH &&
     textLength <= OBSERVATION_TEXT_MAX_LENGTH &&
     isOnline &&
@@ -108,11 +113,12 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
           })
           setText(result.text.slice(0, OBSERVATION_TEXT_MAX_LENGTH))
         } catch (error) {
-          const kind = legalConsentKindFromError(error)
-          if (kind) {
-            setLegalKind(kind)
-          }
-          setFormError(resolveReportError(error))
+          const bootstrap = await resyncBootstrapAfterLegalError(error)
+          setFormError(
+            readAiConsentStatus(bootstrap?.user ?? auth.user ?? auth.bootstrap?.user) === 'declined'
+              ? OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE
+              : resolveReportError(error),
+          )
         } finally {
           setIsTranscribing(false)
         }
@@ -147,6 +153,11 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
       return
     }
 
+    if (!aiConsentGranted) {
+      setFormError(OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE)
+      return
+    }
+
     try {
       const response = await submitMutation.mutateAsync({
         text: trimmedText,
@@ -161,11 +172,12 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
         submittedAt: response.submitted_at,
       })
     } catch (error) {
-      const kind = legalConsentKindFromError(error)
-      if (kind) {
-        setLegalKind(kind)
-      }
-      setFormError(resolveReportError(error))
+      const bootstrap = await resyncBootstrapAfterLegalError(error)
+      setFormError(
+        readAiConsentStatus(bootstrap?.user ?? auth.user ?? auth.bootstrap?.user) === 'declined'
+          ? OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE
+          : resolveReportError(error),
+      )
     }
   }
 
@@ -212,7 +224,11 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
             isTranscribing={isTranscribing}
             isSubmitPending={isSubmitPending}
             onTextChange={setText}
-            onStartRecording={() => void handleStartRecording()}
+            onStartRecording={
+              aiConsentGranted ? () => void handleStartRecording() : () => {
+                setFormError(OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE)
+              }
+            }
             onStopRecording={handleStopRecording}
           />
 
@@ -223,6 +239,9 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
             onRemovePhoto={(photo) => removePhoto(photo.localId)}
           />
 
+          {!aiConsentGranted ? (
+            <TerrainErrorState message={OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE} />
+          ) : null}
           {formError ? <TerrainErrorState message={formError} /> : null}
         </div>
       </div>
@@ -252,11 +271,6 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
           )}
         </Button>
       </TerrainStickyFooter>
-      <LegalConsentSheet
-        kind={legalKind}
-        onClose={() => setLegalKind(null)}
-        onAccepted={() => setFormError(null)}
-      />
     </div>
   )
 }

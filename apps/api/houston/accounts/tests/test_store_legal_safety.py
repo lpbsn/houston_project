@@ -8,7 +8,12 @@ from rest_framework.test import APIClient
 
 from houston.accounts.deletion_services import _anonymize_user
 from houston.accounts.legal_constants import CURRENT_AI_CONSENT_VERSION, CURRENT_TERMS_VERSION
-from houston.accounts.legal_services import grant_current_legal_defaults, withdraw_ai_consent
+from houston.accounts.legal_services import (
+    decline_current_ai_consent,
+    grant_current_legal_defaults,
+    resolve_ai_consent_status,
+    withdraw_ai_consent,
+)
 from houston.accounts.models import User
 from houston.analytics.classifier import PatternClassifierProviderResponse
 from houston.analytics.models import SignalPatternAssignment
@@ -43,12 +48,14 @@ def _clear_legal(user: User) -> None:
     user.terms_accepted_at = None
     user.ai_consent_version = None
     user.ai_processing_consented_at = None
+    user.ai_declined_version = None
     user.save(
         update_fields=[
             "terms_version",
             "terms_accepted_at",
             "ai_consent_version",
             "ai_processing_consented_at",
+            "ai_declined_version",
             "updated_at",
         ]
     )
@@ -67,6 +74,36 @@ def test_submit_observation_requires_terms_then_ai_consent():
     with pytest.raises(Exception) as exc_info:
         submit_observation(membership=membership, text="A" * 20, temporary_upload_ids=[])
     assert exc_info.value.code == "ai_consent_required"
+
+    decline_current_ai_consent(user=membership.user, version=CURRENT_AI_CONSENT_VERSION)
+    with pytest.raises(Exception) as exc_info:
+        submit_observation(membership=membership, text="A" * 20, temporary_upload_ids=[])
+    assert exc_info.value.code == "ai_consent_required"
+    assert membership.user.ai_consent_version is None
+    assert membership.user.ai_declined_version == CURRENT_AI_CONSENT_VERSION
+
+
+def test_ai_consent_status_derives_undecided_granted_declined():
+    membership = build_api_membership(role=EstablishmentMembership.Role.STAFF)
+    user = membership.user
+    _clear_legal(user)
+    user.refresh_from_db()
+    assert resolve_ai_consent_status(user) == "undecided"
+
+    user.ai_consent_version = CURRENT_AI_CONSENT_VERSION
+    user.ai_processing_consented_at = timezone.now()
+    user.save(update_fields=["ai_consent_version", "ai_processing_consented_at", "updated_at"])
+    assert resolve_ai_consent_status(user) == "granted"
+
+    withdraw_ai_consent(user=user)
+    user.refresh_from_db()
+    assert resolve_ai_consent_status(user) == "declined"
+    assert user.ai_consent_version is None
+    assert user.ai_declined_version == CURRENT_AI_CONSENT_VERSION
+
+    user.ai_declined_version = "openai-v0"
+    user.save(update_fields=["ai_declined_version", "updated_at"])
+    assert resolve_ai_consent_status(user) == "undecided"
 
 
 def test_comment_requires_terms_not_ai_consent():
@@ -193,6 +230,24 @@ def test_terms_and_ai_consent_http_roundtrip():
     )
     assert terms.status_code == 200
     assert terms.json()["user"]["needs_terms_acceptance"] is False
+    assert terms.json()["user"]["ai_consent_status"] == "undecided"
+    assert "ai_declined_version" not in terms.json()["user"]
+    decline = client.post(
+        "/api/v1/auth/me/ai-consent/decline/",
+        {"version": CURRENT_AI_CONSENT_VERSION},
+        format="json",
+        **headers,
+    )
+    assert decline.status_code == 200
+    assert decline.json()["user"]["ai_consent_status"] == "declined"
+    assert decline.json()["user"]["needs_ai_consent"] is True
+    invalid = client.post(
+        "/api/v1/auth/me/ai-consent/decline/",
+        {"version": "openai-v0"},
+        format="json",
+        **headers,
+    )
+    assert invalid.status_code == 400
     ai = client.post(
         "/api/v1/auth/me/ai-consent/",
         {"version": CURRENT_AI_CONSENT_VERSION},
@@ -201,9 +256,11 @@ def test_terms_and_ai_consent_http_roundtrip():
     )
     assert ai.status_code == 200
     assert ai.json()["user"]["needs_ai_consent"] is False
+    assert ai.json()["user"]["ai_consent_status"] == "granted"
     withdraw = client.post("/api/v1/auth/me/ai-consent/withdraw/", **headers)
     assert withdraw.status_code == 200
     assert withdraw.json()["user"]["needs_ai_consent"] is True
+    assert withdraw.json()["user"]["ai_consent_status"] == "declined"
 
 
 def test_account_anonymization_clears_legal_fields():
@@ -216,6 +273,7 @@ def test_account_anonymization_clears_legal_fields():
     assert user.terms_accepted_at is None
     assert user.ai_consent_version is None
     assert user.ai_processing_consented_at is None
+    assert user.ai_declined_version is None
 
 
 def test_openai_pattern_classifier_skips_without_source_author_ai_consent():

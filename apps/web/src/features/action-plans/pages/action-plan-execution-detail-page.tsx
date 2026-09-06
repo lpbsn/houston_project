@@ -20,7 +20,9 @@ import { parseDetailDeepLink } from '@/features/comments/lib/detail-deep-link'
 import { TerrainFeedback } from '@/components/domain/terrain-feedback'
 import { trackObservation } from '@/features/observations/components/observation-processing-tracker-provider'
 import { useTaskObservationComposeDraft } from '@/features/observations/lib/use-observation-compose-draft'
+import { resyncBootstrapAfterLegalError } from '@/features/auth/api'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE, readAiConsentStatus } from '@/lib/legal'
 import { useNetworkStatus } from '@/lib/network-status'
 import { notifySuccess } from '@/lib/success-toast'
 import { cn } from '@/lib/utils'
@@ -82,7 +84,8 @@ function ActionPlanExecutionDetailPageContent({
   source,
 }: ActionPlanExecutionDetailPageContentProps) {
   const { navigate, search: locationSearch } = useAppRoute()
-  const { activeMembership } = useAuth()
+  const { activeMembership, user, bootstrap } = useAuth()
+  const aiConsentGranted = readAiConsentStatus(user ?? bootstrap?.user) === 'granted'
   const { isOnline } = useNetworkStatus()
   const markDoneMutation = useMarkActionPlanExecutionDoneMutation(establishmentId, executionId)
   const validateMutation = useValidateActionPlanExecutionMutation(establishmentId, executionId)
@@ -317,6 +320,13 @@ function ActionPlanExecutionDetailPageContent({
     if (!observationTaskId) {
       return
     }
+    if (!aiConsentGranted) {
+      setFeedback({
+        variant: 'error',
+        message: OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE,
+      })
+      return
+    }
     if (!activeMembership?.id) {
       setFeedback({
         variant: 'error',
@@ -341,9 +351,13 @@ function ActionPlanExecutionDetailPageContent({
       setObservationTaskId(null)
       setFeedback({ variant: 'success', message: 'Observation créée.' })
     } catch (error) {
+      const resynced = await resyncBootstrapAfterLegalError(error)
       setFeedback({
         variant: 'error',
-        message: resolveActionPlanErrorMessage(error, 'L’observation n’a pas pu être créée.'),
+        message:
+          readAiConsentStatus(resynced?.user ?? user ?? bootstrap?.user) === 'declined'
+            ? OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE
+            : resolveActionPlanErrorMessage(error, 'L’observation n’a pas pu être créée.'),
       })
     }
   }
@@ -358,6 +372,14 @@ function ActionPlanExecutionDetailPageContent({
       return
     }
 
+    if (!aiConsentGranted) {
+      setTaskActionsTask(null)
+      setFeedback({
+        variant: 'error',
+        message: OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE,
+      })
+      return
+    }
     setObservationTaskId(taskActionsTask.id)
   }
 

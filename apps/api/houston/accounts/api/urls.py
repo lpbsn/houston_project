@@ -4,6 +4,7 @@ from houston.accounts.api.views import (
     AccountDeletionPreviewView,
     AccountDeletionView,
     AiConsentAcceptView,
+    AiConsentDeclineView,
     AiConsentWithdrawView,
     BootstrapView,
     CsrfCookieView,
@@ -38,6 +39,11 @@ urlpatterns = [
     path("me/delete/", AccountDeletionView.as_view(), name="auth-delete"),
     path("me/terms/", TermsAcceptView.as_view(), name="auth-terms-accept"),
     path("me/ai-consent/", AiConsentAcceptView.as_view(), name="auth-ai-consent-accept"),
+    path(
+        "me/ai-consent/decline/",
+        AiConsentDeclineView.as_view(),
+        name="auth-ai-consent-decline",
+    ),
     path(
         "me/ai-consent/withdraw/",
         AiConsentWithdrawView.as_view(),

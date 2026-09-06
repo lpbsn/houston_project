@@ -16,6 +16,7 @@ import {
 import {
   CURRENT_AI_CONSENT_VERSION,
   CURRENT_TERMS_VERSION,
+  isLegalError,
 } from '@/lib/legal'
 
 import { clearCsrfTokenCache, ensureCsrfToken } from './csrf'
@@ -876,6 +877,39 @@ export async function acceptCurrentAiConsent() {
   }
   queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, result.data)
   return result.data
+}
+
+export async function declineCurrentAiConsent() {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/auth/me/ai-consent/decline/', {
+        body: { version: CURRENT_AI_CONSENT_VERSION },
+        headers: accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+            }
+          : undefined,
+      }),
+    { refreshable: true },
+  )
+  if (result.error || !result.data) {
+    throw buildAuthError(result.response, result.error, 'AI consent could not be declined.')
+  }
+  queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, result.data)
+  return result.data
+}
+
+export async function resyncBootstrapAfterLegalError(error: unknown) {
+  if (!isLegalError(error)) {
+    return null
+  }
+  try {
+    const data = await fetchBootstrap()
+    queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, data)
+    return data
+  } catch {
+    return null
+  }
 }
 
 export async function withdrawAiConsent() {

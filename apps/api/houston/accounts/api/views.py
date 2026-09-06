@@ -664,6 +664,40 @@ class AiConsentAcceptView(APIView):
         return Response(build_bootstrap_payload(user=request.user, session=request.auth.session))
 
 
+class AiConsentDeclineView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["auth"],
+        request=LegalVersionRequestSerializer,
+        responses={
+            200: BootstrapResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+        description="Records an initial decline of the current OpenAI processing disclosure.",
+    )
+    def post(self, request):
+        serializer = LegalVersionRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        from houston.accounts.legal_services import (
+            InvalidLegalVersionError,
+            decline_current_ai_consent,
+        )
+
+        try:
+            decline_current_ai_consent(
+                user=request.user,
+                version=serializer.validated_data["version"],
+            )
+        except InvalidLegalVersionError as exc:
+            from houston.accounts.api.legal_errors import legal_error_response
+
+            return legal_error_response(exc)
+        return Response(build_bootstrap_payload(user=request.user, session=request.auth.session))
+
+
 class AiConsentWithdrawView(APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [permissions.IsAuthenticated]
@@ -675,7 +709,7 @@ class AiConsentWithdrawView(APIView):
             200: BootstrapResponseSerializer,
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
         },
-        description="Withdraws OpenAI processing consent.",
+        description="Withdraws OpenAI processing consent after a prior grant.",
     )
     def post(self, request):
         from houston.accounts.legal_services import withdraw_ai_consent

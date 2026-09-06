@@ -44,37 +44,12 @@ vi.mock('../hooks/use-chat-websocket', () => ({
   },
 }))
 
-vi.mock('@/features/auth/components/legal-consent-sheet', () => ({
-  LegalConsentSheet: ({
-    kind,
-    onClose,
-    onAccepted,
-  }: {
-    kind: 'terms' | 'ai' | null
-    onClose: () => void
-    onAccepted: () => void
-  }) => {
-    if (!kind) {
-      return null
-    }
-    return createElement(
-      'div',
-      { 'data-testid': 'legal-consent-sheet', 'data-kind': kind },
-      createElement('button', {
-        type: 'button',
-        'data-testid': 'legal-accept',
-        onClick: () => {
-          onAccepted()
-          onClose()
-        },
-      }),
-      createElement('button', {
-        type: 'button',
-        'data-testid': 'legal-close',
-        onClick: onClose,
-      }),
-    )
-  },
+const { resyncBootstrapAfterLegalError } = vi.hoisted(() => ({
+  resyncBootstrapAfterLegalError: vi.fn(async () => null),
+}))
+
+vi.mock('@/features/auth/api', () => ({
+  resyncBootstrapAfterLegalError,
 }))
 
 vi.mock('@/app/auth-provider', () => ({
@@ -377,7 +352,7 @@ describe('ChatRealtimeProvider', () => {
     })
   })
 
-  it('opens terms consent on terms_acceptance_required and retries only those failed messages', () => {
+  it('resyncs bootstrap on terms_acceptance_required without a local consent sheet', () => {
     renderProviderWithProbe()
     fireEvent.click(screen.getByText('send'))
     fireEvent.click(screen.getByText('send'))
@@ -403,8 +378,7 @@ describe('ChatRealtimeProvider', () => {
       })
     })
 
-    const afterReject = readLocalMessages()
-    expect(afterReject).toEqual([
+    expect(readLocalMessages()).toEqual([
       expect.objectContaining({
         clientMessageId: termsMessage.clientMessageId,
         status: 'failed',
@@ -416,30 +390,11 @@ describe('ChatRealtimeProvider', () => {
         rejectCode: 'validation_error',
       }),
     ])
-    expect(screen.getByTestId('legal-consent-sheet').getAttribute('data-kind')).toBe('terms')
-    expect(sendMessageMock).not.toHaveBeenCalled()
-
-    fireEvent.click(screen.getByTestId('legal-accept'))
-
-    expect(sendMessageMock).toHaveBeenCalledTimes(1)
-    expect(sendMessageMock).toHaveBeenCalledWith({
-      conversationId: 'conv-1',
-      clientMessageId: termsMessage.clientMessageId,
-      body: 'Hello',
-    })
-    expect(readLocalMessages()).toEqual([
-      expect.objectContaining({
-        clientMessageId: termsMessage.clientMessageId,
-        status: 'pending',
-      }),
-      expect.objectContaining({
-        clientMessageId: validationMessage.clientMessageId,
-        status: 'failed',
-        rejectCode: 'validation_error',
-      }),
-    ])
-    expect(readLocalMessages()[0]?.rejectCode).toBeUndefined()
     expect(screen.queryByTestId('legal-consent-sheet')).toBeNull()
+    expect(resyncBootstrapAfterLegalError).toHaveBeenCalledWith({
+      code: 'terms_acceptance_required',
+    })
+    expect(sendMessageMock).not.toHaveBeenCalled()
   })
 
   it('does not open terms consent for permission_denied', () => {
@@ -468,7 +423,7 @@ describe('ChatRealtimeProvider', () => {
     expect(sendMessageMock).not.toHaveBeenCalled()
   })
 
-  it('keeps terms-failed messages after dismissing consent', () => {
+  it('keeps terms-failed messages after bootstrap resync', () => {
     renderProviderWithProbe()
     fireEvent.click(screen.getByText('send'))
 
@@ -481,8 +436,6 @@ describe('ChatRealtimeProvider', () => {
         detail: 'Accept the current terms of use.',
       })
     })
-
-    fireEvent.click(screen.getByTestId('legal-close'))
 
     expect(screen.queryByTestId('legal-consent-sheet')).toBeNull()
     expect(readLocalMessages()[0]).toEqual(

@@ -69,6 +69,7 @@ const { authState } = vi.hoisted(() => ({
         first_name: 'Marie',
         last_name: 'Renaud',
         email: 'marie@example.com',
+        ai_consent_status: 'granted',
       },
       isBootstrapping: false,
       isReady: true,
@@ -175,6 +176,8 @@ vi.mock('@/features/auth/api', () => ({
     leaves_establishments_without_director: [],
   })),
   deleteAccount: vi.fn(async () => undefined),
+  acceptCurrentAiConsent: vi.fn(async () => undefined),
+  withdrawAiConsent: vi.fn(async () => undefined),
 }))
 
 vi.mock('@/features/gamification/hooks', () => ({
@@ -249,6 +252,19 @@ afterEach(() => {
 })
 
 describe('ProfilePage', () => {
+  it('withdraws AI consent from the Général toggle', async () => {
+    const { withdrawAiConsent } = await import('@/features/auth/api')
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Traitement OpenAI' }))
+    expect(withdrawAiConsent).toHaveBeenCalledTimes(1)
+  })
+
   it('renders current score and next grade from gamification API data', () => {
     render(
       createElement(ProfilePage, {

@@ -8,7 +8,9 @@ import {
   PUBLIC_PRIVACY_POLICY_URL,
   PUBLIC_TERMS_URL,
   isAiConsentRequired,
+  isLegalError,
   isTermsAcceptanceRequired,
+  readAiConsentStatus,
 } from './legal'
 
 describe('legal constants', () => {
@@ -19,6 +21,11 @@ describe('legal constants', () => {
     expect(CURRENT_AI_CONSENT_VERSION).toBe('openai-v1')
     expect(isTermsAcceptanceRequired({ code: 'terms_acceptance_required' })).toBe(true)
     expect(isAiConsentRequired({ code: 'ai_consent_required' })).toBe(true)
+    expect(isLegalError({ code: 'ai_consent_required' })).toBe(true)
+    expect(isLegalError({ code: 'permission_denied' })).toBe(false)
+    expect(readAiConsentStatus({ ai_consent_status: 'declined' })).toBe('declined')
+    expect(readAiConsentStatus({ ai_consent_status: 'granted' })).toBe('granted')
+    expect(readAiConsentStatus(null)).toBe('undecided')
   })
 
   it('keeps analytics pattern classification inside openai-v1 disclosure copy', () => {
