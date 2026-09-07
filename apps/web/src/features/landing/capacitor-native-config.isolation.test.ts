@@ -66,7 +66,7 @@ describe('capacitor native config isolation', () => {
   it('disables iOS Capacitor bridge logging without a global loggingBehavior', () => {
     const config = readFileSync(resolve(process.cwd(), 'capacitor.config.ts'), 'utf8')
     expect(config).toMatch(/ios:\s*\{\s*loggingBehavior:\s*'none'\s*,?\s*\}/)
-    expect(config).not.toMatch(/^  loggingBehavior:/m)
+    expect(config).not.toMatch(/^ {2}loggingBehavior:/m)
   })
 
   it('sets CAPACITOR_DEBUG false on iOS Release', () => {
