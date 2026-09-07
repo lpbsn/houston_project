@@ -153,7 +153,7 @@ describe('AndroidAppUpdateHost', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
-  it('clears a force overlay when a later check decides none', async () => {
+  it('clears a force overlay when a later check has a known non-forcing floor', async () => {
     let onForeground: (() => void) | undefined
     subscribeAppForeground.mockImplementation((listener) => {
       onForeground = listener
@@ -173,6 +173,91 @@ describe('AndroidAppUpdateHost', () => {
     fetchAndroidMinSupportedVersionCode.mockResolvedValue(0)
     clearAndroidAppUpdateStateForTests()
     snoozeAndroidAppUpdate('3', Date.now())
+    onForeground?.()
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+  })
+
+  it('keeps a force overlay if Play info is temporarily missing', async () => {
+    let onForeground: (() => void) | undefined
+    subscribeAppForeground.mockImplementation((listener) => {
+      onForeground = listener
+      return () => undefined
+    })
+    fetchAndroidMinSupportedVersionCode.mockResolvedValue(9)
+    render(
+      <AndroidAppUpdateHost>
+        <div>app</div>
+      </AndroidAppUpdateHost>,
+    )
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: LATER_ACTION_LABEL })).toBeNull()
+      expect(screen.getByRole('button', { name: UPDATE_ACTION_LABEL })).toBeTruthy()
+    })
+
+    readAndroidPlayUpdate.mockResolvedValue(null)
+    clearAndroidAppUpdateStateForTests()
+    onForeground?.()
+    await waitFor(() => {
+      expect(readAndroidPlayUpdate.mock.calls.length).toBeGreaterThanOrEqual(2)
+    })
+    expect(screen.queryByRole('button', { name: LATER_ACTION_LABEL })).toBeNull()
+    expect(screen.getByRole('button', { name: UPDATE_ACTION_LABEL })).toBeTruthy()
+  })
+
+  it('keeps a force overlay if the backend floor is temporarily unknown', async () => {
+    let onForeground: (() => void) | undefined
+    subscribeAppForeground.mockImplementation((listener) => {
+      onForeground = listener
+      return () => undefined
+    })
+    fetchAndroidMinSupportedVersionCode.mockResolvedValue(9)
+    render(
+      <AndroidAppUpdateHost>
+        <div>app</div>
+      </AndroidAppUpdateHost>,
+    )
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: LATER_ACTION_LABEL })).toBeNull()
+      expect(screen.getByRole('button', { name: UPDATE_ACTION_LABEL })).toBeTruthy()
+    })
+
+    fetchAndroidMinSupportedVersionCode.mockResolvedValue(null)
+    clearAndroidAppUpdateStateForTests()
+    onForeground?.()
+    await waitFor(() => {
+      expect(fetchAndroidMinSupportedVersionCode.mock.calls.length).toBeGreaterThanOrEqual(2)
+    })
+    expect(screen.queryByRole('button', { name: LATER_ACTION_LABEL })).toBeNull()
+    expect(screen.getByRole('button', { name: UPDATE_ACTION_LABEL })).toBeTruthy()
+  })
+
+  it('clears a force overlay when Play is known to have nothing installable', async () => {
+    let onForeground: (() => void) | undefined
+    subscribeAppForeground.mockImplementation((listener) => {
+      onForeground = listener
+      return () => undefined
+    })
+    fetchAndroidMinSupportedVersionCode.mockResolvedValue(9)
+    render(
+      <AndroidAppUpdateHost>
+        <div>app</div>
+      </AndroidAppUpdateHost>,
+    )
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: UPDATE_ACTION_LABEL })).toBeTruthy()
+    })
+
+    fetchAndroidMinSupportedVersionCode.mockResolvedValue(null)
+    readAndroidPlayUpdate.mockResolvedValue(
+      installablePlay({
+        updateAvailability: 1,
+        flexibleUpdateAllowed: false,
+        immediateUpdateAllowed: false,
+      }),
+    )
+    clearAndroidAppUpdateStateForTests()
     onForeground?.()
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).toBeNull()

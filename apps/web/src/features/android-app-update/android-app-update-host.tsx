@@ -25,6 +25,8 @@ export function AndroidAppUpdateHost({ children }: PropsWithChildren) {
   const [availableVersionCode, setAvailableVersionCode] = useState('')
   const [updateBusy, setUpdateBusy] = useState(false)
   const updateInFlightRef = useRef(false)
+  const promptRef = useRef<PromptMode | null>(null)
+  promptRef.current = prompt
 
   const runCheck = useCallback(async (reason: 'launch' | 'foreground') => {
     if (!isAndroidInAppUpdateRuntime()) {
@@ -40,7 +42,7 @@ export function AndroidAppUpdateHost({ children }: PropsWithChildren) {
     const play = await readAndroidPlayUpdate()
     markAndroidAppUpdateChecked(nowMs)
     if (!play) {
-      setPrompt(null)
+      setPrompt((current) => (current === 'force' ? current : null))
       return
     }
 
@@ -51,6 +53,9 @@ export function AndroidAppUpdateHost({ children }: PropsWithChildren) {
       nowMs,
       snooze: stored.snooze,
     })
+    const floorUnknown = minSupportedVersionCode == null
+    const keepForceWhileUnknown =
+      promptRef.current === 'force' && floorUnknown && isPlayUpdateInstallable(play)
 
     if (decision.action === 'complete_downloaded') {
       await completeAndroidFlexibleUpdateIfDownloaded()
@@ -73,6 +78,9 @@ export function AndroidAppUpdateHost({ children }: PropsWithChildren) {
     }
 
     if (decision.action === 'show_force' || decision.action === 'show_flexible') {
+      if (decision.action === 'show_flexible' && keepForceWhileUnknown) {
+        return
+      }
       const nextMode = decision.action === 'show_force' ? 'force' : 'flexible'
       logAndroidAppUpdate('update_detected', {
         currentVersionCode: play.currentVersionCode,
@@ -88,6 +96,9 @@ export function AndroidAppUpdateHost({ children }: PropsWithChildren) {
       return
     }
 
+    if (keepForceWhileUnknown) {
+      return
+    }
     setPrompt(null)
   }, [])
 
@@ -124,7 +135,11 @@ export function AndroidAppUpdateHost({ children }: PropsWithChildren) {
       }
 
       const play = await readAndroidPlayUpdate()
-      if (prompt === 'force' && play && isPlayUpdateInstallable(play)) {
+      if (prompt === 'force') {
+        if (!play || isPlayUpdateInstallable(play)) {
+          return
+        }
+        setPrompt(null)
         return
       }
       setPrompt(null)
