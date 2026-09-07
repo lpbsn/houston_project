@@ -63,6 +63,12 @@ describe('capacitor native config isolation', () => {
     expect(gradle).toContain('Push would be missing in the Closed Testing AAB')
   })
 
+  it('disables iOS Capacitor bridge logging without a global loggingBehavior', () => {
+    const config = readFileSync(resolve(process.cwd(), 'capacitor.config.ts'), 'utf8')
+    expect(config).toMatch(/ios:\s*\{\s*loggingBehavior:\s*'none'\s*,?\s*\}/)
+    expect(config).not.toMatch(/^ {2}loggingBehavior:/m)
+  })
+
   it('sets CAPACITOR_DEBUG false on iOS Release', () => {
     const releaseXcconfig = readFileSync(resolve(process.cwd(), 'ios/release.xcconfig'), 'utf8')
     const pbxproj = readFileSync(
