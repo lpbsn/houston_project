@@ -26,7 +26,10 @@ export function AndroidAppUpdateHost({ children }: PropsWithChildren) {
   const [updateBusy, setUpdateBusy] = useState(false)
   const updateInFlightRef = useRef(false)
   const promptRef = useRef<PromptMode | null>(null)
-  promptRef.current = prompt
+
+  useEffect(() => {
+    promptRef.current = prompt
+  }, [prompt])
 
   const runCheck = useCallback(async (reason: 'launch' | 'foreground') => {
     if (!isAndroidInAppUpdateRuntime()) {
