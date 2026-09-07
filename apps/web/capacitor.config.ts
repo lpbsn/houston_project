@@ -8,6 +8,9 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: false,
   },
+  ios: {
+    loggingBehavior: 'none',
+  },
   plugins: {
     Keyboard: {
       resize: KeyboardResize.Native,
