@@ -507,6 +507,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/client-requirements/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Public client policy for native store builds. Default min Android versionCode is 0 (no forced update). */
+        get: operations["v1_client_requirements_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cross/action-plan-execution-feed/": {
         parameters: {
             query?: never;
@@ -3682,6 +3699,9 @@ export interface components {
             ticket: string;
             expires_in: number;
         };
+        ClientRequirementsResponse: {
+            android_min_supported_version_code: number;
+        };
         CommentAuthor: {
             /** Format: uuid */
             membership_id: string;
@@ -6501,6 +6521,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CatalogBusinessUnitSuggestion"][];
+                };
+            };
+        };
+    };
+    v1_client_requirements_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientRequirementsResponse"];
                 };
             };
         };

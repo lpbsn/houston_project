@@ -1,5 +1,6 @@
 from http import HTTPStatus
 
+from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.urls import reverse_lazy
 from django.views.generic import TemplateView
@@ -17,6 +18,10 @@ from houston.establishments.access import (
 
 class HealthResponseSerializer(serializers.Serializer):
     status = serializers.CharField()
+
+
+class ClientRequirementsResponseSerializer(serializers.Serializer):
+    android_min_supported_version_code = serializers.IntegerField(min_value=0)
 
 
 class HomeView(TemplateView):
@@ -45,3 +50,24 @@ class HealthView(APIView):
     @extend_schema(responses=HealthResponseSerializer)
     def get(self, request):
         return Response({"status": "ok"})
+
+
+class ClientRequirementsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    @extend_schema(
+        responses=ClientRequirementsResponseSerializer,
+        description=(
+            "Public client policy for native store builds. "
+            "Default min Android versionCode is 0 (no forced update)."
+        ),
+    )
+    def get(self, request):
+        return Response(
+            {
+                "android_min_supported_version_code": (
+                    settings.HOUSTON_ANDROID_MIN_SUPPORTED_VERSION_CODE
+                ),
+            }
+        )

@@ -3,6 +3,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import App from './App'
+import { AndroidAppUpdateHost } from '@/features/android-app-update/android-app-update-host'
 import { createBrowserHistory } from '@/app/app-history'
 import { AppRouteProvider } from '@/app/app-routes'
 import { AuthProvider } from '@/app/auth-provider'
@@ -79,7 +80,9 @@ async function bootstrap() {
         <AuthProvider>
           <ObservationProcessingTrackerProvider>
             <AppRouteProvider history={history}>
-              <App />
+              <AndroidAppUpdateHost>
+                <App />
+              </AndroidAppUpdateHost>
             </AppRouteProvider>
           </ObservationProcessingTrackerProvider>
         </AuthProvider>
