@@ -187,6 +187,7 @@ Use Railway service shell or `railway run` against `api-web`. Not automated in p
 
 ```toml
 startCommand = "/app/infra/docker/railway/start-api-web.sh"
+drainingSeconds = 20
 ```
 
 The script ([`infra/docker/railway/start-api-web.sh`](../../infra/docker/railway/start-api-web.sh)):
@@ -196,7 +197,8 @@ The script ([`infra/docker/railway/start-api-web.sh`](../../infra/docker/railway
 * Starts **Daphne** via `/opt/venv/bin/daphne` on `127.0.0.1:8000` (HTTP + WebSocket)
 * Starts **nginx** on `0.0.0.0:$PORT` (Railway edge)
 * Routes `/api/*` and `/ws/*` to Daphne; `/*` to SPA static
-* Exits non-zero if Daphne or nginx fails
+* Exits 0 on SIGTERM/SIGINT (Railway teardown); exits non-zero only if Daphne or nginx dies without a shutdown signal
+* `drainingSeconds = 20` is the Railway grace ceiling before SIGKILL, not a fixed sleep
 
 No `$PORT` logic in `railway.toml` — only in the start script.
 

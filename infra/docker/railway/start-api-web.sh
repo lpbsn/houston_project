@@ -5,11 +5,18 @@ PORT="${PORT:-8080}"
 MEDIA_ROOT="${HOUSTON_PRIVATE_MEDIA_ROOT:-/app/apps/api/private_media}"
 NGINX_CONF="/tmp/nginx-railway.conf"
 DAPHNE_PID=""
+NGINX_PID=""
 
 cleanup() {
     if [ -n "$DAPHNE_PID" ]; then
         kill "$DAPHNE_PID" 2>/dev/null || true
         wait "$DAPHNE_PID" 2>/dev/null || true
+        DAPHNE_PID=""
+    fi
+    if [ -n "$NGINX_PID" ]; then
+        kill "$NGINX_PID" 2>/dev/null || true
+        wait "$NGINX_PID" 2>/dev/null || true
+        NGINX_PID=""
     fi
 }
 
@@ -19,7 +26,14 @@ fail() {
     exit 1
 }
 
-trap cleanup INT TERM
+shutdown() {
+    echo "start-api-web: shutting down" >&2
+    trap - INT TERM
+    cleanup
+    exit 0
+}
+
+trap shutdown INT TERM
 
 mkdir -p "$MEDIA_ROOT"
 chown -R houston:houston "$MEDIA_ROOT" 2>/dev/null || true
@@ -50,6 +64,7 @@ done
 if ! kill -0 "$DAPHNE_PID" 2>/dev/null; then
     kill "$NGINX_PID" 2>/dev/null || true
     wait "$NGINX_PID" 2>/dev/null || true
+    NGINX_PID=""
     fail "Daphne exited unexpectedly"
 fi
 

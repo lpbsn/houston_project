@@ -19,3 +19,4 @@ watchPatterns = [
 startCommand = "/app/infra/docker/railway/start-api-web.sh"
 healthcheckPath = "/api/v1/health/"
 preDeployCommand = "/bin/sh -c 'cd /app/apps/api && /opt/venv/bin/python manage.py migrate --noinput --verbosity 2'"
+drainingSeconds = 20
