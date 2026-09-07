@@ -1504,6 +1504,20 @@ paths:
                 items:
                   $ref: '#/components/schemas/CatalogBusinessUnitSuggestion'
           description: ''
+  /api/v1/client-requirements/:
+    get:
+      operationId: v1_client_requirements_retrieve
+      description: Public client policy for native store builds. Default min Android
+        versionCode is 0 (no forced update).
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientRequirementsResponse'
+          description: ''
   /api/v1/cross/action-plan-execution-feed/:
     get:
       operationId: v1_cross_action_plan_execution_feed_retrieve
@@ -11521,6 +11535,14 @@ components:
       required:
       - expires_in
       - ticket
+    ClientRequirementsResponse:
+      type: object
+      properties:
+        android_min_supported_version_code:
+          type: integer
+          minimum: 0
+      required:
+      - android_min_supported_version_code
     CommentAuthor:
       type: object
       properties:

@@ -57,6 +57,27 @@ Before the first Play upload:
 - Upload the `.aab` (not an APK) in Play Console. First time: enroll **Play App Signing** (this keystore is the upload key).
 - Closed Testing for a recent personal Play account (tester count / duration) is a **console** operation. Recheck Play Help at upload time.
 
+## Android in-app updates (Play)
+
+In-app update checks use Google Play In-App Updates. They **do not work** on sideloaded or USB-debug binaries. Play must have installed the app.
+
+Closed Testing:
+
+1. Upload AAB `versionCode` **N**, wait until testers can install that build from the closed track.
+2. Upload AAB **N+1** on the same track. Play propagation can take several minutes.
+3. Open the N build (cold start). Expect the soft dialog: « Une nouvelle version de Spore est disponible. » with **Mettre à jour** and **Plus tard**.
+4. **Plus tard** must not show the same version again for 24 h. A still-newer Play `versionCode` may show immediately.
+5. **Mettre à jour** must open the native Play in-app flow (not a browser tab).
+6. Cancel or fail the Play sheet: the app stays usable; no error toast.
+
+Faster iteration: [internal app sharing](https://developer.android.com/guide/playcore/in-app-updates/test).
+
+Force update (test env only): set `HOUSTON_ANDROID_MIN_SUPPORTED_VERSION_CODE` above the installed `versionCode`. The blocking copy appears only if Play reports an **installable** update on that device. If Play has nothing installable, the app must not be blocked.
+
+Default `HOUSTON_ANDROID_MIN_SUPPORTED_VERSION_CODE=0` (never force). Do not raise it in production unless a shipped build is actually unsupported.
+
+iOS and web have no equivalent flow in this path.
+
 ## App Links / Universal Links (identities, not the Native handler)
 
 The Capacitor handler, Android `autoVerify` host `app.spore-os.com`, and iOS Associated Domains entitlement are already in the repo. **Verified** OS association is a **console** follow-up.
