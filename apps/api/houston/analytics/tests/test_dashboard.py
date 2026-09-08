@@ -35,8 +35,14 @@ from houston.establishments.models import (
     EstablishmentMembership,
     OperationalUnit,
 )
-from houston.gamification.constants import CURRENT_RULE_VERSION
+from houston.gamification.constants import (
+    CURRENT_RULE_VERSION,
+    SOURCE_TYPE_ACTION_PLAN_EXECUTION,
+    SOURCE_TYPE_SIGNAL,
+    SOURCE_TYPE_SIGNAL_RESOLUTION_REQUEST,
+)
 from houston.gamification.models import PointTransaction
+from houston.gamification.selectors import get_active_season
 from houston.gamification.services import open_season
 from houston.signals.constants import (
     SIGNAL_LIFECYCLE_EVENT_CANCELED,
@@ -45,7 +51,7 @@ from houston.signals.constants import (
     SIGNAL_LIFECYCLE_EVENT_RESOLVED,
 )
 from houston.signals.lifecycle_events import record_signal_lifecycle_event
-from houston.signals.models import Signal
+from houston.signals.models import Signal, SignalResolutionRequest
 from houston.signals.services import merge_signal_into_resolved, qualify_signal_routing
 from houston.testing.auth import auth_headers, build_api_membership, login
 from houston.testing.factories import create_establishment, create_membership, create_user
@@ -698,21 +704,68 @@ def test_dashboard_deadline_counts_match_n_and_empty_shares_are_null():
         assert deadlines.late_count == 0
 
 
-def _award_points(*, membership, occurred_at):
-    season = open_season(membership.establishment)
+def _ledger_tx(
+    *,
+    membership,
+    occurred_at,
+    delta=5,
+    source_type="test",
+    source_id=None,
+    reason_code="test.award",
+    reversed_transaction=None,
+    establishment=None,
+):
+    establishment = establishment or membership.establishment
+    season = get_active_season(establishment)
+    if season is None:
+        season = open_season(establishment)
     tx_id = uuid.uuid4()
     return PointTransaction.objects.create(
         id=tx_id,
         membership=membership,
-        establishment=membership.establishment,
+        establishment=establishment,
         season=season,
-        delta=5,
-        reason_code="test.award",
-        source_type="test",
-        source_id=str(tx_id),
+        delta=delta,
+        reason_code=reason_code,
+        source_type=source_type,
+        source_id=str(source_id or tx_id),
         rule_version=CURRENT_RULE_VERSION,
         occurred_at=occurred_at,
         idempotency_key=f"tx:{tx_id}",
+        reversed_transaction=reversed_transaction,
+    )
+
+
+def _award_points(*, membership, occurred_at):
+    return _ledger_tx(membership=membership, occurred_at=occurred_at)
+
+
+def _contributor_pts(result, user_id):
+    return next(
+        (item.pts for item in result.contributors if item.user_id == user_id),
+        0,
+    )
+
+
+def _create_execution(
+    membership,
+    *,
+    title,
+    business_unit,
+    source_signal=None,
+    affected_business_unit=None,
+    responsible_business_unit=None,
+):
+    return ActionPlanExecution.objects.create(
+        establishment=membership.establishment,
+        created_by=membership,
+        title=title,
+        source_signal=source_signal,
+        pilot_business_unit=business_unit,
+        affected_business_unit=affected_business_unit or business_unit,
+        responsible_business_unit=responsible_business_unit or business_unit,
+        last_activity_at=timezone.now(),
+        use_shared_chronology=True,
     )
 
 
@@ -745,6 +798,513 @@ def test_cross_contributors_expose_unique_sorted_establishment_names():
     assert result.scope_type == "cross"
     assert len(result.contributors) == 1
     assert result.contributors[0].establishment_names == ("AKATSUKI", "ANBU", "Konoha")
+
+
+def test_manager_contributors_scope_activity_not_contributor_bus():
+    manager = build_api_membership(role=EstablishmentMembership.Role.MANAGER)
+    in_scope_bu = create_business_unit(
+        establishment=manager.establishment,
+        key="analytics_contrib_in",
+    )
+    out_scope_bu = create_business_unit(
+        establishment=manager.establishment,
+        key="analytics_contrib_out",
+    )
+    create_membership_with_business_unit_scope(
+        membership=manager,
+        business_unit=in_scope_bu,
+    )
+    in_scope_staff = create_membership(
+        establishment=manager.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    create_membership_with_business_unit_scope(
+        membership=in_scope_staff,
+        business_unit=in_scope_bu,
+    )
+    out_scope_staff = create_membership(
+        establishment=manager.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    create_membership_with_business_unit_scope(
+        membership=out_scope_staff,
+        business_unit=out_scope_bu,
+    )
+    in_scope_signal = Signal.objects.create(
+        establishment=manager.establishment,
+        status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.RESOLVED,
+        title="In scope activity",
+        structured_summary="Summary for in scope activity.",
+        issue_focus="in-scope-activity",
+        last_activity_at=timezone.now(),
+        affected_business_unit=in_scope_bu,
+        responsible_business_unit=in_scope_bu,
+    )
+    out_scope_signal = Signal.objects.create(
+        establishment=manager.establishment,
+        status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.RESOLVED,
+        title="Out of scope activity",
+        structured_summary="Summary for out of scope activity.",
+        issue_focus="out-of-scope-activity",
+        last_activity_at=timezone.now(),
+        affected_business_unit=out_scope_bu,
+        responsible_business_unit=out_scope_bu,
+    )
+    unassigned_signal = Signal.objects.create(
+        establishment=manager.establishment,
+        status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.UNASSIGNED,
+        title="Unassigned activity",
+        structured_summary="Summary for unassigned activity.",
+        issue_focus="unassigned-activity",
+        last_activity_at=timezone.now(),
+        affected_business_unit=out_scope_bu,
+        responsible_business_unit=out_scope_bu,
+    )
+    now = timezone.now()
+    occurred_at = now - timedelta(hours=1)
+    _ledger_tx(
+        membership=in_scope_staff,
+        occurred_at=occurred_at,
+        delta=4,
+        source_type=SOURCE_TYPE_SIGNAL,
+        source_id=in_scope_signal.id,
+    )
+    _ledger_tx(
+        membership=in_scope_staff,
+        occurred_at=occurred_at,
+        delta=7,
+        source_type=SOURCE_TYPE_SIGNAL,
+        source_id=out_scope_signal.id,
+    )
+    _ledger_tx(
+        membership=out_scope_staff,
+        occurred_at=occurred_at,
+        delta=3,
+        source_type=SOURCE_TYPE_SIGNAL,
+        source_id=in_scope_signal.id,
+    )
+    _ledger_tx(
+        membership=out_scope_staff,
+        occurred_at=occurred_at,
+        delta=2,
+        source_type=SOURCE_TYPE_SIGNAL,
+        source_id=unassigned_signal.id,
+    )
+
+    result = get_analytics_dashboard(manager.user, period_days=7, now=now)
+
+    assert _contributor_pts(result, in_scope_staff.user_id) == 4
+    assert _contributor_pts(result, out_scope_staff.user_id) == 5
+    assert {item.user_id for item in result.contributors} == {
+        in_scope_staff.user_id,
+        out_scope_staff.user_id,
+    }
+
+
+def test_manager_contributors_follow_execution_and_resolution_request_scope():
+    manager = build_api_membership(role=EstablishmentMembership.Role.MANAGER)
+    in_scope_bu = create_business_unit(
+        establishment=manager.establishment,
+        key="analytics_contrib_exec_in",
+    )
+    out_scope_bu = create_business_unit(
+        establishment=manager.establishment,
+        key="analytics_contrib_exec_out",
+    )
+    create_membership_with_business_unit_scope(
+        membership=manager,
+        business_unit=in_scope_bu,
+    )
+    staff = create_membership(
+        establishment=manager.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    in_scope_signal = Signal.objects.create(
+        establishment=manager.establishment,
+        status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.RESOLVED,
+        title="In scope request signal",
+        structured_summary="Summary for in scope request signal.",
+        issue_focus="in-scope-request",
+        last_activity_at=timezone.now(),
+        affected_business_unit=in_scope_bu,
+        responsible_business_unit=in_scope_bu,
+    )
+    out_scope_signal = Signal.objects.create(
+        establishment=manager.establishment,
+        status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.RESOLVED,
+        title="Out of scope request signal",
+        structured_summary="Summary for out of scope request signal.",
+        issue_focus="out-of-scope-request",
+        last_activity_at=timezone.now(),
+        affected_business_unit=out_scope_bu,
+        responsible_business_unit=out_scope_bu,
+    )
+    in_scope_request = SignalResolutionRequest.objects.create(
+        signal=in_scope_signal,
+        requested_by_membership=staff,
+        requested_at=timezone.now(),
+        review_route=SignalResolutionRequest.ReviewRoute.STAFF_TO_MANAGER,
+        status=SignalResolutionRequest.Status.APPROVED,
+    )
+    out_scope_request = SignalResolutionRequest.objects.create(
+        signal=out_scope_signal,
+        requested_by_membership=staff,
+        requested_at=timezone.now(),
+        review_route=SignalResolutionRequest.ReviewRoute.STAFF_TO_MANAGER,
+        status=SignalResolutionRequest.Status.APPROVED,
+    )
+    linked_out = _create_execution(
+        manager,
+        title="Linked out of scope signal",
+        business_unit=in_scope_bu,
+        source_signal=out_scope_signal,
+    )
+    unlinked_in = _create_execution(
+        manager,
+        title="Unlinked in scope",
+        business_unit=in_scope_bu,
+    )
+    unlinked_out = _create_execution(
+        manager,
+        title="Unlinked out of scope",
+        business_unit=out_scope_bu,
+    )
+    now = timezone.now()
+    occurred_at = now - timedelta(hours=1)
+    _ledger_tx(
+        membership=staff,
+        occurred_at=occurred_at,
+        delta=2,
+        source_type=SOURCE_TYPE_SIGNAL_RESOLUTION_REQUEST,
+        source_id=in_scope_request.id,
+    )
+    _ledger_tx(
+        membership=staff,
+        occurred_at=occurred_at,
+        delta=9,
+        source_type=SOURCE_TYPE_SIGNAL_RESOLUTION_REQUEST,
+        source_id=out_scope_request.id,
+    )
+    _ledger_tx(
+        membership=staff,
+        occurred_at=occurred_at,
+        delta=8,
+        source_type=SOURCE_TYPE_ACTION_PLAN_EXECUTION,
+        source_id=linked_out.id,
+    )
+    _ledger_tx(
+        membership=staff,
+        occurred_at=occurred_at,
+        delta=3,
+        source_type=SOURCE_TYPE_ACTION_PLAN_EXECUTION,
+        source_id=unlinked_in.id,
+    )
+    _ledger_tx(
+        membership=staff,
+        occurred_at=occurred_at,
+        delta=6,
+        source_type=SOURCE_TYPE_ACTION_PLAN_EXECUTION,
+        source_id=unlinked_out.id,
+    )
+
+    result = get_analytics_dashboard(manager.user, period_days=7, now=now)
+
+    assert _contributor_pts(result, staff.user_id) == 5
+
+
+def test_manager_excludes_unattributable_owner_and_director_keep_them():
+    now = timezone.now()
+    occurred_at = now - timedelta(hours=1)
+    for role in (
+        EstablishmentMembership.Role.OWNER,
+        EstablishmentMembership.Role.DIRECTOR,
+        EstablishmentMembership.Role.MANAGER,
+    ):
+        membership = build_api_membership(role=role)
+        staff = create_membership(
+            establishment=membership.establishment,
+            role=EstablishmentMembership.Role.STAFF,
+        )
+        _ledger_tx(membership=staff, occurred_at=occurred_at, delta=5)
+        result = get_analytics_dashboard(membership.user, period_days=7, now=now)
+        if role == EstablishmentMembership.Role.MANAGER:
+            assert result.contributors == ()
+        else:
+            assert _contributor_pts(result, staff.user_id) == 5
+
+
+def test_manager_contributors_exclude_orphan_canonical_source_id():
+    manager = build_api_membership(role=EstablishmentMembership.Role.MANAGER)
+    in_scope_bu = create_business_unit(
+        establishment=manager.establishment,
+        key="analytics_contrib_orphan_in",
+    )
+    create_membership_with_business_unit_scope(
+        membership=manager,
+        business_unit=in_scope_bu,
+    )
+    staff = create_membership(
+        establishment=manager.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    now = timezone.now()
+    _ledger_tx(
+        membership=staff,
+        occurred_at=now - timedelta(hours=1),
+        delta=5,
+        source_type=SOURCE_TYPE_SIGNAL,
+        source_id=uuid.uuid4(),
+    )
+
+    result = get_analytics_dashboard(manager.user, period_days=7, now=now)
+
+    assert result.contributors == ()
+
+
+def test_mixed_membership_contributors_and_cross_establishment_source_mismatch():
+    manager = build_api_membership(role=EstablishmentMembership.Role.MANAGER)
+    second = Establishment.objects.create(
+        name="Director house",
+        organization=manager.establishment.organization,
+        status=Establishment.Status.ACTIVE,
+        timezone="UTC",
+    )
+    director = create_membership(
+        establishment=second,
+        user=manager.user,
+        role=EstablishmentMembership.Role.DIRECTOR,
+    )
+    in_scope_bu = create_business_unit(
+        establishment=manager.establishment,
+        key="mixed-contrib-in",
+    )
+    out_scope_bu = create_business_unit(
+        establishment=manager.establishment,
+        key="mixed-contrib-out",
+    )
+    create_membership_with_business_unit_scope(
+        membership=manager,
+        business_unit=in_scope_bu,
+    )
+    staff_a = create_membership(
+        establishment=manager.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    staff_b = create_membership(
+        establishment=second,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    in_scope_signal = Signal.objects.create(
+        establishment=manager.establishment,
+        status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.RESOLVED,
+        title="Manager in scope",
+        structured_summary="Summary for manager in scope.",
+        issue_focus="manager-in-scope",
+        last_activity_at=timezone.now(),
+        affected_business_unit=in_scope_bu,
+        responsible_business_unit=in_scope_bu,
+    )
+    out_scope_signal = Signal.objects.create(
+        establishment=manager.establishment,
+        status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.RESOLVED,
+        title="Manager hidden",
+        structured_summary="Summary for manager hidden.",
+        issue_focus="manager-hidden",
+        last_activity_at=timezone.now(),
+        affected_business_unit=out_scope_bu,
+        responsible_business_unit=out_scope_bu,
+    )
+    director_signal = Signal.objects.create(
+        establishment=second,
+        status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.RESOLVED,
+        title="Director signal",
+        structured_summary="Summary for director signal.",
+        issue_focus="director-signal",
+        last_activity_at=timezone.now(),
+    )
+    now = timezone.now()
+    occurred_at = now - timedelta(hours=1)
+    _ledger_tx(
+        membership=staff_a,
+        occurred_at=occurred_at,
+        delta=4,
+        source_type=SOURCE_TYPE_SIGNAL,
+        source_id=in_scope_signal.id,
+    )
+    _ledger_tx(
+        membership=staff_a,
+        occurred_at=occurred_at,
+        delta=9,
+        source_type=SOURCE_TYPE_SIGNAL,
+        source_id=out_scope_signal.id,
+    )
+    _ledger_tx(
+        membership=staff_b,
+        occurred_at=occurred_at,
+        delta=6,
+        source_type="test",
+    )
+    _ledger_tx(
+        membership=staff_a,
+        occurred_at=occurred_at,
+        delta=11,
+        source_type=SOURCE_TYPE_SIGNAL,
+        source_id=director_signal.id,
+    )
+
+    cross = get_analytics_dashboard(manager.user, period_days=7, now=now)
+    establishment_a = get_analytics_dashboard(
+        manager.user,
+        period_days=7,
+        now=now,
+        establishment_id=manager.establishment_id,
+    )
+    owner_of_a = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    owner_staff = create_membership(
+        establishment=owner_of_a.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    foreign = Establishment.objects.create(
+        name="Foreign readable",
+        organization=owner_of_a.establishment.organization,
+        status=Establishment.Status.ACTIVE,
+        timezone="UTC",
+    )
+    create_membership(
+        establishment=foreign,
+        user=owner_of_a.user,
+        role=EstablishmentMembership.Role.DIRECTOR,
+    )
+    foreign_signal = Signal.objects.create(
+        establishment=foreign,
+        status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.RESOLVED,
+        title="Foreign",
+        structured_summary="Summary for foreign.",
+        issue_focus="foreign",
+        last_activity_at=timezone.now(),
+    )
+    _ledger_tx(
+        membership=owner_staff,
+        occurred_at=occurred_at,
+        delta=13,
+        source_type=SOURCE_TYPE_SIGNAL,
+        source_id=foreign_signal.id,
+    )
+
+    owner_view = get_analytics_dashboard(
+        owner_of_a.user,
+        period_days=7,
+        now=now,
+        establishment_id=owner_of_a.establishment_id,
+    )
+
+    assert _contributor_pts(cross, staff_a.user_id) == 4
+    assert _contributor_pts(cross, staff_b.user_id) == 6
+    assert _contributor_pts(establishment_a, staff_a.user_id) == 4
+    assert all(item.user_id != staff_b.user_id for item in establishment_a.contributors)
+    assert director.establishment_id == second.id
+    assert _contributor_pts(owner_view, owner_staff.user_id) == 13
+
+
+def test_manager_contributors_reversal_one_hop_fail_closed_on_chain():
+    manager = build_api_membership(role=EstablishmentMembership.Role.MANAGER)
+    in_scope_bu = create_business_unit(
+        establishment=manager.establishment,
+        key="analytics_contrib_rev_in",
+    )
+    out_scope_bu = create_business_unit(
+        establishment=manager.establishment,
+        key="analytics_contrib_rev_out",
+    )
+    create_membership_with_business_unit_scope(
+        membership=manager,
+        business_unit=in_scope_bu,
+    )
+    in_scope_staff = create_membership(
+        establishment=manager.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    out_scope_staff = create_membership(
+        establishment=manager.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    in_scope_signal = Signal.objects.create(
+        establishment=manager.establishment,
+        status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.RESOLVED,
+        title="Reversal in scope",
+        structured_summary="Summary for reversal in scope.",
+        issue_focus="reversal-in-scope",
+        last_activity_at=timezone.now(),
+        affected_business_unit=in_scope_bu,
+        responsible_business_unit=in_scope_bu,
+    )
+    out_scope_signal = Signal.objects.create(
+        establishment=manager.establishment,
+        status=Signal.Status.OPEN,
+        routing_status=Signal.RoutingStatus.RESOLVED,
+        title="Reversal out of scope",
+        structured_summary="Summary for reversal out of scope.",
+        issue_focus="reversal-out-of-scope",
+        last_activity_at=timezone.now(),
+        affected_business_unit=out_scope_bu,
+        responsible_business_unit=out_scope_bu,
+    )
+    now = timezone.now()
+    occurred_at = now - timedelta(hours=1)
+    original = _ledger_tx(
+        membership=in_scope_staff,
+        occurred_at=occurred_at,
+        delta=6,
+        source_type=SOURCE_TYPE_SIGNAL,
+        source_id=in_scope_signal.id,
+    )
+    reversal = _ledger_tx(
+        membership=in_scope_staff,
+        occurred_at=occurred_at,
+        delta=-2,
+        source_type="test",
+        reversed_transaction=original,
+    )
+    out_original = _ledger_tx(
+        membership=out_scope_staff,
+        occurred_at=occurred_at,
+        delta=9,
+        source_type=SOURCE_TYPE_SIGNAL,
+        source_id=out_scope_signal.id,
+    )
+    _ledger_tx(
+        membership=out_scope_staff,
+        occurred_at=occurred_at,
+        delta=-4,
+        source_type="test",
+        reversed_transaction=out_original,
+    )
+    chained = _ledger_tx(
+        membership=in_scope_staff,
+        occurred_at=occurred_at,
+        delta=-1,
+        source_type="test",
+        reversed_transaction=reversal,
+    )
+
+    result = get_analytics_dashboard(manager.user, period_days=7, now=now)
+    contributor_ids = {item.user_id for item in result.contributors}
+
+    assert chained.reversed_transaction_id == reversal.id
+    assert in_scope_staff.user_id in contributor_ids
+    assert _contributor_pts(result, in_scope_staff.user_id) == 4
+    assert out_scope_staff.user_id not in contributor_ids
+    assert _contributor_pts(result, out_scope_staff.user_id) == 0
 
 
 def test_canceled_delay_uses_canonical_timestamp_when_journal_event_is_missing():

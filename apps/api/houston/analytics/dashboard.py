@@ -22,7 +22,7 @@ from datetime import datetime, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from django.db.models import Count, Sum
+from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
 from houston.accounts.models import User
@@ -61,8 +61,9 @@ from houston.analytics.models import (
     PatternLifecycleEvent,
     SignalPatternAssignment,
 )
-from houston.analytics.selectors import resolve_analytics_read_scope
+from houston.analytics.selectors import AnalyticsReadScope, resolve_analytics_read_scope
 from houston.establishments.management_scope import (
+    list_management_memberships_for_user,
     management_establishment_ids_for_user,
 )
 from houston.establishments.membership_scope import (
@@ -70,6 +71,12 @@ from houston.establishments.membership_scope import (
     membership_scope_prefetch,
 )
 from houston.establishments.models import EstablishmentMembership
+from houston.establishments.role_constants import ADMIN_ROLES
+from houston.gamification.constants import (
+    SOURCE_TYPE_ACTION_PLAN_EXECUTION,
+    SOURCE_TYPE_SIGNAL,
+    SOURCE_TYPE_SIGNAL_RESOLUTION_REQUEST,
+)
 from houston.gamification.models import PointTransaction
 from houston.signals.constants import (
     ACTIVE_SIGNAL_STATUSES,
@@ -79,7 +86,7 @@ from houston.signals.constants import (
     SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
     SIGNAL_LIFECYCLE_EVENT_RESOLVED,
 )
-from houston.signals.models import Signal, SignalLifecycleEvent
+from houston.signals.models import Signal, SignalLifecycleEvent, SignalResolutionRequest
 
 DASHBOARD_PERIOD_DAYS = frozenset({3, 7, 15, 30, 90})
 DEFAULT_DASHBOARD_PERIOD_DAYS = 7
@@ -330,6 +337,7 @@ def get_analytics_dashboard(
     )
     contributors = _contributors(
         user=user,
+        read_scope=read_scope,
         establishment_ids=establishment_ids,
         current_period=current_period,
     )
@@ -1360,19 +1368,166 @@ def _new_patterns(
     return tuple(items)
 
 
+def _parse_ledger_source_uuid(source_id: str) -> UUID | None:
+    try:
+        return UUID(str(source_id))
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
+def _admin_establishment_ids_for_user(
+    user: User | None,
+    establishment_ids: tuple[UUID, ...],
+) -> frozenset[UUID]:
+    allowed = set(establishment_ids)
+    return frozenset(
+        membership.establishment_id
+        for membership in list_management_memberships_for_user(user)
+        if membership.role in ADMIN_ROLES and membership.establishment_id in allowed
+    )
+
+
+def _effective_contributor_source(
+    transaction: PointTransaction,
+) -> tuple[str, UUID] | None:
+    origin = (
+        transaction.reversed_transaction
+        if transaction.reversed_transaction_id is not None
+        else transaction
+    )
+    source_id = _parse_ledger_source_uuid(origin.source_id)
+    if source_id is None:
+        return None
+    return origin.source_type, source_id
+
+
+def _manager_in_scope_transaction_ids(
+    transactions: list[PointTransaction],
+    read_scope: AnalyticsReadScope,
+) -> set[UUID]:
+    if not transactions:
+        return set()
+
+    signal_ids: set[UUID] = set()
+    request_ids: set[UUID] = set()
+    execution_ids: set[UUID] = set()
+    effective: dict[UUID, tuple[str, UUID]] = {}
+    for transaction in transactions:
+        parsed = _effective_contributor_source(transaction)
+        if parsed is None:
+            continue
+        source_type, source_id = parsed
+        effective[transaction.id] = parsed
+        if source_type == SOURCE_TYPE_SIGNAL:
+            signal_ids.add(source_id)
+        elif source_type == SOURCE_TYPE_SIGNAL_RESOLUTION_REQUEST:
+            request_ids.add(source_id)
+        elif source_type == SOURCE_TYPE_ACTION_PLAN_EXECUTION:
+            execution_ids.add(source_id)
+
+    authorized_signals = set()
+    if signal_ids:
+        authorized_signals = set(
+            read_scope.readable_signals_queryset()
+            .filter(id__in=signal_ids)
+            .values_list("id", "establishment_id")
+        )
+
+    authorized_requests = set()
+    if request_ids:
+        request_rows = list(
+            SignalResolutionRequest.objects.filter(id__in=request_ids).values_list(
+                "id",
+                "signal_id",
+                "signal__establishment_id",
+            )
+        )
+        readable_request_signals = set(
+            read_scope.readable_signals_queryset()
+            .filter(id__in={signal_id for _, signal_id, _ in request_rows})
+            .values_list("id", flat=True)
+        )
+        authorized_requests = {
+            (request_id, establishment_id)
+            for request_id, signal_id, establishment_id in request_rows
+            if signal_id in readable_request_signals
+        }
+
+    authorized_executions = set()
+    if execution_ids:
+        authorized_executions = set(
+            read_scope.readable_executions_queryset()
+            .filter(id__in=execution_ids)
+            .values_list("id", "establishment_id")
+        )
+
+    allowed: set[UUID] = set()
+    for transaction in transactions:
+        parsed = effective.get(transaction.id)
+        if parsed is None:
+            continue
+        source_type, source_id = parsed
+        source_key = (source_id, transaction.establishment_id)
+        if source_type == SOURCE_TYPE_SIGNAL and source_key in authorized_signals:
+            allowed.add(transaction.id)
+        elif (
+            source_type == SOURCE_TYPE_SIGNAL_RESOLUTION_REQUEST
+            and source_key in authorized_requests
+        ):
+            allowed.add(transaction.id)
+        elif (
+            source_type == SOURCE_TYPE_ACTION_PLAN_EXECUTION
+            and source_key in authorized_executions
+        ):
+            allowed.add(transaction.id)
+    return allowed
+
+
+def _contributor_transactions(
+    *,
+    user: User | None,
+    read_scope: AnalyticsReadScope,
+    establishment_ids: tuple[UUID, ...],
+    current_period: AnalyticsComparisonPeriod,
+):
+    queryset = PointTransaction.objects.filter(
+        establishment_id__in=establishment_ids,
+        occurred_at__gte=current_period.period_start,
+        occurred_at__lt=current_period.period_end,
+    )
+    admin_ids = _admin_establishment_ids_for_user(user, establishment_ids)
+    if admin_ids == set(establishment_ids):
+        return queryset
+
+    manager_queryset = (
+        queryset.exclude(establishment_id__in=admin_ids) if admin_ids else queryset
+    )
+    authorized_ids = _manager_in_scope_transaction_ids(
+        list(manager_queryset.select_related("reversed_transaction")),
+        read_scope,
+    )
+    if admin_ids:
+        return queryset.filter(
+            Q(establishment_id__in=admin_ids) | Q(pk__in=authorized_ids)
+        )
+    return queryset.filter(pk__in=authorized_ids)
+
+
 def _contributors(
     *,
     user: User | None,
+    read_scope: AnalyticsReadScope,
     establishment_ids: tuple[UUID, ...],
     current_period: AnalyticsComparisonPeriod,
 ) -> tuple[ContributorItem, ...]:
     if not establishment_ids:
         return ()
     rows = list(
-        PointTransaction.objects.filter(
-            establishment_id__in=establishment_ids,
-            occurred_at__gte=current_period.period_start,
-            occurred_at__lt=current_period.period_end,
+        _contributor_transactions(
+            user=user,
+            read_scope=read_scope,
+            establishment_ids=establishment_ids,
+            current_period=current_period,
         )
         .values("membership__user_id")
         .annotate(
