@@ -111,6 +111,21 @@ describe('resolveTerrainBackPath', () => {
     ).toBe('/cross/execution')
   })
 
+  it('restores cross calendar search from a cross execution detail', () => {
+    expect(
+      resolveTerrainBackPath(
+        {
+          kind: 'action-plan-execution-detail',
+          executionId: 'exec-1',
+          scope: { type: 'cross' },
+        },
+        { search: '?layout=calendar&granularity=week&anchor=2026-09-08&view_mode=personal' },
+      ),
+    ).toBe(
+      '/cross/execution?layout=calendar&granularity=week&anchor=2026-09-08&view_mode=personal',
+    )
+  })
+
   it('does not treat scoped dashboards as nested details', () => {
     expect(
       resolveTerrainBackPath({

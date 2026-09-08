@@ -22,6 +22,7 @@ import {
   fetchCrossActionPlanExecutionFeed,
   fetchActionPlanExecutionUpcoming,
   fetchActionPlanExecutionCalendar,
+  fetchCrossActionPlanExecutionCalendar,
   markActionPlanExecutionDone,
   markActionPlanTaskDone,
   markActionPlanTaskPending,
@@ -105,14 +106,14 @@ export function useActionPlanExecutionFeedQuery(
   return useInfiniteQuery({
     queryKey:
       source === 'cross'
-        ? actionPlansQueryKeys.crossExecutionFeed
+        ? actionPlansQueryKeys.crossExecutionFeed(viewMode)
         : establishmentId
           ? actionPlansQueryKeys.executionFeed(establishmentId, viewMode)
           : ['action-plans', 'action-plan-execution-feed', 'none'],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) => {
       if (source === 'cross') {
-        return fetchCrossActionPlanExecutionFeed({ cursor: pageParam })
+        return fetchCrossActionPlanExecutionFeed(viewMode, { cursor: pageParam })
       }
       if (!establishmentId) {
         throw new Error('Établissement non sélectionné.')
@@ -162,21 +163,33 @@ export function useActionPlanExecutionCalendarQuery(
   establishmentId: string | null,
   viewMode: ActionPlanExecutionFeedViewMode,
   window: { from: string; to: string } | null,
-  options?: { enabled?: boolean },
+  options?: { enabled?: boolean; source?: 'establishment' | 'cross' },
 ) {
-  const enabled = Boolean(establishmentId) && Boolean(window) && options?.enabled !== false
+  const source = options?.source ?? 'establishment'
+  const enabled =
+    Boolean(window) &&
+    options?.enabled !== false &&
+    (source === 'cross' || Boolean(establishmentId))
   return useQuery({
     queryKey:
-      establishmentId && window
-        ? actionPlansQueryKeys.executionCalendar(
-            establishmentId,
-            viewMode,
-            window.from,
-            window.to,
-          )
-        : ['action-plans', 'action-plan-execution-calendar', 'none'],
+      source === 'cross' && window
+        ? actionPlansQueryKeys.crossExecutionCalendar(viewMode, window.from, window.to)
+        : establishmentId && window
+          ? actionPlansQueryKeys.executionCalendar(
+              establishmentId,
+              viewMode,
+              window.from,
+              window.to,
+            )
+          : ['action-plans', 'action-plan-execution-calendar', 'none'],
     queryFn: () => {
-      if (!establishmentId || !window) {
+      if (!window) {
+        throw new Error('Fenêtre calendrier manquante.')
+      }
+      if (source === 'cross') {
+        return fetchCrossActionPlanExecutionCalendar(viewMode, window)
+      }
+      if (!establishmentId) {
         throw new Error('Établissement non sélectionné.')
       }
       return fetchActionPlanExecutionCalendar(establishmentId, viewMode, window)

@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 
+import { combineCivilDateTimeToIso } from '@/lib/business-timezone'
+import { collectOverflowYScrollElements } from '@/lib/terrain-scroll-layout'
+
 import { ExecutionCalendarView } from './execution-calendar-view'
 
 function wrap(item: Partial<ActionPlanExecutionFeedItem> & { id: string; title: string }) {
@@ -137,7 +140,15 @@ describe('ExecutionCalendarView', () => {
 
     const unplannedToggle = screen.getByRole('button', { name: 'Déplier la section Non planifiés' })
     expect(unplannedToggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.getByText('Non planifiés · 1')).toBeTruthy()
     expect(screen.queryByText('Sans créneau')).toBeNull()
+
+    const hub = screen.getByTestId('calendar-hub-scroller')
+    const gridCard = screen.getByTestId('calendar-grid-card')
+    expect(hub.className).not.toMatch(/overflow-y-auto/)
+    expect(gridCard.className).toMatch(/min-h-0/)
+    expect(gridCard.className).toMatch(/flex-1/)
+    expect(gridCard.className).not.toMatch(/min-h-full/)
 
     const scroller = screen.getByTestId('calendar-time-scroller')
     expect(scroller.textContent).toContain('00:00')
@@ -145,4 +156,425 @@ describe('ExecutionCalendarView', () => {
     expect(screen.getByText('Journée').compareDocumentPosition(scroller) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getByRole('button', { name: /Brief cuisine/ }).textContent).toContain('En cours')
   })
+
+  it('keeps unplanned pending_validation collapsed and names them on the header', () => {
+    render(
+      <ExecutionCalendarView
+        granularity="week"
+        days={['2026-09-07', '2026-09-08', '2026-09-09']}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={{
+          timezone: 'Europe/Paris',
+          items: [],
+          unplanned: [
+            wrap({
+              id: 'exec-pending-unplanned',
+              title: 'Nouvelle fuite sous le lave-vaisselle',
+              status: 'pending_validation',
+              start_at: null,
+              end_at: '2026-08-29T08:00:00.000Z',
+            }),
+            wrap({
+              id: 'exec-done-unplanned',
+              title: 'Ancien plan sans date',
+              status: 'done',
+              start_at: null,
+            }),
+          ],
+        }}
+      />,
+    )
+
+    const unplannedToggle = screen.getByRole('button', {
+      name: 'Déplier la section Non planifiés · 1 à valider',
+    })
+    expect(unplannedToggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.getByText('Non planifiés · 1 à valider · 2')).toBeTruthy()
+    expect(screen.queryByText('Nouvelle fuite sous le lave-vaisselle')).toBeNull()
+    expect(screen.queryByText('Ancien plan sans date')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Nouvelle fuite/ })).toBeNull()
+  })
+
+  it('renders scheduled and pending_validation timed events on the day grid', () => {
+    render(
+      <ExecutionCalendarView
+        granularity="day"
+        days={['2026-09-08']}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={{
+          timezone: 'Europe/Paris',
+          items: [
+            wrap({
+              id: 'exec-scheduled',
+              title: 'Brief planifié',
+              status: 'scheduled',
+              start_at: '2026-09-08T07:00:00.000Z',
+              end_at: '2026-09-08T08:00:00.000Z',
+            }),
+            wrap({
+              id: 'exec-pending',
+              title: 'Brief à valider',
+              status: 'pending_validation',
+              start_at: '2026-09-08T09:00:00.000Z',
+              end_at: '2026-09-08T10:00:00.000Z',
+            }),
+          ],
+          unplanned: [],
+        }}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: /Brief planifié/ }).textContent).toContain('Planifiée')
+    expect(screen.getByRole('button', { name: /Brief à valider/ }).textContent).toContain(
+      'Validation',
+    )
+  })
+
+  it('keeps status and org on month chips', () => {
+    render(
+      <ExecutionCalendarView
+        granularity="month"
+        days={['2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11', '2026-09-12', '2026-09-13']}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={{
+          timezone: 'Europe/Paris',
+          items: [
+            wrap({
+              id: 'exec-month',
+              title: 'Brief cuisine',
+              status: 'in_progress',
+              start_at: '2026-09-08T07:00:00.000Z',
+              end_at: '2026-09-08T09:00:00.000Z',
+            }),
+          ],
+          unplanned: [],
+        }}
+      />,
+    )
+
+    const chip = screen.getByRole('button', { name: /Brief cuisine/ })
+    expect(chip.textContent).toContain('En cours')
+    expect(chip.textContent).toContain('Restaurant')
+  })
+
+  it('keeps the month grid in the same scroller when unplanned is expanded', () => {
+    render(
+      <ExecutionCalendarView
+        granularity="month"
+        days={['2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11', '2026-09-12', '2026-09-13']}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={{
+          timezone: 'Europe/Paris',
+          items: [
+            wrap({
+              id: 'exec-month',
+              title: 'Brief cuisine',
+              status: 'in_progress',
+              start_at: '2026-09-08T07:00:00.000Z',
+              end_at: '2026-09-08T09:00:00.000Z',
+            }),
+          ],
+          unplanned: [
+            wrap({
+              id: 'exec-unplanned',
+              title: 'Sans créneau',
+              start_at: null,
+              end_at: null,
+            }),
+          ],
+        }}
+      />,
+    )
+
+    const scroller = screen.getByTestId('calendar-month-scroller')
+    const grid = screen.getByTestId('calendar-month-grid')
+    expect(scroller.className).toMatch(/overflow-y-auto/)
+    expect(scroller.contains(grid)).toBe(true)
+    expect(grid.className).toMatch(/\bshrink-0\b/)
+    expect(grid.className).not.toMatch(/overflow-y-auto/)
+    expect(screen.getByText('lun.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Brief cuisine/ })).toBeTruthy()
+    expect(screen.queryByText('Sans créneau')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Déplier la section Non planifiés' }))
+
+    expect(screen.getByTestId('calendar-month-grid')).toBe(grid)
+    expect(scroller.contains(grid)).toBe(true)
+    expect(scroller.contains(screen.getByRole('button', { name: /Sans créneau/ }))).toBe(true)
+    expect(screen.getByText('lun.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Brief cuisine/ })).toBeTruthy()
+    expect(screen.getByTestId('calendar-unplanned-list').className).not.toMatch(/overflow-y/)
+    expect(collectOverflowYScrollElements(scroller)).toEqual([])
+  })
+
+  it('opens the same execution from a timed grid block and a day-lane continuation', () => {
+    const onOpen = vi.fn()
+    render(
+      <ExecutionCalendarView
+        granularity="week"
+        days={['2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11', '2026-09-12', '2026-09-13', '2026-09-14']}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={onOpen}
+        data={{
+          timezone: 'Europe/Paris',
+          items: [
+            wrap({
+              id: 'exec-span',
+              title: 'Chantier toiture',
+              start_at: combineCivilDateTimeToIso('2026-09-08', '14:00'),
+              end_at: combineCivilDateTimeToIso('2026-09-13', '15:00'),
+            }),
+          ],
+          unplanned: [],
+        }}
+      />,
+    )
+
+    const chips = screen.getAllByRole('button', { name: /Chantier toiture/ })
+    expect(chips.some((chip) => chip.textContent?.includes('Suite'))).toBe(true)
+    fireEvent.click(chips[0])
+    fireEvent.click(chips[chips.length - 1])
+    expect(onOpen).toHaveBeenCalledWith('exec-span')
+    expect(onOpen).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not label Suite on a full first civil day in the day lane', () => {
+    render(
+      <ExecutionCalendarView
+        granularity="day"
+        days={['2026-09-08']}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={{
+          timezone: 'Europe/Paris',
+          items: [
+            wrap({
+              id: 'exec-full-start',
+              title: 'Ouverture site',
+              start_at: combineCivilDateTimeToIso('2026-09-08', '00:00'),
+              end_at: combineCivilDateTimeToIso('2026-09-13', '15:00'),
+            }),
+          ],
+          unplanned: [],
+        }}
+      />,
+    )
+
+    const chip = screen.getByRole('button', { name: /Ouverture site/ })
+    expect(chip.textContent).not.toContain('Suite')
+    expect(screen.getByTestId('calendar-time-scroller').contains(chip)).toBe(false)
+  })
+
+  it('keeps a full-day timed span on month cells without using the day-lane projection', () => {
+    render(
+      <ExecutionCalendarView
+        granularity="month"
+        days={['2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11', '2026-09-12', '2026-09-13']}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={{
+          timezone: 'Europe/Paris',
+          items: [
+            wrap({
+              id: 'exec-month-span',
+              title: 'Chantier toiture',
+              start_at: combineCivilDateTimeToIso('2026-09-08', '14:00'),
+              end_at: combineCivilDateTimeToIso('2026-09-13', '15:00'),
+            }),
+          ],
+          unplanned: [],
+        }}
+      />,
+    )
+
+    expect(screen.getAllByRole('button', { name: /Chantier toiture/ }).length).toBeGreaterThan(1)
+    expect(screen.queryByText('Suite')).toBeNull()
+  })
+
+  it('shows compact unplanned facts without list-card chrome', () => {
+    render(
+      <ExecutionCalendarView
+        granularity="day"
+        days={['2026-09-08']}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={{
+          timezone: 'Europe/Paris',
+          items: [],
+          unplanned: [
+            wrap({
+              id: 'exec-unplanned',
+              title: 'Sans créneau',
+              start_at: null,
+              end_at: null,
+              created_at: '2026-09-08T08:00:00.000Z',
+              assignees: [{ membership_id: 'm-1', display_name: 'Alice Martin' }],
+            }),
+          ],
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Déplier la section Non planifiés' }))
+    const card = screen.getByRole('button', { name: /Sans créneau/ })
+    const createdLabel = `Créé le ${new Intl.DateTimeFormat('fr-FR', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(new Date('2026-09-08T12:00:00.000Z'))}`
+    expect(card.textContent).toContain('Restaurant')
+    expect(card.textContent).toContain('AM')
+    expect(card.textContent).toContain(createdLabel)
+    expect(card.textContent?.indexOf('AM') ?? -1).toBeLessThan(card.textContent?.indexOf(createdLabel) ?? -1)
+    expect(card.textContent).not.toMatch(/08:00|10:00/)
+    expect(card.textContent).not.toContain('En cours')
+    expect(screen.getByTestId('calendar-time-scroller').contains(card)).toBe(false)
+    expect(screen.getByTestId('calendar-unplanned-list').className).not.toMatch(/overflow-y/)
+  })
+
+  it('lets the hub pane scroll the natural time grid when unplanned is expanded', () => {
+    render(
+      <ExecutionCalendarView
+        granularity="day"
+        days={['2026-09-08']}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={{
+          timezone: 'Europe/Paris',
+          items: [
+            wrap({
+              id: 'exec-timed',
+              title: 'Brief cuisine',
+              start_at: '2026-09-08T07:00:00.000Z',
+              end_at: '2026-09-08T09:00:00.000Z',
+            }),
+          ],
+          unplanned: [
+            wrap({
+              id: 'exec-unplanned-1',
+              title: 'Sans créneau A',
+              start_at: null,
+              end_at: null,
+            }),
+            wrap({
+              id: 'exec-unplanned-2',
+              title: 'Sans créneau B',
+              start_at: null,
+              end_at: null,
+            }),
+          ],
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Déplier la section Non planifiés' }))
+
+    const hub = screen.getByTestId('calendar-hub-scroller')
+    const gridCard = screen.getByTestId('calendar-grid-card')
+    const timeScroller = screen.getByTestId('calendar-time-scroller')
+    const innerColumn = timeScroller.parentElement
+    expect(hub.className).toMatch(/overflow-y-auto/)
+    expect(collectOverflowYScrollElements(hub)).toEqual([])
+    expect(gridCard.className).toMatch(/\bshrink-0\b/)
+    expect(gridCard.className).toMatch(/overflow-x-hidden/)
+    expect(gridCard.className).toMatch(/overflow-y-hidden/)
+    expect(gridCard.className).not.toMatch(/min-h-full/)
+    expect(gridCard.className).not.toMatch(/min-h-0/)
+    expect(gridCard.className).not.toMatch(/\bflex-1\b/)
+    expect(gridCard.className).not.toMatch(/overflow-hidden(?!-)/)
+    expect(innerColumn?.className).toMatch(/\bshrink-0\b/)
+    expect(innerColumn?.className).not.toMatch(/min-h-0/)
+    expect(innerColumn?.className).not.toMatch(/\bflex-1\b/)
+    expect(timeScroller.className).toMatch(/\bshrink-0\b/)
+    expect(timeScroller.className).not.toMatch(/overflow-y-auto/)
+    expect(timeScroller.className).not.toMatch(/overscroll-y-contain/)
+    expect(timeScroller.className).not.toMatch(/min-h-0/)
+    expect(timeScroller.className).not.toMatch(/\bflex-1\b/)
+    expect(timeScroller.textContent).toContain('00:00')
+    expect(timeScroller.contains(screen.getByText('Journée'))).toBe(false)
+    expect(timeScroller.contains(screen.getByRole('button', { name: /Sans créneau A/ }))).toBe(false)
+    expect(screen.getByTestId('calendar-unplanned-list').className).not.toMatch(/overflow-y/)
+  })
+
+  it('keeps week horizontal overflow on the card without a nested vertical scroller when unplanned is expanded', () => {
+    render(
+      <ExecutionCalendarView
+        granularity="week"
+        days={['2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11', '2026-09-12', '2026-09-13', '2026-09-14']}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={{
+          timezone: 'Europe/Paris',
+          items: [],
+          unplanned: [
+            wrap({
+              id: 'exec-unplanned',
+              title: 'Sans créneau',
+              start_at: null,
+              end_at: null,
+            }),
+          ],
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Déplier la section Non planifiés' }))
+
+    const hub = screen.getByTestId('calendar-hub-scroller')
+    const gridCard = screen.getByTestId('calendar-grid-card')
+    const timeScroller = screen.getByTestId('calendar-time-scroller')
+    expect(hub.className).toMatch(/overflow-y-auto/)
+    expect(collectOverflowYScrollElements(hub)).toEqual([])
+    expect(gridCard.className).toMatch(/overflow-x-auto/)
+    expect(gridCard.className).toMatch(/overflow-y-hidden/)
+    expect(gridCard.className).not.toMatch(/overflow-y-auto/)
+    expect(gridCard.className).not.toMatch(/overflow-hidden(?!-)/)
+    expect(timeScroller.className).not.toMatch(/overflow-y-auto/)
+  })
 })
+

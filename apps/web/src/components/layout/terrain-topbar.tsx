@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { ArrowLeft } from 'lucide-react'
 
 import type { TerrainDetailTitleLayout } from '@/app/terrain-routes'
+import { useTerrainHubTitleSlotValue } from '@/components/layout/terrain-hub-title-slot'
 import { Button } from '@/components/ui/button'
 import { terrainBackButtonClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -14,6 +15,7 @@ type TerrainTopbarProps = {
   onBack?: () => void
   showBottomBorder?: boolean
   trailing?: ReactNode
+  afterTitle?: ReactNode
 }
 
 function TrailingSlot({ trailing }: { trailing?: ReactNode }) {
@@ -40,7 +42,11 @@ export function TerrainTopbar({
   onBack,
   showBottomBorder = true,
   trailing,
+  afterTitle,
 }: TerrainTopbarProps) {
+  const slotAfterTitle = useTerrainHubTitleSlotValue()
+  const titleAddon = afterTitle ?? slotAfterTitle
+
   if (variant === 'hub') {
     return (
       <header
@@ -50,14 +56,19 @@ export function TerrainTopbar({
           'pt-[max(0.75rem,var(--app-safe-top))] pb-1.5 lg:pt-0 lg:pb-0',
         )}
       >
-        <div className="flex h-14 items-center justify-between gap-3 px-3 lg:h-16 lg:px-6">
-          {pageTitle ? (
-            <h1 className="min-w-0 flex-1 truncate text-left text-2xl font-semibold leading-tight text-[#1a1a1a]">
-              {pageTitle}
-            </h1>
-          ) : (
-            <span className="min-w-0 flex-1" aria-hidden />
-          )}
+        <div className="flex min-h-14 items-center justify-between gap-3 px-3 lg:min-h-16 lg:px-6">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+            {pageTitle ? (
+              <h1 className="min-w-0 truncate text-left text-2xl font-semibold leading-tight text-[#1a1a1a]">
+                {pageTitle}
+              </h1>
+            ) : (
+              <span className="min-w-0 flex-1" aria-hidden />
+            )}
+            {titleAddon ? (
+              <div className="min-w-0 shrink">{titleAddon}</div>
+            ) : null}
+          </div>
           <TrailingSlot trailing={trailing} />
         </div>
       </header>

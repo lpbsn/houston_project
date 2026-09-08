@@ -41,9 +41,11 @@ export function resolveTerrainBackPath(
     return buildAnalyticsReturnPath(parseAnalyticsUrlState(search, { now }))
   }
 
-  if (route.kind === 'action-plan-execution-detail' && route.scope?.type !== 'cross') {
+  if (route.kind === 'action-plan-execution-detail') {
     const hub = getTerrainRouteConfig(route).backPath ?? '/execution'
-    return executionFeedHref(hub, parseExecutionFeedSearch(search))
+    const urlOptions =
+      route.scope?.type === 'cross' ? { defaultViewMode: 'general' as const } : undefined
+    return executionFeedHref(hub, parseExecutionFeedSearch(search, now, urlOptions), urlOptions)
   }
 
   if (route.kind === 'action-plan-execution-edit') {

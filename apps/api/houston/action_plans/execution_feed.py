@@ -105,6 +105,7 @@ def build_action_plan_execution_feed_page(
 def build_cross_action_plan_execution_feed_page(
     *,
     memberships: list[EstablishmentMembership],
+    view_mode: ExecutionFeedViewMode,
     page_size: int,
     cursor: ActionPlanExecutionFeedCursor | None = None,
 ) -> tuple[
@@ -125,17 +126,17 @@ def build_cross_action_plan_execution_feed_page(
         prepared = _membership_for_action_plan_execution_feed(membership)
         ensure_visible_action_plan_executions_materialized(
             membership=prepared,
-            view_mode="general",
+            view_mode=view_mode,
         )
         ensure_execution_lifecycle_for_read(establishment_id=prepared.establishment_id)
         queryset = action_plan_execution_feed_queryset(
             membership=prepared,
-            view_mode="general",
+            view_mode=view_mode,
         )
         combined = queryset if combined is None else combined | queryset
         for execution in scheduled_executions_visible_preview_queryset(
             membership=prepared,
-            view_mode="general",
+            view_mode=view_mode,
         ):
             scheduled_by_id.setdefault(execution.id, execution)
 
@@ -166,7 +167,7 @@ def build_cross_action_plan_execution_feed_page(
     scheduled_count = sum(
         scheduled_executions_base_queryset(
             membership=_membership_for_action_plan_execution_feed(membership),
-            view_mode="general",
+            view_mode=view_mode,
         ).count()
         for membership in memberships
     )

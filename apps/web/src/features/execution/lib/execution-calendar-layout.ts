@@ -33,6 +33,11 @@ export function civilDatesInclusive(from: string, to: string): string[] {
   return dates
 }
 
+export type CivilDayCoverage =
+  | { kind: 'none' }
+  | { kind: 'full_day' }
+  | { kind: 'partial'; startMin: number; endMin: number }
+
 export function allDayDatesForItem(item: ActionPlanExecutionFeedItem): string[] {
   const start = splitIsoToCivil(item.start_at ?? '').date
   if (!start) {
@@ -42,35 +47,84 @@ export function allDayDatesForItem(item: ActionPlanExecutionFeedItem): string[] 
   return civilDatesInclusive(start, end)
 }
 
+function openEndedCoverageOnDay(
+  item: ActionPlanExecutionFeedItem,
+  day: string,
+): CivilDayCoverage {
+  const startDate = splitIsoToCivil(item.start_at ?? '').date
+  if (!startDate || day !== startDate) {
+    return { kind: 'none' }
+  }
+  const startMin = civilMinutesFromMidnight(item.start_at ?? '') ?? 0
+  let endMin = Math.min(DAY_MINUTES, startMin + OPEN_ENDED_MINUTES)
+  if (endMin <= startMin) {
+    endMin = Math.min(DAY_MINUTES, startMin + 15)
+  }
+  return { kind: 'partial', startMin, endMin }
+}
+
+export function civilCoverageOnDay(
+  item: ActionPlanExecutionFeedItem,
+  day: string,
+): CivilDayCoverage {
+  if (isExecutionAllDay(item) || !item.start_at) {
+    return { kind: 'none' }
+  }
+  if (!item.end_at) {
+    return openEndedCoverageOnDay(item, day)
+  }
+
+  const startDate = splitIsoToCivil(item.start_at).date
+  const endDate = splitIsoToCivil(item.end_at).date
+  if (!startDate || !endDate || day < startDate || day > endDate) {
+    return { kind: 'none' }
+  }
+
+  const intersectStart = day === startDate ? (civilMinutesFromMidnight(item.start_at) ?? 0) : 0
+  const intersectEnd = day === endDate ? (civilMinutesFromMidnight(item.end_at) ?? 0) : DAY_MINUTES
+  if (intersectEnd <= intersectStart) {
+    return { kind: 'none' }
+  }
+  if (intersectStart === 0 && intersectEnd === DAY_MINUTES) {
+    return { kind: 'full_day' }
+  }
+  return { kind: 'partial', startMin: intersectStart, endMin: intersectEnd }
+}
+
 export function timedIntervalOnDay(
   item: ActionPlanExecutionFeedItem,
   day: string,
 ): { startMin: number; endMin: number } | null {
-  if (isExecutionAllDay(item) || !item.start_at) {
+  const coverage = civilCoverageOnDay(item, day)
+  if (coverage.kind !== 'partial') {
     return null
   }
-  const start = splitIsoToCivil(item.start_at)
-  if (!start.date) {
-    return null
-  }
-  const end = item.end_at ? splitIsoToCivil(item.end_at) : { date: start.date, time: '' }
-  const endDate = end.date || start.date
-  if (day < start.date || day > endDate) {
-    return null
-  }
+  return { startMin: coverage.startMin, endMin: coverage.endMin }
+}
 
-  const startMin =
-    day === start.date ? (civilMinutesFromMidnight(item.start_at) ?? 0) : 0
-  let endMin = DAY_MINUTES
-  if (!item.end_at) {
-    endMin = Math.min(DAY_MINUTES, startMin + OPEN_ENDED_MINUTES)
-  } else if (day === endDate) {
-    endMin = civilMinutesFromMidnight(item.end_at) ?? DAY_MINUTES
+export function occupiesAllDayLane(item: ActionPlanExecutionFeedItem, day: string): boolean {
+  if (isExecutionAllDay(item)) {
+    return allDayDatesForItem(item).includes(day)
   }
-  if (endMin <= startMin) {
-    endMin = Math.min(DAY_MINUTES, startMin + 15)
+  return civilCoverageOnDay(item, day).kind === 'full_day'
+}
+
+export function occupiesMonthCell(item: ActionPlanExecutionFeedItem, day: string): boolean {
+  if (isExecutionAllDay(item)) {
+    return allDayDatesForItem(item).includes(day)
   }
-  return { startMin, endMin }
+  return civilCoverageOnDay(item, day).kind !== 'none'
+}
+
+export function isTimedDayLaneContinuation(
+  item: ActionPlanExecutionFeedItem,
+  day: string,
+): boolean {
+  if (isExecutionAllDay(item) || civilCoverageOnDay(item, day).kind !== 'full_day') {
+    return false
+  }
+  const startDate = splitIsoToCivil(item.start_at ?? '').date
+  return Boolean(startDate && startDate < day)
 }
 
 export function splitOverlappingColumns(

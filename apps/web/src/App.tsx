@@ -35,7 +35,6 @@ import { NotFoundPage } from '@/app/not-found-page'
 import { RoutePageLoading } from '@/app/route-page-loading'
 import { useAuth } from '@/app/auth-provider'
 import { resolveTerrainBackPath } from '@/app/terrain-back-path'
-import { appendExecutionFeedSearch } from '@/features/execution/lib/execution-feed-url-state'
 import {
   getTerrainContentKey,
   getTerrainRouteConfig,
@@ -715,15 +714,10 @@ function App() {
           <LazyExecutionFeedPage
             establishmentId={establishmentIdForScope ?? null}
             source={source}
-            onOpenActionPlanExecution={(id) =>
-              navigate(
-                source === 'cross'
-                  ? serializeScopedExecutionDetailPath(scope, id)
-                  : appendExecutionFeedSearch(
-                      serializeScopedExecutionDetailPath(scope, id),
-                      locationSearch,
-                    ),
-              )
+            onOpenActionPlanExecution={
+              source === 'cross'
+                ? (id) => navigate(serializeScopedExecutionDetailPath(scope, id))
+                : undefined
             }
             onNavigate={navigate}
           />
@@ -807,9 +801,6 @@ function App() {
     if (route.path === '/execution') {
       return (
         <LazyExecutionFeedPage
-          onOpenActionPlanExecution={(id) =>
-            navigate(appendExecutionFeedSearch(`/action-plans/executions/${id}`, locationSearch))
-          }
           onNavigate={navigate}
         />
       )

@@ -11,13 +11,23 @@ export type ExecutionFeedUrlState = {
   viewMode: ExecutionViewMode
 }
 
+export type ExecutionFeedUrlStateOptions = {
+  defaultViewMode?: ExecutionViewMode
+}
+
 const LAYOUTS = new Set<ExecutionFeedLayout>(['list', 'calendar'])
 const GRANULARITIES = new Set<ExecutionCalendarGranularity>(['day', 'week', 'month'])
 const VIEW_MODES = new Set<ExecutionViewMode>(['personal', 'general'])
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
+export const CROSS_EXECUTION_FEED_DEFAULT_VIEW_MODE: ExecutionViewMode = 'general'
+
 function parseSearchParams(search: string): URLSearchParams {
   return new URLSearchParams(search.startsWith('?') ? search.slice(1) : search)
+}
+
+function resolveDefaultViewMode(options?: ExecutionFeedUrlStateOptions): ExecutionViewMode {
+  return options?.defaultViewMode ?? 'personal'
 }
 
 export function defaultExecutionFeedUrlState(now: Date = new Date()): ExecutionFeedUrlState {
@@ -32,6 +42,7 @@ export function defaultExecutionFeedUrlState(now: Date = new Date()): ExecutionF
 export function parseExecutionFeedSearch(
   search: string,
   now: Date = new Date(),
+  options?: ExecutionFeedUrlStateOptions,
 ): ExecutionFeedUrlState {
   const params = parseSearchParams(search)
   const defaults = defaultExecutionFeedUrlState(now)
@@ -39,6 +50,7 @@ export function parseExecutionFeedSearch(
   const granularityRaw = params.get('granularity')
   const anchorRaw = params.get('anchor')
   const viewModeRaw = params.get('view_mode')
+  const defaultViewMode = resolveDefaultViewMode(options)
   return {
     layout: layoutRaw && LAYOUTS.has(layoutRaw as ExecutionFeedLayout)
       ? (layoutRaw as ExecutionFeedLayout)
@@ -51,12 +63,16 @@ export function parseExecutionFeedSearch(
     viewMode:
       viewModeRaw && VIEW_MODES.has(viewModeRaw as ExecutionViewMode)
         ? (viewModeRaw as ExecutionViewMode)
-        : defaults.viewMode,
+        : defaultViewMode,
   }
 }
 
-export function serializeExecutionFeedSearch(state: ExecutionFeedUrlState): string {
+export function serializeExecutionFeedSearch(
+  state: ExecutionFeedUrlState,
+  options?: ExecutionFeedUrlStateOptions,
+): string {
   const params = new URLSearchParams()
+  const defaultViewMode = resolveDefaultViewMode(options)
   if (state.layout !== 'list') {
     params.set('layout', state.layout)
   }
@@ -64,22 +80,32 @@ export function serializeExecutionFeedSearch(state: ExecutionFeedUrlState): stri
     params.set('granularity', state.granularity)
     params.set('anchor', state.anchor)
   }
-  if (state.viewMode !== 'personal') {
+  if (state.viewMode !== defaultViewMode) {
     params.set('view_mode', state.viewMode)
   }
   const query = params.toString()
   return query ? `?${query}` : ''
 }
 
-export function executionFeedHref(pathname: string, state: ExecutionFeedUrlState): string {
-  return `${pathname}${serializeExecutionFeedSearch(state)}`
+export function executionFeedHref(
+  pathname: string,
+  state: ExecutionFeedUrlState,
+  options?: ExecutionFeedUrlStateOptions,
+): string {
+  return `${pathname}${serializeExecutionFeedSearch(state, options)}`
 }
 
 const FEED_SEARCH_KEYS = new Set(['layout', 'granularity', 'anchor', 'view_mode'])
 
-export function appendExecutionFeedSearch(pathname: string, search: string): string {
+export function appendExecutionFeedSearch(
+  pathname: string,
+  search: string,
+  options?: ExecutionFeedUrlStateOptions,
+): string {
   const incoming = parseSearchParams(search)
-  const next = parseSearchParams(serializeExecutionFeedSearch(parseExecutionFeedSearch(search)))
+  const next = parseSearchParams(
+    serializeExecutionFeedSearch(parseExecutionFeedSearch(search, new Date(), options), options),
+  )
   const incomingQuery = incoming.toString()
   if (incomingQuery) {
     for (const pair of incomingQuery.split('&')) {

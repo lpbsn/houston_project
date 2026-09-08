@@ -1518,6 +1518,63 @@ paths:
               schema:
                 $ref: '#/components/schemas/ClientRequirementsResponse'
           description: ''
+  /api/v1/cross/action-plan-execution-calendar/:
+    get:
+      operationId: v1_cross_action_plan_execution_calendar_retrieve
+      parameters:
+      - in: query
+        name: establishment_id
+        schema:
+          type: string
+      - in: query
+        name: from
+        schema:
+          type: string
+        description: Inclusive civil start date (YYYY-MM-DD).
+        required: true
+      - in: query
+        name: to
+        schema:
+          type: string
+        description: Inclusive civil end date (YYYY-MM-DD).
+        required: true
+      - in: query
+        name: view_mode
+        schema:
+          type: string
+          enum:
+          - general
+          - personal
+        description: Defaults to general.
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanExecutionCalendarResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/cross/action-plan-execution-feed/:
     get:
       operationId: v1_cross_action_plan_execution_feed_retrieve
@@ -1534,6 +1591,14 @@ paths:
         name: page_size
         schema:
           type: integer
+      - in: query
+        name: view_mode
+        schema:
+          type: string
+          enum:
+          - general
+          - personal
+        description: Defaults to general.
       tags:
       - action-plans
       security:

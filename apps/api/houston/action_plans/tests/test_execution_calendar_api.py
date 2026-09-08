@@ -9,13 +9,17 @@ from django.utils import timezone
 
 from houston.action_plans.constants import (
     EXECUTION_STATUS_IN_PROGRESS,
+    EXECUTION_STATUS_PENDING_VALIDATION,
     EXECUTION_STATUS_SCHEDULED,
     SCHEDULE_ALL_DAY_END,
     SCHEDULE_ALL_DAY_START,
 )
 from houston.action_plans.models import ActionPlanExecution, ActionPlanSchedule
 from houston.action_plans.schedule_services import create_action_plan_schedule
-from houston.action_plans.services import create_action_plan_with_execution
+from houston.action_plans.services import (
+    create_action_plan_with_execution,
+    mark_action_plan_execution_done,
+)
 from houston.action_plans.tests.helpers import (
     action_plan_execution_calendar_url,
     action_plan_execution_feed_url,
@@ -438,3 +442,211 @@ def test_calendar_materialization_does_not_emit_side_effects(
     )
     assert response.status_code == 200, response.content
     mock_on_commit.assert_not_called()
+
+
+def _calendar_payload_by_id(body, execution_id):
+    for bucket in ("items", "unplanned"):
+        for item in body[bucket]:
+            payload = item["action_plan_execution"]
+            if payload["id"] == str(execution_id):
+                return bucket, payload
+    return None, None
+
+
+def test_calendar_keeps_future_scheduled_status_inside_window(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    now = timezone.now()
+    start_at = now + timedelta(days=2)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Future scheduled in window",
+        tasks=[build_task_payload(task="in", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=start_at,
+        end_at=start_at + timedelta(hours=1),
+        visible_from=now - timedelta(minutes=1),
+    )
+    execution.refresh_from_db()
+    assert execution.status == EXECUTION_STATUS_SCHEDULED
+
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_execution_calendar_url(owner_membership.establishment_id)
+        + _calendar_query(
+            view_mode="general",
+            from_date=(now + timedelta(days=1)).date(),
+            to_date=(now + timedelta(days=3)).date(),
+        ),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200, response.content
+    bucket, payload = _calendar_payload_by_id(response.json(), execution.id)
+    assert bucket == "items"
+    assert payload["status"] == EXECUTION_STATUS_SCHEDULED
+
+
+def test_calendar_due_scheduled_is_promoted_before_read(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    now = timezone.now()
+    start_at = now + timedelta(days=2)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Due scheduled",
+        tasks=[build_task_payload(task="due", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=start_at,
+        end_at=start_at + timedelta(hours=1),
+        visible_from=now - timedelta(minutes=1),
+    )
+    execution.start_at = now - timedelta(hours=1)
+    execution.end_at = now + timedelta(hours=1)
+    execution.status = EXECUTION_STATUS_SCHEDULED
+    execution.save(update_fields=["start_at", "end_at", "status", "updated_at"])
+
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_execution_calendar_url(owner_membership.establishment_id)
+        + _calendar_query(
+            view_mode="general",
+            from_date=now.date(),
+            to_date=(now + timedelta(days=1)).date(),
+        ),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200, response.content
+    bucket, payload = _calendar_payload_by_id(response.json(), execution.id)
+    assert bucket == "items"
+    assert payload["status"] == EXECUTION_STATUS_IN_PROGRESS
+
+
+def test_calendar_includes_dated_pending_validation_in_window(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    now = timezone.now()
+    start_at = now - timedelta(hours=3)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Pending dated",
+        requires_validation=True,
+        tasks=[build_task_payload(task="pv", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=start_at,
+        end_at=start_at + timedelta(hours=1),
+        visible_from=now - timedelta(minutes=1),
+    )
+    pending = mark_action_plan_execution_done(
+        execution_id=execution.id,
+        actor_membership=owner_membership,
+    )
+    assert pending.status == EXECUTION_STATUS_PENDING_VALIDATION
+    assert pending.start_at == start_at
+
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_execution_calendar_url(owner_membership.establishment_id)
+        + _calendar_query(
+            view_mode="general",
+            from_date=now.date(),
+            to_date=now.date(),
+        ),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200, response.content
+    bucket, payload = _calendar_payload_by_id(response.json(), pending.id)
+    assert bucket == "items"
+    assert payload["status"] == EXECUTION_STATUS_PENDING_VALIDATION
+
+
+def test_calendar_undated_pending_validation_is_unplanned_not_grid(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    execution = create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Pending undated",
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        status=EXECUTION_STATUS_PENDING_VALIDATION,
+        requires_validation=True,
+    )
+    token = login(api_client, user=owner_membership.user)
+    now = timezone.now()
+    response = api_client.get(
+        action_plan_execution_calendar_url(owner_membership.establishment_id)
+        + _calendar_query(
+            view_mode="general",
+            from_date=now.date(),
+            to_date=now.date(),
+        ),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200, response.content
+    bucket, payload = _calendar_payload_by_id(response.json(), execution.id)
+    assert bucket == "unplanned"
+    assert payload["status"] == EXECUTION_STATUS_PENDING_VALIDATION
+
+
+def test_calendar_week_window_omits_scheduled_visible_on_upcoming(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    now = timezone.now()
+    start_at = now + timedelta(days=20)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Far scheduled",
+        tasks=[build_task_payload(task="far", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=start_at,
+        end_at=start_at + timedelta(hours=1),
+        visible_from=now - timedelta(minutes=1),
+    )
+    token = login(api_client, user=owner_membership.user)
+    calendar = api_client.get(
+        action_plan_execution_calendar_url(owner_membership.establishment_id)
+        + _calendar_query(
+            view_mode="general",
+            from_date=now.date(),
+            to_date=(now + timedelta(days=6)).date(),
+        ),
+        **auth_headers(token),
+    )
+    upcoming = api_client.get(
+        action_plan_execution_upcoming_url(owner_membership.establishment_id)
+        + feed_query("general"),
+        **auth_headers(token),
+    )
+    assert calendar.status_code == 200
+    assert upcoming.status_code == 200
+    calendar_ids = {item["action_plan_execution"]["id"] for item in calendar.json()["items"]}
+    upcoming_ids = {item["action_plan_execution"]["id"] for item in upcoming.json()["items"]}
+    assert str(execution.id) not in calendar_ids
+    assert str(execution.id) in upcoming_ids

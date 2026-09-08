@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ActionPlanExecutionFeedItemWrapper } from '@/features/action-plans/types'
+import { useTerrainHubTitleSlotValue } from '@/components/layout/terrain-hub-title-slot'
 import { ActionPlansApiError } from '@/features/action-plans/api'
 
 import { ExecutionFeedPage } from './execution-feed-page'
@@ -15,6 +16,7 @@ const planFeedQueryMock = vi.fn()
 const calendarQueryMock = vi.fn()
 const executionNavigate = vi.fn()
 const executionRouteState = { search: '' }
+let serializeAppRouteMockPath = '/execution'
 
 function buildPlanFeedWrapper(
   id: string,
@@ -100,7 +102,7 @@ vi.mock('@/app/app-routes', () => ({
     search: executionRouteState.search,
     navigate: executionNavigate,
   }),
-  serializeAppRoute: () => '/execution',
+  serializeAppRoute: () => serializeAppRouteMockPath,
 }))
 
 vi.mock('@/features/action-plans/hooks/use-action-plan-execution-feed-quick-actions', () => ({
@@ -114,18 +116,29 @@ vi.mock('@/features/action-plans/hooks/use-action-plan-execution-feed-quick-acti
   }),
 }))
 
-function renderExecutionFeedPage(props: { onNavigate?: (pathname: string) => void } = {}) {
+function TitleSlotProbe() {
+  const node = useTerrainHubTitleSlotValue()
+  return createElement('div', { 'data-testid': 'title-slot' }, node)
+}
+
+function renderExecutionFeedPage(
+  props: { onNavigate?: (pathname: string) => void; source?: 'establishment' | 'cross' } = {},
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
-
-  return render(
+  const tree = () =>
     createElement(
       QueryClientProvider,
       { client: queryClient },
-      createElement(ExecutionFeedPage, props),
-    ),
-  )
+      createElement('div', null, createElement(TitleSlotProbe), createElement(ExecutionFeedPage, props)),
+    )
+
+  const view = render(tree())
+  return {
+    ...view,
+    rerenderPage: () => view.rerender(tree()),
+  }
 }
 
 describe('ExecutionFeedPage plan feed', () => {
@@ -133,6 +146,7 @@ describe('ExecutionFeedPage plan feed', () => {
     planFetchNextPage.mockClear()
     executionNavigate.mockClear()
     executionRouteState.search = ''
+    serializeAppRouteMockPath = '/execution'
     planFeedQueryMock.mockReturnValue(buildPlanFeedQueryState())
     calendarQueryMock.mockReturnValue({
       isLoading: false,
@@ -450,5 +464,106 @@ describe('ExecutionFeedPage plan feed', () => {
     expect(screen.getByRole('tablist', { name: 'Disposition du feed' })).toBeTruthy()
     expect(screen.getByRole('tablist', { name: 'Granularité du calendrier' })).toBeTruthy()
     expect(screen.getByRole('tab', { name: 'Semaine' }).getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('opens a calendar event with the current feed search on the detail href', () => {
+    executionRouteState.search =
+      '?layout=calendar&granularity=week&anchor=2026-09-08&view_mode=general'
+    calendarQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      data: {
+        timezone: 'Europe/Paris',
+        items: [
+          buildPlanFeedWrapper('exec-cal', 'Brief cuisine', {
+            start_at: '2026-09-08T07:00:00.000Z',
+            end_at: '2026-09-08T09:00:00.000Z',
+          }),
+        ],
+        unplanned: [],
+      },
+      refetch: vi.fn(),
+    })
+
+    renderExecutionFeedPage()
+    fireEvent.click(screen.getByRole('button', { name: /Brief cuisine/ }))
+
+    expect(executionNavigate).toHaveBeenCalledWith(
+      '/action-plans/executions/exec-cal?layout=calendar&granularity=week&anchor=2026-09-08&view_mode=general',
+    )
+  })
+
+  it('uses the live search after a search-only change with a stable route', () => {
+    calendarQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      data: {
+        timezone: 'Europe/Paris',
+        items: [
+          buildPlanFeedWrapper('exec-cal', 'Brief cuisine', {
+            start_at: '2026-09-08T07:00:00.000Z',
+            end_at: '2026-09-08T09:00:00.000Z',
+          }),
+        ],
+        unplanned: [],
+      },
+      refetch: vi.fn(),
+    })
+
+    executionRouteState.search = ''
+    const view = renderExecutionFeedPage()
+    executionRouteState.search =
+      '?layout=calendar&granularity=month&anchor=2026-09-08&view_mode=general'
+    view.rerenderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: /Brief cuisine/ }))
+    expect(executionNavigate).toHaveBeenCalledWith(
+      '/action-plans/executions/exec-cal?layout=calendar&granularity=month&anchor=2026-09-08&view_mode=general',
+    )
+  })
+
+  it('exposes calendar and view-mode controls on the cross feed with Vue globale by default', () => {
+    serializeAppRouteMockPath = '/cross/execution'
+    renderExecutionFeedPage({ source: 'cross' })
+    expect(screen.getByRole('tab', { name: 'Vue globale' }).getAttribute('aria-selected')).toBe(
+      'true',
+    )
+    expect(screen.getByRole('tablist', { name: 'Disposition du feed' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: 'Calendrier' }))
+    expect(executionNavigate).toHaveBeenCalledWith(
+      expect.stringContaining('layout=calendar'),
+      { replace: true },
+    )
+    expect(executionNavigate.mock.calls[0]?.[0]).not.toContain('view_mode=personal')
+  })
+
+  it('opens a cross calendar event while preserving Ma vue', () => {
+    serializeAppRouteMockPath = '/cross/execution'
+    executionRouteState.search =
+      '?layout=calendar&granularity=week&anchor=2026-09-08&view_mode=personal'
+    calendarQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      data: {
+        timezone: 'Europe/Paris',
+        items: [
+          buildPlanFeedWrapper('exec-cal', 'Brief cuisine', {
+            start_at: '2026-09-08T07:00:00.000Z',
+            end_at: '2026-09-08T09:00:00.000Z',
+          }),
+        ],
+        unplanned: [],
+      },
+      refetch: vi.fn(),
+    })
+
+    renderExecutionFeedPage({ source: 'cross' })
+    fireEvent.click(screen.getByRole('button', { name: /Brief cuisine/ }))
+    expect(executionNavigate).toHaveBeenCalledWith(
+      '/cross/execution/exec-cal?layout=calendar&granularity=week&anchor=2026-09-08&view_mode=personal',
+    )
   })
 })

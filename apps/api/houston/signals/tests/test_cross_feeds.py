@@ -142,3 +142,242 @@ def test_signal_feed_foreign_establishment_is_not_found(api_client):
         **auth_headers(token),
     )
     assert response.status_code in {403, 404}
+
+
+def _cross_calendar_query(*, from_date, to_date, view_mode=None) -> str:
+    query = f"?from={from_date.isoformat()}&to={to_date.isoformat()}"
+    if view_mode is not None:
+        query += f"&view_mode={view_mode}"
+    return query
+
+
+def test_cross_execution_feed_defaults_to_general_view_mode(api_client):
+    from houston.action_plans.tests.helpers import create_execution
+    from houston.comments.models import Comment, CommentMention
+    from houston.testing.taxonomy import create_business_unit as make_bu
+
+    user = create_user(username="cross-view-mode")
+    establishment = create_establishment(name="Scoped")
+    restaurant = make_bu(establishment=establishment, key="salle")
+    maintenance = make_bu(establishment=establishment, key="maintenance")
+    manager = create_membership(
+        establishment=establishment,
+        user=user,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    create_membership_with_business_unit_scope(membership=manager, business_unit=restaurant)
+    owner = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    maintenance_staff = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    create_membership_with_business_unit_scope(
+        membership=maintenance_staff,
+        business_unit=maintenance,
+    )
+    mentioned = create_execution(
+        owner,
+        business_unit=maintenance,
+        title="Mentioned out of scope",
+        assignees=[
+            build_assignee_payload(membership=maintenance_staff, business_unit=maintenance)
+        ],
+    )
+    comment = Comment.objects.create(
+        establishment=establishment,
+        action_plan_execution=mentioned,
+        author_membership=owner,
+        body="Mention",
+    )
+    CommentMention.objects.create(comment=comment, mentioned_membership=manager)
+
+    token = login(api_client, user=user)
+    default_feed = api_client.get(
+        "/api/v1/cross/action-plan-execution-feed/",
+        **auth_headers(token),
+    )
+    general_feed = api_client.get(
+        "/api/v1/cross/action-plan-execution-feed/?view_mode=general",
+        **auth_headers(token),
+    )
+    personal_feed = api_client.get(
+        "/api/v1/cross/action-plan-execution-feed/?view_mode=personal",
+        **auth_headers(token),
+    )
+    invalid = api_client.get(
+        "/api/v1/cross/action-plan-execution-feed/?view_mode=invalid",
+        **auth_headers(token),
+    )
+    assert default_feed.status_code == 200
+    assert general_feed.status_code == 200
+    assert personal_feed.status_code == 200
+    assert invalid.status_code == 400
+    default_ids = {item["action_plan_execution"]["id"] for item in default_feed.json()["items"]}
+    general_ids = {item["action_plan_execution"]["id"] for item in general_feed.json()["items"]}
+    personal_ids = {item["action_plan_execution"]["id"] for item in personal_feed.json()["items"]}
+    assert default_ids == general_ids
+    assert str(mentioned.id) not in general_ids
+    assert str(mentioned.id) in personal_ids
+
+
+def test_cross_execution_calendar_unions_and_respects_per_membership_rbac(api_client):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    user = create_user(username="cross-cal-owner")
+    first = create_establishment(name="Alpha")
+    second = create_establishment(name="Beta")
+    membership_a = create_membership(
+        establishment=first,
+        user=user,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    membership_b = create_membership(
+        establishment=second,
+        user=user,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    bu_a = create_business_unit(establishment=first, key="salle")
+    bu_b = create_business_unit(establishment=second, key="salle")
+    now = timezone.now()
+    start_at = now + timedelta(days=2)
+    _, exec_a = create_action_plan_with_execution(
+        establishment_id=first.id,
+        created_by=membership_a,
+        pilot_business_unit_id=bu_a.id,
+        title="From A",
+        tasks=[build_task_payload(task="a", business_unit=bu_a)],
+        assignees=[build_assignee_payload(membership=membership_a, business_unit=bu_a)],
+        start_at=start_at,
+        end_at=start_at + timedelta(hours=1),
+        visible_from=now - timedelta(minutes=1),
+    )
+    _, exec_b = create_action_plan_with_execution(
+        establishment_id=second.id,
+        created_by=membership_b,
+        pilot_business_unit_id=bu_b.id,
+        title="From B",
+        tasks=[build_task_payload(task="b", business_unit=bu_b)],
+        assignees=[build_assignee_payload(membership=membership_b, business_unit=bu_b)],
+        start_at=start_at,
+        end_at=start_at + timedelta(hours=1),
+        visible_from=now - timedelta(minutes=1),
+    )
+    token = login(api_client, user=user)
+    response = api_client.get(
+        "/api/v1/cross/action-plan-execution-calendar/"
+        + _cross_calendar_query(
+            from_date=(now + timedelta(days=1)).date(),
+            to_date=(now + timedelta(days=3)).date(),
+        ),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200, response.content
+    body = response.json()
+    ids = {item["action_plan_execution"]["id"] for item in body["items"]}
+    assert str(exec_a.id) in ids
+    assert str(exec_b.id) in ids
+    payload_a = next(
+        item["action_plan_execution"]
+        for item in body["items"]
+        if item["action_plan_execution"]["id"] == str(exec_a.id)
+    )
+    assert payload_a["status"] == "scheduled"
+    assert payload_a["permission_hints"]["can_mark_done"] is False
+    assert payload_a["establishment_id"] == str(first.id)
+
+    over = api_client.get(
+        "/api/v1/cross/action-plan-execution-calendar/"
+        + _cross_calendar_query(
+            from_date=now.date(),
+            to_date=(now + timedelta(days=46)).date(),
+        ),
+        **auth_headers(token),
+    )
+    assert over.status_code == 400
+
+
+def test_cross_execution_calendar_manager_scope_is_not_widened(api_client):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    user = create_user(username="cross-cal-manager")
+    establishment = create_establishment(name="Scoped cal")
+    restaurant = create_business_unit(establishment=establishment, key="salle")
+    maintenance = create_business_unit(establishment=establishment, key="maintenance")
+    manager = create_membership(
+        establishment=establishment,
+        user=user,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    create_membership_with_business_unit_scope(membership=manager, business_unit=restaurant)
+    owner = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    now = timezone.now()
+    start_at = now + timedelta(days=2)
+    _, in_scope = create_action_plan_with_execution(
+        establishment_id=establishment.id,
+        created_by=owner,
+        pilot_business_unit_id=restaurant.id,
+        title="In scope",
+        tasks=[build_task_payload(task="in", business_unit=restaurant)],
+        assignees=[build_assignee_payload(membership=owner, business_unit=restaurant)],
+        start_at=start_at,
+        end_at=start_at + timedelta(hours=1),
+        visible_from=now - timedelta(minutes=1),
+    )
+    maintenance_staff = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    create_membership_with_business_unit_scope(
+        membership=maintenance_staff,
+        business_unit=maintenance,
+    )
+    _, out_of_scope = create_action_plan_with_execution(
+        establishment_id=establishment.id,
+        created_by=owner,
+        pilot_business_unit_id=maintenance.id,
+        title="Out of scope",
+        tasks=[build_task_payload(task="out", business_unit=maintenance)],
+        assignees=[
+            build_assignee_payload(membership=maintenance_staff, business_unit=maintenance)
+        ],
+        start_at=start_at,
+        end_at=start_at + timedelta(hours=1),
+        visible_from=now - timedelta(minutes=1),
+    )
+    token = login(api_client, user=user)
+    response = api_client.get(
+        "/api/v1/cross/action-plan-execution-calendar/"
+        + _cross_calendar_query(
+            from_date=(now + timedelta(days=1)).date(),
+            to_date=(now + timedelta(days=3)).date(),
+        ),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200, response.content
+    ids = {item["action_plan_execution"]["id"] for item in response.json()["items"]}
+    assert str(in_scope.id) in ids
+    assert str(out_of_scope.id) not in ids
+
+
+def test_cross_execution_calendar_staff_forbidden(api_client):
+    staff = build_api_membership(role=EstablishmentMembership.Role.STAFF)
+    token = login(api_client, user=staff.user)
+    from django.utils import timezone
+
+    today = timezone.now().date()
+    response = api_client.get(
+        "/api/v1/cross/action-plan-execution-calendar/"
+        + _cross_calendar_query(from_date=today, to_date=today),
+        **auth_headers(token),
+    )
+    assert response.status_code == 403

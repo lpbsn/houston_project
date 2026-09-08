@@ -2,9 +2,11 @@ import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, LoaderCircle, Plus } from 'lucide-react'
 
 import { serializeAppRoute, useAppRoute } from '@/app/app-routes'
+import { serializeScopedExecutionDetailPath } from '@/app/scoped-terrain'
 import { useAuth } from '@/app/auth-provider'
 import { getBootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permission-hints'
 import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
+import { TerrainHubTitleSlot } from '@/components/layout/terrain-hub-title-slot'
 import { TerrainHubViewToolbar } from '@/components/layout/terrain-hub-view-toolbar'
 import { Button } from '@/components/ui/button'
 import {
@@ -36,6 +38,7 @@ import {
   shiftCalendarAnchor,
 } from '../lib/execution-calendar-window'
 import {
+  appendExecutionFeedSearch,
   executionFeedHref,
   parseExecutionFeedSearch,
   type ExecutionCalendarGranularity,
@@ -73,7 +76,6 @@ function readScheduledCountFromFeedPages(
 }
 
 export function ExecutionFeedPage({
-  onOpenActionPlanExecution,
   onNavigate,
   establishmentId: establishmentIdProp,
   source = 'establishment',
@@ -83,9 +85,12 @@ export function ExecutionFeedPage({
   const establishmentId =
     establishmentIdProp ?? auth.bootstrap?.active_membership?.establishment_id ?? null
   const isCross = source === 'cross'
-  const feedUrl = parseExecutionFeedSearch(isCross ? '' : search)
+  const feedUrlOptions = isCross
+    ? { defaultViewMode: 'general' as const }
+    : undefined
+  const feedUrl = parseExecutionFeedSearch(search, new Date(), feedUrlOptions)
   const viewMode = feedUrl.viewMode
-  const layout: ExecutionFeedLayout = isCross ? 'list' : feedUrl.layout
+  const layout: ExecutionFeedLayout = feedUrl.layout
   const granularity = feedUrl.granularity
   const calendarWindow = useMemo(
     () => resolveCalendarWindow(granularity, feedUrl.anchor),
@@ -103,10 +108,14 @@ export function ExecutionFeedPage({
   ) {
     const pathname = serializeAppRoute(route).split('?')[0] || '/execution'
     navigate(
-      executionFeedHref(pathname, {
-        ...feedUrl,
-        ...patch,
-      }),
+      executionFeedHref(
+        pathname,
+        {
+          ...feedUrl,
+          ...patch,
+        },
+        feedUrlOptions,
+      ),
       { replace: true },
     )
   }
@@ -116,7 +125,7 @@ export function ExecutionFeedPage({
     establishmentId,
     viewMode,
     { from: calendarWindow.from, to: calendarWindow.to },
-    { enabled: !isCross && layout === 'calendar' },
+    { enabled: layout === 'calendar', source },
   )
   const quickActions = useActionPlanExecutionFeedQuickActions({
     establishmentId,
@@ -172,6 +181,22 @@ export function ExecutionFeedPage({
     </Button>
   ) : null
 
+  function executionDetailPath(executionId: string): string {
+    if (route.kind === 'scoped-terrain') {
+      return serializeScopedExecutionDetailPath(route.scope, executionId)
+    }
+    if (isCross) {
+      return `/cross/execution/${executionId}`
+    }
+    return `/action-plans/executions/${executionId}`
+  }
+
+  function openExecution(executionId: string) {
+    navigate(
+      appendExecutionFeedSearch(executionDetailPath(executionId), search, feedUrlOptions),
+    )
+  }
+
   if (!establishmentId && !isCross) {
     return (
       <p className="px-3 py-4 text-sm text-[#6b5f52]">Établissement non sélectionné.</p>
@@ -187,56 +212,55 @@ export function ExecutionFeedPage({
         onSelectActionPlan={() => onNavigate?.('/action-plans/new?from=execution')}
         onSelectCatalog={() => onNavigate?.('/action-plans')}
       />
+      <TerrainHubTitleSlot>
+        <ExecutionFeedTabs
+          viewMode={viewMode}
+          onChange={(next) => replaceFeedUrl({ viewMode: next })}
+        />
+      </TerrainHubTitleSlot>
       <TerrainHubSubheader>
-        {isCross ? null : (
-          <div className="flex flex-col gap-2">
-            <TerrainHubViewToolbar className="pb-1">
-              <ExecutionFeedTabs
-                viewMode={viewMode}
-                onChange={(next) => replaceFeedUrl({ viewMode: next })}
-              />
-            </TerrainHubViewToolbar>
-            <TerrainHubViewToolbar trailing={createAction}>
-              <TerrainSegmentedControl
-                ariaLabel="Disposition du feed"
-                value={layout}
-                onChange={(next) => replaceFeedUrl({ layout: next })}
-                options={[
-                  { value: 'list', label: 'Liste' },
-                  { value: 'calendar', label: 'Calendrier' },
-                ]}
-              />
-            </TerrainHubViewToolbar>
-            {layout === 'calendar' ? (
-              <CalendarPeriodToolbar
-                granularity={granularity}
-                periodLabel={formatCalendarPeriodLabel(granularity, calendarWindow, feedUrl.anchor)}
-                onGranularityChange={(next) => replaceFeedUrl({ granularity: next })}
-                onPrevious={() =>
-                  replaceFeedUrl({
-                    anchor: shiftCalendarAnchor(granularity, feedUrl.anchor, -1),
-                  })
-                }
-                onToday={() => replaceFeedUrl({ anchor: calendarAnchorToday() })}
-                onNext={() =>
-                  replaceFeedUrl({
-                    anchor: shiftCalendarAnchor(granularity, feedUrl.anchor, 1),
-                  })
-                }
-              />
-            ) : null}
-          </div>
-        )}
+        <div className="flex flex-col gap-2">
+          <TerrainHubViewToolbar className="pb-3 pt-3" trailing={createAction}>
+            <TerrainSegmentedControl
+              ariaLabel="Disposition du feed"
+              className="w-fit"
+              value={layout}
+              onChange={(next) => replaceFeedUrl({ layout: next })}
+              options={[
+                { value: 'list', label: 'Liste' },
+                { value: 'calendar', label: 'Calendrier' },
+              ]}
+            />
+          </TerrainHubViewToolbar>
+          {layout === 'calendar' ? (
+            <CalendarPeriodToolbar
+              granularity={granularity}
+              periodLabel={formatCalendarPeriodLabel(granularity, calendarWindow, feedUrl.anchor)}
+              onGranularityChange={(next) => replaceFeedUrl({ granularity: next })}
+              onPrevious={() =>
+                replaceFeedUrl({
+                  anchor: shiftCalendarAnchor(granularity, feedUrl.anchor, -1),
+                })
+              }
+              onToday={() => replaceFeedUrl({ anchor: calendarAnchorToday() })}
+              onNext={() =>
+                replaceFeedUrl({
+                  anchor: shiftCalendarAnchor(granularity, feedUrl.anchor, 1),
+                })
+              }
+            />
+          ) : null}
+        </div>
       </TerrainHubSubheader>
       <div
         className={cn(
           'min-h-0 flex-1 px-3 pb-4',
-          layout === 'calendar' && !isCross
+          layout === 'calendar'
             ? 'flex flex-col overflow-hidden'
             : 'overflow-y-auto overscroll-y-contain',
         )}
       >
-        {layout === 'calendar' && !isCross ? (
+        {layout === 'calendar' ? (
           <div className="flex min-h-0 flex-1 flex-col pt-3">
             <ExecutionCalendarView
               granularity={granularity}
@@ -247,7 +271,7 @@ export function ExecutionFeedPage({
               isError={calendarQuery.isError}
               error={calendarQuery.error}
               onRetry={() => void calendarQuery.refetch()}
-              onOpenExecution={(id) => onOpenActionPlanExecution?.(id)}
+              onOpenExecution={openExecution}
             />
           </div>
         ) : (
@@ -286,7 +310,7 @@ export function ExecutionFeedPage({
                       <ActionPlanExecutionFeedCard
                         key={`plan-pinned-${item.id}`}
                         item={item}
-                        onSelect={(id) => onOpenActionPlanExecution?.(id)}
+                        onSelect={openExecution}
                         onOpenActions={isCross ? undefined : quickActions.openActions}
                       />
                     ))}
@@ -309,7 +333,7 @@ export function ExecutionFeedPage({
                             <ActionPlanExecutionFeedCard
                               key={`plan-${item.id}`}
                               item={item}
-                              onSelect={(id) => onOpenActionPlanExecution?.(id)}
+                              onSelect={openExecution}
                               onOpenActions={isCross ? undefined : quickActions.openActions}
                             />
                           ))}

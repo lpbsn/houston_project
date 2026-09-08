@@ -524,6 +524,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cross/action-plan-execution-calendar/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_cross_action_plan_execution_calendar_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cross/action-plan-execution-feed/": {
         parameters: {
             query?: never;
@@ -6576,12 +6592,65 @@ export interface operations {
             };
         };
     };
+    v1_cross_action_plan_execution_calendar_retrieve: {
+        parameters: {
+            query: {
+                establishment_id?: string;
+                /** @description Inclusive civil start date (YYYY-MM-DD). */
+                from: string;
+                /** @description Inclusive civil end date (YYYY-MM-DD). */
+                to: string;
+                /** @description Defaults to general. */
+                view_mode?: "general" | "personal";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPlanExecutionCalendarResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     v1_cross_action_plan_execution_feed_retrieve: {
         parameters: {
             query?: {
                 cursor?: string;
                 establishment_id?: string;
                 page_size?: number;
+                /** @description Defaults to general. */
+                view_mode?: "general" | "personal";
             };
             header?: never;
             path?: never;

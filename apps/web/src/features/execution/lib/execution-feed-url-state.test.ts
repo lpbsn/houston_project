@@ -49,4 +49,37 @@ describe('execution-feed-url-state', () => {
       '/action-plans/executions/exec-1?layout=calendar&granularity=week&anchor=2026-09-08&tab=comments&commentId=c-1&focus=validation',
     )
   })
+
+  it('defaults missing view_mode to general only when asked', () => {
+    expect(
+      parseExecutionFeedSearch('', new Date('2026-09-08T10:00:00.000Z')).viewMode,
+    ).toBe('personal')
+    expect(
+      parseExecutionFeedSearch('', new Date('2026-09-08T10:00:00.000Z'), {
+        defaultViewMode: 'general',
+      }).viewMode,
+    ).toBe('general')
+    expect(
+      serializeExecutionFeedSearch(
+        {
+          layout: 'list',
+          granularity: 'week',
+          anchor: '2026-09-08',
+          viewMode: 'general',
+        },
+        { defaultViewMode: 'general' },
+      ),
+    ).toBe('')
+    expect(
+      serializeExecutionFeedSearch(
+        {
+          layout: 'list',
+          granularity: 'week',
+          anchor: '2026-09-08',
+          viewMode: 'personal',
+        },
+        { defaultViewMode: 'general' },
+      ),
+    ).toBe('?view_mode=personal')
+  })
 })

@@ -23,7 +23,7 @@ describe('TerrainTopbar', () => {
     expect(screen.queryByRole('img', { name: 'Houston' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Notifications' })).toBeTruthy()
     expect(container.querySelector('.grid-cols-\\[1fr_auto_1fr\\]')).toBeNull()
-    expect(container.querySelector('.h-14')).toBeTruthy()
+    expect(container.querySelector('.min-h-14')).toBeTruthy()
   })
 
   it('renders hub without page title using a spacer', () => {
@@ -32,7 +32,7 @@ describe('TerrainTopbar', () => {
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
     expect(screen.queryByRole('img', { name: 'Houston' })).toBeNull()
     expect(container.querySelector('span[aria-hidden]')).toBeTruthy()
-    expect(container.querySelector('.h-14')).toBeTruthy()
+    expect(container.querySelector('.min-h-14')).toBeTruthy()
   })
 
   it('renders long hub page titles without crashing', () => {
@@ -49,6 +49,23 @@ describe('TerrainTopbar', () => {
         name: 'Page introuvable avec un titre très long qui doit être tronqué',
       }),
     ).toBeTruthy()
+  })
+
+  it('renders afterTitle beside the hub title and keeps trailing notifications', () => {
+    render(
+      <TerrainTopbar
+        variant="hub"
+        pageTitle="Exécution"
+        afterTitle={<button type="button">Ma vue</button>}
+        trailing={<button type="button">Notifications</button>}
+      />,
+    )
+
+    const title = screen.getByRole('heading', { level: 1, name: 'Exécution' })
+    const scope = screen.getByRole('button', { name: 'Ma vue' })
+    const notifications = screen.getByRole('button', { name: 'Notifications' })
+    expect(title.compareDocumentPosition(scope) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(scope.compareDocumentPosition(notifications) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('renders detail back button without visible border classes', () => {

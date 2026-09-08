@@ -13,7 +13,6 @@ from houston.action_plans.materialization import (
 from houston.action_plans.selectors import (
     action_plan_execution_calendar_items_queryset,
     action_plan_execution_calendar_unplanned_queryset,
-    action_plan_execution_overdue,
     annotate_action_plan_execution_feed_pins,
 )
 from houston.establishments.membership_scope import membership_scope_prefetch
@@ -114,4 +113,54 @@ def build_action_plan_execution_calendar(
         "items": items,
         "unplanned": unplanned,
         "as_of": as_of,
+        "membership": membership,
+    }
+
+
+def build_cross_action_plan_execution_calendar(
+    *,
+    memberships: list[EstablishmentMembership],
+    view_mode: ExecutionFeedViewMode,
+    from_date: date,
+    to_date: date,
+) -> dict:
+    if not memberships:
+        as_of = timezone.now()
+        return {
+            "timezone": "Europe/Paris",
+            "items": [],
+            "unplanned": [],
+            "as_of": as_of,
+            "membership_by_execution_id": {},
+        }
+
+    items_by_id = {}
+    unplanned_by_id = {}
+    membership_by_execution_id = {}
+    timezone_name = None
+    as_of = None
+    for membership in memberships:
+        calendar = build_action_plan_execution_calendar(
+            membership=membership,
+            view_mode=view_mode,
+            from_date=from_date,
+            to_date=to_date,
+        )
+        if timezone_name is None:
+            timezone_name = calendar["timezone"]
+        as_of = calendar["as_of"]
+        slice_membership = calendar["membership"]
+        for execution in calendar["items"]:
+            items_by_id.setdefault(execution.id, execution)
+            membership_by_execution_id.setdefault(execution.id, slice_membership)
+        for execution in calendar["unplanned"]:
+            unplanned_by_id.setdefault(execution.id, execution)
+            membership_by_execution_id.setdefault(execution.id, slice_membership)
+
+    return {
+        "timezone": timezone_name,
+        "items": list(items_by_id.values()),
+        "unplanned": list(unplanned_by_id.values()),
+        "as_of": as_of or timezone.now(),
+        "membership_by_execution_id": membership_by_execution_id,
     }

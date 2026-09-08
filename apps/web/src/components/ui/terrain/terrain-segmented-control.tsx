@@ -27,9 +27,10 @@ export function TerrainSegmentedControl<T extends string>({
       role="tablist"
       aria-label={ariaLabel}
       className={cn(
-        'inline-flex max-w-full items-center rounded-xl border border-[#E8E6DF] bg-[#F5F4F0] p-0.5',
+        'grid max-w-full overflow-hidden rounded-xl border border-[#E8E6DF] bg-[#F5F4F0] p-0.5',
         className,
       )}
+      style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
     >
       {options.map((option) => {
         const selected = option.value === value
@@ -40,8 +41,8 @@ export function TerrainSegmentedControl<T extends string>({
             role="tab"
             aria-selected={selected}
             className={cn(
-              'min-h-8 min-w-0 flex-1 rounded-[10px] px-3 py-1.5 text-xs font-semibold',
-              selected ? 'bg-white text-[#114660] shadow-sm' : 'text-[#7D7B75]',
+              'min-h-8 min-w-0 whitespace-nowrap rounded-[10px] px-2 py-1.5 text-xs font-semibold sm:px-2.5',
+              selected ? 'z-10 bg-white text-[#114660] shadow-sm' : 'z-0 text-[#7D7B75]',
             )}
             onClick={() => onChange(option.value)}
           >

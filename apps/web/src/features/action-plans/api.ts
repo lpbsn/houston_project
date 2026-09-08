@@ -46,7 +46,8 @@ export const actionPlansQueryKeys = {
     ['action-plans', 'detail', establishmentId, actionPlanId] as const,
   executionFeed: (establishmentId: string, viewMode: ActionPlanExecutionFeedViewMode) =>
     ['action-plans', 'action-plan-execution-feed', establishmentId, viewMode] as const,
-  crossExecutionFeed: ['action-plans', 'cross-action-plan-execution-feed'] as const,
+  crossExecutionFeed: (viewMode: ActionPlanExecutionFeedViewMode) =>
+    ['action-plans', 'cross-action-plan-execution-feed', viewMode] as const,
   executionUpcoming: (establishmentId: string, viewMode: ActionPlanExecutionFeedViewMode) =>
     ['action-plans', 'action-plan-execution-upcoming', establishmentId, viewMode] as const,
   executionCalendar: (
@@ -56,6 +57,12 @@ export const actionPlansQueryKeys = {
     to: string,
   ) =>
     ['action-plans', 'action-plan-execution-calendar', establishmentId, viewMode, from, to] as const,
+  crossExecutionCalendar: (
+    viewMode: ActionPlanExecutionFeedViewMode,
+    from: string,
+    to: string,
+  ) =>
+    ['action-plans', 'cross-action-plan-execution-calendar', viewMode, from, to] as const,
   executionDetail: (establishmentId: string, executionId: string) =>
     ['action-plans', 'execution-detail', establishmentId, executionId] as const,
   crossExecutionDetail: (executionId: string) =>
@@ -186,6 +193,7 @@ export async function fetchActionPlanExecutionFeed(
 }
 
 export async function fetchCrossActionPlanExecutionFeed(
+  viewMode: ActionPlanExecutionFeedViewMode,
   options: { cursor?: string; pageSize?: number } = {},
 ): Promise<ActionPlanExecutionFeedResponse> {
   const result = await withAuthRetry(
@@ -193,6 +201,7 @@ export async function fetchCrossActionPlanExecutionFeed(
       apiClient.GET('/api/v1/cross/action-plan-execution-feed/', {
         params: {
           query: {
+            view_mode: viewMode,
             ...(options.cursor ? { cursor: options.cursor } : {}),
             ...(options.pageSize ? { page_size: options.pageSize } : {}),
           },
@@ -251,6 +260,27 @@ export async function fetchActionPlanExecutionCalendar(
           headers: getAuthHeaders(accessToken),
         },
       ),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanExecutionCalendarResponse>(result)
+}
+
+export async function fetchCrossActionPlanExecutionCalendar(
+  viewMode: ActionPlanExecutionFeedViewMode,
+  window: { from: string; to: string },
+): Promise<ActionPlanExecutionCalendarResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/cross/action-plan-execution-calendar/', {
+        params: {
+          query: {
+            view_mode: viewMode,
+            from: window.from,
+            to: window.to,
+          },
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
     { refreshable: true },
   )
   return assertActionPlanData<ActionPlanExecutionCalendarResponse>(result)

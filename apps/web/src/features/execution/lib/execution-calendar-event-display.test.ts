@@ -5,6 +5,7 @@ import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 import {
   calendarEventOrgBadges,
   calendarEventPresentation,
+  calendarUnplannedCreatedDateLabel,
   resolveCalendarEventChromeDensity,
 } from './execution-calendar-event-display'
 
@@ -72,18 +73,38 @@ describe('execution-calendar-event-display', () => {
     ).toEqual(['Cuisine', 'Restaurant'])
   })
 
-  it('degrades month and short timed blocks to title-only', () => {
-    expect(resolveCalendarEventChromeDensity({ variant: 'month' })).toBe('title')
-    expect(resolveCalendarEventChromeDensity({ variant: 'timed', heightPx: 24 })).toBe('title')
-    expect(resolveCalendarEventChromeDensity({ variant: 'allDay' })).toBe('status')
-    expect(resolveCalendarEventChromeDensity({ variant: 'timed', heightPx: 96 })).toBe('org')
+  it('compacts month and short timed blocks without dropping layers', () => {
+    expect(resolveCalendarEventChromeDensity({ variant: 'month' })).toBe('compact')
+    expect(resolveCalendarEventChromeDensity({ variant: 'timed', heightPx: 24 })).toBe('compact')
+    expect(resolveCalendarEventChromeDensity({ variant: 'allDay' })).toBe('comfortable')
+    expect(resolveCalendarEventChromeDensity({ variant: 'timed', heightPx: 96 })).toBe('comfortable')
   })
 
-  it('includes compact status and assignee initials at org density', () => {
-    const presentation = calendarEventPresentation(buildItem(), 'org')
-    expect(presentation.statusLabel).toBe('En cours')
-    expect(presentation.assigneeInitials).toEqual(['AM'])
-    expect(presentation.orgBadges).toEqual(['Restaurant'])
-    expect(presentation.chrome.bar).toBe('#3A7A96')
+  it('formats unplanned created_at as a civil date without time', () => {
+    const expected = `Créé le ${new Intl.DateTimeFormat('fr-FR', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(new Date('2026-09-08T12:00:00.000Z'))}`
+    expect(calendarUnplannedCreatedDateLabel('2026-09-08T08:00:00.000Z')).toBe(expected)
+    expect(calendarUnplannedCreatedDateLabel('2026-09-08T08:00:00.000Z')).not.toMatch(/08:00|10:00/)
+    expect(calendarUnplannedCreatedDateLabel('')).toBeNull()
+  })
+
+  it('exposes status, org and assignees for month, all-day and short timed densities', () => {
+    for (const density of ['compact', 'comfortable'] as const) {
+      const presentation = calendarEventPresentation(buildItem(), density)
+      expect(presentation.statusLabel).toBe('En cours')
+      expect(presentation.assigneeInitials).toEqual(['AM'])
+      expect(presentation.orgBadges).toEqual(['Restaurant'])
+      expect(presentation.chrome.bar).toBe('#3A7A96')
+    }
+    expect(calendarEventPresentation(buildItem({ status: 'scheduled' })).statusLabel).toBe(
+      'Planifiée',
+    )
+    expect(
+      calendarEventPresentation(buildItem({ status: 'pending_validation' })).statusLabel,
+    ).toBe('Validation')
   })
 })

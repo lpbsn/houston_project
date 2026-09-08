@@ -1,5 +1,6 @@
 import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 import { formatActionPlanExecutionStatusLabel } from '@/features/action-plans/lib/action-plan-display'
+import { splitIsoToCivil } from '@/lib/business-timezone'
 import { getDisplayNameInitials } from '@/lib/display-names'
 
 type InvolvedPoleLike = {
@@ -8,7 +9,7 @@ type InvolvedPoleLike = {
   }
 }
 
-export type CalendarEventChromeDensity = 'title' | 'status' | 'assignees' | 'org'
+export type CalendarEventChromeDensity = 'comfortable' | 'compact'
 
 export type CalendarEventChrome = {
   bar: string
@@ -46,7 +47,7 @@ const STATUS_CHROME: Record<string, CalendarEventChrome> = {
   },
 }
 
-const MAX_ASSIGNEE_INITIALS = 2
+const MAX_ASSIGNEE_AVATARS = 3
 
 export function calendarEventChromeForStatus(status: string): CalendarEventChrome {
   return STATUS_CHROME[status] ?? DEFAULT_CHROME
@@ -68,41 +69,50 @@ export function resolveCalendarEventChromeDensity(input: {
   narrow?: boolean
 }): CalendarEventChromeDensity {
   if (input.variant === 'month') {
-    return 'title'
+    return 'compact'
   }
   if (input.variant === 'allDay') {
-    return 'status'
+    return 'comfortable'
   }
   const height = input.heightPx ?? 0
   if (input.narrow) {
-    if (height < 36) {
-      return 'title'
-    }
-    if (height < 56) {
-      return 'status'
-    }
-    return 'assignees'
+    return height < 56 ? 'compact' : 'comfortable'
   }
-  if (height < 28) {
-    return 'title'
-  }
-  if (height < 44) {
-    return 'status'
-  }
-  if (height < 68) {
-    return 'assignees'
-  }
-  return 'org'
+  return height < 44 ? 'compact' : 'comfortable'
+}
+
+function assigneeNames(assignees: ActionPlanExecutionFeedItem['assignees']): string[] {
+  return assignees
+    .map((assignee) => assignee.display_name.trim())
+    .filter((name) => name.length > 0)
 }
 
 export function calendarEventAssigneeInitials(
   assignees: ActionPlanExecutionFeedItem['assignees'],
 ): string[] {
-  return assignees
-    .map((assignee) => assignee.display_name.trim())
-    .filter((name) => name.length > 0)
-    .slice(0, MAX_ASSIGNEE_INITIALS)
+  return assigneeNames(assignees)
+    .slice(0, MAX_ASSIGNEE_AVATARS)
     .map((name) => getDisplayNameInitials(name))
+}
+
+export function calendarEventAssigneeOverflow(
+  assignees: ActionPlanExecutionFeedItem['assignees'],
+): number {
+  return Math.max(0, assigneeNames(assignees).length - MAX_ASSIGNEE_AVATARS)
+}
+
+export function calendarUnplannedCreatedDateLabel(createdAt: string | null | undefined): string | null {
+  const date = splitIsoToCivil(createdAt ?? '').date
+  if (!date) {
+    return null
+  }
+  const formatted = new Intl.DateTimeFormat('fr-FR', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${date}T12:00:00.000Z`))
+  return `Créé le ${formatted}`
 }
 
 export function calendarEventOrgBadges(item: ActionPlanExecutionFeedItem): string[] {
@@ -122,24 +132,21 @@ export function calendarEventOrgBadges(item: ActionPlanExecutionFeedItem): strin
 
 export function calendarEventPresentation(
   item: ActionPlanExecutionFeedItem,
-  density: CalendarEventChromeDensity,
+  _density?: CalendarEventChromeDensity,
 ): {
   title: string
   chrome: CalendarEventChrome
-  statusLabel: string | null
+  statusLabel: string
   assigneeInitials: string[]
+  assigneeOverflow: number
   orgBadges: string[]
 } {
-  const showStatus = density !== 'title'
-  const showAssignees = density === 'assignees' || density === 'org'
-  const showOrg = density === 'org'
   return {
     title: item.title,
     chrome: calendarEventChromeForStatus(item.status),
-    statusLabel: showStatus
-      ? calendarEventShortStatusLabel(item.status, item.validated_at)
-      : null,
-    assigneeInitials: showAssignees ? calendarEventAssigneeInitials(item.assignees) : [],
-    orgBadges: showOrg ? calendarEventOrgBadges(item) : [],
+    statusLabel: calendarEventShortStatusLabel(item.status, item.validated_at),
+    assigneeInitials: calendarEventAssigneeInitials(item.assignees),
+    assigneeOverflow: calendarEventAssigneeOverflow(item.assignees),
+    orgBadges: calendarEventOrgBadges(item),
   }
 }
