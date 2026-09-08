@@ -11,6 +11,10 @@ import type {
 import { resolveApiErrorMessage } from '@/lib/error-message'
 
 import {
+  calendarEventPresentation,
+  resolveCalendarEventChromeDensity,
+} from '../lib/execution-calendar-event-display'
+import {
   allDayDatesForItem,
   isExecutionAllDay,
   splitOverlappingColumns,
@@ -49,27 +53,69 @@ function weekdayIndexMonday(date: string): number {
 }
 
 function CalendarEventButton({
-  title,
-  allDay,
+  item,
+  variant,
+  heightPx,
+  narrow,
   className,
   onSelect,
 }: {
-  title: string
-  allDay?: boolean
+  item: ActionPlanExecutionFeedItem
+  variant: 'timed' | 'allDay' | 'month'
+  heightPx?: number
+  narrow?: boolean
   className?: string
   onSelect: () => void
 }) {
+  const density = resolveCalendarEventChromeDensity({ variant, heightPx, narrow })
+  const presentation = calendarEventPresentation(item, density)
   return (
     <button
       type="button"
       className={cn(
-        'min-h-8 min-w-[2.75rem] overflow-hidden rounded-md bg-[#114660] px-1.5 py-1 text-left text-[11px] font-semibold leading-tight text-white',
+        'flex min-h-7 min-w-[2.75rem] items-stretch justify-start overflow-hidden rounded-md border border-black/5 text-left leading-tight',
         className,
       )}
+      style={{ backgroundColor: presentation.chrome.background, color: presentation.chrome.text }}
       onClick={onSelect}
     >
-      <span className="line-clamp-2">{title}</span>
-      {allDay ? <span className="mt-0.5 block text-[10px] font-medium opacity-90">Journée entière</span> : null}
+      <span
+        className="w-[3px] shrink-0"
+        style={{ backgroundColor: presentation.chrome.bar }}
+        aria-hidden
+      />
+      <span className="flex min-h-0 min-w-0 flex-1 flex-col items-start justify-start gap-0.5 overflow-hidden px-1.5 py-0.5">
+        <span className={cn('w-full font-semibold', variant === 'month' ? 'line-clamp-1 text-[10px]' : 'line-clamp-2 text-[11px]')}>
+          {presentation.title}
+        </span>
+        {presentation.statusLabel ? (
+          <span className="flex min-w-0 items-center gap-1 text-[10px] font-medium opacity-80">
+            <span
+              className="h-1.5 w-1.5 shrink-0 rounded-full"
+              style={{ backgroundColor: presentation.chrome.bar }}
+              aria-hidden
+            />
+            <span className="truncate">{presentation.statusLabel}</span>
+          </span>
+        ) : null}
+        {presentation.assigneeInitials.length > 0 ? (
+          <span className="truncate text-[10px] font-medium opacity-80">
+            {presentation.assigneeInitials.join(' · ')}
+          </span>
+        ) : null}
+        {presentation.orgBadges.length > 0 ? (
+          <span className="flex min-w-0 flex-wrap gap-0.5">
+            {presentation.orgBadges.map((badge) => (
+              <span
+                key={badge}
+                className="max-w-full truncate rounded bg-white/70 px-1 py-px text-[9px] font-semibold"
+              >
+                {badge}
+              </span>
+            ))}
+          </span>
+        ) : null}
+      </span>
     </button>
   )
 }
@@ -84,7 +130,7 @@ function AllDayLane({
   onOpenExecution: (executionId: string) => void
 }) {
   return (
-    <div className="grid border-b border-[#E8E6DF] bg-white" style={{ gridTemplateColumns: `3rem repeat(${days.length}, minmax(0, 1fr))` }}>
+    <div className="grid shrink-0 border-b border-[#E8E6DF] bg-white" style={{ gridTemplateColumns: `3rem repeat(${days.length}, minmax(0, 1fr))` }}>
       <div className="px-1 py-2 text-[10px] font-semibold uppercase tracking-wide text-[#7D7B75]">
         Journée
       </div>
@@ -95,8 +141,8 @@ function AllDayLane({
             {dayItems.map((item) => (
               <CalendarEventButton
                 key={item.id}
-                title={item.title}
-                allDay
+                item={item}
+                variant="allDay"
                 onSelect={() => onOpenExecution(item.id)}
               />
             ))}
@@ -110,10 +156,12 @@ function AllDayLane({
 function TimedDayColumn({
   day,
   items,
+  narrow,
   onOpenExecution,
 }: {
   day: string
   items: ActionPlanExecutionFeedItem[]
+  narrow?: boolean
   onOpenExecution: (executionId: string) => void
 }) {
   const blocks = splitOverlappingColumns(
@@ -134,19 +182,23 @@ function TimedDayColumn({
       ))}
       {blocks.map((block) => {
         const widthPct = 100 / block.columnCount
+        const heightPx = Math.max(24, ((block.endMin - block.startMin) / 60) * HOUR_HEIGHT)
         return (
           <div
             key={block.item.id}
-            className="absolute px-0.5"
+            className="absolute px-1"
             style={{
               top: (block.startMin / 60) * HOUR_HEIGHT,
-              height: Math.max(24, ((block.endMin - block.startMin) / 60) * HOUR_HEIGHT),
+              height: heightPx,
               left: `${block.column * widthPct}%`,
               width: `${widthPct}%`,
             }}
           >
             <CalendarEventButton
-              title={block.item.title}
+              item={block.item}
+              variant="timed"
+              heightPx={heightPx}
+              narrow={narrow}
               className="h-full w-full"
               onSelect={() => onOpenExecution(block.item.id)}
             />
@@ -167,13 +219,14 @@ function TimeGrid({
   onOpenExecution: (executionId: string) => void
 }) {
   const timedItems = items.filter((item) => !isExecutionAllDay(item) && item.start_at)
+  const narrow = days.length > 1
   return (
     <div className="grid" style={{ gridTemplateColumns: `3rem repeat(${days.length}, minmax(0, 1fr))` }}>
-      <div className="relative" style={{ height: hours().length * HOUR_HEIGHT }}>
+      <div className="relative pt-1" style={{ height: hours().length * HOUR_HEIGHT }}>
         {hours().map((hour) => (
           <div
             key={hour}
-            className="absolute inset-x-0 -translate-y-2 pr-1 text-right text-[10px] text-[#7D7B75]"
+            className="absolute inset-x-0 pr-1 pt-0.5 text-right text-[10px] text-[#7D7B75]"
             style={{ top: hour * HOUR_HEIGHT }}
           >
             {formatHour(hour)}
@@ -181,7 +234,13 @@ function TimeGrid({
         ))}
       </div>
       {days.map((day) => (
-        <TimedDayColumn key={day} day={day} items={timedItems} onOpenExecution={onOpenExecution} />
+        <TimedDayColumn
+          key={day}
+          day={day}
+          items={timedItems}
+          narrow={narrow}
+          onOpenExecution={onOpenExecution}
+        />
       ))}
     </div>
   )
@@ -206,8 +265,8 @@ function MonthOverflowSheet({
         {items.map((item) => (
           <CalendarEventButton
             key={item.id}
-            title={item.title}
-            allDay={isExecutionAllDay(item)}
+            item={item}
+            variant={isExecutionAllDay(item) ? 'allDay' : 'timed'}
             className="min-h-10 w-full"
             onSelect={() => {
               onClose()
@@ -265,7 +324,7 @@ export function ExecutionCalendarView({
 
   const header = (
     <div
-      className="sticky top-0 z-20 grid border-b border-[#E8E6DF] bg-white"
+      className="grid shrink-0 border-b border-[#E8E6DF] bg-white"
       style={{ gridTemplateColumns: granularity === 'day' ? '3rem 1fr' : `3rem repeat(${days.length}, minmax(4.5rem, 1fr))` }}
     >
       <div />
@@ -292,7 +351,7 @@ export function ExecutionCalendarView({
       weeks.push(days.slice(index, index + 7))
     }
     return (
-      <div className="flex flex-col gap-3">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
         <UnplannedBanner items={unplanned} onOpenExecution={onOpenExecution} />
         <div className="overflow-hidden rounded-xl border border-[#E8E6DF] bg-white">
           <div className="grid grid-cols-7 border-b border-[#E8E6DF]">
@@ -330,9 +389,9 @@ export function ExecutionCalendarView({
                       {visible.map((item) => (
                         <CalendarEventButton
                           key={item.id}
-                          title={item.title}
-                          allDay={isExecutionAllDay(item)}
-                          className="min-h-7 rounded px-1 py-0.5 text-[10px]"
+                          item={item}
+                          variant="month"
+                          className="min-h-7 w-full"
                           onSelect={() => onOpenExecution(item.id)}
                         />
                       ))}
@@ -363,21 +422,29 @@ export function ExecutionCalendarView({
     )
   }
 
-  const scrollerClassName =
-    granularity === 'week'
-      ? 'overflow-x-auto overscroll-x-contain'
-      : ''
-
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <UnplannedBanner items={unplanned} onOpenExecution={onOpenExecution} />
-      <div className={cn('overflow-hidden rounded-xl border border-[#E8E6DF] bg-white', scrollerClassName)}>
-        <div className={granularity === 'week' ? 'min-w-[44rem]' : undefined}>
+      <div
+        className={cn(
+          'flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#E8E6DF] bg-white',
+          granularity === 'week' && 'overflow-x-auto overscroll-x-contain',
+        )}
+      >
+        <div
+          className={cn(
+            'flex min-h-0 min-w-0 flex-1 flex-col',
+            granularity === 'week' && 'min-w-[44rem]',
+          )}
+        >
           {header}
-          <div className="sticky top-[3.25rem] z-10">
-            <AllDayLane days={days} items={allDayItems} onOpenExecution={onOpenExecution} />
+          <AllDayLane days={days} items={allDayItems} onOpenExecution={onOpenExecution} />
+          <div
+            data-testid="calendar-time-scroller"
+            className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain"
+          >
+            <TimeGrid days={days} items={items} onOpenExecution={onOpenExecution} />
           </div>
-          <TimeGrid days={days} items={items} onOpenExecution={onOpenExecution} />
         </div>
       </div>
     </div>
@@ -391,7 +458,7 @@ function UnplannedBanner({
   items: ActionPlanExecutionFeedItem[]
   onOpenExecution: (executionId: string) => void
 }) {
-  const [expanded, setExpanded] = useState(true)
+  const [expanded, setExpanded] = useState(false)
   if (items.length === 0) {
     return null
   }

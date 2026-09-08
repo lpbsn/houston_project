@@ -71,6 +71,46 @@ describe('resolveTerrainBackPath', () => {
     ).toBeNull()
   })
 
+  it('returns the execution feed with calendar search from a detail', () => {
+    expect(
+      resolveTerrainBackPath(
+        { kind: 'action-plan-execution-detail', executionId: 'exec-1' },
+        { search: '?layout=calendar&granularity=week&anchor=2026-09-08' },
+      ),
+    ).toBe('/execution?layout=calendar&granularity=week&anchor=2026-09-08')
+    expect(
+      resolveTerrainBackPath(
+        {
+          kind: 'action-plan-execution-detail',
+          executionId: 'exec-1',
+          scope: { type: 'establishment', establishmentId: 'est-1' },
+        },
+        { search: '?layout=calendar&granularity=day&anchor=2026-09-08' },
+      ),
+    ).toBe('/e/est-1/execution?layout=calendar&granularity=day&anchor=2026-09-08')
+  })
+
+  it('keeps calendar search when leaving execution edit for the detail', () => {
+    expect(
+      resolveTerrainBackPath(
+        { kind: 'action-plan-execution-edit', executionId: 'exec-1' },
+        { search: '?layout=calendar&granularity=week&anchor=2026-09-08&tab=comments' },
+      ),
+    ).toBe(
+      '/action-plans/executions/exec-1?layout=calendar&granularity=week&anchor=2026-09-08&tab=comments',
+    )
+  })
+
+  it('does not attach calendar state when leaving a cross-establishment execution', () => {
+    expect(
+      resolveTerrainBackPath({
+        kind: 'action-plan-execution-detail',
+        executionId: 'exec-1',
+        scope: { type: 'cross' },
+      }),
+    ).toBe('/cross/execution')
+  })
+
   it('does not treat scoped dashboards as nested details', () => {
     expect(
       resolveTerrainBackPath({

@@ -152,4 +152,21 @@ describe('ActionPlanExecutionDetailTopbarTrailing', () => {
 
     expect(navigateMock).toHaveBeenCalledWith('/action-plans/executions/exec-1/edit')
   })
+
+  it('keeps calendar search when navigating to edit', () => {
+    render(
+      createElement(ActionPlanExecutionDetailTopbarTrailing, {
+        establishmentId: 'est-1',
+        executionId: 'exec-1',
+        search: '?layout=calendar&granularity=week&anchor=2026-09-08',
+        onNavigate: navigateMock,
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Modifier' }))
+
+    expect(navigateMock).toHaveBeenCalledWith(
+      '/action-plans/executions/exec-1/edit?layout=calendar&granularity=week&anchor=2026-09-08',
+    )
+  })
 })

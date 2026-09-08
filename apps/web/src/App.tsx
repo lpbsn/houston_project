@@ -35,6 +35,7 @@ import { NotFoundPage } from '@/app/not-found-page'
 import { RoutePageLoading } from '@/app/route-page-loading'
 import { useAuth } from '@/app/auth-provider'
 import { resolveTerrainBackPath } from '@/app/terrain-back-path'
+import { appendExecutionFeedSearch } from '@/features/execution/lib/execution-feed-url-state'
 import {
   getTerrainContentKey,
   getTerrainRouteConfig,
@@ -502,6 +503,7 @@ function App() {
           key={executionDetailId}
           establishmentId={establishmentId}
           executionId={executionDetailId}
+          search={locationSearch}
           onNavigate={navigate}
         />
       )
@@ -514,6 +516,7 @@ function App() {
     auth.hasOperationalAccess,
     establishmentId,
     executionDetailId,
+    locationSearch,
     navigate,
     route.kind,
     staticRoutePath,
@@ -713,7 +716,14 @@ function App() {
             establishmentId={establishmentIdForScope ?? null}
             source={source}
             onOpenActionPlanExecution={(id) =>
-              navigate(serializeScopedExecutionDetailPath(scope, id))
+              navigate(
+                source === 'cross'
+                  ? serializeScopedExecutionDetailPath(scope, id)
+                  : appendExecutionFeedSearch(
+                      serializeScopedExecutionDetailPath(scope, id),
+                      locationSearch,
+                    ),
+              )
             }
             onNavigate={navigate}
           />
@@ -797,7 +807,9 @@ function App() {
     if (route.path === '/execution') {
       return (
         <LazyExecutionFeedPage
-          onOpenActionPlanExecution={(id) => navigate(`/action-plans/executions/${id}`)}
+          onOpenActionPlanExecution={(id) =>
+            navigate(appendExecutionFeedSearch(`/action-plans/executions/${id}`, locationSearch))
+          }
           onNavigate={navigate}
         />
       )

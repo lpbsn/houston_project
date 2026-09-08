@@ -92,4 +92,57 @@ describe('ExecutionCalendarView', () => {
     expect(onOpen).toHaveBeenCalledWith('exec-a')
     expect(onOpen).toHaveBeenCalledWith('exec-b')
   })
+
+  it('keeps unplanned collapsed and places 00:00 in the dedicated time scroller', () => {
+    render(
+      <ExecutionCalendarView
+        granularity="day"
+        days={['2026-09-08']}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={{
+          timezone: 'Europe/Paris',
+          items: [
+            wrap({
+              id: 'exec-timed',
+              title: 'Brief cuisine',
+              status: 'in_progress',
+              start_at: '2026-09-08T07:00:00.000Z',
+              end_at: '2026-09-08T09:00:00.000Z',
+              assignees: [{ membership_id: 'm-1', display_name: 'Alice Martin' }],
+            }),
+            wrap({
+              id: 'exec-all-day',
+              title: 'Inventaire',
+              all_day: true,
+              start_at: '2026-09-08T00:00:00.000Z',
+              end_at: '2026-09-08T23:59:59.000Z',
+            }),
+          ],
+          unplanned: [
+            wrap({
+              id: 'exec-unplanned',
+              title: 'Sans créneau',
+              start_at: null,
+              end_at: null,
+            }),
+          ],
+        }}
+      />,
+    )
+
+    const unplannedToggle = screen.getByRole('button', { name: 'Déplier la section Non planifiés' })
+    expect(unplannedToggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByText('Sans créneau')).toBeNull()
+
+    const scroller = screen.getByTestId('calendar-time-scroller')
+    expect(scroller.textContent).toContain('00:00')
+    expect(scroller.contains(screen.getByText('Journée'))).toBe(false)
+    expect(screen.getByText('Journée').compareDocumentPosition(scroller) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Brief cuisine/ }).textContent).toContain('En cours')
+  })
 })

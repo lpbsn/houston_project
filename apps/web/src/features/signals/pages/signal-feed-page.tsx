@@ -114,7 +114,7 @@ export function SignalFeedPage({
       <TerrainHubSubheader>
         {isCross ? null : (
           <>
-            <TerrainHubViewToolbar>
+            <TerrainHubViewToolbar className="pb-1">
               <SignalFeedTabs viewMode={viewMode} onChange={setViewMode} />
             </TerrainHubViewToolbar>
             <SignalFeedFiltersBar

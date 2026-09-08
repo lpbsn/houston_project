@@ -74,3 +74,27 @@ export function serializeExecutionFeedSearch(state: ExecutionFeedUrlState): stri
 export function executionFeedHref(pathname: string, state: ExecutionFeedUrlState): string {
   return `${pathname}${serializeExecutionFeedSearch(state)}`
 }
+
+const FEED_SEARCH_KEYS = new Set(['layout', 'granularity', 'anchor', 'view_mode'])
+
+export function appendExecutionFeedSearch(pathname: string, search: string): string {
+  const incoming = parseSearchParams(search)
+  const next = parseSearchParams(serializeExecutionFeedSearch(parseExecutionFeedSearch(search)))
+  const incomingQuery = incoming.toString()
+  if (incomingQuery) {
+    for (const pair of incomingQuery.split('&')) {
+      const separator = pair.indexOf('=')
+      const rawKey = separator === -1 ? pair : pair.slice(0, separator)
+      const key = decodeURIComponent(rawKey.replace(/\+/g, ' '))
+      if (!key || FEED_SEARCH_KEYS.has(key)) {
+        continue
+      }
+      const value = incoming.get(key)
+      if (value != null) {
+        next.set(key, value)
+      }
+    }
+  }
+  const query = next.toString()
+  return query ? `${pathname}?${query}` : pathname
+}

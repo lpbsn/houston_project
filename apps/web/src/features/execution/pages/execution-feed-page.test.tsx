@@ -363,7 +363,7 @@ describe('ExecutionFeedPage plan feed', () => {
     expect(screen.getByRole('button', { name: 'Chargement…' })).toBeTruthy()
   })
 
-  it('renders Planifiées from scheduled_items and À venir nav with scheduled_count', () => {
+  it('renders À venir with scheduled_count and does not merge Planifiées into the list', () => {
     const onNavigate = vi.fn()
     planFeedQueryMock.mockReturnValue(
       buildPlanFeedQueryState({
@@ -398,9 +398,9 @@ describe('ExecutionFeedPage plan feed', () => {
     renderExecutionFeedPage({ onNavigate })
 
     expect(screen.getByRole('button', { name: 'À venir, 4' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Replier la section Planifiées' })).toBeTruthy()
-    expect(screen.getByText('Plan programmé')).toBeTruthy()
-    expect(screen.getByText('Planifiée')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Replier la section Planifiées' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Déplier la section Planifiées' })).toBeNull()
+    expect(screen.queryByText('Plan programmé')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'À venir, 4' }))
     expect(onNavigate).toHaveBeenCalledWith('/execution/upcoming')
@@ -437,10 +437,18 @@ describe('ExecutionFeedPage plan feed', () => {
 
   it('switches from list to calendar via URL state', () => {
     renderExecutionFeedPage()
-    fireEvent.click(screen.getByRole('button', { name: 'Calendrier' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Calendrier' }))
     expect(executionNavigate).toHaveBeenCalledWith(
       expect.stringContaining('layout=calendar'),
       { replace: true },
     )
+  })
+
+  it('exposes segmented layout and granularity tablists', () => {
+    executionRouteState.search = '?layout=calendar&granularity=week&anchor=2026-09-08'
+    renderExecutionFeedPage()
+    expect(screen.getByRole('tablist', { name: 'Disposition du feed' })).toBeTruthy()
+    expect(screen.getByRole('tablist', { name: 'Granularité du calendrier' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'Semaine' }).getAttribute('aria-selected')).toBe('true')
   })
 })

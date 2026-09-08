@@ -6,6 +6,11 @@ import {
   parseAnalyticsSignalReturnContext,
   parseAnalyticsUrlState,
 } from '@/features/analytics/lib/analytics-url-state'
+import {
+  appendExecutionFeedSearch,
+  executionFeedHref,
+  parseExecutionFeedSearch,
+} from '@/features/execution/lib/execution-feed-url-state'
 
 type ResolveTerrainBackPathOptions = {
   search?: string
@@ -34,6 +39,18 @@ export function resolveTerrainBackPath(
 
   if (route.kind === 'analytics-pattern-detail') {
     return buildAnalyticsReturnPath(parseAnalyticsUrlState(search, { now }))
+  }
+
+  if (route.kind === 'action-plan-execution-detail' && route.scope?.type !== 'cross') {
+    const hub = getTerrainRouteConfig(route).backPath ?? '/execution'
+    return executionFeedHref(hub, parseExecutionFeedSearch(search))
+  }
+
+  if (route.kind === 'action-plan-execution-edit') {
+    return appendExecutionFeedSearch(
+      `/action-plans/executions/${route.executionId}`,
+      search,
+    )
   }
 
   if (

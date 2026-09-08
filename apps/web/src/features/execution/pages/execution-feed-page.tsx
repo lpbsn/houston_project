@@ -11,7 +11,7 @@ import {
   TerrainEmptyState,
   TerrainErrorState,
   TerrainCollapsibleFeedSection,
-  TerrainFilterPill,
+  TerrainSegmentedControl,
 } from '@/components/ui/terrain'
 import { useCollapsibleFeedSections } from '@/lib/use-collapsible-feed-sections'
 import { resolveApiErrorMessage } from '@/lib/error-message'
@@ -45,7 +45,6 @@ import { ActionPlanExecutionFeedCardActionsSheet } from '@/features/action-plans
 import { useActionPlanExecutionFeedQuickActions } from '@/features/action-plans/hooks/use-action-plan-execution-feed-quick-actions'
 import {
   groupActionPlanExecutionsBySection,
-  mergeScheduledItemsIntoFeedSections,
   partitionActionPlanExecutionFeedPinnedItems,
 } from '../lib/action-plan-execution-feed-sections'
 import { canOpenExecutionCreateMenu } from '../lib/execution-create-menu'
@@ -60,25 +59,17 @@ type ExecutionFeedPageProps = {
   source?: 'establishment' | 'cross'
 }
 
-function readScheduledPreviewFromFeedPages(
+function readScheduledCountFromFeedPages(
   pages: ActionPlanExecutionFeedResponse[] | undefined,
-): {
-  scheduledItems: ReturnType<typeof unwrapActionPlanExecutionFeedItems>
-  scheduledCount: number
-} {
+): number {
   if (!pages?.length) {
-    return { scheduledItems: [], scheduledCount: 0 }
+    return 0
   }
 
   const pageWithScheduled =
-    pages.find(
-      (page) => page.scheduled_items != null || typeof page.scheduled_count === 'number',
-    ) ?? pages[0]
+    pages.find((page) => typeof page.scheduled_count === 'number') ?? pages[0]
 
-  return {
-    scheduledItems: unwrapActionPlanExecutionFeedItems(pageWithScheduled?.scheduled_items ?? []),
-    scheduledCount: pageWithScheduled?.scheduled_count ?? 0,
-  }
+  return pageWithScheduled?.scheduled_count ?? 0
 }
 
 export function ExecutionFeedPage({
@@ -135,14 +126,11 @@ export function ExecutionFeedPage({
   const planItems = planFeedQuery.isSuccess
     ? unwrapActionPlanExecutionFeedItems(planFeedQuery.data.pages.flatMap((page) => page.items))
     : []
-  const { scheduledItems, scheduledCount } = planFeedQuery.isSuccess
-    ? readScheduledPreviewFromFeedPages(planFeedQuery.data.pages)
-    : { scheduledItems: [], scheduledCount: 0 }
+  const scheduledCount = planFeedQuery.isSuccess
+    ? readScheduledCountFromFeedPages(planFeedQuery.data.pages)
+    : 0
   const { pinnedItems, unpinnedItems } = partitionActionPlanExecutionFeedPinnedItems(planItems)
-  const planGroups = mergeScheduledItemsIntoFeedSections(
-    groupActionPlanExecutionsBySection(unpinnedItems),
-    scheduledItems,
-  )
+  const planGroups = groupActionPlanExecutionsBySection(unpinnedItems)
   const sectionKeys = planGroups.map((group) => group.section)
   const { isExpanded, toggle } = useCollapsibleFeedSections(sectionKeys, {
     defaultCollapsedKeys: EXECUTION_FEED_DEFAULT_COLLAPSED_SECTIONS,
@@ -161,7 +149,6 @@ export function ExecutionFeedPage({
   const isInitialLoading = planFeedQuery.isLoading
   const showGlobalEmpty =
     planItems.length === 0 &&
-    scheduledItems.length === 0 &&
     scheduledCount === 0 &&
     planFeedQuery.isSuccess &&
     !planFeedQuery.isLoading
@@ -203,91 +190,54 @@ export function ExecutionFeedPage({
       <TerrainHubSubheader>
         {isCross ? null : (
           <div className="flex flex-col gap-2">
-            <TerrainHubViewToolbar trailing={createAction}>
+            <TerrainHubViewToolbar className="pb-1">
               <ExecutionFeedTabs
                 viewMode={viewMode}
                 onChange={(next) => replaceFeedUrl({ viewMode: next })}
               />
             </TerrainHubViewToolbar>
-            <div className="flex gap-1.5 overflow-x-auto px-3">
-              <TerrainFilterPill
-                active={layout === 'list'}
-                onClick={() => replaceFeedUrl({ layout: 'list' })}
-              >
-                Liste
-              </TerrainFilterPill>
-              <TerrainFilterPill
-                active={layout === 'calendar'}
-                onClick={() => replaceFeedUrl({ layout: 'calendar' })}
-              >
-                Calendrier
-              </TerrainFilterPill>
-            </div>
+            <TerrainHubViewToolbar trailing={createAction}>
+              <TerrainSegmentedControl
+                ariaLabel="Disposition du feed"
+                value={layout}
+                onChange={(next) => replaceFeedUrl({ layout: next })}
+                options={[
+                  { value: 'list', label: 'Liste' },
+                  { value: 'calendar', label: 'Calendrier' },
+                ]}
+              />
+            </TerrainHubViewToolbar>
             {layout === 'calendar' ? (
-              <div className="flex flex-col gap-2 px-3 pb-2">
-                <div className="flex gap-1.5 overflow-x-auto">
-                  {(['day', 'week', 'month'] as const).map((value) => (
-                    <TerrainFilterPill
-                      key={value}
-                      active={granularity === value}
-                      onClick={() => replaceFeedUrl({ granularity: value })}
-                    >
-                      {value === 'day' ? 'Jour' : value === 'week' ? 'Semaine' : 'Mois'}
-                    </TerrainFilterPill>
-                  ))}
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="min-w-0 truncate text-sm font-semibold capitalize text-[#1a1a1a]">
-                    {formatCalendarPeriodLabel(granularity, calendarWindow, feedUrl.anchor)}
-                  </p>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      aria-label="Période précédente"
-                      onClick={() =>
-                        replaceFeedUrl({
-                          anchor: shiftCalendarAnchor(granularity, feedUrl.anchor, -1),
-                        })
-                      }
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8"
-                      onClick={() => replaceFeedUrl({ anchor: calendarAnchorToday() })}
-                    >
-                      Aujourd’hui
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      aria-label="Période suivante"
-                      onClick={() =>
-                        replaceFeedUrl({
-                          anchor: shiftCalendarAnchor(granularity, feedUrl.anchor, 1),
-                        })
-                      }
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
+              <CalendarPeriodToolbar
+                granularity={granularity}
+                periodLabel={formatCalendarPeriodLabel(granularity, calendarWindow, feedUrl.anchor)}
+                onGranularityChange={(next) => replaceFeedUrl({ granularity: next })}
+                onPrevious={() =>
+                  replaceFeedUrl({
+                    anchor: shiftCalendarAnchor(granularity, feedUrl.anchor, -1),
+                  })
+                }
+                onToday={() => replaceFeedUrl({ anchor: calendarAnchorToday() })}
+                onNext={() =>
+                  replaceFeedUrl({
+                    anchor: shiftCalendarAnchor(granularity, feedUrl.anchor, 1),
+                  })
+                }
+              />
             ) : null}
           </div>
         )}
       </TerrainHubSubheader>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 pb-4">
+      <div
+        className={cn(
+          'min-h-0 flex-1 px-3 pb-4',
+          layout === 'calendar' && !isCross
+            ? 'flex flex-col overflow-hidden'
+            : 'overflow-y-auto overscroll-y-contain',
+        )}
+      >
         {layout === 'calendar' && !isCross ? (
-          <div className="pt-3">
+          <div className="flex min-h-0 flex-1 flex-col pt-3">
             <ExecutionCalendarView
               granularity={granularity}
               days={calendarWindow.days}
@@ -409,6 +359,76 @@ export function ExecutionFeedPage({
           onSelectAction={quickActions.runAction}
         />
       ) : null}
+    </div>
+  )
+}
+
+function CalendarPeriodToolbar({
+  granularity,
+  periodLabel,
+  onGranularityChange,
+  onPrevious,
+  onToday,
+  onNext,
+}: {
+  granularity: ExecutionCalendarGranularity
+  periodLabel: string
+  onGranularityChange: (value: ExecutionCalendarGranularity) => void
+  onPrevious: () => void
+  onToday: () => void
+  onNext: () => void
+}) {
+  const granularityControl = (
+    <TerrainSegmentedControl
+      ariaLabel="Granularité du calendrier"
+      value={granularity}
+      onChange={onGranularityChange}
+      options={[
+        { value: 'day', label: 'Jour' },
+        { value: 'week', label: 'Semaine' },
+        { value: 'month', label: 'Mois' },
+      ]}
+    />
+  )
+  const nav = (
+    <div className="flex shrink-0 items-center gap-1">
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="h-8 w-8"
+        aria-label="Période précédente"
+        onClick={onPrevious}
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </Button>
+      <Button type="button" variant="outline" size="sm" className="h-8" onClick={onToday}>
+        Aujourd’hui
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="h-8 w-8"
+        aria-label="Période suivante"
+        onClick={onNext}
+      >
+        <ChevronRight className="h-4 w-4" />
+      </Button>
+    </div>
+  )
+
+  return (
+    <div className="px-3 pb-2">
+      <div className="flex flex-wrap items-center gap-2 lg:grid lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+        <p className="min-w-0 flex-1 truncate text-sm font-semibold capitalize text-[#1a1a1a]">
+          {periodLabel}
+        </p>
+        <div className="order-3 w-full lg:order-none lg:w-auto lg:justify-self-center">
+          {granularityControl}
+        </div>
+        <div className="ml-auto lg:ml-0 lg:justify-self-end">{nav}</div>
+      </div>
     </div>
   )
 }
