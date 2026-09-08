@@ -12,6 +12,9 @@ import { ExecutionFeedPage } from './execution-feed-page'
 
 const planFetchNextPage = vi.fn()
 const planFeedQueryMock = vi.fn()
+const calendarQueryMock = vi.fn()
+const executionNavigate = vi.fn()
+const executionRouteState = { search: '' }
 
 function buildPlanFeedWrapper(
   id: string,
@@ -33,6 +36,7 @@ function buildPlanFeedWrapper(
       assignees: [{ membership_id: 'member-1', display_name: 'Alice' }],
       start_at: null,
       end_at: null,
+      all_day: false,
       is_overdue: false,
       task_count: 0,
       treated_task_count: 0,
@@ -87,6 +91,16 @@ vi.mock('@/features/auth/lib/bootstrap-permission-hints', () => ({
 
 vi.mock('@/features/action-plans/hooks', () => ({
   useActionPlanExecutionFeedQuery: () => planFeedQueryMock(),
+  useActionPlanExecutionCalendarQuery: () => calendarQueryMock(),
+}))
+
+vi.mock('@/app/app-routes', () => ({
+  useAppRoute: () => ({
+    route: { kind: 'static', path: '/execution' },
+    search: executionRouteState.search,
+    navigate: executionNavigate,
+  }),
+  serializeAppRoute: () => '/execution',
 }))
 
 vi.mock('@/features/action-plans/hooks/use-action-plan-execution-feed-quick-actions', () => ({
@@ -117,7 +131,16 @@ function renderExecutionFeedPage(props: { onNavigate?: (pathname: string) => voi
 describe('ExecutionFeedPage plan feed', () => {
   beforeEach(() => {
     planFetchNextPage.mockClear()
+    executionNavigate.mockClear()
+    executionRouteState.search = ''
     planFeedQueryMock.mockReturnValue(buildPlanFeedQueryState())
+    calendarQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      data: { timezone: 'Europe/Paris', items: [], unplanned: [] },
+      refetch: vi.fn(),
+    })
   })
 
   afterEach(() => {
@@ -410,5 +433,14 @@ describe('ExecutionFeedPage plan feed', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'À venir, 0' }))
     expect(onNavigate).toHaveBeenCalledWith('/execution/upcoming')
+  })
+
+  it('switches from list to calendar via URL state', () => {
+    renderExecutionFeedPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Calendrier' }))
+    expect(executionNavigate).toHaveBeenCalledWith(
+      expect.stringContaining('layout=calendar'),
+      { replace: true },
+    )
   })
 })

@@ -22,6 +22,7 @@ export type ActionPlanUseRequest = {
   end_at?: string | null
   visible_from?: string | null
   occurrence_date?: string | null
+  all_day?: boolean
 }
 export type ActionPlanPlanningSubmitRequest =
   components['schemas']['ActionPlanPlanningSubmitRequest']
@@ -51,6 +52,8 @@ export type ActionPlanExecutionFeedItemWrapper =
 export type ActionPlanExecutionFeedResponse = components['schemas']['ActionPlanExecutionFeedResponse']
 /** Upcoming list reuses the feed response envelope (items + cursor pagination). */
 export type ActionPlanExecutionUpcomingResponse = ActionPlanExecutionFeedResponse
+export type ActionPlanExecutionCalendarResponse =
+  components['schemas']['ActionPlanExecutionCalendarResponse']
 export type ActionPlanExecutionPinState = components['schemas']['ActionPlanExecutionPinState']
 export type ActionPlanExecutionFeedAssignee =
   components['schemas']['ActionPlanExecutionFeedAssignee']

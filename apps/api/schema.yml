@@ -1757,6 +1757,66 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/action-plan-execution-calendar/:
+    get:
+      operationId: v1_establishments_action_plan_execution_calendar_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: from
+        schema:
+          type: string
+        description: Inclusive civil start date (YYYY-MM-DD) in the establishment
+          timezone.
+        required: true
+      - in: query
+        name: to
+        schema:
+          type: string
+        description: Inclusive civil end date (YYYY-MM-DD) in the establishment timezone.
+        required: true
+      - in: query
+        name: view_mode
+        schema:
+          type: string
+          enum:
+          - general
+          - personal
+        required: true
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanExecutionCalendarResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/action-plan-execution-feed/:
     get:
       operationId: v1_establishments_action_plan_execution_feed_retrieve
@@ -8772,6 +8832,9 @@ components:
           type: string
           format: date
           nullable: true
+        all_day:
+          type: boolean
+          default: false
         schedule:
           allOf:
           - $ref: '#/components/schemas/ActionPlanScheduleCreateRequest'
@@ -8871,6 +8934,23 @@ components:
       required:
       - business_unit_id
       - membership_id
+    ActionPlanExecutionCalendarResponse:
+      type: object
+      properties:
+        timezone:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanExecutionFeedItemWrapper'
+        unplanned:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanExecutionFeedItemWrapper'
+      required:
+      - items
+      - timezone
+      - unplanned
     ActionPlanExecutionDetail:
       type: object
       properties:
@@ -8926,6 +9006,8 @@ components:
           type: string
           format: date-time
           nullable: true
+        all_day:
+          type: boolean
         occurrence_date:
           type: string
           format: date
@@ -9038,6 +9120,7 @@ components:
       - active_review
       - activity_subject
       - affected_business_unit
+      - all_day
       - assignees_by_pole
       - cancel_origin
       - canceled_at
@@ -9131,6 +9214,8 @@ components:
           type: string
           format: date-time
           nullable: true
+        all_day:
+          type: boolean
         is_overdue:
           type: boolean
         task_count:
@@ -9157,6 +9242,7 @@ components:
         establishment_name:
           type: string
       required:
+      - all_day
       - assignees
       - created_at
       - description_short
@@ -9419,6 +9505,9 @@ components:
           type: array
           items:
             type: string
+        all_day:
+          type: boolean
+          default: false
       required:
       - item_id
       - kind
@@ -9534,6 +9623,9 @@ components:
         end_at:
           type: string
           format: time
+        all_day:
+          type: boolean
+          default: false
         recurrence_days:
           type: array
           items:
@@ -9576,6 +9668,8 @@ components:
         end_at:
           type: string
           format: time
+        all_day:
+          type: boolean
         recurrence_days:
           type: array
           items:
@@ -9603,6 +9697,7 @@ components:
           $ref: '#/components/schemas/ActionPlanSchedulePermissionHints'
       required:
       - action_plan_id
+      - all_day
       - assignees
       - created_at
       - created_by_display_name
@@ -13674,6 +13769,8 @@ components:
           type: string
           format: date-time
           nullable: true
+        all_day:
+          type: boolean
         assignees:
           type: array
           items:
@@ -13706,6 +13803,8 @@ components:
           items:
             $ref: '#/components/schemas/ActionPlanScheduleAssigneeInput'
         use_shared_chronology:
+          type: boolean
+        all_day:
           type: boolean
     PatchedActionPlanUpdateRequest:
       type: object

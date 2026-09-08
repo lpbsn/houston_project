@@ -70,6 +70,9 @@ export function invalidateActionPlanExecutionFeedQueries(
   void queryClient.invalidateQueries({
     queryKey: ['action-plans', 'action-plan-execution-feed', establishmentId],
   })
+  void queryClient.invalidateQueries({
+    queryKey: ['action-plans', 'action-plan-execution-calendar', establishmentId],
+  })
 }
 
 export function invalidateActionPlanExecutionUpcomingQueries(

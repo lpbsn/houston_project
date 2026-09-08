@@ -393,6 +393,7 @@ def _create_individual_execution(
         start_at=owner.start_at,
         end_at=owner.end_at,
         visible_from=owner.visible_from,
+        all_day=bool(item.get("all_day", False)),
         affected_business_unit=action_plan.affected_business_unit,
         responsible_business_unit=action_plan.responsible_business_unit,
         activity_subject=action_plan.activity_subject,
@@ -422,6 +423,7 @@ def _create_shared_execution(
         end_at=item.get("end_at"),
         visible_from=item.get("visible_from"),
         occurrence_date=item.get("occurrence_date"),
+        all_day=bool(item.get("all_day", False)),
         emit_side_effects=False,
     )
 
@@ -487,6 +489,7 @@ def _create_schedule_from_item(
         recurrence_days=recurrence_days,
         assignees=assignees,
         use_shared_chronology=use_shared_chronology,
+        all_day=bool(item.get("all_day", False)),
         emit_side_effects=False,
     )
 

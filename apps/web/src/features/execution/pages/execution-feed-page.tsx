@@ -1,25 +1,46 @@
-import { useState } from 'react'
-import { LoaderCircle, Plus } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { ChevronLeft, ChevronRight, LoaderCircle, Plus } from 'lucide-react'
 
+import { serializeAppRoute, useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
 import { getBootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permission-hints'
 import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
 import { TerrainHubViewToolbar } from '@/components/layout/terrain-hub-view-toolbar'
 import { Button } from '@/components/ui/button'
-import { TerrainEmptyState, TerrainErrorState, TerrainCollapsibleFeedSection } from '@/components/ui/terrain'
+import {
+  TerrainEmptyState,
+  TerrainErrorState,
+  TerrainCollapsibleFeedSection,
+  TerrainFilterPill,
+} from '@/components/ui/terrain'
 import { useCollapsibleFeedSections } from '@/lib/use-collapsible-feed-sections'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 import { ActionPlansApiError, unwrapActionPlanExecutionFeedItems } from '@/features/action-plans/api'
-import { useActionPlanExecutionFeedQuery } from '@/features/action-plans/hooks'
+import {
+  useActionPlanExecutionCalendarQuery,
+  useActionPlanExecutionFeedQuery,
+} from '@/features/action-plans/hooks'
 import type { ActionPlanExecutionFeedResponse } from '@/features/action-plans/types'
-import type { ExecutionViewMode } from '@/features/execution/lib/types'
 
 import { ActionPlanExecutionFeedCard } from '../components/action-plan-execution-feed-card'
+import { ExecutionCalendarView } from '../components/execution-calendar-view'
 import { ExecutionCreateMenuSheet } from '../components/execution-create-menu-sheet'
 import { ExecutionFeedTabs } from '../components/execution-feed-tabs'
 import { ExecutionUpcomingNavRow } from '../components/execution-upcoming-nav-row'
+import {
+  calendarAnchorToday,
+  formatCalendarPeriodLabel,
+  resolveCalendarWindow,
+  shiftCalendarAnchor,
+} from '../lib/execution-calendar-window'
+import {
+  executionFeedHref,
+  parseExecutionFeedSearch,
+  type ExecutionCalendarGranularity,
+  type ExecutionFeedLayout,
+} from '../lib/execution-feed-url-state'
 import { ActionPlanExecutionFeedCardActionsSheet } from '@/features/action-plans/components/action-plan-execution-feed-card-actions-sheet'
 import { useActionPlanExecutionFeedQuickActions } from '@/features/action-plans/hooks/use-action-plan-execution-feed-quick-actions'
 import {
@@ -67,13 +88,45 @@ export function ExecutionFeedPage({
   source = 'establishment',
 }: ExecutionFeedPageProps) {
   const auth = useAuth()
+  const { route, search, navigate } = useAppRoute()
   const establishmentId =
     establishmentIdProp ?? auth.bootstrap?.active_membership?.establishment_id ?? null
   const isCross = source === 'cross'
-  const [viewMode, setViewMode] = useState<ExecutionViewMode>('personal')
+  const feedUrl = parseExecutionFeedSearch(isCross ? '' : search)
+  const viewMode = feedUrl.viewMode
+  const layout: ExecutionFeedLayout = isCross ? 'list' : feedUrl.layout
+  const granularity = feedUrl.granularity
+  const calendarWindow = useMemo(
+    () => resolveCalendarWindow(granularity, feedUrl.anchor),
+    [granularity, feedUrl.anchor],
+  )
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false)
 
+  function replaceFeedUrl(
+    patch: Partial<{
+      layout: ExecutionFeedLayout
+      granularity: ExecutionCalendarGranularity
+      anchor: string
+      viewMode: typeof viewMode
+    }>,
+  ) {
+    const pathname = serializeAppRoute(route).split('?')[0] || '/execution'
+    navigate(
+      executionFeedHref(pathname, {
+        ...feedUrl,
+        ...patch,
+      }),
+      { replace: true },
+    )
+  }
+
   const planFeedQuery = useActionPlanExecutionFeedQuery(establishmentId, viewMode, { source })
+  const calendarQuery = useActionPlanExecutionCalendarQuery(
+    establishmentId,
+    viewMode,
+    { from: calendarWindow.from, to: calendarWindow.to },
+    { enabled: !isCross && layout === 'calendar' },
+  )
   const quickActions = useActionPlanExecutionFeedQuickActions({
     establishmentId,
     viewMode,
@@ -149,12 +202,106 @@ export function ExecutionFeedPage({
       />
       <TerrainHubSubheader>
         {isCross ? null : (
-          <TerrainHubViewToolbar trailing={createAction}>
-            <ExecutionFeedTabs viewMode={viewMode} onChange={setViewMode} />
-          </TerrainHubViewToolbar>
+          <div className="flex flex-col gap-2">
+            <TerrainHubViewToolbar trailing={createAction}>
+              <ExecutionFeedTabs
+                viewMode={viewMode}
+                onChange={(next) => replaceFeedUrl({ viewMode: next })}
+              />
+            </TerrainHubViewToolbar>
+            <div className="flex gap-1.5 overflow-x-auto px-3">
+              <TerrainFilterPill
+                active={layout === 'list'}
+                onClick={() => replaceFeedUrl({ layout: 'list' })}
+              >
+                Liste
+              </TerrainFilterPill>
+              <TerrainFilterPill
+                active={layout === 'calendar'}
+                onClick={() => replaceFeedUrl({ layout: 'calendar' })}
+              >
+                Calendrier
+              </TerrainFilterPill>
+            </div>
+            {layout === 'calendar' ? (
+              <div className="flex flex-col gap-2 px-3 pb-2">
+                <div className="flex gap-1.5 overflow-x-auto">
+                  {(['day', 'week', 'month'] as const).map((value) => (
+                    <TerrainFilterPill
+                      key={value}
+                      active={granularity === value}
+                      onClick={() => replaceFeedUrl({ granularity: value })}
+                    >
+                      {value === 'day' ? 'Jour' : value === 'week' ? 'Semaine' : 'Mois'}
+                    </TerrainFilterPill>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="min-w-0 truncate text-sm font-semibold capitalize text-[#1a1a1a]">
+                    {formatCalendarPeriodLabel(granularity, calendarWindow, feedUrl.anchor)}
+                  </p>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      aria-label="Période précédente"
+                      onClick={() =>
+                        replaceFeedUrl({
+                          anchor: shiftCalendarAnchor(granularity, feedUrl.anchor, -1),
+                        })
+                      }
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      onClick={() => replaceFeedUrl({ anchor: calendarAnchorToday() })}
+                    >
+                      Aujourd’hui
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      aria-label="Période suivante"
+                      onClick={() =>
+                        replaceFeedUrl({
+                          anchor: shiftCalendarAnchor(granularity, feedUrl.anchor, 1),
+                        })
+                      }
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
         )}
       </TerrainHubSubheader>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 pb-4">
+        {layout === 'calendar' && !isCross ? (
+          <div className="pt-3">
+            <ExecutionCalendarView
+              granularity={granularity}
+              days={calendarWindow.days}
+              month={feedUrl.anchor.slice(0, 7)}
+              data={calendarQuery.data}
+              isLoading={calendarQuery.isLoading}
+              isError={calendarQuery.isError}
+              error={calendarQuery.error}
+              onRetry={() => void calendarQuery.refetch()}
+              onOpenExecution={(id) => onOpenActionPlanExecution?.(id)}
+            />
+          </div>
+        ) : (
+          <>
         {isInitialLoading ? (
           <div className="flex items-center justify-center py-16 text-[#7D7B75]">
             <LoaderCircle className="h-6 w-6 animate-spin" />
@@ -249,6 +396,8 @@ export function ExecutionFeedPage({
             ) : null}
           </div>
         ) : null}
+          </>
+        )}
       </div>
 
       {quickActions.activeItem ? (

@@ -41,6 +41,11 @@ from houston.action_plans.api.serializers import (
     serialize_schedule_detail,
     serialize_task_execution,
 )
+from houston.action_plans.calendar_feed import (
+    ActionPlanExecutionCalendarWindowError,
+    build_action_plan_execution_calendar,
+    parse_calendar_window_dates,
+)
 from houston.action_plans.exceptions import (
     ActionPlanConflictError,
     ActionPlanPermissionError,
@@ -62,6 +67,7 @@ from houston.action_plans.feed_pin_services import (
     unpin_action_plan_execution_for_membership,
 )
 from houston.action_plans.feed_serializers import (
+    ActionPlanExecutionCalendarResponseSerializer,
     ActionPlanExecutionFeedResponseSerializer,
     serialize_action_plan_execution_feed_item,
 )
@@ -536,6 +542,7 @@ class ActionPlanListCreateView(EstablishmentScopedActionPlanMixin, APIView):
                     end_at=data.get("end_at"),
                     visible_from=data.get("visible_from"),
                     occurrence_date=data.get("occurrence_date"),
+                    all_day=data.get("all_day", False),
                 )
                 if execution is not None:
                     execution = get_action_plan_execution_for_detail(
@@ -596,6 +603,7 @@ class ActionPlanListCreateView(EstablishmentScopedActionPlanMixin, APIView):
                 end_at=data.get("end_at"),
                 visible_from=data.get("visible_from"),
                 occurrence_date=data.get("occurrence_date"),
+                all_day=data.get("all_day", False),
             )
         except (ActionPlanPermissionError, ActionPlanValidationError, ActionPlanStateError) as exc:
             return _action_plan_error_response(exc)
@@ -936,6 +944,8 @@ class ActionPlanExecutionDetailView(EstablishmentScopedActionPlanMixin, APIView)
                 kwargs[key] = data[key]
         if "end_at" in data:
             kwargs["end_at"] = data["end_at"]
+        if "all_day" in data:
+            kwargs["all_day"] = data["all_day"]
 
         try:
             update_action_plan_execution(**kwargs)
@@ -1433,6 +1443,7 @@ class ActionPlanScheduleDetailView(EstablishmentScopedActionPlanMixin, APIView):
                     _schedule_assignee_payloads(data["assignees"]) if "assignees" in data else None
                 ),
                 use_shared_chronology=data.get("use_shared_chronology"),
+                all_day=data.get("all_day"),
             )
         except (ActionPlanPermissionError, ActionPlanValidationError) as exc:
             return _action_plan_error_response(exc)
@@ -1598,6 +1609,112 @@ class ActionPlanExecutionFeedView(EstablishmentScopedActionPlanMixin, APIView):
             "has_more": has_more,
         }
         return Response(ActionPlanExecutionFeedResponseSerializer(payload).data)
+
+
+class ActionPlanExecutionCalendarView(EstablishmentScopedActionPlanMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+    ]
+
+    @extend_schema(
+        tags=["action-plans"],
+        parameters=[
+            OpenApiParameter(
+                name="view_mode",
+                required=True,
+                type=str,
+                enum=["personal", "general"],
+            ),
+            OpenApiParameter(
+                name="from",
+                required=True,
+                type=str,
+                description="Inclusive civil start date (YYYY-MM-DD) in the establishment timezone.",
+            ),
+            OpenApiParameter(
+                name="to",
+                required=True,
+                type=str,
+                description="Inclusive civil end date (YYYY-MM-DD) in the establishment timezone.",
+            ),
+        ],
+        responses={
+            200: ActionPlanExecutionCalendarResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def get(self, request, establishment_id):
+        membership = resolve_observation_actor_membership(
+            request,
+            establishment_id=self.establishment_id,
+        )
+        if membership is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        view_mode = request.query_params.get("view_mode", "").strip().lower()
+        if view_mode not in {"personal", "general"}:
+            return Response(
+                {
+                    "code": "validation_error",
+                    "detail": "view_mode must be personal or general.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            from_date, to_date = parse_calendar_window_dates(
+                from_raw=request.query_params.get("from"),
+                to_raw=request.query_params.get("to"),
+            )
+        except ActionPlanExecutionCalendarWindowError as exc:
+            return Response(
+                {"code": "validation_error", "detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        calendar = build_action_plan_execution_calendar(
+            membership=membership,
+            view_mode=view_mode,  # type: ignore[arg-type]
+            from_date=from_date,
+            to_date=to_date,
+        )
+        as_of = calendar["as_of"]
+        payload = {
+            "timezone": calendar["timezone"],
+            "items": [
+                {
+                    "item_type": "action_plan_execution",
+                    "action_plan_execution": serialize_action_plan_execution_feed_item(
+                        execution=execution,
+                        membership=membership,
+                        is_overdue=action_plan_execution_overdue(
+                            execution=execution,
+                            now=as_of,
+                        ),
+                    ),
+                }
+                for execution in calendar["items"]
+            ],
+            "unplanned": [
+                {
+                    "item_type": "action_plan_execution",
+                    "action_plan_execution": serialize_action_plan_execution_feed_item(
+                        execution=execution,
+                        membership=membership,
+                        is_overdue=action_plan_execution_overdue(
+                            execution=execution,
+                            now=as_of,
+                        ),
+                    ),
+                }
+                for execution in calendar["unplanned"]
+            ],
+        }
+        return Response(ActionPlanExecutionCalendarResponseSerializer(payload).data)
 
 
 def _encode_upcoming_cursor(*, start_at, execution_id) -> str:

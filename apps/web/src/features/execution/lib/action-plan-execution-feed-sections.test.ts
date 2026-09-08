@@ -23,6 +23,7 @@ function buildFeedItem(
     assignees: [],
     start_at: null,
     end_at: null,
+    all_day: false,
     is_overdue: false,
     task_count: 0,
     treated_task_count: 0,

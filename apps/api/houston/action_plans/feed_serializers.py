@@ -66,6 +66,7 @@ class ActionPlanExecutionFeedItemSerializer(serializers.Serializer):
     assignees = ActionPlanExecutionFeedAssigneeSerializer(many=True)
     start_at = serializers.DateTimeField(allow_null=True)
     end_at = serializers.DateTimeField(allow_null=True)
+    all_day = serializers.BooleanField()
     is_overdue = serializers.BooleanField()
     task_count = serializers.IntegerField()
     treated_task_count = serializers.IntegerField()
@@ -89,6 +90,12 @@ class ActionPlanExecutionFeedResponseSerializer(serializers.Serializer):
     scheduled_count = serializers.IntegerField()
     next_cursor = serializers.CharField(allow_null=True)
     has_more = serializers.BooleanField()
+
+
+class ActionPlanExecutionCalendarResponseSerializer(serializers.Serializer):
+    timezone = serializers.CharField()
+    items = ActionPlanExecutionFeedItemWrapperSerializer(many=True)
+    unplanned = ActionPlanExecutionFeedItemWrapperSerializer(many=True)
 
 
 def serialize_action_plan_execution_feed_item(
@@ -127,6 +134,7 @@ def serialize_action_plan_execution_feed_item(
         "assignees": assignees,
         "start_at": execution.start_at,
         "end_at": execution.end_at,
+        "all_day": execution.all_day,
         "is_overdue": overdue,
         "task_count": task_count,
         "treated_task_count": treated_task_count,

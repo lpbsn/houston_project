@@ -68,6 +68,7 @@ vi.mock('./action-plan-event-planning-form', async (importOriginal) => {
                   repeatEnabled: false,
                   recurrenceDays: [],
                   recurrenceEndDate: '',
+                  allDay: false,
                 },
               ],
               startDate: '2026-07-01',
@@ -94,6 +95,7 @@ vi.mock('./action-plan-event-planning-form', async (importOriginal) => {
                   repeatEnabled: true,
                   recurrenceDays: ['tuesday', 'thursday', 'saturday'],
                   recurrenceEndDate: '2026-07-25',
+                  allDay: false,
                 },
                 {
                   id: 'a-one-shot',
@@ -106,6 +108,7 @@ vi.mock('./action-plan-event-planning-form', async (importOriginal) => {
                   repeatEnabled: false,
                   recurrenceDays: [],
                   recurrenceEndDate: '',
+                  allDay: false,
                 },
               ],
             }))

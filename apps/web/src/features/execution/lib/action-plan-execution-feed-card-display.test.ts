@@ -118,6 +118,15 @@ describe('getActionPlanFeedStartCountdownState', () => {
     expect(getActionPlanFeedStartCountdownState(undefined, NOW)).toEqual({ variant: 'no_start' })
     expect(getActionPlanFeedStartCountdownState('not-a-date', NOW)).toEqual({ variant: 'no_start' })
   })
+
+  it('returns all_day instead of a countdown to 23:59', () => {
+    expect(getActionPlanFeedSidebarState('2026-09-08T21:59:00Z', NOW, false, true)).toEqual({
+      variant: 'all_day',
+    })
+    expect(getActionPlanFeedStartCountdownState('2026-09-08T22:00:00Z', NOW, true)).toEqual({
+      variant: 'all_day',
+    })
+  })
 })
 
 describe('getActionPlanFeedProgressState', () => {

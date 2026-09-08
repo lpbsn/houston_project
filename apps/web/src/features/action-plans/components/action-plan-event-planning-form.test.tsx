@@ -170,11 +170,13 @@ describe('ActionPlanEventPlanningForm', () => {
     expect(screen.queryByText('Assignés')).toBeNull()
   })
 
-  it('always shows start and end time pills in global mode', () => {
+  it('shows start and end time pills when hours are set', () => {
     renderForm({
       ...createActionPlanEventPlanningDraft(),
       startDate: '2026-07-04',
       endDate: '2026-07-04',
+      startTime: '09:00',
+      endTime: '10:00',
     })
     expect(screen.getByLabelText('Début — heure')).toBeTruthy()
     expect(screen.getByLabelText('Fin — heure')).toBeTruthy()
@@ -460,5 +462,42 @@ describe('ActionPlanEventPlanningForm', () => {
       endTime: '18:00',
       repeatEnabled: true,
     })
+  })
+
+  it('toggles journée entière without requiring hours', () => {
+    const onDraftChange = vi.fn()
+    const initial = {
+      ...createActionPlanEventPlanningDraft(),
+      startDate: '2026-09-08',
+      endDate: '2026-09-08',
+      startTime: '09:00',
+      endTime: '10:00',
+    }
+    renderForm(initial, baseConfig, onDraftChange)
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Journée entière' }))
+    expect(resolveDraftUpdate(onDraftChange.mock.calls[0][0], initial)).toEqual(
+      expect.objectContaining({
+        startDate: '2026-09-08',
+        endDate: '2026-09-08',
+        startTime: '',
+        endTime: '',
+      }),
+    )
+  })
+
+  it('hides time pickers when the draft is all-day', () => {
+    renderForm({
+      ...createActionPlanEventPlanningDraft(),
+      startDate: '2026-09-08',
+      endDate: '2026-09-08',
+      startTime: '',
+      endTime: '',
+    })
+    expect(screen.getByRole('switch', { name: 'Journée entière' }).getAttribute('aria-checked')).toBe(
+      'true',
+    )
+    expect(screen.queryByLabelText('Début — heure')).toBeNull()
+    expect(screen.queryByLabelText('Fin — heure')).toBeNull()
   })
 })

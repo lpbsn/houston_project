@@ -49,6 +49,7 @@ import {
 } from '../lib/action-plan-form-validation'
 import {
   createActionPlanEventPlanningDraft,
+  isAllDayPlanningDraft,
   toCreateFormPlanningSlice,
   type ActionPlanEventPlanningDraft,
 } from '../lib/action-plan-event-planning-form'
@@ -319,6 +320,7 @@ export function ActionPlanCreatePage({
       schedule: planningSlice.schedule,
       sourceSignalId: isSignalLinked ? signalId : undefined,
       issueFocus,
+      allDay: isAllDayPlanningDraft(planningDraft),
     }),
     [
       effectiveAssignees,

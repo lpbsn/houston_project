@@ -15,6 +15,7 @@ import {
   getDefaultPlanningTime,
   hasGlobalRepeat,
   hasPerAssigneeRepeat,
+  isAllDayPlanningDraft,
   resolveNowStartForPlanning,
   shouldHidePrimaryPlanningActions,
   snapTimeToFiveMinutes,
@@ -402,5 +403,23 @@ describe('action-plan-event-planning-form', () => {
     )
 
     expect(errors.assignees).toBe('Ajoutez au moins un assigné pour lancer le plan.')
+  })
+
+  it('treats a dated draft without times as all-day', () => {
+    const draft = {
+      ...createActionPlanEventPlanningDraft(),
+      startDate: '2026-09-08',
+      endDate: '2026-09-08',
+      startTime: '',
+      endTime: '',
+    }
+    expect(isAllDayPlanningDraft(draft)).toBe(true)
+    expect(toUseRequestOptions(draft).allDay).toBe(true)
+    expect(
+      validateActionPlanEventPlanningDraft(
+        { ...draft, repeatEnabled: true, recurrenceDays: ['monday'], recurrenceEndDate: '2026-10-01' },
+        { allowRepeat: true },
+      ),
+    ).toEqual({})
   })
 })

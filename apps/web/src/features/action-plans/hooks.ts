@@ -21,6 +21,7 @@ import {
   fetchActionPlanExecutionFeed,
   fetchCrossActionPlanExecutionFeed,
   fetchActionPlanExecutionUpcoming,
+  fetchActionPlanExecutionCalendar,
   markActionPlanExecutionDone,
   markActionPlanTaskDone,
   markActionPlanTaskPending,
@@ -154,6 +155,33 @@ export function useActionPlanExecutionUpcomingQuery(
       return lastPage.next_cursor
     },
     enabled: Boolean(establishmentId),
+  })
+}
+
+export function useActionPlanExecutionCalendarQuery(
+  establishmentId: string | null,
+  viewMode: ActionPlanExecutionFeedViewMode,
+  window: { from: string; to: string } | null,
+  options?: { enabled?: boolean },
+) {
+  const enabled = Boolean(establishmentId) && Boolean(window) && options?.enabled !== false
+  return useQuery({
+    queryKey:
+      establishmentId && window
+        ? actionPlansQueryKeys.executionCalendar(
+            establishmentId,
+            viewMode,
+            window.from,
+            window.to,
+          )
+        : ['action-plans', 'action-plan-execution-calendar', 'none'],
+    queryFn: () => {
+      if (!establishmentId || !window) {
+        throw new Error('Établissement non sélectionné.')
+      }
+      return fetchActionPlanExecutionCalendar(establishmentId, viewMode, window)
+    },
+    enabled,
   })
 }
 

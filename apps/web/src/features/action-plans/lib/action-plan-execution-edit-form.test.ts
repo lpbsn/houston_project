@@ -164,6 +164,7 @@ function buildExecution(
       can_pin: false,
     },
     active_review: null,
+    all_day: false,
     ...overrides,
   }
 }
@@ -261,6 +262,20 @@ describe('action-plan-execution-edit-form', () => {
       staffMode: false,
     })
     expect(errors.assignees).toBeTruthy()
+  })
+
+  it('hydrates all-day executions without showing sentinel times', () => {
+    const form = hydrateActionPlanExecutionEditForm(
+      buildExecution({
+        all_day: true,
+        start_at: '2026-09-08T22:00:00.000Z',
+        end_at: '2026-09-09T21:59:59.000Z',
+      }),
+    )
+    expect(form.planningDraft.startTime).toBe('')
+    expect(form.planningDraft.endTime).toBe('')
+    const body = buildActionPlanExecutionUpdateRequest(form)
+    expect(body.all_day).toBe(true)
   })
 
   it('detects stale and invalid-state conflict codes', () => {

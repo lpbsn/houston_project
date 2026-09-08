@@ -41,6 +41,7 @@ function buildExecution(
     created_by_display_name: 'Alice',
     use_shared_chronology: true,
     start_at: '2026-07-01T08:00:00.000Z',
+    all_day: false,
     visible_from: '2026-07-01T08:00:00.000Z',
     end_at: '2026-07-01T18:00:00.000Z',
     occurrence_date: null,

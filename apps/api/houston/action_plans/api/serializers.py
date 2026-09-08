@@ -201,6 +201,7 @@ class ActionPlanScheduleCreateRequestSerializer(serializers.Serializer):
     end_date = serializers.DateField()
     start_at = serializers.TimeField()
     end_at = serializers.TimeField()
+    all_day = serializers.BooleanField(required=False, default=False)
     recurrence_days = serializers.ListField(
         child=serializers.CharField(),
         min_length=1,
@@ -231,6 +232,7 @@ class ActionPlanPlanningItemSerializer(serializers.Serializer):
         required=False,
         default=list,
     )
+    all_day = serializers.BooleanField(required=False, default=False)
 
     def validate(self, attrs):
         kind = attrs.get("kind")
@@ -294,6 +296,7 @@ class ActionPlanCreateRequestSerializer(serializers.Serializer):
     end_at = serializers.DateTimeField(required=False, allow_null=True)
     visible_from = serializers.DateTimeField(required=False, allow_null=True)
     occurrence_date = serializers.DateField(required=False, allow_null=True)
+    all_day = serializers.BooleanField(required=False, default=False)
     schedule = ActionPlanScheduleCreateRequestSerializer(required=False, allow_null=True)
     # Direct atomic planning create (mutually exclusive with schedule / catalog / signal)
     submission_id = serializers.UUIDField(required=False)
@@ -378,6 +381,7 @@ class ActionPlanScheduleUpdateRequestSerializer(serializers.Serializer):
         required=False,
     )
     use_shared_chronology = serializers.BooleanField(required=False)
+    all_day = serializers.BooleanField(required=False)
 
 
 class ActionPlanSchedulePermissionHintsSerializer(serializers.Serializer):
@@ -400,6 +404,7 @@ class ActionPlanScheduleDetailSerializer(serializers.Serializer):
     end_date = serializers.DateField()
     start_at = serializers.TimeField()
     end_at = serializers.TimeField()
+    all_day = serializers.BooleanField()
     recurrence_days = serializers.ListField(child=serializers.CharField())
     created_by_id = serializers.UUIDField()
     created_by_display_name = serializers.CharField()
@@ -484,6 +489,7 @@ class ActionPlanExecutionUpdateRequestSerializer(serializers.Serializer):
     )
     requires_validation = serializers.BooleanField(required=False)
     end_at = serializers.DateTimeField(required=False, allow_null=True)
+    all_day = serializers.BooleanField(required=False)
     assignees = ActionPlanExecutionAssigneeUpdateSerializer(many=True, required=False)
     pending_tasks = ActionPlanExecutionPendingTaskUpdateSerializer(
         many=True,
@@ -542,6 +548,7 @@ class ActionPlanExecutionDetailSerializer(serializers.Serializer):
     start_at = serializers.DateTimeField(allow_null=True)
     visible_from = serializers.DateTimeField(allow_null=True)
     end_at = serializers.DateTimeField(allow_null=True)
+    all_day = serializers.BooleanField()
     occurrence_date = serializers.DateField(allow_null=True)
     last_activity_at = serializers.DateTimeField()
     marked_done_by_membership_id = serializers.UUIDField(allow_null=True)
@@ -818,6 +825,7 @@ def serialize_execution_detail(
         "start_at": execution.start_at,
         "visible_from": execution.visible_from,
         "end_at": execution.end_at,
+        "all_day": execution.all_day,
         "occurrence_date": execution.occurrence_date,
         "last_activity_at": execution.last_activity_at,
         "marked_done_by_membership_id": execution.marked_done_by_membership_id,
@@ -891,6 +899,7 @@ def serialize_schedule_detail(
         "end_date": schedule.end_date,
         "start_at": schedule.start_at,
         "end_at": schedule.end_at,
+        "all_day": schedule.all_day,
         "recurrence_days": schedule.recurrence_days or [],
         "created_by_id": schedule.created_by_id,
         "created_by_display_name": _membership_display_name(schedule.created_by),

@@ -16,6 +16,7 @@ import {
   combineDateAndTimeToIso,
   formatAssigneeSummary,
   hasGlobalRepeat,
+  isAllDayPlanningDraft,
   resolveNowStartForPlanning,
   snapTimeToFiveMinutes,
   splitIsoToDateAndTime,
@@ -155,6 +156,51 @@ export function ActionPlanEventPlanningForm({
     updateDraft({ repeatEnabled })
   }
 
+  function handleAllDayToggle(allDay: boolean) {
+    if (allDay) {
+      updateDraft({
+        startDate: draft.startDate || resolveNowStartForPlanning().date,
+        endDate: draft.endDate || draft.startDate || resolveNowStartForPlanning().date,
+        startTime: '',
+        endTime: '',
+      })
+      return
+    }
+    const now = resolveNowStartForPlanning()
+    updateDraft({
+      startTime: now.time,
+      endTime: snapTimeToFiveMinutes(
+        `${String((Number.parseInt(now.time.slice(0, 2), 10) + 1) % 24).padStart(2, '0')}:${now.time.slice(3, 5)}`,
+      ),
+    })
+  }
+
+  function handleAssigneeAllDayToggle(assignee: ActionPlanAssigneeDraft, allDay: boolean) {
+    const startParts = splitIsoToDateAndTime(assignee.startAt)
+    const endParts = splitIsoToDateAndTime(assignee.endAt)
+    const date = startParts.date || resolveNowStartForPlanning().date
+    if (allDay) {
+      updateAssignee(assignee.id, {
+        allDay: true,
+        startAt: combineDateAndTimeToIso(date, '', 'start'),
+        endAt: combineDateAndTimeToIso(endParts.date || date, '', 'end'),
+      })
+      return
+    }
+    const now = resolveNowStartForPlanning()
+    updateAssignee(assignee.id, {
+      allDay: false,
+      startAt: combineDateAndTimeToIso(date, now.time, 'start'),
+      endAt: combineDateAndTimeToIso(
+        endParts.date || date,
+        snapTimeToFiveMinutes(
+          `${String((Number.parseInt(now.time.slice(0, 2), 10) + 1) % 24).padStart(2, '0')}:${now.time.slice(3, 5)}`,
+        ),
+        'end',
+      ),
+    })
+  }
+
   function handleStartDateChange(startDate: string) {
     updateDraft({ startDate })
   }
@@ -260,6 +306,15 @@ export function ActionPlanEventPlanningForm({
             />
           ) : null}
 
+          {showGlobalPlanning ? (
+            <TerrainSwitch
+              variant="bordered"
+              label="Journée entière"
+              checked={isAllDayPlanningDraft(draft)}
+              onCheckedChange={handleAllDayToggle}
+            />
+          ) : null}
+
           {showAssigneePlanning ? (
             <div className="space-y-3 border-b border-[#E8E6DF] px-3 pt-3 pb-3">
               {draft.assignees.map((assignee) => {
@@ -305,6 +360,13 @@ export function ActionPlanEventPlanningForm({
                       />
                     ) : null}
 
+                    <TerrainSwitch
+                      variant="bordered"
+                      label="Journée entière"
+                      checked={assignee.allDay}
+                      onCheckedChange={(allDay) => handleAssigneeAllDayToggle(assignee, allDay)}
+                    />
+
                     {showAssigneeRepeat ? (
                       <>
                         <PlanningDateTimeRow
@@ -327,7 +389,12 @@ export function ActionPlanEventPlanningForm({
                           onTimeChange={() => undefined}
                           labelAddon={renderNowButton((parts) =>
                             updateAssignee(assignee.id, {
-                              startAt: combineDateAndTimeToIso(parts.date, parts.time, 'start'),
+                              startAt: combineDateAndTimeToIso(
+                                parts.date,
+                                assignee.allDay ? '' : parts.time,
+                                'start',
+                              ),
+                              allDay: assignee.allDay,
                             }),
                           )}
                           error={assigneeFieldError(mergedFieldErrors, assignee.id, 'startDate')}
@@ -368,6 +435,8 @@ export function ActionPlanEventPlanningForm({
                             />
                           </div>
                         </div>
+                        {assignee.allDay ? null : (
+                          <>
                         <PlanningDateTimeRow
                           rowId={`assignee-${assignee.id}-slot-start`}
                           label="Début du créneau d'exécution"
@@ -410,6 +479,8 @@ export function ActionPlanEventPlanningForm({
                           error={assigneeFieldError(mergedFieldErrors, assignee.id, 'endTime')}
                           fieldKey={`assignee.${assignee.id}.endTime`}
                         />
+                          </>
+                        )}
                       </>
                     ) : (
                       <>
@@ -419,6 +490,7 @@ export function ActionPlanEventPlanningForm({
                           date={startParts.date}
                           time={startParts.time}
                           disabled={lockStart}
+                          hideTime={assignee.allDay}
                           openPicker={openPicker}
                           onOpenPickerChange={setOpenPicker}
                           onDateChange={(date) =>
@@ -459,6 +531,7 @@ export function ActionPlanEventPlanningForm({
                           label="Fin"
                           date={endParts.date}
                           time={endParts.time}
+                          hideTime={assignee.allDay}
                           openPicker={openPicker}
                           onOpenPickerChange={setOpenPicker}
                           onDateChange={(date) =>
@@ -581,36 +654,40 @@ export function ActionPlanEventPlanningForm({
                     ) : null}
                   </div>
                 </div>
-                <PlanningDateTimeRow
-                  rowId="global-slot-start"
-                  label="Début du créneau d'exécution"
-                  date={draft.startDate}
-                  time={draft.startTime}
-                  hideDate
-                  openPicker={openPicker}
-                  onOpenPickerChange={setOpenPicker}
-                  onDateChange={() => undefined}
-                  onTimeChange={(startTime) =>
-                    updateDraft({ startTime: snapTimeToFiveMinutes(startTime) })
-                  }
-                  error={mergedFieldErrors.startTime}
-                  fieldKey="startTime"
-                />
-                <PlanningDateTimeRow
-                  rowId="global-slot-end"
-                  label="Fin du créneau d'exécution"
-                  date={draft.startDate}
-                  time={draft.endTime}
-                  hideDate
-                  openPicker={openPicker}
-                  onOpenPickerChange={setOpenPicker}
-                  onDateChange={() => undefined}
-                  onTimeChange={(endTime) =>
-                    updateDraft({ endTime: snapTimeToFiveMinutes(endTime) })
-                  }
-                  error={mergedFieldErrors.endTime}
-                  fieldKey="endTime"
-                />
+                {isAllDayPlanningDraft(draft) ? null : (
+                  <>
+                    <PlanningDateTimeRow
+                      rowId="global-slot-start"
+                      label="Début du créneau d'exécution"
+                      date={draft.startDate}
+                      time={draft.startTime}
+                      hideDate
+                      openPicker={openPicker}
+                      onOpenPickerChange={setOpenPicker}
+                      onDateChange={() => undefined}
+                      onTimeChange={(startTime) =>
+                        updateDraft({ startTime: snapTimeToFiveMinutes(startTime) })
+                      }
+                      error={mergedFieldErrors.startTime}
+                      fieldKey="startTime"
+                    />
+                    <PlanningDateTimeRow
+                      rowId="global-slot-end"
+                      label="Fin du créneau d'exécution"
+                      date={draft.startDate}
+                      time={draft.endTime}
+                      hideDate
+                      openPicker={openPicker}
+                      onOpenPickerChange={setOpenPicker}
+                      onDateChange={() => undefined}
+                      onTimeChange={(endTime) =>
+                        updateDraft({ endTime: snapTimeToFiveMinutes(endTime) })
+                      }
+                      error={mergedFieldErrors.endTime}
+                      fieldKey="endTime"
+                    />
+                  </>
+                )}
               </>
             ) : (
               <>
@@ -620,6 +697,7 @@ export function ActionPlanEventPlanningForm({
                   date={draft.startDate}
                   time={draft.startTime}
                   disabled={lockStart}
+                  hideTime={isAllDayPlanningDraft(draft)}
                   openPicker={openPicker}
                   onOpenPickerChange={setOpenPicker}
                   onDateChange={handleStartDateChange}
@@ -648,6 +726,7 @@ export function ActionPlanEventPlanningForm({
                   label="Fin"
                   date={draft.endDate}
                   time={draft.endTime}
+                  hideTime={isAllDayPlanningDraft(draft)}
                   openPicker={openPicker}
                   onOpenPickerChange={setOpenPicker}
                   onDateChange={(endDate) => updateDraft({ endDate })}

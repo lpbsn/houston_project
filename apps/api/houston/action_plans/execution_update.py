@@ -166,6 +166,7 @@ def update_action_plan_execution(
     end_at: datetime | None | object = ...,
     assignees: list[dict] | None = None,
     pending_tasks: list[dict] | None = None,
+    all_day: bool | None = None,
 ) -> ActionPlanExecution:
     execution = _lock_execution_for_write(execution_id=execution_id)
     locked_tasks = _lock_all_execution_tasks_after_execution(execution=execution)
@@ -230,6 +231,9 @@ def update_action_plan_execution(
             execution.end_at = end_at
             update_fields.append("end_at")
             diff.end_at_changed = True
+    if all_day is not None and all_day != execution.all_day:
+        execution.all_day = all_day
+        update_fields.append("all_day")
 
     final_assignee_rows = _resolve_final_assignees(
         actor=actor,

@@ -548,6 +548,53 @@ def action_plan_execution_feed_queryset(
     )
 
 
+def action_plan_execution_calendar_items_queryset(
+    *,
+    membership: EstablishmentMembership,
+    view_mode: ExecutionFeedViewMode,
+    window_start: datetime,
+    window_end: datetime,
+) -> QuerySet[ActionPlanExecution]:
+    now = timezone.now()
+    visibility = _execution_feed_visibility_q(membership=membership, view_mode=view_mode)
+    operational = Q(status__in=EXECUTION_FEED_CURSOR_STATUSES) & (
+        Q(visible_from__isnull=True) | Q(visible_from__lte=now)
+    )
+    scheduled = Q(status=EXECUTION_STATUS_SCHEDULED)
+    window = Q(start_at__lte=window_end) & (Q(end_at__isnull=True) | Q(end_at__gte=window_start))
+    return (
+        ActionPlanExecution.objects.filter(visibility)
+        .filter(operational | scheduled)
+        .filter(window)
+        .select_related(*_EXECUTION_FEED_SELECT_RELATED)
+        .prefetch_related(*_EXECUTION_FEED_PREFETCH)
+        .distinct()
+        .order_by("start_at", "id")
+    )
+
+
+def action_plan_execution_calendar_unplanned_queryset(
+    *,
+    membership: EstablishmentMembership,
+    view_mode: ExecutionFeedViewMode,
+) -> QuerySet[ActionPlanExecution]:
+    now = timezone.now()
+    visibility = _execution_feed_visibility_q(membership=membership, view_mode=view_mode)
+    operational = Q(status__in=EXECUTION_FEED_CURSOR_STATUSES) & (
+        Q(visible_from__isnull=True) | Q(visible_from__lte=now)
+    )
+    scheduled = Q(status=EXECUTION_STATUS_SCHEDULED)
+    return (
+        ActionPlanExecution.objects.filter(visibility)
+        .filter(operational | scheduled)
+        .filter(start_at__isnull=True)
+        .select_related(*_EXECUTION_FEED_SELECT_RELATED)
+        .prefetch_related(*_EXECUTION_FEED_PREFETCH)
+        .distinct()
+        .order_by("-last_activity_at", "id")
+    )
+
+
 def action_plan_execution_pinnable_by_membership(
     membership: EstablishmentMembership,
     execution: ActionPlanExecution,

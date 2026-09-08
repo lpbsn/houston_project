@@ -17,6 +17,7 @@ import type {
   ActionPlanExecutionFeedItemWrapper,
   ActionPlanExecutionFeedResponse,
   ActionPlanExecutionUpcomingResponse,
+  ActionPlanExecutionCalendarResponse,
   ActionPlanExecutionValidateRequest,
   ActionPlanExecutionPinState,
   ActionPlanListItem,
@@ -48,6 +49,13 @@ export const actionPlansQueryKeys = {
   crossExecutionFeed: ['action-plans', 'cross-action-plan-execution-feed'] as const,
   executionUpcoming: (establishmentId: string, viewMode: ActionPlanExecutionFeedViewMode) =>
     ['action-plans', 'action-plan-execution-upcoming', establishmentId, viewMode] as const,
+  executionCalendar: (
+    establishmentId: string,
+    viewMode: ActionPlanExecutionFeedViewMode,
+    from: string,
+    to: string,
+  ) =>
+    ['action-plans', 'action-plan-execution-calendar', establishmentId, viewMode, from, to] as const,
   executionDetail: (establishmentId: string, executionId: string) =>
     ['action-plans', 'execution-detail', establishmentId, executionId] as const,
   crossExecutionDetail: (executionId: string) =>
@@ -220,6 +228,32 @@ export async function fetchActionPlanExecutionUpcoming(
     { refreshable: true },
   )
   return assertActionPlanData<ActionPlanExecutionUpcomingResponse>(result)
+}
+
+export async function fetchActionPlanExecutionCalendar(
+  establishmentId: string,
+  viewMode: ActionPlanExecutionFeedViewMode,
+  window: { from: string; to: string },
+): Promise<ActionPlanExecutionCalendarResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET(
+        '/api/v1/establishments/{establishment_id}/action-plan-execution-calendar/',
+        {
+          params: {
+            ...establishmentPath(establishmentId),
+            query: {
+              view_mode: viewMode,
+              from: window.from,
+              to: window.to,
+            },
+          },
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanExecutionCalendarResponse>(result)
 }
 
 export async function fetchActionPlanCatalog(

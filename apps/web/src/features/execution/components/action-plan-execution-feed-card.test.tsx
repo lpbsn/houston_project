@@ -68,6 +68,7 @@ function buildFeedItem(
     assignees: [{ membership_id: 'member-1', display_name: 'Alice Martin' }],
     start_at: null,
     end_at: '2026-07-10T16:00:00Z',
+    all_day: false,
     is_overdue: false,
     task_count: 4,
     treated_task_count: 1,

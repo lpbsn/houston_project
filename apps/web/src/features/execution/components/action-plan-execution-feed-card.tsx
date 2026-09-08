@@ -267,7 +267,12 @@ function InProgressActionPlanFeedCard({
   const showActions =
     onOpenActions && canOpenActionPlanExecutionFeedCardActions(item.permission_hints)
   const now = useFeedCardNow()
-  const sidebarState = getActionPlanFeedSidebarState(item.end_at, now, item.is_overdue)
+  const sidebarState = getActionPlanFeedSidebarState(
+    item.end_at,
+    now,
+    item.is_overdue,
+    item.all_day,
+  )
   const progressState = getActionPlanFeedProgressState(item)
 
   return (
@@ -350,7 +355,7 @@ function ScheduledActionPlanFeedCard({
   const showActions =
     onOpenActions && canOpenActionPlanExecutionFeedCardActions(item.permission_hints)
   const now = useFeedCardNow()
-  const sidebarState = getActionPlanFeedStartCountdownState(item.start_at, now)
+  const sidebarState = getActionPlanFeedStartCountdownState(item.start_at, now, item.all_day)
 
   return (
     <article
