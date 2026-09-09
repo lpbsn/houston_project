@@ -85,6 +85,31 @@ def test_can_update_hint_roles():
     assert can_update_action_plan_execution_content(staff, staff_execution) is True
 
 
+def test_update_end_at_requires_start_at():
+    establishment = create_establishment()
+    pilot = create_business_unit(establishment=establishment, key="pilot")
+    owner = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    execution = _create_in_progress_execution(
+        owner=owner,
+        pilot_bu=pilot,
+        start_at=None,
+        end_at=None,
+    )
+    with pytest.raises(
+        ActionPlanValidationError,
+        match="End datetime requires a start datetime",
+    ):
+        update_action_plan_execution(
+            execution_id=execution.id,
+            actor=owner,
+            expected_updated_at=execution.updated_at,
+            end_at=timezone.now() + timedelta(hours=1),
+        )
+
+
 def test_update_title_and_reject_stale():
     establishment = create_establishment()
     pilot = create_business_unit(establishment=establishment, key="pilot")

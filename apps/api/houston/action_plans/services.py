@@ -1117,6 +1117,19 @@ def _materialize_execution_structure(
         )
 
 
+def _assert_end_after_start(
+    *,
+    start_at: datetime | None,
+    end_at: datetime | None,
+) -> None:
+    if end_at is None:
+        return
+    if start_at is None:
+        raise ActionPlanValidationError("End datetime requires a start datetime.")
+    if end_at <= start_at:
+        raise ActionPlanValidationError("End datetime must be after start datetime.")
+
+
 def initial_execution_status(
     *,
     start_at: datetime | None,
@@ -1177,6 +1190,7 @@ def _create_execution_record(
         raise ActionPlanValidationError(
             "Individual chronology requires a chronology owner membership.",
         )
+    _assert_end_after_start(start_at=start_at, end_at=end_at)
     status = initial_execution_status(start_at=start_at, now=now)
     started_at = now if status == EXECUTION_STATUS_IN_PROGRESS else None
     started_by_membership = (

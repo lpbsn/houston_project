@@ -325,6 +325,20 @@ describe('action-plan-event-planning-form', () => {
     expect(body?.start_date).toBe('2026-07-10')
   })
 
+  it('rejects an end datetime without a start datetime', () => {
+    const errors = validateActionPlanEventPlanningDraft({
+      ...createActionPlanEventPlanningDraft(),
+      endDate: '2026-07-02',
+      endTime: '10:00',
+    })
+    expect(errors.endDate).toBe('Une date de fin nécessite une date de début.')
+  })
+
+  it('allows an undated one-shot draft', () => {
+    const errors = validateActionPlanEventPlanningDraft(createActionPlanEventPlanningDraft())
+    expect(errors.endDate).toBeUndefined()
+  })
+
   it('skips global repeat validation when per-assignee chronology is enabled', () => {
     const errors = validateActionPlanEventPlanningDraft(
       {

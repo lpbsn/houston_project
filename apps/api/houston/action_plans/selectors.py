@@ -12,6 +12,7 @@ from houston.action_plans.constants import (
     CATALOG_STATUS_ACTIVE,
     CONTRIBUTION_STATUS_DONE,
     CONTRIBUTION_STATUS_IN_PROGRESS,
+    EXECUTION_CALENDAR_CURSOR_STATUSES,
     EXECUTION_FEED_CURSOR_STATUSES,
     EXECUTION_STATUS_SCHEDULED,
     SCHEDULED_FEED_PREVIEW_LIMIT,
@@ -557,7 +558,7 @@ def action_plan_execution_calendar_items_queryset(
 ) -> QuerySet[ActionPlanExecution]:
     now = timezone.now()
     visibility = _execution_feed_visibility_q(membership=membership, view_mode=view_mode)
-    operational = Q(status__in=EXECUTION_FEED_CURSOR_STATUSES) & (
+    operational = Q(status__in=EXECUTION_CALENDAR_CURSOR_STATUSES) & (
         Q(visible_from__isnull=True) | Q(visible_from__lte=now)
     )
     scheduled = Q(status=EXECUTION_STATUS_SCHEDULED)
@@ -580,7 +581,7 @@ def action_plan_execution_calendar_unplanned_queryset(
 ) -> QuerySet[ActionPlanExecution]:
     now = timezone.now()
     visibility = _execution_feed_visibility_q(membership=membership, view_mode=view_mode)
-    operational = Q(status__in=EXECUTION_FEED_CURSOR_STATUSES) & (
+    operational = Q(status__in=EXECUTION_CALENDAR_CURSOR_STATUSES) & (
         Q(visible_from__isnull=True) | Q(visible_from__lte=now)
     )
     scheduled = Q(status=EXECUTION_STATUS_SCHEDULED)

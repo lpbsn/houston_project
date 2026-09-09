@@ -590,7 +590,13 @@ export function validateActionPlanEventPlanningDraft(
 
   if (!hasGlobalRepeat(draft)) {
     const { sharedStartAt, sharedEndAt } = toSharedChronologyFields(draft)
-    if (sharedStartAt && sharedEndAt && Date.parse(sharedEndAt) <= Date.parse(sharedStartAt)) {
+    if (sharedEndAt && !sharedStartAt) {
+      errors.endDate = 'Une date de fin nécessite une date de début.'
+    } else if (
+      sharedStartAt &&
+      sharedEndAt &&
+      Date.parse(sharedEndAt) <= Date.parse(sharedStartAt)
+    ) {
       errors.endDate = 'La fin doit être postérieure au début.'
     }
     return errors

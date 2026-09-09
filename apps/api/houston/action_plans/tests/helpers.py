@@ -407,5 +407,8 @@ def create_execution(
     if end_at is not None:
         execution.end_at = end_at
         update_fields.append("end_at")
+        if execution.start_at is None and execution.created_at < end_at:
+            execution.start_at = execution.created_at
+            update_fields.append("start_at")
     execution.save(update_fields=update_fields + ["updated_at"])
     return execution

@@ -35,6 +35,7 @@ from houston.action_plans.permissions import (
 )
 from houston.action_plans.services import (
     ValidatedAssigneePayload,
+    _assert_end_after_start,
     _lock_all_execution_tasks_after_execution,
     _lock_execution_for_write,
     _membership_display_name,
@@ -90,23 +91,6 @@ class ExecutionUpdateDiff:
     reassigned_to_membership_ids: set[uuid.UUID] = field(default_factory=set)
     unassigned_from_membership_ids: set[uuid.UUID] = field(default_factory=set)
     deadline_changed_membership_ids: set[uuid.UUID] = field(default_factory=set)
-
-
-def _assert_end_after_start(
-    *,
-    start_at: datetime | None,
-    end_at: datetime | None,
-) -> None:
-    if end_at is None:
-        return
-    if start_at is None:
-        raise ActionPlanValidationError(
-            "End datetime requires a start datetime."
-        )
-    if end_at <= start_at:
-        raise ActionPlanValidationError(
-            "End datetime must be after start datetime."
-        )
 
 
 def _manager_can_manage_bu(

@@ -8,6 +8,8 @@ import pytest
 from django.utils import timezone
 
 from houston.action_plans.constants import (
+    EXECUTION_STATUS_CANCELED,
+    EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
     EXECUTION_STATUS_PENDING_VALIDATION,
     EXECUTION_STATUS_SCHEDULED,
@@ -30,6 +32,7 @@ from houston.action_plans.tests.helpers import (
     build_task_payload,
     create_catalog_action_plan,
     create_execution,
+    feed_execution_ids,
     feed_query,
     recurrence_days_for_visible_today,
 )
@@ -219,6 +222,83 @@ def test_calendar_includes_intersection_and_unplanned(
     assert str(unplanned.id) not in item_ids
     assert "timezone" in body
     assert "all_day" in body["items"][0]["action_plan_execution"]
+
+
+def test_calendar_excludes_canceled_from_items_and_unplanned_but_list_keeps_them(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    now = timezone.now()
+    inside_start = now + timedelta(days=2)
+    _, dated_canceled = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Dated canceled",
+        tasks=[build_task_payload(task="canceled", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=inside_start,
+        end_at=inside_start + timedelta(hours=1),
+    )
+    dated_canceled.status = EXECUTION_STATUS_CANCELED
+    dated_canceled.save(update_fields=["status", "updated_at"])
+
+    _, dated_done = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Dated done",
+        tasks=[build_task_payload(task="done", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=inside_start,
+        end_at=inside_start + timedelta(hours=2),
+    )
+    dated_done.status = EXECUTION_STATUS_DONE
+    dated_done.save(update_fields=["status", "updated_at"])
+
+    unplanned_canceled = create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Unplanned canceled",
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        status=EXECUTION_STATUS_CANCELED,
+    )
+
+    token = login(api_client, user=owner_membership.user)
+    window_from = (now + timedelta(days=1)).date()
+    window_to = (now + timedelta(days=3)).date()
+    calendar_response = api_client.get(
+        action_plan_execution_calendar_url(owner_membership.establishment_id)
+        + _calendar_query(view_mode="general", from_date=window_from, to_date=window_to),
+        **auth_headers(token),
+    )
+    assert calendar_response.status_code == 200, calendar_response.content
+    calendar_body = calendar_response.json()
+    item_ids = {item["action_plan_execution"]["id"] for item in calendar_body["items"]}
+    unplanned_ids = {
+        item["action_plan_execution"]["id"] for item in calendar_body["unplanned"]
+    }
+    assert str(dated_canceled.id) not in item_ids
+    assert str(dated_canceled.id) not in unplanned_ids
+    assert str(unplanned_canceled.id) not in unplanned_ids
+    assert str(unplanned_canceled.id) not in item_ids
+    assert str(dated_done.id) in item_ids
+
+    feed_response = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id) + feed_query("general"),
+        **auth_headers(token),
+    )
+    assert feed_response.status_code == 200
+    feed_ids = set(feed_execution_ids(feed_response.json()))
+    assert str(dated_canceled.id) in feed_ids
+    assert str(unplanned_canceled.id) in feed_ids
 
 
 def test_calendar_does_not_infer_all_day_from_sentinel_times(

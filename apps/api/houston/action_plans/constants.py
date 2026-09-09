@@ -91,6 +91,11 @@ EXECUTION_FEED_CURSOR_STATUSES = frozenset(
     }
 )
 
+# Calendar grid + unplanned omit canceled; the list feed still uses the cursor set.
+EXECUTION_CALENDAR_CURSOR_STATUSES = frozenset(
+    EXECUTION_FEED_CURSOR_STATUSES - {EXECUTION_STATUS_CANCELED}
+)
+
 EXECUTION_FEED_STATUSES = EXECUTION_STATUSES
 
 TERMINAL_EXECUTION_STATUSES = frozenset(
