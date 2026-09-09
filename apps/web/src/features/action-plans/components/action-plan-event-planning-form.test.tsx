@@ -80,6 +80,8 @@ function StatefulPlanningHarness({
   )
 }
 
+const PARIS_NOW_1002 = '2026-07-19T08:02:00.000Z'
+
 describe('ActionPlanEventPlanningForm', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -367,7 +369,7 @@ describe('ActionPlanEventPlanningForm', () => {
   })
 
   it('fills shared start from Maintenant without changing end', () => {
-    vi.setSystemTime(new Date(2026, 6, 19, 10, 2, 0))
+    vi.setSystemTime(new Date(PARIS_NOW_1002))
     const initial = {
       ...createActionPlanEventPlanningDraft(),
       startDate: '2026-07-01',
@@ -391,7 +393,7 @@ describe('ActionPlanEventPlanningForm', () => {
   })
 
   it('updates only the targeted assignee start with Maintenant', () => {
-    vi.setSystemTime(new Date(2026, 6, 19, 10, 2, 0))
+    vi.setSystemTime(new Date(PARIS_NOW_1002))
     const onDraftChange = vi.fn()
     const first = createActionPlanAssigneeDraft({
       membershipId: 'm1',
@@ -428,7 +430,7 @@ describe('ActionPlanEventPlanningForm', () => {
   })
 
   it('keeps both patches from the same render before any intermediate rerender', () => {
-    vi.setSystemTime(new Date(2026, 6, 19, 10, 2, 0))
+    vi.setSystemTime(new Date(PARIS_NOW_1002))
     const initial = {
       ...createActionPlanEventPlanningDraft(),
       startDate: '2026-07-01',
