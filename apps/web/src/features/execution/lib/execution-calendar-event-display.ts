@@ -130,10 +130,7 @@ export function calendarEventOrgBadges(item: ActionPlanExecutionFeedItem): strin
   return [pole]
 }
 
-export function calendarEventPresentation(
-  item: ActionPlanExecutionFeedItem,
-  _density?: CalendarEventChromeDensity,
-): {
+export function calendarEventPresentation(item: ActionPlanExecutionFeedItem): {
   title: string
   chrome: CalendarEventChrome
   statusLabel: string

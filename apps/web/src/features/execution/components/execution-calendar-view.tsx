@@ -82,7 +82,7 @@ function CalendarEventButton({
 }) {
   const density =
     densityOverride ?? resolveCalendarEventChromeDensity({ variant, heightPx, narrow })
-  const presentation = calendarEventPresentation(item, density)
+  const presentation = calendarEventPresentation(item)
   const compact = density === 'compact'
   const showSuite = continuation === true && !compact
   return (

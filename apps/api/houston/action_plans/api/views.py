@@ -1631,13 +1631,19 @@ class ActionPlanExecutionCalendarView(EstablishmentScopedActionPlanMixin, APIVie
                 name="from",
                 required=True,
                 type=str,
-                description="Inclusive civil start date (YYYY-MM-DD) in the establishment timezone.",
+                description=(
+                    "Inclusive civil start date (YYYY-MM-DD) "
+                    "in the establishment timezone."
+                ),
             ),
             OpenApiParameter(
                 name="to",
                 required=True,
                 type=str,
-                description="Inclusive civil end date (YYYY-MM-DD) in the establishment timezone.",
+                description=(
+                    "Inclusive civil end date (YYYY-MM-DD) "
+                    "in the establishment timezone."
+                ),
             ),
         ],
         responses={

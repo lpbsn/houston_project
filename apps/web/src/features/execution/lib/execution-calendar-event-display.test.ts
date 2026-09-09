@@ -93,13 +93,11 @@ describe('execution-calendar-event-display', () => {
   })
 
   it('exposes status, org and assignees for month, all-day and short timed densities', () => {
-    for (const density of ['compact', 'comfortable'] as const) {
-      const presentation = calendarEventPresentation(buildItem(), density)
-      expect(presentation.statusLabel).toBe('En cours')
-      expect(presentation.assigneeInitials).toEqual(['AM'])
-      expect(presentation.orgBadges).toEqual(['Restaurant'])
-      expect(presentation.chrome.bar).toBe('#3A7A96')
-    }
+    const presentation = calendarEventPresentation(buildItem())
+    expect(presentation.statusLabel).toBe('En cours')
+    expect(presentation.assigneeInitials).toEqual(['AM'])
+    expect(presentation.orgBadges).toEqual(['Restaurant'])
+    expect(presentation.chrome.bar).toBe('#3A7A96')
     expect(calendarEventPresentation(buildItem({ status: 'scheduled' })).statusLabel).toBe(
       'Planifiée',
     )

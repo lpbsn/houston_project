@@ -841,6 +841,8 @@ def ensure_visible_action_plan_executions_materialized(
         except ActionPlanValidationError as exc:
             _log_skipped_schedule_materialization(
                 schedule=schedule,
+                materialization_path=MATERIALIZATION_PATH_READ,
+                exc=exc,
             )
     return count
 

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from datetime import timedelta
-
 import importlib
+from datetime import timedelta
 
 import pytest
 from django.apps import apps as django_apps
