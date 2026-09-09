@@ -502,6 +502,7 @@ function App() {
           key={executionDetailId}
           establishmentId={establishmentId}
           executionId={executionDetailId}
+          search={locationSearch}
           onNavigate={navigate}
         />
       )
@@ -514,6 +515,7 @@ function App() {
     auth.hasOperationalAccess,
     establishmentId,
     executionDetailId,
+    locationSearch,
     navigate,
     route.kind,
     staticRoutePath,
@@ -712,8 +714,10 @@ function App() {
           <LazyExecutionFeedPage
             establishmentId={establishmentIdForScope ?? null}
             source={source}
-            onOpenActionPlanExecution={(id) =>
-              navigate(serializeScopedExecutionDetailPath(scope, id))
+            onOpenActionPlanExecution={
+              source === 'cross'
+                ? (id) => navigate(serializeScopedExecutionDetailPath(scope, id))
+                : undefined
             }
             onNavigate={navigate}
           />
@@ -797,7 +801,6 @@ function App() {
     if (route.path === '/execution') {
       return (
         <LazyExecutionFeedPage
-          onOpenActionPlanExecution={(id) => navigate(`/action-plans/executions/${id}`)}
           onNavigate={navigate}
         />
       )

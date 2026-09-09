@@ -8,6 +8,7 @@ import {
   hasPerAssigneeRepeat,
   splitIsoToDateAndTime,
   toScheduleDraft,
+  isAllDayPlanningDraft,
   validateActionPlanEventPlanningDraft,
   validatePerAssigneePlanningDraft,
   type ActionPlanEventPlanningDraft,
@@ -69,6 +70,7 @@ function buildSharedPlanningItems(
         start_at: scheduleBody.start_at,
         end_at: scheduleBody.end_at,
         recurrence_days: scheduleBody.recurrence_days,
+        all_day: scheduleBody.all_day ?? false,
       },
     ]
   }
@@ -82,6 +84,7 @@ function buildSharedPlanningItems(
       start_at: useBody.start_at ?? null,
       end_at: useBody.end_at ?? null,
       visible_from: useBody.visible_from ?? null,
+      all_day: useBody.all_day ?? isAllDayPlanningDraft(draft),
     },
   ]
 }
@@ -106,9 +109,10 @@ function buildIndividualPlanningItems(
         business_unit_id: assignee.businessUnitId,
         start_date: startParts.date.trim() || null,
         end_date: assignee.recurrenceEndDate.trim(),
-        start_at: startParts.time,
-        end_at: endParts.time,
+        start_at: assignee.allDay ? '00:00' : startParts.time,
+        end_at: assignee.allDay ? '23:59' : endParts.time,
         recurrence_days: [...assignee.recurrenceDays],
+        all_day: assignee.allDay,
       })
       continue
     }
@@ -121,6 +125,7 @@ function buildIndividualPlanningItems(
       start_at: assignee.startAt.trim() || null,
       end_at: assignee.endAt.trim() || null,
       visible_from: assignee.visibleFrom.trim() || null,
+      all_day: assignee.allDay,
     })
   }
 
@@ -133,6 +138,7 @@ function buildIndividualPlanningItems(
       start_at: useBody.start_at ?? null,
       end_at: useBody.end_at ?? null,
       visible_from: useBody.visible_from ?? null,
+      all_day: useBody.all_day ?? isAllDayPlanningDraft(draft),
     })
   }
 

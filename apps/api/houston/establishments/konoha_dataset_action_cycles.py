@@ -89,6 +89,24 @@ def _require_at_or_before_cutoff(instant: datetime, *, label: str, group: str) -
         )
 
 
+def _start_at_required_when_end_at(
+    *,
+    created_at: datetime,
+    start_at: datetime | None,
+    end_at: datetime | None,
+    signal_group: str,
+) -> datetime | None:
+    from houston.establishments.konoha_dataset_replay import KonohaDatasetReplayError
+
+    if end_at is None or start_at is not None:
+        return start_at
+    if created_at < end_at:
+        return created_at
+    raise KonohaDatasetReplayError(
+        [f"{signal_group}: end_at requires a start datetime"]
+    )
+
+
 @lru_cache(maxsize=1)
 def load_konoha_dataset_action_overrides() -> dict[str, dict[str, Any]]:
     if not ACTION_OVERRIDES_PATH.exists():
@@ -426,7 +444,6 @@ def extend_replay_events_with_cycles(
             raise KonohaDatasetReplayError(
                 [f"{signal_group}: plan created_at is before last observation"]
             )
-        start_at = _override_dt(overlay, "start_at")
         end_at = _overlay_end_at(
             overlay,
             default=_default_closed_plan_end_at(
@@ -434,6 +451,12 @@ def extend_replay_events_with_cycles(
                 resolved_at=resolved_at,
                 signal_group=signal_group,
             ),
+        )
+        start_at = _start_at_required_when_end_at(
+            created_at=created_at,
+            start_at=_override_dt(overlay, "start_at"),
+            end_at=end_at,
+            signal_group=signal_group,
         )
         if start_at is not None and end_at is not None and end_at <= start_at:
             raise KonohaDatasetReplayError(
@@ -604,7 +627,7 @@ def _append_open_linked_plan_events(
         )
         if start_at is not None and start_at > created_at:
             _require_at_or_before_cutoff(start_at, label="start_at", group=signal_group)
-        else:
+        elif end_at is None:
             start_at = None
     elif cutoff_status == "canceled":
         if canceled_at is None:
@@ -612,6 +635,13 @@ def _append_open_linked_plan_events(
                 [f"{signal_group}: canceled overlay must set canceled_at"]
             )
         _require_at_or_before_cutoff(canceled_at, label="canceled_at", group=signal_group)
+
+    start_at = _start_at_required_when_end_at(
+        created_at=created_at,
+        start_at=start_at,
+        end_at=end_at,
+        signal_group=signal_group,
+    )
 
     spec = PlanReplaySpec(
         requires_validation=requires_validation,

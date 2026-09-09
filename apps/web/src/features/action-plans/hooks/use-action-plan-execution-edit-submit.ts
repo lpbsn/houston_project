@@ -26,6 +26,7 @@ type UseActionPlanExecutionEditSubmitOptions = {
   membershipId?: string
   onNavigate: (pathname: string) => void
   onConflictReload: () => Promise<void>
+  returnPath?: string
 }
 
 export function useActionPlanExecutionEditSubmit({
@@ -36,6 +37,7 @@ export function useActionPlanExecutionEditSubmit({
   membershipId,
   onNavigate,
   onConflictReload,
+  returnPath,
 }: UseActionPlanExecutionEditSubmitOptions) {
   const updateMutation = useUpdateActionPlanExecutionMutation(establishmentId, executionId)
   const [frontendFieldErrors, setFrontendFieldErrors] = useState<Record<string, string>>({})
@@ -74,7 +76,7 @@ export function useActionPlanExecutionEditSubmit({
     try {
       await updateMutation.mutateAsync(buildActionPlanExecutionUpdateRequest(values))
       notifySuccess({ message: 'Plan mis à jour.', kind: 'updated' })
-      onNavigate(`/action-plans/executions/${executionId}`)
+      onNavigate(returnPath ?? `/action-plans/executions/${executionId}`)
       return true
     } catch (error) {
       const apiError =

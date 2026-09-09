@@ -31,6 +31,11 @@ def action_plan_execution_feed_url(establishment_id, query: str = "") -> str:
     return base + query
 
 
+def action_plan_execution_calendar_url(establishment_id, query: str = "") -> str:
+    base = f"/api/v1/establishments/{establishment_id}/action-plan-execution-calendar/"
+    return base + query
+
+
 def action_plan_execution_upcoming_url(establishment_id, query: str = "") -> str:
     base = f"/api/v1/establishments/{establishment_id}/action-plan-execution-upcoming/"
     return base + query
@@ -402,5 +407,8 @@ def create_execution(
     if end_at is not None:
         execution.end_at = end_at
         update_fields.append("end_at")
+        if execution.start_at is None and execution.created_at < end_at:
+            execution.start_at = execution.created_at
+            update_fields.append("start_at")
     execution.save(update_fields=update_fields + ["updated_at"])
     return execution

@@ -1117,6 +1117,33 @@ def _materialize_execution_structure(
         )
 
 
+def _assert_end_after_start(
+    *,
+    start_at: datetime | None,
+    end_at: datetime | None,
+) -> None:
+    if end_at is None:
+        return
+    if start_at is None:
+        raise ActionPlanValidationError("End datetime requires a start datetime.")
+    if end_at <= start_at:
+        raise ActionPlanValidationError("End datetime must be after start datetime.")
+
+
+def _assert_all_day_closed_window(
+    *,
+    all_day: bool,
+    start_at: datetime | None,
+    end_at: datetime | None,
+) -> None:
+    if not all_day:
+        return
+    if start_at is None or end_at is None:
+        raise ActionPlanValidationError(
+            "All-day executions require start_at and end_at.",
+        )
+
+
 def initial_execution_status(
     *,
     start_at: datetime | None,
@@ -1155,6 +1182,7 @@ def _create_execution_record(
     end_at: datetime | None = None,
     visible_from: datetime | None = None,
     occurrence_date=None,
+    all_day: bool = False,
     affected_business_unit=None,
     responsible_business_unit=None,
     activity_subject=None,
@@ -1176,6 +1204,8 @@ def _create_execution_record(
         raise ActionPlanValidationError(
             "Individual chronology requires a chronology owner membership.",
         )
+    _assert_end_after_start(start_at=start_at, end_at=end_at)
+    _assert_all_day_closed_window(all_day=all_day, start_at=start_at, end_at=end_at)
     status = initial_execution_status(start_at=start_at, now=now)
     started_at = now if status == EXECUTION_STATUS_IN_PROGRESS else None
     started_by_membership = (
@@ -1201,6 +1231,7 @@ def _create_execution_record(
         start_at=start_at,
         visible_from=visible_from,
         end_at=end_at,
+        all_day=all_day,
         started_at=started_at,
         started_by_membership=started_by_membership,
         last_activity_at=now,
@@ -1472,6 +1503,7 @@ def create_action_plan_with_execution(
     end_at: datetime | None = None,
     visible_from: datetime | None = None,
     occurrence_date=None,
+    all_day: bool = False,
 ) -> tuple[ActionPlan, ActionPlanExecution]:
     pilot_business_unit = _validate_business_unit_in_establishment(
         establishment_id=establishment_id,
@@ -1664,6 +1696,7 @@ def create_action_plan_with_execution(
         end_at=resolved_end_at,
         visible_from=resolved_visible_from,
         occurrence_date=occurrence_date,
+        all_day=all_day,
         affected_business_unit=affected_business_unit,
         responsible_business_unit=responsible_business_unit,
         activity_subject=activity_subject,
@@ -1712,6 +1745,7 @@ def create_execution_from_action_plan(
     end_at: datetime | None = None,
     visible_from: datetime | None = None,
     occurrence_date=None,
+    all_day: bool = False,
     emit_side_effects: bool = True,
 ) -> ActionPlanExecution:
     action_plan = ActionPlan.objects.select_for_update().filter(id=action_plan_id).first()
@@ -1830,6 +1864,7 @@ def create_execution_from_action_plan(
         end_at=resolved_end_at,
         visible_from=resolved_visible_from,
         occurrence_date=occurrence_date,
+        all_day=all_day,
         affected_business_unit=action_plan.affected_business_unit,
         responsible_business_unit=action_plan.responsible_business_unit,
         activity_subject=action_plan.activity_subject,
@@ -2388,6 +2423,7 @@ def create_action_plan_with_optional_schedule(
     end_at: datetime | None = None,
     visible_from: datetime | None = None,
     occurrence_date=None,
+    all_day: bool = False,
 ) -> tuple[ActionPlan, ActionPlanExecution | None]:
     if created_by.role == EstablishmentMembership.Role.STAFF:
         raise ActionPlanPermissionError("Not allowed to create a schedule for this action plan.")
@@ -2422,11 +2458,12 @@ def create_action_plan_with_optional_schedule(
         start_date=schedule.get("start_date")
         or establishment_local_date(establishment=action_plan.establishment),
         end_date=schedule["end_date"],
-        start_at=schedule["start_at"],
-        end_at=schedule["end_at"],
+        start_at=schedule.get("start_at"),
+        end_at=schedule.get("end_at"),
         recurrence_days=schedule["recurrence_days"],
         assignees=schedule_assignees,
         use_shared_chronology=schedule.get("use_shared_chronology", True),
+        all_day=schedule.get("all_day", False),
     )
 
     one_shot_assignees = _assignee_payloads_from_dicts(assignees or [])
@@ -2442,6 +2479,7 @@ def create_action_plan_with_optional_schedule(
         end_at=end_at,
         visible_from=visible_from,
         occurrence_date=occurrence_date,
+        all_day=all_day,
     )
     return action_plan, execution
 

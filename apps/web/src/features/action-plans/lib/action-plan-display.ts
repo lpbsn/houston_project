@@ -1,4 +1,5 @@
 import type { SignalClassificationInput } from '@/lib/signal-classification'
+import { formatCivilDateFr, splitIsoToCivil } from '@/lib/business-timezone'
 
 import type { ActionPlanBusinessUnit } from '@/features/action-plans/types'
 
@@ -104,6 +105,21 @@ export function isActionPlanExecutionOverdue(
     return false
   }
   return Date.parse(endAt) < Date.now()
+}
+
+export function formatActionPlanAllDayPeriodLabel(
+  startAt: string | null,
+  endAt: string | null,
+): string {
+  const start = splitIsoToCivil(startAt ?? '')
+  const end = splitIsoToCivil(endAt ?? '')
+  if (!start.date) {
+    return 'Journée entière'
+  }
+  if (end.date && end.date !== start.date) {
+    return `${formatCivilDateFr(start.date)} – ${formatCivilDateFr(end.date)} · Journée entière`
+  }
+  return `${formatCivilDateFr(start.date)} · Journée entière`
 }
 
 export function formatActionPlanEndAtLabel(endAt: string | null): string | null {

@@ -15,6 +15,8 @@ from houston.action_plans.constants import (
     EXECUTION_STATUS_PENDING_VALIDATION,
     EXECUTION_STATUS_SCHEDULED,
     RECURRENCE_DAYS,
+    SCHEDULE_ALL_DAY_END,
+    SCHEDULE_ALL_DAY_START,
     SCHEDULE_STATUS_ACTIVE,
     SCHEDULE_STATUS_INACTIVE,
 )
@@ -114,6 +116,21 @@ def _validate_schedule_window(
         raise ActionPlanValidationError(
             "end_at must be after start_at on the same day (overnight slots are not supported).",
         )
+
+
+def _resolve_schedule_clock(
+    *,
+    all_day: bool,
+    start_at: time | None,
+    end_at: time | None,
+) -> tuple[time, time]:
+    if all_day:
+        return SCHEDULE_ALL_DAY_START, SCHEDULE_ALL_DAY_END
+    if start_at is None or end_at is None:
+        raise ActionPlanValidationError(
+            "start_at and end_at are required unless all_day is true.",
+        )
+    return start_at, end_at
 
 
 def classify_schedule_linked_execution(
@@ -283,6 +300,7 @@ def reactivate_schedule_future_execution(
     execution.start_at = occurrence_start
     execution.end_at = occurrence_end
     execution.visible_from = visible_from
+    execution.all_day = schedule.all_day
     execution.last_activity_at = now
     update_fields = [
         "status",
@@ -294,6 +312,7 @@ def reactivate_schedule_future_execution(
         "start_at",
         "end_at",
         "visible_from",
+        "all_day",
         "last_activity_at",
         "updated_at",
     ]
@@ -353,12 +372,14 @@ def _sync_future_execution_window(
     execution.start_at = occurrence_start
     execution.end_at = occurrence_end
     execution.visible_from = visible_from
+    execution.all_day = schedule.all_day
     execution.last_activity_at = now
     execution.save(
         update_fields=[
             "start_at",
             "end_at",
             "visible_from",
+            "all_day",
             "last_activity_at",
             "updated_at",
         ],
@@ -507,19 +528,25 @@ def _create_action_plan_schedule_core(
     actor: EstablishmentMembership,
     start_date: date,
     end_date: date,
-    start_at: time,
-    end_at: time,
+    start_at: time | None,
+    end_at: time | None,
     recurrence_days: list[str],
     assignees: list[dict] | None = None,
     use_shared_chronology: bool = False,
+    all_day: bool = False,
     emit_side_effects: bool = True,
 ) -> ActionPlanSchedule:
     """Schedule write path without catalog/use gates (caller already authorized)."""
+    resolved_start_at, resolved_end_at = _resolve_schedule_clock(
+        all_day=all_day,
+        start_at=start_at,
+        end_at=end_at,
+    )
     _validate_schedule_window(
         start_date=start_date,
         end_date=end_date,
-        start_at=start_at,
-        end_at=end_at,
+        start_at=resolved_start_at,
+        end_at=resolved_end_at,
     )
     normalized_recurrence_days = normalize_recurring_recurrence_days(recurrence_days)
     if actor.role == EstablishmentMembership.Role.STAFF:
@@ -560,8 +587,9 @@ def _create_action_plan_schedule_core(
         use_shared_chronology=use_shared_chronology,
         start_date=start_date,
         end_date=end_date,
-        start_at=start_at,
-        end_at=end_at,
+        start_at=resolved_start_at,
+        end_at=resolved_end_at,
+        all_day=all_day,
         recurrence_days=normalized_recurrence_days,
         status=SCHEDULE_STATUS_ACTIVE,
     )
@@ -583,11 +611,12 @@ def create_action_plan_schedule(
     actor: EstablishmentMembership,
     start_date: date,
     end_date: date,
-    start_at: time,
-    end_at: time,
+    start_at: time | None,
+    end_at: time | None,
     recurrence_days: list[str],
     assignees: list[dict] | None = None,
     use_shared_chronology: bool = False,
+    all_day: bool = False,
     emit_side_effects: bool = True,
 ) -> ActionPlanSchedule:
     if not can_create_action_plan_schedule(actor, action_plan):
@@ -606,6 +635,7 @@ def create_action_plan_schedule(
         recurrence_days=recurrence_days,
         assignees=assignees,
         use_shared_chronology=use_shared_chronology,
+        all_day=all_day,
         emit_side_effects=emit_side_effects,
     )
 
@@ -616,11 +646,12 @@ def create_action_plan_schedule_for_planning_engine(
     actor: EstablishmentMembership,
     start_date: date,
     end_date: date,
-    start_at: time,
-    end_at: time,
+    start_at: time | None,
+    end_at: time | None,
     recurrence_days: list[str],
     assignees: list[dict] | None = None,
     use_shared_chronology: bool = False,
+    all_day: bool = False,
     emit_side_effects: bool = False,
 ) -> ActionPlanSchedule:
     """Internal planning-engine schedule create (catalog readiness already decided by caller)."""
@@ -634,6 +665,7 @@ def create_action_plan_schedule_for_planning_engine(
         recurrence_days=recurrence_days,
         assignees=assignees,
         use_shared_chronology=use_shared_chronology,
+        all_day=all_day,
         emit_side_effects=emit_side_effects,
     )
 
@@ -725,6 +757,7 @@ def update_action_plan_schedule(
     recurrence_days: list[str] | None = None,
     assignees: list[dict] | None = None,
     use_shared_chronology: bool | None = None,
+    all_day: bool | None = None,
 ) -> ActionPlanSchedule:
     if not can_manage_action_plan_schedule(actor, schedule):
         raise ActionPlanPermissionError("Not allowed to update this schedule.")
@@ -739,10 +772,28 @@ def update_action_plan_schedule(
     update_fields = ["updated_at"]
     next_start_date = start_date if start_date is not None else schedule.start_date
     next_end_date = end_date if end_date is not None else schedule.end_date
-    next_start_at = start_at if start_at is not None else schedule.start_at
-    next_end_at = end_at if end_at is not None else schedule.end_at
+    next_all_day = all_day if all_day is not None else schedule.all_day
+    turning_off_all_day = schedule.all_day and all_day is False
+    if turning_off_all_day:
+        if start_at is None or end_at is None:
+            raise ActionPlanValidationError(
+                "Turning off all_day requires start_at and end_at.",
+            )
+        next_start_at, next_end_at = start_at, end_at
+    else:
+        next_start_at = start_at if start_at is not None else schedule.start_at
+        next_end_at = end_at if end_at is not None else schedule.end_at
+    if next_all_day:
+        next_start_at, next_end_at = _resolve_schedule_clock(
+            all_day=True,
+            start_at=next_start_at,
+            end_at=next_end_at,
+        )
 
-    if any(value is not None for value in (start_date, end_date, start_at, end_at)):
+    if any(
+        value is not None
+        for value in (start_date, end_date, start_at, end_at, all_day)
+    ):
         _validate_schedule_window(
             start_date=next_start_date,
             end_date=next_end_date,
@@ -756,12 +807,17 @@ def update_action_plan_schedule(
     if end_date is not None:
         schedule.end_date = end_date
         update_fields.append("end_date")
-    if start_at is not None:
-        schedule.start_at = start_at
-        update_fields.append("start_at")
-    if end_at is not None:
-        schedule.end_at = end_at
-        update_fields.append("end_at")
+    if start_at is not None or next_all_day or turning_off_all_day:
+        schedule.start_at = next_start_at
+        if "start_at" not in update_fields:
+            update_fields.append("start_at")
+    if end_at is not None or next_all_day or turning_off_all_day:
+        schedule.end_at = next_end_at
+        if "end_at" not in update_fields:
+            update_fields.append("end_at")
+    if all_day is not None:
+        schedule.all_day = all_day
+        update_fields.append("all_day")
     if recurrence_days is not None:
         schedule.recurrence_days = normalize_recurring_recurrence_days(recurrence_days)
         update_fields.append("recurrence_days")

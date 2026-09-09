@@ -95,6 +95,9 @@ describe('query-invalidation factory parity', () => {
 
     expect(prefixes()).toEqual([
       actionPlansQueryKeys.executionFeed(EST, 'personal').slice(0, 3),
+      actionPlansQueryKeys.executionCalendar(EST, 'personal', '2026-01-01', '2026-01-02').slice(0, 3),
+      actionPlansQueryKeys.crossExecutionFeed('general').slice(0, 2),
+      actionPlansQueryKeys.crossExecutionCalendar('general', '2026-01-01', '2026-01-02').slice(0, 2),
     ])
   })
 
@@ -108,6 +111,7 @@ describe('query-invalidation factory parity', () => {
       expect.arrayContaining([
         actionPlansQueryKeys.executionFeed(EST, 'personal').slice(0, 3),
         actionPlansQueryKeys.executionUpcoming(EST, 'personal').slice(0, 3),
+        actionPlansQueryKeys.executionCalendar(EST, 'personal', '2026-01-01', '2026-01-02').slice(0, 3),
         actionPlansQueryKeys.executionDetail(EST, ENTITY),
         signalsQueryKeys.feed(EST, 'general', EMPTY_SIGNAL_FEED_FILTERS).slice(0, 3),
         signalsQueryKeys.detail(EST, ENTITY).slice(0, 3),

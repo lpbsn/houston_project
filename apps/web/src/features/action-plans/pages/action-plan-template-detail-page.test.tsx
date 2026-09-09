@@ -400,6 +400,7 @@ describe('ActionPlanTemplateDetailPage', () => {
             end_at: '10:00:00',
             recurrence_days: ['monday'],
             assignees: [],
+            all_day: false,
           },
         ],
       },

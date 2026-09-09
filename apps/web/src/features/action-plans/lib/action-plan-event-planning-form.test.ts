@@ -15,6 +15,7 @@ import {
   getDefaultPlanningTime,
   hasGlobalRepeat,
   hasPerAssigneeRepeat,
+  isAllDayPlanningDraft,
   resolveNowStartForPlanning,
   shouldHidePrimaryPlanningActions,
   snapTimeToFiveMinutes,
@@ -42,16 +43,14 @@ describe('action-plan-event-planning-form', () => {
       endTime: '10:00',
     }
     const { sharedStartAt, sharedEndAt } = toSharedChronologyFields(draft)
-    expect(sharedStartAt).toBeTruthy()
-    expect(sharedEndAt).toBeTruthy()
-    expect(new Date(sharedStartAt).getDate()).toBe(1)
-    expect(new Date(sharedEndAt).getDate()).toBe(2)
+    expect(splitIsoToDateAndTime(sharedStartAt)).toEqual({ date: '2026-07-01', time: '09:00' })
+    expect(splitIsoToDateAndTime(sharedEndAt)).toEqual({ date: '2026-07-02', time: '10:00' })
   })
 
   it('maps timed one-shot datetimes from combine helper', () => {
     const iso = combineDateTimeToIso('2026-07-01', '09:30', 'start')
-    expect(iso).toBeTruthy()
-    expect(new Date(iso).getHours()).toBe(9)
+    expect(iso).toBe('2026-07-01T07:30:00.000Z')
+    expect(splitIsoToDateAndTime(iso)).toEqual({ date: '2026-07-01', time: '09:30' })
   })
 
   it('maps repeat draft to schedule', () => {
@@ -138,19 +137,19 @@ describe('action-plan-event-planning-form', () => {
   })
 
   it('resolves now start with five-minute snap and day rollover', () => {
-    vi.setSystemTime(new Date(2026, 6, 19, 10, 2, 0))
+    vi.setSystemTime(new Date('2026-07-19T08:02:00.000Z'))
     expect(resolveNowStartForPlanning()).toEqual({
       date: '2026-07-19',
       time: '10:00',
     })
 
-    vi.setSystemTime(new Date(2026, 6, 19, 10, 3, 0))
+    vi.setSystemTime(new Date('2026-07-19T08:03:00.000Z'))
     expect(resolveNowStartForPlanning()).toEqual({
       date: '2026-07-19',
       time: '10:05',
     })
 
-    vi.setSystemTime(new Date(2026, 6, 19, 23, 58, 0))
+    vi.setSystemTime(new Date('2026-07-19T21:58:00.000Z'))
     expect(resolveNowStartForPlanning()).toEqual({
       date: '2026-07-20',
       time: '00:00',
@@ -324,6 +323,20 @@ describe('action-plan-event-planning-form', () => {
     expect(body?.start_date).toBe('2026-07-10')
   })
 
+  it('rejects an end datetime without a start datetime', () => {
+    const errors = validateActionPlanEventPlanningDraft({
+      ...createActionPlanEventPlanningDraft(),
+      endDate: '2026-07-02',
+      endTime: '10:00',
+    })
+    expect(errors.endDate).toBe('Une date de fin nécessite une date de début.')
+  })
+
+  it('allows an undated one-shot draft', () => {
+    const errors = validateActionPlanEventPlanningDraft(createActionPlanEventPlanningDraft())
+    expect(errors.endDate).toBeUndefined()
+  })
+
   it('skips global repeat validation when per-assignee chronology is enabled', () => {
     const errors = validateActionPlanEventPlanningDraft(
       {
@@ -402,5 +415,23 @@ describe('action-plan-event-planning-form', () => {
     )
 
     expect(errors.assignees).toBe('Ajoutez au moins un assigné pour lancer le plan.')
+  })
+
+  it('treats a dated draft without times as all-day', () => {
+    const draft = {
+      ...createActionPlanEventPlanningDraft(),
+      startDate: '2026-09-08',
+      endDate: '2026-09-08',
+      startTime: '',
+      endTime: '',
+    }
+    expect(isAllDayPlanningDraft(draft)).toBe(true)
+    expect(toUseRequestOptions(draft).allDay).toBe(true)
+    expect(
+      validateActionPlanEventPlanningDraft(
+        { ...draft, repeatEnabled: true, recurrenceDays: ['monday'], recurrenceEndDate: '2026-10-01' },
+        { allowRepeat: true },
+      ),
+    ).toEqual({})
   })
 })

@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 
 import {
   computeActionPlanDeadlineState,
+  formatActionPlanAllDayPeriodLabel,
   formatActionPlanEndAtLabel,
 } from '../lib/action-plan-display'
 import type { ActionPlanExecutionDetail } from '../types'
@@ -23,6 +24,19 @@ export function ActionPlanExecutionDetailDeadlineSection({
 }: ActionPlanExecutionDetailDeadlineSectionProps) {
   if (!execution.end_at) {
     return null
+  }
+
+  if (execution.all_day) {
+    return (
+      <TerrainCard className="space-y-2">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.04em] text-[#7D7B75]">
+          Deadline
+        </p>
+        <p className="text-sm text-[#555]">
+          {formatActionPlanAllDayPeriodLabel(execution.start_at, execution.end_at)}
+        </p>
+      </TerrainCard>
+    )
   }
 
   const deadlineState = computeActionPlanDeadlineState({

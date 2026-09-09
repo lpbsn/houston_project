@@ -35,6 +35,8 @@ from houston.action_plans.permissions import (
 )
 from houston.action_plans.services import (
     ValidatedAssigneePayload,
+    _assert_all_day_closed_window,
+    _assert_end_after_start,
     _lock_all_execution_tasks_after_execution,
     _lock_execution_for_write,
     _membership_display_name,
@@ -90,23 +92,6 @@ class ExecutionUpdateDiff:
     reassigned_to_membership_ids: set[uuid.UUID] = field(default_factory=set)
     unassigned_from_membership_ids: set[uuid.UUID] = field(default_factory=set)
     deadline_changed_membership_ids: set[uuid.UUID] = field(default_factory=set)
-
-
-def _assert_end_after_start(
-    *,
-    start_at: datetime | None,
-    end_at: datetime | None,
-) -> None:
-    if end_at is None:
-        return
-    if start_at is None:
-        raise ActionPlanValidationError(
-            "End datetime requires a start datetime."
-        )
-    if end_at <= start_at:
-        raise ActionPlanValidationError(
-            "End datetime must be after start datetime."
-        )
 
 
 def _manager_can_manage_bu(
@@ -166,6 +151,7 @@ def update_action_plan_execution(
     end_at: datetime | None | object = ...,
     assignees: list[dict] | None = None,
     pending_tasks: list[dict] | None = None,
+    all_day: bool | None = None,
 ) -> ActionPlanExecution:
     execution = _lock_execution_for_write(execution_id=execution_id)
     locked_tasks = _lock_all_execution_tasks_after_execution(execution=execution)
@@ -230,6 +216,14 @@ def update_action_plan_execution(
             execution.end_at = end_at
             update_fields.append("end_at")
             diff.end_at_changed = True
+    if all_day is not None and all_day != execution.all_day:
+        execution.all_day = all_day
+        update_fields.append("all_day")
+    _assert_all_day_closed_window(
+        all_day=execution.all_day,
+        start_at=execution.start_at,
+        end_at=execution.end_at,
+    )
 
     final_assignee_rows = _resolve_final_assignees(
         actor=actor,

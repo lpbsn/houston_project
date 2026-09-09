@@ -27,6 +27,8 @@ function getSidebarAriaLabel(state: ActionPlanFeedSidebarState): string {
       return 'Sans échéance'
     case 'no_start':
       return 'Sans date de début'
+    case 'all_day':
+      return 'Journée entière'
     case 'overdue':
       return `Échéance dépassée de ${state.value}`
   }
@@ -111,6 +113,11 @@ export function ActionPlanFeedSidebar({
           </span>
           <span className="mt-0.5 text-xl font-bold leading-none tabular-nums">{state.value}</span>
         </>
+      ) : null}
+      {state.variant === 'all_day' ? (
+        <span className="px-1 text-center text-[10px] font-semibold uppercase leading-tight tracking-wide">
+          Journée entière
+        </span>
       ) : null}
       {state.variant === 'no_deadline' || state.variant === 'no_start' ? (
         <SidebarIconCircle>

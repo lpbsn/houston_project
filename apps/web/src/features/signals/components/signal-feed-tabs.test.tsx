@@ -17,21 +17,22 @@ afterEach(() => {
 })
 
 describe('SignalFeedTabs', () => {
-  it('renders Ma zone and Vue globale labels', () => {
+  it('renders Ma zone and Vue globale as segmented tabs', () => {
     render(<SignalFeedTabs viewMode="personal" onChange={onChange} />)
 
-    expect(screen.getByRole('button', { name: /ma zone/i })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /vue globale/i })).toBeTruthy()
+    expect(screen.getByRole('tablist', { name: 'Mode de vue' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'Ma zone' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('tab', { name: 'Vue globale' }).getAttribute('aria-selected')).toBe('false')
   })
 
   it('calls onChange when switching tabs', () => {
     const { rerender } = render(<SignalFeedTabs viewMode="personal" onChange={onChange} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /vue globale/i }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Vue globale' }))
     expect(onChange).toHaveBeenCalledWith('general' satisfies SignalViewMode)
 
     rerender(<SignalFeedTabs viewMode="general" onChange={onChange} />)
-    fireEvent.click(screen.getByRole('button', { name: /ma zone/i }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Ma zone' }))
     expect(onChange).toHaveBeenCalledWith('personal' satisfies SignalViewMode)
   })
 })

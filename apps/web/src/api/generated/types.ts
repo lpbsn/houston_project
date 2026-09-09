@@ -524,6 +524,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cross/action-plan-execution-calendar/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_cross_action_plan_execution_calendar_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cross/action-plan-execution-feed/": {
         parameters: {
             query?: never;
@@ -599,6 +615,22 @@ export interface paths {
         put?: never;
         /** @description Creates a DRAFT establishment in a manageable organization (Owner on ACTIVE or DRAFT). Uses the session-selected establishment's organization when present and authorized; otherwise the actor's unique manageable organization. Seeds organizational owners and starts onboarding atomically. Body accepts only the establishment name. */
         post: operations["v1_establishments_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/action-plan-execution-calendar/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_action_plan_execution_calendar_retrieve"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2638,6 +2670,8 @@ export interface components {
             visible_from?: string | null;
             /** Format: date */
             occurrence_date?: string | null;
+            /** @default false */
+            all_day: boolean;
             schedule?: components["schemas"]["ActionPlanScheduleCreateRequest"] | null;
             /** Format: uuid */
             submission_id?: string;
@@ -2676,6 +2710,11 @@ export interface components {
             /** Format: date-time */
             end_at?: string | null;
         };
+        ActionPlanExecutionCalendarResponse: {
+            timezone: string;
+            items: components["schemas"]["ActionPlanExecutionFeedItemWrapper"][];
+            unplanned: components["schemas"]["ActionPlanExecutionFeedItemWrapper"][];
+        };
         ActionPlanExecutionDetail: {
             /** Format: uuid */
             id: string;
@@ -2700,6 +2739,7 @@ export interface components {
             visible_from: string | null;
             /** Format: date-time */
             end_at: string | null;
+            all_day: boolean;
             /** Format: date */
             occurrence_date: string | null;
             /** Format: date-time */
@@ -2774,6 +2814,7 @@ export interface components {
             start_at: string | null;
             /** Format: date-time */
             end_at: string | null;
+            all_day: boolean;
             is_overdue: boolean;
             task_count: number;
             treated_task_count: number;
@@ -2882,6 +2923,8 @@ export interface components {
             /** Format: date */
             end_date?: string | null;
             recurrence_days?: string[];
+            /** @default false */
+            all_day: boolean;
         };
         ActionPlanPlanningResourceResult: {
             /** Format: uuid */
@@ -2929,9 +2972,11 @@ export interface components {
             /** Format: date */
             end_date: string;
             /** Format: time */
-            start_at: string;
+            start_at?: string | null;
             /** Format: time */
-            end_at: string;
+            end_at?: string | null;
+            /** @default false */
+            all_day: boolean;
             recurrence_days: string[];
             assignees?: components["schemas"]["ActionPlanScheduleAssigneeInput"][];
             /** @default false */
@@ -2952,6 +2997,7 @@ export interface components {
             start_at: string;
             /** Format: time */
             end_at: string;
+            all_day: boolean;
             recurrence_days: string[];
             /** Format: uuid */
             created_by_id: string;
@@ -4571,6 +4617,7 @@ export interface components {
             requires_validation?: boolean;
             /** Format: date-time */
             end_at?: string | null;
+            all_day?: boolean;
             assignees?: components["schemas"]["ActionPlanExecutionAssigneeUpdate"][];
             pending_tasks?: components["schemas"]["ActionPlanExecutionPendingTaskUpdate"][];
         };
@@ -4586,6 +4633,7 @@ export interface components {
             recurrence_days?: string[];
             assignees?: components["schemas"]["ActionPlanScheduleAssigneeInput"][];
             use_shared_chronology?: boolean;
+            all_day?: boolean;
         };
         PatchedActionPlanUpdateRequest: {
             title?: string;
@@ -6544,12 +6592,65 @@ export interface operations {
             };
         };
     };
+    v1_cross_action_plan_execution_calendar_retrieve: {
+        parameters: {
+            query: {
+                establishment_id?: string;
+                /** @description Inclusive civil start date (YYYY-MM-DD). */
+                from: string;
+                /** @description Inclusive civil end date (YYYY-MM-DD). */
+                to: string;
+                /** @description Defaults to general. */
+                view_mode?: "general" | "personal";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPlanExecutionCalendarResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     v1_cross_action_plan_execution_feed_retrieve: {
         parameters: {
             query?: {
                 cursor?: string;
                 establishment_id?: string;
                 page_size?: number;
+                /** @description Defaults to general. */
+                view_mode?: "general" | "personal";
             };
             header?: never;
             path?: never;
@@ -6780,6 +6881,57 @@ export interface operations {
                 };
             };
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_action_plan_execution_calendar_retrieve: {
+        parameters: {
+            query: {
+                /** @description Inclusive civil start date (YYYY-MM-DD) in the establishment timezone. */
+                from: string;
+                /** @description Inclusive civil end date (YYYY-MM-DD) in the establishment timezone. */
+                to: string;
+                view_mode: "general" | "personal";
+            };
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPlanExecutionCalendarResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

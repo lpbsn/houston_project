@@ -3,7 +3,7 @@ import { LoaderCircle } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
-import { TerrainHubViewToolbar } from '@/components/layout/terrain-hub-view-toolbar'
+import { TerrainHubTitleSlot } from '@/components/layout/terrain-hub-title-slot'
 import {
   TerrainCollapsibleFeedSection,
   TerrainEmptyState,
@@ -111,12 +111,12 @@ export function SignalFeedPage({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      <TerrainHubTitleSlot enabled={!isCross}>
+        <SignalFeedTabs viewMode={viewMode} onChange={setViewMode} />
+      </TerrainHubTitleSlot>
       <TerrainHubSubheader>
         {isCross ? null : (
           <>
-            <TerrainHubViewToolbar>
-              <SignalFeedTabs viewMode={viewMode} onChange={setViewMode} />
-            </TerrainHubViewToolbar>
             <SignalFeedFiltersBar
               establishmentId={establishmentId}
               filters={filters}

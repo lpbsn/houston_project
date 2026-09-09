@@ -80,6 +80,8 @@ function StatefulPlanningHarness({
   )
 }
 
+const PARIS_NOW_1002 = '2026-07-19T08:02:00.000Z'
+
 describe('ActionPlanEventPlanningForm', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -170,11 +172,13 @@ describe('ActionPlanEventPlanningForm', () => {
     expect(screen.queryByText('Assignés')).toBeNull()
   })
 
-  it('always shows start and end time pills in global mode', () => {
+  it('shows start and end time pills when hours are set', () => {
     renderForm({
       ...createActionPlanEventPlanningDraft(),
       startDate: '2026-07-04',
       endDate: '2026-07-04',
+      startTime: '09:00',
+      endTime: '10:00',
     })
     expect(screen.getByLabelText('Début — heure')).toBeTruthy()
     expect(screen.getByLabelText('Fin — heure')).toBeTruthy()
@@ -365,7 +369,7 @@ describe('ActionPlanEventPlanningForm', () => {
   })
 
   it('fills shared start from Maintenant without changing end', () => {
-    vi.setSystemTime(new Date(2026, 6, 19, 10, 2, 0))
+    vi.setSystemTime(new Date(PARIS_NOW_1002))
     const initial = {
       ...createActionPlanEventPlanningDraft(),
       startDate: '2026-07-01',
@@ -389,7 +393,7 @@ describe('ActionPlanEventPlanningForm', () => {
   })
 
   it('updates only the targeted assignee start with Maintenant', () => {
-    vi.setSystemTime(new Date(2026, 6, 19, 10, 2, 0))
+    vi.setSystemTime(new Date(PARIS_NOW_1002))
     const onDraftChange = vi.fn()
     const first = createActionPlanAssigneeDraft({
       membershipId: 'm1',
@@ -426,7 +430,7 @@ describe('ActionPlanEventPlanningForm', () => {
   })
 
   it('keeps both patches from the same render before any intermediate rerender', () => {
-    vi.setSystemTime(new Date(2026, 6, 19, 10, 2, 0))
+    vi.setSystemTime(new Date(PARIS_NOW_1002))
     const initial = {
       ...createActionPlanEventPlanningDraft(),
       startDate: '2026-07-01',
@@ -460,5 +464,42 @@ describe('ActionPlanEventPlanningForm', () => {
       endTime: '18:00',
       repeatEnabled: true,
     })
+  })
+
+  it('toggles journée entière without requiring hours', () => {
+    const onDraftChange = vi.fn()
+    const initial = {
+      ...createActionPlanEventPlanningDraft(),
+      startDate: '2026-09-08',
+      endDate: '2026-09-08',
+      startTime: '09:00',
+      endTime: '10:00',
+    }
+    renderForm(initial, baseConfig, onDraftChange)
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Journée entière' }))
+    expect(resolveDraftUpdate(onDraftChange.mock.calls[0][0], initial)).toEqual(
+      expect.objectContaining({
+        startDate: '2026-09-08',
+        endDate: '2026-09-08',
+        startTime: '',
+        endTime: '',
+      }),
+    )
+  })
+
+  it('hides time pickers when the draft is all-day', () => {
+    renderForm({
+      ...createActionPlanEventPlanningDraft(),
+      startDate: '2026-09-08',
+      endDate: '2026-09-08',
+      startTime: '',
+      endTime: '',
+    })
+    expect(screen.getByRole('switch', { name: 'Journée entière' }).getAttribute('aria-checked')).toBe(
+      'true',
+    )
+    expect(screen.queryByLabelText('Début — heure')).toBeNull()
+    expect(screen.queryByLabelText('Fin — heure')).toBeNull()
   })
 })

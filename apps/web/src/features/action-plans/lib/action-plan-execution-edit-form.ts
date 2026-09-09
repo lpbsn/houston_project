@@ -5,6 +5,7 @@ import type {
 } from '../types'
 import {
   createActionPlanEventPlanningDraft,
+  isAllDayPlanningDraft,
   splitIsoToDateAndTime,
   toSharedChronologyFields,
   type ActionPlanEventPlanningDraft,
@@ -120,9 +121,13 @@ export function hydrateActionPlanExecutionEditForm(
     const start = splitIsoToDateAndTime(execution.start_at ?? '')
     const end = splitIsoToDateAndTime(execution.end_at ?? '')
     planningDraft.startDate = start.date
-    planningDraft.startTime = start.time
+    planningDraft.startTime = execution.all_day ? '' : start.time
     planningDraft.endDate = end.date
-    planningDraft.endTime = end.time
+    planningDraft.endTime = execution.all_day ? '' : end.time
+  }
+
+  if (execution.all_day) {
+    planningDraft.assignees = assignees.map((assignee) => ({ ...assignee, allDay: true }))
   }
 
   return {
@@ -344,6 +349,12 @@ export function buildActionPlanExecutionUpdateRequest(
   if (values.useSharedChronology) {
     const { sharedEndAt } = toSharedChronologyFields(values.planningDraft)
     body.end_at = sharedEndAt ? toIsoDateTime(sharedEndAt) : null
+    body.all_day = isAllDayPlanningDraft(values.planningDraft)
+  } else {
+    const validAssignees = values.planningDraft.assignees.filter(
+      (assignee) => assignee.membershipId && assignee.businessUnitId,
+    )
+    body.all_day = validAssignees.length > 0 && validAssignees.every((assignee) => assignee.allDay)
   }
 
   return body

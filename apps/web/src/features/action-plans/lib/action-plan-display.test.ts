@@ -128,6 +128,7 @@ function buildExecutionDetail(
     created_by_display_name: 'Marie R.',
     use_shared_chronology: true,
     start_at: null,
+    all_day: false,
     visible_from: null,
     end_at: null,
     occurrence_date: null,

@@ -3,6 +3,7 @@ import { LoaderCircle } from 'lucide-react'
 
 import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
+import { appendExecutionFeedSearch } from '@/features/execution/lib/execution-feed-url-state'
 import { TerrainFeedback } from '@/components/domain/terrain-feedback'
 import {
   TerrainCard,
@@ -43,14 +44,17 @@ type ActionPlanExecutionEditPageProps = {
 }
 
 export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecutionEditPageProps) {
-  const { navigate } = useAppRoute()
+  const { navigate, search } = useAppRoute()
   const auth = useAuth()
   const establishmentId = auth.activeMembership?.establishment_id ?? null
   const role = auth.activeMembership?.role ?? null
   const membershipId = auth.activeMembership?.id
   const staffMode = role === 'staff'
   const canCrossPole = canDefineCrossPoleTasks(role)
-  const detailBackPath = `/action-plans/executions/${executionId}`
+  const detailBackPath = appendExecutionFeedSearch(
+    `/action-plans/executions/${executionId}`,
+    search,
+  )
 
   const detailQuery = useActionPlanExecutionDetailQuery(establishmentId, executionId)
   const [form, setForm] = useState<ActionPlanExecutionEditFormValues | null>(null)
@@ -104,6 +108,7 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
     staffMode,
     membershipId,
     onNavigate: navigate,
+    returnPath: detailBackPath,
     onConflictReload: async () => {
       const result = await detailQuery.refetch()
       if (result.data) {

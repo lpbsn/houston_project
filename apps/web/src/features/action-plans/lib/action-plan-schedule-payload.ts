@@ -62,14 +62,15 @@ export function buildActionPlanScheduleCreateRequest(options: {
   schedule: ActionPlanScheduleDraft
   assignees?: ActionPlanAssigneeDraft[]
   useSharedChronology?: boolean
+  allDay?: boolean
 }): ActionPlanScheduleCreateRequest | undefined {
-  const { schedule, assignees = [], useSharedChronology = true } = options
+  const { schedule, assignees = [], useSharedChronology = true, allDay = false } = options
   if (!isActionPlanScheduleConfigured(schedule)) {
     return undefined
   }
 
-  const startAt = toScheduleTime(schedule.startAt)
-  const endAt = toScheduleTime(schedule.endAt)
+  const startAt = toScheduleTime(allDay ? '00:00' : schedule.startAt)
+  const endAt = toScheduleTime(allDay ? '23:59' : schedule.endAt)
   if (!startAt || !endAt) {
     return undefined
   }
@@ -79,6 +80,7 @@ export function buildActionPlanScheduleCreateRequest(options: {
     end_date: schedule.endDate.trim(),
     start_at: startAt,
     end_at: endAt,
+    all_day: allDay,
     recurrence_days: [...schedule.recurrenceDays],
     assignees: buildScheduleAssigneePayloads(assignees, useSharedChronology),
     use_shared_chronology: useSharedChronology,

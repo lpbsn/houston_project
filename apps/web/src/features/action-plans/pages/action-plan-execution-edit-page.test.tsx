@@ -15,6 +15,7 @@ const revalidateFrontendMock = vi.fn()
 const submitHookState = {
   hasAttemptedSubmit: false,
 }
+const editRouteState = { search: '' }
 
 function buildExecution(
   overrides: Partial<ActionPlanExecutionDetail> = {},
@@ -41,6 +42,7 @@ function buildExecution(
     created_by_display_name: 'Alice',
     use_shared_chronology: true,
     start_at: '2026-07-01T08:00:00.000Z',
+    all_day: false,
     visible_from: '2026-07-01T08:00:00.000Z',
     end_at: '2026-07-01T18:00:00.000Z',
     occurrence_date: null,
@@ -111,6 +113,7 @@ vi.mock('@/app/app-routes', () => ({
   useAppRoute: () => ({
     navigate: navigateMock,
     route: { kind: 'action-plan-execution-edit', executionId: 'exec-1' },
+    search: editRouteState.search,
   }),
 }))
 
@@ -152,6 +155,7 @@ vi.mock('../hooks/use-action-plan-execution-edit-submit', () => ({
 describe('ActionPlanExecutionEditPage guards', () => {
   beforeEach(() => {
     submitHookState.hasAttemptedSubmit = false
+    editRouteState.search = ''
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -219,6 +223,16 @@ describe('ActionPlanExecutionEditPage guards', () => {
     )
     expect(form).toBeTruthy()
     expect(form!.contains(screen.getAllByRole('textbox')[0]!)).toBe(true)
+  })
+
+  it('returns to the detail with calendar search', async () => {
+    editRouteState.search = '?layout=calendar&granularity=week&anchor=2026-09-08'
+    render(createElement(ActionPlanExecutionEditPage, { executionId: 'exec-1' }))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Retour' }))
+    expect(navigateMock).toHaveBeenCalledWith(
+      '/action-plans/executions/exec-1?layout=calendar&granularity=week&anchor=2026-09-08',
+    )
   })
 
   it('keeps local draft edits when detail refetch returns a newer updated_at', async () => {

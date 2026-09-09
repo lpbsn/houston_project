@@ -136,6 +136,7 @@ describe('buildActionPlanCreateRequest', () => {
       start_at: null,
       end_at: null,
       visible_from: null,
+      all_day: false,
     })
     expect(request).not.toHaveProperty('schedule')
   })

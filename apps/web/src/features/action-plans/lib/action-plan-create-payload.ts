@@ -113,6 +113,7 @@ export function buildDirectPlanningCreateRequest(
     start_at: null,
     end_at: null,
     visible_from: null,
+    all_day: false,
     submission_id: planning.submissionId,
     items: planning.items,
   }
@@ -135,6 +136,7 @@ export function buildActionPlanCreateRequest(
       start_at: null,
       end_at: null,
       visible_from: null,
+      all_day: false,
       ...(values.sourceSignalId ? { source_signal_id: values.sourceSignalId } : {}),
     }
   }
@@ -173,6 +175,7 @@ export function buildActionPlanCreateRequest(
     ...(values.sourceSignalId ? { source_signal_id: values.sourceSignalId } : {}),
     ...(trimmedFocus ? { issue_focus: trimmedFocus } : {}),
     ...(schedule ? { schedule } : {}),
+    all_day: values.useSharedChronology ? Boolean(values.allDay) : false,
   }
 }
 
@@ -182,6 +185,7 @@ export function buildActionPlanUseRequest(options: {
   sharedStartAt: string
   sharedEndAt: string
   sharedVisibleFrom: string
+  allDay?: boolean
 }): ActionPlanUseRequest {
   return {
     assignees: buildAssigneePayloads(options.assignees, {
@@ -196,5 +200,6 @@ export function buildActionPlanUseRequest(options: {
     visible_from: options.useSharedChronology
       ? toIsoDateTime(options.sharedVisibleFrom) ?? null
       : null,
+    all_day: options.allDay ?? false,
   }
 }

@@ -32,6 +32,7 @@ describe('buildActionPlanScheduleCreateRequest', () => {
       recurrence_days: ['monday', 'wednesday'],
       assignees: [],
       use_shared_chronology: true,
+      all_day: false,
     })
   })
 

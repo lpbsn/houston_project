@@ -1,3 +1,4 @@
+import { combineCivilDateTimeToIso, splitIsoToCivil, todayCivilDate } from '@/lib/business-timezone'
 import type { ActionPlanRecurrenceDay } from './action-plan-schedule-constants'
 import { ACTION_PLAN_RECURRENCE_DAY_LABELS } from './action-plan-schedule-constants'
 import type { ActionPlanAssigneeDraft } from './action-plan-form-validation'
@@ -73,6 +74,17 @@ function resolveEffectiveTime(
   return part === 'start' ? draft.startTime.trim() : draft.endTime.trim()
 }
 
+export function isAllDayPlanningTimes(startTime: string, endTime: string): boolean {
+  return !startTime.trim() && !endTime.trim()
+}
+
+export function isAllDayPlanningDraft(draft: ActionPlanEventPlanningDraft): boolean {
+  if (!draft.startDate.trim()) {
+    return false
+  }
+  return isAllDayPlanningTimes(draft.startTime, draft.endTime)
+}
+
 export function combineDateTimeToIso(
   date: string,
   time: string,
@@ -84,14 +96,10 @@ export function combineDateTimeToIso(
   }
   const effectiveTime =
     time.trim() || (part === 'start' ? ALL_DAY_START_TIME : ALL_DAY_END_TIME)
-  const parsed = Date.parse(`${trimmedDate}T${effectiveTime}`)
-  if (Number.isNaN(parsed)) {
-    return ''
+  if (part === 'end' && (time.trim() === ALL_DAY_END_TIME || !time.trim())) {
+    return combineCivilDateTimeToIso(trimmedDate, '23:59:59')
   }
-  if (part === 'end' && effectiveTime === ALL_DAY_END_TIME) {
-    return new Date(`${trimmedDate}T23:59:59`).toISOString()
-  }
-  return new Date(parsed).toISOString()
+  return combineCivilDateTimeToIso(trimmedDate, effectiveTime)
 }
 
 function addOneCalendarDay(date: string): string {
@@ -137,14 +145,10 @@ export function snapDateAndTimeToFiveMinutes(parts: {
 }
 
 export function resolveNowStartForPlanning(now: Date = new Date()): { date: string; time: string } {
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  const hours = String(now.getHours()).padStart(2, '0')
-  const minutes = String(now.getMinutes()).padStart(2, '0')
+  const civil = splitIsoToCivil(now.toISOString())
   return snapDateAndTimeToFiveMinutes({
-    date: `${year}-${month}-${day}`,
-    time: `${hours}:${minutes}`,
+    date: civil.date || todayCivilDate(undefined, now),
+    time: civil.time,
   })
 }
 
@@ -165,8 +169,12 @@ export function toScheduleDraft(draft: ActionPlanEventPlanningDraft): ActionPlan
   if (!hasGlobalRepeat(draft)) {
     return createActionPlanScheduleDraft()
   }
-  const startTime = resolveEffectiveTime(draft, 'start')
-  const endTime = resolveEffectiveTime(draft, 'end')
+  const startTime = isAllDayPlanningDraft(draft)
+    ? ALL_DAY_START_TIME
+    : resolveEffectiveTime(draft, 'start')
+  const endTime = isAllDayPlanningDraft(draft)
+    ? ALL_DAY_END_TIME
+    : resolveEffectiveTime(draft, 'end')
   return {
     enabled: true,
     recurrenceDays: [...draft.recurrenceDays],
@@ -202,6 +210,7 @@ export function toUseRequestOptions(draft: ActionPlanEventPlanningDraft): {
   sharedStartAt: string
   sharedEndAt: string
   sharedVisibleFrom: string
+  allDay: boolean
 } {
   const { sharedStartAt, sharedEndAt } = toSharedChronologyFields(draft)
   return {
@@ -210,6 +219,7 @@ export function toUseRequestOptions(draft: ActionPlanEventPlanningDraft): {
     sharedStartAt,
     sharedEndAt,
     sharedVisibleFrom: '',
+    allDay: isAllDayPlanningDraft(draft),
   }
 }
 
@@ -274,19 +284,13 @@ export function formatDatePillLabel(date: string): string {
 }
 
 export function splitIsoToDateAndTime(iso: string): { date: string; time: string } {
-  if (!iso.trim()) {
+  const civil = splitIsoToCivil(iso)
+  if (!civil.date) {
     return { date: '', time: '' }
   }
-  const parsed = new Date(iso)
-  if (Number.isNaN(parsed.getTime())) {
-    return { date: '', time: '' }
-  }
-  const offset = parsed.getTimezoneOffset()
-  const local = new Date(parsed.getTime() - offset * 60_000)
-  const isoLocal = local.toISOString()
   return {
-    date: isoLocal.slice(0, 10),
-    time: snapTimeToFiveMinutes(isoLocal.slice(11, 16)),
+    date: civil.date,
+    time: snapTimeToFiveMinutes(civil.time),
   }
 }
 
@@ -363,6 +367,7 @@ export function buildScheduleRequestForAssignee(
     schedule,
     assignees: options.staffMode ? [] : [assignee],
     useSharedChronology: false,
+    allDay: assignee.allDay || isAllDayPlanningTimes(startParts.time, endTime),
   })
 }
 
@@ -375,6 +380,7 @@ export function buildScheduleRequestsFromDraft(
       schedule: toScheduleDraft(draft),
       assignees: options.staffMode ? [] : draft.assignees,
       useSharedChronology: true,
+      allDay: isAllDayPlanningDraft(draft),
     })
     return body ? [body] : []
   }
@@ -412,6 +418,7 @@ export function buildUseRequestFromDraft(
     sharedStartAt,
     sharedEndAt,
     sharedVisibleFrom: '',
+    allDay: isAllDayPlanningDraft(draft),
   })
 }
 
@@ -433,6 +440,7 @@ export function buildUseRequestForAssignee(
     sharedStartAt: startAt,
     sharedEndAt: endAt,
     sharedVisibleFrom: '',
+    allDay: assignee.allDay,
   })
 }
 
@@ -466,14 +474,16 @@ export function validateAssigneePlanningAction(
     if (!startParts.date.trim()) {
       errors[key('startDate')] = 'La date de début est requise.'
     }
-    if (!startParts.time) {
-      errors[key('startTime')] = "L'heure de début est requise."
-    }
-    if (!endParts.time) {
-      errors[key('endTime')] = "L'heure de fin du créneau est requise."
-    }
-    if (startParts.time && endParts.time && endParts.time <= startParts.time) {
-      errors[key('endTime')] = "L'heure de fin doit être après l'heure de début."
+    if (!assignee.allDay && !isAllDayPlanningTimes(startParts.time, endParts.time)) {
+      if (!startParts.time) {
+        errors[key('startTime')] = "L'heure de début est requise."
+      }
+      if (!endParts.time) {
+        errors[key('endTime')] = "L'heure de fin du créneau est requise."
+      }
+      if (startParts.time && endParts.time && endParts.time <= startParts.time) {
+        errors[key('endTime')] = "L'heure de fin doit être après l'heure de début."
+      }
     }
     if (assignee.recurrenceDays.length === 0) {
       errors[key('recurrenceDays')] = 'Sélectionnez au moins un jour.'
@@ -495,14 +505,16 @@ export function validateAssigneePlanningAction(
   if (!startParts.date.trim()) {
     errors[key('startDate')] = 'La date de début est requise.'
   }
-  if (!startParts.time) {
-    errors[key('startTime')] = "L'heure de début est requise."
-  }
   if (!endParts.date.trim()) {
     errors[key('endDate')] = 'La date de fin est requise.'
   }
-  if (!endParts.time) {
-    errors[key('endTime')] = "L'heure de fin est requise."
+  if (!assignee.allDay && !isAllDayPlanningTimes(startParts.time, endParts.time)) {
+    if (!startParts.time) {
+      errors[key('startTime')] = "L'heure de début est requise."
+    }
+    if (!endParts.time) {
+      errors[key('endTime')] = "L'heure de fin est requise."
+    }
   }
 
   const startAt =
@@ -578,7 +590,13 @@ export function validateActionPlanEventPlanningDraft(
 
   if (!hasGlobalRepeat(draft)) {
     const { sharedStartAt, sharedEndAt } = toSharedChronologyFields(draft)
-    if (sharedStartAt && sharedEndAt && Date.parse(sharedEndAt) <= Date.parse(sharedStartAt)) {
+    if (sharedEndAt && !sharedStartAt) {
+      errors.endDate = 'Une date de fin nécessite une date de début.'
+    } else if (
+      sharedStartAt &&
+      sharedEndAt &&
+      Date.parse(sharedEndAt) <= Date.parse(sharedStartAt)
+    ) {
       errors.endDate = 'La fin doit être postérieure au début.'
     }
     return errors
@@ -603,16 +621,18 @@ export function validateActionPlanEventPlanningDraft(
     errors.recurrenceEndDate = 'La fin de récurrence doit être postérieure ou égale au début.'
   }
 
-  const startTime = resolveEffectiveTime(draft, 'start')
-  const endTime = resolveEffectiveTime(draft, 'end')
-  if (!startTime) {
-    errors.startTime = "L'heure de début est requise."
-  }
-  if (!endTime) {
-    errors.endTime = "L'heure de fin est requise."
-  }
-  if (startTime && endTime && endTime <= startTime) {
-    errors.endTime = "L'heure de fin doit être après l'heure de début."
+  if (!isAllDayPlanningDraft(draft)) {
+    const startTime = resolveEffectiveTime(draft, 'start')
+    const endTime = resolveEffectiveTime(draft, 'end')
+    if (!startTime) {
+      errors.startTime = "L'heure de début est requise."
+    }
+    if (!endTime) {
+      errors.endTime = "L'heure de fin est requise."
+    }
+    if (startTime && endTime && endTime <= startTime) {
+      errors.endTime = "L'heure de fin doit être après l'heure de début."
+    }
   }
 
   return errors

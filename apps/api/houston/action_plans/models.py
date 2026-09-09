@@ -197,6 +197,7 @@ class ActionPlanSchedule(BaseModel):
     end_date = models.DateField()
     start_at = models.TimeField()
     end_at = models.TimeField()
+    all_day = models.BooleanField(default=False)
     recurrence_days = models.JSONField(default=list, blank=True)
     status = models.CharField(
         max_length=16,
@@ -345,6 +346,7 @@ class ActionPlanExecution(BaseModel):
     start_at = models.DateTimeField(null=True, blank=True)
     visible_from = models.DateTimeField(null=True, blank=True)
     end_at = models.DateTimeField(null=True, blank=True)
+    all_day = models.BooleanField(default=False)
     last_activity_at = models.DateTimeField()
     availability_notified_at = models.DateTimeField(null=True, blank=True)
     marked_done_by_membership = models.ForeignKey(

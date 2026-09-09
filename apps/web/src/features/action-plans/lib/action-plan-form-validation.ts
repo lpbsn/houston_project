@@ -61,6 +61,7 @@ export type ActionPlanAssigneeDraft = {
   repeatEnabled: boolean
   recurrenceDays: ActionPlanRecurrenceDay[]
   recurrenceEndDate: string
+  allDay: boolean
 }
 
 export function createActionPlanAssigneeDraft(
@@ -77,6 +78,7 @@ export function createActionPlanAssigneeDraft(
     repeatEnabled: partial.repeatEnabled ?? false,
     recurrenceDays: partial.recurrenceDays ?? [],
     recurrenceEndDate: partial.recurrenceEndDate ?? '',
+    allDay: partial.allDay ?? false,
   }
 }
 
@@ -96,6 +98,7 @@ export type ActionPlanCreateFormValues = {
   sourceSignalId?: string | null
   /** Linked create only: required when effective routing becomes resolved without signal focus. */
   issueFocus?: string
+  allDay?: boolean
 }
 
 /** Flat field-error map (includes per-task keys `tasks.<id>.<field>`). */

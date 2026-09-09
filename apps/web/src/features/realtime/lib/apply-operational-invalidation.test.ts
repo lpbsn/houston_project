@@ -126,7 +126,16 @@ describe('applyOperationalInvalidation', () => {
       expect(invalidateSpy).toHaveBeenCalledWith({
         queryKey: ['action-plans', 'action-plan-execution-feed', 'est-1'],
       })
-      expect(invalidateSpy).toHaveBeenCalledTimes(2)
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ['action-plans', 'action-plan-execution-calendar', 'est-1'],
+      })
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ['action-plans', 'cross-action-plan-execution-feed'],
+      })
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ['action-plans', 'cross-action-plan-execution-calendar'],
+      })
+      expect(invalidateSpy).toHaveBeenCalledTimes(5)
     } else {
       expect(invalidateSpy).toHaveBeenCalledOnce()
     }

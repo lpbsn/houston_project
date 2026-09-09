@@ -393,6 +393,7 @@ def _create_individual_execution(
         start_at=owner.start_at,
         end_at=owner.end_at,
         visible_from=owner.visible_from,
+        all_day=bool(item.get("all_day", False)),
         affected_business_unit=action_plan.affected_business_unit,
         responsible_business_unit=action_plan.responsible_business_unit,
         activity_subject=action_plan.activity_subject,
@@ -422,6 +423,7 @@ def _create_shared_execution(
         end_at=item.get("end_at"),
         visible_from=item.get("visible_from"),
         occurrence_date=item.get("occurrence_date"),
+        all_day=bool(item.get("all_day", False)),
         emit_side_effects=False,
     )
 
@@ -432,19 +434,26 @@ def _require_schedule_item_fields(item: dict) -> tuple[object, object, object, l
     start_at = item.get("start_at")
     end_at = item.get("end_at")
     recurrence_days = item.get("recurrence_days")
+    all_day = bool(item.get("all_day", False))
     missing: list[str] = []
     if end_date is None:
         missing.append("end_date")
-    if start_at is None or (isinstance(start_at, str) and not str(start_at).strip()):
-        missing.append("start_at")
-    if end_at is None or (isinstance(end_at, str) and not str(end_at).strip()):
-        missing.append("end_at")
+    if not all_day:
+        if start_at is None or (isinstance(start_at, str) and not str(start_at).strip()):
+            missing.append("start_at")
+        if end_at is None or (isinstance(end_at, str) and not str(end_at).strip()):
+            missing.append("end_at")
     if not recurrence_days:
         missing.append("recurrence_days")
     if missing:
         raise ActionPlanValidationError(
             f"Schedule item missing required fields: {', '.join(missing)}."
         )
+    if all_day:
+        if start_at is None or (isinstance(start_at, str) and not str(start_at).strip()):
+            start_at = None
+        if end_at is None or (isinstance(end_at, str) and not str(end_at).strip()):
+            end_at = None
     return end_date, start_at, end_at, list(recurrence_days)
 
 
@@ -487,6 +496,7 @@ def _create_schedule_from_item(
         recurrence_days=recurrence_days,
         assignees=assignees,
         use_shared_chronology=use_shared_chronology,
+        all_day=bool(item.get("all_day", False)),
         emit_side_effects=False,
     )
 

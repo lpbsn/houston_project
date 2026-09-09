@@ -10,24 +10,20 @@ afterEach(() => {
 })
 
 describe('ExecutionFeedTabs', () => {
-  it('applies brand active styling to the selected tab', () => {
+  it('exposes a segmented tablist for view mode', () => {
     const onChange = vi.fn()
     render(<ExecutionFeedTabs viewMode="personal" onChange={onChange} />)
 
-    const personalTab = screen.getByRole('button', { name: 'Ma vue' })
-    const globalTab = screen.getByRole('button', { name: 'Vue globale' })
-
-    expect(personalTab.className).toContain('uppercase')
-    expect(personalTab.className).toContain('bg-[#114660]')
-    expect(personalTab.className).toContain('border-[#114660]')
-    expect(globalTab.className).not.toContain('bg-[#114660]')
+    expect(screen.getByRole('tablist', { name: 'Mode de vue' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'Ma vue' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('tab', { name: 'Vue globale' }).getAttribute('aria-selected')).toBe('false')
   })
 
   it('calls onChange when a tab is clicked', () => {
     const onChange = vi.fn()
     render(<ExecutionFeedTabs viewMode="personal" onChange={onChange} />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Vue globale' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Vue globale' }))
 
     expect(onChange).toHaveBeenCalledWith('general')
   })

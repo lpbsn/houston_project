@@ -90,8 +90,17 @@ export function formatActionPlanFeedTaskProgressLabel(
 }
 
 export function formatActionPlanFeedMetaParts(
-  item: Pick<ActionPlanExecutionFeedItem, 'end_at' | 'task_count' | 'treated_task_count'>,
+  item: Pick<
+    ActionPlanExecutionFeedItem,
+    'end_at' | 'task_count' | 'treated_task_count' | 'all_day'
+  >,
 ): ActionPlanFeedMetaParts {
+  if (item.all_day) {
+    return {
+      deadlineLabel: 'Échéance : Journée entière',
+      taskProgressLabel: formatActionPlanFeedTaskProgressLabel(item),
+    }
+  }
   const endAtLabel = formatActionPlanEndAtLabel(item.end_at)
   return {
     deadlineLabel: endAtLabel ? `Échéance : ${endAtLabel}` : null,
@@ -102,6 +111,7 @@ export function formatActionPlanFeedMetaParts(
 export type ActionPlanFeedSidebarState =
   | { variant: 'countdown'; prefix: 'DANS'; value: string }
   | { variant: 'start_countdown'; prefix: 'DÉBUT'; value: string }
+  | { variant: 'all_day' }
   | { variant: 'no_deadline' }
   | { variant: 'no_start' }
   | { variant: 'overdue'; prefix: 'RETARD'; value: string }
@@ -137,7 +147,11 @@ export function formatActionPlanFeedStartCountdownValue(remainingMs: number): st
 export function getActionPlanFeedStartCountdownState(
   startAt: string | null | undefined,
   now: number,
+  allDay = false,
 ): ActionPlanFeedSidebarState {
+  if (allDay) {
+    return { variant: 'all_day' }
+  }
   if (!startAt) {
     return { variant: 'no_start' }
   }
@@ -158,7 +172,11 @@ export function getActionPlanFeedSidebarState(
   endAt: string | null,
   now: number,
   isOverdue = false,
+  allDay = false,
 ): ActionPlanFeedSidebarState {
+  if (allDay && !isOverdue) {
+    return { variant: 'all_day' }
+  }
   if (isOverdue) {
     const endMs = endAt ? Date.parse(endAt) : Number.NaN
     const overdueMs = Number.isNaN(endMs) ? 0 : Math.max(0, now - endMs)

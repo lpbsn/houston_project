@@ -467,6 +467,7 @@ def materialize_execution_from_schedule(
                 end_at=occurrence_end,
                 visible_from=visible_from,
                 occurrence_date=occurrence_date,
+                all_day=schedule.all_day,
                 affected_business_unit=action_plan.affected_business_unit,
                 responsible_business_unit=action_plan.responsible_business_unit,
                 activity_subject=action_plan.activity_subject,
@@ -843,4 +844,80 @@ def ensure_visible_action_plan_executions_materialized(
                 materialization_path=MATERIALIZATION_PATH_READ,
                 exc=exc,
             )
+    return count
+
+
+MATERIALIZATION_PATH_CALENDAR = "calendar"
+
+
+def materialize_visible_schedule_occurrences_in_window(
+    *,
+    membership: EstablishmentMembership,
+    view_mode: str,
+    from_date: date,
+    until_date: date,
+    now: datetime | None = None,
+) -> int:
+    """Materialize visible schedule occurrences in [from_date, until_date].
+
+    Dates before local today are skipped (no past backfill). Does not update
+    last_materialized_at. Uses emit_side_effects=False.
+    """
+    resolved_now = now or timezone.now()
+    local_today = establishment_local_date(
+        establishment=membership.establishment,
+        at=resolved_now,
+    )
+    if until_date < local_today:
+        return 0
+
+    window_start = max(from_date, local_today)
+    if window_start > until_date:
+        return 0
+
+    visibility_q = _schedule_materialization_visibility_q(
+        membership=membership,
+        view_mode=view_mode,
+    )
+    schedules = list(
+        ActionPlanSchedule.objects.filter(
+            visibility_q,
+            status=SCHEDULE_STATUS_ACTIVE,
+        )
+        .select_related("establishment", "action_plan")
+        .prefetch_related("schedule_assignees")
+        .distinct()
+    )
+    count = 0
+    for schedule in schedules:
+        try:
+            occurrence_dates = iter_occurrence_dates(
+                schedule=schedule,
+                from_date=window_start,
+                until_date=until_date,
+            )
+        except ActionPlanValidationError as exc:
+            _log_skipped_schedule_materialization(
+                schedule=schedule,
+                materialization_path=MATERIALIZATION_PATH_CALENDAR,
+                exc=exc,
+            )
+            continue
+        for occurrence_date in occurrence_dates:
+            if occurrence_date < local_today:
+                continue
+            try:
+                created = _materialize_occurrence(
+                    schedule=schedule,
+                    occurrence_date=occurrence_date,
+                    emit_side_effects=False,
+                )
+                count += len(created)
+            except ActionPlanValidationError as exc:
+                _log_skipped_schedule_materialization(
+                    schedule=schedule,
+                    materialization_path=MATERIALIZATION_PATH_CALENDAR,
+                    exc=exc,
+                )
+                break
     return count
