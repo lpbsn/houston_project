@@ -266,13 +266,15 @@ def test_deadline_changed_end_at_at():
     )
     business_unit = create_business_unit(establishment=establishment, key="kitchen")
     create_membership_with_business_unit_scope(membership=staff, business_unit=business_unit)
-    first_end = timezone.now() + timedelta(days=2)
+    start_at = timezone.now()
+    first_end = start_at + timedelta(days=2)
     second_end = first_end + timedelta(days=3)
     _, execution = create_action_plan_with_execution(
         establishment_id=establishment.id,
         created_by=owner,
         pilot_business_unit_id=business_unit.id,
         title="Deadline journal",
+        start_at=start_at,
         end_at=first_end,
         tasks=[build_task_payload(task="Work", business_unit=business_unit)],
         assignees=[build_assignee_payload(membership=staff, business_unit=business_unit)],

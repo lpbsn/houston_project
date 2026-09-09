@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import time, timedelta
+from datetime import datetime, time, timedelta, timezone as datetime_timezone
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -471,57 +471,66 @@ def test_calendar_future_window_does_not_materialize_gap(
     assert gap_dates == set()
 
 
-@patch("django.db.transaction.on_commit")
 def test_calendar_materialization_does_not_emit_side_effects(
-    mock_on_commit,
     api_client,
     owner_membership,
     staff_membership,
     business_unit,
 ):
-    catalog = create_catalog_action_plan(
-        owner_membership=owner_membership,
-        business_unit=business_unit,
-    )
-    today = timezone.now().date()
-    create_action_plan_schedule(
-        action_plan=catalog,
-        actor=owner_membership,
-        start_date=today,
-        end_date=today + timedelta(days=40),
-        start_at=time(9, 0),
-        end_at=time(10, 0),
-        recurrence_days=[
-            "monday",
-            "tuesday",
-            "wednesday",
-            "thursday",
-            "friday",
-            "saturday",
-            "sunday",
-        ],
-        assignees=[
-            build_schedule_assignee_payload(
-                membership=staff_membership,
-                business_unit=business_unit,
+    frozen_now = datetime(2026, 9, 9, 12, 0, tzinfo=datetime_timezone.utc)
+    with patch("django.utils.timezone.now", return_value=frozen_now):
+        token = login(api_client, user=owner_membership.user)
+        catalog = create_catalog_action_plan(
+            owner_membership=owner_membership,
+            business_unit=business_unit,
+        )
+        today = timezone.now().date()
+        create_action_plan_schedule(
+            action_plan=catalog,
+            actor=owner_membership,
+            start_date=today,
+            end_date=today + timedelta(days=40),
+            start_at=time(9, 0),
+            end_at=time(10, 0),
+            recurrence_days=[
+                "monday",
+                "tuesday",
+                "wednesday",
+                "thursday",
+                "friday",
+                "saturday",
+                "sunday",
+            ],
+            assignees=[
+                build_schedule_assignee_payload(
+                    membership=staff_membership,
+                    business_unit=business_unit,
+                )
+            ],
+            use_shared_chronology=True,
+            emit_side_effects=False,
+        )
+        with (
+            patch(
+                "houston.action_plans.realtime.schedule_action_plan_execution_invalidation"
+            ) as mock_invalidate,
+            patch(
+                "houston.notifications.scheduling."
+                "schedule_action_plan_execution_created_notification"
+            ) as mock_created_notification,
+        ):
+            response = api_client.get(
+                action_plan_execution_calendar_url(owner_membership.establishment_id)
+                + _calendar_query(
+                    view_mode="general",
+                    from_date=today + timedelta(days=20),
+                    to_date=today + timedelta(days=21),
+                ),
+                **auth_headers(token),
             )
-        ],
-        use_shared_chronology=True,
-        emit_side_effects=False,
-    )
-    mock_on_commit.reset_mock()
-    token = login(api_client, user=owner_membership.user)
-    response = api_client.get(
-        action_plan_execution_calendar_url(owner_membership.establishment_id)
-        + _calendar_query(
-            view_mode="general",
-            from_date=today + timedelta(days=20),
-            to_date=today + timedelta(days=21),
-        ),
-        **auth_headers(token),
-    )
-    assert response.status_code == 200, response.content
-    mock_on_commit.assert_not_called()
+            assert response.status_code == 200, response.content
+            mock_invalidate.assert_not_called()
+            mock_created_notification.assert_not_called()
 
 
 def _calendar_payload_by_id(body, execution_id):
