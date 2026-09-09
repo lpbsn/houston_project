@@ -121,11 +121,15 @@ def _validate_schedule_window(
 def _resolve_schedule_clock(
     *,
     all_day: bool,
-    start_at: time,
-    end_at: time,
+    start_at: time | None,
+    end_at: time | None,
 ) -> tuple[time, time]:
     if all_day:
         return SCHEDULE_ALL_DAY_START, SCHEDULE_ALL_DAY_END
+    if start_at is None or end_at is None:
+        raise ActionPlanValidationError(
+            "start_at and end_at are required unless all_day is true.",
+        )
     return start_at, end_at
 
 
@@ -524,8 +528,8 @@ def _create_action_plan_schedule_core(
     actor: EstablishmentMembership,
     start_date: date,
     end_date: date,
-    start_at: time,
-    end_at: time,
+    start_at: time | None,
+    end_at: time | None,
     recurrence_days: list[str],
     assignees: list[dict] | None = None,
     use_shared_chronology: bool = False,
@@ -607,8 +611,8 @@ def create_action_plan_schedule(
     actor: EstablishmentMembership,
     start_date: date,
     end_date: date,
-    start_at: time,
-    end_at: time,
+    start_at: time | None,
+    end_at: time | None,
     recurrence_days: list[str],
     assignees: list[dict] | None = None,
     use_shared_chronology: bool = False,
@@ -642,8 +646,8 @@ def create_action_plan_schedule_for_planning_engine(
     actor: EstablishmentMembership,
     start_date: date,
     end_date: date,
-    start_at: time,
-    end_at: time,
+    start_at: time | None,
+    end_at: time | None,
     recurrence_days: list[str],
     assignees: list[dict] | None = None,
     use_shared_chronology: bool = False,
@@ -768,9 +772,17 @@ def update_action_plan_schedule(
     update_fields = ["updated_at"]
     next_start_date = start_date if start_date is not None else schedule.start_date
     next_end_date = end_date if end_date is not None else schedule.end_date
-    next_start_at = start_at if start_at is not None else schedule.start_at
-    next_end_at = end_at if end_at is not None else schedule.end_at
     next_all_day = all_day if all_day is not None else schedule.all_day
+    turning_off_all_day = schedule.all_day and all_day is False
+    if turning_off_all_day:
+        if start_at is None or end_at is None:
+            raise ActionPlanValidationError(
+                "Turning off all_day requires start_at and end_at.",
+            )
+        next_start_at, next_end_at = start_at, end_at
+    else:
+        next_start_at = start_at if start_at is not None else schedule.start_at
+        next_end_at = end_at if end_at is not None else schedule.end_at
     if next_all_day:
         next_start_at, next_end_at = _resolve_schedule_clock(
             all_day=True,
@@ -795,11 +807,11 @@ def update_action_plan_schedule(
     if end_date is not None:
         schedule.end_date = end_date
         update_fields.append("end_date")
-    if start_at is not None or next_all_day:
+    if start_at is not None or next_all_day or turning_off_all_day:
         schedule.start_at = next_start_at
         if "start_at" not in update_fields:
             update_fields.append("start_at")
-    if end_at is not None or next_all_day:
+    if end_at is not None or next_all_day or turning_off_all_day:
         schedule.end_at = next_end_at
         if "end_at" not in update_fields:
             update_fields.append("end_at")

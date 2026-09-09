@@ -368,3 +368,50 @@ def test_add_pending_preserves_action_plan_task_id_on_existing():
     created = ActionPlanExecutionTask.objects.get(task="Brand new")
     assert renamed.action_plan_task_id == original_plan_task_id
     assert created.action_plan_task_id is None
+
+
+def test_update_rejects_all_day_on_undated_execution():
+    establishment = create_establishment()
+    pilot = create_business_unit(establishment=establishment, key="pilot")
+    owner = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    execution = _create_in_progress_execution(
+        owner=owner,
+        pilot_bu=pilot,
+        start_at=None,
+        end_at=None,
+    )
+    with pytest.raises(ActionPlanValidationError, match="All-day executions require"):
+        update_action_plan_execution(
+            execution_id=execution.id,
+            actor=owner,
+            expected_updated_at=execution.updated_at,
+            all_day=True,
+        )
+
+
+def test_update_rejects_clearing_end_at_while_all_day():
+    establishment = create_establishment()
+    pilot = create_business_unit(establishment=establishment, key="pilot")
+    owner = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    start_at = timezone.now() - timedelta(hours=1)
+    execution = _create_in_progress_execution(
+        owner=owner,
+        pilot_bu=pilot,
+        start_at=start_at,
+        end_at=start_at + timedelta(hours=2),
+    )
+    execution.all_day = True
+    execution.save(update_fields=["all_day", "updated_at"])
+    with pytest.raises(ActionPlanValidationError, match="All-day executions require"):
+        update_action_plan_execution(
+            execution_id=execution.id,
+            actor=owner,
+            expected_updated_at=execution.updated_at,
+            end_at=None,
+        )

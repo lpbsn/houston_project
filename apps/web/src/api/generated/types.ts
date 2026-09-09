@@ -2972,9 +2972,9 @@ export interface components {
             /** Format: date */
             end_date: string;
             /** Format: time */
-            start_at: string;
+            start_at?: string | null;
             /** Format: time */
-            end_at: string;
+            end_at?: string | null;
             /** @default false */
             all_day: boolean;
             recurrence_days: string[];

@@ -157,10 +157,18 @@ def build_cross_action_plan_execution_calendar(
             unplanned_by_id.setdefault(execution.id, execution)
             membership_by_execution_id.setdefault(execution.id, slice_membership)
 
+    # Match queryset contracts: items order_by("start_at", "id");
+    # unplanned order_by("-last_activity_at", "id").
+    items = sorted(items_by_id.values(), key=lambda execution: (execution.start_at, execution.id))
+    unplanned = sorted(
+        unplanned_by_id.values(),
+        key=lambda execution: (-execution.last_activity_at.timestamp(), execution.id),
+    )
+
     return {
         "timezone": timezone_name,
-        "items": list(items_by_id.values()),
-        "unplanned": list(unplanned_by_id.values()),
+        "items": items,
+        "unplanned": unplanned,
         "as_of": as_of or timezone.now(),
         "membership_by_execution_id": membership_by_execution_id,
     }

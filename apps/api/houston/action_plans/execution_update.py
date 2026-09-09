@@ -35,6 +35,7 @@ from houston.action_plans.permissions import (
 )
 from houston.action_plans.services import (
     ValidatedAssigneePayload,
+    _assert_all_day_closed_window,
     _assert_end_after_start,
     _lock_all_execution_tasks_after_execution,
     _lock_execution_for_write,
@@ -218,6 +219,11 @@ def update_action_plan_execution(
     if all_day is not None and all_day != execution.all_day:
         execution.all_day = all_day
         update_fields.append("all_day")
+    _assert_all_day_closed_window(
+        all_day=execution.all_day,
+        start_at=execution.start_at,
+        end_at=execution.end_at,
+    )
 
     final_assignee_rows = _resolve_final_assignees(
         actor=actor,

@@ -336,6 +336,9 @@ def _parse_planning_items(raw_items: list[dict]) -> tuple[list[dict] | None, Res
             for key in ("start_at", "end_at"):
                 value = item.get(key)
                 if value in (None, ""):
+                    if item.get("all_day"):
+                        item[key] = None
+                        continue
                     return None, Response(
                         {
                             "code": "validation_error",

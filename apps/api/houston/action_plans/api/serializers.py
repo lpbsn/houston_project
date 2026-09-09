@@ -199,8 +199,8 @@ class ActionPlanScheduleAssigneeInputSerializer(serializers.Serializer):
 class ActionPlanScheduleCreateRequestSerializer(serializers.Serializer):
     start_date = serializers.DateField(required=False, allow_null=True)
     end_date = serializers.DateField()
-    start_at = serializers.TimeField()
-    end_at = serializers.TimeField()
+    start_at = serializers.TimeField(required=False, allow_null=True)
+    end_at = serializers.TimeField(required=False, allow_null=True)
     all_day = serializers.BooleanField(required=False, default=False)
     recurrence_days = serializers.ListField(
         child=serializers.CharField(),
@@ -212,6 +212,18 @@ class ActionPlanScheduleCreateRequestSerializer(serializers.Serializer):
         default=list,
     )
     use_shared_chronology = serializers.BooleanField(required=False, default=False)
+
+    def validate(self, attrs):
+        if attrs.get("all_day"):
+            return attrs
+        errors: dict[str, str] = {}
+        if attrs.get("start_at") is None:
+            errors["start_at"] = "This field is required unless all_day is true."
+        if attrs.get("end_at") is None:
+            errors["end_at"] = "This field is required unless all_day is true."
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
 
 
 class ActionPlanPlanningItemSerializer(serializers.Serializer):
@@ -247,10 +259,11 @@ class ActionPlanPlanningItemSerializer(serializers.Serializer):
 
         if end_date is None:
             errors["end_date"] = "This field is required for schedule items."
-        if start_at is None or (isinstance(start_at, str) and not start_at.strip()):
-            errors["start_at"] = "This field is required for schedule items."
-        if end_at is None or (isinstance(end_at, str) and not end_at.strip()):
-            errors["end_at"] = "This field is required for schedule items."
+        if not attrs.get("all_day"):
+            if start_at is None or (isinstance(start_at, str) and not start_at.strip()):
+                errors["start_at"] = "This field is required for schedule items."
+            if end_at is None or (isinstance(end_at, str) and not end_at.strip()):
+                errors["end_at"] = "This field is required for schedule items."
         if not recurrence_days:
             errors["recurrence_days"] = "This field is required for schedule items."
 

@@ -434,19 +434,26 @@ def _require_schedule_item_fields(item: dict) -> tuple[object, object, object, l
     start_at = item.get("start_at")
     end_at = item.get("end_at")
     recurrence_days = item.get("recurrence_days")
+    all_day = bool(item.get("all_day", False))
     missing: list[str] = []
     if end_date is None:
         missing.append("end_date")
-    if start_at is None or (isinstance(start_at, str) and not str(start_at).strip()):
-        missing.append("start_at")
-    if end_at is None or (isinstance(end_at, str) and not str(end_at).strip()):
-        missing.append("end_at")
+    if not all_day:
+        if start_at is None or (isinstance(start_at, str) and not str(start_at).strip()):
+            missing.append("start_at")
+        if end_at is None or (isinstance(end_at, str) and not str(end_at).strip()):
+            missing.append("end_at")
     if not recurrence_days:
         missing.append("recurrence_days")
     if missing:
         raise ActionPlanValidationError(
             f"Schedule item missing required fields: {', '.join(missing)}."
         )
+    if all_day:
+        if start_at is None or (isinstance(start_at, str) and not str(start_at).strip()):
+            start_at = None
+        if end_at is None or (isinstance(end_at, str) and not str(end_at).strip()):
+            end_at = None
     return end_date, start_at, end_at, list(recurrence_days)
 
 

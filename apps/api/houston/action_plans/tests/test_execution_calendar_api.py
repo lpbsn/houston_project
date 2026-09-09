@@ -17,6 +17,7 @@ from houston.action_plans.constants import (
     SCHEDULE_ALL_DAY_END,
     SCHEDULE_ALL_DAY_START,
 )
+from houston.action_plans.exceptions import ActionPlanValidationError
 from houston.action_plans.models import ActionPlanExecution, ActionPlanSchedule
 from houston.action_plans.schedule_services import create_action_plan_schedule
 from houston.action_plans.services import (
@@ -28,6 +29,9 @@ from houston.action_plans.tests.helpers import (
     action_plan_execution_feed_url,
     action_plan_execution_upcoming_url,
     action_plan_planning_submit_url,
+    action_plans_url,
+    api_recurring_schedule_payload,
+    api_task_payload,
     build_assignee_payload,
     build_schedule_assignee_payload,
     build_task_payload,
@@ -146,6 +150,207 @@ def test_planning_submit_all_day_schedule_copies_flag(
     execution = schedule.executions.first()
     assert execution is not None
     assert execution.all_day is True
+
+
+def _all_day_planning_schedule_item(*, staff_membership, business_unit, clocks):
+    today = timezone.now().date()
+    item = {
+        "item_id": str(uuid4()),
+        "kind": "schedule",
+        "assignees": [
+            {
+                "membership_id": str(staff_membership.id),
+                "business_unit_id": str(business_unit.id),
+            }
+        ],
+        "start_date": today.isoformat(),
+        "end_date": (today + timedelta(days=14)).isoformat(),
+        "recurrence_days": recurrence_days_for_visible_today(),
+        "all_day": True,
+    }
+    if clocks == "omit":
+        return item
+    if clocks == "null":
+        item["start_at"] = None
+        item["end_at"] = None
+        return item
+    item["start_at"] = ""
+    item["end_at"] = ""
+    return item
+
+
+@pytest.mark.parametrize("clocks", ["omit", "null", "blank"])
+def test_planning_submit_all_day_schedule_accepts_missing_clocks(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+    clocks,
+):
+    catalog = create_catalog_action_plan(
+        owner_membership=owner_membership,
+        business_unit=business_unit,
+    )
+    payload = {
+        "submission_id": str(uuid4()),
+        "use_shared_chronology": True,
+        "items": [
+            _all_day_planning_schedule_item(
+                staff_membership=staff_membership,
+                business_unit=business_unit,
+                clocks=clocks,
+            )
+        ],
+    }
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.post(
+        action_plan_planning_submit_url(owner_membership.establishment_id, catalog.id),
+        payload,
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 201, response.content
+    schedule = ActionPlanSchedule.objects.get(id=response.json()["schedules"][0]["id"])
+    assert schedule.all_day is True
+    assert schedule.start_at == SCHEDULE_ALL_DAY_START
+    assert schedule.end_at == SCHEDULE_ALL_DAY_END
+
+
+@pytest.mark.parametrize("clocks", ["omit", "null"])
+def test_nested_schedule_create_all_day_accepts_omitted_or_null_clocks(
+    api_client,
+    owner_membership,
+    business_unit,
+    clocks,
+):
+    schedule_payload = api_recurring_schedule_payload(
+        staff_membership=owner_membership,
+        business_unit=business_unit,
+        assignees=[],
+        use_shared_chronology=True,
+        all_day=True,
+    )
+    if clocks == "omit":
+        schedule_payload.pop("start_at")
+        schedule_payload.pop("end_at")
+    else:
+        schedule_payload["start_at"] = None
+        schedule_payload["end_at"] = None
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.post(
+        action_plans_url(owner_membership.establishment_id),
+        {
+            "title": "All-day nested schedule",
+            "pilot_business_unit_id": str(business_unit.id),
+            "tasks": [api_task_payload(task="Weekly check", business_unit=business_unit)],
+            "schedule": schedule_payload,
+        },
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 201, response.json()
+    schedule = ActionPlanSchedule.objects.get(action_plan_id=response.json()["id"])
+    assert schedule.all_day is True
+    assert schedule.start_at == SCHEDULE_ALL_DAY_START
+    assert schedule.end_at == SCHEDULE_ALL_DAY_END
+
+
+def test_nested_schedule_create_rejects_blank_clock_strings(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    schedule_payload = api_recurring_schedule_payload(
+        staff_membership=owner_membership,
+        business_unit=business_unit,
+        assignees=[],
+        use_shared_chronology=True,
+        all_day=True,
+        start_at="",
+        end_at="",
+    )
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.post(
+        action_plans_url(owner_membership.establishment_id),
+        {
+            "title": "Blank clock nested schedule",
+            "pilot_business_unit_id": str(business_unit.id),
+            "tasks": [api_task_payload(task="Weekly check", business_unit=business_unit)],
+            "schedule": schedule_payload,
+        },
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 400
+
+
+def test_create_rejects_all_day_without_start_or_end(
+    owner_membership,
+    business_unit,
+):
+    start_at = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    with pytest.raises(ActionPlanValidationError, match="All-day executions require"):
+        create_action_plan_with_execution(
+            establishment_id=owner_membership.establishment_id,
+            created_by=owner_membership,
+            pilot_business_unit_id=business_unit.id,
+            title="All day undated",
+            tasks=[build_task_payload(task="Task", business_unit=business_unit)],
+            assignees=[
+                build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+            ],
+            all_day=True,
+        )
+    with pytest.raises(ActionPlanValidationError, match="All-day executions require"):
+        create_action_plan_with_execution(
+            establishment_id=owner_membership.establishment_id,
+            created_by=owner_membership,
+            pilot_business_unit_id=business_unit.id,
+            title="All day open-ended",
+            tasks=[build_task_payload(task="Task", business_unit=business_unit)],
+            assignees=[
+                build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+            ],
+            start_at=start_at,
+            all_day=True,
+        )
+
+
+def test_dated_all_day_execution_is_calendar_item_not_unplanned(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    start_at = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    end_at = start_at.replace(hour=23, minute=59)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="All day on grid",
+        tasks=[build_task_payload(task="Task", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=start_at,
+        end_at=end_at,
+        all_day=True,
+    )
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_execution_calendar_url(owner_membership.establishment_id)
+        + _calendar_query(
+            view_mode="general",
+            from_date=start_at.date(),
+            to_date=start_at.date(),
+        ),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200, response.content
+    item_ids = {item["action_plan_execution"]["id"] for item in response.json()["items"]}
+    unplanned_ids = {item["action_plan_execution"]["id"] for item in response.json()["unplanned"]}
+    assert str(execution.id) in item_ids
+    assert str(execution.id) not in unplanned_ids
 
 
 def test_calendar_rejects_window_over_45_days(api_client, owner_membership):

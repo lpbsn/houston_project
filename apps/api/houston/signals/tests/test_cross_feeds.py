@@ -301,6 +301,65 @@ def test_cross_execution_calendar_unions_and_respects_per_membership_rbac(api_cl
     assert over.status_code == 400
 
 
+def test_cross_execution_calendar_items_are_sorted_by_start_at_then_id(api_client):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    user = create_user(username="cross-cal-order")
+    first = create_establishment(name="Alpha")
+    second = create_establishment(name="Beta")
+    membership_a = create_membership(
+        establishment=first,
+        user=user,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    membership_b = create_membership(
+        establishment=second,
+        user=user,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    bu_a = create_business_unit(establishment=first, key="salle")
+    bu_b = create_business_unit(establishment=second, key="salle")
+    now = timezone.now()
+    later_start = now + timedelta(days=2, hours=3)
+    earlier_start = now + timedelta(days=2, hours=1)
+    _, exec_later = create_action_plan_with_execution(
+        establishment_id=first.id,
+        created_by=membership_a,
+        pilot_business_unit_id=bu_a.id,
+        title="Later in first membership",
+        tasks=[build_task_payload(task="later", business_unit=bu_a)],
+        assignees=[build_assignee_payload(membership=membership_a, business_unit=bu_a)],
+        start_at=later_start,
+        end_at=later_start + timedelta(hours=1),
+        visible_from=now - timedelta(minutes=1),
+    )
+    _, exec_earlier = create_action_plan_with_execution(
+        establishment_id=second.id,
+        created_by=membership_b,
+        pilot_business_unit_id=bu_b.id,
+        title="Earlier in second membership",
+        tasks=[build_task_payload(task="earlier", business_unit=bu_b)],
+        assignees=[build_assignee_payload(membership=membership_b, business_unit=bu_b)],
+        start_at=earlier_start,
+        end_at=earlier_start + timedelta(hours=1),
+        visible_from=now - timedelta(minutes=1),
+    )
+    token = login(api_client, user=user)
+    response = api_client.get(
+        "/api/v1/cross/action-plan-execution-calendar/"
+        + _cross_calendar_query(
+            from_date=(now + timedelta(days=1)).date(),
+            to_date=(now + timedelta(days=3)).date(),
+        ),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200, response.content
+    ids = [item["action_plan_execution"]["id"] for item in response.json()["items"]]
+    assert ids == [str(exec_earlier.id), str(exec_later.id)]
+
+
 def test_cross_execution_calendar_manager_scope_is_not_widened(api_client):
     from datetime import timedelta
 

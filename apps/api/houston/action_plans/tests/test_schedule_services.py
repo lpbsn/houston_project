@@ -13,6 +13,8 @@ from houston.action_plans.constants import (
     EXECUTION_STATUS_IN_PROGRESS,
     EXECUTION_STATUS_PENDING_VALIDATION,
     EXECUTION_STATUS_SCHEDULED,
+    SCHEDULE_ALL_DAY_END,
+    SCHEDULE_ALL_DAY_START,
 )
 from houston.action_plans.exceptions import (
     ActionPlanConflictError,
@@ -854,3 +856,136 @@ def test_update_preserves_pending_validation_window(
     pending.refresh_from_db()
     assert pending.status == EXECUTION_STATUS_PENDING_VALIDATION
     assert (pending.start_at, pending.end_at, pending.visible_from) == window
+
+
+def test_create_all_day_schedule_without_clocks_uses_sentinels(
+    owner_membership,
+    catalog_action_plan,
+    staff_membership,
+    business_unit,
+):
+    schedule = create_action_plan_schedule(
+        action_plan=catalog_action_plan,
+        actor=owner_membership,
+        recurrence_days=recurrence_days_for_visible_today(),
+        assignees=[
+            build_schedule_assignee_payload(
+                membership=staff_membership,
+                business_unit=business_unit,
+            )
+        ],
+        use_shared_chronology=True,
+        all_day=True,
+        start_at=None,
+        end_at=None,
+        **{
+            key: value
+            for key, value in visible_schedule_window().items()
+            if key not in {"start_at", "end_at"}
+        },
+    )
+    assert schedule.all_day is True
+    assert schedule.start_at == SCHEDULE_ALL_DAY_START
+    assert schedule.end_at == SCHEDULE_ALL_DAY_END
+
+
+def test_turning_all_day_off_without_request_clocks_raises(
+    owner_membership,
+    catalog_action_plan,
+    staff_membership,
+    business_unit,
+):
+    schedule = create_action_plan_schedule(
+        action_plan=catalog_action_plan,
+        actor=owner_membership,
+        recurrence_days=recurrence_days_for_visible_today(),
+        assignees=[
+            build_schedule_assignee_payload(
+                membership=staff_membership,
+                business_unit=business_unit,
+            )
+        ],
+        use_shared_chronology=True,
+        all_day=True,
+        start_at=None,
+        end_at=None,
+        **{
+            key: value
+            for key, value in visible_schedule_window().items()
+            if key not in {"start_at", "end_at"}
+        },
+    )
+    with pytest.raises(ActionPlanValidationError, match="Turning off all_day"):
+        update_action_plan_schedule(
+            schedule=schedule,
+            actor=owner_membership,
+            all_day=False,
+        )
+    schedule.refresh_from_db()
+    assert schedule.all_day is True
+    assert schedule.start_at == SCHEDULE_ALL_DAY_START
+    assert schedule.end_at == SCHEDULE_ALL_DAY_END
+
+
+def test_turning_all_day_off_with_new_clocks_syncs_future_execution(
+    owner_membership,
+    catalog_action_plan,
+    staff_membership,
+    business_unit,
+):
+    schedule = create_action_plan_schedule(
+        action_plan=catalog_action_plan,
+        actor=owner_membership,
+        recurrence_days=recurrence_days_for_visible_today(),
+        assignees=[
+            build_schedule_assignee_payload(
+                membership=staff_membership,
+                business_unit=business_unit,
+            )
+        ],
+        use_shared_chronology=True,
+        all_day=True,
+        start_at=None,
+        end_at=None,
+        **{
+            key: value
+            for key, value in visible_schedule_window(period_days=21).items()
+            if key not in {"start_at", "end_at"}
+        },
+    )
+    future_execution = schedule.executions.filter(
+        status__in=[EXECUTION_STATUS_SCHEDULED, EXECUTION_STATUS_IN_PROGRESS],
+    ).first()
+    assert future_execution is not None
+    future_execution.start_at = timezone.now() + timezone.timedelta(days=2)
+    future_execution.end_at = future_execution.start_at + timezone.timedelta(hours=23, minutes=59)
+    future_execution.visible_from = future_execution.start_at - timezone.timedelta(hours=1)
+    future_execution.status = EXECUTION_STATUS_SCHEDULED
+    future_execution.all_day = True
+    future_execution.save(
+        update_fields=[
+            "start_at",
+            "end_at",
+            "visible_from",
+            "status",
+            "all_day",
+            "updated_at",
+        ],
+    )
+
+    update_action_plan_schedule(
+        schedule=schedule,
+        actor=owner_membership,
+        all_day=False,
+        start_at=time(8, 0),
+        end_at=time(9, 0),
+    )
+
+    schedule.refresh_from_db()
+    future_execution.refresh_from_db()
+    assert schedule.all_day is False
+    assert schedule.start_at == time(8, 0)
+    assert schedule.end_at == time(9, 0)
+    assert future_execution.all_day is False
+    assert future_execution.start_at.hour == 8
+    assert future_execution.end_at.hour == 9

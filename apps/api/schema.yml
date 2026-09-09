@@ -9685,9 +9685,11 @@ components:
         start_at:
           type: string
           format: time
+          nullable: true
         end_at:
           type: string
           format: time
+          nullable: true
         all_day:
           type: boolean
           default: false
@@ -9704,10 +9706,8 @@ components:
           type: boolean
           default: false
       required:
-      - end_at
       - end_date
       - recurrence_days
-      - start_at
     ActionPlanScheduleDetail:
       type: object
       properties:

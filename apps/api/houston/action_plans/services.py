@@ -1130,6 +1130,20 @@ def _assert_end_after_start(
         raise ActionPlanValidationError("End datetime must be after start datetime.")
 
 
+def _assert_all_day_closed_window(
+    *,
+    all_day: bool,
+    start_at: datetime | None,
+    end_at: datetime | None,
+) -> None:
+    if not all_day:
+        return
+    if start_at is None or end_at is None:
+        raise ActionPlanValidationError(
+            "All-day executions require start_at and end_at.",
+        )
+
+
 def initial_execution_status(
     *,
     start_at: datetime | None,
@@ -1191,6 +1205,7 @@ def _create_execution_record(
             "Individual chronology requires a chronology owner membership.",
         )
     _assert_end_after_start(start_at=start_at, end_at=end_at)
+    _assert_all_day_closed_window(all_day=all_day, start_at=start_at, end_at=end_at)
     status = initial_execution_status(start_at=start_at, now=now)
     started_at = now if status == EXECUTION_STATUS_IN_PROGRESS else None
     started_by_membership = (
@@ -2443,8 +2458,8 @@ def create_action_plan_with_optional_schedule(
         start_date=schedule.get("start_date")
         or establishment_local_date(establishment=action_plan.establishment),
         end_date=schedule["end_date"],
-        start_at=schedule["start_at"],
-        end_at=schedule["end_at"],
+        start_at=schedule.get("start_at"),
+        end_at=schedule.get("end_at"),
         recurrence_days=schedule["recurrence_days"],
         assignees=schedule_assignees,
         use_shared_chronology=schedule.get("use_shared_chronology", True),
