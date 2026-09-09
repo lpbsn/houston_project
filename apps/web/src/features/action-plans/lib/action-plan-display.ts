@@ -122,6 +122,14 @@ export function formatActionPlanAllDayPeriodLabel(
   return `${formatCivilDateFr(start.date)} · Journée entière`
 }
 
+export function formatActionPlanAllDayInstantLabel(instantAt: string | null): string {
+  const civil = splitIsoToCivil(instantAt ?? '')
+  if (!civil.date) {
+    return 'Journée entière'
+  }
+  return `${formatCivilDateFr(civil.date)} · Journée entière`
+}
+
 export function formatActionPlanEndAtLabel(endAt: string | null): string | null {
   if (!endAt) {
     return null

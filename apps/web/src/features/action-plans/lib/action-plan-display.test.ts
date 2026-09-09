@@ -9,6 +9,7 @@ import {
   buildActionPlanTemplatePoleSummaries,
   computeActionPlanDeadlineState,
   flattenActionPlanAssignees,
+  formatActionPlanAllDayInstantLabel,
   formatActionPlanCreatedAtLabel,
   formatActionPlanExecutionStatusLabel,
   formatActionPlanTaskAssigneePoleLine,
@@ -176,6 +177,19 @@ describe('formatActionPlanCreatedAtLabel', () => {
     const label = formatActionPlanCreatedAtLabel('2026-07-07T08:38:00.000Z')
     expect(label).toBeTruthy()
     expect(label).toMatch(/\d/)
+  })
+})
+
+describe('formatActionPlanAllDayInstantLabel', () => {
+  it('formats a civil date with the all-day suffix', () => {
+    expect(formatActionPlanAllDayInstantLabel('2026-07-07T08:38:00.000Z')).toBe(
+      '07/07/2026 · Journée entière',
+    )
+  })
+
+  it('falls back when the instant has no civil date', () => {
+    expect(formatActionPlanAllDayInstantLabel(null)).toBe('Journée entière')
+    expect(formatActionPlanAllDayInstantLabel('')).toBe('Journée entière')
   })
 })
 
