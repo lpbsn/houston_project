@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta, timezone as datetime_timezone
+from datetime import datetime, time, timedelta
+from datetime import timezone as datetime_timezone
 from unittest.mock import patch
 from uuid import uuid4
 
