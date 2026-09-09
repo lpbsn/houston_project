@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Bell } from 'lucide-react'
 
 import { TerrainBottomSheet, TerrainCollapsibleFeedSection, TerrainErrorState } from '@/components/ui/terrain'
 import { formatCivilDateFr, todayCivilDate } from '@/lib/business-timezone'
@@ -31,6 +32,7 @@ import { calendarUnplannedSectionHeader } from '../lib/execution-calendar-unplan
 import type { ExecutionCalendarGranularity } from '../lib/execution-feed-url-state'
 
 const HOUR_HEIGHT = 48
+const TIME_GRID_INITIAL_HOUR = 8
 const TIME_GUTTER = '3.75rem'
 const WEEKDAY_LABELS = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.']
 const MONTH_VISIBLE = 2
@@ -160,11 +162,19 @@ function CalendarEventButton({
             compact ? 'text-[9px]' : 'text-[10px]',
           )}
         >
-          <span
-            className="h-1.5 w-1.5 shrink-0 rounded-full"
-            style={{ backgroundColor: presentation.chrome.bar }}
-            aria-hidden
-          />
+          {item.status === 'pending_validation' ? (
+            <Bell
+              className={cn('shrink-0', compact ? 'h-2.5 w-2.5' : 'h-3 w-3')}
+              style={{ color: presentation.chrome.bar }}
+              aria-hidden
+            />
+          ) : (
+            <span
+              className="h-1.5 w-1.5 shrink-0 rounded-full"
+              style={{ backgroundColor: presentation.chrome.bar }}
+              aria-hidden
+            />
+          )}
           <span className="truncate">{presentation.statusLabel}</span>
         </span>
       </span>
@@ -347,12 +357,27 @@ export function ExecutionCalendarView({
   const today = todayCivilDate()
   const [overflowDay, setOverflowDay] = useState<string | null>(null)
   const [unplannedExpanded, setUnplannedExpanded] = useState(false)
+  const didAlignTimeGridRef = useRef(false)
   const items = data ? unwrapActionPlanExecutionFeedItems(data.items) : []
   const unplanned = data ? unwrapActionPlanExecutionFeedItems(data.unplanned) : []
   const overflowItems = useMemo(
     () => (overflowDay ? items.filter((item) => occupiesMonthCell(item, overflowDay)) : []),
     [items, overflowDay],
   )
+
+  useLayoutEffect(() => {
+    if (granularity === 'month') {
+      didAlignTimeGridRef.current = false
+    }
+  }, [granularity])
+
+  const attachTimeScroller = useCallback((node: HTMLDivElement | null) => {
+    if (!node || didAlignTimeGridRef.current) {
+      return
+    }
+    node.scrollTop = TIME_GRID_INITIAL_HOUR * HOUR_HEIGHT
+    didAlignTimeGridRef.current = true
+  }, [])
 
   if (isLoading) {
     return <p className="px-1 py-8 text-center text-sm text-[#7D7B75]">Chargement du calendrier…</p>
@@ -400,20 +425,15 @@ export function ExecutionCalendarView({
       weeks.push(days.slice(index, index + 7))
     }
     return (
-      <div
-        data-testid="calendar-month-scroller"
-        className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto"
-      >
-        <UnplannedBanner
-          items={unplanned}
-          expanded={unplannedExpanded}
-          onToggle={() => setUnplannedExpanded((current) => !current)}
-          onOpenExecution={onOpenExecution}
-        />
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
         <div
-          data-testid="calendar-month-grid"
-          className="shrink-0 overflow-hidden rounded-xl border border-[#E8E6DF] bg-white"
+          data-testid="calendar-month-scroller"
+          className="min-h-0 flex-1 overflow-y-auto"
         >
+          <div
+            data-testid="calendar-month-grid"
+            className="overflow-hidden rounded-xl border border-[#E8E6DF] bg-white"
+          >
           <div className="grid grid-cols-7 border-b border-[#E8E6DF]">
             {WEEKDAY_LABELS.map((label) => (
               <div key={label} className="px-1 py-2 text-center text-[10px] font-semibold uppercase text-[#7D7B75]">
@@ -465,7 +485,14 @@ export function ExecutionCalendarView({
               })}
             </div>
           ))}
+          </div>
         </div>
+        <UnplannedBanner
+          items={unplanned}
+          expanded={unplannedExpanded}
+          onToggle={() => setUnplannedExpanded((current) => !current)}
+          onOpenExecution={onOpenExecution}
+        />
         <MonthOverflowSheet
           day={overflowDay ?? ''}
           items={overflowItems}
@@ -480,55 +507,40 @@ export function ExecutionCalendarView({
   return (
     <div
       data-testid="calendar-hub-scroller"
-      className={cn(
-        'flex min-h-0 flex-1 flex-col gap-3',
-        unplannedExpanded && 'overflow-y-auto overscroll-y-contain',
-      )}
+      className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden"
     >
-      <UnplannedBanner
-        items={unplanned}
-        expanded={unplannedExpanded}
-        onToggle={() => setUnplannedExpanded((current) => !current)}
-        onOpenExecution={onOpenExecution}
-      />
       <div
         data-testid="calendar-grid-card"
         className={cn(
-          'flex flex-col rounded-xl border border-[#E8E6DF] bg-white',
-          unplannedExpanded
-            ? cn(
-                'shrink-0',
-                granularity === 'week'
-                  ? 'overflow-x-auto overflow-y-hidden overscroll-x-contain'
-                  : 'overflow-x-hidden overflow-y-hidden',
-              )
-            : cn(
-                'min-h-0 flex-1 overflow-hidden',
-                granularity === 'week' && 'overflow-x-auto overscroll-x-contain',
-              ),
+          'flex min-h-0 flex-1 flex-col rounded-xl border border-[#E8E6DF] bg-white',
+          granularity === 'week'
+            ? 'overflow-x-auto overflow-y-hidden overscroll-x-contain'
+            : 'overflow-hidden',
         )}
       >
         <div
           className={cn(
-            'flex min-w-0 flex-col',
-            unplannedExpanded ? 'shrink-0' : 'min-h-0 flex-1',
+            'flex min-h-0 min-w-0 flex-1 flex-col',
             granularity === 'week' && 'min-w-[44rem]',
           )}
         >
           {header}
           <AllDayLane days={days} items={items} onOpenExecution={onOpenExecution} />
           <div
+            ref={attachTimeScroller}
             data-testid="calendar-time-scroller"
-            className={
-              unplannedExpanded
-                ? 'shrink-0'
-                : 'min-h-0 flex-1 overflow-y-auto overscroll-y-contain'
-            }
+            className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain"
           >
             <TimeGrid days={days} items={items} onOpenExecution={onOpenExecution} />
           </div>
         </div>
       </div>
+      <UnplannedBanner
+        items={unplanned}
+        expanded={unplannedExpanded}
+        onToggle={() => setUnplannedExpanded((current) => !current)}
+        onOpenExecution={onOpenExecution}
+      />
     </div>
   )
 }
@@ -557,7 +569,10 @@ function UnplannedBanner({
       expanded={expanded}
       onToggle={onToggle}
     >
-      <div data-testid="calendar-unplanned-list" className="flex flex-col gap-1">
+      <div
+        data-testid="calendar-unplanned-list"
+        className="flex max-h-48 flex-col gap-1 overflow-y-auto overscroll-y-contain"
+      >
         {items.map((item) => {
           const orgBadges = calendarEventOrgBadges(item)
           const initials = calendarEventAssigneeInitials(item.assignees)
