@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { bootstrapQueryKey } from '@/features/auth/api'
@@ -212,6 +212,18 @@ export function useCatalogBusinessUnitChips(options?: OnboardingQueryOptions) {
   })
 }
 
+export function useCatalogActivitySubjectChips(businessUnitKeys: string[]) {
+  const uniqueKeys = [
+    ...new Set(businessUnitKeys.map((key) => key.trim()).filter((key) => key.length > 0)),
+  ]
+  return useQueries({
+    queries: uniqueKeys.map((key) => ({
+      queryKey: [...onboardingQueryKeys.catalogActivitySubjects(key, ''), 'chips'],
+      queryFn: () => suggestActivitySubjects(key, '', { limit: 200 }),
+      staleTime: 60_000,
+    })),
+  })
+}
 
 export function useActivitySubjectSuggestions(
   businessUnitKey: string,

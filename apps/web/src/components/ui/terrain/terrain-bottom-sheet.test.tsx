@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { TerrainBottomSheet } from '@/components/ui/terrain/terrain-bottom-sheet'
@@ -8,6 +8,7 @@ import {
   dismissTopNativeOverlay,
   resetNativeOverlayDismissForTests,
 } from '@/lib/native-overlay-dismiss'
+import { terrain } from '@/lib/terrain-styles'
 
 describe('TerrainBottomSheet native overlay dismiss', () => {
   afterEach(() => {
@@ -42,5 +43,26 @@ describe('TerrainBottomSheet native overlay dismiss', () => {
 
     expect(dismissTopNativeOverlay()).toBe(true)
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('TerrainBottomSheet surface color', () => {
+  afterEach(() => {
+    cleanup()
+    resetNativeOverlayDismissForTests()
+  })
+
+  it('owns terrain foreground on the white dialog instead of inheriting parent color', () => {
+    render(
+      <div className="text-white">
+        <TerrainBottomSheet title="Actions" open onClose={() => undefined}>
+          <input aria-label="Nom" />
+        </TerrainBottomSheet>
+      </div>,
+    )
+
+    expect(screen.getByRole('dialog').className.split(/\s+/)).toEqual(
+      expect.arrayContaining(terrain.foreground.split(/\s+/)),
+    )
   })
 })

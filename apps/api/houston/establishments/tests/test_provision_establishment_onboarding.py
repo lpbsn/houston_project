@@ -4,6 +4,7 @@ import uuid
 from unittest.mock import patch
 
 import pytest
+from django.db import IntegrityError
 from rest_framework.test import APIClient
 
 from houston.accounts.models import User
@@ -80,9 +81,17 @@ def switch_establishment(api_client: APIClient, *, access_token: str, establishm
 
 
 def post_create_establishment(api_client: APIClient, *, access_token: str, name: str):
+    return post_create_establishment_payload(
+        api_client,
+        access_token=access_token,
+        body={"name": name},
+    )
+
+
+def post_create_establishment_payload(api_client: APIClient, *, access_token: str, body: dict):
     return api_client.post(
         "/api/v1/establishments/",
-        {"name": name},
+        body,
         format="json",
         **auth_headers(access_token),
     )
@@ -341,3 +350,127 @@ def test_create_establishment_api_duplicate_name(api_client):
     )
     assert response.status_code == 400
     assert response.json()["code"] == "duplicate_establishment_name"
+
+
+def _owner_api_context(api_client: APIClient, *, org_name: str):
+    organization = create_organization(name=org_name)
+    active = create_establishment(name="Active A", organization=organization)
+    actor = create_user(username=f"owner_{uuid.uuid4().hex[:8]}")
+    create_membership(user=actor, establishment=active, role=ROLE_OWNER)
+    access_token = login(api_client, user=actor)
+    switch_establishment(api_client, access_token=access_token, establishment_id=active.id)
+    return organization, actor, access_token
+
+
+def test_create_establishment_api_omits_name_as_unnamed(api_client):
+    organization, _actor, access_token = _owner_api_context(api_client, org_name="Unnamed Omit Org")
+    response = post_create_establishment_payload(api_client, access_token=access_token, body={})
+    assert response.status_code == 201, response.json()
+    body = response.json()
+    assert body["name"] is None
+    assert body["status"] == Establishment.Status.DRAFT
+    assert body["organization_id"] == str(organization.id)
+    establishment = Establishment.objects.get(id=body["establishment_id"])
+    assert establishment.name is None
+
+    session_response = api_client.get(
+        f"/api/v1/onboarding-sessions/{body['onboarding_session_id']}/",
+        **auth_headers(access_token),
+    )
+    assert session_response.status_code == 200
+    assert session_response.json()["establishment"]["name"] == ""
+
+    bootstrap = api_client.get("/api/v1/auth/bootstrap/", **auth_headers(access_token))
+    assert bootstrap.status_code == 200
+    pending = next(
+        item
+        for item in bootstrap.json()["pending_onboarding_memberships"]
+        if item["establishment_id"] == body["establishment_id"]
+    )
+    assert pending["establishment_name"] == ""
+
+    org_list = api_client.get(
+        f"/api/v1/organizations/{organization.id}/establishments/",
+        **auth_headers(access_token),
+    )
+    assert org_list.status_code == 200
+    draft_row = next(
+        row for row in org_list.json()["results"] if row["id"] == body["establishment_id"]
+    )
+    assert draft_row["name"] == ""
+
+
+def test_create_establishment_api_null_name_is_unnamed(api_client):
+    _organization, _actor, access_token = _owner_api_context(
+        api_client,
+        org_name="Unnamed Null Org",
+    )
+    response = post_create_establishment_payload(
+        api_client,
+        access_token=access_token,
+        body={"name": None},
+    )
+    assert response.status_code == 201, response.json()
+    assert response.json()["name"] is None
+
+
+def test_create_establishment_api_blank_name_is_rejected(api_client):
+    _organization, _actor, access_token = _owner_api_context(api_client, org_name="Blank Name Org")
+    for blank in ("", "   "):
+        response = post_create_establishment_payload(
+            api_client,
+            access_token=access_token,
+            body={"name": blank},
+        )
+        assert response.status_code == 400
+
+
+def test_unnamed_provision_is_idempotent(api_client):
+    _organization, actor, access_token = _owner_api_context(
+        api_client,
+        org_name="Idempotent Unnamed Org",
+    )
+    first = post_create_establishment_payload(api_client, access_token=access_token, body={})
+    second = post_create_establishment_payload(api_client, access_token=access_token, body={})
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json()["establishment_id"] == second.json()["establishment_id"]
+    assert first.json()["onboarding_session_id"] == second.json()["onboarding_session_id"]
+    unnamed_count = Establishment.objects.filter(
+        organization_id=first.json()["organization_id"],
+        name__isnull=True,
+        status=Establishment.Status.DRAFT,
+    ).count()
+    assert unnamed_count == 1
+
+    provision = provision_establishment_onboarding(
+        actor=actor,
+        organization=Organization.objects.get(id=first.json()["organization_id"]),
+        name=None,
+    )
+    assert str(provision.establishment.id) == first.json()["establishment_id"]
+
+
+def test_unnamed_provision_creates_new_after_name_sync(api_client):
+    _organization, _actor, access_token = _owner_api_context(
+        api_client,
+        org_name="Named Then Unnamed Org",
+    )
+    first = post_create_establishment_payload(api_client, access_token=access_token, body={})
+    establishment = Establishment.objects.get(id=first.json()["establishment_id"])
+    establishment.name = "Synced Hotel"
+    establishment.save(update_fields=["name", "updated_at"])
+
+    second = post_create_establishment_payload(api_client, access_token=access_token, body={})
+    assert second.status_code == 201
+    assert second.json()["establishment_id"] != first.json()["establishment_id"]
+    assert second.json()["name"] is None
+
+
+def test_non_draft_establishment_cannot_be_unnamed():
+    organization = create_organization(name="Constraint Org")
+    establishment = create_establishment(name="Named Active", organization=organization)
+    establishment.name = None
+    with pytest.raises(IntegrityError):
+        establishment.save(update_fields=["name", "updated_at"])
+

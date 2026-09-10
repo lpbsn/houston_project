@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/app/auth-provider'
 import { switchEstablishment } from '@/features/auth/api'
 import {
-  canCreateEstablishmentFromBootstrapHints,
   canManageOrganizationFromBootstrapHints,
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
@@ -17,7 +16,6 @@ import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 import {
-  useCreateOrganizationEstablishmentMutation,
   useInviteOrganizationOwnerMutation,
   useOrganizationEstablishmentsQuery,
   useOrganizationMemberFilterOptionsQuery,
@@ -32,7 +30,8 @@ import type {
   OrganizationMemberListFilters,
   OrganizationTab,
 } from '../types'
-import { CreateEstablishmentSheet, InviteOwnerSheet } from '../components/organization-action-sheets'
+import { CreateEstablishmentAction } from '../components/create-establishment-action'
+import { InviteOwnerSheet } from '../components/organization-action-sheets'
 import { OrganizationEstablishmentsTab } from '../components/organization-establishments-tab'
 import { OrganizationMembersTab } from '../components/organization-members-tab'
 import { OrganizationOwnersTab } from '../components/organization-owners-tab'
@@ -47,16 +46,13 @@ export function OrganizationPage({ onNavigate }: OrganizationPageProps) {
   const isLgViewport = useLgViewport()
   const permissionHints = getBootstrapPermissionHints(bootstrap)
   const canManageOrganization = canManageOrganizationFromBootstrapHints(permissionHints)
-  const canCreateEstablishment = canCreateEstablishmentFromBootstrapHints(permissionHints)
 
   const orgResolution = useMemo(() => resolveUniqueOrganizationId(bootstrap), [bootstrap])
   const organizationId = orgResolution.ok ? orgResolution.organizationId : null
 
   const [activeTab, setActiveTab] = useState<OrganizationTab>('establishments')
   const [memberFilters, setMemberFilters] = useState<OrganizationMemberListFilters>({})
-  const [createOpen, setCreateOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
-  const [createError, setCreateError] = useState<string | null>(null)
   const [inviteError, setInviteError] = useState<string | null>(null)
   const [resendingUserId, setResendingUserId] = useState<string | null>(null)
   const [accessPendingId, setAccessPendingId] = useState<string | null>(null)
@@ -71,8 +67,8 @@ export function OrganizationPage({ onNavigate }: OrganizationPageProps) {
   const filterOptionsQuery = useOrganizationMemberFilterOptionsQuery(organizationId)
   const ownersQuery = useOrganizationOwnersQuery(organizationId)
 
-  const createMutation = useCreateOrganizationEstablishmentMutation(organizationId ?? '')
   const inviteMutation = useInviteOrganizationOwnerMutation(organizationId ?? '')
+  const showOrganizationCreateAction = !activeMembership
 
   useEffect(() => {
     if (!isReady || isBootstrapping) {
@@ -162,7 +158,16 @@ export function OrganizationPage({ onNavigate }: OrganizationPageProps) {
         {activeTab === 'establishments' ? (
           <OrganizationEstablishmentsTab
             establishments={establishmentsQuery.data?.results ?? []}
-            canCreate={canCreateEstablishment}
+            organizationName={overviewQuery.data?.name}
+            createAction={
+              showOrganizationCreateAction ? (
+                <CreateEstablishmentAction
+                  bootstrap={bootstrap}
+                  navigate={onNavigate}
+                  triggerVariant="organization"
+                />
+              ) : null
+            }
             onManage={(establishmentId) =>
               onNavigate(`/organization/establishments/${establishmentId}`)
             }
@@ -175,10 +180,6 @@ export function OrganizationPage({ onNavigate }: OrganizationPageProps) {
             onResume={(establishmentId, sessionId) =>
               onNavigate(buildOnboardingUrlFromIds(establishmentId, sessionId))
             }
-            onCreate={() => {
-              setCreateError(null)
-              setCreateOpen(true)
-            }}
           />
         ) : null}
 
@@ -229,26 +230,6 @@ export function OrganizationPage({ onNavigate }: OrganizationPageProps) {
       {inviteError && !inviteOpen ? (
         <p className="text-sm text-red-600">{inviteError}</p>
       ) : null}
-
-      <CreateEstablishmentSheet
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        isSubmitting={createMutation.isPending}
-        errorMessage={createError}
-        onSubmit={async (name) => {
-          if (!organizationId) return
-          setCreateError(null)
-          try {
-            const created = await createMutation.mutateAsync(name)
-            setCreateOpen(false)
-            onNavigate(
-              buildOnboardingUrlFromIds(created.establishment_id, created.onboarding_session_id),
-            )
-          } catch (error) {
-            setCreateError(error instanceof Error ? error.message : 'Création impossible.')
-          }
-        }}
-      />
 
       <InviteOwnerSheet
         open={inviteOpen}

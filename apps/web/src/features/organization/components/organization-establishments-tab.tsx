@@ -1,22 +1,25 @@
+import type { ReactNode } from 'react'
+
 import { HoustonBadge, TerrainCard } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { formatMembershipRoleDisplay } from '@/lib/display-names'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
+import { displayEstablishmentName } from '@/features/onboarding/lib/display-establishment-name'
 import { canResumeDraftOnboarding } from '../lib/can-resume-draft-onboarding'
 import type { OrganizationAdminEstablishment } from '../types'
 
 type OrganizationEstablishmentsTabProps = {
   establishments: OrganizationAdminEstablishment[]
-  canCreate: boolean
+  createAction?: ReactNode
+  organizationName?: string | null
   onManage: (establishmentId: string) => void
   onAccessApp: (establishmentId: string) => void
   pendingAccessEstablishmentId: string | null
   accessError: string | null
   accessErrorEstablishmentId: string | null
   onResume: (establishmentId: string, sessionId: string) => void
-  onCreate: () => void
 }
 
 function directorsLabel(establishment: OrganizationAdminEstablishment): string {
@@ -30,14 +33,14 @@ function directorsLabel(establishment: OrganizationAdminEstablishment): string {
 
 export function OrganizationEstablishmentsTab({
   establishments,
-  canCreate,
+  createAction,
+  organizationName,
   onManage,
   onAccessApp,
   pendingAccessEstablishmentId,
   accessError,
   accessErrorEstablishmentId,
   onResume,
-  onCreate,
 }: OrganizationEstablishmentsTabProps) {
   const active = establishments.filter((row) => row.status === 'active')
   const drafts = establishments.filter((row) => row.status === 'draft')
@@ -46,11 +49,7 @@ export function OrganizationEstablishmentsTab({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-base font-semibold text-[#1a1a1a]">Établissements</h2>
-        {canCreate ? (
-          <Button type="button" onClick={onCreate}>
-            Ajouter un établissement
-          </Button>
-        ) : null}
+        {createAction}
       </div>
 
       <section className="space-y-3">
@@ -62,7 +61,12 @@ export function OrganizationEstablishmentsTab({
             <TerrainCard key={establishment.id} className="space-y-3 p-4">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <p className="text-sm font-semibold text-[#1a1a1a]">{establishment.name}</p>
+                  <p className="text-sm font-semibold text-[#1a1a1a]">
+                    {displayEstablishmentName({
+                      establishmentName: establishment.name,
+                      organizationName,
+                    })}
+                  </p>
                   <p className={cn('mt-1 text-xs', terrain.muted)}>
                     {directorsLabel(establishment)}
                   </p>
@@ -108,7 +112,12 @@ export function OrganizationEstablishmentsTab({
               <TerrainCard key={establishment.id} className="space-y-3 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <p className="text-sm font-semibold text-[#1a1a1a]">{establishment.name}</p>
+                    <p className="text-sm font-semibold text-[#1a1a1a]">
+                    {displayEstablishmentName({
+                      establishmentName: establishment.name,
+                      organizationName,
+                    })}
+                  </p>
                     <p className={cn('mt-1 text-xs', terrain.muted)}>
                       {directorsLabel(establishment)}
                     </p>

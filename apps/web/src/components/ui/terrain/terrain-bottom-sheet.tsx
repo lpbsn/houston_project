@@ -1,6 +1,7 @@
 import { useEffect, useId, type ReactNode } from 'react'
 
 import { registerNativeOverlayDismiss } from '@/lib/native-overlay-dismiss'
+import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 type TerrainBottomSheetProps = {
@@ -48,6 +49,7 @@ export function TerrainBottomSheet({
         aria-labelledby={titleId}
         className={cn(
           'relative z-10 flex max-h-[70vh] flex-col rounded-t-2xl border border-[#E8E6DF] bg-white shadow-lg',
+          terrain.foreground,
         )}
       >
         <div className="flex shrink-0 items-center justify-center py-2">

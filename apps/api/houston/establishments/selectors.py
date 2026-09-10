@@ -430,7 +430,7 @@ def get_establishment_business_unit_tree(
 
     return {
         "establishment_id": establishment.id,
-        "establishment_name": establishment.name,
+        "establishment_name": establishment.name or "",
         "business_units": serialized_units,
     }
 

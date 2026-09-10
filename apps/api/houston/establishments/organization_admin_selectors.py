@@ -140,7 +140,7 @@ def list_organization_admin_establishments(
     for establishment in establishments:
         item: dict[str, Any] = {
             "id": establishment.id,
-            "name": establishment.name,
+            "name": establishment.name or "",
             "status": establishment.status,
             "directors": [
                 serialize_admin_director(membership)
@@ -416,7 +416,7 @@ def _serialize_member_membership(membership: EstablishmentMembership) -> dict[st
     return {
         "membership_id": membership.id,
         "establishment_id": membership.establishment_id,
-        "establishment_name": membership.establishment.name,
+        "establishment_name": membership.establishment.name or "",
         "establishment_status": membership.establishment.status,
         "role": membership.role,
         "status": membership.status,

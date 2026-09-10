@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { OrganizationEstablishmentsTab } from '../components/organization-establishments-tab'
+import { OrganizationEstablishmentsTab } from './organization-establishments-tab'
 import type { OrganizationAdminEstablishment } from '../types'
 
 afterEach(() => {
@@ -28,15 +28,31 @@ function establishment(
 }
 
 const baseProps = {
-  canCreate: false,
   onManage: vi.fn(),
   onAccessApp: vi.fn(),
   pendingAccessEstablishmentId: null as string | null,
   accessError: null as string | null,
   accessErrorEstablishmentId: null as string | null,
   onResume: vi.fn(),
-  onCreate: vi.fn(),
 }
+
+describe('OrganizationEstablishmentsTab create action slot', () => {
+  it('renders a provided create action', () => {
+    render(
+      <OrganizationEstablishmentsTab
+        {...baseProps}
+        establishments={[]}
+        createAction={<button type="button">Ajouter un établissement</button>}
+      />,
+    )
+    expect(screen.getByRole('button', { name: /Ajouter un établissement/i })).toBeTruthy()
+  })
+
+  it('hides create when no action is provided', () => {
+    render(<OrganizationEstablishmentsTab {...baseProps} establishments={[]} />)
+    expect(screen.queryByRole('button', { name: /Ajouter un établissement/i })).toBeNull()
+  })
+})
 
 describe('OrganizationEstablishmentsTab resume CTA', () => {
   it('shows resume only when can continue and session exists', () => {
@@ -108,5 +124,23 @@ describe('OrganizationEstablishmentsTab access app CTA', () => {
       />,
     )
     expect(screen.queryByRole('button', { name: /Accéder à l'application/i })).toBeNull()
+  })
+
+  it('shows a neutral label when the draft name is empty', () => {
+    render(
+      <OrganizationEstablishmentsTab
+        {...baseProps}
+        organizationName="Spore"
+        establishments={[
+          establishment({
+            name: '',
+            status: 'draft',
+            can_continue_onboarding: true,
+            onboarding_session_id: 'session-1',
+          }),
+        ]}
+      />,
+    )
+    expect(screen.getByText('Spore')).toBeTruthy()
   })
 })

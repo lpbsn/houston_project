@@ -408,6 +408,21 @@ def test_activate_onboarding_session_success_for_owner(onboarding_session, owner
     assert AIUsageLog.objects.count() == 0
 
 
+def test_activate_onboarding_session_rejects_unnamed_establishment(onboarding_session, owner):
+    establishment = onboarding_session.establishment
+    establishment.name = None
+    establishment.save(update_fields=["name", "updated_at"])
+    create_ready_runtime(onboarding_session, owner)
+    mark_onboarding_ready_for_activation(session=onboarding_session, actor=owner)
+
+    with pytest.raises(InvalidOnboardingActivationStateError, match="must have a name"):
+        activate_onboarding_session(session=onboarding_session, actor=owner)
+
+    establishment.refresh_from_db()
+    assert establishment.status == Establishment.Status.DRAFT
+    assert establishment.name is None
+
+
 def test_mark_ready_denies_director_even_when_readiness_passes(onboarding_session, owner):
     create_ready_runtime(onboarding_session, owner)
     director_membership = EstablishmentMembership.objects.get(

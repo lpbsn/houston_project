@@ -66,7 +66,7 @@ export function applyCatalogBusinessUnitSelection(
       client_key: createClientKey(),
       business_unit_client_key: businessUnitClientKey,
       catalog_key: subject.key,
-      label: subject.label,
+      label: '',
       description: '',
     })
   }
@@ -122,4 +122,48 @@ export function createEmptyBusinessUnit(): OnboardingDraftPayload['business_unit
     specific_name: '',
     instance_description: '',
   }
+}
+
+/**
+ * Persist XOR: catalog subjects keep catalog_key and empty label/description;
+ * free subjects keep label/description and a null catalog_key.
+ * Call at hydrate and persist boundaries — not inside payload parse.
+ */
+export function canonicalizeDraftActivitySubjectIdentities(
+  payload: OnboardingDraftPayload,
+): OnboardingDraftPayload {
+  return {
+    ...payload,
+    activity_subjects: payload.activity_subjects.map((subject) => {
+      const catalogKey = subject.catalog_key?.trim() || null
+      if (catalogKey) {
+        return {
+          ...subject,
+          catalog_key: catalogKey,
+          label: '',
+          description: '',
+        }
+      }
+      return {
+        ...subject,
+        catalog_key: null,
+      }
+    }),
+  }
+}
+
+export function displayDraftActivitySubjectLabel(
+  subject: OnboardingDraftActivitySubject,
+  catalogLabelByKey: ReadonlyMap<string, string>,
+): string {
+  const freeLabel = subject.label.trim()
+  if (freeLabel) {
+    return freeLabel
+  }
+  const catalogKey = subject.catalog_key?.trim()
+  if (!catalogKey) {
+    return ''
+  }
+  const catalogLabel = catalogLabelByKey.get(catalogKey)?.trim()
+  return catalogLabel || catalogKey
 }

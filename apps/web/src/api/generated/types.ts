@@ -613,7 +613,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Creates a DRAFT establishment in a manageable organization (Owner on ACTIVE or DRAFT). Uses the session-selected establishment's organization when present and authorized; otherwise the actor's unique manageable organization. Seeds organizational owners and starts onboarding atomically. Body accepts only the establishment name. */
+        /** @description Creates a DRAFT establishment in a manageable organization (Owner on ACTIVE or DRAFT). Uses the session-selected establishment's organization when present and authorized; otherwise the actor's unique manageable organization. Seeds organizational owners and starts onboarding atomically. Body accepts an optional establishment name. Omit or send null to provision an unnamed DRAFT; blank strings are rejected. Seeds organizational owners and starts onboarding atomically. */
         post: operations["v1_establishments_create"];
         delete?: never;
         options?: never;
@@ -3950,14 +3950,14 @@ export interface components {
             operational_config: components["schemas"]["EstablishmentAdminOperationalConfig"];
         };
         EstablishmentCreateRequest: {
-            name: string;
+            name?: string | null;
         };
         EstablishmentCreateResponse: {
             /** Format: uuid */
             establishment_id: string;
             /** Format: uuid */
             organization_id: string;
-            name: string;
+            name: string | null;
             status: string;
             /** Format: uuid */
             onboarding_session_id: string;
@@ -6840,7 +6840,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
+        requestBody?: {
             content: {
                 "application/json": components["schemas"]["EstablishmentCreateRequest"];
                 "application/x-www-form-urlencoded": components["schemas"]["EstablishmentCreateRequest"];

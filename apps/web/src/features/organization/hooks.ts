@@ -104,7 +104,7 @@ export function useInviteOrganizationOwnerMutation(organizationId: string) {
 
 export function useCreateOrganizationEstablishmentMutation(organizationId: string) {
   return useMutation({
-    mutationFn: (name: string) => createEstablishment({ name }),
+    mutationFn: () => createEstablishment({}),
     onSuccess: async () => {
       await invalidateOrganizationQueries(organizationId)
     },

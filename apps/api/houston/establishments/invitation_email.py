@@ -149,14 +149,15 @@ def send_establishment_invitation_email(
     user = membership.user
     accept_url = build_invitation_accept_url(raw_token=raw_token)
     role_label = _ROLE_LABELS_FR.get(membership.role, membership.role)
+    establishment_name = membership.establishment.name or ""
     context = {
         "first_name": user.first_name,
-        "establishment_name": membership.establishment.name,
+        "establishment_name": establishment_name,
         "role_label": role_label,
         "accept_url": accept_url,
         "expires_at_label": _format_expires_at_fr(invitation.expires_at),
     }
-    subject = _build_invitation_email_subject(establishment_name=membership.establishment.name)
+    subject = _build_invitation_email_subject(establishment_name=establishment_name)
     html_body, text_body = _render_invitation_email_bodies(context=context)
     idempotency_key = f"membership-invitation/{invitation.id}"
 

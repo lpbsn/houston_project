@@ -6,13 +6,15 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
-from django.db.models.functions import Lower, Trim
+from django.db.models.functions import Length, Lower, Trim
+from django.db.models.lookups import GreaterThan
 from django.utils import timezone
 
 from houston.core.models import BaseModel
 from houston.organizations.models import Organization
 
 ESTABLISHMENT_ORG_NAME_CI_UNIQ = "establishment_org_name_ci_uniq"
+ESTABLISHMENT_NON_DRAFT_REQUIRES_NAME = "establishment_non_draft_requires_name"
 
 DEFAULT_ESTABLISHMENT_TIMEZONE = "Europe/Paris"
 ESTABLISHMENT_TIMEZONE_MAX_LENGTH = 63
@@ -56,7 +58,7 @@ class Establishment(BaseModel):
         on_delete=models.CASCADE,
         related_name="establishments",
     )
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=255, null=True, blank=True)
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
@@ -75,6 +77,14 @@ class Establishment(BaseModel):
                 "organization",
                 name=ESTABLISHMENT_ORG_NAME_CI_UNIQ,
             ),
+            models.CheckConstraint(
+                condition=Q(status="draft")
+                | (
+                    Q(name__isnull=False)
+                    & GreaterThan(Length(Trim("name")), 0)
+                ),
+                name=ESTABLISHMENT_NON_DRAFT_REQUIRES_NAME,
+            ),
         ]
 
     def clean(self) -> None:
@@ -88,7 +98,7 @@ class Establishment(BaseModel):
                 ) from exc
 
     def __str__(self) -> str:
-        return self.name
+        return self.name or f"Establishment {self.pk}"
 
 
 class OnboardingSession(BaseModel):
