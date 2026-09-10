@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Plus } from 'lucide-react'
 
 import {
@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 import { useCreateOrganizationEstablishmentMutation } from '../hooks'
-import { resolveUniqueOrganizationId } from '../lib/resolve-unique-organization-id'
 
 type CreateEstablishmentActionProps = {
   bootstrap: BootstrapResponse | null | undefined
@@ -33,26 +32,19 @@ export function CreateEstablishmentAction({
   }
 
   return (
-    <CreateEstablishmentActionReady
-      bootstrap={bootstrap}
-      navigate={navigate}
-      triggerVariant={triggerVariant}
-    />
+    <CreateEstablishmentActionReady navigate={navigate} triggerVariant={triggerVariant} />
   )
 }
 
 function CreateEstablishmentActionReady({
-  bootstrap,
   navigate,
   triggerVariant,
-}: CreateEstablishmentActionProps) {
-  const orgResolution = useMemo(() => resolveUniqueOrganizationId(bootstrap), [bootstrap])
-  const organizationId = orgResolution.ok ? orgResolution.organizationId : null
+}: Omit<CreateEstablishmentActionProps, 'bootstrap'>) {
   const createMutation = useCreateOrganizationEstablishmentMutation()
   const [error, setError] = useState<string | null>(null)
 
   async function provisionUnnamed() {
-    if (!organizationId || createMutation.isPending) {
+    if (createMutation.isPending) {
       return
     }
     setError(null)

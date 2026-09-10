@@ -39,8 +39,9 @@ function InviteFormProbe({
   establishmentId: string
   allowedTargetRoles?: ('owner' | 'staff' | 'manager' | 'director')[]
   bootstrap?: {
-    memberships: { organization_id: string }[]
-    pending_onboarding_memberships: { organization_id: string }[]
+    memberships: { establishment_id?: string; organization_id: string }[]
+    pending_onboarding_memberships: { establishment_id?: string; organization_id: string }[]
+    active_membership?: { establishment_id: string; organization_id: string } | null
   }
 }) {
   const {
@@ -326,7 +327,7 @@ describe('useMembershipInviteForm', () => {
         establishmentId: 'est-1',
         allowedTargetRoles: ['owner', 'director', 'manager', 'staff'],
         bootstrap: {
-          memberships: [{ organization_id: 'org-1' }],
+          memberships: [{ establishment_id: 'est-1', organization_id: 'org-1' }],
           pending_onboarding_memberships: [],
         },
       }),
@@ -358,6 +359,50 @@ describe('useMembershipInviteForm', () => {
     })
     expect(inviteMembership).not.toHaveBeenCalled()
     expect(invalidateMembershipListQueries).not.toHaveBeenCalled()
+  })
+
+  it('submits owner invites for the targeted establishment when several orgs exist', async () => {
+    inviteOrganizationOwner.mockResolvedValue({
+      invitation_accept_path: '/invitations/token-owner-multi',
+    })
+
+    renderWithQueryClient(
+      createElement(InviteFormProbe, {
+        establishmentId: 'est-2',
+        allowedTargetRoles: ['owner', 'director', 'manager', 'staff'],
+        bootstrap: {
+          memberships: [
+            { establishment_id: 'est-1', organization_id: 'org-1' },
+            { establishment_id: 'est-2', organization_id: 'org-2' },
+          ],
+          pending_onboarding_memberships: [],
+        },
+      }),
+    )
+
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'owner@example.com' },
+    })
+    fireEvent.change(screen.getByLabelText('First name'), {
+      target: { value: 'Sam' },
+    })
+    fireEvent.change(screen.getByLabelText('Last name'), {
+      target: { value: 'Owner' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Select owner' }))
+
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button', { name: 'Submit' }))
+    })
+
+    await waitFor(() => {
+      expect(inviteOrganizationOwner).toHaveBeenCalledWith('org-2', {
+        email: 'owner@example.com',
+        first_name: 'Sam',
+        last_name: 'Owner',
+      })
+    })
+    expect(inviteMembership).not.toHaveBeenCalled()
   })
 
   it('maps invitation API error codes', async () => {

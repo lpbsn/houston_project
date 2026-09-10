@@ -11,7 +11,7 @@ import {
 } from '@/features/auth/lib/invitation-rbac'
 import type { BootstrapResponse, MembershipInvitationRequestRoleEnum } from '@/features/auth/types'
 import { inviteOrganizationOwner } from '@/features/organization/api'
-import { resolveUniqueOrganizationId } from '@/features/organization/lib/resolve-unique-organization-id'
+import { resolveOrganizationIdForEstablishment } from '@/features/organization/lib/resolve-organization-id-for-establishment'
 import { resolvePublicAppUrl } from '@/lib/runtime'
 
 export type MembershipInviteFormState = {
@@ -140,7 +140,7 @@ export function useMembershipInviteForm({
       const lastName = form.last_name.trim()
 
       if (selectedRole === 'owner') {
-        const organizationId = resolveUniqueOrganizationId(bootstrap)
+        const organizationId = resolveOrganizationIdForEstablishment(bootstrap, establishmentId)
         if (!organizationId.ok) {
           throw new Error('Impossible de déterminer l’organisation pour inviter un propriétaire.')
         }

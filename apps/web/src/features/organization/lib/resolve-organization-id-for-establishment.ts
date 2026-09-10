@@ -1,31 +1,37 @@
 import type { BootstrapResponse } from '@/features/auth/types'
 
-export type ResolveUniqueOrganizationIdResult =
+export type ResolveOrganizationIdForEstablishmentResult =
   | { ok: true; organizationId: string }
   | { ok: false; reason: 'none' | 'ambiguous' }
 
 type OrganizationIdSource = {
+  establishment_id?: string | null
   organization_id?: string | null
 }
 
 /**
- * Deduplicate organization ids from bootstrap membership sources.
- * Accepts only when exactly one distinct organization is present.
+ * Resolve the organization of a known establishment from bootstrap membership sources.
+ * Does not infer an org when the establishment is absent.
  */
-export function resolveUniqueOrganizationId(
+export function resolveOrganizationIdForEstablishment(
   bootstrap: BootstrapResponse | null | undefined,
-): ResolveUniqueOrganizationIdResult {
-  if (!bootstrap) {
+  establishmentId: string,
+): ResolveOrganizationIdForEstablishmentResult {
+  if (!bootstrap || establishmentId.length === 0) {
     return { ok: false, reason: 'none' }
   }
 
   const sources: OrganizationIdSource[] = [
+    ...(bootstrap.active_membership ? [bootstrap.active_membership] : []),
     ...(bootstrap.memberships ?? []),
     ...(bootstrap.pending_onboarding_memberships ?? []),
   ]
 
   const uniqueIds = new Set<string>()
   for (const source of sources) {
+    if (source.establishment_id !== establishmentId) {
+      continue
+    }
     const id = source.organization_id
     if (typeof id === 'string' && id.length > 0) {
       uniqueIds.add(id)

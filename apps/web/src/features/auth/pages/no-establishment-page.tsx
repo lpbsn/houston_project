@@ -1,8 +1,8 @@
 import { Building2 } from 'lucide-react'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { CreateEstablishmentAction } from '@/features/organization/components/create-establishment-action'
 import type { BootstrapResponse } from '@/features/auth/types'
+import { CreateEstablishmentAction } from '@/features/organization/components/create-establishment-action'
 
 type NoEstablishmentPageProps = {
   bootstrap: BootstrapResponse | null | undefined

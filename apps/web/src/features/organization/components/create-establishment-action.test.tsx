@@ -132,6 +132,42 @@ describe('CreateEstablishmentAction', () => {
     })
   })
 
+  it('provisions when bootstrap lists more than one organization', async () => {
+    const navigate = vi.fn()
+    createEstablishment.mockResolvedValueOnce({
+      establishment_id: 'est-new',
+      organization_id: 'org-2',
+      name: null,
+      status: 'draft',
+      onboarding_session_id: 'session-2',
+    })
+
+    renderAction(
+      createElement(CreateEstablishmentAction, {
+        bootstrap: bootstrap([
+          membership({ organization_id: 'org-1' }),
+          membership({
+            id: 'membership-2',
+            establishment_id: 'est-2',
+            organization_id: 'org-2',
+            organization_name: 'Other',
+          }),
+        ]),
+        navigate,
+        triggerVariant: 'organization',
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Ajouter un établissement/i }))
+
+    await waitFor(() => {
+      expect(createEstablishment).toHaveBeenCalledWith({})
+    })
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith('/onboarding?establishmentId=est-new&sessionId=session-2')
+    })
+  })
+
   it('shows an inline error when creation fails', async () => {
     createEstablishment.mockRejectedValueOnce(new Error('Création refusée.'))
 

@@ -186,6 +186,29 @@ describe('TeamPage', () => {
     expect(screen.getByPlaceholderText('Rechercher un membre…')).toBeTruthy()
   })
 
+  it('shows invite card when can_manage_organization is true even without can_invite', () => {
+    authState.current = {
+      ...authState.current,
+      bootstrap: {
+        permission_hints: {
+          chat_available: false,
+          can_create_action_plan: false,
+          can_create_catalog_action_plan: false,
+          can_view_action_plan_catalog: false,
+          can_invite: false,
+          can_manage_runtime_config: false,
+          can_view_team: true,
+          can_manage_organization: true,
+          can_create_establishment: true,
+        },
+      },
+    }
+
+    render(createElement(TeamPage, { onNavigate }))
+
+    expect(screen.getByRole('button', { name: /Inviter un membre/i })).toBeTruthy()
+  })
+
   it('shows permission denied when can_view_team is false', () => {
     authState.current = {
       ...authState.current,
