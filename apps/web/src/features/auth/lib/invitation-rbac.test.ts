@@ -25,6 +25,9 @@ describe('invitation-rbac', () => {
     expect(
       resolveTeamInviteRoleOptions({ actorRole: 'staff', canManageOrganization: false }),
     ).toEqual([])
+    expect(
+      resolveTeamInviteRoleOptions({ actorRole: 'staff', canManageOrganization: true }),
+    ).toEqual(['owner'])
   })
 
   it('requires scopes only for manager and staff invites', () => {

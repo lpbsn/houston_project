@@ -155,23 +155,22 @@ export function useMembershipInviteForm({
         setInvitationLink(buildInvitationAcceptUrl(result.invitation_accept_path))
         setForm(emptyForm)
         setSelectedBusinessUnitScopes([])
-        return
+      } else {
+        const scopes = requiresInviteScopes(selectedRole) ? selectedBusinessUnitScopes : []
+
+        const result = await inviteMembership(establishmentId, {
+          email: submittedEmail,
+          first_name: firstName,
+          last_name: lastName,
+          role: selectedRole,
+          ...(scopes.length > 0 ? { scopes } : {}),
+        })
+
+        setInvitedEmail(submittedEmail)
+        setInvitationLink(buildInvitationAcceptUrl(result.invitation_accept_path))
+        setForm(emptyForm)
+        setSelectedBusinessUnitScopes([])
       }
-
-      const scopes = requiresInviteScopes(selectedRole) ? selectedBusinessUnitScopes : []
-
-      const result = await inviteMembership(establishmentId, {
-        email: submittedEmail,
-        first_name: firstName,
-        last_name: lastName,
-        role: selectedRole,
-        ...(scopes.length > 0 ? { scopes } : {}),
-      })
-
-      setInvitedEmail(submittedEmail)
-      setInvitationLink(buildInvitationAcceptUrl(result.invitation_accept_path))
-      setForm(emptyForm)
-      setSelectedBusinessUnitScopes([])
 
       void invalidateMembershipListQueries(establishmentId, queryClient)
     } catch (error) {

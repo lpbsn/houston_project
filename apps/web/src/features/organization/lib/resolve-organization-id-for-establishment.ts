@@ -48,3 +48,42 @@ export function resolveOrganizationIdForEstablishment(
   const [organizationId] = uniqueIds
   return { ok: true, organizationId: organizationId! }
 }
+
+type OrganizationCapabilitySource = {
+  organization_id?: string | null
+  role?: string | null
+  status?: string | null
+}
+
+/**
+ * UX-only: true when bootstrap shows an owner membership on this establishment's org.
+ * Does not use the user-global `can_manage_organization` hint.
+ */
+export function canManageOrganizationOfEstablishment(
+  bootstrap: BootstrapResponse | null | undefined,
+  establishmentId: string,
+): boolean {
+  const resolved = resolveOrganizationIdForEstablishment(bootstrap, establishmentId)
+  if (!resolved.ok || !bootstrap) {
+    return false
+  }
+
+  const sources: OrganizationCapabilitySource[] = [
+    ...(bootstrap.active_membership ? [bootstrap.active_membership] : []),
+    ...(bootstrap.memberships ?? []),
+    ...(bootstrap.pending_onboarding_memberships ?? []),
+  ]
+
+  return sources.some((source) => {
+    if (source.organization_id !== resolved.organizationId) {
+      return false
+    }
+    if (source.role !== 'owner') {
+      return false
+    }
+    if (source.status != null && source.status !== 'active') {
+      return false
+    }
+    return true
+  })
+}

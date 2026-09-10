@@ -16,11 +16,11 @@ import { useMembershipInviteForm } from '@/features/auth/hooks/use-membership-in
 import { buildInvitationCreatedMessage } from '@/features/auth/lib/invitation-messaging'
 import {
   canInviteFromBootstrapHints,
-  canManageOrganizationFromBootstrapHints,
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
 import { resolveTeamInviteRoleOptions } from '@/features/auth/lib/invitation-rbac'
 import { toRoleEnum } from '@/features/auth/lib/role'
+import { canManageOrganizationOfEstablishment } from '@/features/organization/lib/resolve-organization-id-for-establishment'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -29,7 +29,10 @@ export function TeamInvitePage() {
   const { activeMembership, bootstrap } = useAuth()
   const permissionHints = getBootstrapPermissionHints(bootstrap)
   const role = toRoleEnum(activeMembership?.role)
-  const canManageOrganization = canManageOrganizationFromBootstrapHints(permissionHints)
+  const canManageOrganization = canManageOrganizationOfEstablishment(
+    bootstrap,
+    activeMembership?.establishment_id ?? '',
+  )
   const allowedTargetRoles = resolveTeamInviteRoleOptions({
     actorRole: role,
     canManageOrganization,

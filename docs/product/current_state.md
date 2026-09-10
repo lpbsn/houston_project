@@ -82,7 +82,7 @@ Post-core gaps (non-blocking pilot): some bootstrap hints, no REST message write
 - Terrain mobile shell (`TerrainShell`, bottom nav, `--app-safe-*` insets).
 - Native UX (Capacitor Lot 9): Android system back aligned on `backPath`; iOS keyboard resize native; Observation mic OS declarations.
 - Management shell (`AppShell`) for non-terrain routes: onboarding, pending onboarding, select-establishment, no-establishment, invitations.
-- Organization owner invite: `/team/invite` (Owner option when `can_manage_organization`) via `POST /api/v1/organizations/{id}/owner-invitations/`. Membership invites stay on the same page via establishment membership invitations.
+- Organization owner invite: `/team/invite` (Owner option when bootstrap shows an owner membership on the current establishment’s organization) via `POST /api/v1/organizations/{id}/owner-invitations/`. Membership invites stay on the same page via establishment membership invitations.
 - Operational config lives at `/e/{id}/operational-config` (desktop sidebar). Team and membership admin: `/team*`.
 - Client router: `apps/web/src/app/app-routes.ts` (not React Router).
 - Server state: TanStack Query only (no client global store library).

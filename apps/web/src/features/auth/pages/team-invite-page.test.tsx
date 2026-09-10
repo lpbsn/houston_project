@@ -4,6 +4,8 @@ import { createElement } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { BootstrapResponse, Membership } from '@/features/auth/types'
+
 import { TeamInvitePage } from './team-invite-page'
 
 const navigate = vi.fn()
@@ -14,23 +16,18 @@ const MVP_PHRASE =
 const SUCCESS_MESSAGE =
   'Invitation créée. Un email va être envoyé à invitee@example.com.'
 
-const { authState, inviteFormState } = vi.hoisted(() => ({
+type TeamInviteAuthMock = {
+  bootstrap: BootstrapResponse | null
+  activeMembership: Membership | null
+}
+
+const { authState, inviteFormState, useMembershipInviteForm } = vi.hoisted(() => ({
+  useMembershipInviteForm: vi.fn(),
   authState: {
     current: {
-      bootstrap: {
-        permission_hints: {
-          can_invite: true,
-          can_manage_organization: false,
-        },
-      },
-      activeMembership: {
-        id: 'member-1',
-        establishment_id: 'est-1',
-        establishment_name: 'Nice',
-        role: 'director',
-        status: 'active',
-      },
-    },
+      bootstrap: null as BootstrapResponse | null,
+      activeMembership: null as Membership | null,
+    } satisfies TeamInviteAuthMock,
   },
   inviteFormState: {
     current: {
@@ -80,27 +77,92 @@ vi.mock('@/app/auth-provider', () => ({
 }))
 
 vi.mock('@/features/auth/hooks/use-membership-invite-form', () => ({
-  useMembershipInviteForm: () => inviteFormState.current,
+  useMembershipInviteForm: (...args: unknown[]) => {
+    useMembershipInviteForm(...args)
+    return inviteFormState.current
+  },
 }))
+
+function membership(overrides: Partial<Membership> = {}): Membership {
+  return {
+    id: overrides.id ?? 'member-1',
+    establishment_id: overrides.establishment_id ?? 'est-1',
+    establishment_name: overrides.establishment_name ?? 'Nice',
+    organization_id: overrides.organization_id ?? 'org-1',
+    organization_name: overrides.organization_name ?? 'Org',
+    role: overrides.role ?? 'director',
+    status: overrides.status ?? 'active',
+    scopes: overrides.scopes ?? [],
+    scope_summary: overrides.scope_summary ?? { business_unit_count: 0 },
+  }
+}
+
+function bootstrap(options: {
+  permissionHints?: Partial<BootstrapResponse['permission_hints']>
+  memberships?: Membership[]
+  activeMembership?: Membership | null
+}): BootstrapResponse {
+  const activeMembership = options.activeMembership ?? membership()
+  return {
+    authenticated: true,
+    user: {
+      id: 'user-1',
+      username: 'marie',
+      email: 'marie@example.com',
+      identity_type: 'human',
+      first_name: 'Marie',
+      last_name: 'Renaud',
+      terms_version: 'cgu-v1',
+      terms_accepted_at: '2026-01-01T00:00:00.000Z',
+      current_terms_version: 'cgu-v1',
+      needs_terms_acceptance: false,
+      ai_consent_version: 'openai-v1',
+      ai_processing_consented_at: '2026-01-01T00:00:00.000Z',
+      current_ai_consent_version: 'openai-v1',
+      needs_ai_consent: false,
+      ai_consent_status: 'granted',
+    },
+    memberships: options.memberships ?? [activeMembership],
+    active_membership: activeMembership,
+    pending_onboarding_memberships: [],
+    permission_hints: {
+      chat_available: false,
+      can_create_action_plan: false,
+      can_create_catalog_action_plan: false,
+      can_view_action_plan_catalog: false,
+      can_invite: true,
+      can_manage_runtime_config: false,
+      can_view_team: true,
+      can_manage_organization: false,
+      can_create_establishment: false,
+      ...options.permissionHints,
+    },
+  }
+}
+
+function inviteAuth(options: {
+  permissionHints?: Partial<BootstrapResponse['permission_hints']>
+  memberships?: Membership[]
+  activeMembership?: Membership
+} = {}): TeamInviteAuthMock {
+  const activeMembership = options.activeMembership ?? membership()
+  return {
+    bootstrap: bootstrap({
+      permissionHints: options.permissionHints,
+      memberships: options.memberships,
+      activeMembership,
+    }),
+    activeMembership,
+  }
+}
+
+authState.current = inviteAuth()
 
 afterEach(() => {
   cleanup()
   navigate.mockReset()
-  authState.current = {
-    bootstrap: {
-      permission_hints: {
-        can_invite: true,
-        can_manage_organization: false,
-      },
-    },
-    activeMembership: {
-      id: 'member-1',
-      establishment_id: 'est-1',
-      establishment_name: 'Nice',
-      role: 'director',
-      status: 'active',
-    },
-  }
+  useMembershipInviteForm.mockReset()
+  authState.current = inviteAuth()
   inviteFormState.current = {
     form: {
       email: '',
@@ -146,21 +208,13 @@ describe('TeamInvitePage', () => {
   })
 
   it('shows terrain error state when invite is not allowed', () => {
-    authState.current = {
-      bootstrap: {
-        permission_hints: {
-          can_invite: false,
-          can_manage_organization: false,
-        },
+    authState.current = inviteAuth({
+      permissionHints: {
+        can_invite: false,
+        can_manage_organization: false,
       },
-      activeMembership: {
-        id: 'member-1',
-        establishment_id: 'est-1',
-        establishment_name: 'Nice',
-        role: 'staff',
-        status: 'active',
-      },
-    }
+      activeMembership: membership({ role: 'staff' }),
+    })
 
     render(createElement(TeamInvitePage))
 
@@ -172,21 +226,13 @@ describe('TeamInvitePage', () => {
   })
 
   it('navigates back to team from unauthorized state', () => {
-    authState.current = {
-      bootstrap: {
-        permission_hints: {
-          can_invite: false,
-          can_manage_organization: false,
-        },
+    authState.current = inviteAuth({
+      permissionHints: {
+        can_invite: false,
+        can_manage_organization: false,
       },
-      activeMembership: {
-        id: 'member-1',
-        establishment_id: 'est-1',
-        establishment_name: 'Nice',
-        role: 'staff',
-        status: 'active',
-      },
-    }
+      activeMembership: membership({ role: 'staff' }),
+    })
 
     render(createElement(TeamInvitePage))
 
@@ -226,27 +272,82 @@ describe('TeamInvitePage', () => {
     expect(screen.getByRole('button', { name: /Copy invitation link/i })).toBeTruthy()
   })
 
-  it('shows invite form when can_manage_organization is true even without can_invite', () => {
-    authState.current = {
-      bootstrap: {
-        permission_hints: {
-          can_invite: false,
-          can_manage_organization: true,
-        },
+  it('shows invite form when the actor owns this establishment organization without can_invite', () => {
+    authState.current = inviteAuth({
+      permissionHints: {
+        can_invite: false,
+        can_manage_organization: true,
       },
-      activeMembership: {
-        id: 'member-1',
-        establishment_id: 'est-1',
-        establishment_name: 'Nice',
-        role: 'owner',
-        status: 'active',
-      },
-    }
+      activeMembership: membership({ role: 'owner' }),
+    })
 
     render(createElement(TeamInvitePage))
 
     expect(screen.getByText('Email')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Create invitation/i })).toBeTruthy()
+    expect(useMembershipInviteForm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allowedTargetRoles: ['owner', 'director', 'manager', 'staff'],
+      }),
+    )
+  })
+
+  it('denies invite access for staff when the global org hint is for another organization', () => {
+    const ownerOtherOrg = membership({
+      id: 'member-a',
+      establishment_id: 'est-a',
+      organization_id: 'org-a',
+      role: 'owner',
+    })
+    const staffHere = membership({
+      organization_id: 'org-b',
+      role: 'staff',
+    })
+    authState.current = inviteAuth({
+      permissionHints: {
+        can_invite: false,
+        can_manage_organization: true,
+      },
+      memberships: [ownerOtherOrg, staffHere],
+      activeMembership: staffHere,
+    })
+
+    render(createElement(TeamInvitePage))
+
+    expect(
+      screen.getByText('Votre profil actuel ne vous permet pas de créer des invitations.'),
+    ).toBeTruthy()
+    expect(screen.queryByText('Email')).toBeNull()
+  })
+
+  it('does not offer owner when the actor can invite but only owns another organization', () => {
+    const ownerOtherOrg = membership({
+      id: 'member-a',
+      establishment_id: 'est-a',
+      organization_id: 'org-a',
+      role: 'owner',
+    })
+    const directorHere = membership({
+      organization_id: 'org-b',
+      role: 'director',
+    })
+    authState.current = inviteAuth({
+      permissionHints: {
+        can_invite: true,
+        can_manage_organization: true,
+      },
+      memberships: [ownerOtherOrg, directorHere],
+      activeMembership: directorHere,
+    })
+
+    render(createElement(TeamInvitePage))
+
+    expect(screen.getByText('Email')).toBeTruthy()
+    expect(useMembershipInviteForm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allowedTargetRoles: ['manager', 'staff'],
+      }),
+    )
   })
 
   it('hides business unit scopes when owner is selected', () => {

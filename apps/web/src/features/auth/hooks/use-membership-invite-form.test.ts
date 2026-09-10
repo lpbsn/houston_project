@@ -358,7 +358,7 @@ describe('useMembershipInviteForm', () => {
       })
     })
     expect(inviteMembership).not.toHaveBeenCalled()
-    expect(invalidateMembershipListQueries).not.toHaveBeenCalled()
+    expect(invalidateMembershipListQueries).toHaveBeenCalledWith('est-1', expect.anything())
   })
 
   it('submits owner invites for the targeted establishment when several orgs exist', async () => {
@@ -403,6 +403,7 @@ describe('useMembershipInviteForm', () => {
       })
     })
     expect(inviteMembership).not.toHaveBeenCalled()
+    expect(invalidateMembershipListQueries).toHaveBeenCalledWith('est-2', expect.anything())
   })
 
   it('maps invitation API error codes', async () => {
