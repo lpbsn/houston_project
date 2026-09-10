@@ -748,14 +748,13 @@ describe('ProfilePage', () => {
       }),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /Gestion de l'établissement/i }))
-    expect(onNavigate).toHaveBeenCalledWith('/organization/establishments/est-1')
-
     fireEvent.click(screen.getByRole('button', { name: /Bibliothèque/i }))
     expect(onNavigate).toHaveBeenCalledWith('/action-plans')
 
     fireEvent.click(screen.getByRole('button', { name: /Équipe/i }))
     expect(onNavigate).toHaveBeenCalledWith('/team')
+    expect(screen.queryByRole('button', { name: /Gestion de l'établissement/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Gestion de l'organisation/i })).toBeNull()
   })
 
   it('does not show ops-config CTA on general profile', () => {
@@ -784,16 +783,28 @@ describe('ProfilePage', () => {
     )
 
     expect(screen.queryByRole('button', { name: /^Établissement$/i })).toBeNull()
-    expect(onNavigate).not.toHaveBeenCalledWith('/app/operational-config')
   })
 
-  it('shows organization admin link for owners', () => {
+  it('shows a pending onboarding resume link when drafts exist alongside ACTIVE', () => {
     authState.current = {
       ...authState.current,
       activeMembership: {
         ...authState.current.activeMembership,
         role: 'owner',
       },
+      pendingOnboardingMemberships: [
+        {
+          id: 'pending-1',
+          establishment_id: 'est-draft',
+          establishment_name: 'Draft Hotel',
+          establishment_status: 'draft',
+          organization_id: 'org-1',
+          organization_name: 'Org',
+          role: 'owner',
+          onboarding_session_id: 'session-1',
+          can_continue_onboarding: true,
+        },
+      ],
       bootstrap: {
         permission_hints: {
           chat_available: false,
@@ -816,8 +827,11 @@ describe('ProfilePage', () => {
       }),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /Gestion de l'organisation/i }))
-    expect(onNavigate).toHaveBeenCalledWith('/organization')
+    fireEvent.click(screen.getByRole('button', { name: /Reprendre la configuration/i }))
+    expect(onNavigate).toHaveBeenCalledWith(
+      '/onboarding?establishmentId=est-draft&sessionId=session-1',
+    )
+    expect(screen.queryByRole('button', { name: /Gestion de l'organisation/i })).toBeNull()
   })
 
   it('hides establishment card when runtime config hint is false and role is not admin', () => {

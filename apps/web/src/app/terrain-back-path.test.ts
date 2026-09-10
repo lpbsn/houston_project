@@ -51,9 +51,9 @@ describe('resolveTerrainBackPath', () => {
     expect(
       resolveTerrainBackPath(
         { kind: 'static', path: '/analytics' },
-        { hasOperationalAccess: false, authenticatedLandingPath: '/organization' },
+        { hasOperationalAccess: false, authenticatedLandingPath: '/no-establishment' },
       ),
-    ).toBe('/organization')
+    ).toBe('/no-establishment')
     expect(
       resolveTerrainBackPath(
         { kind: 'static', path: '/analytics' },

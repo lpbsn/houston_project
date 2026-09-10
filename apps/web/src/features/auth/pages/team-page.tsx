@@ -13,6 +13,7 @@ import { TeamMemberList } from '@/features/auth/components/team/team-member-list
 import { TeamStatusFilters } from '@/features/auth/components/team/team-status-filters'
 import {
   canInviteFromBootstrapHints,
+  canManageOrganizationFromBootstrapHints,
   canViewTeamFromBootstrapHints,
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
@@ -37,7 +38,9 @@ type TeamPageProps = {
 export function TeamPage({ onNavigate }: TeamPageProps) {
   const { activeMembership, bootstrap, isBootstrapping, isReady } = useAuth()
   const permissionHints = getBootstrapPermissionHints(bootstrap)
-  const canInvite = canInviteFromBootstrapHints(permissionHints)
+  const canInvite =
+    canInviteFromBootstrapHints(permissionHints) ||
+    canManageOrganizationFromBootstrapHints(permissionHints)
   const canViewTeam = canViewTeamFromBootstrapHints(permissionHints)
   const establishmentId = activeMembership?.establishment_id ?? null
 

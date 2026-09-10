@@ -28,7 +28,7 @@ Lazy pages: [`lazy-terrain-pages.tsx`](../../apps/web/src/app/lazy-terrain-pages
 ## Layout
 
 - **Terrain shell** — `TerrainShell` (`fixed inset-x-0 top-0`, `h-dvh`, topbar, scrollable main, optional bottom nav). Safe-area token `--app-safe-top/bottom` = `var(--safe-area-inset-*, env(safe-area-inset-*, 0px))` (Capacitor Android polyfill + iOS `env()`).
-- **App shell** — desktop/management shell for non-terrain routes (`/organization*`, onboarding, auth pages). Configuration opérationnelle lives at `/e/{establishmentId}/operational-config` (TerrainShell, desktop web `lg` only; mobile/native redirect to `/e/{id}/reporting`).
+- **App shell** — desktop/management shell for non-terrain routes (onboarding, pending onboarding, select-establishment, no-establishment, invitations, auth pages). Configuration opérationnelle lives at `/e/{establishmentId}/operational-config` (TerrainShell, desktop web `lg` only; mobile/native redirect to `/e/{id}/reporting`).
 
 ## Server state
 

@@ -20,6 +20,7 @@ const { authState, inviteFormState } = vi.hoisted(() => ({
       bootstrap: {
         permission_hints: {
           can_invite: true,
+          can_manage_organization: false,
         },
       },
       activeMembership: {
@@ -89,6 +90,7 @@ afterEach(() => {
     bootstrap: {
       permission_hints: {
         can_invite: true,
+        can_manage_organization: false,
       },
     },
     activeMembership: {
@@ -148,6 +150,7 @@ describe('TeamInvitePage', () => {
       bootstrap: {
         permission_hints: {
           can_invite: false,
+          can_manage_organization: false,
         },
       },
       activeMembership: {
@@ -173,6 +176,7 @@ describe('TeamInvitePage', () => {
       bootstrap: {
         permission_hints: {
           can_invite: false,
+          can_manage_organization: false,
         },
       },
       activeMembership: {
@@ -222,6 +226,43 @@ describe('TeamInvitePage', () => {
     expect(screen.getByRole('button', { name: /Copy invitation link/i })).toBeTruthy()
   })
 
+  it('shows invite form when can_manage_organization is true even without can_invite', () => {
+    authState.current = {
+      bootstrap: {
+        permission_hints: {
+          can_invite: false,
+          can_manage_organization: true,
+        },
+      },
+      activeMembership: {
+        id: 'member-1',
+        establishment_id: 'est-1',
+        establishment_name: 'Nice',
+        role: 'owner',
+        status: 'active',
+      },
+    }
+
+    render(createElement(TeamInvitePage))
+
+    expect(screen.getByText('Email')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Create invitation/i })).toBeTruthy()
+  })
+
+  it('hides business unit scopes when owner is selected', () => {
+    inviteFormState.current = {
+      ...inviteFormState.current,
+      roleOptions: ['owner', 'director', 'manager', 'staff'],
+      selectedRole: 'owner',
+      requiresScopes: false,
+    }
+
+    render(createElement(TeamInvitePage))
+
+    expect(screen.getByRole('button', { name: 'owner' })).toBeTruthy()
+    expect(screen.queryByText("Pôles d'activité")).toBeNull()
+  })
+
   it('shows terrain feedback on submit error', () => {
     inviteFormState.current = {
       ...inviteFormState.current,
@@ -232,5 +273,4 @@ describe('TeamInvitePage', () => {
 
     expect(screen.getByText('Invitation could not be created.')).toBeTruthy()
   })
-
 })

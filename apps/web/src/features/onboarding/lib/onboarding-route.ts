@@ -1,7 +1,7 @@
 import {
   buildOperationalConfigFallbackPath,
   buildOperationalConfigPath,
-} from '@/features/organization/lib/operational-config-navigation'
+} from '@/features/establishment-config/lib/operational-config-navigation'
 
 export type OnboardingOperationalRedirectInput = {
   hasOperationalAccess: boolean

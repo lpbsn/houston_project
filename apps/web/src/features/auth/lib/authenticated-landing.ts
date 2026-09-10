@@ -1,7 +1,6 @@
 import type { AppRoute } from '@/app/app-routes'
 import type { BootstrapResponse } from '@/features/auth/types'
 
-import { canManageOrganizationFromBootstrapHints } from '@/features/auth/lib/bootstrap-permission-hints'
 import {
   buildOnboardingUrl,
   resolvePendingLanding,
@@ -19,7 +18,6 @@ export type AuthenticatedLanding =
   | { kind: 'establishment-selection'; path: '/select-establishment' }
   | { kind: 'cross'; path: typeof CROSS_DASHBOARD_LANDING_PATH }
   | { kind: 'analytics'; path: '/analytics' }
-  | { kind: 'organization'; path: '/organization' }
   | { kind: 'pending'; path: string }
   | { kind: 'empty'; path: '/no-establishment' }
 
@@ -47,10 +45,6 @@ export function resolveAuthenticatedLanding(
     if (canShowAnalyticsNavigation(bootstrap)) {
       return { kind: 'analytics', path: '/analytics' }
     }
-  }
-
-  if (canManageOrganizationFromBootstrapHints(bootstrap.permission_hints)) {
-    return { kind: 'organization', path: '/organization' }
   }
 
   if (bootstrap.active_membership) {
@@ -92,7 +86,6 @@ export const AUTHENTICATED_LANDING_PATHS = new Set<string>([
   '/analytics',
   '/pending-onboarding',
   '/onboarding',
-  '/organization',
   '/no-establishment',
 ])
 
@@ -101,9 +94,7 @@ export function routeAllowsMissingActiveMembership(path: string): boolean {
     path === '/onboarding' ||
     path === '/pending-onboarding' ||
     path === '/select-establishment' ||
-    path === '/no-establishment' ||
-    path === '/organization' ||
-    path.startsWith('/organization/')
+    path === '/no-establishment'
   )
 }
 

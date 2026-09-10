@@ -81,12 +81,6 @@ import {
 } from '@/features/auth/lib/team-list-ui-state'
 import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-accept-page'
 import { OperationalConfigPage } from '@/features/establishment-config/pages/operational-config-page'
-import {
-  buildOperationalConfigFallbackPath,
-  buildOperationalConfigPath,
-} from '@/features/organization/lib/operational-config-navigation'
-import { OrganizationEstablishmentPage } from '@/features/organization/pages/organization-establishment-page'
-import { OrganizationPage } from '@/features/organization/pages/organization-page'
 import { OnboardingPage } from '@/features/onboarding/pages/onboarding-page'
 import { NotificationCenter } from '@/features/notifications/components/notification-center'
 import { ActionPlanExecutionDetailTopbarTrailing } from '@/features/action-plans/components/action-plan-execution-detail-topbar-trailing'
@@ -252,23 +246,6 @@ function App() {
       }
     }
 
-    const activeEstablishmentId = auth.bootstrap.active_membership?.establishment_id ?? null
-    if (route.kind === 'static' && route.path === '/app/operational-config') {
-      if (activeEstablishmentId) {
-        navigate(
-          isDesktopWeb
-            ? buildOperationalConfigPath(activeEstablishmentId)
-            : buildOperationalConfigFallbackPath(activeEstablishmentId),
-          { replace: true },
-        )
-        return
-      }
-      if (landingPath) {
-        navigate(landingPath, { replace: true })
-      }
-      return
-    }
-
     if (
       route.kind === 'scoped-terrain' &&
       route.scope.type === 'establishment' &&
@@ -388,10 +365,6 @@ function App() {
         .finally(() => {
           applyingOpenRef.current = false
         })
-      return
-    }
-
-    if (route.kind === 'organization-establishment-detail') {
       return
     }
 
@@ -700,15 +673,6 @@ function App() {
       return <LazyTeamMemberDetailPage membershipId={route.membershipId} />
     }
 
-    if (route.kind === 'organization-establishment-detail') {
-      return (
-        <OrganizationEstablishmentPage
-          establishmentId={route.establishmentId}
-          onNavigate={navigate}
-        />
-      )
-    }
-
     if (route.kind === 'chat-conversation-detail') {
       return <LazyChatConversationPage conversationId={route.conversationId} />
     }
@@ -816,14 +780,6 @@ function App() {
       return <LoginPage onNavigate={navigate} />
     }
 
-    if (route.path === '/organization') {
-      return <OrganizationPage onNavigate={navigate} />
-    }
-
-    if (route.path === '/app/operational-config') {
-      return null
-    }
-
     if (route.path === '/reporting') {
       return <LazyReportPage />
     }
@@ -913,7 +869,7 @@ function App() {
     }
 
     if (route.path === '/no-establishment') {
-      return <NoEstablishmentPage />
+      return <NoEstablishmentPage bootstrap={auth.bootstrap} navigate={navigate} />
     }
 
     return null
@@ -1027,19 +983,7 @@ function App() {
           description: 'Create your password to join this establishment in Houston.',
           actions: signInAction,
         }
-      : route.kind === 'organization-establishment-detail'
-          ? {
-              title: 'Établissement',
-              description: 'Consultez et administrez cet établissement.',
-              actions: signOutAction,
-            }
-      : route.kind === 'static' && route.path === '/organization'
-          ? {
-              title: 'Gestion de l’organisation',
-              description: 'Pilotez les établissements, membres et propriétaires.',
-              actions: signOutAction,
-            }
-          : route.kind === 'static' && route.path === '/onboarding'
+      : route.kind === 'static' && route.path === '/onboarding'
             ? {
                 headingBadge: 'Onboarding',
                 title: auth.isAuthenticated

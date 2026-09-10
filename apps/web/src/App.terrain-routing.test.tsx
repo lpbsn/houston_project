@@ -920,7 +920,7 @@ describe('App terrain active membership routing', () => {
     render(wrapApp())
 
     await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith('/organization', { replace: true })
+      expect(navigate).toHaveBeenCalledWith('/reporting', { replace: true })
     })
     expect(switchEstablishment).not.toHaveBeenCalled()
   })
@@ -1100,36 +1100,5 @@ describe('App terrain active membership routing', () => {
     })
     expect(screen.queryByTestId('operational-config')).toBeNull()
     expect(switchEstablishment).not.toHaveBeenCalled()
-  })
-
-  it('cuts over /app/operational-config to the scoped page on desktop', async () => {
-    stubLgViewport(true)
-    const bootstrap = bootstrapWithSelectedEstablishment('est-2')
-    authState.bootstrap = bootstrap
-    authState.memberships = bootstrap.memberships
-    authState.hasOperationalAccess = true
-    routeState.route = { kind: 'static', path: '/app/operational-config' }
-
-    render(wrapApp())
-
-    await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith('/e/est-2/operational-config', { replace: true })
-    })
-  })
-
-  it('cuts over /app/operational-config to reporting off desktop', async () => {
-    stubLgViewport(false)
-    const bootstrap = bootstrapWithSelectedEstablishment('est-2')
-    authState.bootstrap = bootstrap
-    authState.memberships = bootstrap.memberships
-    authState.hasOperationalAccess = true
-    routeState.route = { kind: 'static', path: '/app/operational-config' }
-
-    render(wrapApp())
-
-    await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith('/e/est-2/reporting', { replace: true })
-    })
-    expect(navigate).not.toHaveBeenCalledWith('/e/est-2/operational-config', { replace: true })
   })
 })

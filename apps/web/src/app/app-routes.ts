@@ -23,12 +23,10 @@ export type { ScopedTerrainPage, ScopedTerrainRoute, TerrainScope } from '@/app/
 export type AppPath =
   | '/'
   | '/login'
-  | '/app/operational-config'
   | '/onboarding'
   | '/pending-onboarding'
   | '/select-establishment'
   | '/no-establishment'
-  | '/organization'
   | '/reporting'
   | '/signals'
   | '/execution'
@@ -57,7 +55,6 @@ export type AppRoute =
   | { kind: 'analytics-pattern-detail'; patternId: string }
   | { kind: 'chat-conversation-detail'; conversationId: string }
   | { kind: 'team-member-detail'; membershipId: string }
-  | { kind: 'organization-establishment-detail'; establishmentId: string }
   | { kind: 'invitation'; token: string }
   | { kind: 'unknown'; pathname: string }
 
@@ -93,8 +90,6 @@ export function getAppRouteKey(route: AppRoute): string {
       return `chat-conversation-detail:${route.conversationId}`
     case 'team-member-detail':
       return `team-member-detail:${route.membershipId}`
-    case 'organization-establishment-detail':
-      return `organization-establishment-detail:${route.establishmentId}`
     case 'invitation':
       return `invitation:${route.token}`
     case 'unknown':
@@ -201,11 +196,6 @@ function parseTeamMemberId(pathname: string): string | null {
   return membershipId
 }
 
-function parseOrganizationEstablishmentId(pathname: string): string | null {
-  const match = pathname.match(/^\/organization\/establishments\/([^/]+)$/)
-  return match?.[1] ?? null
-}
-
 export function parseAppRoute(input: string): AppRoute {
   const pathname = normalizeRoutePath(input)
 
@@ -249,23 +239,13 @@ export function parseAppRoute(input: string): AppRoute {
     return { kind: 'team-member-detail', membershipId: teamMemberId }
   }
 
-  const organizationEstablishmentId = parseOrganizationEstablishmentId(pathname)
-  if (organizationEstablishmentId) {
-    return {
-      kind: 'organization-establishment-detail',
-      establishmentId: organizationEstablishmentId,
-    }
-  }
-
   if (
     pathname === '/' ||
     pathname === '/login' ||
-    pathname === '/app/operational-config' ||
     pathname === '/onboarding' ||
     pathname === '/pending-onboarding' ||
     pathname === '/select-establishment' ||
     pathname === '/no-establishment' ||
-    pathname === '/organization' ||
     pathname === '/reporting' ||
     pathname === '/signals' ||
     pathname === '/execution' ||
@@ -317,8 +297,6 @@ export function serializeAppRoute(route: AppRoute): string {
       return `/chat/${route.conversationId}`
     case 'team-member-detail':
       return `/team/${route.membershipId}`
-    case 'organization-establishment-detail':
-      return `/organization/establishments/${route.establishmentId}`
     case 'invitation':
       return `/invitations/${route.token}`
     case 'unknown':

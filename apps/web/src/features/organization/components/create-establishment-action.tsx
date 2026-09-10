@@ -48,7 +48,7 @@ function CreateEstablishmentActionReady({
 }: CreateEstablishmentActionProps) {
   const orgResolution = useMemo(() => resolveUniqueOrganizationId(bootstrap), [bootstrap])
   const organizationId = orgResolution.ok ? orgResolution.organizationId : null
-  const createMutation = useCreateOrganizationEstablishmentMutation(organizationId ?? '')
+  const createMutation = useCreateOrganizationEstablishmentMutation()
   const [error, setError] = useState<string | null>(null)
 
   async function provisionUnnamed() {
