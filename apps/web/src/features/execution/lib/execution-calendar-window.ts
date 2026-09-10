@@ -1,4 +1,9 @@
-import { addCivilDays, startOfMondayWeek, todayCivilDate } from '@/lib/business-timezone'
+import {
+  addCivilDays,
+  BUSINESS_TIMEZONE,
+  startOfMondayWeek,
+  todayCivilDate,
+} from '@/lib/business-timezone'
 
 import type { ExecutionCalendarGranularity } from './execution-feed-url-state'
 
@@ -55,8 +60,44 @@ export function shiftCalendarAnchor(
   return addCivilDays(monthStart, 32).slice(0, 7) + '-01'
 }
 
-export function calendarAnchorToday(now: Date = new Date()): string {
-  return todayCivilDate(undefined, now)
+export function calendarAnchorToday(
+  timeZone: string = BUSINESS_TIMEZONE,
+  now: Date = new Date(),
+): string {
+  return todayCivilDate(timeZone, now)
+}
+
+export function calendarTimezoneScopeKey(
+  source: 'establishment' | 'cross',
+  establishmentId: string | null | undefined,
+): string {
+  return source === 'cross' ? 'cross' : `establishment:${establishmentId ?? ''}`
+}
+
+export type RememberedCalendarTimezone = {
+  scopeKey: string
+  timezone: string
+}
+
+export function rememberScopedCalendarTimezone(
+  remembered: RememberedCalendarTimezone | null,
+  scopeKey: string,
+  liveTimezone: string | undefined,
+): RememberedCalendarTimezone | null {
+  if (liveTimezone) {
+    return { scopeKey, timezone: liveTimezone }
+  }
+  if (remembered?.scopeKey === scopeKey) {
+    return remembered
+  }
+  return null
+}
+
+export function resolveScopedCalendarTimezone(
+  remembered: RememberedCalendarTimezone | null,
+  liveTimezone: string | undefined,
+): string {
+  return liveTimezone ?? remembered?.timezone ?? BUSINESS_TIMEZONE
 }
 
 function utcNoon(date: string): Date {

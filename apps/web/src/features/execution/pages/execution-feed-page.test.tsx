@@ -152,22 +152,38 @@ function TitleSlotProbe() {
 }
 
 function renderExecutionFeedPage(
-  props: { onNavigate?: (pathname: string) => void; source?: 'establishment' | 'cross' } = {},
+  props: {
+    onNavigate?: (pathname: string) => void
+    source?: 'establishment' | 'cross'
+    establishmentId?: string | null
+  } = {},
 ) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
-  const tree = () =>
+  const tree = (
+    nextProps: {
+      onNavigate?: (pathname: string) => void
+      source?: 'establishment' | 'cross'
+      establishmentId?: string | null
+    } = props,
+  ) =>
     createElement(
       QueryClientProvider,
       { client: queryClient },
-      createElement('div', null, createElement(TitleSlotProbe), createElement(ExecutionFeedPage, props)),
+      createElement('div', null, createElement(TitleSlotProbe), createElement(ExecutionFeedPage, nextProps)),
     )
 
   const view = render(tree())
   return {
     ...view,
-    rerenderPage: () => view.rerender(tree()),
+    rerenderPage: (
+      nextProps: {
+        onNavigate?: (pathname: string) => void
+        source?: 'establishment' | 'cross'
+        establishmentId?: string | null
+      } = props,
+    ) => view.rerender(tree(nextProps)),
   }
 }
 
@@ -183,6 +199,7 @@ describe('ExecutionFeedPage plan feed', () => {
 
   afterEach(() => {
     cleanup()
+    vi.useRealTimers()
     Reflect.deleteProperty(window, 'matchMedia')
   })
 
@@ -719,5 +736,64 @@ describe('ExecutionFeedPage plan feed', () => {
     expect(screen.getByTestId('calendar-period-error')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
     expect(refetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps Aujourd’hui on the last known calendar timezone while a period has no data', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-08T22:30:00.000Z'))
+    stubLgViewport(true)
+    executionRouteState.search = '?layout=calendar&granularity=day&anchor=2026-09-08'
+    calendarQueryMock.mockReturnValue(
+      buildCalendarQueryState({
+        data: { timezone: 'UTC', items: [], unplanned: [] },
+      }),
+    )
+    const view = renderExecutionFeedPage()
+
+    executionRouteState.search = '?layout=calendar&granularity=day&anchor=2026-09-01'
+    calendarQueryMock.mockReturnValue(
+      buildCalendarQueryState({
+        isLoading: true,
+        isFetching: true,
+        isSuccess: false,
+        data: undefined,
+      }),
+    )
+    view.rerenderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Aujourd’hui' }))
+    expect(executionNavigate).toHaveBeenCalledWith(
+      expect.stringContaining('anchor=2026-09-08'),
+      { replace: true },
+    )
+  })
+
+  it('does not reuse a remembered timezone after an establishment change', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-08T22:30:00.000Z'))
+    stubLgViewport(true)
+    executionRouteState.search = '?layout=calendar&granularity=day&anchor=2026-09-08'
+    calendarQueryMock.mockReturnValue(
+      buildCalendarQueryState({
+        data: { timezone: 'UTC', items: [], unplanned: [] },
+      }),
+    )
+    const view = renderExecutionFeedPage({ establishmentId: 'est-1' })
+
+    calendarQueryMock.mockReturnValue(
+      buildCalendarQueryState({
+        isLoading: true,
+        isFetching: true,
+        isSuccess: false,
+        data: undefined,
+      }),
+    )
+    view.rerenderPage({ establishmentId: 'est-2' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Aujourd’hui' }))
+    expect(executionNavigate).toHaveBeenCalledWith(
+      expect.stringContaining('anchor=2026-09-09'),
+      { replace: true },
+    )
   })
 })

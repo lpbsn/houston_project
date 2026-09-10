@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveCalendarWindow, shiftCalendarAnchor } from './execution-calendar-window'
+import {
+  calendarAnchorToday,
+  rememberScopedCalendarTimezone,
+  resolveCalendarWindow,
+  resolveScopedCalendarTimezone,
+  shiftCalendarAnchor,
+} from './execution-calendar-window'
 
 describe('execution-calendar-window', () => {
   it('uses a Monday-start week including the requested day', () => {
@@ -20,5 +26,30 @@ describe('execution-calendar-window', () => {
   it('shifts month anchors to the first of the month', () => {
     expect(shiftCalendarAnchor('month', '2026-09-15', 1)).toBe('2026-10-01')
     expect(shiftCalendarAnchor('month', '2026-09-15', -1)).toBe('2026-08-01')
+  })
+
+  it('anchors today in the requested timezone', () => {
+    const now = new Date('2026-09-08T22:30:00.000Z')
+    expect(calendarAnchorToday('UTC', now)).toBe('2026-09-08')
+    expect(calendarAnchorToday('Europe/Paris', now)).toBe('2026-09-09')
+  })
+
+  it('keeps a known timezone across a missing payload for the same scope', () => {
+    const remembered = rememberScopedCalendarTimezone(null, 'establishment:est-1', 'UTC')
+    const duringTransition = rememberScopedCalendarTimezone(
+      remembered,
+      'establishment:est-1',
+      undefined,
+    )
+    expect(resolveScopedCalendarTimezone(duringTransition, undefined)).toBe('UTC')
+  })
+
+  it('forgets a known timezone after an establishment or source change', () => {
+    const remembered = rememberScopedCalendarTimezone(null, 'establishment:est-1', 'UTC')
+    expect(
+      rememberScopedCalendarTimezone(remembered, 'establishment:est-2', undefined),
+    ).toBeNull()
+    expect(rememberScopedCalendarTimezone(remembered, 'cross', undefined)).toBeNull()
+    expect(resolveScopedCalendarTimezone(null, undefined)).toBe('Europe/Paris')
   })
 })

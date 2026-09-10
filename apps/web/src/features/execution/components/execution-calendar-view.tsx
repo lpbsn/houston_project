@@ -2,7 +2,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState, type PointerEv
 import { Bell, ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { TerrainBottomSheet, TerrainCollapsibleFeedSection, TerrainErrorState } from '@/components/ui/terrain'
-import { formatCivilDateFr, todayCivilDate } from '@/lib/business-timezone'
+import { formatCivilDateFr, todayCivilDate, BUSINESS_TIMEZONE } from '@/lib/business-timezone'
 import { useLgViewport } from '@/lib/lg-viewport'
 import { cn } from '@/lib/utils'
 import { ActionPlansApiError, unwrapActionPlanExecutionFeedItems } from '@/features/action-plans/api'
@@ -54,6 +54,7 @@ type ExecutionCalendarViewProps = {
   days: string[]
   month: string
   data?: ActionPlanExecutionCalendarResponse
+  timeZone?: string
   isLoading: boolean
   isError: boolean
   error: unknown
@@ -212,15 +213,19 @@ function allDayLaneVisibleLimit(dayCount: number): number {
 function AllDayLane({
   days,
   items,
+  timeZone,
   onOpenExecution,
   onOpenOverflow,
 }: {
   days: string[]
   items: ActionPlanExecutionFeedItem[]
+  timeZone: string
   onOpenExecution: (executionId: string) => void
   onOpenOverflow: (day: string) => void
 }) {
-  const hasOccupants = days.some((day) => items.some((item) => occupiesAllDayLane(item, day)))
+  const hasOccupants = days.some((day) =>
+    items.some((item) => occupiesAllDayLane(item, day, timeZone)),
+  )
   if (!hasOccupants) {
     return null
   }
@@ -235,7 +240,7 @@ function AllDayLane({
         Journée
       </div>
       {days.map((day) => {
-        const dayItems = items.filter((item) => occupiesAllDayLane(item, day))
+        const dayItems = items.filter((item) => occupiesAllDayLane(item, day, timeZone))
         const visible = dayItems.slice(0, visibleLimit)
         const extra = dayItems.length - visible.length
         return (
@@ -245,7 +250,7 @@ function AllDayLane({
                 key={item.id}
                 item={item}
                 variant="allDay"
-                continuation={isTimedDayLaneContinuation(item, day)}
+                continuation={isTimedDayLaneContinuation(item, day, timeZone)}
                 onSelect={() => onOpenExecution(item.id)}
               />
             ))}
@@ -269,16 +274,18 @@ function TimedDayColumn({
   day,
   items,
   narrow,
+  timeZone,
   onOpenExecution,
 }: {
   day: string
   items: ActionPlanExecutionFeedItem[]
   narrow?: boolean
+  timeZone: string
   onOpenExecution: (executionId: string) => void
 }) {
   const blocks = splitOverlappingColumns(
     items.flatMap((item) => {
-      const interval = timedIntervalOnDay(item, day)
+      const interval = timedIntervalOnDay(item, day, timeZone)
       return interval ? [{ item, ...interval }] : []
     }),
   )
@@ -330,10 +337,12 @@ function TimedDayColumn({
 function TimeGrid({
   days,
   items,
+  timeZone,
   onOpenExecution,
 }: {
   days: string[]
   items: ActionPlanExecutionFeedItem[]
+  timeZone: string
   onOpenExecution: (executionId: string) => void
 }) {
   const timedItems = items.filter((item) => !isExecutionAllDay(item) && item.start_at)
@@ -357,6 +366,7 @@ function TimeGrid({
           day={day}
           items={timedItems}
           narrow={narrow}
+          timeZone={timeZone}
           onOpenExecution={onOpenExecution}
         />
       ))}
@@ -476,18 +486,19 @@ function CalendarPeriodStatus({
 }
 
 export function ExecutionCalendarView({
-
   granularity,
   days,
   month,
   data,
+  timeZone: timeZoneProp,
   isLoading,
   isError,
   error,
   onRetry,
   onOpenExecution,
 }: ExecutionCalendarViewProps) {
-  const today = todayCivilDate()
+  const timeZone = timeZoneProp ?? data?.timezone ?? BUSINESS_TIMEZONE
+  const today = todayCivilDate(timeZone)
   const isLg = useLgViewport()
   const daysKey = days.join(',')
   const weekVisibleCount = weekVisibleDayCount(isLg, days.length)
@@ -513,9 +524,13 @@ export function ExecutionCalendarView({
       return []
     }
     const occupiesOverflow =
-      granularity === 'month' ? occupiesMonthCell : occupiesAllDayLane
+      granularity === 'month'
+        ? (item: ActionPlanExecutionFeedItem, day: string) =>
+            occupiesMonthCell(item, day, timeZone)
+        : (item: ActionPlanExecutionFeedItem, day: string) =>
+            occupiesAllDayLane(item, day, timeZone)
     return items.filter((item) => occupiesOverflow(item, overflowDay))
-  }, [granularity, items, overflowDay])
+  }, [granularity, items, overflowDay, timeZone])
 
   let weekStartIndex = weekWindow.startIndex
   if (weekWindow.key !== weekWindowKey) {
@@ -687,7 +702,7 @@ export function ExecutionCalendarView({
           {weeks.map((week) => (
             <div key={week[0]} className="grid grid-cols-7 border-b border-[#E8E6DF] last:border-b-0">
               {week.map((day) => {
-                const dayItems = items.filter((item) => occupiesMonthCell(item, day))
+                const dayItems = items.filter((item) => occupiesMonthCell(item, day, timeZone))
                 const visible = dayItems.slice(0, MONTH_VISIBLE)
                 const extra = dayItems.length - visible.length
                 const inMonth = day.startsWith(month)
@@ -768,6 +783,7 @@ export function ExecutionCalendarView({
           <AllDayLane
             days={gridDays}
             items={items}
+            timeZone={timeZone}
             onOpenExecution={onOpenExecution}
             onOpenOverflow={setOverflowDay}
           />
@@ -776,7 +792,7 @@ export function ExecutionCalendarView({
             data-testid="calendar-time-scroller"
             className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain"
           >
-            <TimeGrid days={gridDays} items={items} onOpenExecution={onOpenExecution} />
+            <TimeGrid days={gridDays} items={items} timeZone={timeZone} onOpenExecution={onOpenExecution} />
           </div>
         </div>
       </div>

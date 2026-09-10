@@ -1222,6 +1222,24 @@ describe('ExecutionCalendarView', () => {
     expect(screen.queryByTestId('calendar-time-scroller')).toBeNull()
     expect(screen.queryByTestId('calendar-period-error')).toBeNull()
   })
+
+  it('resolves today from the provided calendar timezone', () => {
+    const spy = vi.spyOn(businessTimezone, 'todayCivilDate')
+    render(
+      <ExecutionCalendarView
+        granularity="day"
+        days={['2026-09-08']}
+        month="2026-09"
+        timeZone="UTC"
+        isLoading
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+      />,
+    )
+    expect(spy).toHaveBeenCalledWith('UTC')
+  })
 })
 
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, LoaderCircle, Plus } from 'lucide-react'
 
 import { serializeAppRoute, useAppRoute } from '@/app/app-routes'
@@ -32,12 +32,6 @@ import { ExecutionCreateMenuSheet } from '../components/execution-create-menu-sh
 import { ExecutionFeedTabs } from '../components/execution-feed-tabs'
 import { ExecutionUpcomingNavRow } from '../components/execution-upcoming-nav-row'
 import {
-  calendarAnchorToday,
-  formatCalendarPeriodLabel,
-  resolveCalendarWindow,
-  shiftCalendarAnchor,
-} from '../lib/execution-calendar-window'
-import {
   appendExecutionFeedSearch,
   executionFeedHref,
   parseExecutionFeedSearch,
@@ -52,6 +46,16 @@ import {
 } from '../lib/action-plan-execution-feed-sections'
 import { canOpenExecutionCreateMenu } from '../lib/execution-create-menu'
 import { getEmptyFeedDescription } from '../lib/execution-feed-empty'
+import {
+  calendarAnchorToday,
+  calendarTimezoneScopeKey,
+  formatCalendarPeriodLabel,
+  rememberScopedCalendarTimezone,
+  resolveCalendarWindow,
+  resolveScopedCalendarTimezone,
+  shiftCalendarAnchor,
+  type RememberedCalendarTimezone,
+} from '../lib/execution-calendar-window'
 
 const EXECUTION_FEED_DEFAULT_COLLAPSED_SECTIONS = ['done', 'canceled'] as const
 
@@ -126,6 +130,17 @@ export function ExecutionFeedPage({
     viewMode,
     { from: calendarWindow.from, to: calendarWindow.to },
     { enabled: layout === 'calendar', source },
+  )
+  const calendarTimezoneScope = calendarTimezoneScopeKey(source, establishmentId)
+  const rememberedCalendarTimezoneRef = useRef<RememberedCalendarTimezone | null>(null)
+  rememberedCalendarTimezoneRef.current = rememberScopedCalendarTimezone(
+    rememberedCalendarTimezoneRef.current,
+    calendarTimezoneScope,
+    calendarQuery.data?.timezone,
+  )
+  const calendarTimeZone = resolveScopedCalendarTimezone(
+    rememberedCalendarTimezoneRef.current,
+    calendarQuery.data?.timezone,
   )
   const quickActions = useActionPlanExecutionFeedQuickActions({
     establishmentId,
@@ -242,7 +257,7 @@ export function ExecutionFeedPage({
                   anchor: shiftCalendarAnchor(granularity, feedUrl.anchor, -1),
                 })
               }
-              onToday={() => replaceFeedUrl({ anchor: calendarAnchorToday() })}
+              onToday={() => replaceFeedUrl({ anchor: calendarAnchorToday(calendarTimeZone) })}
               onNext={() =>
                 replaceFeedUrl({
                   anchor: shiftCalendarAnchor(granularity, feedUrl.anchor, 1),
@@ -267,6 +282,7 @@ export function ExecutionFeedPage({
               days={calendarWindow.days}
               month={feedUrl.anchor.slice(0, 7)}
               data={calendarQuery.data}
+              timeZone={calendarTimeZone}
               isLoading={calendarQuery.isLoading}
               isError={calendarQuery.isError}
               error={calendarQuery.error}
