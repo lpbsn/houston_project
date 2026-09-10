@@ -11,12 +11,11 @@ import {
 import {
   canAccessManagementSpace,
   canCreateCatalogActionPlanFromBootstrapHints,
-  canManageOrganizationFromBootstrapHints,
-  canManageRuntimeConfigFromBootstrapHints,
   canViewActionPlanCatalogFromBootstrapHints,
   canViewTeamFromBootstrapHints,
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
+import { resolvePendingLandingPath } from '@/features/auth/lib/pending-onboarding'
 import { canSwitchEstablishment } from '@/features/auth/lib/establishment-switch'
 import { AccountDeletionCard } from '@/features/auth/pages/account-deletion-card'
 import {
@@ -162,6 +161,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
     isBootstrapping,
     isReady,
     memberships,
+    pendingOnboardingMemberships,
     user,
   } = useAuth()
   const permissionHints = getBootstrapPermissionHints(bootstrap)
@@ -173,8 +173,6 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   const role = toRoleEnum(activeMembership?.role)
   const canAccessManagement = canAccessManagementSpace(permissionHints)
   const canViewTeam = canViewTeamFromBootstrapHints(permissionHints)
-  const canManageOrganization = canManageOrganizationFromBootstrapHints(permissionHints)
-  const canManageRuntimeConfig = canManageRuntimeConfigFromBootstrapHints(permissionHints)
   const canShowActionPlansNav =
     canViewActionPlanCatalogFromBootstrapHints(permissionHints) ||
     canCreateCatalogActionPlanFromBootstrapHints(permissionHints)
@@ -188,9 +186,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   )
   const establishmentId = activeMembership?.establishment_id ?? null
   const showSwitchEstablishment = canSwitchEstablishment(memberships, establishmentId)
-  const showEstablishmentAdmin =
-    Boolean(establishmentId) &&
-    (canManageOrganization || role === 'owner' || role === 'director' || canManageRuntimeConfig)
+  const pendingResumePath = resolvePendingLandingPath(pendingOnboardingMemberships)
   const notificationPreferencesQuery = useNotificationPreferencesQuery(establishmentId)
   const gamificationOverviewQuery = useGamificationOverviewQuery(establishmentId)
   const updateNotificationPreferencesMutation =
@@ -342,6 +338,32 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
               ) : null}
             </>
           ) : null}
+          {aiConsentError ? <p className="px-4 pb-3.5 text-xs text-[#E24B4A]">{aiConsentError}</p> : null}
+          <TerrainSwitch
+            label={
+              aiConsentPending
+                ? 'Enregistrement...'
+                : 'Traitement OpenAI'
+            }
+            checked={aiConsentGranted}
+            disabled={aiConsentPending}
+            onCheckedChange={(checked) => {
+              setAiConsentError(null)
+              setAiConsentPending(true)
+              const action = checked ? acceptCurrentAiConsent() : withdrawAiConsent()
+              void action
+                .catch((caught) => {
+                  setAiConsentError(
+                    caught instanceof AuthApiError
+                      ? caught.message
+                      : 'Mise à jour du consentement impossible.',
+                  )
+                })
+                .finally(() => {
+                  setAiConsentPending(false)
+                })
+            }}
+          />
         </TerrainCard>
       </div>
 
@@ -358,29 +380,16 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
         </div>
       ) : null}
 
-      {canManageOrganization || showEstablishmentAdmin ? (
+      {pendingResumePath ? (
         <div className="space-y-2">
-          <TerrainSectionLabel dotVariant="primary" className="py-0">
-            Administration
-          </TerrainSectionLabel>
-          {canManageOrganization ? (
-            <ProfileManagementNavCard
-              icon={Building2}
-              iconClassName="bg-[#EEF2FF] text-[#1B4FD8]"
-              title="Gestion de l'organisation"
-              subtitle="Établissements, membres et propriétaires"
-              onClick={() => onNavigate?.('/organization')}
-            />
-          ) : null}
-          {showEstablishmentAdmin && establishmentId ? (
-            <ProfileManagementNavCard
-              icon={Building2}
-              iconClassName="bg-[#F3F0FF] text-[#6B4FD8]"
-              title="Gestion de l'établissement"
-              subtitle="Vue d'ensemble et membres de l'établissement actif"
-              onClick={() => onNavigate?.(`/organization/establishments/${establishmentId}`)}
-            />
-          ) : null}
+          <TerrainSectionLabel>Configuration</TerrainSectionLabel>
+          <ProfileManagementNavCard
+            icon={Building2}
+            iconClassName="bg-[#EEF2FF] text-[#1B4FD8]"
+            title="Reprendre la configuration"
+            subtitle="Établissement en cours de configuration"
+            onClick={() => onNavigate?.(pendingResumePath)}
+          />
         </div>
       ) : null}
 
@@ -453,11 +462,17 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
         </TerrainCard>
       ) : null}
 
-      <TerrainCard padding="sm" className="space-y-3">
-        <p className="text-sm font-medium text-[#1a1a1a]">Confidentialité</p>
+      <AccountDeletionCard
+        disabled={isLoggingOut}
+        onDeleted={async () => {
+          await onSignOut?.()
+        }}
+      />
+
+      <nav className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-1 pt-1">
         <a
           href={PUBLIC_PRIVACY_POLICY_URL}
-          className="block text-sm text-[#5c5a54] underline"
+          className={cn('text-xs', terrain.muted)}
           target="_blank"
           rel="noreferrer"
         >
@@ -465,46 +480,13 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
         </a>
         <a
           href={PUBLIC_TERMS_URL}
-          className="block text-sm text-[#5c5a54] underline"
+          className={cn('text-xs', terrain.muted)}
           target="_blank"
           rel="noreferrer"
         >
           Conditions d’utilisation
         </a>
-        {aiConsentError ? <p className="text-sm text-[#E24B4A]">{aiConsentError}</p> : null}
-        <TerrainSwitch
-          label={
-            aiConsentPending
-              ? 'Enregistrement...'
-              : 'Traitement OpenAI'
-          }
-          checked={aiConsentGranted}
-          disabled={aiConsentPending}
-          onCheckedChange={(checked) => {
-            setAiConsentError(null)
-            setAiConsentPending(true)
-            const action = checked ? acceptCurrentAiConsent() : withdrawAiConsent()
-            void action
-              .catch((caught) => {
-                setAiConsentError(
-                  caught instanceof AuthApiError
-                    ? caught.message
-                    : 'Mise à jour du consentement impossible.',
-                )
-              })
-              .finally(() => {
-                setAiConsentPending(false)
-              })
-          }}
-        />
-      </TerrainCard>
-
-      <AccountDeletionCard
-        disabled={isLoggingOut}
-        onDeleted={async () => {
-          await onSignOut?.()
-        }}
-      />
+      </nav>
     </div>
   )
 }

@@ -4,10 +4,18 @@ import { createElement } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { BootstrapResponse, Membership } from '@/features/auth/types'
 import { resetTeamListUiState } from '@/features/auth/lib/team-list-ui-state'
 import { TeamPage } from './team-page'
 
 const onNavigate = vi.fn()
+
+type TeamPageAuthMock = {
+  bootstrap: BootstrapResponse | null
+  activeMembership: Membership | null
+  isBootstrapping: boolean
+  isReady: boolean
+}
 
 const { authState, teamMembersState, sampleMembership } = vi.hoisted(() => {
   const membership = {
@@ -41,29 +49,11 @@ const { authState, teamMembersState, sampleMembership } = vi.hoisted(() => {
     sampleMembership: membership,
     authState: {
       current: {
-        bootstrap: {
-          permission_hints: {
-            chat_available: false,
-            can_create_action_plan: false,
-            can_create_catalog_action_plan: false,
-            can_view_action_plan_catalog: false,
-            can_invite: true,
-            can_manage_runtime_config: false,
-            can_view_team: true,
-          can_manage_organization: false,
-          can_create_establishment: false,
-          },
-        },
-        activeMembership: {
-          id: 'member-1',
-          establishment_id: 'est-1',
-          establishment_name: 'Nice',
-          role: 'director',
-          status: 'active',
-        },
+        bootstrap: null as BootstrapResponse | null,
+        activeMembership: null as Membership | null,
         isBootstrapping: false,
         isReady: true,
-      },
+      } as TeamPageAuthMock,
     },
     teamMembersState: {
       current: {
@@ -84,34 +74,90 @@ vi.mock('@/features/auth/hooks/use-team-members', () => ({
   useTeamMembersQuery: () => teamMembersState.current,
 }))
 
+function authMembership(overrides: Partial<Membership> = {}): Membership {
+  return {
+    id: overrides.id ?? 'member-1',
+    establishment_id: overrides.establishment_id ?? 'est-1',
+    establishment_name: overrides.establishment_name ?? 'Nice',
+    organization_id: overrides.organization_id ?? 'org-1',
+    organization_name: overrides.organization_name ?? 'Org',
+    role: overrides.role ?? 'director',
+    status: overrides.status ?? 'active',
+    scopes: overrides.scopes ?? [],
+    scope_summary: overrides.scope_summary ?? { business_unit_count: 0 },
+  }
+}
+
+function bootstrap(options: {
+  permissionHints?: Partial<BootstrapResponse['permission_hints']>
+  memberships?: Membership[]
+  activeMembership?: Membership | null
+}): BootstrapResponse {
+  const activeMembership = options.activeMembership ?? authMembership()
+  return {
+    authenticated: true,
+    user: {
+      id: 'user-1',
+      username: 'marie',
+      email: 'marie@example.com',
+      identity_type: 'human',
+      first_name: 'Marie',
+      last_name: 'Renaud',
+      terms_version: 'cgu-v1',
+      terms_accepted_at: '2026-01-01T00:00:00.000Z',
+      current_terms_version: 'cgu-v1',
+      needs_terms_acceptance: false,
+      ai_consent_version: 'openai-v1',
+      ai_processing_consented_at: '2026-01-01T00:00:00.000Z',
+      current_ai_consent_version: 'openai-v1',
+      needs_ai_consent: false,
+      ai_consent_status: 'granted',
+    },
+    memberships: options.memberships ?? [activeMembership],
+    active_membership: activeMembership,
+    pending_onboarding_memberships: [],
+    permission_hints: {
+      chat_available: false,
+      can_create_action_plan: false,
+      can_create_catalog_action_plan: false,
+      can_view_action_plan_catalog: false,
+      can_invite: true,
+      can_manage_runtime_config: false,
+      can_view_team: true,
+      can_manage_organization: false,
+      can_create_establishment: false,
+      ...options.permissionHints,
+    },
+  }
+}
+
+function teamAuth(options: {
+  permissionHints?: Partial<BootstrapResponse['permission_hints']>
+  memberships?: Membership[]
+  activeMembership?: Membership
+  isBootstrapping?: boolean
+  isReady?: boolean
+} = {}): TeamPageAuthMock {
+  const activeMembership = options.activeMembership ?? authMembership()
+  return {
+    bootstrap: bootstrap({
+      permissionHints: options.permissionHints,
+      memberships: options.memberships,
+      activeMembership,
+    }),
+    activeMembership,
+    isBootstrapping: options.isBootstrapping ?? false,
+    isReady: options.isReady ?? true,
+  }
+}
+
+authState.current = teamAuth()
+
 afterEach(() => {
   cleanup()
   resetTeamListUiState()
   onNavigate.mockReset()
-  authState.current = {
-    bootstrap: {
-      permission_hints: {
-        chat_available: false,
-        can_create_action_plan: false,
-        can_create_catalog_action_plan: false,
-        can_view_action_plan_catalog: false,
-        can_invite: true,
-        can_manage_runtime_config: false,
-        can_view_team: true,
-          can_manage_organization: false,
-          can_create_establishment: false,
-      },
-    },
-    activeMembership: {
-      id: 'member-1',
-      establishment_id: 'est-1',
-      establishment_name: 'Nice',
-      role: 'director',
-      status: 'active',
-    },
-    isBootstrapping: false,
-    isReady: true,
-  }
+  authState.current = teamAuth()
   teamMembersState.current = {
     isPending: false,
     isError: false,
@@ -163,22 +209,9 @@ describe('TeamPage', () => {
   })
 
   it('hides invite card when can_invite is false', () => {
-    authState.current = {
-      ...authState.current,
-      bootstrap: {
-        permission_hints: {
-          chat_available: false,
-          can_create_action_plan: false,
-          can_create_catalog_action_plan: false,
-          can_view_action_plan_catalog: false,
-          can_invite: false,
-          can_manage_runtime_config: false,
-          can_view_team: true,
-          can_manage_organization: false,
-          can_create_establishment: false,
-        },
-      },
-    }
+    authState.current = teamAuth({
+      permissionHints: { can_invite: false },
+    })
 
     render(createElement(TeamPage, { onNavigate }))
 
@@ -186,23 +219,54 @@ describe('TeamPage', () => {
     expect(screen.getByPlaceholderText('Rechercher un membre…')).toBeTruthy()
   })
 
-  it('shows permission denied when can_view_team is false', () => {
-    authState.current = {
-      ...authState.current,
-      bootstrap: {
-        permission_hints: {
-          chat_available: false,
-          can_create_action_plan: false,
-          can_create_catalog_action_plan: false,
-          can_view_action_plan_catalog: false,
-          can_invite: false,
-          can_manage_runtime_config: false,
-          can_view_team: false,
-          can_manage_organization: false,
-          can_create_establishment: false,
-        },
+  it('shows invite card when the actor owns this establishment organization without can_invite', () => {
+    authState.current = teamAuth({
+      permissionHints: {
+        can_invite: false,
+        can_manage_organization: true,
+        can_create_establishment: true,
       },
-    }
+      activeMembership: authMembership({ role: 'owner' }),
+    })
+
+    render(createElement(TeamPage, { onNavigate }))
+
+    expect(screen.getByRole('button', { name: /Inviter un membre/i })).toBeTruthy()
+  })
+
+  it('hides invite card for staff when the global org hint is for another organization', () => {
+    const ownerOtherOrg = authMembership({
+      id: 'member-a',
+      establishment_id: 'est-a',
+      organization_id: 'org-a',
+      role: 'owner',
+    })
+    const staffHere = authMembership({
+      organization_id: 'org-b',
+      role: 'staff',
+    })
+    authState.current = teamAuth({
+      permissionHints: {
+        can_invite: false,
+        can_manage_organization: true,
+        can_create_establishment: true,
+      },
+      memberships: [ownerOtherOrg, staffHere],
+      activeMembership: staffHere,
+    })
+
+    render(createElement(TeamPage, { onNavigate }))
+
+    expect(screen.queryByRole('button', { name: /Inviter un membre/i })).toBeNull()
+  })
+
+  it('shows permission denied when can_view_team is false', () => {
+    authState.current = teamAuth({
+      permissionHints: {
+        can_invite: false,
+        can_view_team: false,
+      },
+    })
 
     render(createElement(TeamPage, { onNavigate }))
 

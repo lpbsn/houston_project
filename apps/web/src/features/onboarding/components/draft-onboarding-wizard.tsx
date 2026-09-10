@@ -19,10 +19,9 @@ import { useLgViewport } from '@/lib/lg-viewport'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { onboardingQueryKeys, suggestActivitySubjects } from '@/features/onboarding/api'
 import {
-  suggestActivitySubjects,
-} from '@/features/onboarding/api'
-import {
+  useCatalogActivitySubjectChips,
   useCatalogBusinessUnitChips,
   useCompleteOnboardingSession,
   useOnboardingDraft,
@@ -31,7 +30,9 @@ import {
 import {
   addManualActivitySubject,
   applyCatalogBusinessUnitSelection,
+  canonicalizeDraftActivitySubjectIdentities,
   createEmptyBusinessUnit,
+  displayDraftActivitySubjectLabel,
   removeActivitySubject,
 } from '@/features/onboarding/lib/onboarding-draft-catalog'
 import { getCompleteErrorMessage } from '@/features/onboarding/lib/onboarding-draft-errors'
@@ -211,10 +212,20 @@ function StructureStep({
   catalogUnits: Array<{ key: string; label: string; description: string; unit_type: string }>
   catalogLoading: boolean
 }) {
+  const queryClient = useQueryClient()
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() => new Set())
   const [subjectModalBuKey, setSubjectModalBuKey] = useState<string | null>(null)
   const [seedingKey, setSeedingKey] = useState<string | null>(null)
   const [prevBusinessUnits, setPrevBusinessUnits] = useState(draft.business_units)
+  const catalogSubjectQueries = useCatalogActivitySubjectChips(
+    draft.business_units.map((unit) => unit.catalog_key),
+  )
+  const catalogLabelByKey = new Map<string, string>()
+  for (const result of catalogSubjectQueries) {
+    for (const subject of result.data ?? []) {
+      catalogLabelByKey.set(subject.key, subject.label)
+    }
+  }
 
   if (draft.business_units !== prevBusinessUnits) {
     setPrevBusinessUnits(draft.business_units)
@@ -231,7 +242,11 @@ function StructureStep({
   ) {
     setSeedingKey(businessUnitClientKey)
     try {
-      const subjects = await suggestActivitySubjects(catalogUnit.key, '', { limit: 200 })
+      const subjects = await queryClient.fetchQuery({
+        queryKey: [...onboardingQueryKeys.catalogActivitySubjects(catalogUnit.key, ''), 'chips'],
+        queryFn: () => suggestActivitySubjects(catalogUnit.key, '', { limit: 200 }),
+        staleTime: 60_000,
+      })
       setDraft((current) =>
         applyCatalogBusinessUnitSelection(current, businessUnitClientKey, catalogUnit, subjects),
       )
@@ -483,7 +498,7 @@ function StructureStep({
                           >
                             <div className="min-w-0">
                               <div className="truncate text-sm font-medium text-spore-forest">
-                                {subject.label || subject.catalog_key}
+                                {displayDraftActivitySubjectLabel(subject, catalogLabelByKey)}
                               </div>
                               {subject.description ? (
                                 <p className="mt-0.5 text-xs text-spore-muted">{subject.description}</p>
@@ -808,7 +823,9 @@ export function DraftOnboardingWizard({ sessionId, onNavigate }: DraftOnboarding
 
   if (!hydrated && draftQuery.data) {
     try {
-      const parsed = parseOnboardingDraftPayload(draftQuery.data.payload)
+      const parsed = canonicalizeDraftActivitySubjectIdentities(
+        parseOnboardingDraftPayload(draftQuery.data.payload),
+      )
       setDraft(parsed)
       setStep(parsed.current_step === DRAFT_STEP_TEAM ? 'team' : 'structure')
       setHydrateError(null)
@@ -825,7 +842,7 @@ export function DraftOnboardingWizard({ sessionId, onNavigate }: DraftOnboarding
 
   useEffect(() => {
     if (!draft || !isDirty) return
-    enqueue(draft)
+    enqueue(canonicalizeDraftActivitySubjectIdentities(draft))
   }, [draft, enqueue, isDirty])
 
   const updateDraft = useCallback((updater: SetStateAction<OnboardingDraftPayload>) => {
@@ -875,7 +892,9 @@ export function DraftOnboardingWizard({ sessionId, onNavigate }: DraftOnboarding
     if (!draft || !structureOk || isNavigating) return
     setIsNavigating(true)
     setNavError(null)
-    const snapshot = withCurrentStep(draft, DRAFT_STEP_TEAM)
+    const snapshot = canonicalizeDraftActivitySubjectIdentities(
+      withCurrentStep(draft, DRAFT_STEP_TEAM),
+    )
     setDraft(snapshot)
     try {
       await flush(snapshot)
@@ -891,7 +910,9 @@ export function DraftOnboardingWizard({ sessionId, onNavigate }: DraftOnboarding
     if (!draft || isNavigating) return
     setIsNavigating(true)
     setNavError(null)
-    const snapshot = withCurrentStep(draft, DRAFT_STEP_STRUCTURE)
+    const snapshot = canonicalizeDraftActivitySubjectIdentities(
+      withCurrentStep(draft, DRAFT_STEP_STRUCTURE),
+    )
     setDraft(snapshot)
     try {
       await flush(snapshot)
@@ -906,7 +927,9 @@ export function DraftOnboardingWizard({ sessionId, onNavigate }: DraftOnboarding
   async function handleComplete() {
     if (!draft || !completeOk || completeMutation.isPending) return
     setNavError(null)
-    const finalSnapshot = stripEmptyMemberRows(withCurrentStep(draft, DRAFT_STEP_TEAM))
+    const finalSnapshot = canonicalizeDraftActivitySubjectIdentities(
+      stripEmptyMemberRows(withCurrentStep(draft, DRAFT_STEP_TEAM)),
+    )
     setDraft(finalSnapshot)
     stop()
     try {

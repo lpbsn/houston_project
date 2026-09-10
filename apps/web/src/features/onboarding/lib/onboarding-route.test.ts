@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { shouldRedirectOnboardingToOperationalConfig } from '@/features/onboarding/lib/onboarding-route'
+import {
+  resolveOnboardingOperationalLeavePath,
+  shouldRedirectOnboardingToOperationalConfig,
+} from '@/features/onboarding/lib/onboarding-route'
 
 describe('shouldRedirectOnboardingToOperationalConfig', () => {
   const activeEstablishmentId = '33333333-3333-3333-3333-333333333333'
@@ -43,5 +46,24 @@ describe('shouldRedirectOnboardingToOperationalConfig', () => {
         routeEstablishmentId: null,
       }),
     ).toBe(false)
+  })
+})
+
+describe('resolveOnboardingOperationalLeavePath', () => {
+  const establishmentId = '33333333-3333-3333-3333-333333333333'
+
+  it('sends desktop to operational config and mobile to reporting', () => {
+    expect(
+      resolveOnboardingOperationalLeavePath({
+        establishmentId,
+        isDesktop: true,
+      }),
+    ).toBe(`/e/${establishmentId}/operational-config`)
+    expect(
+      resolveOnboardingOperationalLeavePath({
+        establishmentId,
+        isDesktop: false,
+      }),
+    ).toBe(`/e/${establishmentId}/reporting`)
   })
 })

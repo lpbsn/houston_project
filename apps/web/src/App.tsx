@@ -5,6 +5,7 @@ import { parseAppRoute, serializeAppRoute, useAppRoute, type AppRoute } from '@/
 import {
   serializeScopedExecutionDetailPath,
   serializeScopedSignalDetailPath,
+  serializeScopedTerrainPath,
 } from '@/app/scoped-terrain'
 import { useLgViewport } from '@/lib/lg-viewport'
 import { hasTrueCrossEstablishmentScope } from '@/features/navigation/lib/shared-navigation'
@@ -80,8 +81,6 @@ import {
 } from '@/features/auth/lib/team-list-ui-state'
 import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-accept-page'
 import { OperationalConfigPage } from '@/features/establishment-config/pages/operational-config-page'
-import { OrganizationEstablishmentPage } from '@/features/organization/pages/organization-establishment-page'
-import { OrganizationPage } from '@/features/organization/pages/organization-page'
 import { OnboardingPage } from '@/features/onboarding/pages/onboarding-page'
 import { NotificationCenter } from '@/features/notifications/components/notification-center'
 import { ActionPlanExecutionDetailTopbarTrailing } from '@/features/action-plans/components/action-plan-execution-detail-topbar-trailing'
@@ -247,6 +246,16 @@ function App() {
       }
     }
 
+    if (
+      route.kind === 'scoped-terrain' &&
+      route.scope.type === 'establishment' &&
+      route.page === 'operational-config' &&
+      !isDesktopWeb
+    ) {
+      navigate(serializeScopedTerrainPath(route.scope, 'reporting'), { replace: true })
+      return
+    }
+
     const routeEstablishmentId = establishmentIdRequiringSwitch(route)
     const sessionEstablishmentId =
       auth.bootstrap.active_membership?.establishment_id ?? null
@@ -356,10 +365,6 @@ function App() {
         .finally(() => {
           applyingOpenRef.current = false
         })
-      return
-    }
-
-    if (route.kind === 'organization-establishment-detail') {
       return
     }
 
@@ -668,15 +673,6 @@ function App() {
       return <LazyTeamMemberDetailPage membershipId={route.membershipId} />
     }
 
-    if (route.kind === 'organization-establishment-detail') {
-      return (
-        <OrganizationEstablishmentPage
-          establishmentId={route.establishmentId}
-          onNavigate={navigate}
-        />
-      )
-    }
-
     if (route.kind === 'chat-conversation-detail') {
       return <LazyChatConversationPage conversationId={route.conversationId} />
     }
@@ -759,6 +755,12 @@ function App() {
           />
         )
       }
+      if (route.page === 'operational-config') {
+        if (!isDesktopWeb || scope.type !== 'establishment') {
+          return null
+        }
+        return <OperationalConfigPage establishmentId={scope.establishmentId} />
+      }
       if (route.page === 'settings') {
         return (
           <LazyComingSoonPage
@@ -776,14 +778,6 @@ function App() {
 
     if (route.path === '/login') {
       return <LoginPage onNavigate={navigate} />
-    }
-
-    if (route.path === '/organization') {
-      return <OrganizationPage onNavigate={navigate} />
-    }
-
-    if (route.path === '/app/operational-config') {
-      return <OperationalConfigPage onNavigate={navigate} />
     }
 
     if (route.path === '/reporting') {
@@ -875,7 +869,7 @@ function App() {
     }
 
     if (route.path === '/no-establishment') {
-      return <NoEstablishmentPage />
+      return <NoEstablishmentPage bootstrap={auth.bootstrap} navigate={navigate} />
     }
 
     return null
@@ -989,26 +983,7 @@ function App() {
           description: 'Create your password to join this establishment in Houston.',
           actions: signInAction,
         }
-      : route.kind === 'organization-establishment-detail'
-          ? {
-              title: 'Établissement',
-              description: 'Consultez et administrez cet établissement.',
-              actions: signOutAction,
-            }
-      : route.kind === 'static' && route.path === '/organization'
-          ? {
-              title: 'Gestion de l’organisation',
-              description: 'Pilotez les établissements, membres et propriétaires.',
-              actions: signOutAction,
-            }
-          : route.kind === 'static' && route.path === '/app/operational-config'
-            ? {
-                title: 'Modifier l’onboarding',
-                description:
-                  'Consultez et ajustez les pôles, sujets et descriptions de votre établissement actif.',
-                actions: signOutAction,
-              }
-          : route.kind === 'static' && route.path === '/onboarding'
+      : route.kind === 'static' && route.path === '/onboarding'
             ? {
                 headingBadge: 'Onboarding',
                 title: auth.isAuthenticated

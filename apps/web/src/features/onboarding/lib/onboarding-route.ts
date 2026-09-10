@@ -1,3 +1,8 @@
+import {
+  buildOperationalConfigFallbackPath,
+  buildOperationalConfigPath,
+} from '@/features/establishment-config/lib/operational-config-navigation'
+
 export type OnboardingOperationalRedirectInput = {
   hasOperationalAccess: boolean
   activeEstablishmentId: string | null | undefined
@@ -12,4 +17,16 @@ export function shouldRedirectOnboardingToOperationalConfig(
     Boolean(input.routeEstablishmentId) &&
     input.activeEstablishmentId === input.routeEstablishmentId
   )
+}
+
+export function resolveOnboardingOperationalLeavePath({
+  establishmentId,
+  isDesktop,
+}: {
+  establishmentId: string
+  isDesktop: boolean
+}): string {
+  return isDesktop
+    ? buildOperationalConfigPath(establishmentId)
+    : buildOperationalConfigFallbackPath(establishmentId)
 }

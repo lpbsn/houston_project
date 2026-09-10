@@ -1,8 +1,15 @@
 import { Building2 } from 'lucide-react'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import type { BootstrapResponse } from '@/features/auth/types'
+import { CreateEstablishmentAction } from '@/features/organization/components/create-establishment-action'
 
-export function NoEstablishmentPage() {
+type NoEstablishmentPageProps = {
+  bootstrap: BootstrapResponse | null | undefined
+  navigate: (path: string, options?: { replace?: boolean }) => void
+}
+
+export function NoEstablishmentPage({ bootstrap, navigate }: NoEstablishmentPageProps) {
   return (
     <Card className="mx-auto w-full max-w-2xl rounded-[1.85rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_24px_52px_-40px_rgba(46,72,173,0.28)]">
       <CardHeader className="gap-3">
@@ -19,9 +26,16 @@ export function NoEstablishmentPage() {
           n&apos;est associé pour le moment.
         </CardDescription>
       </CardHeader>
-      <CardContent className="text-sm leading-6 text-muted-foreground">
-        Contactez votre administrateur ou reprenez une invitation si vous venez de rejoindre
-        Houston.
+      <CardContent className="space-y-4 text-sm leading-6 text-muted-foreground">
+        <CreateEstablishmentAction
+          bootstrap={bootstrap}
+          navigate={navigate}
+          triggerVariant="organization"
+        />
+        <p>
+          Contactez votre administrateur ou reprenez une invitation si vous venez de rejoindre
+          Houston.
+        </p>
       </CardContent>
     </Card>
   )

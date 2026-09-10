@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 
 import { createElement } from 'react'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AppRoute } from '@/app/app-routes'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
 import { buildSelectEstablishmentRedirectHref } from '@/lib/app-open-target'
+import { queryClient } from '@/lib/query-client'
 
 const navigate = vi.fn()
 const switchEstablishment = vi.hoisted(() => vi.fn())
@@ -123,6 +125,11 @@ vi.mock('@/app/lazy-terrain-pages', () => {
     LazyTeamPage: () => createElement(Page, { name: 'team' }),
   }
 })
+
+vi.mock('@/features/establishment-config/pages/operational-config-page', () => ({
+  OperationalConfigPage: () =>
+    createElement('div', { 'data-testid': 'operational-config' }, 'operational-config'),
+}))
 
 vi.mock('@/features/notifications/components/notification-center', () => ({
   NotificationCenter: () => null,
@@ -282,6 +289,10 @@ function stubLgViewport(matches: boolean) {
   })
 }
 
+function wrapApp() {
+  return createElement(QueryClientProvider, { client: queryClient }, createElement(App))
+}
+
 afterEach(() => {
   try {
     cleanup()
@@ -307,12 +318,12 @@ describe('App terrain active membership routing', () => {
     authState.memberships = bootstrap.memberships
     authState.hasOperationalAccess = false
 
-    const rendered = render(createElement(App))
+    const rendered = render(wrapApp())
 
     expect(navigate).not.toHaveBeenCalled()
 
     routeState.route = { kind: 'static', path: '/reporting' }
-    rendered.rerender(createElement(App))
+    rendered.rerender(wrapApp())
 
     await waitFor(() => {
       expect(navigate).toHaveBeenCalledWith('/select-establishment', { replace: true })
@@ -325,7 +336,7 @@ describe('App terrain active membership routing', () => {
     authState.memberships = bootstrap.memberships
     authState.hasOperationalAccess = true
 
-    render(createElement(App))
+    render(wrapApp())
 
     expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Retour' })).toBeNull()
@@ -338,7 +349,7 @@ describe('App terrain active membership routing', () => {
     authState.memberships = bootstrap.memberships
     authState.hasOperationalAccess = false
 
-    render(createElement(App))
+    render(wrapApp())
 
     expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Retour' })).toBeNull()
@@ -363,7 +374,7 @@ describe('App terrain active membership routing', () => {
     authState.memberships = bootstrap.memberships
     authState.hasOperationalAccess = false
 
-    render(createElement(App))
+    render(wrapApp())
 
     expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Retour' })).toBeNull()
@@ -382,7 +393,7 @@ describe('App terrain active membership routing', () => {
       '/analytics/patterns/pattern-1?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&q=retard&recurrence=recurrent',
     )
 
-    render(createElement(App))
+    render(wrapApp())
 
     fireEvent.click(screen.getByRole('button', { name: 'Retour' }))
 
@@ -406,7 +417,7 @@ describe('App terrain active membership routing', () => {
       '/signals/55555555-5555-4555-8555-555555555555?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&q=retard&recurrence=recurrent&analytics_pattern_id=44444444-4444-4444-8444-444444444444',
     )
 
-    render(createElement(App))
+    render(wrapApp())
 
     fireEvent.click(screen.getByRole('button', { name: 'Retour' }))
 
@@ -430,7 +441,7 @@ describe('App terrain active membership routing', () => {
       '/signals/55555555-5555-4555-8555-555555555555?analytics_pattern_id=44444444-4444-4444-8444-444444444444',
     )
 
-    const rendered = render(createElement(App))
+    const rendered = render(wrapApp())
 
     const planPath = screen.getByTestId('signal-detail').getAttribute('data-plan-path') ?? ''
     fireEvent.click(screen.getByRole('button', { name: 'Retour' }))
@@ -444,7 +455,7 @@ describe('App terrain active membership routing', () => {
       '44444444-4444-4444-8444-444444444444',
     )
 
-    rendered.rerender(createElement(App))
+    rendered.rerender(wrapApp())
 
     const rerenderedPlanPath =
       screen.getByTestId('signal-detail').getAttribute('data-plan-path') ?? ''
@@ -464,7 +475,7 @@ describe('App terrain active membership routing', () => {
     }
     window.history.replaceState(null, '', '/signals/55555555-5555-4555-8555-555555555555')
 
-    render(createElement(App))
+    render(wrapApp())
 
     fireEvent.click(screen.getByRole('button', { name: 'Retour' }))
 
@@ -486,7 +497,7 @@ describe('App terrain active membership routing', () => {
       '/signals/55555555-5555-4555-8555-555555555555/plan?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&q=retard&recurrence=recurrent&analytics_pattern_id=44444444-4444-4444-8444-444444444444',
     )
 
-    render(createElement(App))
+    render(wrapApp())
 
     expect(screen.getByTestId('action-plan-create').getAttribute('data-back-path')).toBe(
       '/signals/55555555-5555-4555-8555-555555555555?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&q=retard&recurrence=recurrent&analytics_pattern_id=44444444-4444-4444-8444-444444444444',
@@ -508,7 +519,7 @@ describe('App terrain active membership routing', () => {
       '/signals/55555555-5555-4555-8555-555555555555/plan',
     )
 
-    render(createElement(App))
+    render(wrapApp())
 
     expect(screen.getByTestId('action-plan-create').getAttribute('data-back-path')).toBe(
       '/signals/55555555-5555-4555-8555-555555555555',
@@ -526,7 +537,7 @@ describe('App terrain active membership routing', () => {
       page: 'dashboard',
     }
 
-    render(createElement(App))
+    render(wrapApp())
 
     expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeTruthy()
     expect(navigate).not.toHaveBeenCalled()
@@ -539,7 +550,7 @@ describe('App terrain active membership routing', () => {
     authState.memberships = bootstrap.memberships
     authState.hasOperationalAccess = false
 
-    render(createElement(App))
+    render(wrapApp())
 
     await waitFor(() => {
       expect(navigate).toHaveBeenCalledWith('/cross?period=7d', { replace: true })
@@ -553,7 +564,7 @@ describe('App terrain active membership routing', () => {
     authState.memberships = bootstrap.memberships
     authState.hasOperationalAccess = true
 
-    render(createElement(App))
+    render(wrapApp())
 
     expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeTruthy()
     expect(navigate).not.toHaveBeenCalled()
@@ -572,7 +583,7 @@ describe('App terrain active membership routing', () => {
     authState.hasOperationalAccess = false
     routeState.route = { kind: 'static', path: '/login' }
 
-    render(createElement(App))
+    render(wrapApp())
 
     await waitFor(() => {
       expect(switchEstablishment).toHaveBeenCalledWith({ establishment_id: 'est-1' })
@@ -599,7 +610,7 @@ describe('App terrain active membership routing', () => {
     authState.hasOperationalAccess = false
     routeState.route = { kind: 'static', path: '/login' }
 
-    render(createElement(App))
+    render(wrapApp())
 
     await waitFor(() => {
       expect(navigate).toHaveBeenCalledWith('/cross?period=7d', { replace: true })
@@ -620,7 +631,7 @@ describe('App terrain active membership routing', () => {
     authState.hasOperationalAccess = false
     routeState.route = { kind: 'static', path: '/login' }
 
-    render(createElement(App))
+    render(wrapApp())
 
     await waitFor(() => {
       expect(navigate).toHaveBeenCalledWith('/cross?period=7d', { replace: true })
@@ -646,7 +657,7 @@ describe('App terrain active membership routing', () => {
     authState.hasOperationalAccess = false
     routeState.route = { kind: 'static', path: '/login' }
 
-    render(createElement(App))
+    render(wrapApp())
 
     await waitFor(() => {
       expect(switchEstablishment).toHaveBeenCalledWith({ establishment_id: establishmentId })
@@ -673,7 +684,7 @@ describe('App terrain active membership routing', () => {
     authState.hasOperationalAccess = false
     routeState.route = { kind: 'static', path: '/login' }
 
-    render(createElement(App))
+    render(wrapApp())
 
     await waitFor(() => {
       expect(navigate).toHaveBeenCalledWith(
@@ -697,7 +708,7 @@ describe('App terrain active membership routing', () => {
       page: 'signals',
     }
 
-    render(createElement(App))
+    render(wrapApp())
 
     await waitFor(() => {
       expect(switchEstablishment).toHaveBeenCalledWith({ establishment_id: 'est-2' })
@@ -713,7 +724,7 @@ describe('App terrain active membership routing', () => {
     authState.hasOperationalAccess = false
     routeState.route = { kind: 'static', path: '/login' }
 
-    render(createElement(App))
+    render(wrapApp())
 
     await waitFor(() => {
       expect(navigate).toHaveBeenCalledWith('/cross?period=7d', { replace: true })
@@ -733,7 +744,7 @@ describe('App terrain active membership routing', () => {
     authState.hasOperationalAccess = false
     routeState.route = { kind: 'static', path: '/select-establishment' }
 
-    render(createElement(App))
+    render(wrapApp())
 
     await waitFor(() => {
       expect(navigate).toHaveBeenCalledWith('/cross?period=7d', { replace: true })
@@ -753,7 +764,7 @@ describe('App terrain active membership routing', () => {
       page: 'chat',
     }
 
-    render(createElement(App))
+    render(wrapApp())
 
     await waitFor(() => {
       expect(switchEstablishment).toHaveBeenCalledWith({ establishment_id: 'est-2' })
@@ -776,7 +787,7 @@ describe('App terrain active membership routing', () => {
       page: 'signals',
     }
 
-    render(createElement(App))
+    render(wrapApp())
 
     await waitFor(() => {
       expect(switchEstablishment).toHaveBeenCalledWith({ establishment_id: 'est-2' })
@@ -799,7 +810,7 @@ describe('App terrain active membership routing', () => {
       page: 'signals',
     }
 
-    render(createElement(App))
+    render(wrapApp())
 
     expect(switchEstablishment).not.toHaveBeenCalled()
     expect(navigate).not.toHaveBeenCalled()
@@ -813,7 +824,7 @@ describe('App terrain active membership routing', () => {
     authState.hasOperationalAccess = true
     routeState.route = { kind: 'static', path: '/chat' }
 
-    render(createElement(App))
+    render(wrapApp())
 
     expect(switchEstablishment).not.toHaveBeenCalled()
   })
@@ -830,7 +841,7 @@ describe('App terrain active membership routing', () => {
       page: 'signals',
     }
 
-    render(createElement(App))
+    render(wrapApp())
 
     expect(switchEstablishment).not.toHaveBeenCalled()
     expect(navigate).not.toHaveBeenCalled()
@@ -848,7 +859,7 @@ describe('App terrain active membership routing', () => {
       page: 'signals',
     }
 
-    render(createElement(App))
+    render(wrapApp())
 
     expect(switchEstablishment).not.toHaveBeenCalled()
     expect(navigate).not.toHaveBeenCalledWith(
@@ -869,7 +880,7 @@ describe('App terrain active membership routing', () => {
       page: 'chat',
     }
 
-    render(createElement(App))
+    render(wrapApp())
 
     await waitFor(() => {
       expect(navigate).toHaveBeenCalledWith(
@@ -906,10 +917,10 @@ describe('App terrain active membership routing', () => {
     authState.hasOperationalAccess = true
     routeState.route = { kind: 'static', path: '/select-establishment' }
 
-    render(createElement(App))
+    render(wrapApp())
 
     await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith('/organization', { replace: true })
+      expect(navigate).toHaveBeenCalledWith('/reporting', { replace: true })
     })
     expect(switchEstablishment).not.toHaveBeenCalled()
   })
@@ -928,7 +939,7 @@ describe('App terrain active membership routing', () => {
     authState.hasOperationalAccess = false
     routeState.route = { kind: 'static', path: '/select-establishment' }
 
-    render(createElement(App))
+    render(wrapApp())
 
     await waitFor(() => {
       expect(switchEstablishment).toHaveBeenCalledWith({ establishment_id: 'est-2' })
@@ -949,7 +960,7 @@ describe('App terrain active membership routing', () => {
     authState.hasOperationalAccess = true
     routeState.route = { kind: 'static', path: '/select-establishment' }
 
-    render(createElement(App))
+    render(wrapApp())
 
     expect(await screen.findByTestId('select-establishment-page')).toBeTruthy()
     expect(switchEstablishment).not.toHaveBeenCalled()
@@ -964,7 +975,7 @@ describe('App terrain active membership routing', () => {
     authState.hasOperationalAccess = true
     routeState.route = { kind: 'static', path: '/select-establishment' }
 
-    render(createElement(App))
+    render(wrapApp())
 
     expect(await screen.findByTestId('select-establishment-page')).toBeTruthy()
     expect(navigate).not.toHaveBeenCalled()
@@ -984,7 +995,7 @@ describe('App terrain active membership routing', () => {
     authState.hasOperationalAccess = true
     routeState.route = { kind: 'static', path: '/select-establishment' }
 
-    render(createElement(App))
+    render(wrapApp())
 
     expect(await screen.findByTestId('select-establishment-page')).toBeTruthy()
     expect(switchEstablishment).not.toHaveBeenCalled()
@@ -1000,7 +1011,7 @@ describe('App terrain active membership routing', () => {
     authState.hasOperationalAccess = false
     routeState.route = { kind: 'static', path: '/select-establishment' }
 
-    render(createElement(App))
+    render(wrapApp())
 
     expect(await screen.findByTestId('select-establishment-page')).toBeTruthy()
     expect(navigate).not.toHaveBeenCalledWith('/cross?period=7d', { replace: true })
@@ -1017,11 +1028,77 @@ describe('App terrain active membership routing', () => {
     authState.hasOperationalAccess = false
     routeState.route = { kind: 'static', path: '/login' }
 
-    render(createElement(App))
+    render(wrapApp())
 
     await waitFor(() => {
       expect(navigate).toHaveBeenCalledWith('/select-establishment', { replace: true })
     })
     expect(navigate).not.toHaveBeenCalledWith('/cross?period=7d', { replace: true })
+  })
+
+  it('silently switches on desktop when operational config differs from the session', async () => {
+    stubLgViewport(true)
+    const bootstrap = bootstrapWithSelectedEstablishment('est-1')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: 'est-2' },
+      page: 'operational-config',
+    }
+
+    render(wrapApp())
+
+    await waitFor(() => {
+      expect(switchEstablishment).toHaveBeenCalledWith({ establishment_id: 'est-2' })
+    })
+    expect(navigate).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^\/select-establishment/),
+      expect.anything(),
+    )
+  })
+
+  it('redirects web mobile operational-config to reporting without mounting the editor', async () => {
+    stubLgViewport(false)
+    const bootstrap = bootstrapWithSelectedEstablishment('est-2')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: 'est-2' },
+      page: 'operational-config',
+    }
+
+    render(wrapApp())
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith('/e/est-2/reporting', { replace: true })
+    })
+    expect(screen.queryByTestId('operational-config')).toBeNull()
+    expect(switchEstablishment).not.toHaveBeenCalled()
+  })
+
+  it('redirects native large-viewport operational-config to reporting', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    stubLgViewport(true)
+    const bootstrap = bootstrapWithSelectedEstablishment('est-2')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: 'est-2' },
+      page: 'operational-config',
+    }
+
+    render(wrapApp())
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith('/e/est-2/reporting', { replace: true })
+    })
+    expect(screen.queryByTestId('operational-config')).toBeNull()
+    expect(switchEstablishment).not.toHaveBeenCalled()
   })
 })

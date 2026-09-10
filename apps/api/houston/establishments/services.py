@@ -1293,6 +1293,10 @@ def upsert_onboarding_draft(
 ) -> dict:
     session = _lock_onboarding_session(session)
     _ensure_onboarding_draft_mutable(session)
+    establishment = Establishment.objects.select_for_update().get(
+        id=session.establishment_id
+    )
+    session.establishment = establishment
 
     access = get_onboarding_access_context(actor=actor, session=session)
     if not access.can_configure_runtime:
@@ -1312,9 +1316,14 @@ def upsert_onboarding_draft(
     draft.payload = normalized
     draft.updated_by = actor
     draft.save(update_fields=["payload", "updated_by", "updated_at"])
+    sync_errors = _sync_establishment_name_from_draft_payload(
+        establishment=establishment,
+        payload=normalized,
+        enforce_uniqueness=False,
+    )
     return serialize_onboarding_draft(
         draft=draft,
-        validation_errors=soft_errors,
+        validation_errors=[*soft_errors, *sync_errors],
         mode=DRAFT_VALIDATION_MODE_SOFT,
     )
 
@@ -1388,24 +1397,11 @@ def complete_onboarding_session(
         director_email=director["email"],
     )
 
-    new_name = normalized["establishment"]["name"]
-    if _establishment_name_taken_excluding(
-        organization_id=establishment.organization_id,
-        normalized_name=new_name,
-        excluding_establishment_id=establishment.id,
-    ):
-        raise OnboardingDraftValidationError(
-            [
-                {
-                    "code": "duplicate_establishment_name",
-                    "section": "establishment",
-                    "field": "name",
-                }
-            ]
-        )
-
-    establishment.name = new_name
-    establishment.save(update_fields=["name", "updated_at"])
+    _sync_establishment_name_from_draft_payload(
+        establishment=establishment,
+        payload=normalized,
+        enforce_uniqueness=True,
+    )
 
     description_text = normalized["establishment"]["description"]
     activity_description, _created = EstablishmentActivityDescription.objects.update_or_create(
@@ -3028,6 +3024,11 @@ def activate_onboarding_session(
     if establishment.status != Establishment.Status.DRAFT:
         raise InvalidOnboardingActivationStateError("Only draft establishments can be activated.")
 
+    if not (establishment.name or "").strip():
+        raise InvalidOnboardingActivationStateError(
+            "An establishment must have a name before activation."
+        )
+
     if session.status != OnboardingSession.Status.READY_FOR_ACTIVATION:
         raise InvalidOnboardingActivationStateError(
             "Onboarding session must be marked ready before activation."
@@ -3712,7 +3713,7 @@ class EstablishmentOnboardingProvision:
 def create_establishment_for_organization(
     *,
     organization_id,
-    name: str,
+    name: str | None,
     timezone: str | None = None,
     status: str = Establishment.Status.DRAFT,
 ) -> Establishment:
@@ -3727,15 +3728,19 @@ def create_establishment_for_organization(
     consistency rules (homogeneous owner status + exact ``User.status``
     compatibility). Emits ``membership.updated`` after commit for each
     ``owner``/``active`` membership created on the new establishment.
+    ``name`` may be ``None`` for CTA unnamed drafts; never persist ``""``.
     """
     if status != Establishment.Status.DRAFT:
         raise InvalidEstablishmentCreationError(
             "Only draft establishments can be created in an existing organization."
         )
 
-    normalized_name = name.strip()
-    if not normalized_name:
-        raise InvalidEstablishmentCreationError("Establishment name is required.")
+    if name is None:
+        normalized_name = None
+    else:
+        normalized_name = name.strip()
+        if not normalized_name:
+            raise InvalidEstablishmentCreationError("Establishment name is required.")
 
     organization = _lock_organization(organization_id=organization_id)
     if organization.status != Organization.Status.ACTIVE:
@@ -3743,7 +3748,7 @@ def create_establishment_for_organization(
             "Establishments can only be created in an active organization."
         )
 
-    if _establishment_name_taken(
+    if normalized_name is not None and _establishment_name_taken(
         organization_id=organization.id,
         normalized_name=normalized_name,
     ):
@@ -3774,12 +3779,16 @@ def provision_establishment_onboarding(
     *,
     actor: User,
     organization: Organization,
-    name: str,
+    name: str | None,
 ) -> EstablishmentOnboardingProvision:
     """Atomically create a DRAFT establishment, seed owners, and start onboarding.
 
     Organization must be manageable by the actor (Owner on DRAFT|ACTIVE). Rolls
     back establishment, seeded memberships, and session on any failure.
+
+    A POST without a name reuses an existing unnamed DRAFT with a non-terminal
+    session the actor can manage. Detection runs after the organization row
+    lock so concurrent unnamed provisions cannot each create a draft.
     """
     from houston.establishments.permissions import resolve_manageable_organization
 
@@ -3796,6 +3805,14 @@ def provision_establishment_onboarding(
             "Establishments can only be created in an active organization."
         )
 
+    if name is None:
+        reused = _reuse_unnamed_draft_onboarding(
+            organization=locked_organization,
+            actor=actor,
+        )
+        if reused is not None:
+            return reused
+
     establishment = create_establishment_for_organization(
         organization_id=locked_organization.id,
         name=name,
@@ -3809,6 +3826,93 @@ def provision_establishment_onboarding(
         establishment=establishment,
         onboarding_session=onboarding_session,
     )
+
+
+def _reuse_unnamed_draft_onboarding(
+    *,
+    organization: Organization,
+    actor: User,
+) -> EstablishmentOnboardingProvision | None:
+    """Return a locked unnamed DRAFT onboarding the actor can manage, if any.
+
+    Call only after ``_lock_organization``.
+    """
+    candidates = (
+        Establishment.objects.select_for_update()
+        .filter(
+            organization_id=organization.id,
+            status=Establishment.Status.DRAFT,
+            name__isnull=True,
+        )
+        .order_by("created_at", "id")
+    )
+    for establishment in candidates:
+        session = (
+            OnboardingSession.objects.select_for_update()
+            .filter(
+                establishment_id=establishment.id,
+                status__in=OnboardingSession.NON_TERMINAL_STATUSES,
+            )
+            .order_by("-created_at", "-id")
+            .first()
+        )
+        if session is None:
+            continue
+        access = get_onboarding_access_context(actor=actor, session=session)
+        if not access.can_manage:
+            continue
+        return EstablishmentOnboardingProvision(
+            establishment=establishment,
+            onboarding_session=session,
+        )
+    return None
+
+
+def _duplicate_establishment_name_error() -> dict:
+    return {
+        "code": "duplicate_establishment_name",
+        "section": "establishment",
+        "field": "name",
+    }
+
+
+def _sync_establishment_name_from_draft_payload(
+    *,
+    establishment: Establishment,
+    payload: dict,
+    enforce_uniqueness: bool,
+) -> list[dict]:
+    raw_name = (payload.get("establishment") or {}).get("name")
+    normalized_name = raw_name.strip() if isinstance(raw_name, str) else ""
+    if not normalized_name:
+        return []
+
+    if _establishment_name_taken_excluding(
+        organization_id=establishment.organization_id,
+        normalized_name=normalized_name,
+        excluding_establishment_id=establishment.id,
+    ):
+        if enforce_uniqueness:
+            raise OnboardingDraftValidationError([_duplicate_establishment_name_error()])
+        return [_duplicate_establishment_name_error()]
+
+    if establishment.name == normalized_name:
+        return []
+
+    try:
+        with transaction.atomic():
+            establishment.name = normalized_name
+            establishment.save(update_fields=["name", "updated_at"])
+    except IntegrityError as exc:
+        if not _is_establishment_name_unique_violation(exc):
+            raise
+        establishment.refresh_from_db()
+        if enforce_uniqueness:
+            raise OnboardingDraftValidationError(
+                [_duplicate_establishment_name_error()]
+            ) from None
+        return [_duplicate_establishment_name_error()]
+    return []
 
 
 def _establishment_name_taken(*, organization_id, normalized_name: str) -> bool:
@@ -4166,7 +4270,7 @@ def _serialize_organization(organization: Organization) -> dict:
 def _serialize_establishment(establishment: Establishment) -> dict:
     return {
         "id": str(establishment.id),
-        "name": establishment.name,
+        "name": establishment.name or "",
         "status": establishment.status,
     }
 

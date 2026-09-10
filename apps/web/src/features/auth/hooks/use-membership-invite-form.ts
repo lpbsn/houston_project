@@ -5,15 +5,20 @@ import { inviteMembership, invalidateMembershipListQueries } from '@/features/au
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 import { type BusinessUnitScopeSelection } from '@/features/auth/lib/business-unit-scope'
 import { resolveInvitationErrorMessage } from '@/features/auth/lib/invitation-errors'
-import { requiresInviteScopes } from '@/features/auth/lib/invitation-rbac'
-import type { MembershipInvitationRequestRoleEnum } from '@/features/auth/types'
+import {
+  requiresInviteScopes,
+  type TeamInviteRoleOption,
+} from '@/features/auth/lib/invitation-rbac'
+import type { BootstrapResponse, MembershipInvitationRequestRoleEnum } from '@/features/auth/types'
+import { inviteOrganizationOwner } from '@/features/organization/api'
+import { resolveOrganizationIdForEstablishment } from '@/features/organization/lib/resolve-organization-id-for-establishment'
 import { resolvePublicAppUrl } from '@/lib/runtime'
 
 export type MembershipInviteFormState = {
   email: string
   first_name: string
   last_name: string
-  role: MembershipInvitationRequestRoleEnum
+  role: TeamInviteRoleOption
 }
 
 const emptyForm: MembershipInviteFormState = {
@@ -31,12 +36,14 @@ export function buildInvitationAcceptUrl(acceptPath: string) {
 
 type UseMembershipInviteFormOptions = {
   establishmentId: string
-  allowedTargetRoles?: MembershipInvitationRequestRoleEnum[]
+  allowedTargetRoles?: TeamInviteRoleOption[]
+  bootstrap?: BootstrapResponse | null
 }
 
 export function useMembershipInviteForm({
   establishmentId,
   allowedTargetRoles,
+  bootstrap,
 }: UseMembershipInviteFormOptions) {
   const queryClient = useQueryClient()
   const [form, setForm] = useState<MembershipInviteFormState>(emptyForm)
@@ -53,8 +60,8 @@ export function useMembershipInviteForm({
 
   const roleOptions = useMemo(() => {
     if (allowedTargetRoles) {
-      const seen = new Set<MembershipInvitationRequestRoleEnum>()
-      const deduped: MembershipInvitationRequestRoleEnum[] = []
+      const seen = new Set<TeamInviteRoleOption>()
+      const deduped: TeamInviteRoleOption[] = []
       for (const role of allowedTargetRoles) {
         if (!seen.has(role)) {
           deduped.push(role)
@@ -100,7 +107,7 @@ export function useMembershipInviteForm({
     selectedRole,
   ])
 
-  function setRole(role: MembershipInvitationRequestRoleEnum) {
+  function setRole(role: TeamInviteRoleOption) {
     setForm((current) => ({ ...current, role }))
     if (!requiresInviteScopes(role)) {
       setSelectedBusinessUnitScopes([])
@@ -129,20 +136,41 @@ export function useMembershipInviteForm({
       }
 
       const submittedEmail = form.email.trim()
-      const scopes = requiresInviteScopes(selectedRole) ? selectedBusinessUnitScopes : []
+      const firstName = form.first_name.trim()
+      const lastName = form.last_name.trim()
 
-      const result = await inviteMembership(establishmentId, {
-        email: submittedEmail,
-        first_name: form.first_name.trim(),
-        last_name: form.last_name.trim(),
-        role: selectedRole,
-        ...(scopes.length > 0 ? { scopes } : {}),
-      })
+      if (selectedRole === 'owner') {
+        const organizationId = resolveOrganizationIdForEstablishment(bootstrap, establishmentId)
+        if (!organizationId.ok) {
+          throw new Error('Impossible de déterminer l’organisation pour inviter un propriétaire.')
+        }
 
-      setInvitedEmail(submittedEmail)
-      setInvitationLink(buildInvitationAcceptUrl(result.invitation_accept_path))
-      setForm(emptyForm)
-      setSelectedBusinessUnitScopes([])
+        const result = await inviteOrganizationOwner(organizationId.organizationId, {
+          email: submittedEmail,
+          first_name: firstName,
+          last_name: lastName,
+        })
+
+        setInvitedEmail(submittedEmail)
+        setInvitationLink(buildInvitationAcceptUrl(result.invitation_accept_path))
+        setForm(emptyForm)
+        setSelectedBusinessUnitScopes([])
+      } else {
+        const scopes = requiresInviteScopes(selectedRole) ? selectedBusinessUnitScopes : []
+
+        const result = await inviteMembership(establishmentId, {
+          email: submittedEmail,
+          first_name: firstName,
+          last_name: lastName,
+          role: selectedRole,
+          ...(scopes.length > 0 ? { scopes } : {}),
+        })
+
+        setInvitedEmail(submittedEmail)
+        setInvitationLink(buildInvitationAcceptUrl(result.invitation_accept_path))
+        setForm(emptyForm)
+        setSelectedBusinessUnitScopes([])
+      }
 
       void invalidateMembershipListQueries(establishmentId, queryClient)
     } catch (error) {

@@ -98,7 +98,7 @@ describe('resolveAuthenticatedLanding', () => {
     vi.unstubAllEnvs()
   })
 
-  it('returns organization for owner with an ACTIVE membership selected', () => {
+  it('returns reporting for owner with an ACTIVE membership selected', () => {
     const active = membership('Nice')
     expect(
       resolveAuthenticatedLanding(
@@ -108,7 +108,7 @@ describe('resolveAuthenticatedLanding', () => {
           permission_hints: ownerOrgHints,
         }),
       ),
-    ).toEqual({ kind: 'organization', path: '/organization' })
+    ).toEqual({ kind: 'operational', path: '/reporting' })
   })
 
   it('returns select-establishment for owner with multiple ACTIVE memberships without selection', () => {
@@ -145,7 +145,7 @@ describe('resolveAuthenticatedLanding', () => {
     ).toEqual({ kind: 'cross', path: '/cross?period=7d' })
   })
 
-  it('returns organization for owner DRAFT-only', () => {
+  it('returns onboarding for owner DRAFT-only', () => {
     const pending: PendingOnboardingMembership = {
       id: '55555555-5555-5555-5555-555555555555',
       establishment_id: '66666666-6666-6666-6666-666666666666',
@@ -165,7 +165,36 @@ describe('resolveAuthenticatedLanding', () => {
           permission_hints: ownerOrgHints,
         }),
       ),
-    ).toEqual({ kind: 'organization', path: '/organization' })
+    ).toEqual({
+      kind: 'pending',
+      path: '/onboarding?establishmentId=66666666-6666-6666-6666-666666666666&sessionId=77777777-7777-7777-7777-777777777777',
+    })
+  })
+
+  it('keeps reporting when an ACTIVE establishment exists alongside DRAFT', () => {
+    const active = membership('Nice')
+    const pending: PendingOnboardingMembership = {
+      id: '55555555-5555-5555-5555-555555555555',
+      establishment_id: '66666666-6666-6666-6666-666666666666',
+      establishment_name: 'Draft Hotel',
+      establishment_status: 'draft',
+      organization_id: '88888888-8888-8888-8888-888888888888',
+      organization_name: 'Draft Org',
+      role: 'owner',
+      onboarding_session_id: '77777777-7777-7777-7777-777777777777',
+      can_continue_onboarding: true,
+    }
+
+    expect(
+      resolveAuthenticatedLanding(
+        bootstrap({
+          active_membership: active,
+          memberships: [active],
+          pending_onboarding_memberships: [pending],
+          permission_hints: ownerOrgHints,
+        }),
+      ),
+    ).toEqual({ kind: 'operational', path: '/reporting' })
   })
 
   it('returns select-establishment for director with multiple ACTIVE without selection', () => {
@@ -255,6 +284,7 @@ describe('resolveAuthenticatedLanding', () => {
       }),
     )
     expect(landing.path).not.toBe('/general')
+    expect(landing).toEqual({ kind: 'empty', path: '/no-establishment' })
   })
 
   it('returns pending-onboarding for director waiting state', () => {
@@ -331,10 +361,12 @@ describe('isPublicAuthRoute', () => {
 })
 
 describe('routeAllowsMissingActiveMembership', () => {
-  it('returns true for onboarding and organization routes', () => {
+  it('returns true for onboarding and account routes without a session', () => {
     expect(routeAllowsMissingActiveMembership('/pending-onboarding')).toBe(true)
-    expect(routeAllowsMissingActiveMembership('/organization')).toBe(true)
-    expect(routeAllowsMissingActiveMembership('/organization/establishments/est-1')).toBe(true)
+    expect(routeAllowsMissingActiveMembership('/onboarding')).toBe(true)
+    expect(routeAllowsMissingActiveMembership('/no-establishment')).toBe(true)
+    expect(routeAllowsMissingActiveMembership('/organization')).toBe(false)
+    expect(routeAllowsMissingActiveMembership('/organization/establishments/est-1')).toBe(false)
     expect(routeAllowsMissingActiveMembership('/app')).toBe(false)
   })
 

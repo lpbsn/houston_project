@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { getAllowedInviteTargetRoles, requiresInviteScopes } from '@/features/auth/lib/invitation-rbac'
+import { getAllowedInviteTargetRoles, requiresInviteScopes, resolveTeamInviteRoleOptions } from '@/features/auth/lib/invitation-rbac'
 
 describe('invitation-rbac', () => {
   it('returns allowed invite target roles for actor roles', () => {
@@ -12,10 +12,29 @@ describe('invitation-rbac', () => {
     expect(getAllowedInviteTargetRoles(undefined)).toEqual([])
   })
 
+  it('prepends owner only when the actor can manage the organization', () => {
+    expect(
+      resolveTeamInviteRoleOptions({ actorRole: 'owner', canManageOrganization: true }),
+    ).toEqual(['owner', 'director', 'manager', 'staff'])
+    expect(
+      resolveTeamInviteRoleOptions({ actorRole: 'owner', canManageOrganization: false }),
+    ).toEqual(['director', 'manager', 'staff'])
+    expect(
+      resolveTeamInviteRoleOptions({ actorRole: 'director', canManageOrganization: true }),
+    ).toEqual(['owner', 'manager', 'staff'])
+    expect(
+      resolveTeamInviteRoleOptions({ actorRole: 'staff', canManageOrganization: false }),
+    ).toEqual([])
+    expect(
+      resolveTeamInviteRoleOptions({ actorRole: 'staff', canManageOrganization: true }),
+    ).toEqual(['owner'])
+  })
+
   it('requires scopes only for manager and staff invites', () => {
     expect(requiresInviteScopes('staff')).toBe(true)
     expect(requiresInviteScopes('manager')).toBe(true)
     expect(requiresInviteScopes('director')).toBe(false)
+    expect(requiresInviteScopes('owner')).toBe(false)
     expect(requiresInviteScopes(null)).toBe(false)
   })
 })

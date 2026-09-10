@@ -18,8 +18,9 @@ import {
   canInviteFromBootstrapHints,
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
-import { getAllowedInviteTargetRoles } from '@/features/auth/lib/invitation-rbac'
+import { resolveTeamInviteRoleOptions } from '@/features/auth/lib/invitation-rbac'
 import { toRoleEnum } from '@/features/auth/lib/role'
+import { canManageOrganizationOfEstablishment } from '@/features/organization/lib/resolve-organization-id-for-establishment'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -28,8 +29,17 @@ export function TeamInvitePage() {
   const { activeMembership, bootstrap } = useAuth()
   const permissionHints = getBootstrapPermissionHints(bootstrap)
   const role = toRoleEnum(activeMembership?.role)
-  const allowedTargetRoles = getAllowedInviteTargetRoles(role)
-  const canAccess = Boolean(activeMembership) && canInviteFromBootstrapHints(permissionHints)
+  const canManageOrganization = canManageOrganizationOfEstablishment(
+    bootstrap,
+    activeMembership?.establishment_id ?? '',
+  )
+  const allowedTargetRoles = resolveTeamInviteRoleOptions({
+    actorRole: role,
+    canManageOrganization,
+  })
+  const canAccess =
+    Boolean(activeMembership) &&
+    (canInviteFromBootstrapHints(permissionHints) || canManageOrganization)
 
   if (!canAccess || !activeMembership) {
     return (
@@ -46,16 +56,22 @@ export function TeamInvitePage() {
     <TeamInviteForm
       establishmentId={activeMembership.establishment_id}
       allowedTargetRoles={allowedTargetRoles}
+      bootstrap={bootstrap}
     />
   )
 }
 
 type TeamInviteFormProps = {
   establishmentId: string
-  allowedTargetRoles: ReturnType<typeof getAllowedInviteTargetRoles>
+  allowedTargetRoles: ReturnType<typeof resolveTeamInviteRoleOptions>
+  bootstrap: ReturnType<typeof useAuth>['bootstrap']
 }
 
-function TeamInviteForm({ establishmentId, allowedTargetRoles }: TeamInviteFormProps) {
+function TeamInviteForm({
+  establishmentId,
+  allowedTargetRoles,
+  bootstrap,
+}: TeamInviteFormProps) {
   const {
     form,
     setForm,
@@ -76,7 +92,7 @@ function TeamInviteForm({ establishmentId, allowedTargetRoles }: TeamInviteFormP
     canSubmit,
     handleSubmit,
     handleCopyLink,
-  } = useMembershipInviteForm({ establishmentId, allowedTargetRoles })
+  } = useMembershipInviteForm({ establishmentId, allowedTargetRoles, bootstrap })
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 px-3 pb-4 pt-3">

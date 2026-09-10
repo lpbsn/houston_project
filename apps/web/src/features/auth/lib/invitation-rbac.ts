@@ -1,6 +1,8 @@
 import type { MembershipInvitationRequestRoleEnum, RoleEnum } from '@/features/auth/types'
 
-/** Session `/team` invite matrix — Owner invites go via `/organization` only. */
+/** Membership invite matrix. Owner uses `POST …/owner-invitations/` from `/team/invite`. */
+export type TeamInviteRoleOption = 'owner' | MembershipInvitationRequestRoleEnum
+
 const OWNER_TARGET_ROLES: MembershipInvitationRequestRoleEnum[] = [
   'director',
   'manager',
@@ -26,6 +28,20 @@ export function getAllowedInviteTargetRoles(
   }
 }
 
-export function requiresInviteScopes(role: MembershipInvitationRequestRoleEnum | null | undefined) {
+export function resolveTeamInviteRoleOptions({
+  actorRole,
+  canManageOrganization,
+}: {
+  actorRole: RoleEnum | null | undefined
+  canManageOrganization: boolean
+}): TeamInviteRoleOption[] {
+  const membershipRoles = getAllowedInviteTargetRoles(actorRole)
+  if (canManageOrganization) {
+    return ['owner', ...membershipRoles]
+  }
+  return membershipRoles
+}
+
+export function requiresInviteScopes(role: TeamInviteRoleOption | null | undefined) {
   return role === 'staff' || role === 'manager'
 }

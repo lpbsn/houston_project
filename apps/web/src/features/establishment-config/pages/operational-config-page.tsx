@@ -1,68 +1,24 @@
-import { ArrowLeft, LoaderCircle } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { LoaderCircle } from 'lucide-react'
+import { useState } from 'react'
 
 import { useAuth } from '@/app/auth-provider'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  canManageOrganizationFromBootstrapHints,
-  canManageRuntimeConfigFromBootstrapHints,
-  getBootstrapPermissionHints,
-} from '@/features/auth/lib/bootstrap-permission-hints'
 import { OperationalConfigBusinessUnitCard } from '@/features/establishment-config/components/operational-config-business-unit-card'
 import {
   useCreateRuntimeBusinessUnit,
   useOperationalConfigTree,
 } from '@/features/establishment-config/hooks'
+import { canManageOperationalConfigForEstablishment } from '@/features/establishment-config/lib/can-manage-operational-config'
 import { resolveRuntimeConfigErrorMessage } from '@/features/establishment-config/lib/runtime-config-errors'
-import { canAccessEstablishmentAdminPage } from '@/features/organization/lib/can-access-establishment-admin'
-import { resolveOperationalConfigReturnPath } from '@/features/organization/lib/operational-config-navigation'
 import { BusinessUnitAutocomplete } from '@/features/onboarding/components/business-unit-autocomplete'
 import type { CatalogBusinessUnitSuggestion } from '@/features/onboarding/types'
-import { useLocationSearch } from '@/lib/location-search'
 
 type OperationalConfigPageProps = {
-  onNavigate?: (path: string) => void
-}
-
-function useOperationalConfigReturnPath() {
-  const { activeMembership, bootstrap } = useAuth()
-  const locationSearch = useLocationSearch()
-  const permissionHints = getBootstrapPermissionHints(bootstrap)
-  const canManageOrganization = canManageOrganizationFromBootstrapHints(permissionHints)
-  const activeEstablishmentId = activeMembership?.establishment_id ?? null
-
-  return useMemo(() => {
-    const returnTo = new URLSearchParams(
-      locationSearch.startsWith('?') ? locationSearch.slice(1) : locationSearch,
-    ).get('returnTo')
-    const canAccessActiveEstablishmentAdmin = canAccessEstablishmentAdminPage({
-      canManageOrganization,
-      memberships: bootstrap?.memberships,
-      establishmentId: activeEstablishmentId ?? '',
-    })
-
-    return resolveOperationalConfigReturnPath({
-      returnTo,
-      activeEstablishmentId,
-      canAccessActiveEstablishmentAdmin: Boolean(
-        activeEstablishmentId && canAccessActiveEstablishmentAdmin,
-      ),
-    })
-  }, [activeEstablishmentId, bootstrap?.memberships, canManageOrganization, locationSearch])
-}
-
-function OperationalConfigContent({
-  establishmentId,
-  establishmentName,
-  returnPath,
-  onNavigate,
-}: {
   establishmentId: string
-  establishmentName: string
-  returnPath: string
-  onNavigate?: (path: string) => void
-}) {
+}
+
+function OperationalConfigContent({ establishmentId }: { establishmentId: string }) {
   const treeQuery = useOperationalConfigTree(establishmentId)
   const createBusinessUnitMutation = useCreateRuntimeBusinessUnit(establishmentId)
   const [pageError, setPageError] = useState<string | null>(null)
@@ -101,7 +57,7 @@ function OperationalConfigContent({
 
   if (treeQuery.isPending) {
     return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <div className="flex items-center gap-2 px-4 py-5 text-sm text-muted-foreground">
         <LoaderCircle className="size-4 animate-spin" />
         Chargement de la configuration opérationnelle…
       </div>
@@ -110,7 +66,7 @@ function OperationalConfigContent({
 
   if (treeQuery.error) {
     return (
-      <Card className="rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9]">
+      <Card className="mx-4 my-5 rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9]">
         <CardHeader>
           <CardTitle>Erreur de chargement</CardTitle>
           <CardDescription>
@@ -137,25 +93,7 @@ function OperationalConfigContent({
   }
 
   return (
-    <div className="space-y-4 sm:space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <p className="text-sm text-muted-foreground">Configuration opérationnelle</p>
-          <h2 className="text-2xl font-black tracking-[-0.04em]">
-            {treeQuery.data?.establishment_name ?? establishmentName}
-          </h2>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          className="h-11 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
-          onClick={() => onNavigate?.(returnPath)}
-        >
-          <ArrowLeft className="size-4" />
-          Retour
-        </Button>
-      </div>
-
+    <div className="space-y-4 px-4 py-5 sm:space-y-5">
       <Card className="rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9]">
         <CardHeader className="gap-2">
           <CardTitle className="text-lg font-semibold">Ajouter un pôle</CardTitle>
@@ -200,76 +138,39 @@ function OperationalConfigContent({
   )
 }
 
-function OperationalConfigAccessDenied({
-  returnPath,
-  onNavigate,
-}: {
-  returnPath: string
-  onNavigate?: (path: string) => void
-}) {
+function OperationalConfigAccessDenied() {
   return (
-    <Card className="rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9]">
+    <Card className="mx-4 my-5 rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9]">
       <CardHeader>
         <CardTitle>Accès refusé</CardTitle>
         <CardDescription>
           Seuls le propriétaire et le directeur peuvent modifier la configuration opérationnelle.
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <Button
-          type="button"
-          variant="outline"
-          className="h-11 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
-          onClick={() => onNavigate?.(returnPath)}
-        >
-          <ArrowLeft className="size-4" />
-          Retour
-        </Button>
-      </CardContent>
     </Card>
   )
 }
 
-export function OperationalConfigPage({ onNavigate }: OperationalConfigPageProps) {
+export function OperationalConfigPage({ establishmentId }: OperationalConfigPageProps) {
   const { activeMembership, bootstrap } = useAuth()
-  const establishmentId = activeMembership?.establishment_id
-  const permissionHints = getBootstrapPermissionHints(bootstrap)
-  const returnPath = useOperationalConfigReturnPath()
+  const sessionEstablishmentId = activeMembership?.establishment_id
+  const canManage = canManageOperationalConfigForEstablishment({
+    memberships: bootstrap?.memberships,
+    establishmentId,
+  })
 
-  if (!establishmentId) {
+  if (!canManage) {
+    return <OperationalConfigAccessDenied />
+  }
+
+  if (sessionEstablishmentId !== establishmentId) {
     return (
-      <Card className="rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9]">
-        <CardHeader>
-          <CardTitle>Configuration indisponible</CardTitle>
-          <CardDescription>
-            Sélectionnez un établissement actif pour modifier la configuration opérationnelle.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
-            onClick={() => onNavigate?.(returnPath)}
-          >
-            <ArrowLeft className="size-4" />
-            Retour
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="flex items-center gap-2 px-4 py-5 text-sm text-muted-foreground">
+        <LoaderCircle className="size-4 animate-spin" />
+        Chargement de la configuration opérationnelle…
+      </div>
     )
   }
 
-  if (!canManageRuntimeConfigFromBootstrapHints(permissionHints)) {
-    return <OperationalConfigAccessDenied returnPath={returnPath} onNavigate={onNavigate} />
-  }
-
-  return (
-    <OperationalConfigContent
-      establishmentId={establishmentId}
-      establishmentName={activeMembership.establishment_name}
-      returnPath={returnPath}
-      onNavigate={onNavigate}
-    />
-  )
+  return <OperationalConfigContent establishmentId={establishmentId} />
 }

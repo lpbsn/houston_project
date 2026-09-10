@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from houston.establishments.api.serializers import EmptyStringForNullMixin
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.organization_admin_selectors import (
     ORGANIZATION_ADMIN_MEMBER_ROLES,
@@ -24,9 +25,11 @@ class OrganizationAdminDirectorSerializer(serializers.Serializer):
     status = serializers.CharField()
 
 
-class OrganizationAdminEstablishmentSerializer(serializers.Serializer):
+class OrganizationAdminEstablishmentSerializer(EmptyStringForNullMixin, serializers.Serializer):
+    null_as_empty_fields = ("name",)
+
     id = serializers.UUIDField()
-    name = serializers.CharField()
+    name = serializers.CharField(allow_blank=True)
     status = serializers.CharField()
     directors = OrganizationAdminDirectorSerializer(many=True)
     active_member_count = serializers.IntegerField()
@@ -45,10 +48,12 @@ class OrganizationAdminMemberBusinessUnitSerializer(serializers.Serializer):
     label = serializers.CharField()
 
 
-class OrganizationAdminMemberMembershipSerializer(serializers.Serializer):
+class OrganizationAdminMemberMembershipSerializer(EmptyStringForNullMixin, serializers.Serializer):
+    null_as_empty_fields = ("establishment_name",)
+
     membership_id = serializers.UUIDField()
     establishment_id = serializers.UUIDField()
-    establishment_name = serializers.CharField()
+    establishment_name = serializers.CharField(allow_blank=True)
     establishment_status = serializers.CharField()
     role = serializers.CharField()
     status = serializers.CharField()

@@ -1,22 +1,29 @@
 from __future__ import annotations
 
 import uuid
+from unittest.mock import patch
 
 import pytest
+from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from houston.core.exceptions import DomainConflictError, DomainValidationError
+from houston.establishments.invitation_email import send_establishment_invitation_email
 from houston.establishments.models import (
     ACTIVITY_DESCRIPTION_MAX_LENGTH,
     ACTIVITY_DESCRIPTION_MIN_LENGTH,
     BusinessUnit,
     Establishment,
     EstablishmentActivityDescription,
+    EstablishmentInvitation,
     EstablishmentMembership,
     OnboardingDraft,
     OnboardingProposal,
     OnboardingSession,
+)
+from houston.establishments.onboarding_draft import (
+    OnboardingDraftValidationError as DraftPayloadValidationError,
 )
 from houston.establishments.onboarding_draft import (
     empty_onboarding_draft_payload,
@@ -256,6 +263,24 @@ def test_description_max_length_enforced():
         mode="soft",
     )
     assert any(error["code"] == "invalid_activity_description_length" for error in errors)
+
+
+def test_final_validation_rejects_catalog_subject_with_label(imported_catalog):
+    payload = _valid_complete_payload(establishment_name="Site Dual Identity")
+    payload["activity_subjects"][0]["label"] = "Propreté"
+    with pytest.raises(DraftPayloadValidationError) as exc_info:
+        validate_onboarding_draft_payload(payload, mode="final")
+    assert any(
+        error["code"] == "invalid_subject_identity" for error in exc_info.value.errors
+    )
+
+
+def test_final_validation_accepts_catalog_subject_without_label(imported_catalog):
+    payload = _valid_complete_payload(establishment_name="Site Xor Identity")
+    normalized, errors = validate_onboarding_draft_payload(payload, mode="final")
+    assert errors == []
+    assert normalized["activity_subjects"][0]["catalog_key"] == "coworking__proprete"
+    assert normalized["activity_subjects"][0]["label"] == ""
 
 
 def test_get_draft_404_when_missing(imported_catalog):
@@ -604,3 +629,142 @@ def test_get_onboarding_draft_service_rejects_activated_session(imported_catalog
 
     with pytest.raises(OnboardingSessionTerminalError):
         get_onboarding_draft(session=session)
+
+
+def test_upsert_syncs_nonempty_name_onto_unnamed_establishment(imported_catalog):
+    owner = create_user(username="draft_sync_name_owner")
+    session = create_onboarding_session(actor=owner)
+    establishment = session.establishment
+    establishment.name = None
+    establishment.save(update_fields=["name", "updated_at"])
+
+    payload = empty_onboarding_draft_payload()
+    payload["establishment"] = {"name": "  Wizard Hotel  ", "description": ""}
+    upsert_onboarding_draft(session=session, actor=owner, payload=payload)
+
+    establishment.refresh_from_db()
+    assert establishment.name == "Wizard Hotel"
+
+
+def test_upsert_empty_name_keeps_unnamed_establishment(imported_catalog):
+    owner = create_user(username="draft_keep_unnamed_owner")
+    session = create_onboarding_session(actor=owner)
+    establishment = session.establishment
+    establishment.name = None
+    establishment.save(update_fields=["name", "updated_at"])
+
+    payload = empty_onboarding_draft_payload()
+    payload["establishment"] = {"name": "   ", "description": ""}
+    upsert_onboarding_draft(session=session, actor=owner, payload=payload)
+
+    establishment.refresh_from_db()
+    assert establishment.name is None
+
+
+def test_autosave_duplicate_name_is_contract_error_not_500(imported_catalog, api_client):
+    owner = create_user(username="draft_dup_autosave_owner")
+    session = create_onboarding_session(actor=owner)
+    colliding_name = "Hotel Collision"
+    Establishment.objects.create(
+        name=colliding_name,
+        organization=session.organization,
+        status=Establishment.Status.ACTIVE,
+    )
+    session.establishment.name = None
+    session.establishment.save(update_fields=["name", "updated_at"])
+
+    access_token = login(api_client, user=owner)
+    headers = auth_headers(access_token)
+    draft_url = f"/api/v1/onboarding-sessions/{session.id}/draft/"
+    colliding_payload = empty_onboarding_draft_payload()
+    colliding_payload["establishment"] = {"name": colliding_name, "description": ""}
+
+    response = api_client.put(
+        draft_url,
+        {"payload": colliding_payload},
+        format="json",
+        **headers,
+    )
+    assert response.status_code == 200, response.json()
+    body = response.json()
+    assert any(
+        error.get("code") == "duplicate_establishment_name"
+        for error in body["validation"]["errors"]
+    )
+    assert body["payload"]["establishment"]["name"] == colliding_name
+
+    session.establishment.refresh_from_db()
+    assert session.establishment.name is None
+
+    get_response = api_client.get(draft_url, **headers)
+    assert get_response.status_code == 200
+    assert get_response.json()["payload"]["establishment"]["name"] == colliding_name
+
+    unique_payload = empty_onboarding_draft_payload()
+    unique_payload["establishment"] = {"name": "Hotel Unique", "description": ""}
+    retry = api_client.put(
+        draft_url,
+        {"payload": unique_payload},
+        format="json",
+        **headers,
+    )
+    assert retry.status_code == 200, retry.json()
+    session.establishment.refresh_from_db()
+    assert session.establishment.name == "Hotel Unique"
+    assert retry.json()["payload"]["establishment"]["name"] == "Hotel Unique"
+    assert not any(
+        error.get("code") == "duplicate_establishment_name"
+        for error in retry.json()["validation"]["errors"]
+    )
+
+
+def test_complete_from_unnamed_sets_name_then_activates(imported_catalog):
+    owner = create_user(username="draft_complete_unnamed_owner")
+    session = create_onboarding_session(actor=owner)
+    session.establishment.name = None
+    session.establishment.save(update_fields=["name", "updated_at"])
+
+    payload = _valid_complete_payload(establishment_name="Completed Hotel")
+    draft = get_onboarding_draft(session=session)
+    draft.payload = payload
+    draft.save(update_fields=["payload", "updated_at"])
+
+    result = complete_onboarding_session(session=session, actor=owner)
+    assert result["activated"] is True
+    session.establishment.refresh_from_db()
+    assert session.establishment.name == "Completed Hotel"
+    assert session.establishment.status == Establishment.Status.ACTIVE
+
+
+@override_settings(
+    HOUSTON_PUBLIC_APP_URL="https://app.spore-os.com",
+    HOUSTON_INVITATION_EMAIL_FROM="Spore <invitation@notify.spore-os.com>",
+    RESEND_API_KEY="re_test_key",
+)
+def test_invite_director_uses_synced_establishment_name(imported_catalog):
+    owner = create_user(username="draft_invite_named_owner")
+    session = create_onboarding_session(actor=owner)
+    session.establishment.name = None
+    session.establishment.save(update_fields=["name", "updated_at"])
+
+    payload = empty_onboarding_draft_payload()
+    payload["establishment"] = {"name": "Invite Hotel", "description": ""}
+    upsert_onboarding_draft(session=session, actor=owner, payload=payload)
+
+    invitation_result = invite_director_during_onboarding(
+        session=session,
+        actor=owner,
+        email=f"dir_{uuid.uuid4().hex[:8]}@example.com",
+        first_name="Dir",
+        last_name="Ector",
+    )
+    invitation = EstablishmentInvitation.objects.get(membership=invitation_result.membership)
+
+    with patch("houston.establishments.resend_client.resend.Emails.send") as send:
+        send_establishment_invitation_email(
+            invitation_id=str(invitation.id),
+            raw_token=invitation_result.invitation_token,
+        )
+
+    params = send.call_args.args[0]
+    assert params["subject"] == "Invitation à rejoindre Invite Hotel sur Spore"

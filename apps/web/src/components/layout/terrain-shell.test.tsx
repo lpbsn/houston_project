@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { createElement, type ComponentProps } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -90,18 +91,26 @@ function renderTerrainShell(
   mainScroll: 'auto' | 'hidden' = 'hidden',
   options: Partial<ComponentProps<typeof TerrainShell>> = {},
 ) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
+
   return render(
     createElement(
-      TerrainShell,
-      {
-        contentKey: 'test',
-        topbar: <div data-testid="terrain-topbar">Topbar</div>,
-        showBottomNav: false,
-        mainScroll,
-        navigate: () => undefined,
-        ...options,
-      },
-      <div data-testid="page-content">Page</div>,
+      QueryClientProvider,
+      { client },
+      createElement(
+        TerrainShell,
+        {
+          contentKey: 'test',
+          topbar: <div data-testid="terrain-topbar">Topbar</div>,
+          showBottomNav: false,
+          mainScroll,
+          navigate: () => undefined,
+          ...options,
+        },
+        <div data-testid="page-content">Page</div>,
+      ),
     ),
   )
 }

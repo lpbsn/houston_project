@@ -16,6 +16,7 @@ import {
   canViewTeamFromBootstrapHints,
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
+import { canManageOrganizationOfEstablishment } from '@/features/organization/lib/resolve-organization-id-for-establishment'
 import {
   getTeamListUiState,
   setTeamListUiState,
@@ -37,9 +38,11 @@ type TeamPageProps = {
 export function TeamPage({ onNavigate }: TeamPageProps) {
   const { activeMembership, bootstrap, isBootstrapping, isReady } = useAuth()
   const permissionHints = getBootstrapPermissionHints(bootstrap)
-  const canInvite = canInviteFromBootstrapHints(permissionHints)
-  const canViewTeam = canViewTeamFromBootstrapHints(permissionHints)
   const establishmentId = activeMembership?.establishment_id ?? null
+  const canInvite =
+    canInviteFromBootstrapHints(permissionHints) ||
+    canManageOrganizationOfEstablishment(bootstrap, establishmentId ?? '')
+  const canViewTeam = canViewTeamFromBootstrapHints(permissionHints)
 
   const initialUiState = getTeamListUiState(establishmentId)
   const [searchQuery, setSearchQuery] = useState(initialUiState.searchQuery)

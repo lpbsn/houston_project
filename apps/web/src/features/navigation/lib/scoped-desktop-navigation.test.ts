@@ -150,5 +150,49 @@ describe('scoped desktop navigation', () => {
     expect(sections[0]?.defaultExpanded).toBe(true)
     expect(sections[0]?.items.map((item) => item.id)).not.toContain('dashboard')
     expect(sections[0]?.items.map((item) => item.id)).toContain('reporting')
+    expect(sections[0]?.items.map((item) => item.id)).not.toContain('operational-config')
+  })
+
+  it('adds operational config for owner and director establishment sections only', () => {
+    const owner = membership({
+      role: 'owner',
+      establishment_id: 'est-owner',
+      establishment_name: 'Owner Site',
+    })
+    const director = membership({
+      role: 'director',
+      establishment_id: 'est-director',
+      establishment_name: 'Director Site',
+    })
+    const manager = membership({
+      role: 'manager',
+      establishment_id: 'est-manager',
+      establishment_name: 'Manager Site',
+    })
+    const sections = resolveScopedDesktopNavigation({
+      bootstrap: bootstrap([owner, director, manager], owner),
+      showChat: false,
+    })
+
+    const ownerItems =
+      sections.find((section) => section.id === 'establishment:est-owner')?.items.map((item) => item.id) ??
+      []
+    const directorItems =
+      sections.find((section) => section.id === 'establishment:est-director')?.items.map((item) => item.id) ??
+      []
+    const managerItems =
+      sections.find((section) => section.id === 'establishment:est-manager')?.items.map((item) => item.id) ??
+      []
+    const crossItems = sections.find((section) => section.id === 'cross')?.items.map((item) => item.id)
+
+    expect(ownerItems).toContain('operational-config')
+    expect(directorItems).toContain('operational-config')
+    expect(managerItems).not.toContain('operational-config')
+    expect(crossItems).not.toContain('operational-config')
+    expect(
+      sections
+        .find((section) => section.id === 'establishment:est-owner')
+        ?.items.find((item) => item.id === 'operational-config')?.href,
+    ).toBe('/e/est-owner/operational-config')
   })
 })

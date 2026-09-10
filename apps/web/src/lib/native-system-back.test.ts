@@ -115,12 +115,12 @@ describe('native system back', () => {
     const { history, pressBack } = await configureAndroid(createMemoryHistory('/analytics'))
     setNativeSystemBackAuthGetter(() => ({
       hasOperationalAccess: false,
-      authenticatedLandingPath: '/organization',
+      authenticatedLandingPath: '/no-establishment',
     }))
 
     pressBack()
 
-    expect(history.getHref()).toBe('/organization')
+    expect(history.getHref()).toBe('/no-establishment')
     expect(minimizeApp).not.toHaveBeenCalled()
   })
 

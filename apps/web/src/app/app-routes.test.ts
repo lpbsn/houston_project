@@ -106,10 +106,20 @@ describe('parseAppRoute', () => {
     })
   })
 
-  it('parses operational config route', () => {
+  it('parses scoped operational config and treats the legacy app path as unknown', () => {
     expect(parseAppRoute('/app/operational-config')).toEqual({
-      kind: 'static',
-      path: '/app/operational-config',
+      kind: 'unknown',
+      pathname: '/app/operational-config',
+    })
+    expect(
+      parseAppRoute('/e/11111111-1111-4111-8111-111111111111/operational-config'),
+    ).toEqual({
+      kind: 'scoped-terrain',
+      scope: {
+        type: 'establishment',
+        establishmentId: '11111111-1111-4111-8111-111111111111',
+      },
+      page: 'operational-config',
     })
   })
 
@@ -166,14 +176,14 @@ describe('parseAppRoute', () => {
     )
   })
 
-  it('parses organization management routes', () => {
+  it('parses former organization routes as unknown', () => {
     expect(parseAppRoute('/organization')).toEqual({
-      kind: 'static',
-      path: '/organization',
+      kind: 'unknown',
+      pathname: '/organization',
     })
     expect(parseAppRoute('/organization/establishments/est-123')).toEqual({
-      kind: 'organization-establishment-detail',
-      establishmentId: 'est-123',
+      kind: 'unknown',
+      pathname: '/organization/establishments/est-123',
     })
   })
 
@@ -223,12 +233,6 @@ describe('getAppRouteKey', () => {
     expect(getAppRouteKey({ kind: 'team-member-detail', membershipId: 'member-1' })).toBe(
       'team-member-detail:member-1',
     )
-    expect(
-      getAppRouteKey({
-        kind: 'organization-establishment-detail',
-        establishmentId: 'est-1',
-      }),
-    ).toBe('organization-establishment-detail:est-1')
     expect(getAppRouteKey({ kind: 'unknown', pathname: '/foo/bar' })).toBe('unknown:/foo/bar')
   })
 

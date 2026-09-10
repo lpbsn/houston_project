@@ -182,7 +182,7 @@ def get_establishment_admin_overview(
     config_counts = _operational_config_counts(establishment_id=establishment.id)
     return {
         "id": establishment.id,
-        "name": establishment.name,
+        "name": establishment.name or "",
         "status": establishment.status,
         "organization_id": establishment.organization_id,
         "organization_name": establishment.organization.name,

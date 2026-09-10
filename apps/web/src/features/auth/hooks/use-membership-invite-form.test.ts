@@ -10,12 +10,17 @@ import { createTestQueryClient } from '@/test-utils'
 import { useMembershipInviteForm } from './use-membership-invite-form'
 
 const inviteMembership = vi.fn()
+const inviteOrganizationOwner = vi.fn()
 const invalidateMembershipListQueries = vi.fn()
 
 vi.mock('@/features/auth/api', () => ({
   inviteMembership: (...args: unknown[]) => inviteMembership(...args),
   invalidateMembershipListQueries: (...args: unknown[]) =>
     invalidateMembershipListQueries(...args),
+}))
+
+vi.mock('@/features/organization/api', () => ({
+  inviteOrganizationOwner: (...args: unknown[]) => inviteOrganizationOwner(...args),
 }))
 
 vi.mock('@/features/auth/hooks', () => ({
@@ -29,9 +34,15 @@ vi.mock('@/features/auth/hooks', () => ({
 function InviteFormProbe({
   establishmentId,
   allowedTargetRoles,
+  bootstrap,
 }: {
   establishmentId: string
-  allowedTargetRoles?: ('staff' | 'manager' | 'director')[]
+  allowedTargetRoles?: ('owner' | 'staff' | 'manager' | 'director')[]
+  bootstrap?: {
+    memberships: { establishment_id?: string; organization_id: string }[]
+    pending_onboarding_memberships: { establishment_id?: string; organization_id: string }[]
+    active_membership?: { establishment_id: string; organization_id: string } | null
+  }
 }) {
   const {
     form,
@@ -44,7 +55,7 @@ function InviteFormProbe({
     errorMessage,
     requiresScopes,
     handleSubmit,
-  } = useMembershipInviteForm({ establishmentId, allowedTargetRoles })
+  } = useMembershipInviteForm({ establishmentId, allowedTargetRoles, bootstrap: bootstrap as never })
 
   return createElement(
     'form',
@@ -86,6 +97,11 @@ function InviteFormProbe({
       'button',
       { type: 'button', onClick: () => setRole('director') },
       'Select director',
+    ),
+    createElement(
+      'button',
+      { type: 'button', onClick: () => setRole('owner') },
+      'Select owner',
     ),
     createElement('button', { type: 'submit' }, 'Submit'),
     createElement('div', { 'data-testid': 'invited-email' }, invitedEmail ?? ''),
@@ -133,6 +149,7 @@ function renderHookWithQueryClient<T>(callback: () => T) {
 
 beforeEach(() => {
   inviteMembership.mockReset()
+  inviteOrganizationOwner.mockReset()
   invalidateMembershipListQueries.mockReset()
   invalidateMembershipListQueries.mockResolvedValue(undefined)
   vi.stubEnv('VITE_PUBLIC_APP_URL', '')
@@ -298,6 +315,95 @@ describe('useMembershipInviteForm', () => {
     })
 
     expect(invalidateMembershipListQueries).toHaveBeenCalledWith('est-1', expect.anything())
+  })
+
+  it('submits owner invites through the organization API without membership scopes', async () => {
+    inviteOrganizationOwner.mockResolvedValue({
+      invitation_accept_path: '/invitations/token-owner',
+    })
+
+    renderWithQueryClient(
+      createElement(InviteFormProbe, {
+        establishmentId: 'est-1',
+        allowedTargetRoles: ['owner', 'director', 'manager', 'staff'],
+        bootstrap: {
+          memberships: [{ establishment_id: 'est-1', organization_id: 'org-1' }],
+          pending_onboarding_memberships: [],
+        },
+      }),
+    )
+
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'owner@example.com' },
+    })
+    fireEvent.change(screen.getByLabelText('First name'), {
+      target: { value: 'Sam' },
+    })
+    fireEvent.change(screen.getByLabelText('Last name'), {
+      target: { value: 'Owner' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Select owner' }))
+
+    expect(screen.getByTestId('requires-scopes').textContent).toBe('false')
+
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button', { name: 'Submit' }))
+    })
+
+    await waitFor(() => {
+      expect(inviteOrganizationOwner).toHaveBeenCalledWith('org-1', {
+        email: 'owner@example.com',
+        first_name: 'Sam',
+        last_name: 'Owner',
+      })
+    })
+    expect(inviteMembership).not.toHaveBeenCalled()
+    expect(invalidateMembershipListQueries).toHaveBeenCalledWith('est-1', expect.anything())
+  })
+
+  it('submits owner invites for the targeted establishment when several orgs exist', async () => {
+    inviteOrganizationOwner.mockResolvedValue({
+      invitation_accept_path: '/invitations/token-owner-multi',
+    })
+
+    renderWithQueryClient(
+      createElement(InviteFormProbe, {
+        establishmentId: 'est-2',
+        allowedTargetRoles: ['owner', 'director', 'manager', 'staff'],
+        bootstrap: {
+          memberships: [
+            { establishment_id: 'est-1', organization_id: 'org-1' },
+            { establishment_id: 'est-2', organization_id: 'org-2' },
+          ],
+          pending_onboarding_memberships: [],
+        },
+      }),
+    )
+
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'owner@example.com' },
+    })
+    fireEvent.change(screen.getByLabelText('First name'), {
+      target: { value: 'Sam' },
+    })
+    fireEvent.change(screen.getByLabelText('Last name'), {
+      target: { value: 'Owner' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Select owner' }))
+
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button', { name: 'Submit' }))
+    })
+
+    await waitFor(() => {
+      expect(inviteOrganizationOwner).toHaveBeenCalledWith('org-2', {
+        email: 'owner@example.com',
+        first_name: 'Sam',
+        last_name: 'Owner',
+      })
+    })
+    expect(inviteMembership).not.toHaveBeenCalled()
+    expect(invalidateMembershipListQueries).toHaveBeenCalledWith('est-2', expect.anything())
   })
 
   it('maps invitation API error codes', async () => {

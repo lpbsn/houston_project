@@ -24,6 +24,17 @@ PROPOSAL_SCHEMA_VERSION_V3 = "onboarding_proposal_v3"
 PROPOSAL_SCHEMA_VERSION_V4 = "onboarding_proposal_v4"
 
 
+class EmptyStringForNullMixin:
+    null_as_empty_fields: tuple[str, ...] = ()
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        for field_name in self.null_as_empty_fields:
+            if data.get(field_name) is None:
+                data[field_name] = ""
+        return data
+
+
 class MembershipUserSummarySerializer(serializers.Serializer):
     id = serializers.UUIDField()
     display_name = serializers.SerializerMethodField()
@@ -71,7 +82,9 @@ class MembershipScopeSummarySerializer(serializers.Serializer):
     business_unit_count = serializers.IntegerField()
 
 
-class EstablishmentMembershipResponseSerializer(serializers.Serializer):
+class EstablishmentMembershipResponseSerializer(EmptyStringForNullMixin, serializers.Serializer):
+    null_as_empty_fields = ("establishment_name",)
+
     id = serializers.UUIDField()
     establishment_id = serializers.UUIDField()
     establishment_name = serializers.CharField(source="establishment.name")
@@ -365,9 +378,11 @@ class OnboardingOrganizationSummarySerializer(serializers.Serializer):
     status = serializers.CharField()
 
 
-class OnboardingEstablishmentSummarySerializer(serializers.Serializer):
+class OnboardingEstablishmentSummarySerializer(EmptyStringForNullMixin, serializers.Serializer):
+    null_as_empty_fields = ("name",)
+
     id = serializers.UUIDField()
-    name = serializers.CharField()
+    name = serializers.CharField(allow_blank=True)
     status = serializers.CharField()
 
 
@@ -634,9 +649,16 @@ class ProposalCommandResponseSerializer(serializers.Serializer):
 
 
 class EstablishmentCreateRequestSerializer(serializers.Serializer):
-    name = serializers.CharField(trim_whitespace=False, max_length=255)
+    name = serializers.CharField(
+        required=False,
+        allow_null=True,
+        trim_whitespace=False,
+        max_length=255,
+    )
 
-    def validate_name(self, value: str) -> str:
+    def validate_name(self, value: str | None) -> str | None:
+        if value is None:
+            return None
         if not value.strip():
             raise serializers.ValidationError("This field may not be blank.")
         return value
@@ -645,7 +667,7 @@ class EstablishmentCreateRequestSerializer(serializers.Serializer):
 class EstablishmentCreateResponseSerializer(serializers.Serializer):
     establishment_id = serializers.UUIDField()
     organization_id = serializers.UUIDField()
-    name = serializers.CharField()
+    name = serializers.CharField(allow_null=True)
     status = serializers.CharField()
     onboarding_session_id = serializers.UUIDField()
 

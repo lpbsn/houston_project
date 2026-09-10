@@ -198,7 +198,9 @@ class EstablishmentCreateView(APIView):
             "ACTIVE or DRAFT). Uses the session-selected establishment's organization "
             "when present and authorized; otherwise the actor's unique manageable "
             "organization. Seeds organizational owners and starts onboarding atomically. "
-            "Body accepts only the establishment name."
+            "Body accepts an optional establishment name. Omit or send null to "
+            "provision an unnamed DRAFT; blank strings are rejected. Seeds "
+            "organizational owners and starts onboarding atomically."
         ),
     )
     def post(self, request):
@@ -229,7 +231,7 @@ class EstablishmentCreateView(APIView):
             provision = provision_establishment_onboarding(
                 actor=request.user,
                 organization=organization,
-                name=serializer.validated_data["name"],
+                name=serializer.validated_data.get("name"),
             )
         except EstablishmentCreationForbiddenError:
             return Response(

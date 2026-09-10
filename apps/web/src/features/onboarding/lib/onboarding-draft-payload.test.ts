@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  addManualActivitySubject,
   applyCatalogBusinessUnitSelection,
+  canonicalizeDraftActivitySubjectIdentities,
   createEmptyBusinessUnit,
+  displayDraftActivitySubjectLabel,
 } from './onboarding-draft-catalog'
 import {
   emptyOnboardingDraftPayload,
@@ -74,7 +77,7 @@ describe('structure and complete gates', () => {
         client_key: '33333333-3333-4333-8333-333333333333',
         business_unit_client_key: buKey,
         catalog_key: 'hotel__accueil',
-        label: 'Accueil',
+        label: '',
         description: '',
       },
     ]
@@ -132,6 +135,8 @@ describe('catalog apply and prune', () => {
     expect(payload.business_units[0]?.catalog_key).toBe('restaurant')
     expect(payload.business_units[0]?.specific_name).toBe('Restaurant')
     expect(payload.activity_subjects).toHaveLength(2)
+    expect(payload.activity_subjects.every((subject) => subject.catalog_key)).toBe(true)
+    expect(payload.activity_subjects.every((subject) => subject.label === '')).toBe(true)
 
     payload = applyCatalogBusinessUnitSelection(
       payload,
@@ -140,6 +145,94 @@ describe('catalog apply and prune', () => {
       [{ key: 'restaurant__stock', label: 'Stock', business_unit_key: 'restaurant' }],
     )
     expect(payload.activity_subjects).toHaveLength(2)
+  })
+
+  it('keeps free subjects as label-only identity', () => {
+    const bu = createEmptyBusinessUnit()
+    let payload = emptyOnboardingDraftPayload()
+    payload.business_units = [bu]
+    payload = addManualActivitySubject(payload, bu.client_key, {
+      label: 'Terrasse VIP',
+      description: 'Privée',
+    })
+    expect(payload.activity_subjects).toEqual([
+      expect.objectContaining({
+        business_unit_client_key: bu.client_key,
+        catalog_key: null,
+        label: 'Terrasse VIP',
+        description: 'Privée',
+      }),
+    ])
+  })
+
+  it('canonicalizes dual catalog identity for persist', () => {
+    const payload = emptyOnboardingDraftPayload()
+    payload.activity_subjects = [
+      {
+        client_key: '33333333-3333-4333-8333-333333333333',
+        business_unit_client_key: '22222222-2222-4222-8222-222222222222',
+        catalog_key: 'hotel__accueil',
+        label: 'Accueil',
+        description: 'Should drop',
+      },
+      {
+        client_key: '44444444-4444-4444-8444-444444444444',
+        business_unit_client_key: '22222222-2222-4222-8222-222222222222',
+        catalog_key: null,
+        label: 'Terrasse VIP',
+        description: 'Privée',
+      },
+    ]
+
+    const canonical = canonicalizeDraftActivitySubjectIdentities(payload)
+    expect(canonical.activity_subjects[0]).toEqual({
+      client_key: '33333333-3333-4333-8333-333333333333',
+      business_unit_client_key: '22222222-2222-4222-8222-222222222222',
+      catalog_key: 'hotel__accueil',
+      label: '',
+      description: '',
+    })
+    expect(canonical.activity_subjects[1]).toEqual(payload.activity_subjects[1])
+  })
+
+  it('displays catalog labels from the catalog map and free labels from payload', () => {
+    const catalogLabelByKey = new Map([['hotel__accueil', 'Accueil']])
+    expect(
+      displayDraftActivitySubjectLabel(
+        {
+          client_key: '1',
+          business_unit_client_key: 'bu',
+          catalog_key: 'hotel__accueil',
+          label: '',
+          description: '',
+        },
+        catalogLabelByKey,
+      ),
+    ).toBe('Accueil')
+    expect(
+      displayDraftActivitySubjectLabel(
+        {
+          client_key: '2',
+          business_unit_client_key: 'bu',
+          catalog_key: null,
+          label: 'Terrasse VIP',
+          description: '',
+        },
+        catalogLabelByKey,
+      ),
+    ).toBe('Terrasse VIP')
+    expect(
+      displayDraftActivitySubjectLabel(
+        {
+          client_key: '3',
+          business_unit_client_key: 'bu',
+          catalog_key: 'hotel__unknown',
+          label: '',
+          description: '',
+        },
+        catalogLabelByKey,
+      ),
+    ).toBe('hotel__unknown')
   })
 
   it('removes member scopes when a business unit is deleted', () => {

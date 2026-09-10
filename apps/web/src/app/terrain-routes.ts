@@ -36,7 +36,6 @@ export type TerrainRouteConfig = {
 export type TerrainTopbarPlacement = 'all' | 'hidden' | 'mobile-only'
 
 const OPERATIONAL_STATIC_PATHS = new Set<string>([
-  '/app/operational-config',
   '/reporting',
   '/signals',
   '/execution',
@@ -53,7 +52,6 @@ const OPERATIONAL_STATIC_PATHS = new Set<string>([
 const PROTECTED_STATIC_PATHS = new Set<string>([
   ...OPERATIONAL_STATIC_PATHS,
   '/analytics',
-  '/organization',
   '/pending-onboarding',
   '/onboarding',
   '/select-establishment',
@@ -98,10 +96,6 @@ export function isProtectedRoute(route: AppRoute): boolean {
     return PROTECTED_STATIC_PATHS.has(route.path)
   }
 
-  if (route.kind === 'organization-establishment-detail') {
-    return true
-  }
-
   if (route.kind === 'analytics-pattern-detail') {
     return true
   }
@@ -111,10 +105,6 @@ export function isProtectedRoute(route: AppRoute): boolean {
 
 export function requiresActiveMembership(route: AppRoute): boolean {
   if (route.kind === 'unknown' || route.kind === 'invitation') {
-    return false
-  }
-
-  if (route.kind === 'organization-establishment-detail') {
     return false
   }
 
@@ -203,6 +193,8 @@ function scopedPageTitle(page: string): string | undefined {
       return 'Discussions'
     case 'general':
       return 'Général'
+    case 'operational-config':
+      return 'Configuration opérationnelle'
     case 'settings':
       return 'Paramètres'
     default:
@@ -220,9 +212,14 @@ function scopedHubConfig(
     pageTitle: scopedPageTitle(page),
     showBottomNav: isDashboard,
     desktopActivePath: serializeScopedTerrainPath(scope, page),
-    mainScroll: isDashboard || page === 'general' || page === 'settings' || page === 'reporting'
-      ? 'auto'
-      : 'hidden',
+    mainScroll:
+      isDashboard ||
+      page === 'general' ||
+      page === 'operational-config' ||
+      page === 'settings' ||
+      page === 'reporting'
+        ? 'auto'
+        : 'hidden',
     ...(isDashboard
       ? {
           hideTopbar: true,

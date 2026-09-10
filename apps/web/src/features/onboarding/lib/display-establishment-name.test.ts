@@ -36,4 +36,19 @@ describe('display-establishment-name', () => {
       }),
     ).toBe('Hôtel Nord')
   })
+
+  it('treats null and blank names like missing labels', () => {
+    expect(
+      displayEstablishmentName({
+        establishmentName: null,
+        organizationName: 'Northwind Group',
+      }),
+    ).toBe('Northwind Group')
+
+    expect(
+      displayEstablishmentName({
+        establishmentName: '',
+      }),
+    ).toBe('Votre établissement')
+  })
 })

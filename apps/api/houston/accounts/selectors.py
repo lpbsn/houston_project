@@ -151,7 +151,7 @@ def _serialize_pending_onboarding_membership(
     return {
         "id": str(membership.id),
         "establishment_id": str(membership.establishment_id),
-        "establishment_name": establishment.name,
+        "establishment_name": establishment.name or "",
         "establishment_status": establishment.status,
         "organization_id": str(establishment.organization_id),
         "organization_name": establishment.organization.name,
@@ -201,7 +201,7 @@ def _serialize_membership(membership: EstablishmentMembership) -> dict:
     return {
         "id": str(membership.id),
         "establishment_id": str(membership.establishment_id),
-        "establishment_name": membership.establishment.name,
+        "establishment_name": membership.establishment.name or "",
         "organization_id": str(membership.establishment.organization_id),
         "organization_name": membership.establishment.organization.name,
         "role": membership.role,
