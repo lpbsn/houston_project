@@ -16,6 +16,8 @@ import {
   calendarEventAssigneeOverflow,
   calendarEventOrgBadges,
   calendarEventPresentation,
+  calendarLaneStatusLabelClassName,
+  calendarLaneSuiteClassName,
   calendarUnplannedCreatedDateLabel,
   resolveCalendarEventChromeDensity,
   type CalendarEventChromeDensity,
@@ -36,6 +38,8 @@ const TIME_GRID_INITIAL_HOUR = 8
 const TIME_GUTTER = '3.75rem'
 const WEEKDAY_LABELS = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.']
 const MONTH_VISIBLE = 2
+const ALL_DAY_VISIBLE_DAY = 2
+const ALL_DAY_VISIBLE_WEEK = 1
 
 type ExecutionCalendarViewProps = {
   granularity: ExecutionCalendarGranularity
@@ -86,7 +90,9 @@ function CalendarEventButton({
     densityOverride ?? resolveCalendarEventChromeDensity({ variant, heightPx, narrow })
   const presentation = calendarEventPresentation(item)
   const compact = density === 'compact'
-  const showSuite = continuation === true && !compact
+  const lane = density === 'lane'
+  const showSuite = continuation === true && (lane || !compact)
+  const showMetaLayers = !lane
   return (
     <button
       type="button"
@@ -105,24 +111,28 @@ function CalendarEventButton({
       />
       <span
         className={cn(
-          'flex min-h-0 min-w-0 flex-1 flex-col items-start justify-start overflow-hidden px-1.5 py-0.5',
-          compact ? 'gap-px' : 'gap-0.5',
+          'flex min-h-0 min-w-0 flex-1 overflow-hidden px-1.5 py-0.5',
+          lane ? 'flex-row items-center gap-1' : 'flex-col items-start justify-start',
+          !lane && (compact ? 'gap-px' : 'gap-0.5'),
         )}
       >
         <span
           className={cn(
-            'flex w-full min-w-0 items-baseline gap-1',
-            compact ? 'text-[10px]' : 'text-[11px]',
+            'flex min-w-0 items-baseline gap-1',
+            lane ? 'min-w-0 flex-1 text-[10px]' : 'w-full',
+            !lane && (compact ? 'text-[10px]' : 'text-[11px]'),
           )}
         >
-          <span className={cn('min-w-0 font-semibold', compact ? 'line-clamp-1' : 'line-clamp-2')}>
+          <span className={cn('min-w-0 font-semibold', compact || lane ? 'line-clamp-1' : 'line-clamp-2')}>
             {presentation.title}
           </span>
           {showSuite ? (
-            <span className="shrink-0 text-[9px] font-medium opacity-70">Suite</span>
+            <span className={lane ? calendarLaneSuiteClassName() : 'shrink-0 text-[9px] font-medium opacity-70'}>
+              Suite
+            </span>
           ) : null}
         </span>
-        {presentation.orgBadges.length > 0 ? (
+        {showMetaLayers && presentation.orgBadges.length > 0 ? (
           <span className="flex min-w-0 flex-wrap gap-0.5">
             {presentation.orgBadges.map((badge) => (
               <span
@@ -134,7 +144,8 @@ function CalendarEventButton({
             ))}
           </span>
         ) : null}
-        {presentation.assigneeInitials.length > 0 || presentation.assigneeOverflow > 0 ? (
+        {showMetaLayers &&
+        (presentation.assigneeInitials.length > 0 || presentation.assigneeOverflow > 0) ? (
           <span className="flex min-w-0 items-center">
             {presentation.assigneeInitials.map((initials, index) => (
               <span
@@ -159,12 +170,13 @@ function CalendarEventButton({
         <span
           className={cn(
             'flex min-w-0 items-center gap-1 font-medium opacity-80',
-            compact ? 'text-[9px]' : 'text-[10px]',
+            lane && 'shrink-0',
+            compact || lane ? 'text-[9px]' : 'text-[10px]',
           )}
         >
           {item.status === 'pending_validation' ? (
             <Bell
-              className={cn('shrink-0', compact ? 'h-2.5 w-2.5' : 'h-3 w-3')}
+              className={cn('shrink-0', compact || lane ? 'h-2.5 w-2.5' : 'h-3 w-3')}
               style={{ color: presentation.chrome.bar }}
               aria-hidden
             />
@@ -175,32 +187,51 @@ function CalendarEventButton({
               aria-hidden
             />
           )}
-          <span className="truncate">{presentation.statusLabel}</span>
+          <span className={lane ? calendarLaneStatusLabelClassName() : 'truncate'}>
+            {presentation.statusLabel}
+          </span>
         </span>
       </span>
     </button>
   )
 }
 
+function allDayLaneVisibleLimit(dayCount: number): number {
+  return dayCount > 1 ? ALL_DAY_VISIBLE_WEEK : ALL_DAY_VISIBLE_DAY
+}
+
 function AllDayLane({
   days,
   items,
   onOpenExecution,
+  onOpenOverflow,
 }: {
   days: string[]
   items: ActionPlanExecutionFeedItem[]
   onOpenExecution: (executionId: string) => void
+  onOpenOverflow: (day: string) => void
 }) {
+  const hasOccupants = days.some((day) => items.some((item) => occupiesAllDayLane(item, day)))
+  if (!hasOccupants) {
+    return null
+  }
+  const visibleLimit = allDayLaneVisibleLimit(days.length)
   return (
-    <div className="grid shrink-0 border-b border-[#E8E6DF] bg-white" style={{ gridTemplateColumns: `${TIME_GUTTER} repeat(${days.length}, minmax(0, 1fr))` }}>
-      <div className="px-1 py-2 text-[10px] font-semibold uppercase tracking-wide text-[#7D7B75]">
+    <div
+      data-testid="calendar-all-day-lane"
+      className="grid shrink-0 border-b border-[#E8E6DF] bg-white"
+      style={{ gridTemplateColumns: `${TIME_GUTTER} repeat(${days.length}, minmax(0, 1fr))` }}
+    >
+      <div className="px-1 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#7D7B75]">
         Journée
       </div>
       {days.map((day) => {
         const dayItems = items.filter((item) => occupiesAllDayLane(item, day))
+        const visible = dayItems.slice(0, visibleLimit)
+        const extra = dayItems.length - visible.length
         return (
-          <div key={day} className="flex min-h-10 flex-col gap-1 border-l border-[#E8E6DF] px-1 py-1">
-            {dayItems.map((item) => (
+          <div key={day} className="flex flex-col gap-0.5 border-l border-[#E8E6DF] px-1 py-1">
+            {visible.map((item) => (
               <CalendarEventButton
                 key={item.id}
                 item={item}
@@ -209,6 +240,15 @@ function AllDayLane({
                 onSelect={() => onOpenExecution(item.id)}
               />
             ))}
+            {extra > 0 ? (
+              <button
+                type="button"
+                className="text-left text-[10px] font-semibold text-[#114660]"
+                onClick={() => onOpenOverflow(day)}
+              >
+                +{extra} de plus
+              </button>
+            ) : null}
           </div>
         )
       })}
@@ -309,7 +349,7 @@ function TimeGrid({
   )
 }
 
-function MonthOverflowSheet({
+function CalendarDayOverflowSheet({
   day,
   items,
   open,
@@ -360,10 +400,14 @@ export function ExecutionCalendarView({
   const didAlignTimeGridRef = useRef(false)
   const items = data ? unwrapActionPlanExecutionFeedItems(data.items) : []
   const unplanned = data ? unwrapActionPlanExecutionFeedItems(data.unplanned) : []
-  const overflowItems = useMemo(
-    () => (overflowDay ? items.filter((item) => occupiesMonthCell(item, overflowDay)) : []),
-    [items, overflowDay],
-  )
+  const overflowItems = useMemo(() => {
+    if (!overflowDay) {
+      return []
+    }
+    const occupiesOverflow =
+      granularity === 'month' ? occupiesMonthCell : occupiesAllDayLane
+    return items.filter((item) => occupiesOverflow(item, overflowDay))
+  }, [granularity, items, overflowDay])
 
   useLayoutEffect(() => {
     if (granularity === 'month') {
@@ -493,7 +537,7 @@ export function ExecutionCalendarView({
           onToggle={() => setUnplannedExpanded((current) => !current)}
           onOpenExecution={onOpenExecution}
         />
-        <MonthOverflowSheet
+        <CalendarDayOverflowSheet
           day={overflowDay ?? ''}
           items={overflowItems}
           open={overflowDay != null}
@@ -525,7 +569,12 @@ export function ExecutionCalendarView({
           )}
         >
           {header}
-          <AllDayLane days={days} items={items} onOpenExecution={onOpenExecution} />
+          <AllDayLane
+            days={days}
+            items={items}
+            onOpenExecution={onOpenExecution}
+            onOpenOverflow={setOverflowDay}
+          />
           <div
             ref={attachTimeScroller}
             data-testid="calendar-time-scroller"
@@ -539,6 +588,13 @@ export function ExecutionCalendarView({
         items={unplanned}
         expanded={unplannedExpanded}
         onToggle={() => setUnplannedExpanded((current) => !current)}
+        onOpenExecution={onOpenExecution}
+      />
+      <CalendarDayOverflowSheet
+        day={overflowDay ?? ''}
+        items={overflowItems}
+        open={overflowDay != null}
+        onClose={() => setOverflowDay(null)}
         onOpenExecution={onOpenExecution}
       />
     </div>

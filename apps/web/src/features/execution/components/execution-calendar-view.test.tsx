@@ -169,6 +169,10 @@ describe('ExecutionCalendarView', () => {
     expect(scroller.contains(screen.getByText('Journée'))).toBe(false)
     expect(screen.getByText('Journée').compareDocumentPosition(scroller) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getByRole('button', { name: /Brief cuisine/ }).textContent).toContain('En cours')
+    const allDayChip = screen.getByRole('button', { name: /Inventaire/ })
+    expect(allDayChip.textContent).toContain('En cours')
+    expect(allDayChip.textContent).not.toContain('Restaurant')
+    expect(screen.getByTestId('calendar-all-day-lane').contains(allDayChip)).toBe(true)
   })
 
   it('keeps unplanned pending_validation collapsed and names them on the header', () => {
@@ -375,7 +379,11 @@ describe('ExecutionCalendarView', () => {
     )
 
     const chips = screen.getAllByRole('button', { name: /Chantier toiture/ })
-    expect(chips.some((chip) => chip.textContent?.includes('Suite'))).toBe(true)
+    const suiteChip = chips.find((chip) => chip.textContent?.includes('Suite'))
+    expect(suiteChip).toBeTruthy()
+    const suite = [...suiteChip!.querySelectorAll('span')].find((node) => node.textContent === 'Suite')
+    expect(suite?.className).toMatch(/\bhidden\b/)
+    expect(suite?.className).toMatch(/\bmd:inline\b/)
     fireEvent.click(chips[0])
     fireEvent.click(chips[chips.length - 1])
     expect(onOpen).toHaveBeenCalledWith('exec-span')
@@ -547,7 +555,8 @@ describe('ExecutionCalendarView', () => {
     expect(timeScroller.className).toMatch(/min-h-0/)
     expect(timeScroller.className).toMatch(/\bflex-1\b/)
     expect(timeScroller.textContent).toContain('00:00')
-    expect(timeScroller.contains(screen.getByText('Journée'))).toBe(false)
+    expect(screen.queryByText('Journée')).toBeNull()
+    expect(screen.queryByTestId('calendar-all-day-lane')).toBeNull()
     expect(timeScroller.contains(screen.getByRole('button', { name: /Sans créneau A/ }))).toBe(false)
     expect(unplannedList.className).toMatch(/overflow-y-auto/)
     expect(timeScroller.contains(unplannedList)).toBe(false)
@@ -645,6 +654,111 @@ describe('ExecutionCalendarView', () => {
       <ExecutionCalendarView granularity="day" days={['2026-09-11']} isLoading={false} {...viewProps} />,
     )
     expect(screen.getByTestId('calendar-time-scroller').scrollTop).toBe(TIME_GRID_INITIAL_SCROLL_TOP)
+  })
+
+  it('caps day-lane events and keeps timed partials out of the lane overflow sheet', () => {
+    const onOpen = vi.fn()
+    render(
+      <ExecutionCalendarView
+        granularity="day"
+        days={['2026-09-08']}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={onOpen}
+        data={{
+          timezone: 'Europe/Paris',
+          items: [
+            wrap({
+              id: 'exec-timed',
+              title: 'Brief cuisine',
+              start_at: '2026-09-08T07:00:00.000Z',
+              end_at: '2026-09-08T09:00:00.000Z',
+            }),
+            wrap({
+              id: 'exec-all-day-a',
+              title: 'Inventaire A',
+              all_day: true,
+              start_at: combineCivilDateTimeToIso('2026-09-08', '00:00'),
+              end_at: combineCivilDateTimeToIso('2026-09-08', '23:59'),
+            }),
+            wrap({
+              id: 'exec-all-day-b',
+              title: 'Inventaire B',
+              all_day: true,
+              start_at: combineCivilDateTimeToIso('2026-09-08', '00:00'),
+              end_at: combineCivilDateTimeToIso('2026-09-08', '23:59'),
+            }),
+            wrap({
+              id: 'exec-all-day-c',
+              title: 'Inventaire C',
+              all_day: true,
+              start_at: combineCivilDateTimeToIso('2026-09-08', '00:00'),
+              end_at: combineCivilDateTimeToIso('2026-09-08', '23:59'),
+            }),
+          ],
+          unplanned: [],
+        }}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: /Inventaire A/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Inventaire B/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Inventaire C/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '+1 de plus' }))
+
+    expect(screen.getByRole('dialog', { name: '08/09/2026' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Inventaire C/ })).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: /Brief cuisine/ }).length).toBe(1)
+    expect(screen.getByTestId('calendar-time-scroller').contains(screen.getByRole('button', { name: /Brief cuisine/ }))).toBe(
+      true,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Inventaire C/ }))
+    expect(onOpen).toHaveBeenCalledWith('exec-all-day-c')
+  })
+
+  it('caps week-lane events independently of the month cell set', () => {
+    render(
+      <ExecutionCalendarView
+        granularity="week"
+        days={['2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11', '2026-09-12', '2026-09-13', '2026-09-14']}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={{
+          timezone: 'Europe/Paris',
+          items: [
+            wrap({
+              id: 'exec-all-day-a',
+              title: 'Inventaire A',
+              all_day: true,
+              start_at: combineCivilDateTimeToIso('2026-09-08', '00:00'),
+              end_at: combineCivilDateTimeToIso('2026-09-08', '23:59'),
+            }),
+            wrap({
+              id: 'exec-all-day-b',
+              title: 'Inventaire B',
+              all_day: true,
+              start_at: combineCivilDateTimeToIso('2026-09-08', '00:00'),
+              end_at: combineCivilDateTimeToIso('2026-09-08', '23:59'),
+            }),
+          ],
+          unplanned: [],
+        }}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: /Inventaire A/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Inventaire B/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '+1 de plus' }))
+    expect(screen.getByRole('dialog', { name: '08/09/2026' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Inventaire B/ })).toBeTruthy()
   })
 })
 
