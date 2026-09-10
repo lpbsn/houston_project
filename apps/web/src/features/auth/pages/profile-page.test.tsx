@@ -5,8 +5,17 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { BootstrapResponse } from '@/features/auth/types'
+import { PUBLIC_PRIVACY_POLICY_URL, PUBLIC_TERMS_URL } from '@/lib/legal'
 
 import { ProfilePage } from './profile-page'
+
+function linkByHref(href: string) {
+  return screen.getAllByRole('link').find((element) => element.getAttribute('href') === href)
+}
+
+function isDocumentFollowing(earlier: Node, later: Node) {
+  return (earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+}
 
 type ProfileBootstrapMock = Pick<BootstrapResponse, 'permission_hints'> &
   Partial<Omit<BootstrapResponse, 'permission_hints'>>
@@ -15,8 +24,10 @@ const onNavigate = vi.fn()
 const onSignOut = vi.fn()
 
 const mutate = vi.fn()
-const { optInNativePush } = vi.hoisted(() => ({
+const { optInNativePush, acceptCurrentAiConsent, withdrawAiConsent } = vi.hoisted(() => ({
   optInNativePush: vi.fn(async () => undefined),
+  acceptCurrentAiConsent: vi.fn(async () => undefined),
+  withdrawAiConsent: vi.fn(async () => undefined),
 }))
 
 const { authState } = vi.hoisted(() => ({
@@ -176,8 +187,8 @@ vi.mock('@/features/auth/api', () => ({
     leaves_establishments_without_director: [],
   })),
   deleteAccount: vi.fn(async () => undefined),
-  acceptCurrentAiConsent: vi.fn(async () => undefined),
-  withdrawAiConsent: vi.fn(async () => undefined),
+  acceptCurrentAiConsent: () => acceptCurrentAiConsent(),
+  withdrawAiConsent: () => withdrawAiConsent(),
 }))
 
 vi.mock('@/features/gamification/hooks', () => ({
@@ -203,6 +214,10 @@ afterEach(() => {
   mutate.mockReset()
   optInNativePush.mockReset()
   optInNativePush.mockResolvedValue(undefined)
+  acceptCurrentAiConsent.mockReset()
+  acceptCurrentAiConsent.mockResolvedValue(undefined)
+  withdrawAiConsent.mockReset()
+  withdrawAiConsent.mockResolvedValue(undefined)
   refetchGamification.mockReset()
   gamificationQueryState.current = {
     data: {
@@ -252,8 +267,7 @@ afterEach(() => {
 })
 
 describe('ProfilePage', () => {
-  it('withdraws AI consent from the Général toggle', async () => {
-    const { withdrawAiConsent } = await import('@/features/auth/api')
+  it('withdraws AI consent from the Général toggle', () => {
     render(
       createElement(ProfilePage, {
         onNavigate,
@@ -262,6 +276,55 @@ describe('ProfilePage', () => {
     )
 
     fireEvent.click(screen.getByRole('switch', { name: 'Traitement OpenAI' }))
+    expect(withdrawAiConsent).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps public legal destinations after account deletion', () => {
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    const switches = screen.getAllByRole('switch')
+    expect(switches).toHaveLength(2)
+    expect(isDocumentFollowing(switches[0], switches[1])).toBe(true)
+
+    fireEvent.click(switches[0])
+    expect(mutate).toHaveBeenCalledWith({ notifications_enabled: false })
+    fireEvent.click(switches[1])
+    expect(withdrawAiConsent).toHaveBeenCalledTimes(1)
+
+    const privacyLink = linkByHref(PUBLIC_PRIVACY_POLICY_URL)
+    const termsLink = linkByHref(PUBLIC_TERMS_URL)
+    expect(privacyLink).toBeTruthy()
+    expect(termsLink).toBeTruthy()
+    expect(privacyLink?.getAttribute('target')).toBe('_blank')
+    expect(privacyLink?.getAttribute('rel')).toBe('noreferrer')
+    expect(termsLink?.getAttribute('target')).toBe('_blank')
+    expect(termsLink?.getAttribute('rel')).toBe('noreferrer')
+    const buttons = screen.getAllByRole('button')
+    const lastButton = buttons[buttons.length - 1]
+    expect(isDocumentFollowing(switches[1], privacyLink as HTMLElement)).toBe(true)
+    expect(isDocumentFollowing(lastButton, privacyLink as HTMLElement)).toBe(true)
+    expect(isDocumentFollowing(privacyLink as HTMLElement, termsLink as HTMLElement)).toBe(true)
+  })
+
+  it('places AI consent after native push when the push switch is present', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    const switches = screen.getAllByRole('switch')
+    expect(switches).toHaveLength(3)
+    expect(isDocumentFollowing(switches[1], switches[2])).toBe(true)
+
+    fireEvent.click(switches[2])
     expect(withdrawAiConsent).toHaveBeenCalledTimes(1)
   })
 

@@ -342,6 +342,32 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
               ) : null}
             </>
           ) : null}
+          {aiConsentError ? <p className="px-4 pb-3.5 text-xs text-[#E24B4A]">{aiConsentError}</p> : null}
+          <TerrainSwitch
+            label={
+              aiConsentPending
+                ? 'Enregistrement...'
+                : 'Traitement OpenAI'
+            }
+            checked={aiConsentGranted}
+            disabled={aiConsentPending}
+            onCheckedChange={(checked) => {
+              setAiConsentError(null)
+              setAiConsentPending(true)
+              const action = checked ? acceptCurrentAiConsent() : withdrawAiConsent()
+              void action
+                .catch((caught) => {
+                  setAiConsentError(
+                    caught instanceof AuthApiError
+                      ? caught.message
+                      : 'Mise à jour du consentement impossible.',
+                  )
+                })
+                .finally(() => {
+                  setAiConsentPending(false)
+                })
+            }}
+          />
         </TerrainCard>
       </div>
 
@@ -453,11 +479,17 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
         </TerrainCard>
       ) : null}
 
-      <TerrainCard padding="sm" className="space-y-3">
-        <p className="text-sm font-medium text-[#1a1a1a]">Confidentialité</p>
+      <AccountDeletionCard
+        disabled={isLoggingOut}
+        onDeleted={async () => {
+          await onSignOut?.()
+        }}
+      />
+
+      <nav className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-1 pt-1">
         <a
           href={PUBLIC_PRIVACY_POLICY_URL}
-          className="block text-sm text-[#5c5a54] underline"
+          className={cn('text-xs', terrain.muted)}
           target="_blank"
           rel="noreferrer"
         >
@@ -465,46 +497,13 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
         </a>
         <a
           href={PUBLIC_TERMS_URL}
-          className="block text-sm text-[#5c5a54] underline"
+          className={cn('text-xs', terrain.muted)}
           target="_blank"
           rel="noreferrer"
         >
           Conditions d’utilisation
         </a>
-        {aiConsentError ? <p className="text-sm text-[#E24B4A]">{aiConsentError}</p> : null}
-        <TerrainSwitch
-          label={
-            aiConsentPending
-              ? 'Enregistrement...'
-              : 'Traitement OpenAI'
-          }
-          checked={aiConsentGranted}
-          disabled={aiConsentPending}
-          onCheckedChange={(checked) => {
-            setAiConsentError(null)
-            setAiConsentPending(true)
-            const action = checked ? acceptCurrentAiConsent() : withdrawAiConsent()
-            void action
-              .catch((caught) => {
-                setAiConsentError(
-                  caught instanceof AuthApiError
-                    ? caught.message
-                    : 'Mise à jour du consentement impossible.',
-                )
-              })
-              .finally(() => {
-                setAiConsentPending(false)
-              })
-          }}
-        />
-      </TerrainCard>
-
-      <AccountDeletionCard
-        disabled={isLoggingOut}
-        onDeleted={async () => {
-          await onSignOut?.()
-        }}
-      />
+      </nav>
     </div>
   )
 }
