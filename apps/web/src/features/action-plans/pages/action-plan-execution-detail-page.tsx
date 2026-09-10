@@ -462,7 +462,7 @@ function ActionPlanExecutionDetailPageContent({
           {showStickyFooter ? (
             <ActionPlanExecutionStickyFooter
               ref={validationActionsRef}
-              className="lg:relative lg:bottom-auto lg:mt-0 lg:rounded-2xl lg:border lg:border-[#E8E6DF] lg:bg-white lg:p-4 lg:shadow-none"
+              className="lg:mt-0 lg:rounded-2xl lg:border lg:border-[#E8E6DF] lg:bg-white lg:p-4 lg:shadow-none"
               data-testid="execution-validation-actions"
               hints={permissionHints}
               isTerminal={isTerminal}

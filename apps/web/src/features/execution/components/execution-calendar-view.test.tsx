@@ -52,6 +52,14 @@ function wrap(item: Partial<ActionPlanExecutionFeedItem> & { id: string; title: 
   }
 }
 
+const TIME_GRID_INITIAL_SCROLL_TOP = 8 * 48
+
+const emptyCalendarData = {
+  timezone: 'Europe/Paris' as const,
+  items: [] as ReturnType<typeof wrap>[],
+  unplanned: [] as ReturnType<typeof wrap>[],
+}
+
 afterEach(() => {
   cleanup()
 })
@@ -146,11 +154,17 @@ describe('ExecutionCalendarView', () => {
     const hub = screen.getByTestId('calendar-hub-scroller')
     const gridCard = screen.getByTestId('calendar-grid-card')
     expect(hub.className).not.toMatch(/overflow-y-auto/)
+    expect(hub.className).toMatch(/overflow-hidden/)
     expect(gridCard.className).toMatch(/min-h-0/)
     expect(gridCard.className).toMatch(/flex-1/)
     expect(gridCard.className).not.toMatch(/min-h-full/)
+    expect(
+      gridCard.compareDocumentPosition(unplannedToggle) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
 
     const scroller = screen.getByTestId('calendar-time-scroller')
+    expect(scroller.className).toMatch(/overflow-y-auto/)
+    expect(scroller.scrollTop).toBe(TIME_GRID_INITIAL_SCROLL_TOP)
     expect(scroller.textContent).toContain('00:00')
     expect(scroller.contains(screen.getByText('Journée'))).toBe(false)
     expect(screen.getByText('Journée').compareDocumentPosition(scroller) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -234,10 +248,12 @@ describe('ExecutionCalendarView', () => {
       />,
     )
 
-    expect(screen.getByRole('button', { name: /Brief planifié/ }).textContent).toContain('Planifiée')
-    expect(screen.getByRole('button', { name: /Brief à valider/ }).textContent).toContain(
-      'Validation',
-    )
+    const scheduled = screen.getByRole('button', { name: /Brief planifié/ })
+    const pending = screen.getByRole('button', { name: /Brief à valider/ })
+    expect(scheduled.textContent).toContain('Planifiée')
+    expect(scheduled.querySelector('svg')).toBeNull()
+    expect(pending.textContent).toContain('Validation')
+    expect(pending.querySelector('svg')).toBeTruthy()
   })
 
   it('keeps status and org on month chips', () => {
@@ -308,22 +324,26 @@ describe('ExecutionCalendarView', () => {
 
     const scroller = screen.getByTestId('calendar-month-scroller')
     const grid = screen.getByTestId('calendar-month-grid')
+    const unplannedToggle = screen.getByRole('button', { name: 'Déplier la section Non planifiés' })
     expect(scroller.className).toMatch(/overflow-y-auto/)
     expect(scroller.contains(grid)).toBe(true)
-    expect(grid.className).toMatch(/\bshrink-0\b/)
+    expect(scroller.contains(unplannedToggle)).toBe(false)
     expect(grid.className).not.toMatch(/overflow-y-auto/)
+    expect(
+      grid.compareDocumentPosition(unplannedToggle) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
     expect(screen.getByText('lun.')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Brief cuisine/ })).toBeTruthy()
     expect(screen.queryByText('Sans créneau')).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Déplier la section Non planifiés' }))
+    fireEvent.click(unplannedToggle)
 
     expect(screen.getByTestId('calendar-month-grid')).toBe(grid)
     expect(scroller.contains(grid)).toBe(true)
-    expect(scroller.contains(screen.getByRole('button', { name: /Sans créneau/ }))).toBe(true)
+    expect(scroller.contains(screen.getByRole('button', { name: /Sans créneau/ }))).toBe(false)
     expect(screen.getByText('lun.')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Brief cuisine/ })).toBeTruthy()
-    expect(screen.getByTestId('calendar-unplanned-list').className).not.toMatch(/overflow-y/)
+    expect(screen.getByTestId('calendar-unplanned-list').className).toMatch(/overflow-y-auto/)
     expect(collectOverflowYScrollElements(scroller)).toEqual([])
   })
 
@@ -466,10 +486,10 @@ describe('ExecutionCalendarView', () => {
     expect(card.textContent).not.toMatch(/08:00|10:00/)
     expect(card.textContent).not.toContain('En cours')
     expect(screen.getByTestId('calendar-time-scroller').contains(card)).toBe(false)
-    expect(screen.getByTestId('calendar-unplanned-list').className).not.toMatch(/overflow-y/)
+    expect(screen.getByTestId('calendar-unplanned-list').className).toMatch(/overflow-y-auto/)
   })
 
-  it('lets the hub pane scroll the natural time grid when unplanned is expanded', () => {
+  it('keeps the time scroller as the day-grid owner when unplanned is expanded', () => {
     render(
       <ExecutionCalendarView
         granularity="day"
@@ -513,28 +533,25 @@ describe('ExecutionCalendarView', () => {
     const hub = screen.getByTestId('calendar-hub-scroller')
     const gridCard = screen.getByTestId('calendar-grid-card')
     const timeScroller = screen.getByTestId('calendar-time-scroller')
+    const unplannedList = screen.getByTestId('calendar-unplanned-list')
     const innerColumn = timeScroller.parentElement
-    expect(hub.className).toMatch(/overflow-y-auto/)
-    expect(collectOverflowYScrollElements(hub)).toEqual([])
-    expect(gridCard.className).toMatch(/\bshrink-0\b/)
-    expect(gridCard.className).toMatch(/overflow-x-hidden/)
-    expect(gridCard.className).toMatch(/overflow-y-hidden/)
+    expect(hub.className).not.toMatch(/overflow-y-auto/)
+    expect(hub.className).toMatch(/overflow-hidden/)
+    expect(gridCard.className).toMatch(/min-h-0/)
+    expect(gridCard.className).toMatch(/\bflex-1\b/)
     expect(gridCard.className).not.toMatch(/min-h-full/)
-    expect(gridCard.className).not.toMatch(/min-h-0/)
-    expect(gridCard.className).not.toMatch(/\bflex-1\b/)
-    expect(gridCard.className).not.toMatch(/overflow-hidden(?!-)/)
-    expect(innerColumn?.className).toMatch(/\bshrink-0\b/)
-    expect(innerColumn?.className).not.toMatch(/min-h-0/)
-    expect(innerColumn?.className).not.toMatch(/\bflex-1\b/)
-    expect(timeScroller.className).toMatch(/\bshrink-0\b/)
-    expect(timeScroller.className).not.toMatch(/overflow-y-auto/)
-    expect(timeScroller.className).not.toMatch(/overscroll-y-contain/)
-    expect(timeScroller.className).not.toMatch(/min-h-0/)
-    expect(timeScroller.className).not.toMatch(/\bflex-1\b/)
+    expect(innerColumn?.className).toMatch(/min-h-0/)
+    expect(innerColumn?.className).toMatch(/\bflex-1\b/)
+    expect(timeScroller.className).toMatch(/overflow-y-auto/)
+    expect(timeScroller.className).toMatch(/overscroll-y-contain/)
+    expect(timeScroller.className).toMatch(/min-h-0/)
+    expect(timeScroller.className).toMatch(/\bflex-1\b/)
     expect(timeScroller.textContent).toContain('00:00')
     expect(timeScroller.contains(screen.getByText('Journée'))).toBe(false)
     expect(timeScroller.contains(screen.getByRole('button', { name: /Sans créneau A/ }))).toBe(false)
-    expect(screen.getByTestId('calendar-unplanned-list').className).not.toMatch(/overflow-y/)
+    expect(unplannedList.className).toMatch(/overflow-y-auto/)
+    expect(timeScroller.contains(unplannedList)).toBe(false)
+    expect(collectOverflowYScrollElements(hub)).toEqual([timeScroller, unplannedList])
   })
 
   it('keeps week horizontal overflow on the card without a nested vertical scroller when unplanned is expanded', () => {
@@ -568,13 +585,66 @@ describe('ExecutionCalendarView', () => {
     const hub = screen.getByTestId('calendar-hub-scroller')
     const gridCard = screen.getByTestId('calendar-grid-card')
     const timeScroller = screen.getByTestId('calendar-time-scroller')
-    expect(hub.className).toMatch(/overflow-y-auto/)
-    expect(collectOverflowYScrollElements(hub)).toEqual([])
+    expect(hub.className).not.toMatch(/overflow-y-auto/)
     expect(gridCard.className).toMatch(/overflow-x-auto/)
     expect(gridCard.className).toMatch(/overflow-y-hidden/)
     expect(gridCard.className).not.toMatch(/overflow-y-auto/)
-    expect(gridCard.className).not.toMatch(/overflow-hidden(?!-)/)
-    expect(timeScroller.className).not.toMatch(/overflow-y-auto/)
+    expect(timeScroller.className).toMatch(/overflow-y-auto/)
+    expect(collectOverflowYScrollElements(hub)).toEqual([
+      timeScroller,
+      screen.getByTestId('calendar-unplanned-list'),
+    ])
+  })
+
+  it('aligns the time grid to 08:00 only when first entering the day or week grid', () => {
+    const viewProps = {
+      month: '2026-09',
+      isError: false,
+      error: null,
+      onRetry: () => undefined,
+      onOpenExecution: () => undefined,
+      data: emptyCalendarData,
+    }
+    const { rerender } = render(
+      <ExecutionCalendarView granularity="day" days={['2026-09-08']} isLoading={false} {...viewProps} />,
+    )
+
+    const firstScroller = screen.getByTestId('calendar-time-scroller')
+    expect(firstScroller.scrollTop).toBe(TIME_GRID_INITIAL_SCROLL_TOP)
+
+    firstScroller.scrollTop = 100
+    rerender(
+      <ExecutionCalendarView granularity="day" days={['2026-09-09']} isLoading={false} {...viewProps} />,
+    )
+    expect(screen.getByTestId('calendar-time-scroller').scrollTop).toBe(100)
+
+    rerender(
+      <ExecutionCalendarView granularity="week" days={['2026-09-08', '2026-09-09']} isLoading={false} {...viewProps} />,
+    )
+    expect(screen.getByTestId('calendar-time-scroller').scrollTop).toBe(100)
+
+    rerender(
+      <ExecutionCalendarView granularity="day" days={['2026-09-10']} isLoading {...viewProps} />,
+    )
+    expect(screen.queryByTestId('calendar-time-scroller')).toBeNull()
+
+    rerender(
+      <ExecutionCalendarView granularity="day" days={['2026-09-10']} isLoading={false} {...viewProps} />,
+    )
+    expect(screen.getByTestId('calendar-time-scroller').scrollTop).toBe(0)
+
+    rerender(
+      <ExecutionCalendarView
+        granularity="month"
+        days={['2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11', '2026-09-12', '2026-09-13']}
+        isLoading={false}
+        {...viewProps}
+      />,
+    )
+    rerender(
+      <ExecutionCalendarView granularity="day" days={['2026-09-11']} isLoading={false} {...viewProps} />,
+    )
+    expect(screen.getByTestId('calendar-time-scroller').scrollTop).toBe(TIME_GRID_INITIAL_SCROLL_TOP)
   })
 })
 

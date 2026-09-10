@@ -414,6 +414,10 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
 
     const footer = screen.getByTestId('execution-validation-actions')
     expect(footer.tagName).toBe('FOOTER')
+    expect(footer.className).toContain('sticky')
+    expect(footer.className).not.toContain('lg:relative')
+    expect(footer.className).not.toContain('lg:bottom-auto')
+    expect(footer.className).toContain('lg:rounded-2xl')
     expect(screen.getAllByTestId('execution-validation-actions')).toHaveLength(1)
     expect(screen.getByTestId('execution-detail-tab-bar').className).toContain('lg:sticky')
     expect(screen.getByTestId('execution-detail-details-panel').className).not.toContain('hidden')

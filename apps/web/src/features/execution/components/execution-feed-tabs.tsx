@@ -10,6 +10,7 @@ export function ExecutionFeedTabs({ viewMode, onChange }: ExecutionFeedTabsProps
   return (
     <TerrainSegmentedControl
       ariaLabel="Mode de vue"
+      className="w-fit"
       value={viewMode}
       onChange={onChange}
       options={[

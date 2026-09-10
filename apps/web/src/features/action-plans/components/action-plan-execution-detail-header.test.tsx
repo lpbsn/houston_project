@@ -99,9 +99,108 @@ describe('ActionPlanExecutionDetailHeader', () => {
     )
 
     const note = screen.getByText('Note')
+    const start = screen.getByText('Début')
     const deadline = screen.getByText('Deadline')
-    expect(note.compareDocumentPosition(deadline) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(note.compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(start.compareDocumentPosition(deadline) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getByRole('img', { name: 'Note : 2 sur 5' })).toBeTruthy()
     expect(screen.getByText('À améliorer')).toBeTruthy()
+  })
+
+  it('hides date sections when start_at and end_at are absent', () => {
+    render(<ActionPlanExecutionDetailHeader execution={buildExecution()} isOverdue={false} />)
+
+    expect(screen.queryByText('Début')).toBeNull()
+    expect(screen.queryByText('Deadline')).toBeNull()
+  })
+
+  it('shows Début only when start_at is present', () => {
+    render(
+      <ActionPlanExecutionDetailHeader
+        execution={buildExecution({ start_at: '2026-06-30T08:00:00Z' })}
+        isOverdue={false}
+      />,
+    )
+
+    expect(screen.getByText('Début')).toBeTruthy()
+    expect(screen.queryByText('Deadline')).toBeNull()
+  })
+
+  it('shows Deadline only when end_at is present', () => {
+    render(
+      <ActionPlanExecutionDetailHeader
+        execution={buildExecution({ end_at: '2026-07-01T18:00:00Z' })}
+        isOverdue={false}
+      />,
+    )
+
+    expect(screen.queryByText('Début')).toBeNull()
+    expect(screen.getByText('Deadline')).toBeTruthy()
+  })
+
+  it('shows Début then Deadline when both timestamps are present', () => {
+    render(
+      <ActionPlanExecutionDetailHeader
+        execution={buildExecution({
+          start_at: '2026-06-30T08:00:00Z',
+          end_at: '2026-07-01T18:00:00Z',
+        })}
+        isOverdue={false}
+      />,
+    )
+
+    const start = screen.getByText('Début')
+    const deadline = screen.getByText('Deadline')
+    expect(start.compareDocumentPosition(deadline) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('shows independent all-day Début and Deadline cards', () => {
+    render(
+      <ActionPlanExecutionDetailHeader
+        execution={buildExecution({
+          all_day: true,
+          start_at: '2026-07-01T10:00:00.000Z',
+          end_at: '2026-07-02T10:00:00.000Z',
+        })}
+        isOverdue={false}
+      />,
+    )
+
+    expect(screen.getByText('Début')).toBeTruthy()
+    expect(screen.getByText('Deadline')).toBeTruthy()
+    expect(screen.getByText('01/07/2026 · Journée entière')).toBeTruthy()
+    expect(screen.getByText('02/07/2026 · Journée entière')).toBeTruthy()
+  })
+
+  it('shows all-day Début only when end_at is absent', () => {
+    render(
+      <ActionPlanExecutionDetailHeader
+        execution={buildExecution({
+          all_day: true,
+          start_at: '2026-07-01T10:00:00.000Z',
+        })}
+        isOverdue={false}
+      />,
+    )
+
+    expect(screen.getByText('Début')).toBeTruthy()
+    expect(screen.queryByText('Deadline')).toBeNull()
+    expect(screen.getByText('01/07/2026 · Journée entière')).toBeTruthy()
+  })
+
+  it('shows all-day Deadline only when start_at is absent', () => {
+    render(
+      <ActionPlanExecutionDetailHeader
+        execution={buildExecution({
+          all_day: true,
+          end_at: '2026-07-02T10:00:00.000Z',
+        })}
+        isOverdue={false}
+      />,
+    )
+
+    expect(screen.queryByText('Début')).toBeNull()
+    expect(screen.getByText('Deadline')).toBeTruthy()
+    expect(screen.getByText('02/07/2026 · Journée entière')).toBeTruthy()
   })
 })
