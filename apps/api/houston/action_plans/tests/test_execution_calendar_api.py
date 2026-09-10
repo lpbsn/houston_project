@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from datetime import timezone as datetime_timezone
+from zoneinfo import ZoneInfo
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -428,6 +429,152 @@ def test_calendar_includes_intersection_and_unplanned(
     assert str(unplanned.id) not in item_ids
     assert "timezone" in body
     assert "all_day" in body["items"][0]["action_plan_execution"]
+
+
+def _use_paris_timezone(membership) -> ZoneInfo:
+    membership.establishment.timezone = "Europe/Paris"
+    membership.establishment.save(update_fields=["timezone"])
+    return ZoneInfo("Europe/Paris")
+
+
+def test_calendar_excludes_item_ending_exactly_at_window_start(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    paris = _use_paris_timezone(owner_membership)
+    window_from = date(2026, 9, 15)
+    window_to = date(2026, 9, 16)
+    window_start = datetime.combine(window_from, time.min, tzinfo=paris)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Ends at window start",
+        tasks=[build_task_payload(task="edge", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=window_start - timedelta(hours=2),
+        end_at=window_start,
+        visible_from=timezone.now() - timedelta(minutes=1),
+    )
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_execution_calendar_url(owner_membership.establishment_id)
+        + _calendar_query(view_mode="general", from_date=window_from, to_date=window_to),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200, response.content
+    item_ids = {item["action_plan_execution"]["id"] for item in response.json()["items"]}
+    assert str(execution.id) not in item_ids
+
+
+def test_calendar_excludes_item_starting_exactly_after_window_end(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    paris = _use_paris_timezone(owner_membership)
+    window_from = date(2026, 9, 15)
+    window_to = date(2026, 9, 16)
+    after_window = datetime.combine(window_to + timedelta(days=1), time.min, tzinfo=paris)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Starts at to+1 midnight",
+        tasks=[build_task_payload(task="edge", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=after_window,
+        end_at=after_window + timedelta(hours=1),
+        visible_from=timezone.now() - timedelta(minutes=1),
+    )
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_execution_calendar_url(owner_membership.establishment_id)
+        + _calendar_query(view_mode="general", from_date=window_from, to_date=window_to),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200, response.content
+    item_ids = {item["action_plan_execution"]["id"] for item in response.json()["items"]}
+    assert str(execution.id) not in item_ids
+
+
+def test_calendar_includes_span_overlapping_window_start(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    paris = _use_paris_timezone(owner_membership)
+    window_from = date(2026, 9, 15)
+    window_to = date(2026, 9, 16)
+    window_start = datetime.combine(window_from, time.min, tzinfo=paris)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Overlaps window start",
+        tasks=[build_task_payload(task="span", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=window_start - timedelta(hours=3),
+        end_at=window_start + timedelta(hours=2),
+        visible_from=timezone.now() - timedelta(minutes=1),
+    )
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_execution_calendar_url(owner_membership.establishment_id)
+        + _calendar_query(view_mode="general", from_date=window_from, to_date=window_to),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200, response.content
+    item_ids = {item["action_plan_execution"]["id"] for item in response.json()["items"]}
+    assert str(execution.id) in item_ids
+
+
+def test_calendar_includes_dst_spring_forward_event_in_paris_window(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    paris = _use_paris_timezone(owner_membership)
+    window_from = date(2026, 3, 29)
+    window_to = date(2026, 3, 29)
+    start_at = datetime(2026, 3, 29, 1, 30, tzinfo=paris)
+    end_at = datetime(2026, 3, 29, 3, 30, tzinfo=paris)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="DST spring",
+        tasks=[build_task_payload(task="dst", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=start_at,
+        end_at=end_at,
+        visible_from=timezone.now() - timedelta(minutes=1),
+    )
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_execution_calendar_url(owner_membership.establishment_id)
+        + _calendar_query(view_mode="general", from_date=window_from, to_date=window_to),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200, response.content
+    item_ids = {item["action_plan_execution"]["id"] for item in response.json()["items"]}
+    assert str(execution.id) in item_ids
+    payload = next(
+        item["action_plan_execution"]
+        for item in response.json()["items"]
+        if item["action_plan_execution"]["id"] == str(execution.id)
+    )
+    assert payload["start_at"].replace("+00:00", "Z").startswith("2026-03-29T00:30:00")
+    assert payload["end_at"].replace("+00:00", "Z").startswith("2026-03-29T01:30:00")
 
 
 def test_calendar_excludes_canceled_from_items_and_unplanned_but_list_keeps_them(

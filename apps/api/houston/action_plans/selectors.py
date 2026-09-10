@@ -562,7 +562,7 @@ def action_plan_execution_calendar_items_queryset(
         Q(visible_from__isnull=True) | Q(visible_from__lte=now)
     )
     scheduled = Q(status=EXECUTION_STATUS_SCHEDULED)
-    window = Q(start_at__lte=window_end) & (Q(end_at__isnull=True) | Q(end_at__gte=window_start))
+    window = Q(start_at__lte=window_end) & (Q(end_at__isnull=True) | Q(end_at__gt=window_start))
     return (
         ActionPlanExecution.objects.filter(visibility)
         .filter(operational | scheduled)

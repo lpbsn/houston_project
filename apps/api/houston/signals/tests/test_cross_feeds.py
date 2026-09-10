@@ -440,3 +440,62 @@ def test_cross_execution_calendar_staff_forbidden(api_client):
         **auth_headers(token),
     )
     assert response.status_code == 403
+
+
+def test_cross_execution_calendar_matches_establishment_on_same_civil_window(api_client):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from houston.action_plans.tests.helpers import action_plan_execution_calendar_url
+
+    user = create_user(username="cross-cal-parity")
+    first = create_establishment(name="Paris Alpha", timezone="Europe/Paris")
+    second = create_establishment(name="Paris Beta", timezone="Europe/Paris")
+    membership_a = create_membership(
+        establishment=first,
+        user=user,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    create_membership(
+        establishment=second,
+        user=user,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    bu_a = create_business_unit(establishment=first, key="salle")
+    now = timezone.now()
+    start_at = now + timedelta(days=2)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=first.id,
+        created_by=membership_a,
+        pilot_business_unit_id=bu_a.id,
+        title="Shared civil window",
+        tasks=[build_task_payload(task="a", business_unit=bu_a)],
+        assignees=[build_assignee_payload(membership=membership_a, business_unit=bu_a)],
+        start_at=start_at,
+        end_at=start_at + timedelta(hours=1),
+        visible_from=now - timedelta(minutes=1),
+    )
+    window_from = (now + timedelta(days=1)).date()
+    window_to = (now + timedelta(days=3)).date()
+    token = login(api_client, user=user)
+    establishment_response = api_client.get(
+        action_plan_execution_calendar_url(first.id)
+        + f"?view_mode=general&from={window_from.isoformat()}&to={window_to.isoformat()}",
+        **auth_headers(token),
+    )
+    cross_response = api_client.get(
+        "/api/v1/cross/action-plan-execution-calendar/"
+        + _cross_calendar_query(from_date=window_from, to_date=window_to),
+        **auth_headers(token),
+    )
+    assert establishment_response.status_code == 200, establishment_response.content
+    assert cross_response.status_code == 200, cross_response.content
+    establishment_ids = {
+        item["action_plan_execution"]["id"] for item in establishment_response.json()["items"]
+    }
+    cross_ids = {item["action_plan_execution"]["id"] for item in cross_response.json()["items"]}
+    assert str(execution.id) in establishment_ids
+    assert str(execution.id) in cross_ids
+    assert establishment_response.json()["timezone"] == "Europe/Paris"
+    assert cross_response.json()["timezone"] == "Europe/Paris"
