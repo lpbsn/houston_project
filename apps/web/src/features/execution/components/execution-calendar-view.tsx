@@ -435,7 +435,48 @@ function WeekWindowControls({
   )
 }
 
+function CalendarPeriodStatus({
+  isPeriodPending,
+  isTransitionError,
+  error,
+  onRetry,
+}: {
+  isPeriodPending: boolean
+  isTransitionError: boolean
+  error: unknown
+  onRetry: () => void
+}) {
+  if (isPeriodPending) {
+    return (
+      <p
+        data-testid="calendar-period-pending"
+        role="status"
+        aria-live="polite"
+        className="shrink-0 px-1 py-1.5 text-center text-xs font-medium text-[#7D7B75]"
+      >
+        Chargement des événements…
+      </p>
+    )
+  }
+  if (isTransitionError) {
+    return (
+      <div data-testid="calendar-period-error" className="shrink-0">
+        <TerrainErrorState
+          message={resolveApiErrorMessage(
+            error,
+            ActionPlansApiError,
+            'Impossible de charger le calendrier.',
+          )}
+          onRetry={onRetry}
+        />
+      </div>
+    )
+  }
+  return null
+}
+
 export function ExecutionCalendarView({
+
   granularity,
   days,
   month,
@@ -460,6 +501,11 @@ export function ExecutionCalendarView({
   const [overflowDay, setOverflowDay] = useState<string | null>(null)
   const [unplannedExpanded, setUnplannedExpanded] = useState(false)
   const didAlignTimeGridRef = useRef(false)
+  const hasShownCalendarRef = useRef(false)
+  if (data != null) {
+    hasShownCalendarRef.current = true
+  }
+  const hasShownCalendar = hasShownCalendarRef.current
   const items = data ? unwrapActionPlanExecutionFeedItems(data.items) : []
   const unplanned = data ? unwrapActionPlanExecutionFeedItems(data.unplanned) : []
   const overflowItems = useMemo(() => {
@@ -539,11 +585,20 @@ export function ExecutionCalendarView({
     didAlignTimeGridRef.current = true
   }, [])
 
-  if (isLoading) {
+  const isInitialLoading = isLoading && !hasShownCalendar
+  const isPeriodPending = isLoading && hasShownCalendar
+  const isInitialError = isError && data == null && !hasShownCalendar
+  const isTransitionError = isError && data == null && hasShownCalendar
+
+  if (isPeriodPending && overflowDay != null) {
+    setOverflowDay(null)
+  }
+
+  if (isInitialLoading) {
     return <p className="px-1 py-8 text-center text-sm text-[#7D7B75]">Chargement du calendrier…</p>
   }
 
-  if (isError) {
+  if (isInitialError) {
     return (
       <TerrainErrorState
         message={resolveApiErrorMessage(
@@ -555,6 +610,15 @@ export function ExecutionCalendarView({
       />
     )
   }
+
+  const periodStatus = (
+    <CalendarPeriodStatus
+      isPeriodPending={isPeriodPending}
+      isTransitionError={isTransitionError}
+      error={error}
+      onRetry={onRetry}
+    />
+  )
 
   const header = (
     <div
@@ -600,7 +664,11 @@ export function ExecutionCalendarView({
       weeks.push(days.slice(index, index + 7))
     }
     return (
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+      <div
+        className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden"
+        aria-busy={isPeriodPending}
+      >
+        {periodStatus}
         <div
           data-testid="calendar-month-scroller"
           className="min-h-0 flex-1 overflow-y-auto"
@@ -683,7 +751,9 @@ export function ExecutionCalendarView({
     <div
       data-testid="calendar-hub-scroller"
       className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden"
+      aria-busy={isPeriodPending}
     >
+      {periodStatus}
       <div
         data-testid="calendar-grid-card"
         className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#E8E6DF] bg-white touch-pan-y"

@@ -116,6 +116,19 @@ vi.mock('@/features/action-plans/hooks/use-action-plan-execution-feed-quick-acti
   }),
 }))
 
+function buildCalendarQueryState(overrides: Record<string, unknown> = {}) {
+  return {
+    isLoading: false,
+    isFetching: false,
+    isError: false,
+    isSuccess: true,
+    data: { timezone: 'Europe/Paris', items: [], unplanned: [] },
+    refetch: vi.fn(),
+    error: null,
+    ...overrides,
+  }
+}
+
 function stubLgViewport(matches: boolean) {
   Object.defineProperty(window, 'matchMedia', {
     configurable: true,
@@ -165,13 +178,7 @@ describe('ExecutionFeedPage plan feed', () => {
     executionRouteState.search = ''
     serializeAppRouteMockPath = '/execution'
     planFeedQueryMock.mockReturnValue(buildPlanFeedQueryState())
-    calendarQueryMock.mockReturnValue({
-      isLoading: false,
-      isError: false,
-      isSuccess: true,
-      data: { timezone: 'Europe/Paris', items: [], unplanned: [] },
-      refetch: vi.fn(),
-    })
+    calendarQueryMock.mockReturnValue(buildCalendarQueryState())
   })
 
   afterEach(() => {
@@ -585,5 +592,132 @@ describe('ExecutionFeedPage plan feed', () => {
     expect(executionNavigate).toHaveBeenCalledWith(
       '/cross/execution/exec-cal?layout=calendar&granularity=week&anchor=2026-09-08&view_mode=personal',
     )
+  })
+
+  it('keeps calendar chrome when navigating to an uncached period', () => {
+    stubLgViewport(true)
+    executionRouteState.search = '?layout=calendar&granularity=day&anchor=2026-09-08'
+    calendarQueryMock.mockReturnValue(
+      buildCalendarQueryState({
+        data: {
+          timezone: 'Europe/Paris',
+          items: [
+            buildPlanFeedWrapper('exec-cal', 'Brief cuisine', {
+              start_at: '2026-09-08T07:00:00.000Z',
+              end_at: '2026-09-08T09:00:00.000Z',
+            }),
+          ],
+          unplanned: [],
+        },
+      }),
+    )
+    const view = renderExecutionFeedPage()
+
+    expect(screen.getByRole('button', { name: /Brief cuisine/ })).toBeTruthy()
+
+    executionRouteState.search = '?layout=calendar&granularity=day&anchor=2026-09-09'
+    calendarQueryMock.mockReturnValue(
+      buildCalendarQueryState({
+        isLoading: true,
+        isFetching: true,
+        isSuccess: false,
+        data: undefined,
+      }),
+    )
+    view.rerenderPage()
+
+    expect(screen.getByTestId('calendar-weekday-2026-09-09')).toBeTruthy()
+    expect(screen.getByTestId('calendar-period-pending')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Brief cuisine/ })).toBeNull()
+    expect(screen.queryByText('Chargement du calendrier…')).toBeNull()
+  })
+
+  it('does not show period pending during a background refetch of the current key', () => {
+    stubLgViewport(true)
+    executionRouteState.search = '?layout=calendar&granularity=day&anchor=2026-09-08'
+    calendarQueryMock.mockReturnValue(
+      buildCalendarQueryState({
+        isFetching: true,
+        isLoading: false,
+        data: {
+          timezone: 'Europe/Paris',
+          items: [
+            buildPlanFeedWrapper('exec-cal', 'Brief cuisine', {
+              start_at: '2026-09-08T07:00:00.000Z',
+              end_at: '2026-09-08T09:00:00.000Z',
+            }),
+          ],
+          unplanned: [],
+        },
+      }),
+    )
+
+    renderExecutionFeedPage()
+
+    expect(screen.getByRole('button', { name: /Brief cuisine/ })).toBeTruthy()
+    expect(screen.queryByTestId('calendar-period-pending')).toBeNull()
+    expect(screen.queryByText('Chargement du calendrier…')).toBeNull()
+  })
+
+  it('keeps the initial calendar fetch as a full-page loading message', () => {
+    executionRouteState.search = '?layout=calendar&granularity=day&anchor=2026-09-08'
+    calendarQueryMock.mockReturnValue(
+      buildCalendarQueryState({
+        isLoading: true,
+        isFetching: true,
+        isSuccess: false,
+        data: undefined,
+      }),
+    )
+
+    renderExecutionFeedPage()
+
+    expect(screen.getByText('Chargement du calendrier…')).toBeTruthy()
+    expect(screen.queryByTestId('calendar-time-scroller')).toBeNull()
+    expect(screen.queryByTestId('calendar-period-pending')).toBeNull()
+  })
+
+  it('shows retry on the selected period when a later calendar fetch fails', () => {
+    stubLgViewport(true)
+    const refetch = vi.fn()
+    executionRouteState.search = '?layout=calendar&granularity=day&anchor=2026-09-08'
+    calendarQueryMock.mockReturnValue(
+      buildCalendarQueryState({
+        refetch,
+        data: {
+          timezone: 'Europe/Paris',
+          items: [
+            buildPlanFeedWrapper('exec-cal', 'Brief cuisine', {
+              start_at: '2026-09-08T07:00:00.000Z',
+              end_at: '2026-09-08T09:00:00.000Z',
+            }),
+          ],
+          unplanned: [],
+        },
+      }),
+    )
+    const view = renderExecutionFeedPage()
+
+    executionRouteState.search = '?layout=calendar&granularity=day&anchor=2026-09-09'
+    calendarQueryMock.mockReturnValue(
+      buildCalendarQueryState({
+        isLoading: false,
+        isSuccess: false,
+        isError: true,
+        data: undefined,
+        refetch,
+        error: new ActionPlansApiError({
+          status: 500,
+          detail: 'Impossible de charger le calendrier.',
+        }),
+      }),
+    )
+    view.rerenderPage()
+
+    expect(screen.getByTestId('calendar-weekday-2026-09-09')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Brief cuisine/ })).toBeNull()
+    expect(screen.getByTestId('calendar-period-error')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
+    expect(refetch).toHaveBeenCalledTimes(1)
   })
 })

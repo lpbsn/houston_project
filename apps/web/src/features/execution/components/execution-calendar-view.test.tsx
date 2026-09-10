@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 
+import { ActionPlansApiError } from '@/features/action-plans/api'
 import { combineCivilDateTimeToIso } from '@/lib/business-timezone'
 import * as businessTimezone from '@/lib/business-timezone'
 import { collectOverflowYScrollElements } from '@/lib/terrain-scroll-layout'
@@ -674,12 +675,14 @@ describe('ExecutionCalendarView', () => {
     rerender(
       <ExecutionCalendarView granularity="day" days={['2026-09-10']} isLoading {...viewProps} />,
     )
-    expect(screen.queryByTestId('calendar-time-scroller')).toBeNull()
+    expect(screen.getByTestId('calendar-time-scroller').scrollTop).toBe(100)
+    expect(screen.getByTestId('calendar-period-pending')).toBeTruthy()
+    expect(screen.queryByText('Chargement du calendrier…')).toBeNull()
 
     rerender(
       <ExecutionCalendarView granularity="day" days={['2026-09-10']} isLoading={false} {...viewProps} />,
     )
-    expect(screen.getByTestId('calendar-time-scroller').scrollTop).toBe(0)
+    expect(screen.getByTestId('calendar-time-scroller').scrollTop).toBe(100)
 
     rerender(
       <ExecutionCalendarView
@@ -960,6 +963,264 @@ describe('ExecutionCalendarView', () => {
     expect(onOpen).toHaveBeenCalledWith('exec-solo')
     expect(onOpen).toHaveBeenCalledWith('exec-pair-b')
     expect(onOpen).toHaveBeenCalledWith('exec-triple-c')
+  })
+
+  it('keeps the first calendar load as a full replacement without a time scroller', () => {
+    render(
+      <ExecutionCalendarView
+        granularity="day"
+        days={['2026-09-08']}
+        month="2026-09"
+        isLoading
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+      />,
+    )
+
+    expect(screen.getByText('Chargement du calendrier…')).toBeTruthy()
+    expect(screen.queryByTestId('calendar-time-scroller')).toBeNull()
+    expect(screen.queryByTestId('calendar-period-pending')).toBeNull()
+  })
+
+  it('keeps the selected-period chrome while waiting for an uncached window', () => {
+    const { rerender } = render(
+      <ExecutionCalendarView
+        granularity="day"
+        days={['2026-09-08']}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={{
+          timezone: 'Europe/Paris',
+          items: [
+            wrap({
+              id: 'exec-day',
+              title: 'Brief cuisine',
+              start_at: '2026-09-08T07:00:00.000Z',
+              end_at: '2026-09-08T09:00:00.000Z',
+            }),
+          ],
+          unplanned: [],
+        }}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: /Brief cuisine/ })).toBeTruthy()
+
+    rerender(
+      <ExecutionCalendarView
+        granularity="day"
+        days={['2026-09-09']}
+        month="2026-09"
+        isLoading
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+      />,
+    )
+
+    expect(screen.getByTestId('calendar-weekday-2026-09-09')).toBeTruthy()
+    expect(screen.queryByTestId('calendar-weekday-2026-09-08')).toBeNull()
+    expect(screen.getByTestId('calendar-time-scroller')).toBeTruthy()
+    expect(screen.getByTestId('calendar-period-pending')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Brief cuisine/ })).toBeNull()
+    expect(screen.queryByText('Chargement du calendrier…')).toBeNull()
+  })
+
+  it('does not treat a day payload as a settled empty week while the week key is pending', () => {
+    stubMatchMedia(true)
+    const { rerender } = render(
+      <ExecutionCalendarView
+        granularity="day"
+        days={['2026-09-08']}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={{
+          timezone: 'Europe/Paris',
+          items: [
+            wrap({
+              id: 'exec-day',
+              title: 'Brief cuisine',
+              start_at: '2026-09-08T07:00:00.000Z',
+              end_at: '2026-09-08T09:00:00.000Z',
+            }),
+          ],
+          unplanned: [],
+        }}
+      />,
+    )
+
+    rerender(
+      <ExecutionCalendarView
+        granularity="week"
+        days={[...MONDAY_WEEK]}
+        month="2026-09"
+        isLoading
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+      />,
+    )
+
+    expect(screen.getByTestId('calendar-weekday-2026-09-07')).toBeTruthy()
+    expect(screen.getByTestId('calendar-weekday-2026-09-13')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Brief cuisine/ })).toBeNull()
+    expect(screen.getByTestId('calendar-period-pending')).toBeTruthy()
+  })
+
+  it('hides the period-pending status once the current key succeeds with an empty window', () => {
+    const { rerender } = render(
+      <ExecutionCalendarView
+        granularity="day"
+        days={['2026-09-08']}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={emptyCalendarData}
+      />,
+    )
+
+    rerender(
+      <ExecutionCalendarView
+        granularity="day"
+        days={['2026-09-09']}
+        month="2026-09"
+        isLoading
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+      />,
+    )
+    expect(screen.getByTestId('calendar-period-pending')).toBeTruthy()
+
+    rerender(
+      <ExecutionCalendarView
+        granularity="day"
+        days={['2026-09-09']}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={emptyCalendarData}
+      />,
+    )
+
+    expect(screen.queryByTestId('calendar-period-pending')).toBeNull()
+    expect(screen.getByTestId('calendar-time-scroller')).toBeTruthy()
+  })
+
+  it('does not show period pending when the current key already has data', () => {
+    render(
+      <ExecutionCalendarView
+        granularity="day"
+        days={['2026-09-08']}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={{
+          timezone: 'Europe/Paris',
+          items: [
+            wrap({
+              id: 'exec-day',
+              title: 'Brief cuisine',
+              start_at: '2026-09-08T07:00:00.000Z',
+              end_at: '2026-09-08T09:00:00.000Z',
+            }),
+          ],
+          unplanned: [],
+        }}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: /Brief cuisine/ })).toBeTruthy()
+    expect(screen.queryByTestId('calendar-period-pending')).toBeNull()
+  })
+
+  it('keeps the selected chrome and retry when a later period fetch fails', () => {
+    const onRetry = vi.fn()
+    const { rerender } = render(
+      <ExecutionCalendarView
+        granularity="day"
+        days={['2026-09-08']}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={onRetry}
+        onOpenExecution={() => undefined}
+        data={{
+          timezone: 'Europe/Paris',
+          items: [
+            wrap({
+              id: 'exec-day',
+              title: 'Brief cuisine',
+              start_at: '2026-09-08T07:00:00.000Z',
+              end_at: '2026-09-08T09:00:00.000Z',
+            }),
+          ],
+          unplanned: [],
+        }}
+      />,
+    )
+
+    rerender(
+      <ExecutionCalendarView
+        granularity="day"
+        days={['2026-09-09']}
+        month="2026-09"
+        isLoading={false}
+        isError
+        error={new ActionPlansApiError({ status: 500, detail: 'Impossible de charger le calendrier.' })}
+        onRetry={onRetry}
+        onOpenExecution={() => undefined}
+      />,
+    )
+
+    expect(screen.getByTestId('calendar-weekday-2026-09-09')).toBeTruthy()
+    expect(screen.getByTestId('calendar-time-scroller')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Brief cuisine/ })).toBeNull()
+    expect(screen.getByTestId('calendar-period-error')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
+    expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the first error as a full replacement before any calendar chrome', () => {
+    render(
+      <ExecutionCalendarView
+        granularity="day"
+        days={['2026-09-08']}
+        month="2026-09"
+        isLoading={false}
+        isError
+        error={new ActionPlansApiError({ status: 500, detail: 'Impossible de charger le calendrier.' })}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+      />,
+    )
+
+    expect(screen.getByText('Impossible de charger le calendrier.')).toBeTruthy()
+    expect(screen.queryByTestId('calendar-time-scroller')).toBeNull()
+    expect(screen.queryByTestId('calendar-period-error')).toBeNull()
   })
 })
 
