@@ -6,9 +6,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 
 import { combineCivilDateTimeToIso } from '@/lib/business-timezone'
+import * as businessTimezone from '@/lib/business-timezone'
 import { collectOverflowYScrollElements } from '@/lib/terrain-scroll-layout'
 
 import { ExecutionCalendarView } from './execution-calendar-view'
+
+const MONDAY_WEEK = [
+  '2026-09-07',
+  '2026-09-08',
+  '2026-09-09',
+  '2026-09-10',
+  '2026-09-11',
+  '2026-09-12',
+  '2026-09-13',
+] as const
 
 function wrap(item: Partial<ActionPlanExecutionFeedItem> & { id: string; title: string }) {
   return {
@@ -60,8 +71,35 @@ const emptyCalendarData = {
   unplanned: [] as ReturnType<typeof wrap>[],
 }
 
+function mockToday(date: string) {
+  vi.spyOn(businessTimezone, 'todayCivilDate').mockReturnValue(date)
+}
+
+function stubMatchMedia(matches: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+}
+
+function visibleWeekDays() {
+  return MONDAY_WEEK.filter((day) => screen.queryByTestId(`calendar-weekday-${day}`))
+}
+
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
+  Reflect.deleteProperty(window, 'matchMedia')
 })
 
 describe('ExecutionCalendarView', () => {
@@ -352,6 +390,7 @@ describe('ExecutionCalendarView', () => {
   })
 
   it('opens the same execution from a timed grid block and a day-lane continuation', () => {
+    mockToday('2026-09-08')
     const onOpen = vi.fn()
     render(
       <ExecutionCalendarView
@@ -381,7 +420,7 @@ describe('ExecutionCalendarView', () => {
     const chips = screen.getAllByRole('button', { name: /Chantier toiture/ })
     const suiteChip = chips.find((chip) => chip.textContent?.includes('Suite'))
     expect(suiteChip).toBeTruthy()
-    const suite = [...suiteChip!.querySelectorAll('span')].find((node) => node.textContent === 'Suite')
+    const suite = Array.from(suiteChip!.querySelectorAll('span')).find((node) => node.textContent === 'Suite')
     expect(suite?.className).toMatch(/\bhidden\b/)
     expect(suite?.className).toMatch(/\bmd:inline\b/)
     fireEvent.click(chips[0])
@@ -563,7 +602,7 @@ describe('ExecutionCalendarView', () => {
     expect(collectOverflowYScrollElements(hub)).toEqual([timeScroller, unplannedList])
   })
 
-  it('keeps week horizontal overflow on the card without a nested vertical scroller when unplanned is expanded', () => {
+  it('keeps week vertical overflow on the time scroller without a nested horizontal canvas', () => {
     render(
       <ExecutionCalendarView
         granularity="week"
@@ -595,8 +634,8 @@ describe('ExecutionCalendarView', () => {
     const gridCard = screen.getByTestId('calendar-grid-card')
     const timeScroller = screen.getByTestId('calendar-time-scroller')
     expect(hub.className).not.toMatch(/overflow-y-auto/)
-    expect(gridCard.className).toMatch(/overflow-x-auto/)
-    expect(gridCard.className).toMatch(/overflow-y-hidden/)
+    expect(gridCard.className).not.toMatch(/overflow-x-auto/)
+    expect(gridCard.className).toMatch(/overflow-hidden/)
     expect(gridCard.className).not.toMatch(/overflow-y-auto/)
     expect(timeScroller.className).toMatch(/overflow-y-auto/)
     expect(collectOverflowYScrollElements(hub)).toEqual([
@@ -721,6 +760,7 @@ describe('ExecutionCalendarView', () => {
   })
 
   it('caps week-lane events independently of the month cell set', () => {
+    mockToday('2026-09-08')
     render(
       <ExecutionCalendarView
         granularity="week"
@@ -760,5 +800,167 @@ describe('ExecutionCalendarView', () => {
     expect(screen.getByRole('dialog', { name: '08/09/2026' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Inventaire B/ })).toBeTruthy()
   })
+
+  it('shows a 3-day compact week window stepped by one day without overflow-x', () => {
+    mockToday('2026-09-07')
+    render(
+      <ExecutionCalendarView
+        granularity="week"
+        days={[...MONDAY_WEEK]}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={emptyCalendarData}
+      />,
+    )
+
+    expect(visibleWeekDays()).toEqual(['2026-09-07', '2026-09-08', '2026-09-09'])
+    expect(screen.queryByTestId('calendar-weekday-2026-09-10')).toBeNull()
+    expect(screen.getByTestId('calendar-grid-card').className).not.toMatch(/overflow-x-auto/)
+    expect(screen.getByTestId('calendar-time-scroller').textContent).toContain('00:00')
+    expect(screen.getByRole('button', { name: 'Jours précédents de la semaine' })).toHaveProperty(
+      'disabled',
+      true,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Jours suivants de la semaine' }))
+
+    expect(visibleWeekDays()).toEqual(['2026-09-08', '2026-09-09', '2026-09-10'])
+    expect(screen.queryByTestId('calendar-weekday-2026-09-07')).toBeNull()
+  })
+
+  it('centers today in the compact week window when it is not at an edge', () => {
+    mockToday('2026-09-10')
+    render(
+      <ExecutionCalendarView
+        granularity="week"
+        days={[...MONDAY_WEEK]}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={emptyCalendarData}
+      />,
+    )
+
+    expect(visibleWeekDays()).toEqual(['2026-09-09', '2026-09-10', '2026-09-11'])
+  })
+
+  it('advances the compact week window by one day on a horizontal swipe', () => {
+    mockToday('2026-09-07')
+    render(
+      <ExecutionCalendarView
+        granularity="week"
+        days={[...MONDAY_WEEK]}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={emptyCalendarData}
+      />,
+    )
+
+    const card = screen.getByTestId('calendar-grid-card')
+    fireEvent.pointerDown(card, { clientX: 200, clientY: 80 })
+    fireEvent.pointerUp(card, { clientX: 140, clientY: 84 })
+
+    expect(visibleWeekDays()).toEqual(['2026-09-08', '2026-09-09', '2026-09-10'])
+  })
+
+  it('shows all seven weekdays at the lg breakpoint without in-week controls', () => {
+    stubMatchMedia(true)
+    mockToday('2026-09-10')
+    render(
+      <ExecutionCalendarView
+        granularity="week"
+        days={[...MONDAY_WEEK]}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={() => undefined}
+        data={emptyCalendarData}
+      />,
+    )
+
+    expect(visibleWeekDays()).toEqual([...MONDAY_WEEK])
+    expect(screen.queryByTestId('calendar-week-next-days')).toBeNull()
+  })
+
+  it('keeps one, two, and three overlapping timed events independently clickable in the compact week', () => {
+    mockToday('2026-09-07')
+    const onOpen = vi.fn()
+    render(
+      <ExecutionCalendarView
+        granularity="week"
+        days={[...MONDAY_WEEK]}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={onOpen}
+        data={{
+          timezone: 'Europe/Paris',
+          items: [
+            wrap({
+              id: 'exec-solo',
+              title: 'Seul',
+              start_at: combineCivilDateTimeToIso('2026-09-07', '08:00'),
+              end_at: combineCivilDateTimeToIso('2026-09-07', '09:00'),
+            }),
+            wrap({
+              id: 'exec-pair-a',
+              title: 'Paire A',
+              start_at: combineCivilDateTimeToIso('2026-09-07', '10:00'),
+              end_at: combineCivilDateTimeToIso('2026-09-07', '12:00'),
+            }),
+            wrap({
+              id: 'exec-pair-b',
+              title: 'Paire B',
+              start_at: combineCivilDateTimeToIso('2026-09-07', '10:30'),
+              end_at: combineCivilDateTimeToIso('2026-09-07', '12:30'),
+            }),
+            wrap({
+              id: 'exec-triple-a',
+              title: 'Triple A',
+              start_at: combineCivilDateTimeToIso('2026-09-07', '14:00'),
+              end_at: combineCivilDateTimeToIso('2026-09-07', '16:00'),
+            }),
+            wrap({
+              id: 'exec-triple-b',
+              title: 'Triple B',
+              start_at: combineCivilDateTimeToIso('2026-09-07', '14:15'),
+              end_at: combineCivilDateTimeToIso('2026-09-07', '16:15'),
+            }),
+            wrap({
+              id: 'exec-triple-c',
+              title: 'Triple C',
+              start_at: combineCivilDateTimeToIso('2026-09-07', '14:30'),
+              end_at: combineCivilDateTimeToIso('2026-09-07', '16:30'),
+            }),
+          ],
+          unplanned: [],
+        }}
+      />,
+    )
+
+    for (const title of ['Seul', 'Paire A', 'Paire B', 'Triple A', 'Triple B', 'Triple C']) {
+      fireEvent.click(screen.getByRole('button', { name: new RegExp(title) }))
+    }
+    expect(onOpen).toHaveBeenCalledTimes(6)
+    expect(onOpen).toHaveBeenCalledWith('exec-solo')
+    expect(onOpen).toHaveBeenCalledWith('exec-pair-b')
+    expect(onOpen).toHaveBeenCalledWith('exec-triple-c')
+  })
 })
+
 

@@ -116,6 +116,23 @@ vi.mock('@/features/action-plans/hooks/use-action-plan-execution-feed-quick-acti
   }),
 }))
 
+function stubLgViewport(matches: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+}
+
 function TitleSlotProbe() {
   const node = useTerrainHubTitleSlotValue()
   return createElement('div', { 'data-testid': 'title-slot' }, node)
@@ -159,6 +176,7 @@ describe('ExecutionFeedPage plan feed', () => {
 
   afterEach(() => {
     cleanup()
+    Reflect.deleteProperty(window, 'matchMedia')
   })
 
   it('renders plan execution items', () => {
@@ -467,6 +485,7 @@ describe('ExecutionFeedPage plan feed', () => {
   })
 
   it('opens a calendar event with the current feed search on the detail href', () => {
+    stubLgViewport(true)
     executionRouteState.search =
       '?layout=calendar&granularity=week&anchor=2026-09-08&view_mode=general'
     calendarQueryMock.mockReturnValue({
@@ -540,6 +559,7 @@ describe('ExecutionFeedPage plan feed', () => {
   })
 
   it('opens a cross calendar event while preserving Ma vue', () => {
+    stubLgViewport(true)
     serializeAppRouteMockPath = '/cross/execution'
     executionRouteState.search =
       '?layout=calendar&granularity=week&anchor=2026-09-08&view_mode=personal'
