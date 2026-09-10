@@ -37,6 +37,17 @@ describe('scoped terrain routes', () => {
       scope: { type: 'establishment', establishmentId: EST_ID },
       page: 'general',
     })
+    expect(parseScopedTerrainRoute(`/e/${EST_ID}/operational-config`)).toEqual({
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: EST_ID },
+      page: 'operational-config',
+    })
+    expect(parseAppRoute(`/e/${EST_ID}/operational-config`)).toEqual({
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: EST_ID },
+      page: 'operational-config',
+    })
+    expect(parseAppRoute('/cross/operational-config').kind).toBe('unknown')
   })
 
   it('parses scoped signal and execution details', () => {
@@ -67,7 +78,7 @@ describe('scoped terrain routes', () => {
       serializeScopedTerrainPath({ type: 'establishment', establishmentId: EST_ID }),
       serializeScopedTerrainPath(
         { type: 'establishment', establishmentId: EST_ID },
-        'signals',
+        'operational-config',
       ),
       serializeScopedSignalDetailPath(
         { type: 'establishment', establishmentId: EST_ID },

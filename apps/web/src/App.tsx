@@ -5,6 +5,7 @@ import { parseAppRoute, serializeAppRoute, useAppRoute, type AppRoute } from '@/
 import {
   serializeScopedExecutionDetailPath,
   serializeScopedSignalDetailPath,
+  serializeScopedTerrainPath,
 } from '@/app/scoped-terrain'
 import { useLgViewport } from '@/lib/lg-viewport'
 import { hasTrueCrossEstablishmentScope } from '@/features/navigation/lib/shared-navigation'
@@ -80,6 +81,10 @@ import {
 } from '@/features/auth/lib/team-list-ui-state'
 import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-accept-page'
 import { OperationalConfigPage } from '@/features/establishment-config/pages/operational-config-page'
+import {
+  buildOperationalConfigFallbackPath,
+  buildOperationalConfigPath,
+} from '@/features/organization/lib/operational-config-navigation'
 import { OrganizationEstablishmentPage } from '@/features/organization/pages/organization-establishment-page'
 import { OrganizationPage } from '@/features/organization/pages/organization-page'
 import { OnboardingPage } from '@/features/onboarding/pages/onboarding-page'
@@ -245,6 +250,33 @@ function App() {
         navigate('/pending-onboarding', { replace: true })
         return
       }
+    }
+
+    const activeEstablishmentId = auth.bootstrap.active_membership?.establishment_id ?? null
+    if (route.kind === 'static' && route.path === '/app/operational-config') {
+      if (activeEstablishmentId) {
+        navigate(
+          isDesktopWeb
+            ? buildOperationalConfigPath(activeEstablishmentId)
+            : buildOperationalConfigFallbackPath(activeEstablishmentId),
+          { replace: true },
+        )
+        return
+      }
+      if (landingPath) {
+        navigate(landingPath, { replace: true })
+      }
+      return
+    }
+
+    if (
+      route.kind === 'scoped-terrain' &&
+      route.scope.type === 'establishment' &&
+      route.page === 'operational-config' &&
+      !isDesktopWeb
+    ) {
+      navigate(serializeScopedTerrainPath(route.scope, 'reporting'), { replace: true })
+      return
     }
 
     const routeEstablishmentId = establishmentIdRequiringSwitch(route)
@@ -759,6 +791,12 @@ function App() {
           />
         )
       }
+      if (route.page === 'operational-config') {
+        if (!isDesktopWeb || scope.type !== 'establishment') {
+          return null
+        }
+        return <OperationalConfigPage establishmentId={scope.establishmentId} />
+      }
       if (route.page === 'settings') {
         return (
           <LazyComingSoonPage
@@ -783,7 +821,7 @@ function App() {
     }
 
     if (route.path === '/app/operational-config') {
-      return <OperationalConfigPage onNavigate={navigate} />
+      return null
     }
 
     if (route.path === '/reporting') {
@@ -1001,13 +1039,6 @@ function App() {
               description: 'Pilotez les établissements, membres et propriétaires.',
               actions: signOutAction,
             }
-          : route.kind === 'static' && route.path === '/app/operational-config'
-            ? {
-                title: 'Modifier l’onboarding',
-                description:
-                  'Consultez et ajustez les pôles, sujets et descriptions de votre établissement actif.',
-                actions: signOutAction,
-              }
           : route.kind === 'static' && route.path === '/onboarding'
             ? {
                 headingBadge: 'Onboarding',

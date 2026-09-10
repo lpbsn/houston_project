@@ -35,7 +35,7 @@ import {
 } from '../lib/can-access-establishment-admin'
 import { getEstablishmentAdminInviteTargetRoles } from '../lib/establishment-admin-invite-roles'
 import { planOpenEstablishmentApp } from '../lib/open-establishment-app-navigation'
-import { planOpenOperationalConfig } from '../lib/operational-config-navigation'
+import { buildOperationalConfigPath } from '../lib/operational-config-navigation'
 import type {
   EstablishmentAdminMemberListFilters,
   EstablishmentAdminMembership,
@@ -74,8 +74,6 @@ export function OrganizationEstablishmentPage({
   const [editMember, setEditMember] = useState<EstablishmentAdminMembership | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [opsError, setOpsError] = useState<string | null>(null)
-  const [opsPending, setOpsPending] = useState(false)
   const [appAccessError, setAppAccessError] = useState<string | null>(null)
   const [appAccessPending, setAppAccessPending] = useState(false)
   const [pendingMembershipId, setPendingMembershipId] = useState<string | null>(null)
@@ -137,29 +135,6 @@ export function OrganizationEstablishmentPage({
     )
   }, [bootstrap, canManageOrganization, isLgViewport, onNavigate, overviewQuery.isError])
 
-  async function handleOpenOperationalConfig() {
-    setOpsError(null)
-    const plan = planOpenOperationalConfig({
-      targetEstablishmentId: establishmentId,
-      activeEstablishmentId: activeMembership?.establishment_id,
-    })
-
-    if (plan.kind === 'already_selected') {
-      onNavigate(plan.path)
-      return
-    }
-
-    setOpsPending(true)
-    try {
-      await switchEstablishment({ establishment_id: plan.establishmentId })
-      onNavigate(plan.path)
-    } catch {
-      setOpsError('Impossible de basculer vers cet établissement.')
-    } finally {
-      setOpsPending(false)
-    }
-  }
-
   async function handleAccessApp() {
     setAppAccessError(null)
     const plan = planOpenEstablishmentApp({
@@ -192,6 +167,7 @@ export function OrganizationEstablishmentPage({
   }
 
   const overview = overviewQuery.data
+  const showOperationalConfigCta = isDesktopWebLanding(isLgViewport)
 
   return (
     <div className="space-y-5">
@@ -225,19 +201,19 @@ export function OrganizationEstablishmentPage({
                 Accéder à l&apos;application
               </Button>
             ) : null}
-            <Button
-              type="button"
-              variant="outline"
-              disabled={opsPending}
-              onClick={() => {
-                void handleOpenOperationalConfig()
-              }}
-            >
-              Configuration opérationnelle
-            </Button>
+            {showOperationalConfigCta ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  onNavigate(buildOperationalConfigPath(establishmentId))
+                }}
+              >
+                Configuration opérationnelle
+              </Button>
+            ) : null}
           </div>
           {appAccessError ? <p className="text-sm text-red-600">{appAccessError}</p> : null}
-          {opsError ? <p className="text-sm text-red-600">{opsError}</p> : null}
         </div>
       </header>
 

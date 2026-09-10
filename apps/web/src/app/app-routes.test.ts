@@ -106,10 +106,20 @@ describe('parseAppRoute', () => {
     })
   })
 
-  it('parses operational config route', () => {
+  it('parses operational config cutover and scoped routes', () => {
     expect(parseAppRoute('/app/operational-config')).toEqual({
       kind: 'static',
       path: '/app/operational-config',
+    })
+    expect(
+      parseAppRoute('/e/11111111-1111-4111-8111-111111111111/operational-config'),
+    ).toEqual({
+      kind: 'scoped-terrain',
+      scope: {
+        type: 'establishment',
+        establishmentId: '11111111-1111-4111-8111-111111111111',
+      },
+      page: 'operational-config',
     })
   })
 

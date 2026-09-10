@@ -68,6 +68,32 @@ describe('usesTerrainShell', () => {
     expect(usesTerrainShell({ kind: 'invitation', token: 't' })).toBe(false)
   })
 
+  it('uses TerrainShell for scoped operational config', () => {
+    expect(
+      usesTerrainShell({
+        kind: 'scoped-terrain',
+        scope: { type: 'establishment', establishmentId: '11111111-1111-4111-8111-111111111111' },
+        page: 'operational-config',
+      }),
+    ).toBe(true)
+  })
+
+  it('configures scoped operational config as a hub without bottom nav', () => {
+    expect(
+      getTerrainRouteConfig({
+        kind: 'scoped-terrain',
+        scope: { type: 'establishment', establishmentId: '11111111-1111-4111-8111-111111111111' },
+        page: 'operational-config',
+      }),
+    ).toEqual({
+      topbarVariant: 'hub',
+      pageTitle: 'Configuration opérationnelle',
+      showBottomNav: false,
+      desktopActivePath: '/e/11111111-1111-4111-8111-111111111111/operational-config',
+      mainScroll: 'auto',
+    })
+  })
+
   it('returns true for analytics pattern detail', () => {
     expect(usesTerrainShell({ kind: 'analytics-pattern-detail', patternId: 'pattern-1' })).toBe(
       true,

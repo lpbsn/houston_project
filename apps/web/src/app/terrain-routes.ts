@@ -203,6 +203,8 @@ function scopedPageTitle(page: string): string | undefined {
       return 'Discussions'
     case 'general':
       return 'Général'
+    case 'operational-config':
+      return 'Configuration opérationnelle'
     case 'settings':
       return 'Paramètres'
     default:
@@ -220,9 +222,14 @@ function scopedHubConfig(
     pageTitle: scopedPageTitle(page),
     showBottomNav: isDashboard,
     desktopActivePath: serializeScopedTerrainPath(scope, page),
-    mainScroll: isDashboard || page === 'general' || page === 'settings' || page === 'reporting'
-      ? 'auto'
-      : 'hidden',
+    mainScroll:
+      isDashboard ||
+      page === 'general' ||
+      page === 'operational-config' ||
+      page === 'settings' ||
+      page === 'reporting'
+        ? 'auto'
+        : 'hidden',
     ...(isDashboard
       ? {
           hideTopbar: true,

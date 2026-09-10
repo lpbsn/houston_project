@@ -12,6 +12,7 @@ export type ScopedDesktopNavItemId =
   | 'execution'
   | 'chat'
   | 'general'
+  | 'operational-config'
   | 'settings'
 
 export type ScopedDesktopNavItem = {
@@ -37,6 +38,13 @@ function isActiveMembership(membership: Membership): boolean {
 
 function canAccessAnalytics(membership: Membership): boolean {
   return isActiveMembership(membership) && ANALYTICS_ROLES.has(membership.role)
+}
+
+function canManageOperationalConfig(membership: Membership): boolean {
+  return (
+    isActiveMembership(membership) &&
+    (membership.role === 'owner' || membership.role === 'director')
+  )
 }
 
 function uniqueEstablishments(memberships: Membership[]): Membership[] {
@@ -106,7 +114,11 @@ function crossItems(showChat: boolean): ScopedDesktopNavItem[] {
 
 function establishmentItems(
   establishmentId: string,
-  options: { showDashboard: boolean; showChat: boolean },
+  options: {
+    showDashboard: boolean
+    showChat: boolean
+    canManageOperationalConfig: boolean
+  },
 ): ScopedDesktopNavItem[] {
   const scope: TerrainScope = { type: 'establishment', establishmentId }
   const items: ScopedDesktopNavItem[] = []
@@ -152,6 +164,14 @@ function establishmentItems(
     href: serializeScopedTerrainPath(scope, 'general'),
     placeholder: false,
   })
+  if (options.canManageOperationalConfig) {
+    items.push({
+      id: 'operational-config',
+      label: 'Configuration opérationnelle',
+      href: serializeScopedTerrainPath(scope, 'operational-config'),
+      placeholder: false,
+    })
+  }
   if (options.showDashboard) {
     items.push({
       id: 'settings',
@@ -201,6 +221,7 @@ export function resolveScopedDesktopNavigation(options: {
       items: establishmentItems(membership.establishment_id, {
         showDashboard,
         showChat: options.showChat,
+        canManageOperationalConfig: canManageOperationalConfig(membership),
       }),
     })
   }

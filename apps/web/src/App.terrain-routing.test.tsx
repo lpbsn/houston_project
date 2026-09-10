@@ -126,6 +126,11 @@ vi.mock('@/app/lazy-terrain-pages', () => {
   }
 })
 
+vi.mock('@/features/establishment-config/pages/operational-config-page', () => ({
+  OperationalConfigPage: () =>
+    createElement('div', { 'data-testid': 'operational-config' }, 'operational-config'),
+}))
+
 vi.mock('@/features/notifications/components/notification-center', () => ({
   NotificationCenter: () => null,
 }))
@@ -1029,5 +1034,102 @@ describe('App terrain active membership routing', () => {
       expect(navigate).toHaveBeenCalledWith('/select-establishment', { replace: true })
     })
     expect(navigate).not.toHaveBeenCalledWith('/cross?period=7d', { replace: true })
+  })
+
+  it('silently switches on desktop when operational config differs from the session', async () => {
+    stubLgViewport(true)
+    const bootstrap = bootstrapWithSelectedEstablishment('est-1')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: 'est-2' },
+      page: 'operational-config',
+    }
+
+    render(wrapApp())
+
+    await waitFor(() => {
+      expect(switchEstablishment).toHaveBeenCalledWith({ establishment_id: 'est-2' })
+    })
+    expect(navigate).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^\/select-establishment/),
+      expect.anything(),
+    )
+  })
+
+  it('redirects web mobile operational-config to reporting without mounting the editor', async () => {
+    stubLgViewport(false)
+    const bootstrap = bootstrapWithSelectedEstablishment('est-2')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: 'est-2' },
+      page: 'operational-config',
+    }
+
+    render(wrapApp())
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith('/e/est-2/reporting', { replace: true })
+    })
+    expect(screen.queryByTestId('operational-config')).toBeNull()
+    expect(switchEstablishment).not.toHaveBeenCalled()
+  })
+
+  it('redirects native large-viewport operational-config to reporting', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    stubLgViewport(true)
+    const bootstrap = bootstrapWithSelectedEstablishment('est-2')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: 'est-2' },
+      page: 'operational-config',
+    }
+
+    render(wrapApp())
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith('/e/est-2/reporting', { replace: true })
+    })
+    expect(screen.queryByTestId('operational-config')).toBeNull()
+    expect(switchEstablishment).not.toHaveBeenCalled()
+  })
+
+  it('cuts over /app/operational-config to the scoped page on desktop', async () => {
+    stubLgViewport(true)
+    const bootstrap = bootstrapWithSelectedEstablishment('est-2')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = { kind: 'static', path: '/app/operational-config' }
+
+    render(wrapApp())
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith('/e/est-2/operational-config', { replace: true })
+    })
+  })
+
+  it('cuts over /app/operational-config to reporting off desktop', async () => {
+    stubLgViewport(false)
+    const bootstrap = bootstrapWithSelectedEstablishment('est-2')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = { kind: 'static', path: '/app/operational-config' }
+
+    render(wrapApp())
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith('/e/est-2/reporting', { replace: true })
+    })
+    expect(navigate).not.toHaveBeenCalledWith('/e/est-2/operational-config', { replace: true })
   })
 })

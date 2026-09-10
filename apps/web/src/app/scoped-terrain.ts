@@ -10,6 +10,7 @@ const ESTABLISHMENT_PAGES = new Set([
   'execution',
   'chat',
   'general',
+  'operational-config',
   'settings',
 ])
 
@@ -24,6 +25,7 @@ export type ScopedTerrainPage =
   | 'execution'
   | 'chat'
   | 'general'
+  | 'operational-config'
   | 'settings'
 
 export type ScopedTerrainRoute = {

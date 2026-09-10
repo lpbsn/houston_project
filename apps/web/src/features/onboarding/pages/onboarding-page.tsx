@@ -4,8 +4,13 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
 import { Button } from '@/components/ui/button'
+import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { resolvePendingLanding } from '@/features/auth/lib/pending-onboarding'
-import { shouldRedirectOnboardingToOperationalConfig } from '@/features/onboarding/lib/onboarding-route'
+import {
+  resolveOnboardingOperationalLeavePath,
+  shouldRedirectOnboardingToOperationalConfig,
+} from '@/features/onboarding/lib/onboarding-route'
+import { useLgViewport } from '@/lib/lg-viewport'
 import { clearRegistrationSessionSnapshot } from '@/features/onboarding/lib/registration-session-storage'
 import { DraftOnboardingWizard } from '@/features/onboarding/components/draft-onboarding-wizard'
 import { OwnerOrgOnboardingStep } from '@/features/onboarding/components/owner-org-onboarding-step'
@@ -57,6 +62,7 @@ export function OnboardingPage({ onNavigate }: { onNavigate?: (path: string) => 
   } = useAuth()
   const routeParams = parseOnboardingRouteParams(search)
   const startMutation = useStartOnboardingSession()
+  const isLgViewport = useLgViewport()
   const autoStartAttemptedRef = useRef(false)
 
   const writeRouteParams = useCallback(
@@ -134,8 +140,25 @@ export function OnboardingPage({ onNavigate }: { onNavigate?: (path: string) => 
       return
     }
 
-    onNavigate('/app/operational-config')
-  }, [isAuthenticated, isReady, onNavigate, shouldRedirectToOperationalConfig])
+    const establishmentId = effectiveRouteParams.establishmentId
+    if (!establishmentId) {
+      return
+    }
+
+    onNavigate(
+      resolveOnboardingOperationalLeavePath({
+        establishmentId,
+        isDesktop: isDesktopWebLanding(isLgViewport),
+      }),
+    )
+  }, [
+    effectiveRouteParams.establishmentId,
+    isAuthenticated,
+    isLgViewport,
+    isReady,
+    onNavigate,
+    shouldRedirectToOperationalConfig,
+  ])
 
   const sessionQuery = useOnboardingSession(effectiveRouteParams.sessionId, {
     enabled: Boolean(effectiveRouteParams.sessionId) && isAuthenticated,
