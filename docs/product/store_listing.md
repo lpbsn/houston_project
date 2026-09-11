@@ -65,7 +65,7 @@ Tablet / TV / Wear screenshots: not required for this phone listing.
 
 **Age rating:** answer the questionnaire in App Store Connect. See [`store_compliance.md`](store_compliance.md). Do not lock a rating number in this repo.
 
-**Icon:** [`store_assets/app-store-icon-1024.png`](store_assets/app-store-icon-1024.png) (1024×1024, no alpha). Same artwork as the iOS `AppIcon` asset.
+**Icon:** [`store_assets/app-store-icon-1024.png`](store_assets/app-store-icon-1024.png) (1024×1024, no alpha, green mark on white). Same artwork as the iOS `AppIcon` asset.
 
 **Screenshots:** iPhone **6.9"** slot (e.g. 1320×2868). iPad screenshots are out of scope: the V1 binary is iPhone only.
 

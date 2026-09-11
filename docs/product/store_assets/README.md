@@ -1,6 +1,6 @@
 # Store listing assets
 
-Generated from the Spore mark [`apps/web/src/assets/brand/spore-icon-source.png`](../../../apps/web/src/assets/brand/spore-icon-source.png) (stippled ring) on cream `#F5F0E8`, matching the web favicon. Regenerate these listing intermediates (and iOS xcassets) with:
+Generated from the shared green mark [`apps/web/resources/spore-icone-green.png`](../../../apps/web/resources/spore-icone-green.png) on opaque white `#FFFFFF`. Same source as Android launcher/splash. Regenerate these listing intermediates (and iOS xcassets) with:
 
 ```bash
 apps/web/scripts/generate-store-brand-assets.sh

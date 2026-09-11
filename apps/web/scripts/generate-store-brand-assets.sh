@@ -5,9 +5,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-MARK="$ROOT/src/assets/brand/spore-icon-source.png"
-ANDROID_MARK="$ROOT/resources/spore-icone-green.png"
-CREAM='#F5F0E8'
+MARK="$ROOT/resources/spore-icone-green.png"
+ANDROID_MARK="$MARK"
 WHITE='#FFFFFF'
 INK='#1A1916'
 RESOURCES="$ROOT/resources"
@@ -106,33 +105,31 @@ fi
 
 mkdir -p "$RESOURCES" "$STORE"
 
-# Full-bleed iOS / Play icon (opaque cream — App Store rejects alpha on 1024).
-magick -size 1024x1024 "xc:${CREAM}" \
-  \( "$MARK" -resize 720x720 \) -gravity center -composite \
-  -alpha off PNG24:"$RESOURCES/icon.png"
+# Full-bleed iOS / Play icon (opaque white — App Store rejects alpha on 1024).
+# Contain ~720 leaves margin for the iOS squircle mask.
+magick -size 1024x1024 "xc:${WHITE}" \
+  \( "$MARK" -trim +repage -resize 720x720 \) -gravity center -composite \
+  -alpha off -strip PNG24:"$RESOURCES/icon.png"
 
-# Adaptive foreground: mark inset (~66% safe zone) on transparency.
-magick -size 1024x1024 xc:none \
-  \( "$MARK" -resize 640x640 \) -gravity center -composite \
-  PNG32:"$RESOURCES/icon-foreground.png"
-
-# Splash source: same cream + smaller centered mark.
-magick -size 2732x2732 "xc:${CREAM}" \
-  \( "$MARK" -resize 920x920 \) -gravity center -composite \
-  PNG24:"$RESOURCES/splash.png"
+# Splash: white + trimmed mark at ~38% of the side (same recipe as Android compose_splash).
+splash_mark=$((2732 * 38 / 100))
+magick -size 2732x2732 "xc:${WHITE}" \
+  \( "$MARK" -trim +repage -resize "${splash_mark}x${splash_mark}" \) \
+  -gravity center -composite \
+  -strip PNG24:"$RESOURCES/splash.png"
 
 cp "$RESOURCES/icon.png" "$ROOT/ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png"
 for splash_name in splash-2732x2732.png splash-2732x2732-1.png splash-2732x2732-2.png; do
   cp "$RESOURCES/splash.png" "$ROOT/ios/App/App/Assets.xcassets/Splash.imageset/${splash_name}"
 done
 
-magick "$RESOURCES/icon.png" -resize 512x512 PNG32:"$STORE/play-icon-512.png"
+magick "$RESOURCES/icon.png" -resize 512x512 -alpha off -strip PNG24:"$STORE/play-icon-512.png"
 cp "$RESOURCES/icon.png" "$STORE/app-store-icon-1024.png"
 
-magick -size 1024x500 "xc:${CREAM}" \
-  \( "$MARK" -resize 360x360 \) -gravity west -geometry +72+0 -composite \
+magick -size 1024x500 "xc:${WHITE}" \
+  \( "$MARK" -trim +repage -resize 360x360 \) -gravity west -geometry +72+0 -composite \
   -font "$FONT_BOLD" -fill "$INK" -pointsize 86 -gravity west -annotate +500-36 'Spore' \
   -font "$FONT_REG" -fill "$INK" -pointsize 28 -gravity west -annotate +500+42 "L'OS des équipes terrain" \
-  PNG24:"$STORE/play-feature-graphic-1024x500.png"
+  -strip PNG24:"$STORE/play-feature-graphic-1024x500.png"
 
 echo "generated iOS + listing brand assets (Android: use --android)"
