@@ -577,7 +577,7 @@ def test_calendar_includes_dst_spring_forward_event_in_paris_window(
     assert payload["end_at"].replace("+00:00", "Z").startswith("2026-03-29T01:30:00")
 
 
-def test_calendar_excludes_canceled_from_items_and_unplanned_but_list_keeps_them(
+def test_calendar_excludes_done_and_canceled_from_items_and_unplanned_but_list_keeps_them(
     api_client,
     owner_membership,
     business_unit,
@@ -623,6 +623,15 @@ def test_calendar_excludes_canceled_from_items_and_unplanned_but_list_keeps_them
         ],
         status=EXECUTION_STATUS_CANCELED,
     )
+    unplanned_done = create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Unplanned done",
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        status=EXECUTION_STATUS_DONE,
+    )
 
     token = login(api_client, user=owner_membership.user)
     window_from = (now + timedelta(days=1)).date()
@@ -640,9 +649,12 @@ def test_calendar_excludes_canceled_from_items_and_unplanned_but_list_keeps_them
     }
     assert str(dated_canceled.id) not in item_ids
     assert str(dated_canceled.id) not in unplanned_ids
+    assert str(dated_done.id) not in item_ids
+    assert str(dated_done.id) not in unplanned_ids
     assert str(unplanned_canceled.id) not in unplanned_ids
     assert str(unplanned_canceled.id) not in item_ids
-    assert str(dated_done.id) in item_ids
+    assert str(unplanned_done.id) not in unplanned_ids
+    assert str(unplanned_done.id) not in item_ids
 
     feed_response = api_client.get(
         action_plan_execution_feed_url(owner_membership.establishment_id) + feed_query("general"),
@@ -651,7 +663,9 @@ def test_calendar_excludes_canceled_from_items_and_unplanned_but_list_keeps_them
     assert feed_response.status_code == 200
     feed_ids = set(feed_execution_ids(feed_response.json()))
     assert str(dated_canceled.id) in feed_ids
+    assert str(dated_done.id) in feed_ids
     assert str(unplanned_canceled.id) in feed_ids
+    assert str(unplanned_done.id) in feed_ids
 
 
 def test_calendar_does_not_infer_all_day_from_sentinel_times(
