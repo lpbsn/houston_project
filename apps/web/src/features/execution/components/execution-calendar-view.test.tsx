@@ -100,6 +100,7 @@ function visibleWeekDays() {
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.useRealTimers()
   Reflect.deleteProperty(window, 'matchMedia')
 })
 
@@ -875,6 +876,126 @@ describe('ExecutionCalendarView', () => {
     fireEvent.pointerUp(card, { clientX: 140, clientY: 84 })
 
     expect(visibleWeekDays()).toEqual(['2026-09-08', '2026-09-09', '2026-09-10'])
+  })
+
+  it('pages the compact week from a chip swipe without opening the execution', () => {
+    mockToday('2026-09-07')
+    const onOpen = vi.fn()
+    render(
+      <ExecutionCalendarView
+        granularity="week"
+        days={[...MONDAY_WEEK]}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={onOpen}
+        data={{
+          timezone: 'Europe/Paris',
+          items: [
+            wrap({
+              id: 'exec-swipe',
+              title: 'Brief cuisine',
+              start_at: combineCivilDateTimeToIso('2026-09-07', '08:00'),
+              end_at: combineCivilDateTimeToIso('2026-09-07', '09:00'),
+            }),
+          ],
+          unplanned: [],
+        }}
+      />,
+    )
+
+    const chip = screen.getByRole('button', { name: /Brief cuisine/ })
+    fireEvent.pointerDown(chip, { clientX: 200, clientY: 80 })
+    fireEvent.pointerUp(chip, { clientX: 140, clientY: 84 })
+    fireEvent.click(chip)
+
+    expect(visibleWeekDays()).toEqual(['2026-09-08', '2026-09-09', '2026-09-10'])
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+
+  it('opens the execution after a sub-threshold move without paging', () => {
+    mockToday('2026-09-07')
+    const onOpen = vi.fn()
+    render(
+      <ExecutionCalendarView
+        granularity="week"
+        days={[...MONDAY_WEEK]}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={onOpen}
+        data={{
+          timezone: 'Europe/Paris',
+          items: [
+            wrap({
+              id: 'exec-tap',
+              title: 'Brief cuisine',
+              start_at: combineCivilDateTimeToIso('2026-09-07', '08:00'),
+              end_at: combineCivilDateTimeToIso('2026-09-07', '09:00'),
+            }),
+          ],
+          unplanned: [],
+        }}
+      />,
+    )
+
+    const chip = screen.getByRole('button', { name: /Brief cuisine/ })
+    fireEvent.pointerDown(chip, { clientX: 200, clientY: 80 })
+    fireEvent.pointerUp(chip, { clientX: 180, clientY: 82 })
+    fireEvent.click(chip)
+
+    expect(visibleWeekDays()).toEqual(['2026-09-07', '2026-09-08', '2026-09-09'])
+    expect(onOpen).toHaveBeenCalledTimes(1)
+    expect(onOpen).toHaveBeenCalledWith('exec-tap')
+  })
+
+  it('expires swipe click suppression so a later tap still opens', () => {
+    mockToday('2026-09-07')
+    vi.useFakeTimers()
+    const onOpen = vi.fn()
+    render(
+      <ExecutionCalendarView
+        granularity="week"
+        days={[...MONDAY_WEEK]}
+        month="2026-09"
+        isLoading={false}
+        isError={false}
+        error={null}
+        onRetry={() => undefined}
+        onOpenExecution={onOpen}
+        data={{
+          timezone: 'Europe/Paris',
+          items: [
+            wrap({
+              id: 'exec-later',
+              title: 'Brief cuisine',
+              start_at: combineCivilDateTimeToIso('2026-09-09', '08:00'),
+              end_at: combineCivilDateTimeToIso('2026-09-09', '09:00'),
+            }),
+          ],
+          unplanned: [],
+        }}
+      />,
+    )
+
+    const card = screen.getByTestId('calendar-grid-card')
+    fireEvent.pointerDown(card, { clientX: 200, clientY: 80 })
+    fireEvent.pointerUp(card, { clientX: 140, clientY: 84 })
+
+    expect(visibleWeekDays()).toEqual(['2026-09-08', '2026-09-09', '2026-09-10'])
+    expect(onOpen).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(50)
+
+    const chip = screen.getByRole('button', { name: /Brief cuisine/ })
+    fireEvent.click(chip)
+
+    expect(onOpen).toHaveBeenCalledTimes(1)
+    expect(onOpen).toHaveBeenCalledWith('exec-later')
   })
 
   it('shows all seven weekdays at the lg breakpoint without in-week controls', () => {

@@ -1,4 +1,12 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
+import {
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type PointerEvent,
+} from 'react'
 import { Bell, ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { TerrainBottomSheet, TerrainCollapsibleFeedSection, TerrainErrorState } from '@/components/ui/terrain'
@@ -41,6 +49,7 @@ const HOUR_HEIGHT = 48
 const TIME_GRID_INITIAL_HOUR = 8
 const TIME_GUTTER = '3.75rem'
 const WEEK_SWIPE_MIN_DX = 48
+const WEEK_SWIPE_CLICK_SUPPRESS_MS = 50
 const WEEKDAY_LABELS = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.']
 const MONTH_VISIBLE = 2
 const ALL_DAY_VISIBLE_DAY = 2
@@ -506,6 +515,8 @@ export function ExecutionCalendarView({
     startIndex: initialWeekStartIndex({ days, today, visibleCount: weekVisibleCount }),
   }))
   const swipeOriginRef = useRef<{ x: number; y: number } | null>(null)
+  const suppressWeekClickRef = useRef(false)
+  const suppressWeekClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [overflowDay, setOverflowDay] = useState<string | null>(null)
   const [unplannedExpanded, setUnplannedExpanded] = useState(false)
   const didAlignTimeGridRef = useRef(false)
@@ -579,9 +590,30 @@ export function ExecutionCalendarView({
         return
       }
       shiftVisibleWeek(dx < 0 ? 1 : -1)
+      suppressWeekClickRef.current = true
+      if (suppressWeekClickTimeoutRef.current != null) {
+        window.clearTimeout(suppressWeekClickTimeoutRef.current)
+      }
+      suppressWeekClickTimeoutRef.current = window.setTimeout(() => {
+        suppressWeekClickRef.current = false
+        suppressWeekClickTimeoutRef.current = null
+      }, WEEK_SWIPE_CLICK_SUPPRESS_MS)
     },
     [compactWeek, shiftVisibleWeek],
   )
+
+  const onWeekClickCapture = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    if (!suppressWeekClickRef.current) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    suppressWeekClickRef.current = false
+    if (suppressWeekClickTimeoutRef.current != null) {
+      window.clearTimeout(suppressWeekClickTimeoutRef.current)
+      suppressWeekClickTimeoutRef.current = null
+    }
+  }, [])
 
   useLayoutEffect(() => {
     if (granularity === 'month') {
@@ -771,6 +803,7 @@ export function ExecutionCalendarView({
         className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#E8E6DF] bg-white touch-pan-y"
         onPointerDown={onWeekPointerDown}
         onPointerUp={onWeekPointerUp}
+        onClickCapture={onWeekClickCapture}
         onPointerCancel={() => {
           swipeOriginRef.current = null
         }}
