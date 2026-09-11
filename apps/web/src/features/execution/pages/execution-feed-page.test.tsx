@@ -116,28 +116,74 @@ vi.mock('@/features/action-plans/hooks/use-action-plan-execution-feed-quick-acti
   }),
 }))
 
+function buildCalendarQueryState(overrides: Record<string, unknown> = {}) {
+  return {
+    isLoading: false,
+    isFetching: false,
+    isError: false,
+    isSuccess: true,
+    data: { timezone: 'Europe/Paris', items: [], unplanned: [] },
+    refetch: vi.fn(),
+    error: null,
+    ...overrides,
+  }
+}
+
+function stubLgViewport(matches: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+}
+
 function TitleSlotProbe() {
   const node = useTerrainHubTitleSlotValue()
   return createElement('div', { 'data-testid': 'title-slot' }, node)
 }
 
 function renderExecutionFeedPage(
-  props: { onNavigate?: (pathname: string) => void; source?: 'establishment' | 'cross' } = {},
+  props: {
+    onNavigate?: (pathname: string) => void
+    source?: 'establishment' | 'cross'
+    establishmentId?: string | null
+  } = {},
 ) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
-  const tree = () =>
+  const tree = (
+    nextProps: {
+      onNavigate?: (pathname: string) => void
+      source?: 'establishment' | 'cross'
+      establishmentId?: string | null
+    } = props,
+  ) =>
     createElement(
       QueryClientProvider,
       { client: queryClient },
-      createElement('div', null, createElement(TitleSlotProbe), createElement(ExecutionFeedPage, props)),
+      createElement('div', null, createElement(TitleSlotProbe), createElement(ExecutionFeedPage, nextProps)),
     )
 
   const view = render(tree())
   return {
     ...view,
-    rerenderPage: () => view.rerender(tree()),
+    rerenderPage: (
+      nextProps: {
+        onNavigate?: (pathname: string) => void
+        source?: 'establishment' | 'cross'
+        establishmentId?: string | null
+      } = props,
+    ) => view.rerender(tree(nextProps)),
   }
 }
 
@@ -148,17 +194,13 @@ describe('ExecutionFeedPage plan feed', () => {
     executionRouteState.search = ''
     serializeAppRouteMockPath = '/execution'
     planFeedQueryMock.mockReturnValue(buildPlanFeedQueryState())
-    calendarQueryMock.mockReturnValue({
-      isLoading: false,
-      isError: false,
-      isSuccess: true,
-      data: { timezone: 'Europe/Paris', items: [], unplanned: [] },
-      refetch: vi.fn(),
-    })
+    calendarQueryMock.mockReturnValue(buildCalendarQueryState())
   })
 
   afterEach(() => {
     cleanup()
+    vi.useRealTimers()
+    Reflect.deleteProperty(window, 'matchMedia')
   })
 
   it('renders plan execution items', () => {
@@ -467,6 +509,7 @@ describe('ExecutionFeedPage plan feed', () => {
   })
 
   it('opens a calendar event with the current feed search on the detail href', () => {
+    stubLgViewport(true)
     executionRouteState.search =
       '?layout=calendar&granularity=week&anchor=2026-09-08&view_mode=general'
     calendarQueryMock.mockReturnValue({
@@ -540,6 +583,7 @@ describe('ExecutionFeedPage plan feed', () => {
   })
 
   it('opens a cross calendar event while preserving Ma vue', () => {
+    stubLgViewport(true)
     serializeAppRouteMockPath = '/cross/execution'
     executionRouteState.search =
       '?layout=calendar&granularity=week&anchor=2026-09-08&view_mode=personal'
@@ -564,6 +608,192 @@ describe('ExecutionFeedPage plan feed', () => {
     fireEvent.click(screen.getByRole('button', { name: /Brief cuisine/ }))
     expect(executionNavigate).toHaveBeenCalledWith(
       '/cross/execution/exec-cal?layout=calendar&granularity=week&anchor=2026-09-08&view_mode=personal',
+    )
+  })
+
+  it('keeps calendar chrome when navigating to an uncached period', () => {
+    stubLgViewport(true)
+    executionRouteState.search = '?layout=calendar&granularity=day&anchor=2026-09-08'
+    calendarQueryMock.mockReturnValue(
+      buildCalendarQueryState({
+        data: {
+          timezone: 'Europe/Paris',
+          items: [
+            buildPlanFeedWrapper('exec-cal', 'Brief cuisine', {
+              start_at: '2026-09-08T07:00:00.000Z',
+              end_at: '2026-09-08T09:00:00.000Z',
+            }),
+          ],
+          unplanned: [],
+        },
+      }),
+    )
+    const view = renderExecutionFeedPage()
+
+    expect(screen.getByRole('button', { name: /Brief cuisine/ })).toBeTruthy()
+
+    executionRouteState.search = '?layout=calendar&granularity=day&anchor=2026-09-09'
+    calendarQueryMock.mockReturnValue(
+      buildCalendarQueryState({
+        isLoading: true,
+        isFetching: true,
+        isSuccess: false,
+        data: undefined,
+      }),
+    )
+    view.rerenderPage()
+
+    expect(screen.getByTestId('calendar-weekday-2026-09-09')).toBeTruthy()
+    expect(screen.getByTestId('calendar-period-pending')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Brief cuisine/ })).toBeNull()
+    expect(screen.queryByText('Chargement du calendrier…')).toBeNull()
+  })
+
+  it('does not show period pending during a background refetch of the current key', () => {
+    stubLgViewport(true)
+    executionRouteState.search = '?layout=calendar&granularity=day&anchor=2026-09-08'
+    calendarQueryMock.mockReturnValue(
+      buildCalendarQueryState({
+        isFetching: true,
+        isLoading: false,
+        data: {
+          timezone: 'Europe/Paris',
+          items: [
+            buildPlanFeedWrapper('exec-cal', 'Brief cuisine', {
+              start_at: '2026-09-08T07:00:00.000Z',
+              end_at: '2026-09-08T09:00:00.000Z',
+            }),
+          ],
+          unplanned: [],
+        },
+      }),
+    )
+
+    renderExecutionFeedPage()
+
+    expect(screen.getByRole('button', { name: /Brief cuisine/ })).toBeTruthy()
+    expect(screen.queryByTestId('calendar-period-pending')).toBeNull()
+    expect(screen.queryByText('Chargement du calendrier…')).toBeNull()
+  })
+
+  it('keeps the initial calendar fetch as a full-page loading message', () => {
+    executionRouteState.search = '?layout=calendar&granularity=day&anchor=2026-09-08'
+    calendarQueryMock.mockReturnValue(
+      buildCalendarQueryState({
+        isLoading: true,
+        isFetching: true,
+        isSuccess: false,
+        data: undefined,
+      }),
+    )
+
+    renderExecutionFeedPage()
+
+    expect(screen.getByText('Chargement du calendrier…')).toBeTruthy()
+    expect(screen.queryByTestId('calendar-time-scroller')).toBeNull()
+    expect(screen.queryByTestId('calendar-period-pending')).toBeNull()
+  })
+
+  it('shows retry on the selected period when a later calendar fetch fails', () => {
+    stubLgViewport(true)
+    const refetch = vi.fn()
+    executionRouteState.search = '?layout=calendar&granularity=day&anchor=2026-09-08'
+    calendarQueryMock.mockReturnValue(
+      buildCalendarQueryState({
+        refetch,
+        data: {
+          timezone: 'Europe/Paris',
+          items: [
+            buildPlanFeedWrapper('exec-cal', 'Brief cuisine', {
+              start_at: '2026-09-08T07:00:00.000Z',
+              end_at: '2026-09-08T09:00:00.000Z',
+            }),
+          ],
+          unplanned: [],
+        },
+      }),
+    )
+    const view = renderExecutionFeedPage()
+
+    executionRouteState.search = '?layout=calendar&granularity=day&anchor=2026-09-09'
+    calendarQueryMock.mockReturnValue(
+      buildCalendarQueryState({
+        isLoading: false,
+        isSuccess: false,
+        isError: true,
+        data: undefined,
+        refetch,
+        error: new ActionPlansApiError({
+          status: 500,
+          detail: 'Impossible de charger le calendrier.',
+        }),
+      }),
+    )
+    view.rerenderPage()
+
+    expect(screen.getByTestId('calendar-weekday-2026-09-09')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Brief cuisine/ })).toBeNull()
+    expect(screen.getByTestId('calendar-period-error')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
+    expect(refetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps Aujourd’hui on the last known calendar timezone while a period has no data', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-08T22:30:00.000Z'))
+    stubLgViewport(true)
+    executionRouteState.search = '?layout=calendar&granularity=day&anchor=2026-09-08'
+    calendarQueryMock.mockReturnValue(
+      buildCalendarQueryState({
+        data: { timezone: 'UTC', items: [], unplanned: [] },
+      }),
+    )
+    const view = renderExecutionFeedPage()
+
+    executionRouteState.search = '?layout=calendar&granularity=day&anchor=2026-09-01'
+    calendarQueryMock.mockReturnValue(
+      buildCalendarQueryState({
+        isLoading: true,
+        isFetching: true,
+        isSuccess: false,
+        data: undefined,
+      }),
+    )
+    view.rerenderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Aujourd’hui' }))
+    expect(executionNavigate).toHaveBeenCalledWith(
+      expect.stringContaining('anchor=2026-09-08'),
+      { replace: true },
+    )
+  })
+
+  it('does not reuse a remembered timezone after an establishment change', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-08T22:30:00.000Z'))
+    stubLgViewport(true)
+    executionRouteState.search = '?layout=calendar&granularity=day&anchor=2026-09-08'
+    calendarQueryMock.mockReturnValue(
+      buildCalendarQueryState({
+        data: { timezone: 'UTC', items: [], unplanned: [] },
+      }),
+    )
+    const view = renderExecutionFeedPage({ establishmentId: 'est-1' })
+
+    calendarQueryMock.mockReturnValue(
+      buildCalendarQueryState({
+        isLoading: true,
+        isFetching: true,
+        isSuccess: false,
+        data: undefined,
+      }),
+    )
+    view.rerenderPage({ establishmentId: 'est-2' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Aujourd’hui' }))
+    expect(executionNavigate).toHaveBeenCalledWith(
+      expect.stringContaining('anchor=2026-09-09'),
+      { replace: true },
     )
   })
 })

@@ -9,9 +9,9 @@ type InvolvedPoleLike = {
   }
 }
 
-export type CalendarEventChromeDensity = 'comfortable' | 'compact'
+export type CalendarEventChromeDensity = 'comfortable' | 'compact' | 'lane'
 
-export type CalendarEventChrome = {
+type CalendarEventChrome = {
   bar: string
   background: string
   text: string
@@ -49,11 +49,11 @@ const STATUS_CHROME: Record<string, CalendarEventChrome> = {
 
 const MAX_ASSIGNEE_AVATARS = 3
 
-export function calendarEventChromeForStatus(status: string): CalendarEventChrome {
+function calendarEventChromeForStatus(status: string): CalendarEventChrome {
   return STATUS_CHROME[status] ?? DEFAULT_CHROME
 }
 
-export function calendarEventShortStatusLabel(
+function calendarEventShortStatusLabel(
   status: string,
   validatedAt?: string | null,
 ): string {
@@ -72,13 +72,21 @@ export function resolveCalendarEventChromeDensity(input: {
     return 'compact'
   }
   if (input.variant === 'allDay') {
-    return 'comfortable'
+    return 'lane'
   }
   const height = input.heightPx ?? 0
   if (input.narrow) {
     return height < 56 ? 'compact' : 'comfortable'
   }
   return height < 44 ? 'compact' : 'comfortable'
+}
+
+export function calendarLaneSuiteClassName(): string {
+  return 'hidden shrink-0 text-[9px] font-medium opacity-70 md:inline'
+}
+
+export function calendarLaneStatusLabelClassName(): string {
+  return 'sr-only md:not-sr-only md:truncate'
 }
 
 function assigneeNames(assignees: ActionPlanExecutionFeedItem['assignees']): string[] {

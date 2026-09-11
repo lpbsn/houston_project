@@ -1,8 +1,17 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Bell } from 'lucide-react'
+import {
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type PointerEvent,
+} from 'react'
+import { Bell, ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { TerrainBottomSheet, TerrainCollapsibleFeedSection, TerrainErrorState } from '@/components/ui/terrain'
-import { formatCivilDateFr, todayCivilDate } from '@/lib/business-timezone'
+import { formatCivilDateFr, todayCivilDate, BUSINESS_TIMEZONE } from '@/lib/business-timezone'
+import { useLgViewport } from '@/lib/lg-viewport'
 import { cn } from '@/lib/utils'
 import { ActionPlansApiError, unwrapActionPlanExecutionFeedItems } from '@/features/action-plans/api'
 import type {
@@ -12,10 +21,9 @@ import type {
 import { resolveApiErrorMessage } from '@/lib/error-message'
 
 import {
-  calendarEventAssigneeInitials,
-  calendarEventAssigneeOverflow,
-  calendarEventOrgBadges,
   calendarEventPresentation,
+  calendarLaneStatusLabelClassName,
+  calendarLaneSuiteClassName,
   calendarUnplannedCreatedDateLabel,
   resolveCalendarEventChromeDensity,
   type CalendarEventChromeDensity,
@@ -29,19 +37,30 @@ import {
   timedIntervalOnDay,
 } from '../lib/execution-calendar-layout'
 import { calendarUnplannedSectionHeader } from '../lib/execution-calendar-unplanned'
+import {
+  initialWeekStartIndex,
+  shiftWeekStartIndex,
+  sliceVisibleWeekDays,
+  weekVisibleDayCount,
+} from '../lib/execution-calendar-visible-days'
 import type { ExecutionCalendarGranularity } from '../lib/execution-feed-url-state'
 
 const HOUR_HEIGHT = 48
 const TIME_GRID_INITIAL_HOUR = 8
 const TIME_GUTTER = '3.75rem'
+const WEEK_SWIPE_MIN_DX = 48
+const WEEK_SWIPE_CLICK_SUPPRESS_MS = 50
 const WEEKDAY_LABELS = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.']
 const MONTH_VISIBLE = 2
+const ALL_DAY_VISIBLE_DAY = 2
+const ALL_DAY_VISIBLE_WEEK = 1
 
 type ExecutionCalendarViewProps = {
   granularity: ExecutionCalendarGranularity
   days: string[]
   month: string
   data?: ActionPlanExecutionCalendarResponse
+  timeZone?: string
   isLoading: boolean
   isError: boolean
   error: unknown
@@ -86,12 +105,15 @@ function CalendarEventButton({
     densityOverride ?? resolveCalendarEventChromeDensity({ variant, heightPx, narrow })
   const presentation = calendarEventPresentation(item)
   const compact = density === 'compact'
-  const showSuite = continuation === true && !compact
+  const lane = density === 'lane'
+  const showSuite = continuation === true && (lane || !compact)
+  const showMetaLayers = !lane
   return (
     <button
       type="button"
       className={cn(
-        'flex min-w-[2.75rem] items-stretch justify-start overflow-hidden rounded-md border border-black/5 text-left leading-tight',
+        'flex items-stretch justify-start overflow-hidden rounded-md border border-black/5 text-left leading-tight',
+        variant === 'timed' ? 'min-w-0' : 'min-w-[2.75rem]',
         compact ? 'min-h-8' : 'min-h-7',
         className,
       )}
@@ -105,24 +127,28 @@ function CalendarEventButton({
       />
       <span
         className={cn(
-          'flex min-h-0 min-w-0 flex-1 flex-col items-start justify-start overflow-hidden px-1.5 py-0.5',
-          compact ? 'gap-px' : 'gap-0.5',
+          'flex min-h-0 min-w-0 flex-1 overflow-hidden px-1.5 py-0.5',
+          lane ? 'flex-row items-center gap-1' : 'flex-col items-start justify-start',
+          !lane && (compact ? 'gap-px' : 'gap-0.5'),
         )}
       >
         <span
           className={cn(
-            'flex w-full min-w-0 items-baseline gap-1',
-            compact ? 'text-[10px]' : 'text-[11px]',
+            'flex min-w-0 items-baseline gap-1',
+            lane ? 'min-w-0 flex-1 text-[10px]' : 'w-full',
+            !lane && (compact ? 'text-[10px]' : 'text-[11px]'),
           )}
         >
-          <span className={cn('min-w-0 font-semibold', compact ? 'line-clamp-1' : 'line-clamp-2')}>
+          <span className={cn('min-w-0 font-semibold', compact || lane ? 'line-clamp-1' : 'line-clamp-2')}>
             {presentation.title}
           </span>
           {showSuite ? (
-            <span className="shrink-0 text-[9px] font-medium opacity-70">Suite</span>
+            <span className={lane ? calendarLaneSuiteClassName() : 'shrink-0 text-[9px] font-medium opacity-70'}>
+              Suite
+            </span>
           ) : null}
         </span>
-        {presentation.orgBadges.length > 0 ? (
+        {showMetaLayers && presentation.orgBadges.length > 0 ? (
           <span className="flex min-w-0 flex-wrap gap-0.5">
             {presentation.orgBadges.map((badge) => (
               <span
@@ -134,7 +160,8 @@ function CalendarEventButton({
             ))}
           </span>
         ) : null}
-        {presentation.assigneeInitials.length > 0 || presentation.assigneeOverflow > 0 ? (
+        {showMetaLayers &&
+        (presentation.assigneeInitials.length > 0 || presentation.assigneeOverflow > 0) ? (
           <span className="flex min-w-0 items-center">
             {presentation.assigneeInitials.map((initials, index) => (
               <span
@@ -159,12 +186,13 @@ function CalendarEventButton({
         <span
           className={cn(
             'flex min-w-0 items-center gap-1 font-medium opacity-80',
-            compact ? 'text-[9px]' : 'text-[10px]',
+            lane && 'shrink-0',
+            compact || lane ? 'text-[9px]' : 'text-[10px]',
           )}
         >
           {item.status === 'pending_validation' ? (
             <Bell
-              className={cn('shrink-0', compact ? 'h-2.5 w-2.5' : 'h-3 w-3')}
+              className={cn('shrink-0', compact || lane ? 'h-2.5 w-2.5' : 'h-3 w-3')}
               style={{ color: presentation.chrome.bar }}
               aria-hidden
             />
@@ -175,40 +203,72 @@ function CalendarEventButton({
               aria-hidden
             />
           )}
-          <span className="truncate">{presentation.statusLabel}</span>
+          <span className={lane ? calendarLaneStatusLabelClassName() : 'truncate'}>
+            {presentation.statusLabel}
+          </span>
         </span>
       </span>
     </button>
   )
 }
 
+function allDayLaneVisibleLimit(dayCount: number): number {
+  return dayCount > 1 ? ALL_DAY_VISIBLE_WEEK : ALL_DAY_VISIBLE_DAY
+}
+
 function AllDayLane({
   days,
   items,
+  timeZone,
   onOpenExecution,
+  onOpenOverflow,
 }: {
   days: string[]
   items: ActionPlanExecutionFeedItem[]
+  timeZone: string
   onOpenExecution: (executionId: string) => void
+  onOpenOverflow: (day: string) => void
 }) {
+  const hasOccupants = days.some((day) =>
+    items.some((item) => occupiesAllDayLane(item, day, timeZone)),
+  )
+  if (!hasOccupants) {
+    return null
+  }
+  const visibleLimit = allDayLaneVisibleLimit(days.length)
   return (
-    <div className="grid shrink-0 border-b border-[#E8E6DF] bg-white" style={{ gridTemplateColumns: `${TIME_GUTTER} repeat(${days.length}, minmax(0, 1fr))` }}>
-      <div className="px-1 py-2 text-[10px] font-semibold uppercase tracking-wide text-[#7D7B75]">
+    <div
+      data-testid="calendar-all-day-lane"
+      className="grid shrink-0 border-b border-[#E8E6DF] bg-white"
+      style={{ gridTemplateColumns: `${TIME_GUTTER} repeat(${days.length}, minmax(0, 1fr))` }}
+    >
+      <div className="px-1 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#7D7B75]">
         Journée
       </div>
       {days.map((day) => {
-        const dayItems = items.filter((item) => occupiesAllDayLane(item, day))
+        const dayItems = items.filter((item) => occupiesAllDayLane(item, day, timeZone))
+        const visible = dayItems.slice(0, visibleLimit)
+        const extra = dayItems.length - visible.length
         return (
-          <div key={day} className="flex min-h-10 flex-col gap-1 border-l border-[#E8E6DF] px-1 py-1">
-            {dayItems.map((item) => (
+          <div key={day} className="flex flex-col gap-0.5 border-l border-[#E8E6DF] px-1 py-1">
+            {visible.map((item) => (
               <CalendarEventButton
                 key={item.id}
                 item={item}
                 variant="allDay"
-                continuation={isTimedDayLaneContinuation(item, day)}
+                continuation={isTimedDayLaneContinuation(item, day, timeZone)}
                 onSelect={() => onOpenExecution(item.id)}
               />
             ))}
+            {extra > 0 ? (
+              <button
+                type="button"
+                className="text-left text-[10px] font-semibold text-[#114660]"
+                onClick={() => onOpenOverflow(day)}
+              >
+                +{extra} de plus
+              </button>
+            ) : null}
           </div>
         )
       })}
@@ -220,22 +280,27 @@ function TimedDayColumn({
   day,
   items,
   narrow,
+  timeZone,
   onOpenExecution,
 }: {
   day: string
   items: ActionPlanExecutionFeedItem[]
   narrow?: boolean
+  timeZone: string
   onOpenExecution: (executionId: string) => void
 }) {
   const blocks = splitOverlappingColumns(
     items.flatMap((item) => {
-      const interval = timedIntervalOnDay(item, day)
+      const interval = timedIntervalOnDay(item, day, timeZone)
       return interval ? [{ item, ...interval }] : []
     }),
   )
 
   return (
-    <div className="relative border-l border-[#E8E6DF]" style={{ height: hours().length * HOUR_HEIGHT }}>
+    <div
+      className="relative min-w-0 overflow-hidden border-l border-[#E8E6DF]"
+      style={{ height: hours().length * HOUR_HEIGHT }}
+    >
       {hours().map((hour) => (
         <div
           key={hour}
@@ -249,7 +314,10 @@ function TimedDayColumn({
         return (
           <div
             key={block.item.id}
-            className="absolute px-1"
+            className={cn(
+              'absolute min-w-0 max-w-full overflow-hidden',
+              block.columnCount > 1 ? 'px-px' : 'px-1',
+            )}
             style={{
               top: (block.startMin / 60) * HOUR_HEIGHT,
               height: heightPx,
@@ -262,7 +330,7 @@ function TimedDayColumn({
               variant="timed"
               heightPx={heightPx}
               narrow={narrow}
-              className="h-full w-full"
+              className="h-full w-full min-w-0 max-w-full"
               onSelect={() => onOpenExecution(block.item.id)}
             />
           </div>
@@ -275,10 +343,12 @@ function TimedDayColumn({
 function TimeGrid({
   days,
   items,
+  timeZone,
   onOpenExecution,
 }: {
   days: string[]
   items: ActionPlanExecutionFeedItem[]
+  timeZone: string
   onOpenExecution: (executionId: string) => void
 }) {
   const timedItems = items.filter((item) => !isExecutionAllDay(item) && item.start_at)
@@ -302,6 +372,7 @@ function TimeGrid({
           day={day}
           items={timedItems}
           narrow={narrow}
+          timeZone={timeZone}
           onOpenExecution={onOpenExecution}
         />
       ))}
@@ -309,7 +380,7 @@ function TimeGrid({
   )
 }
 
-function MonthOverflowSheet({
+function CalendarDayOverflowSheet({
   day,
   items,
   open,
@@ -343,27 +414,206 @@ function MonthOverflowSheet({
   )
 }
 
+function WeekWindowControls({
+  canGoBack,
+  canGoForward,
+  onBack,
+  onForward,
+}: {
+  canGoBack: boolean
+  canGoForward: boolean
+  onBack: () => void
+  onForward: () => void
+}) {
+  return (
+    <div className="flex h-full items-center justify-center gap-0">
+      <button
+        type="button"
+        data-testid="calendar-week-prev-days"
+        className="rounded p-0.5 text-[#7D7B75] disabled:opacity-30"
+        aria-label="Jours précédents de la semaine"
+        disabled={!canGoBack}
+        onClick={onBack}
+      >
+        <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
+      </button>
+      <button
+        type="button"
+        data-testid="calendar-week-next-days"
+        className="rounded p-0.5 text-[#7D7B75] disabled:opacity-30"
+        aria-label="Jours suivants de la semaine"
+        disabled={!canGoForward}
+        onClick={onForward}
+      >
+        <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+      </button>
+    </div>
+  )
+}
+
+function CalendarPeriodStatus({
+  isPeriodPending,
+  isTransitionError,
+  error,
+  onRetry,
+}: {
+  isPeriodPending: boolean
+  isTransitionError: boolean
+  error: unknown
+  onRetry: () => void
+}) {
+  if (isPeriodPending) {
+    return (
+      <p
+        data-testid="calendar-period-pending"
+        role="status"
+        aria-live="polite"
+        className="shrink-0 px-1 py-1.5 text-center text-xs font-medium text-[#7D7B75]"
+      >
+        Chargement des événements…
+      </p>
+    )
+  }
+  if (isTransitionError) {
+    return (
+      <div data-testid="calendar-period-error" className="shrink-0">
+        <TerrainErrorState
+          message={resolveApiErrorMessage(
+            error,
+            ActionPlansApiError,
+            'Impossible de charger le calendrier.',
+          )}
+          onRetry={onRetry}
+        />
+      </div>
+    )
+  }
+  return null
+}
+
 export function ExecutionCalendarView({
   granularity,
   days,
   month,
   data,
+  timeZone: timeZoneProp,
   isLoading,
   isError,
   error,
   onRetry,
   onOpenExecution,
 }: ExecutionCalendarViewProps) {
-  const today = todayCivilDate()
+  const timeZone = timeZoneProp ?? data?.timezone ?? BUSINESS_TIMEZONE
+  const today = todayCivilDate(timeZone)
+  const isLg = useLgViewport()
+  const daysKey = days.join(',')
+  const weekVisibleCount = weekVisibleDayCount(isLg, days.length)
+  const compactWeek = granularity === 'week' && weekVisibleCount < days.length
+  const weekWindowKey = `${daysKey}|${today}|${weekVisibleCount}`
+  const [weekWindow, setWeekWindow] = useState(() => ({
+    key: weekWindowKey,
+    startIndex: initialWeekStartIndex({ days, today, visibleCount: weekVisibleCount }),
+  }))
+  const swipeOriginRef = useRef<{ x: number; y: number } | null>(null)
+  const suppressWeekClickRef = useRef(false)
+  const suppressWeekClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [overflowDay, setOverflowDay] = useState<string | null>(null)
   const [unplannedExpanded, setUnplannedExpanded] = useState(false)
   const didAlignTimeGridRef = useRef(false)
+  const [hasShownCalendar, setHasShownCalendar] = useState(false)
+  const shownCalendar = hasShownCalendar || data != null
+  if (shownCalendar && !hasShownCalendar) {
+    setHasShownCalendar(true)
+  }
   const items = data ? unwrapActionPlanExecutionFeedItems(data.items) : []
   const unplanned = data ? unwrapActionPlanExecutionFeedItems(data.unplanned) : []
-  const overflowItems = useMemo(
-    () => (overflowDay ? items.filter((item) => occupiesMonthCell(item, overflowDay)) : []),
-    [items, overflowDay],
+  const overflowItems = useMemo(() => {
+    if (!overflowDay) {
+      return []
+    }
+    const occupiesOverflow =
+      granularity === 'month'
+        ? (item: ActionPlanExecutionFeedItem, day: string) =>
+            occupiesMonthCell(item, day, timeZone)
+        : (item: ActionPlanExecutionFeedItem, day: string) =>
+            occupiesAllDayLane(item, day, timeZone)
+    return items.filter((item) => occupiesOverflow(item, overflowDay))
+  }, [granularity, items, overflowDay, timeZone])
+
+  let weekStartIndex = weekWindow.startIndex
+  if (weekWindow.key !== weekWindowKey) {
+    weekStartIndex = initialWeekStartIndex({ days, today, visibleCount: weekVisibleCount })
+    setWeekWindow({ key: weekWindowKey, startIndex: weekStartIndex })
+  }
+
+  const gridDays =
+    granularity === 'week'
+      ? sliceVisibleWeekDays(days, weekStartIndex, weekVisibleCount)
+      : days
+  const maxWeekStart = Math.max(0, days.length - weekVisibleCount)
+  const shiftVisibleWeek = useCallback(
+    (delta: -1 | 1) => {
+      setWeekWindow((current) => {
+        const baseStart =
+          current.key === weekWindowKey
+            ? current.startIndex
+            : initialWeekStartIndex({ days, today, visibleCount: weekVisibleCount })
+        return {
+          key: weekWindowKey,
+          startIndex: shiftWeekStartIndex(baseStart, delta, days.length, weekVisibleCount),
+        }
+      })
+    },
+    [days, today, weekVisibleCount, weekWindowKey],
   )
+
+  const onWeekPointerDown = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      if (!compactWeek) {
+        return
+      }
+      swipeOriginRef.current = { x: event.clientX, y: event.clientY }
+    },
+    [compactWeek],
+  )
+
+  const onWeekPointerUp = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      const origin = swipeOriginRef.current
+      swipeOriginRef.current = null
+      if (!compactWeek || !origin) {
+        return
+      }
+      const dx = event.clientX - origin.x
+      const dy = event.clientY - origin.y
+      if (Math.abs(dx) < WEEK_SWIPE_MIN_DX || Math.abs(dx) <= Math.abs(dy)) {
+        return
+      }
+      shiftVisibleWeek(dx < 0 ? 1 : -1)
+      suppressWeekClickRef.current = true
+      if (suppressWeekClickTimeoutRef.current != null) {
+        window.clearTimeout(suppressWeekClickTimeoutRef.current)
+      }
+      suppressWeekClickTimeoutRef.current = window.setTimeout(() => {
+        suppressWeekClickRef.current = false
+        suppressWeekClickTimeoutRef.current = null
+      }, WEEK_SWIPE_CLICK_SUPPRESS_MS)
+    },
+    [compactWeek, shiftVisibleWeek],
+  )
+
+  const onWeekClickCapture = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    if (!suppressWeekClickRef.current) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    suppressWeekClickRef.current = false
+    if (suppressWeekClickTimeoutRef.current != null) {
+      window.clearTimeout(suppressWeekClickTimeoutRef.current)
+      suppressWeekClickTimeoutRef.current = null
+    }
+  }, [])
 
   useLayoutEffect(() => {
     if (granularity === 'month') {
@@ -379,11 +629,20 @@ export function ExecutionCalendarView({
     didAlignTimeGridRef.current = true
   }, [])
 
-  if (isLoading) {
+  const isInitialLoading = isLoading && !shownCalendar
+  const isPeriodPending = isLoading && shownCalendar
+  const isInitialError = isError && data == null && !shownCalendar
+  const isTransitionError = isError && data == null && shownCalendar
+
+  if (isPeriodPending && overflowDay != null) {
+    setOverflowDay(null)
+  }
+
+  if (isInitialLoading) {
     return <p className="px-1 py-8 text-center text-sm text-[#7D7B75]">Chargement du calendrier…</p>
   }
 
-  if (isError) {
+  if (isInitialError) {
     return (
       <TerrainErrorState
         message={resolveApiErrorMessage(
@@ -396,15 +655,39 @@ export function ExecutionCalendarView({
     )
   }
 
+  const periodStatus = (
+    <CalendarPeriodStatus
+      isPeriodPending={isPeriodPending}
+      isTransitionError={isTransitionError}
+      error={error}
+      onRetry={onRetry}
+    />
+  )
+
   const header = (
     <div
       className="grid shrink-0 border-b border-[#E8E6DF] bg-white"
-      style={{ gridTemplateColumns: granularity === 'day' ? `${TIME_GUTTER} 1fr` : `${TIME_GUTTER} repeat(${days.length}, minmax(4.5rem, 1fr))` }}
+      style={{
+        gridTemplateColumns:
+          granularity === 'day'
+            ? `${TIME_GUTTER} 1fr`
+            : `${TIME_GUTTER} repeat(${gridDays.length}, minmax(0, 1fr))`,
+      }}
     >
-      <div />
-      {days.map((day) => (
+      {compactWeek ? (
+        <WeekWindowControls
+          canGoBack={weekStartIndex > 0}
+          canGoForward={weekStartIndex < maxWeekStart}
+          onBack={() => shiftVisibleWeek(-1)}
+          onForward={() => shiftVisibleWeek(1)}
+        />
+      ) : (
+        <div />
+      )}
+      {gridDays.map((day) => (
         <div
           key={day}
+          data-testid={`calendar-weekday-${day}`}
           className={cn(
             'border-l border-[#E8E6DF] px-1 py-2 text-center text-xs font-semibold text-[#1a1a1a]',
             day === today && 'text-[#114660]',
@@ -425,7 +708,11 @@ export function ExecutionCalendarView({
       weeks.push(days.slice(index, index + 7))
     }
     return (
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+      <div
+        className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden"
+        aria-busy={isPeriodPending}
+      >
+        {periodStatus}
         <div
           data-testid="calendar-month-scroller"
           className="min-h-0 flex-1 overflow-y-auto"
@@ -444,7 +731,7 @@ export function ExecutionCalendarView({
           {weeks.map((week) => (
             <div key={week[0]} className="grid grid-cols-7 border-b border-[#E8E6DF] last:border-b-0">
               {week.map((day) => {
-                const dayItems = items.filter((item) => occupiesMonthCell(item, day))
+                const dayItems = items.filter((item) => occupiesMonthCell(item, day, timeZone))
                 const visible = dayItems.slice(0, MONTH_VISIBLE)
                 const extra = dayItems.length - visible.length
                 const inMonth = day.startsWith(month)
@@ -493,7 +780,7 @@ export function ExecutionCalendarView({
           onToggle={() => setUnplannedExpanded((current) => !current)}
           onOpenExecution={onOpenExecution}
         />
-        <MonthOverflowSheet
+        <CalendarDayOverflowSheet
           day={overflowDay ?? ''}
           items={overflowItems}
           open={overflowDay != null}
@@ -508,30 +795,34 @@ export function ExecutionCalendarView({
     <div
       data-testid="calendar-hub-scroller"
       className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden"
+      aria-busy={isPeriodPending}
     >
+      {periodStatus}
       <div
         data-testid="calendar-grid-card"
-        className={cn(
-          'flex min-h-0 flex-1 flex-col rounded-xl border border-[#E8E6DF] bg-white',
-          granularity === 'week'
-            ? 'overflow-x-auto overflow-y-hidden overscroll-x-contain'
-            : 'overflow-hidden',
-        )}
+        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#E8E6DF] bg-white touch-pan-y"
+        onPointerDown={onWeekPointerDown}
+        onPointerUp={onWeekPointerUp}
+        onClickCapture={onWeekClickCapture}
+        onPointerCancel={() => {
+          swipeOriginRef.current = null
+        }}
       >
-        <div
-          className={cn(
-            'flex min-h-0 min-w-0 flex-1 flex-col',
-            granularity === 'week' && 'min-w-[44rem]',
-          )}
-        >
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {header}
-          <AllDayLane days={days} items={items} onOpenExecution={onOpenExecution} />
+          <AllDayLane
+            days={gridDays}
+            items={items}
+            timeZone={timeZone}
+            onOpenExecution={onOpenExecution}
+            onOpenOverflow={setOverflowDay}
+          />
           <div
             ref={attachTimeScroller}
             data-testid="calendar-time-scroller"
             className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain"
           >
-            <TimeGrid days={days} items={items} onOpenExecution={onOpenExecution} />
+            <TimeGrid days={gridDays} items={items} timeZone={timeZone} onOpenExecution={onOpenExecution} />
           </div>
         </div>
       </div>
@@ -539,6 +830,13 @@ export function ExecutionCalendarView({
         items={unplanned}
         expanded={unplannedExpanded}
         onToggle={() => setUnplannedExpanded((current) => !current)}
+        onOpenExecution={onOpenExecution}
+      />
+      <CalendarDayOverflowSheet
+        day={overflowDay ?? ''}
+        items={overflowItems}
+        open={overflowDay != null}
+        onClose={() => setOverflowDay(null)}
         onOpenExecution={onOpenExecution}
       />
     </div>
@@ -574,9 +872,8 @@ function UnplannedBanner({
         className="flex max-h-48 flex-col gap-1 overflow-y-auto overscroll-y-contain"
       >
         {items.map((item) => {
-          const orgBadges = calendarEventOrgBadges(item)
-          const initials = calendarEventAssigneeInitials(item.assignees)
-          const overflow = calendarEventAssigneeOverflow(item.assignees)
+          const { orgBadges, assigneeInitials: initials, assigneeOverflow: overflow } =
+            calendarEventPresentation(item)
           const createdDate = calendarUnplannedCreatedDateLabel(item.created_at)
           return (
             <button

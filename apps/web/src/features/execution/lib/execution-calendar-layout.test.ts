@@ -4,7 +4,9 @@ import { combineCivilDateTimeToIso } from '@/lib/business-timezone'
 import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 
 import {
+  allDayDatesForItem,
   civilCoverageOnDay,
+  isExecutionAllDay,
   isTimedDayLaneContinuation,
   occupiesAllDayLane,
   occupiesMonthCell,
@@ -104,5 +106,82 @@ describe('execution-calendar-layout', () => {
     expect(timedIntervalOnDay(open, '2026-09-08')).toEqual({ startMin: 14 * 60, endMin: 15 * 60 })
     expect(civilCoverageOnDay(open, '2026-09-09')).toEqual({ kind: 'none' })
     expect(occupiesMonthCell(open, '2026-09-08')).toBe(true)
+  })
+
+  it('projects midnight-adjacent instants in UTC instead of Paris', () => {
+    const crossing = item('utc-midnight', '2026-09-08T22:00:00.000Z', '2026-09-08T23:00:00.000Z')
+    expect(civilCoverageOnDay(crossing, '2026-09-08', 'UTC')).toEqual({
+      kind: 'partial',
+      startMin: 22 * 60,
+      endMin: 23 * 60,
+    })
+    expect(civilCoverageOnDay(crossing, '2026-09-09', 'UTC')).toEqual({ kind: 'none' })
+    expect(civilCoverageOnDay(crossing, '2026-09-09')).toEqual({
+      kind: 'partial',
+      startMin: 0,
+      endMin: 60,
+    })
+  })
+
+  it('places a spring-forward timed slot on civil clock minutes', () => {
+    const spring = item('dst-spring', '2026-03-29T00:30:00.000Z', '2026-03-29T01:30:00.000Z')
+    expect(timedIntervalOnDay(spring, '2026-03-29')).toEqual({ startMin: 90, endMin: 210 })
+  })
+
+  it('keeps day-lane, week coverage, and month-cell membership aligned', () => {
+    const span = item('parity', civil('2026-09-08', '14:00'), civil('2026-09-13', '00:00'))
+    const days = [
+      '2026-09-07',
+      '2026-09-08',
+      '2026-09-09',
+      '2026-09-12',
+      '2026-09-13',
+    ]
+    for (const day of days) {
+      const coverage = civilCoverageOnDay(span, day)
+      expect(occupiesMonthCell(span, day)).toBe(coverage.kind !== 'none')
+      expect(occupiesAllDayLane(span, day)).toBe(coverage.kind === 'full_day')
+    }
+  })
+
+  it('keeps multi-day all_day dates aligned across day lane, week, and month', () => {
+    const span = item(
+      'all-day-span',
+      civil('2026-09-08', '00:00'),
+      civil('2026-09-10', '23:59'),
+      true,
+    )
+    const dates = allDayDatesForItem(span)
+    expect(dates).toEqual(['2026-09-08', '2026-09-09', '2026-09-10'])
+    for (const day of dates) {
+      expect(occupiesAllDayLane(span, day)).toBe(true)
+      expect(occupiesMonthCell(span, day)).toBe(true)
+      expect(timedIntervalOnDay(span, day)).toBeNull()
+    }
+    expect(occupiesAllDayLane(span, '2026-09-07')).toBe(false)
+    expect(occupiesMonthCell(span, '2026-09-07')).toBe(false)
+    expect(occupiesAllDayLane(span, '2026-09-11')).toBe(false)
+    expect(occupiesMonthCell(span, '2026-09-11')).toBe(false)
+  })
+
+  it('does not treat a timed civil full day as all_day', () => {
+    const timed = item(
+      'timed-sentinel',
+      civil('2026-09-08', '00:00'),
+      civil('2026-09-08', '23:59'),
+      false,
+    )
+    expect(isExecutionAllDay(timed)).toBe(false)
+    expect(civilCoverageOnDay(timed, '2026-09-08')).toEqual({
+      kind: 'partial',
+      startMin: 0,
+      endMin: 23 * 60 + 59,
+    })
+    expect(occupiesAllDayLane(timed, '2026-09-08')).toBe(false)
+    expect(occupiesMonthCell(timed, '2026-09-08')).toBe(true)
+    expect(timedIntervalOnDay(timed, '2026-09-08')).toEqual({
+      startMin: 0,
+      endMin: 23 * 60 + 59,
+    })
   })
 })
