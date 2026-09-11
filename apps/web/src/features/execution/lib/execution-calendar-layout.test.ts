@@ -4,7 +4,9 @@ import { combineCivilDateTimeToIso } from '@/lib/business-timezone'
 import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 
 import {
+  allDayDatesForItem,
   civilCoverageOnDay,
+  isExecutionAllDay,
   isTimedDayLaneContinuation,
   occupiesAllDayLane,
   occupiesMonthCell,
@@ -140,5 +142,46 @@ describe('execution-calendar-layout', () => {
       expect(occupiesMonthCell(span, day)).toBe(coverage.kind !== 'none')
       expect(occupiesAllDayLane(span, day)).toBe(coverage.kind === 'full_day')
     }
+  })
+
+  it('keeps multi-day all_day dates aligned across day lane, week, and month', () => {
+    const span = item(
+      'all-day-span',
+      civil('2026-09-08', '00:00'),
+      civil('2026-09-10', '23:59'),
+      true,
+    )
+    const dates = allDayDatesForItem(span)
+    expect(dates).toEqual(['2026-09-08', '2026-09-09', '2026-09-10'])
+    for (const day of dates) {
+      expect(occupiesAllDayLane(span, day)).toBe(true)
+      expect(occupiesMonthCell(span, day)).toBe(true)
+      expect(timedIntervalOnDay(span, day)).toBeNull()
+    }
+    expect(occupiesAllDayLane(span, '2026-09-07')).toBe(false)
+    expect(occupiesMonthCell(span, '2026-09-07')).toBe(false)
+    expect(occupiesAllDayLane(span, '2026-09-11')).toBe(false)
+    expect(occupiesMonthCell(span, '2026-09-11')).toBe(false)
+  })
+
+  it('does not treat a timed civil full day as all_day', () => {
+    const timed = item(
+      'timed-sentinel',
+      civil('2026-09-08', '00:00'),
+      civil('2026-09-08', '23:59'),
+      false,
+    )
+    expect(isExecutionAllDay(timed)).toBe(false)
+    expect(civilCoverageOnDay(timed, '2026-09-08')).toEqual({
+      kind: 'partial',
+      startMin: 0,
+      endMin: 23 * 60 + 59,
+    })
+    expect(occupiesAllDayLane(timed, '2026-09-08')).toBe(false)
+    expect(occupiesMonthCell(timed, '2026-09-08')).toBe(true)
+    expect(timedIntervalOnDay(timed, '2026-09-08')).toEqual({
+      startMin: 0,
+      endMin: 23 * 60 + 59,
+    })
   })
 })

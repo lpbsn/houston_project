@@ -695,6 +695,249 @@ def test_calendar_does_not_infer_all_day_from_sentinel_times(
     assert payload["all_day"] is False
 
 
+def _paris_civil_date(instant: datetime) -> date:
+    return instant.astimezone(ZoneInfo("Europe/Paris")).date()
+
+
+def _calendar_item_ids(api_client, *, membership, token, from_date, to_date=None):
+    if to_date is None:
+        to_date = from_date
+    response = api_client.get(
+        action_plan_execution_calendar_url(membership.establishment_id)
+        + _calendar_query(view_mode="general", from_date=from_date, to_date=to_date),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200, response.content
+    return {item["action_plan_execution"]["id"] for item in response.json()["items"]}
+
+
+def _create_all_day_schedule(
+    *,
+    owner_membership,
+    staff_membership,
+    business_unit,
+    start_date: date,
+    end_date: date,
+    recurrence_days: list[str],
+):
+    catalog = create_catalog_action_plan(
+        owner_membership=owner_membership,
+        business_unit=business_unit,
+    )
+    return create_action_plan_schedule(
+        action_plan=catalog,
+        actor=owner_membership,
+        start_date=start_date,
+        end_date=end_date,
+        start_at=None,
+        end_at=None,
+        recurrence_days=recurrence_days,
+        assignees=[
+            build_schedule_assignee_payload(
+                membership=staff_membership,
+                business_unit=business_unit,
+            )
+        ],
+        use_shared_chronology=True,
+        all_day=True,
+    )
+
+
+def test_materialized_all_day_calendar_item_stays_on_occurrence_date(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    _use_paris_timezone(owner_membership)
+    occurrence = date(2026, 9, 16)
+    frozen_now = datetime(2026, 9, 9, 12, 0, tzinfo=datetime_timezone.utc)
+    with patch("django.utils.timezone.now", return_value=frozen_now):
+        schedule = _create_all_day_schedule(
+            owner_membership=owner_membership,
+            staff_membership=staff_membership,
+            business_unit=business_unit,
+            start_date=occurrence,
+            end_date=occurrence + timedelta(days=14),
+            recurrence_days=["wednesday"],
+        )
+        token = login(api_client, user=owner_membership.user)
+        on_occurrence = _calendar_item_ids(
+            api_client,
+            membership=owner_membership,
+            token=token,
+            from_date=occurrence,
+        )
+        execution = ActionPlanExecution.objects.get(
+            action_plan_schedule=schedule,
+            occurrence_date=occurrence,
+        )
+        assert execution.all_day is True
+        assert _paris_civil_date(execution.start_at) == occurrence
+        assert _paris_civil_date(execution.end_at) == occurrence
+        execution_id = str(execution.id)
+        assert execution_id in on_occurrence
+        assert execution_id not in _calendar_item_ids(
+            api_client,
+            membership=owner_membership,
+            token=token,
+            from_date=occurrence - timedelta(days=1),
+        )
+        assert execution_id not in _calendar_item_ids(
+            api_client,
+            membership=owner_membership,
+            token=token,
+            from_date=occurrence + timedelta(days=1),
+        )
+
+
+def test_all_day_create_and_materialized_occurrence_share_civil_dates(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    paris = _use_paris_timezone(owner_membership)
+    civil_day = date(2026, 9, 16)
+    start_at = datetime.combine(civil_day, time.min, tzinfo=paris)
+    end_at = datetime.combine(civil_day, time(23, 59, 59), tzinfo=paris)
+    frozen_now = datetime(2026, 9, 9, 12, 0, tzinfo=datetime_timezone.utc)
+    with patch("django.utils.timezone.now", return_value=frozen_now):
+        _, created = create_action_plan_with_execution(
+            establishment_id=owner_membership.establishment_id,
+            created_by=owner_membership,
+            pilot_business_unit_id=business_unit.id,
+            title="Direct all day",
+            tasks=[build_task_payload(task="Task", business_unit=business_unit)],
+            assignees=[
+                build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+            ],
+            start_at=start_at,
+            end_at=end_at,
+            all_day=True,
+        )
+        schedule = _create_all_day_schedule(
+            owner_membership=owner_membership,
+            staff_membership=staff_membership,
+            business_unit=business_unit,
+            start_date=civil_day,
+            end_date=civil_day + timedelta(days=14),
+            recurrence_days=["wednesday"],
+        )
+        token = login(api_client, user=owner_membership.user)
+        _calendar_item_ids(
+            api_client,
+            membership=owner_membership,
+            token=token,
+            from_date=civil_day,
+        )
+        materialized = ActionPlanExecution.objects.get(
+            action_plan_schedule=schedule,
+            occurrence_date=civil_day,
+        )
+        created.refresh_from_db()
+        materialized.refresh_from_db()
+        assert created.all_day is True
+        assert materialized.all_day is True
+        assert _paris_civil_date(created.start_at) == _paris_civil_date(materialized.start_at)
+        assert _paris_civil_date(created.end_at) == _paris_civil_date(materialized.end_at)
+        assert _paris_civil_date(created.start_at) == civil_day
+        assert _paris_civil_date(created.end_at) == civil_day
+
+
+def test_multi_day_all_day_appears_in_each_civil_window_only(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    paris = _use_paris_timezone(owner_membership)
+    span_start = date(2026, 9, 15)
+    span_end = date(2026, 9, 17)
+    start_at = datetime.combine(span_start, time.min, tzinfo=paris)
+    end_at = datetime.combine(span_end, time(23, 59, 59), tzinfo=paris)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Multi-day all day",
+        tasks=[build_task_payload(task="Task", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=start_at,
+        end_at=end_at,
+        all_day=True,
+    )
+    token = login(api_client, user=owner_membership.user)
+    execution_id = str(execution.id)
+    for day in (span_start, span_start + timedelta(days=1), span_end):
+        assert execution_id in _calendar_item_ids(
+            api_client,
+            membership=owner_membership,
+            token=token,
+            from_date=day,
+        )
+    assert execution_id not in _calendar_item_ids(
+        api_client,
+        membership=owner_membership,
+        token=token,
+        from_date=span_start - timedelta(days=1),
+    )
+    assert execution_id not in _calendar_item_ids(
+        api_client,
+        membership=owner_membership,
+        token=token,
+        from_date=span_end + timedelta(days=1),
+    )
+
+
+def test_all_day_on_paris_dst_spring_forward_stays_on_that_civil_date(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    paris = _use_paris_timezone(owner_membership)
+    dst_day = date(2026, 3, 29)
+    start_at = datetime.combine(dst_day, time.min, tzinfo=paris)
+    end_at = datetime.combine(dst_day, time(23, 59, 59), tzinfo=paris)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="DST all day",
+        tasks=[build_task_payload(task="Task", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=start_at,
+        end_at=end_at,
+        all_day=True,
+    )
+    execution.refresh_from_db()
+    assert _paris_civil_date(execution.start_at) == dst_day
+    assert _paris_civil_date(execution.end_at) == dst_day
+    token = login(api_client, user=owner_membership.user)
+    execution_id = str(execution.id)
+    assert execution_id in _calendar_item_ids(
+        api_client,
+        membership=owner_membership,
+        token=token,
+        from_date=dst_day,
+    )
+    assert execution_id not in _calendar_item_ids(
+        api_client,
+        membership=owner_membership,
+        token=token,
+        from_date=dst_day - timedelta(days=1),
+    )
+    assert execution_id not in _calendar_item_ids(
+        api_client,
+        membership=owner_membership,
+        token=token,
+        from_date=dst_day + timedelta(days=1),
+    )
+
+
 def test_calendar_rbac_matches_feed_and_upcoming(
     api_client,
     owner_membership,
