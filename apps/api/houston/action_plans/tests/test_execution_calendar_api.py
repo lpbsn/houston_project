@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
 from datetime import timezone as datetime_timezone
-from zoneinfo import ZoneInfo
 from unittest.mock import patch
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 import pytest
 from django.utils import timezone

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, LoaderCircle, Plus } from 'lucide-react'
 
 import { serializeAppRoute, useAppRoute } from '@/app/app-routes'
@@ -132,14 +132,21 @@ export function ExecutionFeedPage({
     { enabled: layout === 'calendar', source },
   )
   const calendarTimezoneScope = calendarTimezoneScopeKey(source, establishmentId)
-  const rememberedCalendarTimezoneRef = useRef<RememberedCalendarTimezone | null>(null)
-  rememberedCalendarTimezoneRef.current = rememberScopedCalendarTimezone(
-    rememberedCalendarTimezoneRef.current,
+  const [rememberedCalendarTimezone, setRememberedCalendarTimezone] =
+    useState<RememberedCalendarTimezone | null>(null)
+  const nextRemembered = rememberScopedCalendarTimezone(
+    rememberedCalendarTimezone,
     calendarTimezoneScope,
     calendarQuery.data?.timezone,
   )
+  if (
+    nextRemembered?.scopeKey !== rememberedCalendarTimezone?.scopeKey ||
+    nextRemembered?.timezone !== rememberedCalendarTimezone?.timezone
+  ) {
+    setRememberedCalendarTimezone(nextRemembered)
+  }
   const calendarTimeZone = resolveScopedCalendarTimezone(
-    rememberedCalendarTimezoneRef.current,
+    nextRemembered,
     calendarQuery.data?.timezone,
   )
   const quickActions = useActionPlanExecutionFeedQuickActions({

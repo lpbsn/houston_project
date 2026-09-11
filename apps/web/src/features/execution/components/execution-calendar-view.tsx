@@ -509,11 +509,11 @@ export function ExecutionCalendarView({
   const [overflowDay, setOverflowDay] = useState<string | null>(null)
   const [unplannedExpanded, setUnplannedExpanded] = useState(false)
   const didAlignTimeGridRef = useRef(false)
-  const hasShownCalendarRef = useRef(false)
-  if (data != null) {
-    hasShownCalendarRef.current = true
+  const [hasShownCalendar, setHasShownCalendar] = useState(false)
+  const shownCalendar = hasShownCalendar || data != null
+  if (shownCalendar && !hasShownCalendar) {
+    setHasShownCalendar(true)
   }
-  const hasShownCalendar = hasShownCalendarRef.current
   const items = data ? unwrapActionPlanExecutionFeedItems(data.items) : []
   const unplanned = data ? unwrapActionPlanExecutionFeedItems(data.unplanned) : []
   const overflowItems = useMemo(() => {
@@ -597,10 +597,10 @@ export function ExecutionCalendarView({
     didAlignTimeGridRef.current = true
   }, [])
 
-  const isInitialLoading = isLoading && !hasShownCalendar
-  const isPeriodPending = isLoading && hasShownCalendar
-  const isInitialError = isError && data == null && !hasShownCalendar
-  const isTransitionError = isError && data == null && hasShownCalendar
+  const isInitialLoading = isLoading && !shownCalendar
+  const isPeriodPending = isLoading && shownCalendar
+  const isInitialError = isError && data == null && !shownCalendar
+  const isTransitionError = isError && data == null && shownCalendar
 
   if (isPeriodPending && overflowDay != null) {
     setOverflowDay(null)
