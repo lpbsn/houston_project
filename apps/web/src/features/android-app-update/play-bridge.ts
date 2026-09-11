@@ -12,11 +12,16 @@ import {
 export type PlayUpdateStartOutcome = 'ok' | 'cancelled' | 'failed' | 'not_installable'
 
 type AppUpdatePlugin = typeof import('@capawesome/capacitor-app-update').AppUpdate
+type AppUpdatePluginBox = { plugin: AppUpdatePlugin }
 
-let pluginLoader: (() => Promise<AppUpdatePlugin>) | null = null
+let pluginLoader: (() => Promise<AppUpdatePluginBox>) | null = null
+
+export function boxAndroidAppUpdatePlugin(plugin: AppUpdatePlugin): AppUpdatePluginBox {
+  return { plugin }
+}
 
 export function setAndroidAppUpdatePluginLoaderForTests(
-  loader: (() => Promise<AppUpdatePlugin>) | null,
+  loader: (() => Promise<AppUpdatePluginBox>) | null,
 ): void {
   pluginLoader = loader
 }
@@ -47,7 +52,7 @@ function toSnapshot(info: {
   }
 }
 
-async function loadAppUpdatePlugin(): Promise<AppUpdatePlugin | null> {
+async function loadAppUpdatePlugin(): Promise<AppUpdatePluginBox | null> {
   if (!isAndroidInAppUpdateRuntime()) {
     return null
   }
@@ -56,7 +61,7 @@ async function loadAppUpdatePlugin(): Promise<AppUpdatePlugin | null> {
       return await pluginLoader()
     }
     const module = await import('@capawesome/capacitor-app-update')
-    return module.AppUpdate
+    return boxAndroidAppUpdatePlugin(module.AppUpdate)
   } catch (error) {
     logAndroidAppUpdate('failed', { reason: 'plugin_load', error: String(error) })
     return null
@@ -64,7 +69,8 @@ async function loadAppUpdatePlugin(): Promise<AppUpdatePlugin | null> {
 }
 
 export async function readAndroidPlayUpdate(): Promise<AndroidPlayUpdateSnapshot | null> {
-  const plugin = await loadAppUpdatePlugin()
+  const boxed = await loadAppUpdatePlugin()
+  const plugin = boxed?.plugin
   if (!plugin) {
     return null
   }
@@ -78,7 +84,8 @@ export async function readAndroidPlayUpdate(): Promise<AndroidPlayUpdateSnapshot
 }
 
 export async function completeAndroidFlexibleUpdateIfDownloaded(): Promise<void> {
-  const plugin = await loadAppUpdatePlugin()
+  const boxed = await loadAppUpdatePlugin()
+  const plugin = boxed?.plugin
   if (!plugin) {
     return
   }
@@ -92,7 +99,8 @@ export async function completeAndroidFlexibleUpdateIfDownloaded(): Promise<void>
 export async function startAndroidPlayUpdate(
   preferred: 'immediate' | 'flexible',
 ): Promise<PlayUpdateStartOutcome> {
-  const plugin = await loadAppUpdatePlugin()
+  const boxed = await loadAppUpdatePlugin()
+  const plugin = boxed?.plugin
   if (!plugin) {
     return 'not_installable'
   }

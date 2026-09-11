@@ -81,13 +81,15 @@ export function BottomMobileNav({
                   navigate(item.path)
                 }}
                 className={cn(
-                  'relative flex min-h-11 min-w-11 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[#7D7B75]',
+                  'relative flex min-h-11 min-w-11 w-full flex-col items-center justify-center gap-1 rounded-lg px-1 text-[#7D7B75]',
                   isActive && 'text-[#1B4FD8]',
                 )}
                 {...tapProps}
               >
                 <Icon className={cn('h-5 w-5', isActive && 'stroke-[2.5]')} />
-                <span className="text-[11px] font-medium leading-none">{item.label}</span>
+                <span className="w-full truncate text-center text-[11px] font-medium leading-none">
+                  {item.label}
+                </span>
                 {item.path === '/chat' && chatHasUnread ? (
                   <span className="absolute right-2 top-1 h-2 w-2 rounded-full bg-[#1B4FD8]" />
                 ) : null}

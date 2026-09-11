@@ -1,13 +1,21 @@
 import { onlineManager } from '@tanstack/react-query'
 import { useSyncExternalStore } from 'react'
 
+import { getIsAppActive, subscribeAppBackground, subscribeAppForeground } from '@/lib/app-lifecycle'
 import { getAppRuntime } from '@/lib/runtime'
+
+const FOREGROUND_STATUS_RETRY_MS = 1000
 
 const nativeListeners = new Set<() => void>()
 
 let nativeConfigured = false
 let nativeIsOnline = true
+let nativeStatusGeneration = 0
 let removeNativeListener: (() => Promise<void>) | null = null
+let stopForegroundProbe: (() => void) | null = null
+let stopBackgroundProbeCleanup: (() => void) | null = null
+let foregroundRetryTimer: ReturnType<typeof setTimeout> | null = null
+let readNativePluginStatus: (() => Promise<{ connected: boolean }>) | null = null
 
 function readNavigatorOnline(): boolean {
   if (typeof navigator === 'undefined') {
@@ -53,6 +61,64 @@ function subscribeNetworkStatus(onStoreChange: () => void): () => void {
 function notifyNativeNetworkStatus() {
   for (const listener of nativeListeners) {
     listener()
+  }
+}
+
+function applyNativeConnected(connected: boolean) {
+  if (nativeIsOnline === connected) {
+    return
+  }
+  nativeIsOnline = connected
+  notifyNativeNetworkStatus()
+}
+
+function clearForegroundRetryTimer() {
+  if (foregroundRetryTimer !== null) {
+    clearTimeout(foregroundRetryTimer)
+    foregroundRetryTimer = null
+  }
+}
+
+function bumpNativeStatusGeneration() {
+  nativeStatusGeneration += 1
+  return nativeStatusGeneration
+}
+
+function invalidatePendingNativeStatusProbes() {
+  clearForegroundRetryTimer()
+  bumpNativeStatusGeneration()
+}
+
+function scheduleForegroundOfflineRetry() {
+  clearForegroundRetryTimer()
+  foregroundRetryTimer = setTimeout(() => {
+    foregroundRetryTimer = null
+    if (!getIsAppActive()) {
+      return
+    }
+    void probeNativeNetworkStatus({ allowRetryIfOffline: false })
+  }, FOREGROUND_STATUS_RETRY_MS)
+}
+
+async function probeNativeNetworkStatus(options: { allowRetryIfOffline: boolean }) {
+  clearForegroundRetryTimer()
+  const generation = bumpNativeStatusGeneration()
+  const readStatus = readNativePluginStatus
+  if (!readStatus) {
+    return
+  }
+
+  try {
+    const status = await readStatus()
+    if (generation !== nativeStatusGeneration) {
+      return
+    }
+    applyNativeConnected(status.connected)
+    if (options.allowRetryIfOffline && !status.connected && getIsAppActive()) {
+      scheduleForegroundOfflineRetry()
+    }
+  } catch {
+    // Fail-soft: keep the current snapshot. The plugin listener remains the source.
   }
 }
 
@@ -117,8 +183,8 @@ export async function configureNativeNetworkStatus() {
         latestFromListener = next.connected
         return
       }
-      nativeIsOnline = next.connected
-      notifyNativeNetworkStatus()
+      invalidatePendingNativeStatusProbes()
+      applyNativeConnected(next.connected)
     })
     handle = pluginHandle
     const status = await Network.getStatus()
@@ -136,14 +202,23 @@ export async function configureNativeNetworkStatus() {
     })
     onlineManager.setOnline(nativeIsOnline)
     nativeConfigured = true
+    readNativePluginStatus = () => Network.getStatus()
+    stopForegroundProbe = subscribeAppForeground(() => {
+      void probeNativeNetworkStatus({ allowRetryIfOffline: true })
+    })
+    stopBackgroundProbeCleanup = subscribeAppBackground(() => {
+      invalidatePendingNativeStatusProbes()
+    })
   } catch (error) {
     if (handle) {
       await handle.remove()
     }
     nativeConfigured = false
     nativeIsOnline = true
+    nativeStatusGeneration = 0
     nativeListeners.clear()
     removeNativeListener = null
+    readNativePluginStatus = null
     restoreDefaultOnlineManagerListener()
     onlineManager.setOnline(readNavigatorOnline())
     throw error
@@ -155,8 +230,15 @@ export async function resetNetworkStatusForTests() {
     await removeNativeListener()
     removeNativeListener = null
   }
+  stopForegroundProbe?.()
+  stopForegroundProbe = null
+  stopBackgroundProbeCleanup?.()
+  stopBackgroundProbeCleanup = null
+  clearForegroundRetryTimer()
+  readNativePluginStatus = null
   nativeConfigured = false
   nativeIsOnline = true
+  nativeStatusGeneration = 0
   nativeListeners.clear()
   restoreDefaultOnlineManagerListener()
   onlineManager.setOnline(readNavigatorOnline())

@@ -18,6 +18,7 @@ vi.mock('@/lib/runtime', () => ({
 }))
 
 import {
+  boxAndroidAppUpdatePlugin,
   isAndroidInAppUpdateRuntime,
   readAndroidPlayUpdate,
   setAndroidAppUpdatePluginLoaderForTests,
@@ -53,10 +54,12 @@ describe('android play bridge', () => {
     const startFlexibleUpdate = vi.fn(async () => ({ code: 0 }))
     const performImmediateUpdate = vi.fn(async () => ({ code: 0 }))
     setAndroidAppUpdatePluginLoaderForTests(async () => ({
-      getAppUpdateInfo,
-      startFlexibleUpdate,
-      performImmediateUpdate,
-    }) as never)
+      plugin: {
+        getAppUpdateInfo,
+        startFlexibleUpdate,
+        performImmediateUpdate,
+      } as never,
+    }))
 
     await expect(readAndroidPlayUpdate()).resolves.toMatchObject({
       currentVersionCode: '2',
@@ -71,16 +74,18 @@ describe('android play bridge', () => {
 
   it('maps cancel and failure without throwing', async () => {
     setAndroidAppUpdatePluginLoaderForTests(async () => ({
-      getAppUpdateInfo: async () => ({
-        currentVersionCode: '2',
-        availableVersionCode: '3',
-        updateAvailability: 2,
-        flexibleUpdateAllowed: true,
-        immediateUpdateAllowed: true,
-      }),
-      startFlexibleUpdate: async () => ({ code: 1 }),
-      performImmediateUpdate: async () => ({ code: 2 }),
-    }) as never)
+      plugin: {
+        getAppUpdateInfo: async () => ({
+          currentVersionCode: '2',
+          availableVersionCode: '3',
+          updateAvailability: 2,
+          flexibleUpdateAllowed: true,
+          immediateUpdateAllowed: true,
+        }),
+        startFlexibleUpdate: async () => ({ code: 1 }),
+        performImmediateUpdate: async () => ({ code: 2 }),
+      } as never,
+    }))
 
     await expect(startAndroidPlayUpdate('flexible')).resolves.toBe('cancelled')
     await expect(startAndroidPlayUpdate('immediate')).resolves.toBe('failed')
@@ -88,10 +93,40 @@ describe('android play bridge', () => {
 
   it('returns null when Play lookup throws', async () => {
     setAndroidAppUpdatePluginLoaderForTests(async () => ({
-      getAppUpdateInfo: async () => {
-        throw new Error('not play')
-      },
-    }) as never)
+      plugin: {
+        getAppUpdateInfo: async () => {
+          throw new Error('not play')
+        },
+      } as never,
+    }))
     await expect(readAndroidPlayUpdate()).resolves.toBeNull()
+  })
+
+  it('does not fulfill a Promise with the AppUpdate proxy', async () => {
+    const then = vi.fn()
+    const getAppUpdateInfo = vi.fn(async () => ({
+      updateAvailability: 1,
+    }))
+    const plugin = new Proxy(
+      {},
+      {
+        get(_target, prop) {
+          if (prop === 'then') {
+            return then
+          }
+          if (prop === 'getAppUpdateInfo') {
+            return getAppUpdateInfo
+          }
+          return undefined
+        },
+      },
+    )
+    const boxed = boxAndroidAppUpdatePlugin(plugin as never)
+    const resolved = await Promise.resolve(boxed)
+    expect(then).not.toHaveBeenCalled()
+    await expect(resolved.plugin.getAppUpdateInfo()).resolves.toMatchObject({
+      updateAvailability: 1,
+    })
+    expect(getAppUpdateInfo).toHaveBeenCalledOnce()
   })
 })

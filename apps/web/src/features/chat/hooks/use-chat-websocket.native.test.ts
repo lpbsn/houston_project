@@ -14,15 +14,19 @@ const addAppListener = vi.hoisted(() =>
     return { remove: async () => undefined }
   }),
 )
+const networkConnected = vi.hoisted(() => ({ current: true }))
 const getStatus = vi.hoisted(() =>
-  vi.fn(async () => ({ connected: true, connectionType: 'wifi' as const })),
+  vi.fn(async () => ({ connected: networkConnected.current, connectionType: 'wifi' as const })),
 )
 const networkStatusListeners = vi.hoisted(() => ({
   current: [] as Array<(status: { connected: boolean }) => void>,
 }))
 const addNetworkListener = vi.hoisted(() =>
   vi.fn(async (_event: string, listener: (status: { connected: boolean }) => void) => {
-    networkStatusListeners.current.push(listener)
+    networkStatusListeners.current.push((status) => {
+      networkConnected.current = status.connected
+      listener(status)
+    })
     return { remove: async () => undefined }
   }),
 )
@@ -124,6 +128,12 @@ describe('useChatWebSocket native lifecycle', () => {
     issueChatWsTicket.mockClear()
     appStateListeners.current = []
     networkStatusListeners.current = []
+    networkConnected.current = true
+    getStatus.mockReset()
+    getStatus.mockImplementation(async () => ({
+      connected: networkConnected.current,
+      connectionType: 'wifi' as const,
+    }))
     vi.stubGlobal('WebSocket', MockWebSocket as unknown as typeof WebSocket)
     vi.stubEnv('VITE_APP_RUNTIME', 'native')
     vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:8000')
@@ -250,6 +260,55 @@ describe('useChatWebSocket native lifecycle', () => {
       resumedSocket?.emitMessage({ type: 'auth.ok' })
     })
     expect(result.current.connectionStatus).toBe('connected')
+  })
+
+  it('reconnects once when native foreground getStatus recovers online', async () => {
+    await configureNativeRuntime()
+
+    const { result } = renderHook(() =>
+      useChatWebSocket({
+        establishmentId: 'est-1',
+        enabled: true,
+      }),
+    )
+    await connectSocket(result)
+    const callsAfterConnect = issueChatWsTicket.mock.calls.length
+
+    act(() => {
+      for (const listener of appStateListeners.current) {
+        listener({ isActive: false })
+      }
+    })
+    act(() => {
+      for (const listener of networkStatusListeners.current) {
+        listener({ connected: false })
+      }
+    })
+
+    getStatus.mockResolvedValueOnce({ connected: true, connectionType: 'wifi' })
+    act(() => {
+      for (const listener of appStateListeners.current) {
+        listener({ isActive: true })
+      }
+    })
+    await flushMicrotasks()
+
+    expect(issueChatWsTicket.mock.calls.length).toBe(callsAfterConnect + 1)
+    const resumedSocket = MockWebSocket.instances.at(-1)
+    expect(resumedSocket).toBeDefined()
+    act(() => {
+      resumedSocket?.open()
+      resumedSocket?.emitMessage({ type: 'auth.ok' })
+    })
+    expect(result.current.connectionStatus).toBe('connected')
+
+    act(() => {
+      for (const listener of networkStatusListeners.current) {
+        listener({ connected: true })
+      }
+    })
+    await flushMicrotasks()
+    expect(issueChatWsTicket.mock.calls.length).toBe(callsAfterConnect + 1)
   })
 
   it('supersedes an in-flight native foreground connect when the network returns', async () => {

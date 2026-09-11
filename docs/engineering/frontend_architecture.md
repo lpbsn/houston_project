@@ -57,7 +57,7 @@ Lazy pages: [`lazy-terrain-pages.tsx`](../../apps/web/src/app/lazy-terrain-pages
 
 Invalidation only — backend remains source of truth.
 
-Network banner (`navigator.onLine` on Web; `@capacitor/network` on Native) and WS reconnect on `visibilitychange` / native `appStateChange` share runtime lifecycle and a single `isOnline` source. Query resync after pause is the existing WS `onReconnect` catalogue plus `refetchOnReconnect` when that network signal flaps — not a global foreground invalidate.
+Network banner (`navigator.onLine` on Web; `@capacitor/network` on Native) and WS reconnect on `visibilitychange` / native `appStateChange` share runtime lifecycle and a single `isOnline` source. Native revalidates `Network.getStatus()` on foreground; Query resync after pause is the existing WS `onReconnect` catalogue plus `refetchOnReconnect` when that network signal flaps — not a global foreground invalidate.
 
 ## Builds Web / Native
 
