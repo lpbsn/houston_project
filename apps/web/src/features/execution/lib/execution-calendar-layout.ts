@@ -9,7 +9,7 @@ import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 const DAY_MINUTES = 24 * 60
 const OPEN_ENDED_MINUTES = 60
 
-export type TimedCalendarBlock = {
+type TimedCalendarBlock = {
   item: ActionPlanExecutionFeedItem
   startMin: number
   endMin: number
@@ -21,7 +21,7 @@ export function isExecutionAllDay(item: Pick<ActionPlanExecutionFeedItem, 'all_d
   return item.all_day === true
 }
 
-export function civilDatesInclusive(from: string, to: string): string[] {
+function civilDatesInclusive(from: string, to: string): string[] {
   if (to < from) {
     return []
   }
@@ -34,7 +34,7 @@ export function civilDatesInclusive(from: string, to: string): string[] {
   return dates
 }
 
-export type CivilDayCoverage =
+type CivilDayCoverage =
   | { kind: 'none' }
   | { kind: 'full_day' }
   | { kind: 'partial'; startMin: number; endMin: number }

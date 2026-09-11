@@ -13,9 +13,6 @@ import type {
 import { resolveApiErrorMessage } from '@/lib/error-message'
 
 import {
-  calendarEventAssigneeInitials,
-  calendarEventAssigneeOverflow,
-  calendarEventOrgBadges,
   calendarEventPresentation,
   calendarLaneStatusLabelClassName,
   calendarLaneSuiteClassName,
@@ -842,9 +839,8 @@ function UnplannedBanner({
         className="flex max-h-48 flex-col gap-1 overflow-y-auto overscroll-y-contain"
       >
         {items.map((item) => {
-          const orgBadges = calendarEventOrgBadges(item)
-          const initials = calendarEventAssigneeInitials(item.assignees)
-          const overflow = calendarEventAssigneeOverflow(item.assignees)
+          const { orgBadges, assigneeInitials: initials, assigneeOverflow: overflow } =
+            calendarEventPresentation(item)
           const createdDate = calendarUnplannedCreatedDateLabel(item.created_at)
           return (
             <button

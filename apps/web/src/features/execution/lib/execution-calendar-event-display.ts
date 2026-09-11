@@ -11,7 +11,7 @@ type InvolvedPoleLike = {
 
 export type CalendarEventChromeDensity = 'comfortable' | 'compact' | 'lane'
 
-export type CalendarEventChrome = {
+type CalendarEventChrome = {
   bar: string
   background: string
   text: string
@@ -49,11 +49,11 @@ const STATUS_CHROME: Record<string, CalendarEventChrome> = {
 
 const MAX_ASSIGNEE_AVATARS = 3
 
-export function calendarEventChromeForStatus(status: string): CalendarEventChrome {
+function calendarEventChromeForStatus(status: string): CalendarEventChrome {
   return STATUS_CHROME[status] ?? DEFAULT_CHROME
 }
 
-export function calendarEventShortStatusLabel(
+function calendarEventShortStatusLabel(
   status: string,
   validatedAt?: string | null,
 ): string {
