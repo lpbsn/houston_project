@@ -3,6 +3,7 @@ set -eu
 
 PORT="${PORT:-8080}"
 MEDIA_ROOT="${HOUSTON_PRIVATE_MEDIA_ROOT:-/app/apps/api/private_media}"
+MEDIA_BACKEND=$(printf '%s' "${HOUSTON_PRIVATE_MEDIA_BACKEND:-filesystem}" | tr '[:upper:]' '[:lower:]')
 NGINX_CONF="/tmp/nginx-railway.conf"
 DAPHNE_PID=""
 NGINX_PID=""
@@ -35,8 +36,10 @@ shutdown() {
 
 trap shutdown INT TERM
 
-mkdir -p "$MEDIA_ROOT"
-chown -R houston:houston "$MEDIA_ROOT" 2>/dev/null || true
+if [ "$MEDIA_BACKEND" = "filesystem" ]; then
+    mkdir -p "$MEDIA_ROOT"
+    chown -R houston:houston "$MEDIA_ROOT" 2>/dev/null || true
+fi
 
 cd /app/apps/api
 
