@@ -159,6 +159,32 @@ def test_production_deploy_check_rejects_openai_without_api_key(valid_production
         call_command("check", deploy=True)
 
 
+def test_production_deploy_check_rejects_s3_backend_without_credentials(
+    valid_production_overrides,
+):
+    valid_production_overrides["HOUSTON_PRIVATE_MEDIA_BACKEND"] = "s3"
+    valid_production_overrides["HOUSTON_PRIVATE_MEDIA_ROOT"] = ""
+    valid_production_overrides["HOUSTON_S3_ENDPOINT_URL"] = ""
+    valid_production_overrides["HOUSTON_S3_BUCKET"] = ""
+    valid_production_overrides["HOUSTON_S3_ACCESS_KEY_ID"] = ""
+    valid_production_overrides["HOUSTON_S3_SECRET_ACCESS_KEY"] = ""
+    valid_production_overrides["HOUSTON_S3_REGION"] = ""
+    with override_settings(**valid_production_overrides), pytest.raises(SystemCheckError):
+        call_command("check", deploy=True)
+
+
+def test_production_deploy_check_allows_s3_backend_without_disk_root(valid_production_overrides):
+    valid_production_overrides["HOUSTON_PRIVATE_MEDIA_BACKEND"] = "s3"
+    valid_production_overrides["HOUSTON_PRIVATE_MEDIA_ROOT"] = ""
+    valid_production_overrides["HOUSTON_S3_ENDPOINT_URL"] = "https://s3.example.invalid"
+    valid_production_overrides["HOUSTON_S3_BUCKET"] = "houston-private-media"
+    valid_production_overrides["HOUSTON_S3_ACCESS_KEY_ID"] = "access-key"
+    valid_production_overrides["HOUSTON_S3_SECRET_ACCESS_KEY"] = "secret-key"
+    valid_production_overrides["HOUSTON_S3_REGION"] = "auto"
+    with override_settings(**valid_production_overrides):
+        call_command("check", deploy=True)
+
+
 def test_production_deploy_check_rejects_android_emulator_host_without_exception(
     valid_production_overrides,
 ):
