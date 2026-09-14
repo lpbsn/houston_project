@@ -68,11 +68,17 @@ Full service matrix: [`railway_architecture.md`](railway_architecture.md).
 
 ## HTTPS and proxy behavior
 
-Railway terminates HTTPS at the edge. Houston expects:
+Railway terminates HTTPS at the edge, then proxies HTTP to the nginx sidecar (`$PORT`) and Daphne on `127.0.0.1:8000`.
+
+The sidecar must **relay** the edge `X-Forwarded-Proto`, not replace it with nginx `$scheme` (always `http` on the sidecar). [`infra/docker/railway/nginx.conf`](../../infra/docker/railway/nginx.conf) maps `$http_x_forwarded_proto` to `$forwarded_proto` with fallback `$scheme` when the header is absent, and sets that on `/api/` and `/ws/`.
+
+Django then sees a secure request in prod (`DJANGO_DEBUG=0`) via:
 
 * `SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")`
 * `SECURE_SSL_REDIRECT = False` (redirect handled by Railway)
 * secure cookies enabled when `DJANGO_DEBUG=0`
+
+Absolute URLs from `request.build_absolute_uri` (including observation media `preview_url`) therefore use `https://` on the public host. Django only honors the forwarded proto when `DEBUG` is false; local requests without the header keep `$scheme`.
 
 Public CSRF origins must use `https://`.
 
