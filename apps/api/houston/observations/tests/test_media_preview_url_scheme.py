@@ -3,7 +3,6 @@ from __future__ import annotations
 import uuid
 
 from django.test import RequestFactory, override_settings
-
 from houston.observations.media_access import build_observation_media_preview_url
 
 _PRODUCTION_PROXY = override_settings(
