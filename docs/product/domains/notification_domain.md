@@ -1,7 +1,7 @@
 # Notification Domain
 
 Status: authoritative
-Last reviewed: 2026-08-19
+Last reviewed: 2026-09-15
 Implementation status: lot7_native_push
 
 ## 1. Purpose
@@ -39,7 +39,7 @@ Current truth (Lot 1 in-app + Lot 7 native push):
 - Frontend Notification Center uses TanStack Query (`features/notifications/`).
 - Membership-scoped realtime invalidation (`notification.created` / `notification.updated` / `notification.bulk_updated`) refreshes the notification list and unread badge; transport is owned by `houston/realtime/` (see [`realtime_domain.md`](realtime_domain.md)).
 - Lot 1 event keys are defined in `houston/notifications/constants.py` (`LOT1_EVENT_KEYS`).
-- `notifications_enabled` on `EstablishmentMembership` suppresses in-app notification creation for that recipient.
+- In-app notifications are created for eligible recipients without a global membership opt-out.
 - Native FCM push (Capacitor Lot 7): `PushDevice` user-scoped; send gated by membership `push_enabled` and `PUSH_V1_EVENT_KEYS`. Frontend Native: OS permission + token upsert + profile toggle. Web has no push toggle and no service worker. Web Push / VAPID removed.
 - Chat push (`chat.message.received`) is allowlisted on the backend with anti-spam guards: Redis conversation presence (`chat:presence:{membership_id}:{conversation_id}`, TTL 45s, heartbeat via `POST .../chat/conversations/{id}/presence/`) and push throttle (`push:chat:{conversation_id}:{recipient_membership_id}`, TTL 120s). In-app chat notification rules (dedupe 5 min) are unchanged.
 
@@ -170,7 +170,7 @@ Implemented notification endpoints in `apps/api/schema.yml`:
 - `POST .../notifications/{notification_id}/mark-read/`
 - `POST .../notifications/{notification_id}/archive/`
 - `POST .../notifications/mark-all-read/`
-- `GET` / `PATCH .../notifications/preferences/` — `notifications_enabled`, `push_enabled`
+- `GET` / `PATCH .../notifications/preferences/` — `push_enabled`
 - `POST /api/v1/me/push-devices/` (upsert FCM token), `DELETE .../me/push-devices/{device_id}/` (revoke)
 - `POST .../chat/conversations/{conversation_id}/presence/` — chat push presence heartbeat (204)
 

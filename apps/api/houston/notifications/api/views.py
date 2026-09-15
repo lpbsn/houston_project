@@ -218,7 +218,7 @@ class NotificationPreferencesView(EstablishmentScopedObservationMixin, APIView):
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
         },
-        description="Returns in-app notification preferences for the authenticated recipient.",
+        description="Returns push notification preferences for the authenticated recipient.",
     )
     def get(self, request, establishment_id):
         membership = resolve_observation_actor_membership(
@@ -240,7 +240,7 @@ class NotificationPreferencesView(EstablishmentScopedObservationMixin, APIView):
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
         },
-        description="Updates in-app notification preferences for the authenticated recipient.",
+        description="Updates push notification preferences for the authenticated recipient.",
     )
     def patch(self, request, establishment_id):
         membership = resolve_observation_actor_membership(
@@ -259,7 +259,6 @@ class NotificationPreferencesView(EstablishmentScopedObservationMixin, APIView):
 
         payload = update_notification_preferences(
             membership=membership,
-            notifications_enabled=serializer.validated_data.get("notifications_enabled"),
             push_enabled=serializer.validated_data.get("push_enabled"),
         )
         return Response(NotificationPreferencesSerializer(payload).data)

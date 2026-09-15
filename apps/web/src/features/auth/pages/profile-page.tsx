@@ -187,13 +187,14 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   const establishmentId = activeMembership?.establishment_id ?? null
   const showSwitchEstablishment = canSwitchEstablishment(memberships, establishmentId)
   const pendingResumePath = resolvePendingLandingPath(pendingOnboardingMemberships)
-  const notificationPreferencesQuery = useNotificationPreferencesQuery(establishmentId)
+  const isNativeRuntime = getAppRuntime() === 'native'
+  const notificationPreferencesQuery = useNotificationPreferencesQuery(establishmentId, {
+    enabled: isNativeRuntime,
+  })
   const gamificationOverviewQuery = useGamificationOverviewQuery(establishmentId)
   const updateNotificationPreferencesMutation =
     useUpdateNotificationPreferencesMutation(establishmentId)
-  const notificationsEnabled = notificationPreferencesQuery.data?.notifications_enabled ?? true
   const pushEnabled = notificationPreferencesQuery.data?.push_enabled ?? false
-  const isNativeRuntime = getAppRuntime() === 'native'
   const [pushOptInError, setPushOptInError] = useState<string | null>(null)
   const [isPushOptingIn, setIsPushOptingIn] = useState(false)
   const [aiConsentPending, setAiConsentPending] = useState(false)
@@ -273,36 +274,12 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
           />
         ) : null}
         <TerrainCard className="divide-y divide-[#E8E6DF] p-0">
-          <TerrainSwitch
-            label="Notifications"
-            checked={notificationsEnabled}
-            disabled={isNotificationTogglePending}
-            onCheckedChange={(checked) => {
-              updateNotificationPreferencesMutation.mutate({
-                notifications_enabled: checked,
-              })
-            }}
-          />
-          {notificationPreferencesQuery.isError ? (
-            <p className="px-4 pb-3.5 text-xs text-[#E24B4A]">
-              Les préférences de notifications n&apos;ont pas pu être chargées.
-            </p>
-          ) : null}
-          {updateNotificationPreferencesMutation.isError ? (
-            <p className="px-4 pb-3.5 text-xs text-[#E24B4A]">
-              La mise à jour des notifications a échoué.
-            </p>
-          ) : null}
           {isNativeRuntime ? (
             <>
               <TerrainSwitch
                 label="Notifications push"
                 checked={pushEnabled}
-                disabled={
-                  isNotificationTogglePending ||
-                  isPushOptingIn ||
-                  !notificationsEnabled
-                }
+                disabled={isNotificationTogglePending || isPushOptingIn}
                 onCheckedChange={(checked) => {
                   setPushOptInError(null)
                   if (!checked) {
@@ -328,6 +305,16 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
                     })
                 }}
               />
+              {notificationPreferencesQuery.isError ? (
+                <p className="px-4 pb-3.5 text-xs text-[#E24B4A]">
+                  Les préférences de notifications n&apos;ont pas pu être chargées.
+                </p>
+              ) : null}
+              {updateNotificationPreferencesMutation.isError ? (
+                <p className="px-4 pb-3.5 text-xs text-[#E24B4A]">
+                  La mise à jour des notifications a échoué.
+                </p>
+              ) : null}
               {pushEnabled && osReceive === 'denied' ? (
                 <p className="px-4 pb-3.5 text-xs text-[#E24B4A]">
                   Les notifications sont bloquées dans les réglages du téléphone.

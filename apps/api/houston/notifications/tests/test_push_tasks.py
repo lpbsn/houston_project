@@ -70,24 +70,10 @@ def test_run_push_for_notification_skips_when_event_key_not_allowlisted():
 
 
 @override_settings(**FCM_PUSH_SETTINGS)
-@pytest.mark.parametrize(
-    ("notifications_enabled", "push_enabled"),
-    [
-        (False, True),
-        (True, False),
-        (False, False),
-    ],
-)
-def test_run_push_for_notification_skips_when_preferences_disabled(
-    notifications_enabled,
-    push_enabled,
-):
+def test_run_push_for_notification_skips_when_push_disabled():
     recipient = _prepare_recipient()
-    recipient.notifications_enabled = notifications_enabled
-    recipient.push_enabled = push_enabled
-    recipient.save(
-        update_fields=["notifications_enabled", "push_enabled", "updated_at"],
-    )
+    recipient.push_enabled = False
+    recipient.save(update_fields=["push_enabled", "updated_at"])
     notification = create_test_notification(recipient=recipient)
     _create_push_device(user=recipient.user)
 

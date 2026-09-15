@@ -157,22 +157,6 @@ def test_group_message_notifies_all_other_active_participants():
         _assert_generic_copy(notification)
 
 
-def test_notifications_disabled_skips_chat_notification():
-    author_membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    target_membership = build_api_membership_on_establishment(author_membership)
-    target_membership.notifications_enabled = False
-    target_membership.save(update_fields=["notifications_enabled", "updated_at"])
-    _enable_chat_for_membership(author_membership)
-    conversation_id = _create_dm_conversation(
-        author_membership=author_membership,
-        target_membership=target_membership,
-    )
-
-    _send_message(author_membership=author_membership, conversation_id=conversation_id)
-
-    assert _notifications_for_conversation(conversation_id=conversation_id) == []
-
-
 def test_burst_messages_dedupe_within_window():
     author_membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     target_membership = build_api_membership_on_establishment(author_membership)

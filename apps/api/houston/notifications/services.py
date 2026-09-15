@@ -112,9 +112,6 @@ def create_in_app_notification(
     ):
         return None
 
-    if not recipient_membership.notifications_enabled:
-        return None
-
     if not skip_subject_visibility_recheck and not recipient_can_view_notification_subject(
         recipient=recipient_membership,
         establishment_id=establishment_id,
@@ -373,7 +370,6 @@ def mark_chat_conversation_notifications_read(
 
 def get_notification_preferences(*, membership: EstablishmentMembership) -> dict:
     return {
-        "notifications_enabled": membership.notifications_enabled,
         "push_enabled": membership.push_enabled,
     }
 
@@ -382,30 +378,13 @@ def get_notification_preferences(*, membership: EstablishmentMembership) -> dict
 def update_notification_preferences(
     *,
     membership: EstablishmentMembership,
-    notifications_enabled: bool | None = None,
     push_enabled: bool | None = None,
 ) -> dict:
     update_fields: list[str] = []
 
-    if (
-        notifications_enabled is not None
-        and membership.notifications_enabled != notifications_enabled
-    ):
-        membership.notifications_enabled = notifications_enabled
-        update_fields.append("notifications_enabled")
-        if not notifications_enabled:
-            if membership.push_enabled:
-                membership.push_enabled = False
-                update_fields.append("push_enabled")
-
     if push_enabled is not None and membership.push_enabled != push_enabled:
-        effective_push_enabled = push_enabled
-        if not membership.notifications_enabled:
-            effective_push_enabled = False
-        if membership.push_enabled != effective_push_enabled:
-            membership.push_enabled = effective_push_enabled
-            if "push_enabled" not in update_fields:
-                update_fields.append("push_enabled")
+        membership.push_enabled = push_enabled
+        update_fields.append("push_enabled")
 
     if update_fields:
         update_fields.append("updated_at")

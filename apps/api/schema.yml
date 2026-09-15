@@ -6039,7 +6039,7 @@ paths:
   /api/v1/establishments/{establishment_id}/notifications/preferences/:
     get:
       operationId: v1_establishments_notifications_preferences_retrieve
-      description: Returns in-app notification preferences for the authenticated recipient.
+      description: Returns push notification preferences for the authenticated recipient.
       parameters:
       - in: path
         name: establishment_id
@@ -6072,7 +6072,7 @@ paths:
           description: ''
     patch:
       operationId: v1_establishments_notifications_preferences_partial_update
-      description: Updates in-app notification preferences for the authenticated recipient.
+      description: Updates push notification preferences for the authenticated recipient.
       parameters:
       - in: path
         name: establishment_id
@@ -13089,12 +13089,9 @@ components:
     NotificationPreferences:
       type: object
       properties:
-        notifications_enabled:
-          type: boolean
         push_enabled:
           type: boolean
       required:
-      - notifications_enabled
       - push_enabled
     NotificationSubjectTypeEnum:
       enum:
@@ -13936,8 +13933,6 @@ components:
     PatchedNotificationPreferencesUpdate:
       type: object
       properties:
-        notifications_enabled:
-          type: boolean
         push_enabled:
           type: boolean
     PatchedOnboardingProposalUpdateRequest:

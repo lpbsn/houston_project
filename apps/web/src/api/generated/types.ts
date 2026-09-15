@@ -1750,14 +1750,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Returns in-app notification preferences for the authenticated recipient. */
+        /** @description Returns push notification preferences for the authenticated recipient. */
         get: operations["v1_establishments_notifications_preferences_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** @description Updates in-app notification preferences for the authenticated recipient. */
+        /** @description Updates push notification preferences for the authenticated recipient. */
         patch: operations["v1_establishments_notifications_preferences_partial_update"];
         trace?: never;
     };
@@ -4308,7 +4308,6 @@ export interface components {
             parent_subject_id: string;
         };
         NotificationPreferences: {
-            notifications_enabled: boolean;
             push_enabled: boolean;
         };
         /**
@@ -4659,7 +4658,6 @@ export interface components {
             scopes?: components["schemas"]["EstablishmentMembershipScopeWriteItem"][];
         };
         PatchedNotificationPreferencesUpdate: {
-            notifications_enabled?: boolean;
             push_enabled?: boolean;
         };
         PatchedOnboardingProposalUpdateRequest: {
