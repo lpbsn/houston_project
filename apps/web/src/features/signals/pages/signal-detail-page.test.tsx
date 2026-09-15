@@ -939,6 +939,7 @@ describe('SignalDetailPage linked action plans', () => {
           {
             id: '11111111-1111-4111-8111-111111111111',
             preview_url: 'https://example.com/photo-1.jpg',
+            thumbnail_url: 'https://example.com/photo-1.thumb.jpg',
             content_type: 'image/jpeg',
             size_bytes: 1024,
             position: 1,

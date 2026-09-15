@@ -15,7 +15,7 @@ Railway Project (prod-test V1)
 ├── celery-beat      [PRIVATE]       Celery Beat scheduler (mandatory)
 ├── postgres         [PRIVATE]       Railway PostgreSQL
 ├── redis            [PRIVATE]       Railway Redis
-└── private media    volume on api-web only (worker ephemeral — see deploy contract)
+└── private media    S3 bucket (same vars on api-web + celery-worker; api-web volume is not media truth)
 ```
 
 Local analogues:
@@ -52,8 +52,8 @@ Web static cache: hashed `/assets/` are immutable; `index.html` is revalidated (
 ## Dependencies
 
 ```txt
-api-web        → postgres, redis, private media volume
-celery-worker  → postgres, redis (ephemeral media path — no shared volume)
+api-web        → postgres, redis, S3 private media
+celery-worker  → postgres, redis, S3 private media (same bucket)
 celery-beat    → postgres, redis, beat schedule volume
 ```
 
@@ -70,7 +70,8 @@ All backend services (`api-web`, `celery-worker`, `celery-beat`) share the same 
 | Redis / Celery (`REDIS_URL`, `CELERY_*`, `HOUSTON_CACHE_REDIS_URL`) | yes | yes | yes |
 | OpenAI / AI providers | yes | yes | yes (pipeline runs on worker; beat does not call OpenAI directly) |
 | Auth salts / peppers | yes | yes | yes |
-| `HOUSTON_PRIVATE_MEDIA_ROOT` | yes (persistent volume) | yes (ephemeral path) | no (beat does not touch media files) |
+| `HOUSTON_PRIVATE_MEDIA_BACKEND` + `HOUSTON_S3_*` | yes (S3) | yes (same S3 settings) | no (beat does not touch media files) |
+| `HOUSTON_PRIVATE_MEDIA_ROOT` | not media truth when backend=s3 | not media truth when backend=s3 | no |
 | `HOUSTON_REGISTRATION_INVITE_CODES` | yes | no | no |
 | `PORT` (Railway) | yes (Railway injects) | no public port | no public port |
 
@@ -81,7 +82,7 @@ Full reference: [`railway_variables.md`](railway_variables.md). Template: [`.env
 | Category | Variables | How to set |
 |---|---|---|
 | **Public frontend** | none with secrets | Same-origin: no `VITE_*` API URL; no API secret belongs in `VITE_*` |
-| **Backend-only** | `HOUSTON_PRIVATE_MEDIA_ROOT`, `HOUSTON_LOG_LEVEL`, beat schedule tuning vars | Set on relevant backend services |
+| **Backend-only** | `HOUSTON_PRIVATE_MEDIA_BACKEND`, `HOUSTON_S3_*`, `HOUSTON_PRIVATE_MEDIA_ROOT` (not media truth when backend=s3), `HOUSTON_LOG_LEVEL`, beat schedule tuning vars | Set on relevant backend services |
 | **Secrets (manual)** | `DJANGO_SECRET_KEY`, `OPENAI_API_KEY`, `HOUSTON_AUTH_TOKEN_PEPPER`, `HOUSTON_AUTH_TOKEN_SALT`, `HOUSTON_CHAT_WS_TICKET_SALT`, `HOUSTON_REALTIME_WS_TICKET_SALT` | Generate strong random values before first deploy; store in Railway service variables |
 | **Railway-generated** | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `REDIS_URL` (from plugins) | Copy from Railway Postgres/Redis plugin reference vars into Houston names |
 | **Manual (operator)** | `DJANGO_ALLOWED_HOSTS`, `HOUSTON_CLIENT_ORIGINS`, `HOUSTON_REGISTRATION_INVITE_CODES` | Public Railway domain + `healthcheck.railway.app` in allowed hosts; HTTPS SPA origin plus Native WebView origins (`capacitor://localhost`, `https://localhost`) |
@@ -119,11 +120,12 @@ Redis must remain on the Railway private network. **Do not expose Redis publicly
 
 ## Private media strategy
 
-* Photos linked to observations are persisted in `HOUSTON_PRIVATE_MEDIA_ROOT` (default `/app/apps/api/private_media`).
+* Prod-test private media is the S3 bucket (`HOUSTON_PRIVATE_MEDIA_BACKEND=s3`). Set the same `HOUSTON_S3_*` values on `api-web` and `celery-worker`. The `api-web` volume is not media truth.
+* `HOUSTON_PRIVATE_MEDIA_ROOT` remains for local/CI filesystem and historical filesystem deploys; it is not the object key store when backend=s3.
 * Raw audio is never persisted; transcription uses temporary files only.
 * No public `/media` URL — [`PrivateMediaStorage`](../../apps/api/houston/uploads/private_storage.py) raises on `.url()`; access is API-authorized only.
-* **Railway V1:** persistent volume on `api-web` at `HOUSTON_PRIVATE_MEDIA_ROOT=/app/apps/api/private_media`. Worker uses ephemeral path only — cross-service purge/delete is **not fully guaranteed** (Railway cannot share volumes across services). Details: [`railway_deploy_contract.md`](railway_deploy_contract.md#known-limitations-v1--private-media).
-* **Backup:** private photos must be backed up separately from PostgreSQL (volume snapshot or export). See deploy contract.
+* **Historical filesystem V1:** when backend was filesystem, a persistent volume on `api-web` plus worker `/tmp` meant cross-service purge/delete was **not fully guaranteed**. That is not the current prod-test S3 mode. Details: [`railway_deploy_contract.md`](railway_deploy_contract.md#known-limitations-v1--private-media).
+* **Backup:** private photos must be backed up separately from PostgreSQL (S3/bucket lifecycle or export). See deploy contract.
 
 ## Static cache
 

@@ -91,7 +91,9 @@ Forbidden placeholders: `replace-me-for-local-dev`, empty values.
 | `HOUSTON_INVITATION_EMAIL_ENABLED`, `HOUSTON_PUBLIC_APP_URL` | yes | yes | optional |
 | `HOUSTON_INVITATION_EMAIL_FROM`, `RESEND_API_KEY` | no | yes | no |
 | AI provider vars (`HOUSTON_AI_*`) | yes | yes | yes |
-| `HOUSTON_PRIVATE_MEDIA_ROOT` | yes — `/app/apps/api/private_media` | yes — `/tmp/houston-private-media` (ephemeral) | no |
+| `HOUSTON_PRIVATE_MEDIA_BACKEND` | yes — `s3` | yes — `s3` | no |
+| `HOUSTON_S3_ENDPOINT_URL`, `HOUSTON_S3_BUCKET`, `HOUSTON_S3_ACCESS_KEY_ID`, `HOUSTON_S3_SECRET_ACCESS_KEY`, `HOUSTON_S3_REGION`, `HOUSTON_S3_ADDRESSING_STYLE` | yes — same values | yes — same values | no |
+| `HOUSTON_PRIVATE_MEDIA_ROOT` | not media truth when backend=s3 | not media truth when backend=s3 | no |
 | `HOUSTON_REGISTRATION_INVITE_CODES` | yes | no | no |
 | `PORT` | injected by Railway | n/a | n/a |
 | `HOUSTON_ENABLE_API_DOCS` | optional (`0` default prod-test) | optional | optional |
@@ -110,13 +112,15 @@ Forbidden placeholders: `replace-me-for-local-dev`, empty values.
 
 ## Private media and volumes
 
-| Service | `HOUSTON_PRIVATE_MEDIA_ROOT` | Volume |
-|---|---|---|
-| `api-web` | `/app/apps/api/private_media` | Railway volume at same mount path |
-| `celery-worker` | `/tmp/houston-private-media` | None (ephemeral; deploy-check writable path only) |
-| `celery-beat` | not required | N/A |
+Prod-test media truth is S3. Set the same `HOUSTON_PRIVATE_MEDIA_BACKEND=s3` and `HOUSTON_S3_*` values on `api-web` and `celery-worker`. Do not treat an `api-web` volume as media truth.
 
-See [Known limitations V1](railway_deploy_contract.md#known-limitations-v1--private-media) in the deploy contract.
+| Service | Media | `HOUSTON_PRIVATE_MEDIA_ROOT` |
+|---|---|---|
+| `api-web` | S3 (same bucket as worker) | Not media truth when backend=s3. Optional leftover path if a volume still exists; `start-api-web.sh` `mkdir`s only when backend=filesystem. |
+| `celery-worker` | S3 (same bucket as api-web) | Not media truth when backend=s3. Historical filesystem deploys used `/tmp/houston-private-media` (ephemeral) for deploy-check only. |
+| `celery-beat` | N/A | not required |
+
+See [Known limitations V1](railway_deploy_contract.md#known-limitations-v1--private-media) in the deploy contract (historical filesystem volume vs worker `/tmp`, not current S3 prod-test).
 
 ---
 
@@ -128,11 +132,14 @@ No env var — mount a Railway volume on `celery-beat` at `/var/lib/celerybeat`.
 
 ## Upload limits
 
-Optional overrides (defaults are 10 MiB each):
+Optional overrides:
 
 | Variable | Default |
 |---|---|
-| `HOUSTON_OBSERVATION_PHOTO_MAX_BYTES` | `10485760` |
+| `HOUSTON_OBSERVATION_PHOTO_MAX_BYTES` | `10485760` (10 MiB, input size) |
+| `HOUSTON_OBSERVATION_PHOTO_MAX_PIXELS` | `50000000` (decoded `width * height` before full raster) |
+| `HOUSTON_OBSERVATION_PHOTO_MAX_EDGE_PX` | `1600` |
+| `HOUSTON_OBSERVATION_PHOTO_JPEG_QUALITY` | `82` |
 | `HOUSTON_TRANSCRIPTION_AUDIO_MAX_BYTES` | `10485760` |
 
 nginx on `api-web` allows `12m` request bodies ([`infra/docker/railway/nginx.conf`](../../infra/docker/railway/nginx.conf)).
@@ -228,9 +235,10 @@ Phase 2 (`CELERY_WORKER_PREFETCH_MULTIPLIER`) is out of scope here.
 5. [ ] `POSTGRES_SSLMODE=require`
 6. [ ] Redis URLs mapped to DBs 0–3
 7. [ ] `make backend-deploy-check` passes locally
-8. [ ] `CELERY_WORKER_CONCURRENCY` set on `celery-worker` (positive integer, chosen from isolated staging sizing)
-9. [ ] `celery-worker` and `celery-beat` deployed and running; worker logs show `concurrency: <C> (prefork)` matching the variable
-10. [ ] `import_business_unit_catalog` run manually after migrate
+8. [ ] `HOUSTON_PRIVATE_MEDIA_BACKEND=s3` and the same `HOUSTON_S3_*` values on `api-web` and `celery-worker`
+9. [ ] `CELERY_WORKER_CONCURRENCY` set on `celery-worker` (positive integer, chosen from isolated staging sizing)
+10. [ ] `celery-worker` and `celery-beat` deployed and running; worker logs show `concurrency: <C> (prefork)` matching the variable
+11. [ ] `import_business_unit_catalog` run manually after migrate
 
 ---
 

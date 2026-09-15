@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from houston.uploads.checks import (
+    check_observation_media_preview_windows,
     check_private_media_backend,
     check_private_media_root_configured,
     check_private_media_root_writable,
@@ -124,3 +125,33 @@ def test_unknown_backend_skipped_in_debug(settings):
     settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "minio"
 
     assert check_private_media_backend(None) == []
+
+
+def test_preview_windows_accept_default_p_greater_than_c_and_w_at_least_c(settings):
+    settings.HOUSTON_OBSERVATION_MEDIA_PREVIEW_CACHE_MAX_AGE_SECONDS = 60
+    settings.HOUSTON_OBSERVATION_MEDIA_PREVIEW_URL_BUCKET_SECONDS = 60
+    settings.HOUSTON_OBSERVATION_MEDIA_S3_PRESIGN_TTL_SECONDS = 120
+
+    assert check_observation_media_preview_windows(None) == []
+
+
+def test_preview_windows_reject_presign_ttl_not_greater_than_cache(settings):
+    settings.HOUSTON_OBSERVATION_MEDIA_PREVIEW_CACHE_MAX_AGE_SECONDS = 60
+    settings.HOUSTON_OBSERVATION_MEDIA_PREVIEW_URL_BUCKET_SECONDS = 60
+    settings.HOUSTON_OBSERVATION_MEDIA_S3_PRESIGN_TTL_SECONDS = 60
+
+    errors = check_observation_media_preview_windows(None)
+
+    assert len(errors) == 1
+    assert errors[0].id == "uploads.E005"
+
+
+def test_preview_windows_reject_bucket_shorter_than_cache(settings):
+    settings.HOUSTON_OBSERVATION_MEDIA_PREVIEW_CACHE_MAX_AGE_SECONDS = 60
+    settings.HOUSTON_OBSERVATION_MEDIA_PREVIEW_URL_BUCKET_SECONDS = 30
+    settings.HOUSTON_OBSERVATION_MEDIA_S3_PRESIGN_TTL_SECONDS = 120
+
+    errors = check_observation_media_preview_windows(None)
+
+    assert len(errors) == 1
+    assert errors[0].id == "uploads.E006"

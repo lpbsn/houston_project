@@ -6141,6 +6141,14 @@ paths:
         schema:
           type: string
         required: true
+      - in: query
+        name: variant
+        schema:
+          type: string
+          enum:
+          - full
+          - thumbnail
+        description: full (default) or thumbnail.
       tags:
       - observations
       security:
@@ -6148,6 +6156,8 @@ paths:
       responses:
         '200':
           description: Binary media preview.
+        '302':
+          description: Redirect to a short-lived private storage GET.
         '404':
           description: Not found.
   /api/v1/establishments/{establishment_id}/observations/:
@@ -14561,6 +14571,9 @@ components:
         preview_url:
           type: string
           format: uri
+        thumbnail_url:
+          type: string
+          format: uri
         content_type:
           type: string
         size_bytes:
@@ -14577,6 +14590,7 @@ components:
       - position
       - preview_url
       - size_bytes
+      - thumbnail_url
     SignalFeedItem:
       type: object
       properties:

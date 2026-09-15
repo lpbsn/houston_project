@@ -14,7 +14,11 @@ from houston.establishments.business_unit_identity import (
 from houston.establishments.public_serialization import (
     resolve_activity_subject_public_label,
 )
-from houston.observations.media_access import build_observation_media_preview_url
+from houston.observations.media_access import (
+    PREVIEW_VARIANT_THUMBNAIL,
+    build_observation_media_preview_url,
+    sign_observation_media_preview,
+)
 from houston.signals.models import Signal
 from houston.signals.reporter_display import (
     created_from_observation_media_items,
@@ -136,6 +140,7 @@ class SourceContextSerializer(serializers.Serializer):
 class SignalDetailMediaItemSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     preview_url = serializers.URLField()
+    thumbnail_url = serializers.URLField()
     content_type = serializers.CharField()
     size_bytes = serializers.IntegerField()
     position = serializers.IntegerField()
@@ -349,21 +354,35 @@ def _serialize_signal_detail_media_items(*, signal: Signal, request) -> list[dic
         return []
 
     observation_id = link.observation_id
-    return [
-        {
-            "id": media.id,
-            "preview_url": build_observation_media_preview_url(
-                request=request,
-                establishment_id=signal.establishment_id,
-                media_id=media.id,
-            ),
-            "content_type": media.content_type,
-            "size_bytes": media.size_bytes,
-            "position": media.position,
-            "observation_id": observation_id,
-        }
-        for media in created_from_observation_media_items(signal)
-    ]
+    items = []
+    for media in created_from_observation_media_items(signal):
+        token = sign_observation_media_preview(
+            establishment_id=signal.establishment_id,
+            media_id=media.id,
+        )
+        items.append(
+            {
+                "id": media.id,
+                "preview_url": build_observation_media_preview_url(
+                    request=request,
+                    establishment_id=signal.establishment_id,
+                    media_id=media.id,
+                    token=token,
+                ),
+                "thumbnail_url": build_observation_media_preview_url(
+                    request=request,
+                    establishment_id=signal.establishment_id,
+                    media_id=media.id,
+                    token=token,
+                    variant=PREVIEW_VARIANT_THUMBNAIL,
+                ),
+                "content_type": media.content_type,
+                "size_bytes": media.size_bytes,
+                "position": media.position,
+                "observation_id": observation_id,
+            }
+        )
+    return items
 
 
 def serialize_linked_action_plan_execution_for_signal_detail(

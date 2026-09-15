@@ -4932,6 +4932,8 @@ export interface components {
             id: string;
             /** Format: uri */
             preview_url: string;
+            /** Format: uri */
+            thumbnail_url: string;
             content_type: string;
             size_bytes: number;
             position: number;
@@ -11257,6 +11259,8 @@ export interface operations {
         parameters: {
             query: {
                 token: string;
+                /** @description full (default) or thumbnail. */
+                variant?: "full" | "thumbnail";
             };
             header?: never;
             path: {
@@ -11269,6 +11273,13 @@ export interface operations {
         responses: {
             /** @description Binary media preview. */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Redirect to a short-lived private storage GET. */
+            302: {
                 headers: {
                     [name: string]: unknown;
                 };

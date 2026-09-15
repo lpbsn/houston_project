@@ -25,15 +25,8 @@ function PhotoTile({
   item: SignalDetailMediaItem
   onOpen: () => void
 }) {
-  const [hasError, setHasError] = useState(false)
-
-  if (hasError) {
-    return (
-      <div className={cn(tileClassName)}>
-        <Camera className="h-6 w-6 text-[#1B4FD8]" aria-hidden />
-      </div>
-    )
-  }
+  const [src, setSrc] = useState(item.thumbnail_url)
+  const [showIcon, setShowIcon] = useState(false)
 
   return (
     <button
@@ -42,13 +35,23 @@ function PhotoTile({
       aria-label="Agrandir la photo"
       onClick={onOpen}
     >
-      <img
-        src={item.preview_url}
-        alt=""
-        className="h-full w-full object-cover"
-        loading="lazy"
-        onError={() => setHasError(true)}
-      />
+      {showIcon ? (
+        <Camera className="h-6 w-6 text-[#1B4FD8]" aria-hidden />
+      ) : (
+        <img
+          src={src}
+          alt=""
+          className="h-full w-full object-cover"
+          loading="lazy"
+          onError={() => {
+            if (src !== item.preview_url) {
+              setSrc(item.preview_url)
+              return
+            }
+            setShowIcon(true)
+          }}
+        />
+      )}
     </button>
   )
 }
@@ -133,7 +136,11 @@ export function SignalDetailPhotoSection({ mediaItems }: SignalDetailPhotoSectio
         <TerrainFieldLabel>Photo</TerrainFieldLabel>
         <div className="mt-2 flex gap-2 overflow-x-auto pb-0.5">
           {visibleItems.map((item) => (
-            <PhotoTile key={item.id} item={item} onOpen={() => setSelectedItem(item)} />
+            <PhotoTile
+              key={`${item.id}:${item.thumbnail_url}:${item.preview_url}`}
+              item={item}
+              onOpen={() => setSelectedItem(item)}
+            />
           ))}
         </div>
       </TerrainCard>
