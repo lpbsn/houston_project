@@ -611,11 +611,6 @@ class OnboardingProposalPayloadField(serializers.Field):
         return value
 
 
-# Backward-compatible aliases for imports that still reference old names.
-ProposalBusinessUnitItemSerializer = ProposalBusinessUnitItemV4Serializer
-ProposalActivitySubjectItemSerializer = ProposalActivitySubjectItemV4Serializer
-
-
 class OnboardingProposalCreateRequestSerializer(serializers.Serializer):
     payload = OnboardingProposalPayloadField()
 
