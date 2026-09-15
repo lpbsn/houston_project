@@ -21,6 +21,7 @@ import {
 } from '@/features/observations/types'
 import { resyncBootstrapAfterLegalError } from '@/features/auth/api'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { useNativeKeyboardOpen } from '@/lib/native-keyboard'
 import {
   OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE,
   PUBLIC_PRIVACY_POLICY_URL,
@@ -32,6 +33,7 @@ import { cn } from '@/lib/utils'
 
 export function ReportPage({ establishmentId: establishmentIdProp }: { establishmentId?: string | null } = {}) {
   const shouldReduceMotion = useReducedMotion()
+  const isNativeKeyboardOpen = useNativeKeyboardOpen()
   const auth = useAuth()
   const { isOnline } = useNetworkStatus()
   const establishmentId =
@@ -246,31 +248,33 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
         </div>
       </div>
 
-      <TerrainStickyFooter variant="transparent">
-        <Button
-          type="button"
-          className={cn(
-            'h-12 w-full rounded-full text-[15px] font-bold text-white',
-            canSubmit
-              ? cn(terrainBrandAction.bg, terrainBrandAction.hover)
-              : 'bg-[#114660]/40 hover:bg-[#114660]/40',
-          )}
-          disabled={!canSubmit}
-          onClick={() => void handleSubmit()}
-        >
-          {isSubmitPending ? (
-            <>
-              <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-              Envoi...
-            </>
-          ) : (
-            <>
-              <SendHorizonal className="mr-2 h-4 w-4" />
-              Envoyer l’observation
-            </>
-          )}
-        </Button>
-      </TerrainStickyFooter>
+      {isNativeKeyboardOpen ? null : (
+        <TerrainStickyFooter variant="transparent">
+          <Button
+            type="button"
+            className={cn(
+              'h-12 w-full rounded-full text-[15px] font-bold text-white',
+              canSubmit
+                ? cn(terrainBrandAction.bg, terrainBrandAction.hover)
+                : 'bg-[#114660]/40 hover:bg-[#114660]/40',
+            )}
+            disabled={!canSubmit}
+            onClick={() => void handleSubmit()}
+          >
+            {isSubmitPending ? (
+              <>
+                <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                Envoi...
+              </>
+            ) : (
+              <>
+                <SendHorizonal className="mr-2 h-4 w-4" />
+                Envoyer l’observation
+              </>
+            )}
+          </Button>
+        </TerrainStickyFooter>
+      )}
     </div>
   )
 }

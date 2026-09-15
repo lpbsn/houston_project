@@ -26,6 +26,7 @@ const {
   mockUploadTemporaryPhoto,
   mockSubmitObservation,
   mockIsOnline,
+  mockNativeKeyboardOpen,
   resyncBootstrapAfterLegalError,
 } = vi.hoisted(() => ({
   mockSubmitPending: { current: false },
@@ -33,6 +34,7 @@ const {
   mockUploadTemporaryPhoto: vi.fn(),
   mockSubmitObservation: vi.fn(),
   mockIsOnline: { current: true },
+  mockNativeKeyboardOpen: { current: false },
   resyncBootstrapAfterLegalError: vi.fn(async () => null),
 }))
 
@@ -76,6 +78,10 @@ vi.mock('@/features/observations/components/observation-processing-tracker-provi
 
 vi.mock('@/lib/network-status', () => ({
   useNetworkStatus: () => ({ isOnline: mockIsOnline.current }),
+}))
+
+vi.mock('@/lib/native-keyboard', () => ({
+  useNativeKeyboardOpen: () => mockNativeKeyboardOpen.current,
 }))
 
 vi.mock('@/features/observations/hooks', () => ({
@@ -159,6 +165,7 @@ afterEach(() => {
   cleanup()
   mockSubmitPending.current = false
   mockIsOnline.current = true
+  mockNativeKeyboardOpen.current = false
   objectUrlState.createdUrls = []
   objectUrlState.revokedUrls = []
   __resetObservationComposeDraftStoreForTests()
@@ -258,6 +265,13 @@ describe('ReportPage', () => {
     const footer = submitButton.closest('footer')
     expect(footer).toBeTruthy()
     expect(footer?.className).not.toContain('bg-[#F5F4F0]')
+  })
+
+  it('hides the submit footer while the native keyboard is open', () => {
+    mockNativeKeyboardOpen.current = true
+    renderPage()
+
+    expect(screen.queryByRole('button', { name: /Envoyer l’observation/ })).toBeNull()
   })
 
   it('uses a single internal scroll zone with footer outside the scroller', () => {

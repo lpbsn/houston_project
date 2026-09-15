@@ -46,6 +46,13 @@ async function bootstrap() {
     }
 
     try {
+      const { configureNativeKeyboard } = await import('@/lib/native-keyboard')
+      await configureNativeKeyboard()
+    } catch {
+      // Keyboard chrome stays visible; shell and reporting keep current layout.
+    }
+
+    try {
       const { configureNativeNetworkStatus } = await import('@/lib/network-status')
       await configureNativeNetworkStatus()
     } catch {

@@ -8,6 +8,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TerrainShell } from '@/components/layout/terrain-shell'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
 
+const mockNativeKeyboardOpen = vi.hoisted(() => ({ current: false }))
+
 vi.mock('@/components/layout/network-status-banner', () => ({
   NetworkStatusBanner: () => null,
 }))
@@ -22,6 +24,10 @@ vi.mock('@/features/realtime/components/operational-realtime-provider', () => ({
 
 vi.mock('@/lib/network-status', () => ({
   useNetworkStatus: () => ({ isOnline: true }),
+}))
+
+vi.mock('@/lib/native-keyboard', () => ({
+  useNativeKeyboardOpen: () => mockNativeKeyboardOpen.current,
 }))
 
 vi.mock('framer-motion', () => ({
@@ -117,6 +123,7 @@ function renderTerrainShell(
 
 afterEach(() => {
   cleanup()
+  mockNativeKeyboardOpen.current = false
 })
 
 describe('TerrainShell', () => {
@@ -193,6 +200,15 @@ describe('TerrainShell', () => {
 
     const bottomNav = screen.getByRole('navigation', { name: 'Navigation terrain' })
     expect(bottomNav.className).toContain('lg:hidden')
+  })
+
+  it('hides bottom navigation while the native keyboard is open', () => {
+    mockNativeKeyboardOpen.current = true
+    renderTerrainShell('auto', {
+      showBottomNav: true,
+    })
+
+    expect(screen.queryByRole('navigation', { name: 'Navigation terrain' })).toBeNull()
   })
 
   it('shows the shared mobile nav on a destination page without marking a tab current', () => {
