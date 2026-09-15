@@ -30,6 +30,18 @@ describe('ReportTextSection', () => {
     expect(screen.getByRole('button', { name: 'Démarrer l’enregistrement vocal' })).toBeTruthy()
   })
 
+  it('renders the character counter outside the textarea overlay wrapper', () => {
+    render(<ReportTextSection {...baseProps} />)
+
+    const field = screen.getByTestId('report-text-field')
+    const counter = screen.getByText('0/1000')
+    const mic = screen.getByRole('button', { name: 'Démarrer l’enregistrement vocal' })
+
+    expect(field.contains(screen.getByLabelText('Décrivez l’observation'))).toBe(true)
+    expect(field.contains(mic)).toBe(true)
+    expect(field.contains(counter)).toBe(false)
+  })
+
   it('calls onTextChange when typing', () => {
     const onTextChange = vi.fn()
     render(<ReportTextSection {...baseProps} onTextChange={onTextChange} />)

@@ -35,7 +35,7 @@ export function ReportTextSection({
       >
         Décrivez l’observation
       </label>
-      <div className="relative">
+      <div className="relative" data-testid="report-text-field">
         <textarea
           id="observation-text"
           className={cn(
@@ -50,11 +50,6 @@ export function ReportTextSection({
           }
           placeholder="Détaillez ce que vous voyez..."
         />
-        <div className="absolute bottom-3 left-4">
-          <p className={cn('text-xs', terrain.muted)}>
-            {textLength}/{OBSERVATION_TEXT_MAX_LENGTH}
-          </p>
-        </div>
         <div className="absolute bottom-3 right-3">
           <ReportInlineMicButton
             shouldReduceMotion={shouldReduceMotion}
@@ -66,6 +61,9 @@ export function ReportTextSection({
           />
         </div>
       </div>
+      <p className={cn('mt-1 px-1 text-xs', terrain.muted)}>
+        {textLength}/{OBSERVATION_TEXT_MAX_LENGTH}
+      </p>
     </section>
   )
 }
