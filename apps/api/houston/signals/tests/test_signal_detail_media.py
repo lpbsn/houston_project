@@ -3,8 +3,8 @@ from __future__ import annotations
 import io
 import time as stdlib_time
 from concurrent.futures import ThreadPoolExecutor
-from unittest.mock import patch
-from urllib.parse import urlparse
+from unittest.mock import MagicMock, patch
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -32,6 +32,7 @@ from houston.signals.tests.conftest import (
     signal_detail_url,
 )
 from houston.uploads.models import TemporaryUpload
+from houston.uploads.photo_keys import observation_photo_thumbnail_storage_key
 from houston.uploads.private_storage import get_private_media_storage
 
 pytestmark = pytest.mark.django_db
@@ -102,6 +103,7 @@ def test_signal_detail_returns_created_from_media_items(api_client):
     assert set(item.keys()) == {
         "id",
         "preview_url",
+        "thumbnail_url",
         "content_type",
         "size_bytes",
         "position",
@@ -110,10 +112,25 @@ def test_signal_detail_returns_created_from_media_items(api_client):
     assert item["observation_id"] == str(observation.id)
     assert item["position"] == 1
     assert "storage_key" not in response.content.decode()
+    preview_parts = urlparse(item["preview_url"])
+    thumbnail_parts = urlparse(item["thumbnail_url"])
+    assert preview_parts.netloc == thumbnail_parts.netloc
+    assert parse_qs(preview_parts.query)["token"] == parse_qs(thumbnail_parts.query)["token"]
+    assert parse_qs(thumbnail_parts.query)["variant"] == ["thumbnail"]
+    assert "variant=" not in item["preview_url"] or "variant=full" not in item["preview_url"]
 
     preview = Client().get(item["preview_url"])
     assert preview.status_code == 200
     assert preview["Content-Type"] == item["content_type"]
+    assert preview["Cache-Control"] == "private, max-age=60, must-revalidate"
+    assert preview["Referrer-Policy"] == "no-referrer"
+    assert "no-store" not in preview["Cache-Control"]
+    assert "public" not in preview["Cache-Control"]
+
+    thumbnail = Client().get(item["thumbnail_url"])
+    assert thumbnail.status_code == 200
+    assert thumbnail["Content-Type"] == "image/jpeg"
+    assert thumbnail["Cache-Control"] == "private, max-age=60, must-revalidate"
 
 
 def test_aggregated_observation_media_deleted_and_not_in_detail(api_client):
@@ -160,6 +177,7 @@ def test_resolve_deletes_created_from_media(api_client):
     media = ObservationMedia.objects.get(observation_id=observation.id)
     upload_id = media.temporary_upload_id
     storage_key = media.storage_key
+    thumbnail_key = observation_photo_thumbnail_storage_key(storage_key)
 
     response = api_client.post(
         signal_detail_url(membership.establishment_id, signal.id) + "resolve/",
@@ -176,6 +194,7 @@ def test_resolve_deletes_created_from_media(api_client):
     assert upload.status == TemporaryUpload.Status.DELETED
     storage = get_private_media_storage()
     assert not storage.exists(storage_key)
+    assert not storage.exists(thumbnail_key)
 
 
 def test_cancel_deletes_created_from_media(api_client):
@@ -409,3 +428,114 @@ def test_concurrent_resolve_shared_created_from_deletes_media(api_client):
     assert first_signal.status == Signal.Status.RESOLVED
     assert second_signal.status == Signal.Status.RESOLVED
     assert not ObservationMedia.objects.filter(observation_id=observation.id).exists()
+
+
+def test_thumbnail_preview_404_when_missing_does_not_create_file(api_client):
+    membership = build_api_membership()
+    observation, token = _create_observation_with_photo(
+        api_client=api_client,
+        membership=membership,
+    )
+    signal = create_minimal_v3_signal(membership, title="Missing thumb")
+    _link_created_from(signal=signal, observation=observation)
+    media = ObservationMedia.objects.get(observation_id=observation.id)
+    storage = get_private_media_storage()
+    thumbnail_key = observation_photo_thumbnail_storage_key(media.storage_key)
+    storage.delete(thumbnail_key)
+    assert not storage.exists(thumbnail_key)
+
+    detail = api_client.get(
+        signal_detail_url(membership.establishment_id, signal.id),
+        **auth_headers(token),
+    )
+    body = detail.json()["media_items"][0]
+    assert Client().get(body["thumbnail_url"]).status_code == 404
+    assert not storage.exists(thumbnail_key)
+    assert Client().get(body["preview_url"]).status_code == 200
+
+
+def test_s3_preview_returns_302_without_streaming_bytes(api_client, monkeypatch):
+    membership = build_api_membership()
+    observation, token = _create_observation_with_photo(
+        api_client=api_client,
+        membership=membership,
+    )
+    signal = create_minimal_v3_signal(membership, title="S3 redirect")
+    _link_created_from(signal=signal, observation=observation)
+    storage = MagicMock()
+    storage.exists.return_value = True
+    storage.open.side_effect = AssertionError("preview must not stream S3 through Django")
+    monkeypatch.setattr(
+        "houston.observations.api.media_views.get_private_media_storage",
+        lambda: storage,
+    )
+    monkeypatch.setattr(
+        "houston.observations.api.media_views.generate_private_media_presigned_get_url",
+        lambda name: "https://bucket.example/object",
+    )
+
+    detail = api_client.get(
+        signal_detail_url(membership.establishment_id, signal.id),
+        **auth_headers(token),
+    )
+    with override_settings(HOUSTON_PRIVATE_MEDIA_BACKEND="s3"):
+        preview = Client().get(detail.json()["media_items"][0]["preview_url"])
+    assert preview.status_code == 302
+    assert preview["Location"] == "https://bucket.example/object"
+    assert preview["Cache-Control"] == "private, max-age=60, must-revalidate"
+    assert preview["Referrer-Policy"] == "no-referrer"
+    storage.open.assert_not_called()
+
+
+def test_preview_gate_c_vs_presign_ttl_p(api_client, monkeypatch):
+    """C vs P: Houston 404s after visibility loss; a presign issued before still uses P=120.
+
+    This does not assert that an already-delivered S3 Location dies at C (60s).
+    """
+    membership = build_api_membership()
+    observation, token = _create_observation_with_photo(
+        api_client=api_client,
+        membership=membership,
+    )
+    signal = create_minimal_v3_signal(membership, title="C versus P")
+    _link_created_from(signal=signal, observation=observation)
+    storage = MagicMock()
+    storage.exists.return_value = True
+    captured = {}
+
+    def fake_presign(*, name: str) -> str:
+        from django.conf import settings as django_settings
+
+        captured["expires_in"] = int(
+            django_settings.HOUSTON_OBSERVATION_MEDIA_S3_PRESIGN_TTL_SECONDS
+        )
+        captured["name"] = name
+        return "https://bucket.example/object?X-Amz-Expires=120"
+
+    monkeypatch.setattr(
+        "houston.observations.api.media_views.get_private_media_storage",
+        lambda: storage,
+    )
+    monkeypatch.setattr(
+        "houston.observations.api.media_views.generate_private_media_presigned_get_url",
+        fake_presign,
+    )
+
+    detail = api_client.get(
+        signal_detail_url(membership.establishment_id, signal.id),
+        **auth_headers(token),
+    )
+    preview_url = detail.json()["media_items"][0]["preview_url"]
+    with override_settings(HOUSTON_PRIVATE_MEDIA_BACKEND="s3"):
+        preview = Client().get(preview_url)
+    assert preview.status_code == 302
+    assert captured["expires_in"] == 120
+    assert captured["expires_in"] != 60
+
+    monkeypatch.setattr(
+        "houston.observations.api.media_views.resolve_observation_media_preview",
+        lambda **kwargs: None,
+    )
+    with override_settings(HOUSTON_PRIVATE_MEDIA_BACKEND="s3"):
+        assert Client().get(preview_url).status_code == 404
+    assert captured["expires_in"] == 120

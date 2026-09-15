@@ -25,6 +25,7 @@ from houston.observations.media_services import (
 )
 from houston.observations.models import Observation
 from houston.uploads.models import TemporaryUpload
+from houston.uploads.photo_keys import observation_photo_storage_keys
 
 
 class InvalidAccountDeletionPasswordError(Exception):
@@ -158,7 +159,7 @@ def _delete_unlinked_uploads(*, user: User) -> None:
     storage_keys: list[str] = []
     for upload in uploads:
         if upload.file:
-            storage_keys.append(upload.file.name)
+            storage_keys.extend(observation_photo_storage_keys(upload.file.name))
         upload.status = TemporaryUpload.Status.DELETED
         upload.save(update_fields=["status", "updated_at"])
     schedule_storage_files_deletion(storage_keys=storage_keys)

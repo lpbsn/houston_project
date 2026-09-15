@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import logging
 import uuid
 from datetime import timedelta
@@ -12,8 +13,11 @@ from houston.accounts.models import User
 from houston.establishments.models import Establishment
 from houston.organizations.models import Organization
 from houston.uploads.models import TemporaryUpload
-from houston.uploads.services import cleanup_expired_uploads
+from houston.uploads.photo_keys import observation_photo_thumbnail_storage_key
+from houston.uploads.private_storage import get_private_media_storage
+from houston.uploads.services import cleanup_expired_uploads, create_temporary_photo_upload
 from houston.uploads.tasks import cleanup_expired_uploads_task
+from PIL import Image
 
 pytestmark = pytest.mark.django_db
 
@@ -104,3 +108,42 @@ def test_cleanup_expired_uploads_task_failure_logs_safe_context(caplog):
     assert record.task_name == "cleanup_expired_uploads_task"
     assert record.exception_class == "RuntimeError"
     assert "private_media" not in caplog.text
+
+
+def test_cleanup_expired_uploads_deletes_principal_and_thumbnail():
+    organization = Organization.objects.create(
+        name=f"Org {uuid.uuid4().hex[:6]}",
+        status=Organization.Status.ACTIVE,
+    )
+    establishment = Establishment.objects.create(
+        name="Thumb Cleanup Hotel",
+        organization=organization,
+        status=Establishment.Status.ACTIVE,
+    )
+    user = User.objects.create_user(
+        username=f"thumb_cleanup_{uuid.uuid4().hex[:8]}",
+        email=f"{uuid.uuid4().hex[:8]}@example.com",
+        password="secret-password-12",
+        status=User.Status.ACTIVE,
+    )
+    buffer = io.BytesIO()
+    Image.new("RGB", (16, 16), color="blue").save(buffer, format="JPEG")
+    buffer.seek(0)
+    upload = create_temporary_photo_upload(
+        establishment=establishment,
+        uploaded_by=user,
+        uploaded_file=SimpleUploadedFile("photo.jpg", buffer.read(), content_type="image/jpeg"),
+        declared_content_type="image/jpeg",
+    )
+    principal_key = upload.file.name
+    thumbnail_key = observation_photo_thumbnail_storage_key(principal_key)
+    storage = get_private_media_storage()
+    assert storage.exists(principal_key)
+    assert storage.exists(thumbnail_key)
+
+    upload.expires_at = timezone.now() - timedelta(hours=1)
+    upload.save(update_fields=["expires_at", "updated_at"])
+
+    assert cleanup_expired_uploads() == 1
+    assert not storage.exists(principal_key)
+    assert not storage.exists(thumbnail_key)

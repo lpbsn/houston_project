@@ -1,7 +1,13 @@
+from unittest.mock import MagicMock
+
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.core.files.storage import FileSystemStorage
-from houston.uploads.private_storage import PrivateMediaStorage, get_private_media_storage
+from houston.uploads.private_storage import (
+    PrivateMediaStorage,
+    generate_private_media_presigned_get_url,
+    get_private_media_storage,
+)
 from storages.backends.s3 import S3Storage
 
 
@@ -47,3 +53,40 @@ def test_factory_rejects_unknown_backend(settings):
 
     with pytest.raises(ImproperlyConfigured, match="minio"):
         get_private_media_storage()
+
+
+def test_presign_get_uses_ttl_p_and_private_response_cache_control(settings, monkeypatch):
+    settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "s3"
+    settings.HOUSTON_OBSERVATION_MEDIA_S3_PRESIGN_TTL_SECONDS = 120
+    client = MagicMock()
+    client.generate_presigned_url.return_value = "https://bucket.example/object"
+    inner = MagicMock()
+    inner.bucket_name = "houston-private-media"
+    inner.bucket.meta.client = client
+    monkeypatch.setattr(
+        "houston.uploads.private_storage.get_private_media_storage",
+        lambda: PrivateMediaStorage(inner=inner),
+    )
+
+    url = generate_private_media_presigned_get_url(name="establishments/example/photo.jpg")
+
+    assert url == "https://bucket.example/object"
+    client.generate_presigned_url.assert_called_once_with(
+        "get_object",
+        Params={
+            "Bucket": "houston-private-media",
+            "Key": "establishments/example/photo.jpg",
+            "ResponseCacheControl": "private, max-age=120, must-revalidate",
+        },
+        ExpiresIn=120,
+    )
+    params = client.generate_presigned_url.call_args.kwargs["Params"]
+    assert "public" not in params["ResponseCacheControl"]
+    assert "max-age=121" not in params["ResponseCacheControl"]
+
+
+def test_presign_get_rejected_on_filesystem_backend(settings):
+    settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "filesystem"
+
+    with pytest.raises(ImproperlyConfigured, match="s3"):
+        generate_private_media_presigned_get_url(name="establishments/example/photo.jpg")

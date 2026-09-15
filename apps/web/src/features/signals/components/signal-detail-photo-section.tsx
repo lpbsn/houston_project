@@ -43,7 +43,7 @@ function PhotoTile({
       onClick={onOpen}
     >
       <img
-        src={item.preview_url}
+        src={item.thumbnail_url}
         alt=""
         className="h-full w-full object-cover"
         loading="lazy"

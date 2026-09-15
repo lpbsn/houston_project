@@ -32,6 +32,7 @@ from houston.observations.media_services import schedule_storage_files_deletion
 from houston.observations.models import Observation, ObservationMedia, ObservationProcessing
 from houston.signals.models import CandidateSignal, Signal, SignalSourceObservation
 from houston.uploads.models import TemporaryUpload
+from houston.uploads.photo_keys import observation_photo_storage_keys
 
 
 @dataclass(frozen=True)
@@ -104,7 +105,7 @@ def _collect_observation_media_storage_keys() -> list[str]:
         upload = media.temporary_upload
         storage_key = media.storage_key or (upload.file.name if upload.file else "")
         if storage_key:
-            storage_keys.append(storage_key)
+            storage_keys.extend(observation_photo_storage_keys(storage_key))
     return storage_keys
 
 
@@ -112,7 +113,7 @@ def _collect_temporary_upload_storage_keys() -> list[str]:
     storage_keys: list[str] = []
     for upload in TemporaryUpload.objects.iterator():
         if upload.file and upload.file.name:
-            storage_keys.append(upload.file.name)
+            storage_keys.extend(observation_photo_storage_keys(upload.file.name))
     return storage_keys
 
 

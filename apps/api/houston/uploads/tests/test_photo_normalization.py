@@ -277,3 +277,34 @@ def test_normalized_jpeg_is_progressive_and_reports_real_size():
     assert normalized.size_bytes == len(payload)
     with Image.open(io.BytesIO(payload)) as image:
         assert image.info.get("progressive")
+
+
+def test_thumbnail_is_jpeg_capped_at_320_without_icc_exif_or_progressive():
+    from houston.uploads.photo_normalization import normalize_observation_photo_pair
+
+    principal, thumbnail = normalize_observation_photo_pair(
+        raw_bytes=_jpeg_bytes(size=(3000, 2000)),
+    )
+    with Image.open(io.BytesIO(principal.content_file.read())) as image:
+        assert max(image.size) == 1600
+    payload = thumbnail.content_file.read()
+    assert thumbnail.content_type == "image/jpeg"
+    assert payload[:2] == b"\xff\xd8"
+    with Image.open(io.BytesIO(payload)) as image:
+        assert max(image.size) == 320
+        assert not image.info.get("icc_profile")
+        assert not image.info.get("progressive")
+        assert image.getexif().get(0x0112) in {None, 1}
+
+
+def test_png_alpha_thumbnail_is_opaque_jpeg():
+    from houston.uploads.photo_normalization import normalize_observation_photo_pair
+
+    _principal, thumbnail = normalize_observation_photo_pair(
+        raw_bytes=_png_bytes(mode="RGBA", size=(16, 16), color=(10, 20, 30, 80)),
+    )
+    assert thumbnail.content_type == "image/jpeg"
+    with Image.open(io.BytesIO(thumbnail.content_file.read())) as image:
+        assert image.mode == "RGB"
+        extrema = image.convert("RGBA").getchannel("A").getextrema()
+        assert extrema == (255, 255)

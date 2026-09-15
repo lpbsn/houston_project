@@ -117,3 +117,38 @@ def check_private_media_s3_configured(app_configs, **kwargs):
             id="uploads.E004",
         )
     ]
+
+
+@register()
+def check_observation_media_preview_windows(app_configs, **kwargs):
+    cache_max_age = int(
+        getattr(settings, "HOUSTON_OBSERVATION_MEDIA_PREVIEW_CACHE_MAX_AGE_SECONDS", 60)
+    )
+    bucket_seconds = int(
+        getattr(settings, "HOUSTON_OBSERVATION_MEDIA_PREVIEW_URL_BUCKET_SECONDS", 60)
+    )
+    presign_ttl = int(getattr(settings, "HOUSTON_OBSERVATION_MEDIA_S3_PRESIGN_TTL_SECONDS", 120))
+    errors = []
+    if presign_ttl <= cache_max_age:
+        errors.append(
+            Error(
+                "Observation media presign TTL must exceed Houston preview cache max-age (P > C).",
+                hint=(
+                    "Set HOUSTON_OBSERVATION_MEDIA_S3_PRESIGN_TTL_SECONDS greater than "
+                    "HOUSTON_OBSERVATION_MEDIA_PREVIEW_CACHE_MAX_AGE_SECONDS."
+                ),
+                id="uploads.E005",
+            )
+        )
+    if bucket_seconds < cache_max_age:
+        errors.append(
+            Error(
+                "Preview URL bucket must be at least Houston cache max-age (W >= C).",
+                hint=(
+                    "Set HOUSTON_OBSERVATION_MEDIA_PREVIEW_URL_BUCKET_SECONDS "
+                    ">= HOUSTON_OBSERVATION_MEDIA_PREVIEW_CACHE_MAX_AGE_SECONDS."
+                ),
+                id="uploads.E006",
+            )
+        )
+    return errors

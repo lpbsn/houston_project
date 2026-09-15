@@ -88,6 +88,39 @@ def _resize_without_upscale(image: Image.Image) -> Image.Image:
     return image
 
 
+def _flatten_alpha_to_white(image: Image.Image) -> Image.Image:
+    if image.mode == "RGB":
+        return image
+    if image.mode != "RGBA":
+        return image.convert("RGB")
+    background = Image.new("RGB", image.size, (255, 255, 255))
+    background.paste(image, mask=image.getchannel("A"))
+    return background
+
+
+def _encode_thumbnail(image: Image.Image) -> NormalizedObservationPhoto:
+    working = image.copy()
+    max_edge = int(settings.HOUSTON_OBSERVATION_PHOTO_THUMB_EDGE_PX)
+    working.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
+    working = _flatten_alpha_to_white(working)
+    working.info.pop("icc_profile", None)
+    working.info.pop("exif", None)
+    buffer = io.BytesIO()
+    working.save(
+        buffer,
+        format="JPEG",
+        quality=int(settings.HOUSTON_OBSERVATION_PHOTO_THUMB_JPEG_QUALITY),
+        optimize=True,
+    )
+    payload = buffer.getvalue()
+    return NormalizedObservationPhoto(
+        content_file=ContentFile(payload, name="photo.thumb.jpg"),
+        content_type=_JPEG_CONTENT_TYPE,
+        stored_extension=_JPEG_EXTENSION,
+        size_bytes=len(payload),
+    )
+
+
 def _encode_normalized_image(image: Image.Image, *, keep_png: bool) -> tuple[bytes, str, str]:
     image.info.pop("icc_profile", None)
     image.info.pop("exif", None)
@@ -109,9 +142,13 @@ def _encode_normalized_image(image: Image.Image, *, keep_png: bool) -> tuple[byt
     return payload, _JPEG_CONTENT_TYPE, _JPEG_EXTENSION
 
 
-def normalize_observation_photo(*, raw_bytes: bytes) -> NormalizedObservationPhoto:
+def normalize_observation_photo_pair(
+    *,
+    raw_bytes: bytes,
+) -> tuple[NormalizedObservationPhoto, NormalizedObservationPhoto]:
     _ensure_heif_opener_registered()
     payload = b""
+    thumbnail: NormalizedObservationPhoto | None = None
     try:
         with Image.open(io.BytesIO(raw_bytes)) as opened:
             opened.load()
@@ -130,17 +167,24 @@ def normalize_observation_photo(*, raw_bytes: bytes) -> NormalizedObservationPho
                 image,
                 keep_png=keep_png,
             )
+            thumbnail = _encode_thumbnail(image)
     except InvalidImageContentError:
         raise
     except Exception as exc:
         raise InvalidImageContentError("Invalid image content.") from exc
 
-    if not payload:
+    if not payload or thumbnail is None or not thumbnail.size_bytes:
         raise InvalidImageContentError("Invalid image content.")
 
-    return NormalizedObservationPhoto(
+    principal = NormalizedObservationPhoto(
         content_file=ContentFile(payload, name=f"photo.{stored_extension}"),
         content_type=content_type,
         stored_extension=stored_extension,
         size_bytes=len(payload),
     )
+    return principal, thumbnail
+
+
+def normalize_observation_photo(*, raw_bytes: bytes) -> NormalizedObservationPhoto:
+    principal, _thumbnail = normalize_observation_photo_pair(raw_bytes=raw_bytes)
+    return principal

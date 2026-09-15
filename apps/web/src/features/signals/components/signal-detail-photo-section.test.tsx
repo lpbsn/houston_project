@@ -9,6 +9,7 @@ const mediaItems = [
   {
     id: '11111111-1111-4111-8111-111111111111',
     preview_url: 'https://example.com/photo-1.jpg',
+    thumbnail_url: 'https://example.com/photo-1.thumb.jpg',
     content_type: 'image/jpeg',
     size_bytes: 1024,
     position: 1,
@@ -30,7 +31,7 @@ describe('SignalDetailPhotoSection', () => {
   it('renders real image previews from media items', () => {
     render(<SignalDetailPhotoSection mediaItems={mediaItems} />)
     const image = document.querySelector('img')
-    expect(image?.getAttribute('src')).toBe(mediaItems[0].preview_url)
+    expect(image?.getAttribute('src')).toBe(mediaItems[0].thumbnail_url)
   })
 
   it('shows a camera fallback when image loading fails', async () => {
