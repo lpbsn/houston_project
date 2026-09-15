@@ -420,11 +420,16 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
     expect(footer.className).toContain('lg:rounded-2xl')
     expect(screen.getAllByTestId('execution-validation-actions')).toHaveLength(1)
     expect(screen.getByTestId('execution-detail-tab-bar').className).toContain('lg:sticky')
-    expect(screen.getByTestId('execution-detail-details-panel').className).not.toContain('hidden')
+    const detailsPanel = screen.getByTestId('execution-detail-details-panel')
+    expect(detailsPanel.className).not.toContain('hidden')
+    expect(detailsPanel.contains(footer)).toBe(true)
+    const paddedContent = screen.getByTestId('execution-detail-details-content')
+    expect(detailsPanel.contains(paddedContent)).toBe(true)
+    expect(paddedContent.contains(footer)).toBe(false)
     const frame = screen.getByTestId('execution-detail-frame')
     expect(frame.className).not.toContain('max-w-7xl')
     expect(frame.contains(screen.getByTestId('execution-detail-tab-bar'))).toBe(true)
-    expect(frame.contains(screen.getByTestId('execution-detail-details-panel'))).toBe(true)
+    expect(frame.contains(detailsPanel)).toBe(true)
   })
 
   it('renders a flat task list without pole section headers', () => {

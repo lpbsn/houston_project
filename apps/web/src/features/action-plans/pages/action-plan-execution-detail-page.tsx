@@ -412,52 +412,53 @@ function ActionPlanExecutionDetailPageContent({
           id="execution-detail-panel-details"
           aria-labelledby="execution-detail-tab-details"
           data-testid="execution-detail-details-panel"
-          className={
-            resolvedActiveTab === 'details'
-              ? cn(
-                  'flex flex-col gap-2.5 px-3 pt-2',
-                  showStickyFooter ? 'pb-40 lg:pb-0' : 'pb-4',
-                )
-              : 'hidden'
-          }
+          className={resolvedActiveTab === 'details' ? undefined : 'hidden'}
         >
-          <ActionPlanExecutionDetailHeader
-            execution={execution}
-            isOverdue={isOverdue}
-            currentMembershipId={activeMembership?.id ?? null}
-          />
+          <div
+            data-testid="execution-detail-details-content"
+            className={cn(
+              'flex flex-col gap-2.5 px-3 pt-2',
+              showStickyFooter ? 'pb-40 lg:pb-0' : 'pb-4',
+            )}
+          >
+            <ActionPlanExecutionDetailHeader
+              execution={execution}
+              isOverdue={isOverdue}
+              currentMembershipId={activeMembership?.id ?? null}
+            />
 
-          {feedback ? (
-            <TerrainFeedback variant={feedback.variant} message={feedback.message} />
-          ) : null}
+            {feedback ? (
+              <TerrainFeedback variant={feedback.variant} message={feedback.message} />
+            ) : null}
 
-          {execution.task_executions.length === 0 ? (
-            <TerrainEmptyState title="Aucune tâche dans cette exécution." />
-          ) : (
-            <>
-              <TerrainSectionLabel>Tâches par pôle</TerrainSectionLabel>
-              <ActionPlanExecutionDetailPoleSummarySection execution={execution} />
-              {poleSummaries.length > 1 ? (
-                <ActionPlanExecutionTaskFilters
-                  poles={poleSummaries}
-                  selectedPoleId={selectedPoleId}
-                  onSelectedPoleIdChange={setSelectedPoleId}
-                />
-              ) : null}
-              {filteredTasks.length === 0 ? (
-                <TerrainEmptyState title="Aucune tâche pour ce pôle." />
-              ) : (
-                <ActionPlanExecutionTaskList
-                  tasks={filteredTasks}
-                  isTerminal={isTerminal}
-                  isMutationPending={isMutationPending}
-                  onMarkDone={handleTaskMarkDone}
-                  onUnmarkDone={handleTaskMarkPending}
-                  onOpenTaskActions={setTaskActionsTask}
-                />
-              )}
-            </>
-          )}
+            {execution.task_executions.length === 0 ? (
+              <TerrainEmptyState title="Aucune tâche dans cette exécution." />
+            ) : (
+              <>
+                <TerrainSectionLabel>Tâches par pôle</TerrainSectionLabel>
+                <ActionPlanExecutionDetailPoleSummarySection execution={execution} />
+                {poleSummaries.length > 1 ? (
+                  <ActionPlanExecutionTaskFilters
+                    poles={poleSummaries}
+                    selectedPoleId={selectedPoleId}
+                    onSelectedPoleIdChange={setSelectedPoleId}
+                  />
+                ) : null}
+                {filteredTasks.length === 0 ? (
+                  <TerrainEmptyState title="Aucune tâche pour ce pôle." />
+                ) : (
+                  <ActionPlanExecutionTaskList
+                    tasks={filteredTasks}
+                    isTerminal={isTerminal}
+                    isMutationPending={isMutationPending}
+                    onMarkDone={handleTaskMarkDone}
+                    onUnmarkDone={handleTaskMarkPending}
+                    onOpenTaskActions={setTaskActionsTask}
+                  />
+                )}
+              </>
+            )}
+          </div>
 
           {showStickyFooter ? (
             <ActionPlanExecutionStickyFooter
