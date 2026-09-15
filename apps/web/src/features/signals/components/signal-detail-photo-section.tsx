@@ -28,11 +28,6 @@ function PhotoTile({
   const [src, setSrc] = useState(item.thumbnail_url)
   const [showIcon, setShowIcon] = useState(false)
 
-  useEffect(() => {
-    setSrc(item.thumbnail_url)
-    setShowIcon(false)
-  }, [item.id, item.preview_url, item.thumbnail_url])
-
   return (
     <button
       type="button"
@@ -141,7 +136,11 @@ export function SignalDetailPhotoSection({ mediaItems }: SignalDetailPhotoSectio
         <TerrainFieldLabel>Photo</TerrainFieldLabel>
         <div className="mt-2 flex gap-2 overflow-x-auto pb-0.5">
           {visibleItems.map((item) => (
-            <PhotoTile key={item.id} item={item} onOpen={() => setSelectedItem(item)} />
+            <PhotoTile
+              key={`${item.id}:${item.thumbnail_url}:${item.preview_url}`}
+              item={item}
+              onOpen={() => setSelectedItem(item)}
+            />
           ))}
         </div>
       </TerrainCard>
