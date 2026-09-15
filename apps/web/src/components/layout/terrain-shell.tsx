@@ -11,6 +11,7 @@ import { OperationalReconnectBanner } from '@/features/realtime/components/opera
 import { useOptionalOperationalRealtime } from '@/features/realtime/components/operational-realtime-provider'
 import type { TerrainMainScroll, TerrainNavPath } from '@/app/terrain-routes'
 import type { BootstrapResponse } from '@/features/auth/types'
+import { useNativeKeyboardOpen } from '@/lib/native-keyboard'
 import { terrainPageMotionProps } from '@/lib/terrain-motion'
 import { useNetworkStatus } from '@/lib/network-status'
 import { cn } from '@/lib/utils'
@@ -44,6 +45,7 @@ export function TerrainShell({
   const shouldReduceMotion = useReducedMotion()
   const pageMotion = terrainPageMotionProps(shouldReduceMotion)
   const { isOnline } = useNetworkStatus()
+  const isNativeKeyboardOpen = useNativeKeyboardOpen()
   const operationalRealtime = useOptionalOperationalRealtime()
   const operationalConnectionStatus = operationalRealtime?.connectionStatus ?? 'idle'
 
@@ -94,7 +96,7 @@ export function TerrainShell({
             </AnimatePresence>
           )}
         </main>
-        {showBottomNav ? (
+        {showBottomNav && !isNativeKeyboardOpen ? (
           <BottomMobileNav
             className="shrink-0 lg:hidden"
             activePath={activeNavPath}
