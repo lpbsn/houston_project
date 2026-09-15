@@ -412,13 +412,13 @@ function ActionPlanExecutionDetailPageContent({
           id="execution-detail-panel-details"
           aria-labelledby="execution-detail-tab-details"
           data-testid="execution-detail-details-panel"
-          className={resolvedActiveTab === 'details' ? undefined : 'hidden'}
+          className={resolvedActiveTab === 'details' ? 'flex min-h-full flex-col' : 'hidden'}
         >
           <div
             data-testid="execution-detail-details-content"
             className={cn(
               'flex flex-col gap-2.5 px-3 pt-2',
-              showStickyFooter ? 'pb-40 lg:pb-0' : 'pb-4',
+              showStickyFooter ? 'lg:pb-0' : 'pb-4',
             )}
           >
             <ActionPlanExecutionDetailHeader
