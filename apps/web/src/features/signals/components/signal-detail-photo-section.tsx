@@ -25,15 +25,13 @@ function PhotoTile({
   item: SignalDetailMediaItem
   onOpen: () => void
 }) {
-  const [hasError, setHasError] = useState(false)
+  const [src, setSrc] = useState(item.thumbnail_url)
+  const [showIcon, setShowIcon] = useState(false)
 
-  if (hasError) {
-    return (
-      <div className={cn(tileClassName)}>
-        <Camera className="h-6 w-6 text-[#1B4FD8]" aria-hidden />
-      </div>
-    )
-  }
+  useEffect(() => {
+    setSrc(item.thumbnail_url)
+    setShowIcon(false)
+  }, [item.id, item.preview_url, item.thumbnail_url])
 
   return (
     <button
@@ -42,13 +40,23 @@ function PhotoTile({
       aria-label="Agrandir la photo"
       onClick={onOpen}
     >
-      <img
-        src={item.thumbnail_url}
-        alt=""
-        className="h-full w-full object-cover"
-        loading="lazy"
-        onError={() => setHasError(true)}
-      />
+      {showIcon ? (
+        <Camera className="h-6 w-6 text-[#1B4FD8]" aria-hidden />
+      ) : (
+        <img
+          src={src}
+          alt=""
+          className="h-full w-full object-cover"
+          loading="lazy"
+          onError={() => {
+            if (src !== item.preview_url) {
+              setSrc(item.preview_url)
+              return
+            }
+            setShowIcon(true)
+          }}
+        />
+      )}
     </button>
   )
 }

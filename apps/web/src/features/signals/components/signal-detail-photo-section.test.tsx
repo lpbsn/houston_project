@@ -34,14 +34,36 @@ describe('SignalDetailPhotoSection', () => {
     expect(image?.getAttribute('src')).toBe(mediaItems[0].thumbnail_url)
   })
 
-  it('shows a camera fallback when image loading fails', async () => {
+  it('falls back to preview_url when the thumbnail fails and stays openable', async () => {
     render(<SignalDetailPhotoSection mediaItems={mediaItems} />)
     const image = document.querySelector('img')
     expect(image).not.toBeNull()
     fireEvent.error(image!)
     await waitFor(() => {
+      expect(document.querySelector('img')?.getAttribute('src')).toBe(mediaItems[0].preview_url)
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agrandir la photo' }))
+    const dialog = screen.getByRole('dialog', { name: 'Aperçu photo' })
+    expect(dialog.querySelector('img')?.getAttribute('src')).toBe(mediaItems[0].preview_url)
+  })
+
+  it('keeps the enlarge button when thumbnail and preview both fail', async () => {
+    render(<SignalDetailPhotoSection mediaItems={mediaItems} />)
+    const thumbnail = document.querySelector('img')
+    expect(thumbnail).not.toBeNull()
+    fireEvent.error(thumbnail!)
+    await waitFor(() => {
+      expect(document.querySelector('img')?.getAttribute('src')).toBe(mediaItems[0].preview_url)
+    })
+
+    fireEvent.error(document.querySelector('img')!)
+    await waitFor(() => {
       expect(document.querySelector('img')).toBeNull()
     })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agrandir la photo' }))
+    expect(screen.getByRole('dialog', { name: 'Aperçu photo' })).toBeTruthy()
   })
 
   it('opens an enlarged preview modal when a photo tile is clicked', () => {
