@@ -11,6 +11,7 @@ from houston.accounts.models import User
 from houston.establishments.models import Establishment
 from houston.uploads.exceptions import UploadNotDeletableError, UploadNotFoundError
 from houston.uploads.models import TemporaryUpload
+from houston.uploads.photo_normalization import normalize_observation_photo
 from houston.uploads.validators import validate_observation_photo_upload
 
 
@@ -21,24 +22,28 @@ def create_temporary_photo_upload(
     uploaded_file,
     declared_content_type: str | None,
 ) -> TemporaryUpload:
-    validated = validate_observation_photo_upload(
+    validate_observation_photo_upload(
         uploaded_file=uploaded_file,
         declared_content_type=declared_content_type,
     )
+    uploaded_file.seek(0)
+    raw_bytes = uploaded_file.read()
+    uploaded_file.seek(0)
+    normalized = normalize_observation_photo(raw_bytes=raw_bytes)
     expires_at = timezone.now() + timedelta(hours=settings.HOUSTON_TEMPORARY_UPLOAD_TTL_HOURS)
 
     upload = TemporaryUpload(
         establishment=establishment,
         uploaded_by=uploaded_by,
-        content_type=validated.content_type,
-        stored_extension=validated.stored_extension,
-        size_bytes=validated.size_bytes,
+        content_type=normalized.content_type,
+        stored_extension=normalized.stored_extension,
+        size_bytes=normalized.size_bytes,
         status=TemporaryUpload.Status.VALIDATED,
         expires_at=expires_at,
     )
     upload.file.save(
-        f"photo.{validated.stored_extension}",
-        uploaded_file,
+        f"photo.{normalized.stored_extension}",
+        normalized.content_file,
         save=False,
     )
     upload.save()

@@ -172,6 +172,17 @@ def test_mpo_detected_image_is_accepted_as_jpeg(monkeypatch):
     assert validated.stored_extension == "jpg"
 
 
+@override_settings(HOUSTON_OBSERVATION_PHOTO_MAX_PIXELS=100)
+def test_image_exceeding_max_pixels_is_rejected_without_oversized_bytes():
+    uploaded = SimpleUploadedFile("pixels.jpeg", _jpeg_bytes(), content_type="image/jpeg")
+    with pytest.raises(InvalidImageContentError) as exc_info:
+        validate_observation_photo_upload(
+            uploaded_file=uploaded,
+            declared_content_type="image/jpeg",
+        )
+    assert exc_info.value.error_code == "invalid_image"
+
+
 @override_settings(HOUSTON_OBSERVATION_PHOTO_MAX_BYTES=64)
 def test_oversized_image_returns_file_too_large():
     uploaded = SimpleUploadedFile("large.jpeg", _jpeg_bytes(), content_type="image/jpeg")
@@ -215,6 +226,47 @@ def test_heic_image_is_accepted_when_encoder_available():
     assert validated.content_type == "image/heic"
 
 
+def test_saved_heic_upload_is_stored_as_normalized_jpeg():
+    pytest.importorskip("pillow_heif")
+    import pillow_heif
+
+    pillow_heif.register_heif_opener()
+    buffer = io.BytesIO()
+    Image.new("RGB", (8, 8), color="green").save(buffer, format="HEIF")
+    organization = Organization.objects.create(
+        name="HEIC Upload Org",
+        status=Organization.Status.ACTIVE,
+    )
+    establishment = Establishment.objects.create(
+        name="HEIC Upload Hotel",
+        organization=organization,
+        status=Establishment.Status.ACTIVE,
+    )
+    user = User.objects.create_user(
+        username="upload_heic_user",
+        email="upload_heic@example.com",
+        password="secret-password-12",
+        status=User.Status.ACTIVE,
+    )
+    uploaded = SimpleUploadedFile("photo.heic", buffer.getvalue(), content_type="image/heic")
+    temporary_upload = create_temporary_photo_upload(
+        establishment=establishment,
+        uploaded_by=user,
+        uploaded_file=uploaded,
+        declared_content_type="image/heic",
+    )
+    temporary_upload.file.open("rb")
+    try:
+        stored_bytes = temporary_upload.file.read()
+    finally:
+        temporary_upload.file.close()
+
+    assert stored_bytes[:2] == b"\xff\xd8"
+    assert temporary_upload.content_type == "image/jpeg"
+    assert temporary_upload.stored_extension == "jpg"
+    assert temporary_upload.size_bytes == len(stored_bytes)
+
+
 def test_private_storage_has_no_public_url():
     from houston.uploads.private_storage import PrivateMediaStorage
 
@@ -255,3 +307,6 @@ def test_saved_upload_is_not_empty_after_validation():
 
     assert len(stored_bytes) > 0
     assert stored_bytes[:2] == b"\xff\xd8"
+    assert temporary_upload.content_type == "image/jpeg"
+    assert temporary_upload.stored_extension == "jpg"
+    assert temporary_upload.size_bytes == len(stored_bytes)

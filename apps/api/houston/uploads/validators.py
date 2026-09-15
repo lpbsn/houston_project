@@ -71,19 +71,32 @@ class DetectedImageMetadata:
     image_size: tuple[int, int]
 
 
+def _reject_if_pixel_count_exceeds_limit(image_size: tuple[int, int]) -> None:
+    width, height = image_size
+    if int(width) * int(height) > int(settings.HOUSTON_OBSERVATION_PHOTO_MAX_PIXELS):
+        raise InvalidImageContentError("Invalid image content.")
+
+
 def _detect_image_metadata(raw_bytes: bytes) -> DetectedImageMetadata:
     try:
         with Image.open(io.BytesIO(raw_bytes)) as image:
             image.verify()
+    except Image.DecompressionBombError as exc:
+        raise InvalidImageContentError("Invalid image content.") from exc
     except Exception as exc:
         raise InvalidImageContentError("Invalid image content.") from exc
 
     try:
         with Image.open(io.BytesIO(raw_bytes)) as image:
+            _reject_if_pixel_count_exceeds_limit(image.size)
             image.load()
             detected_format = (image.format or "").upper()
             detected_mode = image.mode
             detected_size = image.size
+    except InvalidImageContentError:
+        raise
+    except Image.DecompressionBombError as exc:
+        raise InvalidImageContentError("Invalid image content.") from exc
     except Exception as exc:
         raise InvalidImageContentError("Invalid image content.") from exc
 

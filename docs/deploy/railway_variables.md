@@ -128,11 +128,14 @@ No env var — mount a Railway volume on `celery-beat` at `/var/lib/celerybeat`.
 
 ## Upload limits
 
-Optional overrides (defaults are 10 MiB each):
+Optional overrides:
 
 | Variable | Default |
 |---|---|
-| `HOUSTON_OBSERVATION_PHOTO_MAX_BYTES` | `10485760` |
+| `HOUSTON_OBSERVATION_PHOTO_MAX_BYTES` | `10485760` (10 MiB, input size) |
+| `HOUSTON_OBSERVATION_PHOTO_MAX_PIXELS` | `50000000` (decoded `width * height` before full raster) |
+| `HOUSTON_OBSERVATION_PHOTO_MAX_EDGE_PX` | `1600` |
+| `HOUSTON_OBSERVATION_PHOTO_JPEG_QUALITY` | `82` |
 | `HOUSTON_TRANSCRIPTION_AUDIO_MAX_BYTES` | `10485760` |
 
 nginx on `api-web` allows `12m` request bodies ([`infra/docker/railway/nginx.conf`](../../infra/docker/railway/nginx.conf)).
