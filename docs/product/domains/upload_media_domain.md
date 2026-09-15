@@ -77,21 +77,20 @@ It does not own Observation submission validity, AI transcription behavior, priv
   - Implemented as Houston-hosted `preview_url` / `thumbnail_url` with a short-lived signed query token. Authorization is re-checked on each Houston GET before 302 or `FileResponse`.
 
 - `MediaCleanupJob`
-  - Candidate concept for removing orphaned, expired, or otherwise deletable media artifacts.
-  - Exact job design is not validated yet.
+  - Implemented as `cleanup_expired_uploads_task` (Celery beat) plus `cleanup_expired_uploads` for expired unlinked `TemporaryUpload` rows and their principal + thumbnail objects.
 
 ## 6. Lifecycle / Statuses
 
-Current code does not validate concrete upload/media status names yet. The MVP lifecycle is:
+`TemporaryUpload.Status` is persisted as `validated` → `linked` on Observation submit, or `deleted` on explicit delete / TTL cleanup. The MVP lifecycle is:
 
 - local selection on the client
-- temporary upload created
+- temporary upload created (`validated`)
 - backend validation
 - normalized and stored, or rejected by backend
-- link to Observation on submit
+- link to Observation on submit (`linked`)
 - authorized access through the parent resource
-- orphaned or expired candidate state
-- deleted
+- orphaned or expired `validated` rows cleaned up
+- deleted (`deleted`)
 
 For transcription audio, the MVP lifecycle is:
 
@@ -101,15 +100,13 @@ For transcription audio, the MVP lifecycle is:
 - validated text accepted into the Observation flow
 - audio deleted
 
-Exact persisted status fields, enums, and transition names are candidate until implemented.
-
 ## 7. Permissions
 
 - A user may upload media only inside an authorized establishment context.
 - A user may link media only to a resource they are allowed to create or update.
 - Viewing media requires visibility of the authorized parent resource.
 - Standalone public media access is forbidden.
-- Signed access URLs, if later implemented, require backend authorization before generation.
+- Houston-hosted `preview_url` / `thumbnail_url` require backend authorization on each GET before 302 or `FileResponse`.
 - Active membership and establishment scoping are mandatory for any media action.
 - Cross-tenant media access is forbidden.
 - Broad support or admin media access is not a default product behavior and must not be assumed.
@@ -138,7 +135,7 @@ Current API truth is `apps/api/schema.yml`.
 
 Implemented endpoints confirmed in `apps/api/schema.yml`:
 
-- `POST /api/v1/establishments/{establishment_id}/temporary-uploads/` — multipart photo (`jpeg`, `png`, `heic`/`heif` with server validation and normalization); private storage, no public URL in response.
+- `POST /api/v1/establishments/{establishment_id}/temporary-uploads/` — multipart photo (`jpeg`/`jpg`, `png`, `webp`, `heic`/`heif` with server validation and normalization); private storage, no public URL in response.
 - `DELETE /api/v1/establishments/{establishment_id}/temporary-uploads/{upload_id}/`
 - `POST /api/v1/establishments/{establishment_id}/transcriptions/` — multipart audio only; backend OpenAI transcription; temp file deleted after each request; **not** stored as `TemporaryUpload`.
 
@@ -146,7 +143,6 @@ Implemented endpoints confirmed in `apps/api/schema.yml`:
 
 Candidate API capabilities only:
 
-- request authorized short-lived media access (read path for linked Observation media)
 - direct browser-to-storage upload
 
 ## 10. Frontend Expectations

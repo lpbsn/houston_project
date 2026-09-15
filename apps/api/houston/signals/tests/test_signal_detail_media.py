@@ -117,7 +117,7 @@ def test_signal_detail_returns_created_from_media_items(api_client):
     assert preview_parts.netloc == thumbnail_parts.netloc
     assert parse_qs(preview_parts.query)["token"] == parse_qs(thumbnail_parts.query)["token"]
     assert parse_qs(thumbnail_parts.query)["variant"] == ["thumbnail"]
-    assert "variant=" not in item["preview_url"] or "variant=full" not in item["preview_url"]
+    assert "variant=" not in item["preview_url"]
 
     preview = Client().get(item["preview_url"])
     assert preview.status_code == 200

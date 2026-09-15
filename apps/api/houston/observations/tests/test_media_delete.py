@@ -55,7 +55,7 @@ def test_delete_missing_object_error_is_success(monkeypatch):
     inner.delete.assert_called_once_with("gone.png")
 
 
-def test_delete_unexpected_error_logs_key_and_exception_class(monkeypatch, caplog):
+def test_delete_unexpected_error_logs_exception_class_without_storage_key(monkeypatch, caplog):
     inner = MagicMock()
     inner.delete.side_effect = RuntimeError("storage unavailable")
     monkeypatch.setattr(
@@ -70,5 +70,7 @@ def test_delete_unexpected_error_logs_key_and_exception_class(monkeypatch, caplo
         record for record in caplog.records if record.getMessage() == "storage_file_delete_failed"
     ]
     assert len(records) == 1
-    assert records[0].storage_key == "establishments/example/photo.png"
+    assert records[0].event == "storage_file_delete_failed"
     assert records[0].exception_class == "RuntimeError"
+    assert not hasattr(records[0], "storage_key")
+    assert "establishments/example/photo.png" not in caplog.text

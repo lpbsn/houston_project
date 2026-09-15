@@ -39,7 +39,6 @@ def delete_private_media_object_idempotent(*, storage_key: str) -> None:
             "storage_file_delete_failed",
             extra={
                 "event": "storage_file_delete_failed",
-                "storage_key": storage_key,
                 "exception_class": type(exc).__name__,
             },
         )

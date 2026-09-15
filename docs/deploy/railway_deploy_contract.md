@@ -212,17 +212,13 @@ No `$PORT` logic in `railway.toml` — only in the start script.
 
 Railway queries from hostname `healthcheck.railway.app` — include it in `DJANGO_ALLOWED_HOSTS` (see [`railway_variables.md`](railway_variables.md)).
 
-### Volume (private media)
+### Volume (not media truth)
 
-| Mount path | Variable |
-|---|---|
-| `/app/apps/api/private_media` | `HOUSTON_PRIVATE_MEDIA_ROOT=/app/apps/api/private_media` |
+The `api-web` volume at `/app/apps/api/private_media` (`HOUSTON_PRIVATE_MEDIA_ROOT`) is **not** prod-test media truth. Prod-test uses `HOUSTON_PRIVATE_MEDIA_BACKEND=s3` with the same `HOUSTON_S3_*` values on `api-web` and `celery-worker`. `start-api-web.sh` creates the media directory only when backend=filesystem.
 
-Add a Railway volume on `api-web` mounted at this path. Verify write access after deploy (upload smoke test).
+A leftover volume may still exist from historical filesystem deploys. Railway volumes mount as root; the start script `chown`s that directory when it is used.
 
-Railway volumes mount as root; the start script `chown`s the media directory. If permission issues persist, set `RAILWAY_RUN_UID=0` on the service.
-
-**Do not scale `api-web` horizontally** while private media uses a single Railway volume (one mount per service). Object storage is required before multi-replica `api-web`.
+Horizontal scale of `api-web` is no longer blocked by a single media volume when backend=s3.
 
 ### Domain
 
@@ -270,11 +266,13 @@ No HTTP healthcheck. Verify in Railway logs:
 
 ### Volume
 
-**No persistent volume.** Use ephemeral writable path for deploy checks:
+**No private-media volume on the worker.** Prod-test media is S3 (same `HOUSTON_S3_*` as `api-web`).
+
+Historical filesystem deploys used an ephemeral writable path for deploy checks only:
 
 `HOUSTON_PRIVATE_MEDIA_ROOT=/tmp/houston-private-media`
 
-See [Known limitations V1 — private media](#known-limitations-v1--private-media).
+That worker `/tmp` vs `api-web` volume split is **not** the current prod-test S3 mode. See [Known limitations V1 — private media](#known-limitations-v1--private-media).
 
 ---
 
@@ -348,22 +346,22 @@ Map one Railway Redis URL to Houston logical DBs 0–3 (see [`railway_variables.
 
 ## Known limitations V1 — private media
 
-Railway **cannot attach the same volume to multiple services**.
+This section describes the **historical filesystem** layout (PR5): Railway **cannot attach the same volume to multiple services**. It is **not** the current prod-test mode (`HOUSTON_PRIVATE_MEDIA_BACKEND=s3`, same bucket on `api-web` and `celery-worker`).
 
-| Service | Storage |
+| Service | Historical filesystem storage |
 |---|---|
 | `api-web` | Persistent volume at `HOUSTON_PRIVATE_MEDIA_ROOT` |
-| `celery-worker` | Ephemeral filesystem only |
+| `celery-worker` | Ephemeral filesystem only (`/tmp`) |
 
-**What works in V1:**
+**What worked on filesystem V1:**
 
 * Photo upload and API-authorized read via `api-web`
 
-**What is not fully guaranteed in V1:**
+**What was not fully guaranteed on filesystem V1:**
 
-* Celery tasks that delete files on disk (`cleanup_expired_uploads`, `delete_all_observation_media`) run on the worker without access to the `api-web` volume. Purge/delete cross-service may leave **orphan files** on the api-web volume or fail silently on the worker.
+* Celery tasks that delete files on disk (`cleanup_expired_uploads`, `delete_all_observation_media`) ran on the worker without access to the `api-web` volume. Purge/delete cross-service could leave **orphan files** on the api-web volume or fail silently on the worker.
 
-Do not present cross-service media purge as fully guaranteed until object storage (future PR, out of scope PR5).
+Do not present that volume split as the current prod-test media architecture.
 
 ---
 
@@ -509,7 +507,7 @@ Rollback: disable Wait for CI (test then prod); revert workflow changes if neede
 | `DJANGO_DEBUG=1` | Use `0` |
 | Nixpacks / Procfile | Dockerfile only |
 | Cloudflare in critical path | Railway HTTPS for V1 |
-| S3 / R2 / MinIO in PR5 | Future object storage |
+| S3 / R2 / MinIO in PR5 | Out of scope for PR5; current prod-test uses S3 (see variables) |
 | Migrations in worker/beat start | pre-deploy `api-web` only |
 | `import_business_unit_catalog` in pre-deploy | Manual post-migrate |
 

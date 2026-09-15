@@ -115,11 +115,11 @@ Never paste secrets, tokens, raw observation text, or private media paths.
 Destructive — use only on prod-test, not production.
 
 1. Reset Postgres (restore empty backup or Railway plugin reset / new instance + update `POSTGRES_*` on all services)
-2. Clear `private_media` on the **api-web** volume
+2. Clear private media in the **S3 bucket** (not the api-web volume; that volume is not media truth when backend=s3)
 3. After empty DB: redeploy / migrate, then `import_business_unit_catalog` (same as §2)
 4. Smoke: [`smoke_checklist.md`](smoke_checklist.md)
 
-**V1 limitation:** worker and api-web do not share a volume — cross-service media purge is not fully guaranteed. See contract § Known limitations V1 — private media.
+**Historical filesystem V1:** worker `/tmp` and api-web did not share a volume — cross-service media purge was not fully guaranteed. That is not current prod-test S3. See contract § Known limitations V1 — private media.
 
 ---
 

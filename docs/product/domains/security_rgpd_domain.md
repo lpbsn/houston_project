@@ -1,7 +1,7 @@
 # Security / RGPD Domain
 
 Status: authoritative
-Last reviewed: 2026-06-09
+Last reviewed: 2026-09-15
 Implementation status: partial
 
 ## 1. Purpose
@@ -17,7 +17,7 @@ Identity / Membership defines who the user is and which establishment they belon
 - Data minimization, purpose limitation, and retention limitation at product level.
 - Raw Observation privacy boundaries across feeds, notifications, realtime, logs, and frontend state.
 - Private media principles for photos and temporary audio handling.
-- Private-by-default photo storage and cleanup through `PrivateMediaStorage` under `HOUSTON_PRIVATE_MEDIA_ROOT` (see [`upload_media_domain.md`](upload_media_domain.md)).
+- Private-by-default photo storage and cleanup through `PrivateMediaStorage`: filesystem under `HOUSTON_PRIVATE_MEDIA_ROOT` locally / in CI; S3 (`HOUSTON_PRIVATE_MEDIA_BACKEND=s3`) in prod-test (see [`upload_media_domain.md`](upload_media_domain.md)).
 - Temporary transcription audio must not be preserved as a `TemporaryUpload`-like persistent artifact; only validated transcription text is persisted in MVP.
 - AI input/output privacy boundaries: only validated pipeline inputs may be sent to AI; Chat and images are excluded from AI analysis in MVP.
 - Minimal technical logging, minimal notification payloads, and minimal realtime payloads.
@@ -89,7 +89,7 @@ Incident assessment, containment, export, deletion, and anonymization workflows 
 
 - Normal users access only authorized establishment data through active membership and backend checks.
 - Detailed role and action matrices remain in `identity_membership_domain.md` and `rbac_permissions_domain.md`.
-- Media access requires backend authorization. Signed URL behavior is a candidate target unless confirmed by current code and `apps/api/schema.yml`.
+- Media access requires backend authorization. Observation photo reads use Houston-hosted `preview_url` / `thumbnail_url` with a signed query token; authorization is re-checked on each GET (see [`upload_media_domain.md`](upload_media_domain.md) and `apps/api/schema.yml`).
 - Notifications, realtime signals, and frontend visibility never grant access.
 - Cross-tenant access is forbidden.
 - Support/admin access is not validated as a public product API. Any future access must be least-privilege, limited, and logged.
@@ -135,7 +135,6 @@ Implemented security truths confirmed today:
 
 Candidate endpoints only:
 
-- Media signed URL endpoint
 - Data export request endpoint
 - Incident reporting endpoint
 - Support or audit access endpoint

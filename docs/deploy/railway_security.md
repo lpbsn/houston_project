@@ -57,7 +57,9 @@ Set on `api-web`, `celery-worker`, and `celery-beat` unless noted otherwise.
 | `HOUSTON_CHAT_WS_TICKET_SALT` | yes | Not the dev default |
 | `HOUSTON_REALTIME_WS_TICKET_SALT` | yes | Not the dev default |
 | `OPENAI_API_KEY` | yes | Required when AI providers are `openai` |
-| `HOUSTON_PRIVATE_MEDIA_ROOT` | yes (`api-web`, `celery-worker`) | Writable shared path |
+| `HOUSTON_PRIVATE_MEDIA_BACKEND` | yes (`api-web`, `celery-worker`) | `s3` in prod-test |
+| `HOUSTON_S3_*` | yes (`api-web`, `celery-worker`) | Same endpoint, bucket, keys, region, addressing style on both services |
+| `HOUSTON_PRIVATE_MEDIA_ROOT` | no when backend=s3 | Not media truth on S3; required writable path only for filesystem backend |
 | `POSTGRES_*` | yes | From Railway Postgres plugin |
 | `REDIS_URL`, `CELERY_*`, `HOUSTON_CACHE_REDIS_URL` | yes | Private Redis only |
 | `HOUSTON_ENABLE_API_DOCS` | no | Default off in prod-test |
@@ -129,7 +131,8 @@ With `DJANGO_DEBUG=0`, custom checks fail when:
 * auth pepper is missing, placeholder, or equal to the Django secret
 * auth / WebSocket salts still use dev defaults
 * OpenAI provider is active without `OPENAI_API_KEY`
-* private media root is empty or not writable
+* private media S3 vars are missing when `HOUSTON_PRIVATE_MEDIA_BACKEND=s3`
+* private media root is empty or not writable when backend=filesystem (`check --deploy` still allows filesystem; it is the local/CI default)
 
 With `DJANGO_DEBUG=1`, dev remains permissive.
 

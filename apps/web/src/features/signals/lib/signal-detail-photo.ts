@@ -1,4 +1,4 @@
-/** Max tiles shown when API only exposes media_count (no signed URLs yet). */
+/** Upper bound on signal-detail photo tiles rendered from `media_items`. */
 export const MAX_VISIBLE_PHOTO_TILES = 6
 
 export function resolveVisiblePhotoTileCount(mediaCount: number): number {

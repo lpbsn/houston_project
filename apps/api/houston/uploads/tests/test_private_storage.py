@@ -9,6 +9,7 @@ from houston.uploads.private_storage import (
     get_private_media_storage,
 )
 from storages.backends.s3 import S3Storage
+from storages.utils import clean_name
 
 
 def test_private_storage_has_no_public_url():
@@ -57,30 +58,41 @@ def test_factory_rejects_unknown_backend(settings):
 
 def test_presign_get_uses_ttl_p_and_private_response_cache_control(settings, monkeypatch):
     settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "s3"
+    settings.HOUSTON_S3_ENDPOINT_URL = "https://s3.example.invalid"
+    settings.HOUSTON_S3_BUCKET = "houston-private-media"
+    settings.HOUSTON_S3_ACCESS_KEY_ID = "access-key"
+    settings.HOUSTON_S3_SECRET_ACCESS_KEY = "secret-key"
+    settings.HOUSTON_S3_REGION = "auto"
+    settings.HOUSTON_S3_ADDRESSING_STYLE = "path"
     settings.HOUSTON_OBSERVATION_MEDIA_S3_PRESIGN_TTL_SECONDS = 120
-    client = MagicMock()
-    client.generate_presigned_url.return_value = "https://bucket.example/object"
-    inner = MagicMock()
-    inner.bucket_name = "houston-private-media"
-    inner.bucket.meta.client = client
+
+    storage = get_private_media_storage()
+    inner = storage._inner
+    assert isinstance(inner, S3Storage)
+
     monkeypatch.setattr(
         "houston.uploads.private_storage.get_private_media_storage",
-        lambda: PrivateMediaStorage(inner=inner),
+        lambda: storage,
     )
+    generate_presigned_url = MagicMock(return_value="https://bucket.example/object")
+    monkeypatch.setattr(inner.bucket.meta.client, "generate_presigned_url", generate_presigned_url)
 
-    url = generate_private_media_presigned_get_url(name="establishments/example/photo.jpg")
+    name = "establishments/example/photo.jpg"
+    url = generate_private_media_presigned_get_url(name=name)
 
     assert url == "https://bucket.example/object"
-    client.generate_presigned_url.assert_called_once_with(
+    # django-storages write path: clean_name() + _normalize_name (no inner._clean_name).
+    expected_key = inner._normalize_name(clean_name(name))
+    generate_presigned_url.assert_called_once_with(
         "get_object",
         Params={
-            "Bucket": "houston-private-media",
-            "Key": "establishments/example/photo.jpg",
+            "Bucket": inner.bucket_name,
+            "Key": expected_key,
             "ResponseCacheControl": "private, max-age=120, must-revalidate",
         },
         ExpiresIn=120,
     )
-    params = client.generate_presigned_url.call_args.kwargs["Params"]
+    params = generate_presigned_url.call_args.kwargs["Params"]
     assert "public" not in params["ResponseCacheControl"]
     assert "max-age=121" not in params["ResponseCacheControl"]
 
