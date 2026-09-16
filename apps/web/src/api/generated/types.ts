@@ -8758,7 +8758,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -8818,7 +8818,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             409: {
@@ -8880,7 +8880,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -8926,7 +8926,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             409: {

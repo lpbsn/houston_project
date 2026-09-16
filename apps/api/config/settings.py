@@ -426,6 +426,9 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "houston.accounts.authentication.BearerAccessTokenAuthentication",
     ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "houston.core.api.permissions.DenyByDefault",
+    ],
     "EXCEPTION_HANDLER": "houston.core.api.exceptions.api_exception_handler",
     "DEFAULT_THROTTLE_RATES": _auth_throttle_rates(),
 }

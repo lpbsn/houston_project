@@ -124,6 +124,20 @@ def test_cross_establishment_business_unit_rejected():
         )
 
 
+def test_membership_scope_create_cross_establishment_raises_integrity_error():
+    establishment_a = create_establishment(name="Hotel A")
+    establishment_b = create_establishment(name="Hotel B")
+    membership_b = create_membership(establishment=establishment_b)
+    business_unit_a = create_business_unit(establishment=establishment_a, key="hotel")
+
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            MembershipScope.objects.create(
+                membership=membership_b,
+                business_unit=business_unit_a,
+            )
+
+
 def test_inactive_business_unit_rejected():
     establishment = create_establishment()
     business_unit = create_business_unit(establishment=establishment, key="hotel")

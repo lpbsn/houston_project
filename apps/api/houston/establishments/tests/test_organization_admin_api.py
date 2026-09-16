@@ -110,6 +110,7 @@ def test_organization_admin_director_forbidden(api_client):
         **auth_headers(access_token),
     )
     assert response.status_code == 403
+    assert response.json()["code"] == "organization_management_forbidden"
     del owner
 
 
@@ -123,6 +124,7 @@ def test_organization_admin_cross_org_forbidden(api_client):
         **auth_headers(access_token),
     )
     assert response.status_code == 403
+    assert response.json()["code"] == "organization_management_forbidden"
     del org_a
 
 
@@ -379,3 +381,25 @@ def test_establishment_membership_invitation_still_rejects_owner(api_client):
     body = response.json()
     assert body["code"] == "validation_error"
     assert "role" in body["errors"]
+
+
+def test_organization_admin_access_is_decided_once(api_client, monkeypatch):
+    owner, organization, _active, _draft = _setup_owner_org()
+    access_token = login(api_client, user=owner)
+    calls = {"count": 0}
+    from houston.establishments import permissions as establishment_permissions
+
+    original = establishment_permissions.decide_organization_admin_access
+
+    def wrapped(*args, **kwargs):
+        calls["count"] += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(
+        establishment_permissions,
+        "decide_organization_admin_access",
+        wrapped,
+    )
+    response = api_client.get(_org_path(organization.id), **auth_headers(access_token))
+    assert response.status_code == 200
+    assert calls["count"] == 1

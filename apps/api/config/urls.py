@@ -2,6 +2,7 @@ from django.conf import settings
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from houston.core.views import AppHomeView, HomeView
+from rest_framework.permissions import AllowAny
 
 urlpatterns = [
     path("", include("houston.accounts.urls")),
@@ -25,6 +26,21 @@ urlpatterns = [
 
 if settings.HOUSTON_ENABLE_API_DOCS:
     urlpatterns += [
-        path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
-        path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="api-docs"),
+        path(
+            "api/schema/",
+            SpectacularAPIView.as_view(
+                authentication_classes=[],
+                permission_classes=[AllowAny],
+            ),
+            name="schema",
+        ),
+        path(
+            "api/docs/",
+            SpectacularSwaggerView.as_view(
+                url_name="schema",
+                authentication_classes=[],
+                permission_classes=[AllowAny],
+            ),
+            name="api-docs",
+        ),
     ]

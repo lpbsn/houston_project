@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import permissions, status
+from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -31,11 +32,7 @@ from houston.establishments.membership_scope import (
     InvalidMembershipScopeAssignmentError,
     parse_membership_scope_inputs,
 )
-from houston.establishments.models import Establishment
-from houston.establishments.permissions import (
-    CanAccessEstablishmentAdmin,
-    resolve_active_establishment_admin_actor,
-)
+from houston.establishments.permissions import CanAccessEstablishmentAdmin
 from houston.establishments.services import (
     DirectorCoverageInvariantError,
     DirectorInvitationDuplicateError,
@@ -55,46 +52,12 @@ from houston.establishments.services import (
 )
 
 
-def _resolve_admin_actor(request, establishment_id):
-    establishment_exists = Establishment.objects.filter(id=establishment_id).exists()
-    if not establishment_exists:
-        return None, "not_found"
-
-    actor = resolve_active_establishment_admin_actor(request.user, establishment_id)
-    if actor is None:
-        establishment = Establishment.objects.filter(id=establishment_id).first()
-        if establishment is None or establishment.status != Establishment.Status.ACTIVE:
-            return None, "not_found"
-        return None, "forbidden"
-    return actor, None
-
-
-def _admin_forbidden_response() -> Response:
-    return Response(
-        {
-            "code": "establishment_admin_forbidden",
-            "detail": "You do not have permission to administer this establishment.",
-        },
-        status=status.HTTP_403_FORBIDDEN,
-    )
-
-
-def _admin_not_found_response() -> Response:
-    return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-
-
-def _resolve_or_error(request, establishment_id):
-    actor, error = _resolve_admin_actor(request, establishment_id)
-    if error == "not_found":
-        return None, _admin_not_found_response()
-    if error == "forbidden":
-        return None, _admin_forbidden_response()
-    return actor, None
-
-
-class EstablishmentAdminOverviewView(APIView):
+class EstablishmentAdminAPIView(APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [permissions.IsAuthenticated, CanAccessEstablishmentAdmin]
+
+
+class EstablishmentAdminOverviewView(EstablishmentAdminAPIView):
 
     @extend_schema(
         tags=["establishment-admin"],
@@ -110,16 +73,12 @@ class EstablishmentAdminOverviewView(APIView):
         ),
     )
     def get(self, request, establishment_id):
-        actor, error_response = _resolve_or_error(request, establishment_id)
-        if error_response is not None:
-            return error_response
+        actor = self.admin_actor
         payload = get_establishment_admin_overview(establishment=actor.establishment)
         return Response(EstablishmentAdminOverviewSerializer(payload).data)
 
 
-class EstablishmentAdminMembershipListView(APIView):
-    authentication_classes = [BearerAccessTokenAuthentication]
-    permission_classes = [permissions.IsAuthenticated, CanAccessEstablishmentAdmin]
+class EstablishmentAdminMembershipListView(EstablishmentAdminAPIView):
 
     @extend_schema(
         tags=["establishment-admin"],
@@ -143,9 +102,7 @@ class EstablishmentAdminMembershipListView(APIView):
         ),
     )
     def get(self, request, establishment_id):
-        actor, error_response = _resolve_or_error(request, establishment_id)
-        if error_response is not None:
-            return error_response
+        actor = self.admin_actor
 
         query = EstablishmentAdminMembershipListQuerySerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
@@ -161,9 +118,7 @@ class EstablishmentAdminMembershipListView(APIView):
         )
 
 
-class EstablishmentAdminMemberFilterOptionsView(APIView):
-    authentication_classes = [BearerAccessTokenAuthentication]
-    permission_classes = [permissions.IsAuthenticated, CanAccessEstablishmentAdmin]
+class EstablishmentAdminMemberFilterOptionsView(EstablishmentAdminAPIView):
 
     @extend_schema(
         tags=["establishment-admin"],
@@ -178,18 +133,14 @@ class EstablishmentAdminMemberFilterOptionsView(APIView):
         ),
     )
     def get(self, request, establishment_id):
-        actor, error_response = _resolve_or_error(request, establishment_id)
-        if error_response is not None:
-            return error_response
+        actor = self.admin_actor
         payload = get_establishment_admin_member_filter_options(
             establishment=actor.establishment
         )
         return Response(EstablishmentAdminMemberFilterOptionsSerializer(payload).data)
 
 
-class EstablishmentAdminMembershipInvitationView(APIView):
-    authentication_classes = [BearerAccessTokenAuthentication]
-    permission_classes = [permissions.IsAuthenticated, CanAccessEstablishmentAdmin]
+class EstablishmentAdminMembershipInvitationView(EstablishmentAdminAPIView):
 
     @extend_schema(
         tags=["establishment-admin"],
@@ -207,9 +158,7 @@ class EstablishmentAdminMembershipInvitationView(APIView):
         ),
     )
     def post(self, request, establishment_id):
-        actor, error_response = _resolve_or_error(request, establishment_id)
-        if error_response is not None:
-            return error_response
+        actor = self.admin_actor
 
         request_serializer = EstablishmentAdminMembershipInvitationRequestSerializer(
             data=request.data
@@ -236,7 +185,7 @@ class EstablishmentAdminMembershipInvitationView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         except MembershipManagementNotFoundError:
-            return _admin_not_found_response()
+            raise NotFound()
         except MembershipManagementForbiddenError:
             return Response(
                 {
@@ -288,9 +237,7 @@ class EstablishmentAdminMembershipInvitationView(APIView):
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
 
-class EstablishmentAdminMembershipDetailView(APIView):
-    authentication_classes = [BearerAccessTokenAuthentication]
-    permission_classes = [permissions.IsAuthenticated, CanAccessEstablishmentAdmin]
+class EstablishmentAdminMembershipDetailView(EstablishmentAdminAPIView):
 
     @extend_schema(
         tags=["establishment-admin"],
@@ -299,20 +246,18 @@ class EstablishmentAdminMembershipDetailView(APIView):
             200: EstablishmentAdminMembershipSerializer,
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
-            404: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
         },
         description="Returns one non-Owner membership for ACTIVE establishment admin.",
     )
     def get(self, request, establishment_id, membership_id):
-        actor, error_response = _resolve_or_error(request, establishment_id)
-        if error_response is not None:
-            return error_response
+        actor = self.admin_actor
         payload = get_establishment_admin_membership(
             actor=actor,
             membership_id=membership_id,
         )
         if payload is None:
-            return _admin_not_found_response()
+            raise NotFound()
         return Response(EstablishmentAdminMembershipSerializer(payload).data)
 
     @extend_schema(
@@ -323,15 +268,13 @@ class EstablishmentAdminMembershipDetailView(APIView):
             400: OpenApiResponse(response=ApiErrorResponseSerializer),
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
-            404: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
             409: OpenApiResponse(response=DirectorInvitationErrorResponseSerializer),
         },
         description="Updates role/scopes for a non-Owner membership (path-scoped admin).",
     )
     def patch(self, request, establishment_id, membership_id):
-        actor, error_response = _resolve_or_error(request, establishment_id)
-        if error_response is not None:
-            return error_response
+        actor = self.admin_actor
 
         serializer = EstablishmentAdminMembershipUpdateRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -358,7 +301,7 @@ class EstablishmentAdminMembershipDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         except MembershipManagementNotFoundError:
-            return _admin_not_found_response()
+            raise NotFound()
         except InvalidMembershipScopeAssignmentError as exc:
             return Response(
                 {"detail": str(exc)},
@@ -394,13 +337,11 @@ class EstablishmentAdminMembershipDetailView(APIView):
             membership_id=membership_id,
         )
         if payload is None:
-            return _admin_not_found_response()
+            raise NotFound()
         return Response(EstablishmentAdminMembershipSerializer(payload).data)
 
 
-class EstablishmentAdminMembershipDeactivateView(APIView):
-    authentication_classes = [BearerAccessTokenAuthentication]
-    permission_classes = [permissions.IsAuthenticated, CanAccessEstablishmentAdmin]
+class EstablishmentAdminMembershipDeactivateView(EstablishmentAdminAPIView):
 
     @extend_schema(
         tags=["establishment-admin"],
@@ -409,15 +350,13 @@ class EstablishmentAdminMembershipDeactivateView(APIView):
             200: EstablishmentAdminMembershipSerializer,
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
-            404: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
             409: OpenApiResponse(response=DirectorInvitationErrorResponseSerializer),
         },
         description="Deactivates a non-Owner membership (path-scoped admin).",
     )
     def post(self, request, establishment_id, membership_id):
-        actor, error_response = _resolve_or_error(request, establishment_id)
-        if error_response is not None:
-            return error_response
+        actor = self.admin_actor
 
         try:
             membership = deactivate_membership_for_establishment_admin(
@@ -433,7 +372,7 @@ class EstablishmentAdminMembershipDeactivateView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         except MembershipManagementNotFoundError:
-            return _admin_not_found_response()
+            raise NotFound()
         except DirectorCoverageInvariantError as exc:
             return Response(
                 {
@@ -456,13 +395,11 @@ class EstablishmentAdminMembershipDeactivateView(APIView):
             membership_id=membership.id,
         )
         if payload is None:
-            return _admin_not_found_response()
+            raise NotFound()
         return Response(EstablishmentAdminMembershipSerializer(payload).data)
 
 
-class EstablishmentAdminMembershipActivateView(APIView):
-    authentication_classes = [BearerAccessTokenAuthentication]
-    permission_classes = [permissions.IsAuthenticated, CanAccessEstablishmentAdmin]
+class EstablishmentAdminMembershipActivateView(EstablishmentAdminAPIView):
 
     @extend_schema(
         tags=["establishment-admin"],
@@ -472,14 +409,12 @@ class EstablishmentAdminMembershipActivateView(APIView):
             400: OpenApiResponse(response=ApiErrorResponseSerializer),
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
-            404: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
         },
         description="Reactivates a non-Owner membership (path-scoped admin).",
     )
     def post(self, request, establishment_id, membership_id):
-        actor, error_response = _resolve_or_error(request, establishment_id)
-        if error_response is not None:
-            return error_response
+        actor = self.admin_actor
 
         try:
             membership = activate_membership_for_establishment_admin(
@@ -495,7 +430,7 @@ class EstablishmentAdminMembershipActivateView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         except MembershipManagementNotFoundError:
-            return _admin_not_found_response()
+            raise NotFound()
         except InvitedMembershipActivationError:
             return Response(
                 {
@@ -518,5 +453,5 @@ class EstablishmentAdminMembershipActivateView(APIView):
             membership_id=membership.id,
         )
         if payload is None:
-            return _admin_not_found_response()
+            raise NotFound()
         return Response(EstablishmentAdminMembershipSerializer(payload).data)

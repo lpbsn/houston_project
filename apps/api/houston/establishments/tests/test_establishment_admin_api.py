@@ -148,10 +148,9 @@ def test_manager_staff_forbidden_and_draft_not_found(api_client, imported_catalo
         business_unit=bu,
     )
     access_token = login(api_client, user=manager)
-    assert (
-        api_client.get(_admin_path(est_a.id), **auth_headers(access_token)).status_code
-        == 403
-    )
+    forbidden = api_client.get(_admin_path(est_a.id), **auth_headers(access_token))
+    assert forbidden.status_code == 403
+    assert forbidden.json()["code"] == "establishment_admin_forbidden"
 
     owner_token = login(api_client, user=owner)
     draft_response = api_client.get(
@@ -476,6 +475,7 @@ def test_membership_other_establishment_not_found(api_client, imported_catalog):
         **auth_headers(access_token),
     )
     assert response.status_code == 404
+    assert response.json() == {"code": "not_found", "detail": "Not found."}
 
 
 def test_admin_mutations_do_not_change_selected_establishment(api_client, imported_catalog):
@@ -551,3 +551,25 @@ def test_filter_options_path_scoped_poles(api_client, imported_catalog):
     labels = {row["label"] for row in body["business_units"]}
     assert "Pole A" in labels
     assert "Pole B" not in labels
+
+
+def test_establishment_admin_access_is_decided_once(api_client, monkeypatch):
+    owner, _organization, est_a, _est_b = _setup_two_active_establishments()
+    access_token = login(api_client, user=owner)
+    calls = {"count": 0}
+    from houston.establishments import permissions as establishment_permissions
+
+    original = establishment_permissions.decide_active_establishment_admin_access
+
+    def wrapped(*args, **kwargs):
+        calls["count"] += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(
+        establishment_permissions,
+        "decide_active_establishment_admin_access",
+        wrapped,
+    )
+    response = api_client.get(_admin_path(est_a.id), **auth_headers(access_token))
+    assert response.status_code == 200
+    assert calls["count"] == 1
