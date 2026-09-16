@@ -2128,7 +2128,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Searches active users in the current active establishment context. Use context=assignee for scope-aware assignment pickers; context=mention for comment @mentions. Results are tenant-filtered before serialization. */
+        /** @description Searches active users in the current active establishment context. Use context=assignee for scope-aware assignment pickers; context=mention for comment @mentions. q is required with a minimum length of 2, except for context=assignee with business_unit_id, which may omit q to list covering members. Results are tenant-filtered before serialization. */
         get: operations["v1_establishments_users_search_list"];
         put?: never;
         post?: never;
@@ -12399,11 +12399,13 @@ export interface operations {
     };
     v1_establishments_users_search_list: {
         parameters: {
-            query: {
+            query?: {
                 /** @description When provided, limits results to active members covering this BusinessUnit (Owner/Director implicitly; Manager/Staff via scope). */
                 business_unit_id?: string;
-                /** @description Search term with a minimum length of 2 characters. */
-                q: string;
+                /** @description assignee: scope-aware search for task/plan assignment. mention: establishment-wide active member search for comments. */
+                context?: "assignee" | "mention";
+                /** @description Search term with a minimum length of 2 characters. May be omitted only for context=assignee when business_unit_id is provided, to list members covering that BusinessUnit. */
+                q?: string;
             };
             header?: never;
             path: {

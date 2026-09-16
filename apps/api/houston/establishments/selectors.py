@@ -146,6 +146,9 @@ def get_membership_for_management(
     )
 
 
+_POLE_MEMBER_BROWSE_LIMIT = 100
+
+
 def search_users_for_establishment(
     *,
     current_membership: EstablishmentMembership | None,
@@ -158,18 +161,30 @@ def search_users_for_establishment(
         return None
 
     normalized_query = query.strip()
+    queryset = _management_membership_queryset(establishment_id=establishment_id).filter(
+        user__status=User.Status.ACTIVE,
+        status=EstablishmentMembership.Status.ACTIVE,
+        establishment__status=Establishment.Status.ACTIVE,
+        establishment__organization__status=Organization.Status.ACTIVE,
+    )
+
     if not normalized_query:
-        return []
+        if business_unit is None:
+            return []
+        memberships = list(
+            queryset.filter(scope_links__business_unit_id=business_unit.id)
+            .exclude(role__in=ADMIN_ROLES)
+            .distinct()
+        )
+        covering = [
+            membership
+            for membership in memberships
+            if membership_covers_business_unit_including_admins(membership, business_unit)
+        ]
+        return covering[:_POLE_MEMBER_BROWSE_LIMIT]
 
     memberships = list(
-        _management_membership_queryset(establishment_id=establishment_id)
-        .filter(
-            user__status=User.Status.ACTIVE,
-            status=EstablishmentMembership.Status.ACTIVE,
-            establishment__status=Establishment.Status.ACTIVE,
-            establishment__organization__status=Organization.Status.ACTIVE,
-        )
-        .filter(
+        queryset.filter(
             Q(user__first_name__icontains=normalized_query)
             | Q(user__last_name__icontains=normalized_query)
             | Q(user__username__icontains=normalized_query)

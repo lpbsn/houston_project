@@ -7299,7 +7299,9 @@ paths:
       operationId: v1_establishments_users_search_list
       description: Searches active users in the current active establishment context.
         Use context=assignee for scope-aware assignment pickers; context=mention for
-        comment @mentions. Results are tenant-filtered before serialization.
+        comment @mentions. q is required with a minimum length of 2, except for context=assignee
+        with business_unit_id, which may omit q to list covering members. Results
+        are tenant-filtered before serialization.
       parameters:
       - in: query
         name: business_unit_id
@@ -7307,6 +7309,15 @@ paths:
           type: string
         description: When provided, limits results to active members covering this
           BusinessUnit (Owner/Director implicitly; Manager/Staff via scope).
+      - in: query
+        name: context
+        schema:
+          type: string
+          enum:
+          - assignee
+          - mention
+        description: 'assignee: scope-aware search for task/plan assignment. mention:
+          establishment-wide active member search for comments.'
       - in: path
         name: establishment_id
         schema:
@@ -7317,8 +7328,9 @@ paths:
         name: q
         schema:
           type: string
-        description: Search term with a minimum length of 2 characters.
-        required: true
+        description: Search term with a minimum length of 2 characters. May be omitted
+          only for context=assignee when business_unit_id is provided, to list members
+          covering that BusinessUnit.
       tags:
       - memberships
       security:

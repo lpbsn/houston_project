@@ -270,6 +270,9 @@ class CatalogActivitySubjectSuggestionSerializer(serializers.Serializer):
 class ScopedUserSearchRequestSerializer(serializers.Serializer):
     q = serializers.CharField(
         trim_whitespace=True,
+        required=False,
+        allow_blank=True,
+        default="",
         min_length=2,
     )
     business_unit_id = serializers.UUIDField(required=False, allow_null=True, default=None)
@@ -284,7 +287,16 @@ class ScopedUserSearchRequestSerializer(serializers.Serializer):
     )
 
     def validate(self, attrs):
+        query = (attrs.get("q") or "").strip()
+        attrs["q"] = query
+        context = attrs.get("context") or "assignee"
         business_unit_id = attrs.get("business_unit_id")
+        allow_empty_query = context == "assignee" and business_unit_id is not None
+        if not allow_empty_query and len(query) < 2:
+            raise serializers.ValidationError(
+                {"q": ["Ensure this field has at least 2 characters."]},
+            )
+
         if business_unit_id is None:
             return attrs
 
@@ -301,10 +313,6 @@ class ScopedUserSearchRequestSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"business_unit_id": "Invalid business unit."},
             )
-
-        attrs["business_unit"] = business_unit
-        return attrs
-
 
         attrs["business_unit"] = business_unit
         return attrs
