@@ -203,7 +203,7 @@ def run_push_for_notification(notification_id: uuid.UUID) -> int:
         return 0
 
     recipient = notification.recipient_membership
-    if not recipient.notifications_enabled or not recipient.push_enabled:
+    if not recipient.push_enabled:
         return 0
 
     if (

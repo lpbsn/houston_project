@@ -60,15 +60,3 @@ def test_create_in_app_notification_does_not_enqueue_on_transaction_rollback():
                 raise RuntimeError("force rollback")
 
         delay.assert_not_called()
-
-
-def test_create_in_app_notification_does_not_enqueue_when_notification_not_created():
-    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
-    staff.notifications_enabled = False
-    staff.save(update_fields=["notifications_enabled", "updated_at"])
-
-    with patch("houston.notifications.push.tasks.send_push_for_notification_task.delay") as delay:
-        notification = _create_notification(recipient=staff, actor=owner)
-        assert notification is None
-        delay.assert_not_called()

@@ -123,7 +123,10 @@ export function useMarkAllNotificationsReadMutation(establishmentId: string | nu
   })
 }
 
-export function useNotificationPreferencesQuery(establishmentId: string | null) {
+export function useNotificationPreferencesQuery(
+  establishmentId: string | null,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: establishmentId
       ? notificationsQueryKeys.preferences(establishmentId)
@@ -134,7 +137,7 @@ export function useNotificationPreferencesQuery(establishmentId: string | null) 
       }
       return fetchNotificationPreferences(establishmentId)
     },
-    enabled: Boolean(establishmentId),
+    enabled: Boolean(establishmentId) && (options?.enabled ?? true),
   })
 }
 

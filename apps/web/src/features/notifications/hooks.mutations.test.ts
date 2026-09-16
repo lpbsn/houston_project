@@ -30,7 +30,7 @@ const markNotificationRead = vi.fn(async () => ({
 }))
 
 const markAllNotificationsRead = vi.fn(async () => ({ updated_count: 2 }))
-const updateNotificationPreferences = vi.fn(async () => ({ notifications_enabled: false }))
+const updateNotificationPreferences = vi.fn(async () => ({ push_enabled: false }))
 
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
@@ -101,14 +101,14 @@ describe('notification mutations', () => {
         createElement(QueryClientProvider, { client: queryClient }, children),
     })
 
-    result.current.mutate({ notifications_enabled: false })
+    result.current.mutate({ push_enabled: false })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
     })
 
     expect(updateNotificationPreferences).toHaveBeenCalledWith('est-1', {
-      notifications_enabled: false,
+      push_enabled: false,
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: notificationsQueryKeys.preferences('est-1'),

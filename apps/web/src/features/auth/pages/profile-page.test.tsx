@@ -149,7 +149,7 @@ vi.mock('@/app/auth-provider', () => ({
 
 vi.mock('@/features/notifications/hooks', () => ({
   useNotificationPreferencesQuery: () => ({
-    data: { notifications_enabled: true, push_enabled: false },
+    data: { push_enabled: false },
     isLoading: false,
     isError: false,
   }),
@@ -288,12 +288,9 @@ describe('ProfilePage', () => {
     )
 
     const switches = screen.getAllByRole('switch')
-    expect(switches).toHaveLength(2)
-    expect(isDocumentFollowing(switches[0], switches[1])).toBe(true)
+    expect(switches).toHaveLength(1)
 
     fireEvent.click(switches[0])
-    expect(mutate).toHaveBeenCalledWith({ notifications_enabled: false })
-    fireEvent.click(switches[1])
     expect(withdrawAiConsent).toHaveBeenCalledTimes(1)
 
     const privacyLink = linkByHref(PUBLIC_PRIVACY_POLICY_URL)
@@ -306,7 +303,7 @@ describe('ProfilePage', () => {
     expect(termsLink?.getAttribute('rel')).toBe('noreferrer')
     const buttons = screen.getAllByRole('button')
     const lastButton = buttons[buttons.length - 1]
-    expect(isDocumentFollowing(switches[1], privacyLink as HTMLElement)).toBe(true)
+    expect(isDocumentFollowing(switches[0], privacyLink as HTMLElement)).toBe(true)
     expect(isDocumentFollowing(lastButton, privacyLink as HTMLElement)).toBe(true)
     expect(isDocumentFollowing(privacyLink as HTMLElement, termsLink as HTMLElement)).toBe(true)
   })
@@ -321,10 +318,10 @@ describe('ProfilePage', () => {
     )
 
     const switches = screen.getAllByRole('switch')
-    expect(switches).toHaveLength(3)
-    expect(isDocumentFollowing(switches[1], switches[2])).toBe(true)
+    expect(switches).toHaveLength(2)
+    expect(isDocumentFollowing(switches[0], switches[1])).toBe(true)
 
-    fireEvent.click(switches[2])
+    fireEvent.click(switches[1])
     expect(withdrawAiConsent).toHaveBeenCalledTimes(1)
   })
 
@@ -439,7 +436,7 @@ describe('ProfilePage', () => {
 
     expect(screen.getByText("Le score n'a pas pu être chargé.")).toBeTruthy()
     expect(screen.getByText('Marie Renaud')).toBeTruthy()
-    expect(screen.getByRole('switch', { name: 'Notifications' })).toBeTruthy()
+    expect(screen.getByRole('switch', { name: 'Traitement OpenAI' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
     expect(refetchGamification).toHaveBeenCalledTimes(1)
@@ -461,7 +458,7 @@ describe('ProfilePage', () => {
 
     expect(screen.getByText('Score & progression')).toBeTruthy()
     expect(screen.getByText('Marie Renaud')).toBeTruthy()
-    expect(screen.getByRole('switch', { name: 'Notifications' })).toBeTruthy()
+    expect(screen.getByRole('switch', { name: 'Traitement OpenAI' })).toBeTruthy()
   })
 
   it('renders rewards as a disabled accessible placeholder without navigation', () => {
@@ -628,21 +625,6 @@ describe('ProfilePage', () => {
     )
 
     expect(screen.getByRole('button', { name: /Analyse.*Indicateurs opérationnels/i })).toBeTruthy()
-  })
-
-  it('updates notification preferences through the global toggle', () => {
-    render(
-      createElement(ProfilePage, {
-        onNavigate,
-        onSignOut,
-      }),
-    )
-
-    const notificationSwitch = screen.getByRole('switch', { name: 'Notifications' })
-    expect(notificationSwitch.getAttribute('aria-checked')).toBe('true')
-
-    fireEvent.click(notificationSwitch)
-    expect(mutate).toHaveBeenCalledWith({ notifications_enabled: false })
   })
 
   it('hides the push toggle on web', () => {

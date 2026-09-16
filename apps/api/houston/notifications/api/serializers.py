@@ -111,12 +111,10 @@ class MarkAllNotificationsReadResponseSerializer(serializers.Serializer):
 
 
 class NotificationPreferencesSerializer(serializers.Serializer):
-    notifications_enabled = serializers.BooleanField()
     push_enabled = serializers.BooleanField()
 
 
 class NotificationPreferencesUpdateSerializer(serializers.Serializer):
-    notifications_enabled = serializers.BooleanField(required=False)
     push_enabled = serializers.BooleanField(required=False)
 
     def validate(self, attrs):
