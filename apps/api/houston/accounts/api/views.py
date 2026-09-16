@@ -94,7 +94,7 @@ class AuthRateLimitedMixin:
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class CsrfCookieView(APIView):
     authentication_classes = []
-    permission_classes = []
+    permission_classes = [permissions.AllowAny]
 
     @extend_schema(
         tags=["auth"],
@@ -115,7 +115,7 @@ class CsrfCookieView(APIView):
 
 class LoginView(AuthRateLimitedMixin, APIView):
     authentication_classes = []
-    permission_classes = []
+    permission_classes = [permissions.AllowAny]
     throttle_scope = settings.AUTH_THROTTLE_SCOPE_LOGIN
 
     @extend_schema(
@@ -166,7 +166,7 @@ class LoginView(AuthRateLimitedMixin, APIView):
 
 class RegisterView(AuthRateLimitedMixin, APIView):
     authentication_classes = []
-    permission_classes = []
+    permission_classes = [permissions.AllowAny]
     throttle_scope = settings.AUTH_THROTTLE_SCOPE_REGISTER
 
     @extend_schema(
@@ -232,7 +232,7 @@ class RegisterView(AuthRateLimitedMixin, APIView):
 
 class ValidateOwnerRegistrationView(AuthRateLimitedMixin, APIView):
     authentication_classes = []
-    permission_classes = []
+    permission_classes = [permissions.AllowAny]
     throttle_scope = settings.AUTH_THROTTLE_SCOPE_REGISTER_VALIDATE
 
     @extend_schema(
@@ -273,7 +273,7 @@ class ValidateOwnerRegistrationView(AuthRateLimitedMixin, APIView):
 
 class DirectorInvitationAcceptView(AuthRateLimitedMixin, APIView):
     authentication_classes = []
-    permission_classes = []
+    permission_classes = [permissions.AllowAny]
     throttle_scope = settings.AUTH_THROTTLE_SCOPE_INVITATION_ACCEPT
 
     @extend_schema(
@@ -367,7 +367,7 @@ class DirectorInvitationAcceptView(AuthRateLimitedMixin, APIView):
 
 class RefreshView(AuthRateLimitedMixin, APIView):
     authentication_classes = []
-    permission_classes = []
+    permission_classes = [permissions.AllowAny]
     throttle_scope = settings.AUTH_THROTTLE_SCOPE_REFRESH
 
     @extend_schema(
@@ -428,7 +428,7 @@ class RefreshView(AuthRateLimitedMixin, APIView):
 
 class LogoutView(APIView):
     authentication_classes = [OptionalBearerAccessTokenAuthentication]
-    permission_classes = []
+    permission_classes = [permissions.AllowAny]
 
     @extend_schema(
         tags=["auth"],

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import BasePermission
 
 from houston.accounts.models import User
@@ -320,11 +321,45 @@ class CanCreateEstablishment(BasePermission):
         return can_create_establishment(getattr(request, "user", None))
 
 
-class CanManageOrganization(BasePermission):
-    message = "You do not have permission to manage this organization."
+class OrganizationManagementForbidden(PermissionDenied):
+    default_code = "organization_management_forbidden"
+    default_detail = "You do not have permission to manage this organization."
 
-    def has_permission(self, request, view) -> bool:
-        return can_manage_organization(getattr(request, "user", None))
+
+class EstablishmentAdminForbidden(PermissionDenied):
+    default_code = "establishment_admin_forbidden"
+    default_detail = "You do not have permission to administer this establishment."
+
+
+@dataclass(frozen=True)
+class OrganizationAdminAccessDecision:
+    allowed: bool = False
+    forbidden: bool = False
+    organization: Organization | None = None
+
+
+@dataclass(frozen=True)
+class EstablishmentAdminAccessDecision:
+    allowed: bool = False
+    not_found: bool = False
+    forbidden: bool = False
+    actor: EstablishmentAdminActor | None = None
+
+
+def decide_organization_admin_access(
+    user: User | None,
+    organization_id,
+) -> OrganizationAdminAccessDecision:
+    """Path-scoped organization admin: manageable org or forbidden (no 404 enumeration)."""
+    if organization_id is None:
+        return OrganizationAdminAccessDecision(forbidden=True)
+    organization = resolve_manageable_organization(
+        user,
+        preferred_organization_id=organization_id,
+    )
+    if organization is None:
+        return OrganizationAdminAccessDecision(forbidden=True)
+    return OrganizationAdminAccessDecision(allowed=True, organization=organization)
 
 
 def resolve_active_establishment_admin_actor(
@@ -340,8 +375,43 @@ def resolve_active_establishment_admin_actor(
     return actor
 
 
-class CanAccessEstablishmentAdmin(BasePermission):
-    message = "You do not have permission to administer this establishment."
+def decide_active_establishment_admin_access(
+    user: User | None,
+    establishment_id,
+) -> EstablishmentAdminAccessDecision:
+    """Path-scoped establishment admin: missing/inactive → not_found; else actor or forbidden."""
+    if establishment_id is None:
+        return EstablishmentAdminAccessDecision(not_found=True)
+    establishment = Establishment.objects.filter(id=establishment_id).first()
+    if establishment is None or establishment.status != Establishment.Status.ACTIVE:
+        return EstablishmentAdminAccessDecision(not_found=True)
+    actor = resolve_active_establishment_admin_actor(user, establishment_id)
+    if actor is None:
+        return EstablishmentAdminAccessDecision(forbidden=True)
+    return EstablishmentAdminAccessDecision(allowed=True, actor=actor)
+
+
+class CanManageOrganization(BasePermission):
+    message = OrganizationManagementForbidden.default_detail
 
     def has_permission(self, request, view) -> bool:
-        return bool(getattr(request, "user", None) and request.user.is_authenticated)
+        organization_id = getattr(view, "kwargs", {}).get("organization_id")
+        decision = decide_organization_admin_access(request.user, organization_id)
+        if decision.forbidden or not decision.allowed or decision.organization is None:
+            raise OrganizationManagementForbidden()
+        view.organization = decision.organization
+        return True
+
+
+class CanAccessEstablishmentAdmin(BasePermission):
+    message = EstablishmentAdminForbidden.default_detail
+
+    def has_permission(self, request, view) -> bool:
+        establishment_id = getattr(view, "kwargs", {}).get("establishment_id")
+        decision = decide_active_establishment_admin_access(request.user, establishment_id)
+        if decision.not_found:
+            raise NotFound()
+        if decision.forbidden or not decision.allowed or decision.actor is None:
+            raise EstablishmentAdminForbidden()
+        view.admin_actor = decision.actor
+        return True

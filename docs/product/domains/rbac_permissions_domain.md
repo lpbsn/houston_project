@@ -1,7 +1,7 @@
 # RBAC / Permissions Domain
 
 Status: authoritative
-Last reviewed: 2026-07-05
+Last reviewed: 2026-09-16
 Implementation status: implemented (Action Plan RBAC in [`action_plans/permissions.py`](../../../apps/api/houston/action_plans/permissions.py); legacy Action/Checklist domains removed Lot 10)
 
 ## 1. Purpose
@@ -32,6 +32,12 @@ Identity, organization, establishment, membership lifecycle, and membership sele
 ## 4. Core Invariants
 
 - Default deny. If membership, role, BusinessUnit scope, or resource visibility is not valid, access is denied.
+- Authorization is layered and must not be collapsed:
+  - **PostgreSQL** enforces that a `MembershipScope` row cannot link a membership to a BusinessUnit of another establishment (`establishment_id` stamped from the membership, composite foreign keys).
+  - **Domain services** own business matrices (active BusinessUnit, Owner/Director without scope rows, invite/manage rules). A database constraint does not replace those checks.
+  - **DRF default** is deny-by-omission (`DenyByDefault`). Omitting `permission_classes` refuses access, including for an authenticated bearer. Intentionally unauthenticated routes opt in with `AllowAny`; the closed public allowlist is enforced by the urlconf inventory test, not a second permission registry.
+  - **Surface permissions** decide HTTP entry for a given context. Path-scoped establishment/organization admin is decided **once** per request (`decide_active_establishment_admin_access` / `decide_organization_admin_access`); the view reads the attached actor or organization. `HasActiveMembership` remains a coarse session gate, not a substitute for object rules.
+- Platform Admin (not implemented) is **not** an `EstablishmentMembership` role and **must not** add an implicit tenant bypass on `HasActiveMembership` or `CanAccessEstablishmentAdmin`.
 - Every establishment-scoped operation requires an active membership plus an active user, active establishment, and active organization.
 - Backend validates authorization on every request. Frontend visibility never grants access.
 - Object-level authorization is mandatory for both reads and writes.

@@ -105,12 +105,10 @@ def test_inactive_membership_does_not_cover_business_unit():
 def test_cross_establishment_membership_does_not_cover_business_unit():
     establishment = create_establishment(name="Hotel A")
     other_establishment = create_establishment(name="Hotel B")
-    staff = create_membership(establishment=establishment, role=EstablishmentMembership.Role.STAFF)
+    owner = create_membership(establishment=establishment, role=EstablishmentMembership.Role.OWNER)
     business_unit = create_business_unit(establishment=other_establishment, key="restaurant")
-    create_membership_with_business_unit_scope(membership=staff, business_unit=business_unit)
-    staff = EstablishmentMembership.objects.prefetch_related("scope_links").get(pk=staff.pk)
 
-    assert membership_covers_business_unit_including_admins(staff, business_unit) is False
+    assert membership_covers_business_unit_including_admins(owner, business_unit) is False
 
 
 def test_null_business_unit_is_not_covered():

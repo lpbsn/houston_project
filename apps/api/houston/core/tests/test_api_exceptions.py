@@ -59,6 +59,21 @@ def test_permission_denied_returns_standard_contract():
     }
 
 
+def test_permission_denied_preserves_business_default_code():
+    class EstablishmentAdminForbidden(exceptions.PermissionDenied):
+        default_code = "establishment_admin_forbidden"
+        default_detail = "You do not have permission to administer this establishment."
+
+    response = api_exception_handler(EstablishmentAdminForbidden(), _context())
+
+    assert response is not None
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.data == {
+        "code": "establishment_admin_forbidden",
+        "detail": "You do not have permission to administer this establishment.",
+    }
+
+
 def test_not_found_returns_standard_contract():
     exc = exceptions.NotFound()
 

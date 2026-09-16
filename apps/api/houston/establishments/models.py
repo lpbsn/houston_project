@@ -391,6 +391,10 @@ class EstablishmentMembership(BaseModel):
                 fields=["user", "establishment"],
                 name="unique_user_establishment_membership",
             ),
+            models.UniqueConstraint(
+                fields=["id", "establishment"],
+                name="membership_id_establishment_uniq",
+            ),
         ]
         indexes = [
             models.Index(fields=["establishment"], name="membership_est_idx"),
@@ -510,6 +514,12 @@ class MembershipScope(BaseModel):
         related_name="scope_links",
         db_index=False,
     )
+    establishment = models.ForeignKey(
+        Establishment,
+        on_delete=models.CASCADE,
+        related_name="membership_scopes",
+        db_index=False,
+    )
     business_unit = models.ForeignKey(
         "BusinessUnit",
         on_delete=models.CASCADE,
@@ -528,6 +538,14 @@ class MembershipScope(BaseModel):
             models.Index(fields=["membership"], name="mship_scope_mship_idx"),
             models.Index(fields=["business_unit"], name="mship_scope_bu_idx"),
         ]
+
+    def save(self, *args, **kwargs):
+        if self.membership_id is not None:
+            self.establishment_id = self.membership.establishment_id
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None:
+                kwargs["update_fields"] = {*update_fields, "establishment_id"}
+        super().save(*args, **kwargs)
 
     def clean(self) -> None:
         super().clean()
@@ -771,6 +789,10 @@ class BusinessUnit(BaseModel):
             models.UniqueConstraint(
                 fields=["establishment", "routing_key"],
                 name="bu_est_routing_key_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=["id", "establishment"],
+                name="bu_id_establishment_uniq",
             ),
             models.CheckConstraint(
                 condition=~Q(specific_name=""),

@@ -30,7 +30,7 @@ from houston.establishments.organization_admin_selectors import (
 )
 from houston.establishments.permissions import (
     CanManageOrganization,
-    resolve_manageable_organization,
+    OrganizationManagementForbidden,
 )
 from houston.establishments.services import (
     DirectorInvitationDuplicateError,
@@ -43,29 +43,12 @@ from houston.establishments.services import (
 )
 
 
-def _resolve_path_organization(request, organization_id):
-    organization = resolve_manageable_organization(
-        request.user,
-        preferred_organization_id=organization_id,
-    )
-    if organization is None:
-        return None
-    return organization
-
-
-def _organization_forbidden_response() -> Response:
-    return Response(
-        {
-            "code": "organization_management_forbidden",
-            "detail": "You do not have permission to manage this organization.",
-        },
-        status=status.HTTP_403_FORBIDDEN,
-    )
-
-
-class OrganizationAdminOverviewView(APIView):
+class OrganizationAdminAPIView(APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [permissions.IsAuthenticated, CanManageOrganization]
+
+
+class OrganizationAdminOverviewView(OrganizationAdminAPIView):
 
     @extend_schema(
         tags=["organizations"],
@@ -80,16 +63,12 @@ class OrganizationAdminOverviewView(APIView):
         ),
     )
     def get(self, request, organization_id):
-        organization = _resolve_path_organization(request, organization_id)
-        if organization is None:
-            return _organization_forbidden_response()
+        organization = self.organization
         payload = get_organization_admin_overview(organization=organization)
         return Response(OrganizationAdminOverviewSerializer(payload).data)
 
 
-class OrganizationAdminEstablishmentListView(APIView):
-    authentication_classes = [BearerAccessTokenAuthentication]
-    permission_classes = [permissions.IsAuthenticated, CanManageOrganization]
+class OrganizationAdminEstablishmentListView(OrganizationAdminAPIView):
 
     @extend_schema(
         tags=["organizations"],
@@ -104,9 +83,7 @@ class OrganizationAdminEstablishmentListView(APIView):
         ),
     )
     def get(self, request, organization_id):
-        organization = _resolve_path_organization(request, organization_id)
-        if organization is None:
-            return _organization_forbidden_response()
+        organization = self.organization
         results = list_organization_admin_establishments(
             organization=organization,
             actor=request.user,
@@ -116,9 +93,7 @@ class OrganizationAdminEstablishmentListView(APIView):
         )
 
 
-class OrganizationAdminMemberListView(APIView):
-    authentication_classes = [BearerAccessTokenAuthentication]
-    permission_classes = [permissions.IsAuthenticated, CanManageOrganization]
+class OrganizationAdminMemberListView(OrganizationAdminAPIView):
 
     @extend_schema(
         tags=["organizations"],
@@ -142,9 +117,7 @@ class OrganizationAdminMemberListView(APIView):
         ),
     )
     def get(self, request, organization_id):
-        organization = _resolve_path_organization(request, organization_id)
-        if organization is None:
-            return _organization_forbidden_response()
+        organization = self.organization
 
         query = OrganizationAdminMemberListQuerySerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
@@ -161,9 +134,7 @@ class OrganizationAdminMemberListView(APIView):
         return Response(OrganizationAdminMemberListSerializer({"results": results}).data)
 
 
-class OrganizationAdminMemberFilterOptionsView(APIView):
-    authentication_classes = [BearerAccessTokenAuthentication]
-    permission_classes = [permissions.IsAuthenticated, CanManageOrganization]
+class OrganizationAdminMemberFilterOptionsView(OrganizationAdminAPIView):
 
     @extend_schema(
         tags=["organizations"],
@@ -178,16 +149,12 @@ class OrganizationAdminMemberFilterOptionsView(APIView):
         ),
     )
     def get(self, request, organization_id):
-        organization = _resolve_path_organization(request, organization_id)
-        if organization is None:
-            return _organization_forbidden_response()
+        organization = self.organization
         payload = get_organization_admin_member_filter_options(organization=organization)
         return Response(OrganizationAdminMemberFilterOptionsSerializer(payload).data)
 
 
-class OrganizationAdminOwnerListView(APIView):
-    authentication_classes = [BearerAccessTokenAuthentication]
-    permission_classes = [permissions.IsAuthenticated, CanManageOrganization]
+class OrganizationAdminOwnerListView(OrganizationAdminAPIView):
 
     @extend_schema(
         tags=["organizations"],
@@ -199,16 +166,12 @@ class OrganizationAdminOwnerListView(APIView):
         description="Lists organizational Owners (active and invited), deduplicated by user.",
     )
     def get(self, request, organization_id):
-        organization = _resolve_path_organization(request, organization_id)
-        if organization is None:
-            return _organization_forbidden_response()
+        organization = self.organization
         results = list_organization_admin_owners(organization=organization)
         return Response(OrganizationAdminOwnerListSerializer({"results": results}).data)
 
 
-class OrganizationAdminOwnerInvitationView(APIView):
-    authentication_classes = [BearerAccessTokenAuthentication]
-    permission_classes = [permissions.IsAuthenticated, CanManageOrganization]
+class OrganizationAdminOwnerInvitationView(OrganizationAdminAPIView):
 
     @extend_schema(
         tags=["organizations"],
@@ -227,9 +190,7 @@ class OrganizationAdminOwnerInvitationView(APIView):
         ),
     )
     def post(self, request, organization_id):
-        organization = _resolve_path_organization(request, organization_id)
-        if organization is None:
-            return _organization_forbidden_response()
+        organization = self.organization
 
         request_serializer = OrganizationAdminOwnerInvitationRequestSerializer(
             data=request.data
@@ -245,7 +206,7 @@ class OrganizationAdminOwnerInvitationView(APIView):
                 last_name=request_serializer.validated_data["last_name"],
             )
         except MembershipManagementForbiddenError:
-            return _organization_forbidden_response()
+            raise OrganizationManagementForbidden()
         except DirectorInvitationDuplicateError:
             return Response(
                 {

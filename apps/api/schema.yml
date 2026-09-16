@@ -127,7 +127,6 @@ paths:
       tags:
       - schema
       security:
-      - BearerAccessToken: []
       - {}
       responses:
         '200':
@@ -950,6 +949,8 @@ paths:
         subsequent auth mutations.
       tags:
       - auth
+      security:
+      - {}
       responses:
         '200':
           content:
@@ -977,6 +978,8 @@ paths:
             schema:
               $ref: '#/components/schemas/LoginRequest'
         required: true
+      security:
+      - {}
       responses:
         '200':
           content:
@@ -1300,6 +1303,8 @@ paths:
             schema:
               $ref: '#/components/schemas/RefreshRequest'
         required: true
+      security:
+      - {}
       responses:
         '200':
           content:
@@ -1345,6 +1350,8 @@ paths:
             schema:
               $ref: '#/components/schemas/RegistrationRequest'
         required: true
+      security:
+      - {}
       responses:
         '201':
           content:
@@ -1388,6 +1395,8 @@ paths:
             schema:
               $ref: '#/components/schemas/RegistrationOwnerValidateRequest'
         required: true
+      security:
+      - {}
       responses:
         '204':
           description: Owner registration fields are valid.
@@ -1511,6 +1520,8 @@ paths:
         versionCode is 0 (no forced update).
       tags:
       - v1
+      security:
+      - {}
       responses:
         '200':
           content:
@@ -3708,7 +3719,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
     patch:
       operationId: v1_establishments_admin_memberships_partial_update
@@ -3770,7 +3781,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '409':
           content:
@@ -3828,7 +3839,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
   /api/v1/establishments/{establishment_id}/admin/memberships/{membership_id}/deactivate/:
     post:
@@ -3874,7 +3885,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '409':
           content:
@@ -7369,6 +7380,8 @@ paths:
       operationId: v1_health_retrieve
       tags:
       - v1
+      security:
+      - {}
       responses:
         '200':
           content:
@@ -7398,6 +7411,8 @@ paths:
             schema:
               $ref: '#/components/schemas/DirectorInvitationAcceptRequest'
         required: true
+      security:
+      - {}
       responses:
         '201':
           content:

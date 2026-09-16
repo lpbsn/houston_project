@@ -64,6 +64,9 @@ def _resolve_error_code(exc: Exception) -> str:
     if isinstance(exc, exceptions.NotAuthenticated):
         return "not_authenticated"
     if isinstance(exc, exceptions.PermissionDenied):
+        default_code = getattr(exc, "default_code", None)
+        if isinstance(default_code, str) and default_code:
+            return default_code
         return "permission_denied"
     if isinstance(exc, exceptions.NotFound):
         return "not_found"
