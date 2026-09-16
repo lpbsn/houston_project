@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import uuid
 
 from django.urls import get_resolver
@@ -37,18 +38,39 @@ PUBLIC_API_VIEWS = frozenset(
 )
 
 
-def _iter_routed_api_views(url_patterns):
+def _iter_url_callbacks(url_patterns, prefix: str = ""):
     for pattern in url_patterns:
+        route = prefix + str(getattr(pattern, "pattern", pattern))
         if hasattr(pattern, "url_patterns"):
-            yield from _iter_routed_api_views(pattern.url_patterns)
+            yield from _iter_url_callbacks(pattern.url_patterns, route)
             continue
         callback = getattr(pattern, "callback", None)
         if callback is None:
             continue
-        view_cls = getattr(callback, "view_class", None)
-        if view_cls is None or not issubclass(view_cls, APIView):
+        yield route, callback
+
+
+def _resolve_view_callback(callback):
+    """Resolve Django ``as_view`` / DRF ``as_view`` / ``@api_view`` through wrappers."""
+    seen: set[int] = set()
+    current = callback
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        view_cls = getattr(current, "view_class", None) or getattr(current, "cls", None)
+        if view_cls is not None:
+            initkwargs = getattr(current, "view_initkwargs", None)
+            if initkwargs is None:
+                initkwargs = getattr(current, "initkwargs", None)
+            return view_cls, dict(initkwargs or {})
+        if isinstance(current, functools.partial):
+            current = current.func
             continue
-        yield view_cls, getattr(callback, "initkwargs", {}) or {}
+        wrapped = getattr(current, "__wrapped__", None)
+        if wrapped is not None and wrapped is not current:
+            current = wrapped
+            continue
+        break
+    return None, {}
 
 
 def _permission_class_lists(view_cls, initkwargs: dict) -> list[list[type[BasePermission]]]:
@@ -74,14 +96,39 @@ def _is_deny_by_omission_only(permission_classes: list) -> bool:
     return permission_classes == [DenyByDefault]
 
 
-def test_routed_api_views_are_public_allowlist_or_explicitly_guarded():
-    routed = list(_iter_routed_api_views(get_resolver().url_patterns))
-    assert routed
+def _is_api_route(route: str) -> bool:
+    return route.startswith("api/") or "/api/" in route
 
+
+def test_inventory_resolves_drf_callback_through_wrappers():
+    wrapped = HealthView.as_view()
+
+    def outer(request, *args, **kwargs):
+        return wrapped(request, *args, **kwargs)
+
+    outer.__wrapped__ = wrapped
+    view_cls, initkwargs = _resolve_view_callback(outer)
+    assert view_cls is HealthView
+    assert initkwargs == {}
+
+    partial = functools.partial(wrapped)
+    view_cls, _ = _resolve_view_callback(partial)
+    assert view_cls is HealthView
+
+
+def test_routed_api_views_are_public_allowlist_or_explicitly_guarded():
     public_seen: set[type[APIView]] = set()
-    for view_cls, initkwargs in routed:
+    api_routes_seen = 0
+
+    for route, callback in _iter_url_callbacks(get_resolver().url_patterns):
+        view_cls, initkwargs = _resolve_view_callback(callback)
+        if view_cls is None or not issubclass(view_cls, APIView):
+            assert not _is_api_route(route), route
+            continue
+
+        api_routes_seen += 1
         permission_lists = _permission_class_lists(view_cls, initkwargs)
-        assert permission_lists
+        assert permission_lists, view_cls
         if view_cls in PUBLIC_API_VIEWS:
             public_seen.add(view_cls)
             assert all(_is_allow_any_only(group) for group in permission_lists), view_cls
@@ -95,6 +142,7 @@ def test_routed_api_views_are_public_allowlist_or_explicitly_guarded():
             assert not _is_deny_by_omission_only(group), view_cls
             assert not _is_allow_any_only(group), view_cls
 
+    assert api_routes_seen
     assert public_seen == PUBLIC_API_VIEWS
 
 
