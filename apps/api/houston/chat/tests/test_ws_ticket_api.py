@@ -15,7 +15,7 @@ from houston.chat.tests.conftest import (
     ws_ticket_url,
 )
 from houston.chat.ws_ticket import WsTicketError, consume_ws_ticket, issue_ws_ticket
-from houston.establishments.models import EstablishmentMembership
+from houston.establishments.models import Establishment, EstablishmentMembership
 
 pytestmark = pytest.mark.django_db
 
@@ -144,3 +144,66 @@ def test_ws_ticket_expired_rejected():
             consume_ws_ticket(ticket, establishment_id=establishment.id)
 
     cache.clear()
+
+
+def test_ws_ticket_ok_for_selected_establishment(api_client):
+    establishment_a = create_establishment()
+    establishment_b = Establishment.objects.create(
+        name="Ticket Site B",
+        organization=establishment_a.organization,
+        status=Establishment.Status.ACTIVE,
+        chat_enabled=True,
+    )
+    user = create_user(username="chat_ticket_selected")
+    create_membership(user=user, establishment=establishment_a)
+    create_membership(user=user, establishment=establishment_b)
+    token = login(api_client, user=user)
+
+    from houston.accounts.models import UserSession
+
+    session = UserSession.objects.filter(user=user).order_by("-created_at").first()
+    assert session is not None
+    session.selected_establishment = establishment_a
+    session.save(update_fields=["selected_establishment", "updated_at"])
+
+    selected = api_client.post(
+        ws_ticket_url(establishment_a.id),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    other = api_client.post(
+        ws_ticket_url(establishment_b.id),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert selected.status_code == 200
+    assert other.status_code == 403
+    assert other.json()["code"] == "permission_denied"
+
+
+def test_ws_ticket_rejects_when_no_selected_establishment(api_client):
+    establishment_a = create_establishment()
+    establishment_b = Establishment.objects.create(
+        name="Ticket Site Unselected B",
+        organization=establishment_a.organization,
+        status=Establishment.Status.ACTIVE,
+        chat_enabled=True,
+    )
+    user = create_user(username="chat_ticket_unselected")
+    create_membership(user=user, establishment=establishment_a)
+    create_membership(user=user, establishment=establishment_b)
+    token = login(api_client, user=user)
+
+    from houston.accounts.models import UserSession
+
+    session = UserSession.objects.filter(user=user).order_by("-created_at").first()
+    assert session is not None
+    session.selected_establishment = None
+    session.save(update_fields=["selected_establishment", "updated_at"])
+
+    response = api_client.post(
+        ws_ticket_url(establishment_a.id),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "permission_denied"

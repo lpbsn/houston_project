@@ -60,7 +60,7 @@ Refresh token:
 - stored as `SessionRefreshToken.token_digest` in the database
 - rotated on every refresh
 - previous refresh token invalidated immediately
-- reuse of an old refresh token revokes the token family and session
+- reuse of an old refresh token calls `revoke_session` (same Chat + realtime `session_revoked` notifies as logout)
 - `refresh_token_transport` (`cookie` or `body`) describes credential transport only; it is never runtime proof, a trust level, or an authorization input
 
 Refresh token cookie:
@@ -428,4 +428,6 @@ Authorization: Bearer <access_token>
 
 - After successful WS auth, the consumer joins `chat_session_{session_id}` where `session_id` comes from the ws-ticket payload (same `UserSession` as the REST access token).
 - `revoke_session` and `switch_selected_establishment` schedule `access.revoked` to that session group only (establishment switch does **not** use membership-wide groups).
+- Refresh-token reuse uses `revoke_session`, so Chat receives `session_revoked` the same way as logout.
 - This is transport-only (Channels/Redis) ; `UserSession` in PostgreSQL remains the auth source of truth.
+- After `auth.ok`, every supported client application frame and every server event that carries Chat data revalidates that PostgreSQL session/membership predicate before delivery. Channel group membership is addressing, not authorization.

@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
-from houston.accounts.models import User
+from houston.accounts.models import User, UserSession
 from houston.chat.models import ChatConversation, ChatMessage, ChatParticipant
 from houston.chat.tests.conftest import (
     create_establishment,
@@ -17,7 +17,7 @@ from houston.chat.tests.helpers import (
     create_dm,
     create_group,
 )
-from houston.establishments.models import EstablishmentMembership
+from houston.establishments.models import Establishment, EstablishmentMembership
 
 pytestmark = pytest.mark.django_db
 
@@ -161,6 +161,55 @@ def test_chat_disabled_blocks_access_endpoints(api_client):
             response = request(chat_url(establishment.id, suffix), **kwargs)
         assert response.status_code == 403, suffix
         assert response.json()["code"] == "permission_denied"
+
+
+def test_conversations_require_selected_establishment(api_client):
+    establishment_a = create_establishment()
+    establishment_b = Establishment.objects.create(
+        name="Conv Site B",
+        organization=establishment_a.organization,
+        status=Establishment.Status.ACTIVE,
+        chat_enabled=True,
+    )
+    user = create_user(username="chat_conv_selected")
+    create_membership(user=user, establishment=establishment_a)
+    create_membership(user=user, establishment=establishment_b)
+    token = login(api_client, user=user)
+    session = UserSession.objects.filter(user=user).order_by("-created_at").first()
+    assert session is not None
+    session.selected_establishment = establishment_a
+    session.save(update_fields=["selected_establishment", "updated_at"])
+
+    selected = api_client.get(
+        chat_url(establishment_a.id, "conversations/"),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    other = api_client.get(
+        chat_url(establishment_b.id, "conversations/"),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    status_other = api_client.get(
+        chat_url(establishment_b.id, "status/"),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert selected.status_code == 200
+    assert other.status_code == 403
+    assert other.json()["code"] == "permission_denied"
+    assert status_other.status_code == 404
+
+    session.selected_establishment = None
+    session.save(update_fields=["selected_establishment", "updated_at"])
+    unselected = api_client.get(
+        chat_url(establishment_a.id, "conversations/"),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    unselected_status = api_client.get(
+        chat_url(establishment_a.id, "status/"),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert unselected.status_code == 403
+    assert unselected_status.status_code == 404
 
 
 def test_get_eligible_memberships_excludes_self_and_returns_peers(api_client):

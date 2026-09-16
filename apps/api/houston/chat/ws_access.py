@@ -21,7 +21,6 @@ def validate_ws_connection_access(
     session_id: UUID,
     establishment_id: UUID,
     membership_id: UUID,
-    require_selected_establishment: bool = True,
 ) -> WsAccessValidation:
     session = UserSession.objects.filter(id=session_id).first()
     if session is None:
@@ -30,10 +29,10 @@ def validate_ws_connection_access(
     now = timezone.now()
     if session.revoked_at is not None or session.status != UserSession.Status.ACTIVE:
         return WsAccessValidation(ok=False, reason="session_revoked")
-    if session.absolute_expires_at <= now:
+    if session.refresh_expires_at <= now or session.absolute_expires_at <= now:
         return WsAccessValidation(ok=False, reason="session_revoked")
 
-    if require_selected_establishment and session.selected_establishment_id != establishment_id:
+    if session.selected_establishment_id != establishment_id:
         return WsAccessValidation(ok=False, reason="establishment_switched")
 
     membership = (

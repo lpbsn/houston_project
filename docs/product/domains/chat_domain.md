@@ -84,7 +84,10 @@ Supported `access.revoked` `reason` values :
 | `chat_disabled` | `update_establishment_chat_enabled(False)` |
 | `access_denied` | `message.send` revalidation failure |
 
-- Backend revalidates session, membership, establishment, organization, `chat_enabled`, and `selected_establishment` before each `message.send`.
+- Backend revalidates session (`refresh_expires_at` and `absolute_expires_at`), membership, establishment, organization, `chat_enabled`, and `selected_establishment` on Chat WS auth, before each supported client application frame, and before delivering `message.created` / `conversation.updated` / `conversation.access_revoked`.
+- Unsupported or invalid client frame types after `auth.ok` are rejected as protocol errors without a PostgreSQL revalidation.
+- `message.created` and `conversation.updated` also require an active conversation participant (`get_active_participant`) ; otherwise the body is dropped and the global socket stays open.
+- `conversation.access_revoked` is still delivered when global Chat access holds, including to the member who just lost that conversation.
 - On revalidation failure : send `access.revoked`, close socket, do **not** create `ChatMessage`.
 - Client must not auto-reconnect after `access.revoked` ; network reconnect remains normal for other close reasons.
 - `session_revoked` : frontend clears auth/cache and lets auth/bootstrap/login flow resume (no redirect to `/reporting`).
@@ -179,7 +182,7 @@ Supported `access.revoked` `reason` values :
 | Create DM | Any active member ; target = active membership same establishment |
 | Create group | Manager, Director, Owner |
 | View conversation | Active participant only |
-| Send message | Active participant ; WS only ; revalidated on each send |
+| Send message | Active participant ; WS only ; revalidated on each supported send frame |
 | Group admin actions | Participant with `admin` role |
 | Add/remove/promote participants | Group admin |
 | Rename group | Group admin |
