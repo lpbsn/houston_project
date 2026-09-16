@@ -2,27 +2,13 @@ import { apiClient, withAuthRetry } from '@/api/client'
 
 import type {
   ActivationBlocker,
-  ActivationResponse,
-  ActivationSummaryResponse,
-  DetailResponse,
-  DirectorInvitationRequest,
-  DirectorInvitationResponse,
-  MarkReadyResponse,
-  OnboardingErrorResponse,
-  OnboardingProposalErrorResponse,
-  OnboardingProposalResponse,
   OnboardingSessionCreateRequest,
   OnboardingSessionCreateResponse,
   OnboardingSessionResponse,
-  ProposalCommandResponse,
-  ProposalValidationErrorItem,
-  RuntimeConfigResponse,
   CatalogActivitySubjectSuggestion,
   CatalogBusinessUnitSuggestion,
   OnboardingCompleteResponse,
   OnboardingDraftResponse,
-  OnboardingProposalCreateRequest,
-  OnboardingProposalUpdateRequest,
 } from './types'
 import type { OnboardingDraftPayload } from './lib/onboarding-draft-payload'
 
@@ -30,14 +16,6 @@ export const onboardingQueryKeys = {
   all: ['onboarding'] as const,
   sessions: () => ['onboarding', 'sessions'] as const,
   session: (sessionId: string) => ['onboarding', 'sessions', sessionId] as const,
-  proposals: (sessionId: string) =>
-    ['onboarding', 'sessions', sessionId, 'proposals'] as const,
-  proposal: (sessionId: string, proposalId: string) =>
-    ['onboarding', 'sessions', sessionId, 'proposals', proposalId] as const,
-  runtimeConfig: (sessionId: string) =>
-    ['onboarding', 'sessions', sessionId, 'runtime-config'] as const,
-  activationSummary: (sessionId: string) =>
-    ['onboarding', 'sessions', sessionId, 'activation-summary'] as const,
   draft: (sessionId: string) =>
     ['onboarding', 'sessions', sessionId, 'draft'] as const,
   catalogBusinessUnits: (query: string) =>
@@ -51,7 +29,6 @@ export class OnboardingApiError extends Error {
   detail: string
   code: string | null
   blockers: ActivationBlocker[]
-  proposalErrors: ProposalValidationErrorItem[]
   payload: unknown
 
   constructor(options: {
@@ -59,7 +36,6 @@ export class OnboardingApiError extends Error {
     detail: string
     code?: string | null
     blockers?: ActivationBlocker[]
-    proposalErrors?: ProposalValidationErrorItem[]
     payload?: unknown
   }) {
     super(options.detail)
@@ -68,7 +44,6 @@ export class OnboardingApiError extends Error {
     this.detail = options.detail
     this.code = options.code ?? null
     this.blockers = options.blockers ?? []
-    this.proposalErrors = options.proposalErrors ?? []
     this.payload = options.payload
   }
 }
@@ -114,24 +89,12 @@ function getActivationBlockers(payload: unknown) {
   )
 }
 
-function getProposalValidationErrors(payload: unknown) {
-  if (!isRecord(payload) || !Array.isArray(payload.errors)) {
-    return []
-  }
-
-  return payload.errors.filter(
-    (error): error is ProposalValidationErrorItem =>
-      isRecord(error) && typeof error.code === 'string',
-  )
-}
-
 function buildOnboardingError(response: Response, error: unknown, fallbackDetail: string) {
   return new OnboardingApiError({
     status: response.status,
     detail: getDetail(error) ?? fallbackDetail,
     code: getOnboardingCode(error),
     blockers: getActivationBlockers(error),
-    proposalErrors: getProposalValidationErrors(error),
     payload: error,
   })
 }
@@ -178,122 +141,6 @@ export async function getOnboardingSession(sessionId: string) {
   }
 
   return result.data as OnboardingSessionResponse
-}
-
-export async function getRuntimeConfig(sessionId: string) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.GET('/api/v1/onboarding-sessions/{session_id}/runtime-config/', {
-        params: {
-          path: { session_id: sessionId },
-        },
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildOnboardingError(
-      result.response,
-      result.error as DetailResponse | OnboardingErrorResponse | undefined,
-      'Runtime configuration could not be loaded.',
-    )
-  }
-
-  return result.data as RuntimeConfigResponse
-}
-
-export async function getActivationSummary(sessionId: string) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.GET('/api/v1/onboarding-sessions/{session_id}/activation-summary/', {
-        params: {
-          path: { session_id: sessionId },
-        },
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildOnboardingError(
-      result.response,
-      result.error as DetailResponse | OnboardingErrorResponse | undefined,
-      'Activation summary could not be loaded.',
-    )
-  }
-
-  return result.data as ActivationSummaryResponse
-}
-
-export async function inviteDirector(sessionId: string, input: DirectorInvitationRequest) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST('/api/v1/onboarding-sessions/{session_id}/director-invitations/', {
-        params: {
-          path: { session_id: sessionId },
-        },
-        body: input,
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildOnboardingError(
-      result.response,
-      result.error,
-      'Director invitation could not be sent.',
-    )
-  }
-
-  return result.data as DirectorInvitationResponse
-}
-
-export async function markReady(sessionId: string) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST('/api/v1/onboarding-sessions/{session_id}/mark-ready/', {
-        params: {
-          path: { session_id: sessionId },
-        },
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildOnboardingError(
-      result.response,
-      result.error,
-      'Onboarding session could not be marked ready.',
-    )
-  }
-
-  return result.data as MarkReadyResponse
-}
-
-export async function activateOnboardingSession(sessionId: string) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST('/api/v1/onboarding-sessions/{session_id}/activate/', {
-        params: {
-          path: { session_id: sessionId },
-        },
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildOnboardingError(
-      result.response,
-      result.error,
-      'Onboarding session could not be activated.',
-    )
-  }
-
-  return result.data as ActivationResponse
 }
 
 export async function suggestBusinessUnits(
@@ -427,170 +274,5 @@ export async function suggestActivitySubjects(
   }
 
   return result.data as CatalogActivitySubjectSuggestion[]
-}
-
-export async function createManualOnboardingProposal(
-  sessionId: string,
-  input: OnboardingProposalCreateRequest,
-) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST('/api/v1/onboarding-sessions/{session_id}/proposals/', {
-        params: {
-          path: { session_id: sessionId },
-        },
-        body: input,
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildOnboardingError(
-      result.response,
-      result.error as
-        | DetailResponse
-        | OnboardingProposalErrorResponse
-        | undefined,
-      'La proposition d’onboarding n’a pas pu être créée.',
-    )
-  }
-
-  return result.data as ProposalCommandResponse
-}
-
-export async function updateManualOnboardingProposal(
-  sessionId: string,
-  proposalId: string,
-  input: OnboardingProposalUpdateRequest,
-) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.PATCH('/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/', {
-        params: {
-          path: { session_id: sessionId, proposal_id: proposalId },
-        },
-        body: input,
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildOnboardingError(
-      result.response,
-      result.error as
-        | DetailResponse
-        | OnboardingProposalErrorResponse
-        | undefined,
-      'La proposition d’onboarding n’a pas pu être mise à jour.',
-    )
-  }
-
-  return result.data as ProposalCommandResponse
-}
-
-export async function submitManualOnboardingProposal(sessionId: string, proposalId: string) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST(
-        '/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/submit/',
-        {
-          params: {
-            path: { session_id: sessionId, proposal_id: proposalId },
-          },
-          headers: getAuthHeaders(accessToken),
-        },
-      ),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildOnboardingError(
-      result.response,
-      result.error as
-        | DetailResponse
-        | OnboardingProposalErrorResponse
-        | undefined,
-      'La proposition d’onboarding n’a pas pu être validée.',
-    )
-  }
-
-  return result.data as ProposalCommandResponse
-}
-
-export async function listOnboardingProposals(sessionId: string) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.GET('/api/v1/onboarding-sessions/{session_id}/proposals/', {
-        params: {
-          path: { session_id: sessionId },
-        },
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildOnboardingError(
-      result.response,
-      result.error as DetailResponse | undefined,
-      'Onboarding proposals could not be loaded.',
-    )
-  }
-
-  return result.data as OnboardingProposalResponse[]
-}
-
-export async function rejectOnboardingProposal(sessionId: string, proposalId: string) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST('/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/reject/', {
-        params: {
-          path: { session_id: sessionId, proposal_id: proposalId },
-        },
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildOnboardingError(
-      result.response,
-      result.error as
-        | DetailResponse
-        | OnboardingProposalErrorResponse
-        | undefined,
-      'Onboarding proposal could not be rejected.',
-    )
-  }
-
-  return result.data as ProposalCommandResponse
-}
-
-export async function applyOnboardingProposal(sessionId: string, proposalId: string) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST('/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/apply/', {
-        params: {
-          path: { session_id: sessionId, proposal_id: proposalId },
-        },
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildOnboardingError(
-      result.response,
-      result.error as
-        | DetailResponse
-        | OnboardingProposalErrorResponse
-        | undefined,
-      'Onboarding proposal could not be applied.',
-    )
-  }
-
-  return result.data as ProposalCommandResponse
 }
 

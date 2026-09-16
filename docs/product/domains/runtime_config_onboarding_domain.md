@@ -20,8 +20,8 @@ Domain boundaries:
 | Lot | Scope |
 |-----|--------|
 | **Lot 1** (done in backend) | Additive `OnboardingDraft`, `GET/PUT …/draft/`, `POST …/complete/`, shared readiness with description 10–5000 |
-| **Lot 2** | Frontend bascule onto draft/complete |
-| **Lot 3** | Remove legacy proposal endpoints/model and FE vestiges |
+| **Lot 2** | Frontend bascule onto draft/complete (Manual V2 wizard/clients FE removed) |
+| **Lot 3** | Remove legacy proposal endpoints/model (backend only; FE vestiges already removed) |
 
 Until Lot 3, both paths coexist. `complete` refuses if any `BusinessUnit` already exists (active or inactive) so legacy apply and complete cannot double-materialize.
 
