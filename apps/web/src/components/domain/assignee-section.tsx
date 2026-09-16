@@ -16,9 +16,12 @@ const AVATAR_BG_CLASSES = [
   'bg-[#F3E5F5] text-[#7B1FA2]',
 ]
 
+export const POLE_MEMBER_SUGGESTIONS_LABEL = 'Membres du pôle responsable'
+
 type AssigneeSectionBaseProps = {
   establishmentId: string
   businessUnitId?: string
+  showPoleMemberSuggestions?: boolean
 }
 
 type AssigneeSectionSingleProps = AssigneeSectionBaseProps & {
@@ -47,18 +50,23 @@ function isMultipleMode(props: AssigneeSectionProps): props is AssigneeSectionMu
 }
 
 export function AssigneeSection(props: AssigneeSectionProps) {
-  const { establishmentId, businessUnitId } = props
+  const { establishmentId, businessUnitId, showPoleMemberSuggestions = false } = props
   const isMultiple = isMultipleMode(props)
   const initialQuery = isMultiple ? '' : (props.selectedUser?.display_name ?? '')
 
   const [query, setQuery] = useState(initialQuery)
+  const trimmedQuery = query.trim()
+  const canShowPoleSuggestions = showPoleMemberSuggestions && Boolean(businessUnitId)
+  const isPoleSuggestionQuery = canShowPoleSuggestions && trimmedQuery.length === 0
+  const isSearchQuery = trimmedQuery.length >= 2
 
   const usersQuery = useEstablishmentUserSearchQuery(establishmentId, query, {
     businessUnitId,
+    allowEmptyQuery: canShowPoleSuggestions,
   })
 
   const results = usersQuery.data ?? []
-  const showHint = query.trim().length > 0 && query.trim().length < 2
+  const showHint = trimmedQuery.length > 0 && trimmedQuery.length < 2
 
   const isUserSelected = (membershipId: string) => {
     if (isMultiple) {
@@ -123,7 +131,7 @@ export function AssigneeSection(props: AssigneeSectionProps) {
           <p className="mt-2 text-xs text-[#7D7B75]">Recherche…</p>
         ) : null}
 
-        {!isMultiple && props.readOnly ? null : query.trim().length >= 2 &&
+        {!isMultiple && props.readOnly ? null : isSearchQuery &&
         !usersQuery.isFetching &&
         results.length === 0 ? (
           <p className="mt-2 text-xs text-[#7D7B75]">
@@ -133,12 +141,27 @@ export function AssigneeSection(props: AssigneeSectionProps) {
           </p>
         ) : null}
 
-        {!isMultiple && props.readOnly ? null : results.length > 0 ? (
-          <ul
-            className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-[#E8E6DF] divide-y divide-[#F0EFE9]"
-            role="listbox"
-            aria-label="Résultats de recherche"
-          >
+        {!isMultiple && props.readOnly ? null : isPoleSuggestionQuery &&
+        !usersQuery.isFetching &&
+        results.length === 0 ? (
+          <p className="mt-2 text-xs text-[#7D7B75]">
+            Aucun utilisateur rattaché à ce périmètre.
+          </p>
+        ) : null}
+
+        {!isMultiple && props.readOnly ? null : (isSearchQuery || isPoleSuggestionQuery) &&
+        results.length > 0 ? (
+          <>
+            {isPoleSuggestionQuery ? (
+              <p className="mt-2 text-xs font-medium text-[#7D7B75]">{POLE_MEMBER_SUGGESTIONS_LABEL}</p>
+            ) : null}
+            <ul
+              className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-[#E8E6DF] divide-y divide-[#F0EFE9]"
+              role="listbox"
+              aria-label={
+                isPoleSuggestionQuery ? POLE_MEMBER_SUGGESTIONS_LABEL : 'Résultats de recherche'
+              }
+            >
             {results.map((user, index) => {
               const isSelected = isUserSelected(user.membership_id)
               return (
@@ -176,6 +199,7 @@ export function AssigneeSection(props: AssigneeSectionProps) {
               )
             })}
           </ul>
+          </>
         ) : null}
 
         {isMultiple && props.selectedUsers.length > 0 ? (

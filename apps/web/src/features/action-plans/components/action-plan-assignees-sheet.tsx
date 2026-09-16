@@ -69,6 +69,7 @@ export function ActionPlanAssigneesSheet({
         mode="multiple"
         establishmentId={establishmentId}
         businessUnitId={pilotBusinessUnitId || undefined}
+        showPoleMemberSuggestions
         assigneeIds={assignees.map((assignee) => assignee.membershipId).filter(Boolean)}
         selectedUsers={selectedUsers}
         onAssigneesChange={handleAssigneesChange}

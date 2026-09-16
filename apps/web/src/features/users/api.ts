@@ -64,7 +64,7 @@ export async function searchEstablishmentUsers(
         params: {
           path: { establishment_id: establishmentId },
           query: {
-            q: query,
+            ...(query ? { q: query } : {}),
             ...(options.businessUnitId
               ? { business_unit_id: options.businessUnitId }
               : {}),

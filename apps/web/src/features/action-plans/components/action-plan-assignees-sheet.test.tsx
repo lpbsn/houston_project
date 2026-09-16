@@ -8,15 +8,15 @@ import { ActionPlanAssigneesSheet } from './action-plan-assignees-sheet'
 import { createActionPlanAssigneeDraft } from '../lib/action-plan-form-validation'
 
 vi.mock('@/components/domain/assignee-section', () => ({
-  AssigneeSection: ({
-    onAssigneesChange,
-  }: {
+  AssigneeSection: (props: {
+    showPoleMemberSuggestions?: boolean
     onAssigneesChange: (ids: string[], users: Array<{ membership_id: string; display_name: string }>) => void
   }) => (
     <button
       type="button"
+      data-show-pole-suggestions={props.showPoleMemberSuggestions ? 'true' : 'false'}
       onClick={() =>
-        onAssigneesChange(['member-2'], [
+        props.onAssigneesChange(['member-2'], [
           { membership_id: 'member-2', display_name: 'Bob' },
         ])
       }
@@ -53,7 +53,9 @@ describe('ActionPlanAssigneesSheet', () => {
       }),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Ajouter Bob' }))
+    const addButton = screen.getByRole('button', { name: 'Ajouter Bob' })
+    expect(addButton.getAttribute('data-show-pole-suggestions')).toBe('true')
+    fireEvent.click(addButton)
     expect(onAssigneesChange).toHaveBeenCalledWith([
       expect.objectContaining({
         membershipId: 'member-2',

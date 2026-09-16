@@ -143,6 +143,7 @@ Implemented response truths:
 - Directors may manage manager and staff memberships; owners may manage director, manager, staff, and organizational owners subject to invariants. Managers may manage in-scope staff/manager targets (service-enforced BU perimeter). Staff cannot manage memberships.
 - Preflight / repair: `preflight_organizational_owners` inventories owner coherence conflicts; `repair_organizational_owners` only creates missing owner memberships when existing owner statuses for that user are homogeneous. Status mixes and non-owner conflicts require manual fix (no auto status alignment).
 - Scoped user search is establishment-scoped and requires the path `establishment_id` to match the current active auth-session context.
+- Scoped user search requires `q` with a minimum length of 2, except `context=assignee` with `business_unit_id`, which may omit `q` to list operational members covering that BusinessUnit (Manager/Staff via scope; Owner/Director are excluded from this browse list).
 - Scoped user search returns active users with active memberships in the same active establishment only.
 - Scoped user search response fields are limited to `id`, `display_name`, `username`, `email`, `role`, and `membership_id`.
 - Establishment invitation acceptance: `POST /api/v1/invitations/{token}/accept/` (password setup, session creation; CSRF required).

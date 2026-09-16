@@ -51,4 +51,20 @@ describe('searchEstablishmentUsers', () => {
       }),
     )
   })
+
+  it('omits q when browsing pole members without a search term', async () => {
+    await searchEstablishmentUsers('est-1', '', {
+      businessUnitId: 'bu-42',
+    })
+
+    expect(getMock).toHaveBeenCalledWith(
+      '/api/v1/establishments/{establishment_id}/users/search/',
+      expect.objectContaining({
+        params: {
+          path: { establishment_id: 'est-1' },
+          query: { business_unit_id: 'bu-42' },
+        },
+      }),
+    )
+  })
 })

@@ -247,3 +247,123 @@ def test_staff_search_assignee_context_without_business_unit_stays_empty(api_cli
 
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_assignee_browse_without_query_lists_covering_members(api_client):
+    establishment = create_establishment(name="Browse Hotel")
+    restaurant = create_business_unit(establishment=establishment, key="restaurant")
+    bar = create_business_unit(establishment=establishment, key="bar")
+
+    actor = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    create_membership_with_business_unit_scope(membership=actor, business_unit=restaurant)
+    owner = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    director = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+    )
+
+    scoped_staff = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    create_membership_with_business_unit_scope(
+        membership=scoped_staff,
+        business_unit=restaurant,
+    )
+
+    out_staff = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    create_membership_with_business_unit_scope(membership=out_staff, business_unit=bar)
+
+    access_token = login(api_client, membership=actor)
+    response = api_client.get(
+        f"/api/v1/establishments/{establishment.id}/users/search/"
+        f"?business_unit_id={restaurant.id}",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 200
+    membership_ids = {item["membership_id"] for item in response.json()}
+    assert str(owner.id) not in membership_ids
+    assert str(director.id) not in membership_ids
+    assert str(scoped_staff.id) in membership_ids
+    assert str(actor.id) in membership_ids
+    assert str(out_staff.id) not in membership_ids
+
+
+def test_assignee_browse_blank_query_with_business_unit_is_allowed(api_client):
+    establishment = create_establishment(name="Blank query hotel")
+    restaurant = create_business_unit(establishment=establishment, key="restaurant")
+    actor = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    scoped_staff = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    create_membership_with_business_unit_scope(
+        membership=scoped_staff,
+        business_unit=restaurant,
+    )
+
+    access_token = login(api_client, membership=actor)
+    response = api_client.get(
+        f"/api/v1/establishments/{establishment.id}/users/search/"
+        f"?q=&business_unit_id={restaurant.id}",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 200
+    membership_ids = {item["membership_id"] for item in response.json()}
+    assert str(actor.id) not in membership_ids
+    assert str(scoped_staff.id) in membership_ids
+
+
+def test_assignee_search_without_query_requires_business_unit(api_client):
+    establishment = create_establishment(name="Missing pole hotel")
+    actor = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+
+    access_token = login(api_client, membership=actor)
+    response = api_client.get(
+        f"/api/v1/establishments/{establishment.id}/users/search/",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 400
+    assert response.json()["errors"]["q"] == [
+        "Ensure this field has at least 2 characters.",
+    ]
+
+
+def test_mention_context_rejects_empty_query_even_with_business_unit(api_client):
+    establishment = create_establishment(name="Mention empty hotel")
+    restaurant = create_business_unit(establishment=establishment, key="restaurant")
+    actor = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    create_membership_with_business_unit_scope(membership=actor, business_unit=restaurant)
+
+    access_token = login(api_client, membership=actor)
+    response = api_client.get(
+        f"/api/v1/establishments/{establishment.id}/users/search/"
+        f"?context=mention&business_unit_id={restaurant.id}",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 400
+    assert response.json()["errors"]["q"] == [
+        "Ensure this field has at least 2 characters.",
+    ]
