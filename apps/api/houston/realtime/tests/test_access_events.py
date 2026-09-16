@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 from houston.accounts.models import SessionRefreshToken, UserSession
-from houston.accounts.services import _revoke_refresh_token_family_for_reuse, revoke_session
+from houston.accounts.services import _handle_refresh_token_reuse, revoke_session
 from houston.establishments.membership_scope import MembershipScopeInput, MembershipScopeType
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.services import (
@@ -53,10 +53,7 @@ def test_refresh_reuse_emits_session_revoked_with_reliable_session(api_client):
     assert refresh is not None
 
     with patch("houston.realtime.broadcast.notify_access_event") as mock_notify:
-        _revoke_refresh_token_family_for_reuse(
-            session_id=session.id,
-            family_id=refresh.family_id,
-        )
+        _handle_refresh_token_reuse(refresh)
 
         mock_notify.assert_called_once()
         assert mock_notify.call_args.kwargs["reason"] == "session.revoked"

@@ -4,7 +4,10 @@ import uuid
 
 import pytest
 from asgiref.sync import async_to_sync
+from channels.db import database_sync_to_async
+from channels.layers import get_channel_layer
 from django.db import close_old_connections
+from houston.chat.groups import membership_group_name
 from houston.chat.models import ChatMessage
 from houston.chat.tests.conftest import (
     create_establishment,
@@ -332,3 +335,116 @@ def test_ws_message_send_does_not_leak_across_conversations(api_client):
 
     leaked = async_to_sync(run)()
     assert leaked is False
+
+
+def test_ws_message_created_dropped_after_conversation_leave(api_client):
+    establishment = create_establishment()
+    admin = create_user(username="chat_ws_drop_admin")
+    target = create_user(username="chat_ws_drop_target")
+    admin_membership = create_membership(
+        user=admin,
+        establishment=establishment,
+        role="manager",
+    )
+    target_membership = create_membership(user=target, establishment=establishment)
+    from houston.chat.services import create_group_conversation, remove_group_participant
+
+    conversation = create_group_conversation(
+        actor_membership=admin_membership,
+        title="Drop after leave",
+        membership_ids=[target_membership.id],
+    )
+    target_ticket = get_ws_ticket(api_client, user=target, establishment=establishment)
+
+    async def run():
+        communicator = await _connect_authenticated(
+            ticket=target_ticket,
+            establishment=establishment,
+        )
+        await database_sync_to_async(remove_group_participant)(
+            actor_membership=admin_membership,
+            conversation_id=conversation.id,
+            target_membership_id=target_membership.id,
+        )
+        revoked = await communicator.receive_json_from()
+        assert revoked["type"] == "conversation.access_revoked"
+
+        await get_channel_layer().group_send(
+            membership_group_name(
+                establishment_id=establishment.id,
+                membership_id=target_membership.id,
+            ),
+            {
+                "type": "chat.message.created",
+                "payload": {
+                    "type": "message.created",
+                    "conversation_id": str(conversation.id),
+                    "message": {"id": str(uuid.uuid4())},
+                },
+            },
+        )
+        try:
+            leaked_event = await communicator.receive_output(timeout=0.4)
+        except TimeoutError:
+            return None
+        return leaked_event
+
+    leaked_event = async_to_sync(run)()
+    close_old_connections()
+    assert leaked_event is None
+
+
+def test_ws_conversation_updated_dropped_after_conversation_leave(api_client):
+    establishment = create_establishment()
+    admin = create_user(username="chat_ws_updated_admin")
+    target = create_user(username="chat_ws_updated_target")
+    admin_membership = create_membership(
+        user=admin,
+        establishment=establishment,
+        role="manager",
+    )
+    target_membership = create_membership(user=target, establishment=establishment)
+    from houston.chat.services import create_group_conversation, remove_group_participant
+
+    conversation = create_group_conversation(
+        actor_membership=admin_membership,
+        title="Updated after leave",
+        membership_ids=[target_membership.id],
+    )
+    target_ticket = get_ws_ticket(api_client, user=target, establishment=establishment)
+
+    async def run():
+        communicator = await _connect_authenticated(
+            ticket=target_ticket,
+            establishment=establishment,
+        )
+        await database_sync_to_async(remove_group_participant)(
+            actor_membership=admin_membership,
+            conversation_id=conversation.id,
+            target_membership_id=target_membership.id,
+        )
+        revoked = await communicator.receive_json_from()
+        assert revoked["type"] == "conversation.access_revoked"
+
+        await get_channel_layer().group_send(
+            membership_group_name(
+                establishment_id=establishment.id,
+                membership_id=target_membership.id,
+            ),
+            {
+                "type": "chat.conversation.updated",
+                "payload": {
+                    "type": "conversation.updated",
+                    "conversation_id": str(conversation.id),
+                },
+            },
+        )
+        try:
+            leaked_event = await communicator.receive_output(timeout=0.4)
+        except TimeoutError:
+            return None
+        return leaked_event
+
+    leaked_event = async_to_sync(run)()
+    close_old_connections()
+    assert leaked_event is None

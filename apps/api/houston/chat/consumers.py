@@ -8,8 +8,7 @@ from uuid import UUID
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.conf import settings
-from django.utils import timezone
-from houston.accounts.models import User, UserSession
+from houston.accounts.models import User
 from houston.chat.exceptions import (
     ChatError,
     ChatNotFoundError,
@@ -19,6 +18,7 @@ from houston.chat.exceptions import (
 from houston.chat.groups import membership_group_name, session_group_name
 from houston.chat.permissions import can_access_chat
 from houston.chat.rate_limits import ChatMessageRateLimitExceeded, check_message_send_rate_limit
+from houston.chat.selectors import get_active_participant
 from houston.chat.services import MessageSendResult, create_message
 from houston.chat.ws_access import WsAccessValidation, validate_ws_connection_access
 from houston.chat.ws_payloads import (
@@ -26,7 +26,7 @@ from houston.chat.ws_payloads import (
     build_message_created_payload,
     build_message_rejected_payload,
 )
-from houston.chat.ws_ticket import WsTicketError, WsTicketPayload, consume_ws_ticket
+from houston.chat.ws_ticket import WsTicketError, consume_ws_ticket
 from houston.core.observability import build_ws_auth_failure_log_context
 from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.organizations.models import Organization
@@ -38,6 +38,8 @@ WS_CLOSE_FORBIDDEN = 4002
 WS_CLOSE_CHAT_DISABLED = 4003
 WS_CLOSE_TENANT_INVALID = 4004
 WS_CLOSE_AUTH_TIMEOUT = 4408
+
+_CLIENT_APPLICATION_TYPES = frozenset({"message.send"})
 
 
 class ChatConsumer(AsyncWebsocketConsumer):
@@ -63,7 +65,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             self.auth_timeout_task.cancel()
             self.auth_timeout_task = None
 
-        if self.authenticated and self.membership_id is not None:
+        if self.membership_id is not None:
             await self.channel_layer.group_discard(
                 membership_group_name(
                     establishment_id=self.establishment_id,
@@ -72,7 +74,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 self.channel_name,
             )
 
-        if self.authenticated and self.session_id is not None:
+        if self.session_id is not None:
             await self.channel_layer.group_discard(
                 session_group_name(session_id=self.session_id),
                 self.channel_name,
@@ -101,19 +103,24 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self._handle_auth(payload)
             return
 
-        if message_type == "message.send":
-            await self._handle_message_send(payload)
+        if message_type not in _CLIENT_APPLICATION_TYPES:
+            await self._send_error(code="validation_error", detail="Unsupported message type.")
             return
 
-        await self._send_error(code="validation_error", detail="Unsupported message type.")
+        if not await self._ensure_authorized():
+            return
+
+        await self._handle_message_send(payload)
 
     async def chat_message_created(self, event: dict) -> None:
-        await self.send(text_data=json.dumps(event["payload"]))
-
-    async def chat_conversation_access_revoked(self, event: dict) -> None:
-        await self.send(text_data=json.dumps(event["payload"]))
+        await self._deliver_conversation_payload_if_participant(event)
 
     async def chat_conversation_updated(self, event: dict) -> None:
+        await self._deliver_conversation_payload_if_participant(event)
+
+    async def chat_conversation_access_revoked(self, event: dict) -> None:
+        if not await self._ensure_authorized():
+            return
         await self.send(text_data=json.dumps(event["payload"]))
 
     async def chat_membership_access_revoked(self, event: dict) -> None:
@@ -153,45 +160,20 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self._close_auth_failed(reason="invalid_ticket")
             return
 
-        if not await self._is_ticket_session_valid(ticket_payload):
-            await self._close_auth_failed(reason="invalid_session")
-            return
-
-        membership = await self._load_membership(ticket_payload.membership_id)
-        if membership is None:
+        access = await self._validate_ticket_access(
+            session_id=ticket_payload.session_id,
+            membership_id=ticket_payload.membership_id,
+        )
+        if not access.ok:
+            reason = access.reason or "access_denied"
             await self._close_ws_auth(
-                reason="membership_not_found",
-                close_code=WS_CLOSE_FORBIDDEN,
+                reason=self._auth_log_reason(reason),
+                close_code=self._auth_close_code(reason),
             )
-            return
-
-        if membership.user_id != ticket_payload.user_id:
-            await self._close_ws_auth(
-                reason="forbidden",
-                close_code=WS_CLOSE_FORBIDDEN,
-            )
-            return
-
-        if membership.establishment_id != self.establishment_id:
-            await self._close_ws_auth(
-                reason="tenant_mismatch",
-                close_code=WS_CLOSE_TENANT_INVALID,
-            )
-            return
-
-        if not can_access_chat(membership):
-            close_code = (
-                WS_CLOSE_CHAT_DISABLED
-                if membership.establishment.status == Establishment.Status.ACTIVE
-                and not membership.establishment.chat_enabled
-                else WS_CLOSE_FORBIDDEN
-            )
-            reason = "chat_disabled" if close_code == WS_CLOSE_CHAT_DISABLED else "forbidden"
-            await self._close_ws_auth(reason=reason, close_code=close_code)
             return
 
         self.authenticated = True
-        self.membership_id = membership.id
+        self.membership_id = ticket_payload.membership_id
         self.session_id = ticket_payload.session_id
         if self.auth_timeout_task is not None:
             self.auth_timeout_task.cancel()
@@ -213,8 +195,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
             text_data=json.dumps(
                 {
                     "type": "auth.ok",
-                    "user_id": str(membership.user_id),
-                    "membership_id": str(membership.id),
+                    "user_id": str(ticket_payload.user_id),
+                    "membership_id": str(ticket_payload.membership_id),
                     "session_id": str(ticket_payload.session_id),
                 }
             )
@@ -223,11 +205,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def _handle_message_send(self, payload: dict) -> None:
         if self.membership_id is None or self.session_id is None:
             await self.close(code=WS_CLOSE_FORBIDDEN)
-            return
-
-        access = await self._validate_ws_access()
-        if not access.ok:
-            await self._revoke_access_and_close(access.reason or "access_denied")
             return
 
         raw_conversation_id = payload.get("conversation_id")
@@ -317,6 +294,32 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 },
             )
 
+    async def _ensure_authorized(self) -> bool:
+        access = await self._validate_ws_access()
+        if access.ok:
+            return True
+        await self._revoke_access_and_close(access.reason or "access_denied")
+        return False
+
+    async def _deliver_conversation_payload_if_participant(self, event: dict) -> None:
+        if not await self._ensure_authorized():
+            return
+        if self.membership_id is None:
+            return
+
+        payload = event.get("payload")
+        if not isinstance(payload, dict):
+            return
+        conversation_id = self._parse_uuid(payload.get("conversation_id"))
+        if conversation_id is None:
+            return
+
+        participant = await self._load_active_participant(conversation_id)
+        if participant is None:
+            return
+
+        await self.send(text_data=json.dumps(payload))
+
     @database_sync_to_async
     def _validate_ws_access(self):
         if self.session_id is None or self.membership_id is None:
@@ -326,7 +329,21 @@ class ChatConsumer(AsyncWebsocketConsumer):
             session_id=self.session_id,
             establishment_id=self.establishment_id,
             membership_id=self.membership_id,
-            require_selected_establishment=False,
+        )
+
+    @database_sync_to_async
+    def _validate_ticket_access(self, *, session_id: UUID, membership_id: UUID):
+        return validate_ws_connection_access(
+            session_id=session_id,
+            establishment_id=self.establishment_id,
+            membership_id=membership_id,
+        )
+
+    @database_sync_to_async
+    def _load_active_participant(self, conversation_id: UUID):
+        return get_active_participant(
+            conversation_id=conversation_id,
+            membership_id=self.membership_id,
         )
 
     async def _revoke_access_and_close(self, reason: str) -> None:
@@ -388,35 +405,23 @@ class ChatConsumer(AsyncWebsocketConsumer):
         except (TypeError, ValueError, AttributeError):
             return None
 
-    @database_sync_to_async
-    def _is_ticket_session_valid(self, ticket_payload: WsTicketPayload) -> bool:
-        session = UserSession.objects.filter(id=ticket_payload.session_id).first()
-        if session is None:
-            return False
-        if session.user_id != ticket_payload.user_id:
-            return False
-        now = timezone.now()
-        if session.revoked_at is not None or session.status != UserSession.Status.ACTIVE:
-            return False
-        return session.absolute_expires_at > now
+    @staticmethod
+    def _auth_close_code(reason: str) -> int:
+        if reason == "session_revoked":
+            return WS_CLOSE_AUTH_FAILED
+        if reason == "chat_disabled":
+            return WS_CLOSE_CHAT_DISABLED
+        return WS_CLOSE_FORBIDDEN
 
-    @database_sync_to_async
-    def _load_membership(self, membership_id: UUID) -> EstablishmentMembership | None:
-        return (
-            EstablishmentMembership.objects.select_related(
-                "user",
-                "establishment",
-                "establishment__organization",
-            )
-            .filter(
-                id=membership_id,
-                status=EstablishmentMembership.Status.ACTIVE,
-                user__status=User.Status.ACTIVE,
-                establishment__status=Establishment.Status.ACTIVE,
-                establishment__organization__status=Organization.Status.ACTIVE,
-            )
-            .first()
-        )
+    @staticmethod
+    def _auth_log_reason(reason: str) -> str:
+        if reason == "session_revoked":
+            return "invalid_session"
+        if reason == "chat_disabled":
+            return "chat_disabled"
+        if reason == "establishment_switched":
+            return "establishment_switched"
+        return "forbidden"
 
     async def _send_message_rejected(
         self,

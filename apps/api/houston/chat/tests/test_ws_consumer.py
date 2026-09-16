@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from unittest.mock import patch
 
 import pytest
 from asgiref.sync import async_to_sync
@@ -248,6 +249,75 @@ def test_ws_wrong_establishment_ticket(api_client):
         response = await communicator.receive_output()
         assert response["type"] == "websocket.close"
         assert response["code"] == 4001
+        await communicator.disconnect()
+
+    async_to_sync(run)()
+
+
+def test_ws_auth_rejects_ticket_after_establishment_switch(api_client):
+    first = create_establishment()
+    from houston.establishments.models import Establishment
+
+    second = Establishment.objects.create(
+        name="Auth Switch Site B",
+        organization=first.organization,
+        status=Establishment.Status.ACTIVE,
+        chat_enabled=True,
+    )
+    user = create_user(username="chat_ws_auth_switch")
+    create_membership(user=user, establishment=first)
+    create_membership(user=user, establishment=second)
+    token = login(api_client, user=user)
+
+    from houston.accounts.models import UserSession
+
+    session = UserSession.objects.filter(user=user).order_by("-created_at").first()
+    assert session is not None
+    session.selected_establishment = first
+    session.save(update_fields=["selected_establishment", "updated_at"])
+    ticket_response = api_client.post(
+        ws_ticket_url(first.id),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    ticket = ticket_response.json()["ticket"]
+    session.selected_establishment = second
+    session.save(update_fields=["selected_establishment", "updated_at"])
+
+    async def run():
+        communicator = await _connect(ws_chat_path(first.id))
+        await communicator.send_json_to({"type": "auth", "ticket": ticket})
+        response = await communicator.receive_output()
+        assert response["type"] == "websocket.close"
+        assert response["code"] == 4002
+        await communicator.disconnect()
+
+    async_to_sync(run)()
+
+
+def test_ws_unsupported_type_does_not_revalidate_access(api_client):
+    establishment = create_establishment()
+    user = create_user(username="chat_ws_unknown_type")
+    create_membership(user=user, establishment=establishment)
+    token = login(api_client, user=user)
+    ticket_response = api_client.post(
+        ws_ticket_url(establishment.id),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    ticket = ticket_response.json()["ticket"]
+
+    async def run():
+        communicator = await _connect(ws_chat_path(establishment.id))
+        await communicator.send_json_to({"type": "auth", "ticket": ticket})
+        auth_response = await communicator.receive_json_from()
+        assert auth_response["type"] == "auth.ok"
+
+        with patch("houston.chat.consumers.validate_ws_connection_access") as mock_validate:
+            await communicator.send_json_to({"type": "not.a.supported.type"})
+            response = await communicator.receive_json_from()
+            mock_validate.assert_not_called()
+
+        assert response["type"] == "error"
+        assert response["code"] == "validation_error"
         await communicator.disconnect()
 
     async_to_sync(run)()

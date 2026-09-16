@@ -9,6 +9,7 @@ from houston.accounts.authentication import AccessTokenAuthContext, BearerAccess
 from houston.chat.access import (
     resolve_chat_actor_membership,
     resolve_chat_settings_actor_membership,
+    resolve_selected_path_membership,
 )
 from houston.chat.api.serializers import (
     ChatAddParticipantRequestSerializer,
@@ -278,11 +279,11 @@ class ChatStatusView(EstablishmentScopedChatMixin, APIView):
         },
     )
     def get(self, request, establishment_id):
-        from houston.establishments.access import get_api_access_context
-
-        access_context = get_api_access_context(request)
-        membership = access_context.active_membership
-        if membership is None or membership.establishment_id != self.establishment_id:
+        membership = resolve_selected_path_membership(
+            request,
+            establishment_id=self.establishment_id,
+        )
+        if membership is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         payload = build_chat_status(membership=membership)

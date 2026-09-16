@@ -555,10 +555,7 @@ def _ensure_refresh_token_consumable(refresh_token: SessionRefreshToken) -> None
 
 
 def _handle_refresh_token_reuse(refresh_token: SessionRefreshToken) -> None:
-    _revoke_refresh_token_family_for_reuse(
-        session_id=refresh_token.session_id,
-        family_id=refresh_token.family_id,
-    )
+    revoke_session(session=refresh_token.session)
     logger.warning(
         "refresh_token_reuse_detected",
         extra=build_refresh_token_reuse_log_context(
@@ -579,32 +576,6 @@ def _is_reused_refresh_token(refresh_token: SessionRefreshToken) -> bool:
         }
         or refresh_token.used_at is not None
         or refresh_token.revoked_at is not None
-    )
-
-
-def _revoke_refresh_token_family_for_reuse(*, session_id, family_id: uuid.UUID) -> None:
-    now = timezone.now()
-
-    with transaction.atomic():
-        session = UserSession.objects.select_for_update().get(id=session_id)
-
-        if session.revoked_at is None or session.status != UserSession.Status.REVOKED:
-            session.revoked_at = now
-            session.status = UserSession.Status.REVOKED
-            session.save(update_fields=["revoked_at", "status", "updated_at"])
-
-        AccessToken.objects.filter(session=session, revoked_at__isnull=True).update(revoked_at=now)
-        SessionRefreshToken.objects.filter(session=session, family_id=family_id).update(
-            revoked_at=now,
-            status=SessionRefreshToken.Status.REVOKED,
-        )
-
-    from houston.realtime.broadcast import schedule_access_event
-
-    schedule_access_event(
-        reason="session.revoked",
-        establishment_id=session.selected_establishment_id,
-        session_id=session.id,
     )
 
 
