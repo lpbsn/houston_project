@@ -289,15 +289,17 @@ class DirectorInvitationAcceptView(AuthRateLimitedMixin, APIView):
         description=(
             "Accepts an establishment invitation, sets the account password, "
             "activates the user and membership, and creates an auth session. "
+            "The invitation bearer is sent in the JSON body, not in the URI. "
             "Owner invitations activate all compatible owner/invited memberships in the "
             "same organization. Cookie transport requires Django CSRF; body transport "
             "does not use cookies."
         ),
     )
-    def post(self, request, token: str):
+    def post(self, request):
         serializer = DirectorInvitationAcceptRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         transport = serializer.validated_data.pop("refresh_token_transport")
+        raw_token = serializer.validated_data.pop("token")
         terms_version = serializer.validated_data.pop("terms_version", None)
         version_error = _reject_invalid_terms_version(terms_version)
         if version_error is not None:
@@ -310,7 +312,7 @@ class DirectorInvitationAcceptView(AuthRateLimitedMixin, APIView):
         try:
             result = accept_establishment_invitation(
                 request=request,
-                raw_token=token,
+                raw_token=raw_token,
                 password=serializer.validated_data["password"],
             )
         except EstablishmentInvitationExpiredError:

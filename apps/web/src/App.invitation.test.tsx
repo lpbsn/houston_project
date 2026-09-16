@@ -12,7 +12,7 @@ import { queryClient } from '@/lib/query-client'
 
 const navigate = vi.fn()
 const routeState = vi.hoisted(() => ({
-  route: { kind: 'invitation', token: 'invite-token' } as AppRoute,
+  route: { kind: 'invitation' } as AppRoute,
 }))
 const authState = vi.hoisted(() => ({
   isReady: true,
@@ -141,7 +141,7 @@ afterEach(() => {
   cleanup()
   navigate.mockReset()
   queryClient.clear()
-  routeState.route = { kind: 'invitation', token: 'invite-token' }
+  routeState.route = { kind: 'invitation' }
   authState.isReady = true
   authState.isAuthenticated = false
   authState.bootstrap = null

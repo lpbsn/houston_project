@@ -77,7 +77,8 @@ export function parseExternalAppUrl(
   const establishmentId = readEstablishmentIdParam(params)
   params.delete('establishment_id')
   const qs = params.toString()
-  const href = `${incoming.pathname}${qs ? `?${qs}` : ''}`
+  const hash = parseAppRoute(incoming.pathname).kind === 'invitation' ? incoming.hash : ''
+  const href = `${incoming.pathname}${qs ? `?${qs}` : ''}${hash}`
   const route = parseAppRoute(href)
   if (route.kind === 'unknown') {
     return null

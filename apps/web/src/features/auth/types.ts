@@ -19,7 +19,7 @@ export type RegistrationRequest = Omit<
 export type RegistrationResponse = components['schemas']['RegistrationResponse']
 export type DirectorInvitationAcceptInput = Omit<
   components['schemas']['DirectorInvitationAcceptRequest'],
-  'refresh_token_transport'
+  'refresh_token_transport' | 'token'
 >
 export type Membership = components['schemas']['Membership']
 export type MembershipInvitationRequest = components['schemas']['MembershipInvitationRequest']

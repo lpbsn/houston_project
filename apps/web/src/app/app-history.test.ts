@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { createBrowserHistory, createMemoryHistory, getHrefSearch } from '@/app/app-history'
+import { createBrowserHistory, createMemoryHistory, getHrefHash, getHrefSearch } from '@/app/app-history'
 
 describe('getHrefSearch', () => {
   it('returns the query string including the leading question mark', () => {
@@ -15,6 +15,16 @@ describe('getHrefSearch', () => {
 
   it('returns an empty string when there is no query', () => {
     expect(getHrefSearch('/signals')).toBe('')
+  })
+})
+
+describe('getHrefHash', () => {
+  it('returns the fragment without the leading hash', () => {
+    expect(getHrefHash('/invitations#invite-token')).toBe('invite-token')
+  })
+
+  it('returns an empty string when there is no fragment', () => {
+    expect(getHrefHash('/invitations')).toBe('')
   })
 })
 

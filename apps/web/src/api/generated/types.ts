@@ -2154,7 +2154,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/invitations/{token}/accept/": {
+    "/api/v1/invitations/accept/": {
         parameters: {
             query?: never;
             header?: never;
@@ -2163,7 +2163,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Accepts an establishment invitation, sets the account password, activates the user and membership, and creates an auth session. Owner invitations activate all compatible owner/invited memberships in the same organization. Cookie transport requires Django CSRF; body transport does not use cookies. */
+        /** @description Accepts an establishment invitation, sets the account password, activates the user and membership, and creates an auth session. The invitation bearer is sent in the JSON body, not in the URI. Owner invitations activate all compatible owner/invited memberships in the same organization. Cookie transport requires Django CSRF; body transport does not use cookies. */
         post: operations["v1_invitations_accept_create"];
         delete?: never;
         options?: never;
@@ -3820,6 +3820,7 @@ export interface components {
         };
         DirectorInvitationAcceptRequest: {
             refresh_token_transport: components["schemas"]["RefreshTokenTransportEnum"];
+            token: string;
             password: string;
             password_confirmation: string;
             terms_version?: string;
@@ -12479,9 +12480,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                token: string;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody: {

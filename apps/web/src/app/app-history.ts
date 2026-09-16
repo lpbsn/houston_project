@@ -10,6 +10,14 @@ export function getHrefSearch(href: string): string {
   return queryIndex === -1 ? '' : withoutHash.slice(queryIndex)
 }
 
+export function getHrefHash(href: string): string {
+  const hashIndex = href.indexOf('#')
+  if (hashIndex === -1) {
+    return ''
+  }
+  return href.slice(hashIndex + 1)
+}
+
 function readBrowserHref(): string {
   return `${window.location.pathname}${window.location.search}${window.location.hash}`
 }

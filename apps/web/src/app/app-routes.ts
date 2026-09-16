@@ -7,7 +7,7 @@ import {
   useSyncExternalStore,
 } from 'react'
 
-import { type AppHistory, getHrefSearch } from '@/app/app-history'
+import { type AppHistory, getHrefHash, getHrefSearch } from '@/app/app-history'
 import {
   parseScopedTerrainRoute,
   serializeScopedExecutionDetailPath,
@@ -55,7 +55,7 @@ export type AppRoute =
   | { kind: 'analytics-pattern-detail'; patternId: string }
   | { kind: 'chat-conversation-detail'; conversationId: string }
   | { kind: 'team-member-detail'; membershipId: string }
-  | { kind: 'invitation'; token: string }
+  | { kind: 'invitation' }
   | { kind: 'unknown'; pathname: string }
 
 export function normalizeRoutePath(input: string): string {
@@ -91,22 +91,14 @@ export function getAppRouteKey(route: AppRoute): string {
     case 'team-member-detail':
       return `team-member-detail:${route.membershipId}`
     case 'invitation':
-      return `invitation:${route.token}`
+      return 'invitation'
     case 'unknown':
       return `unknown:${route.pathname}`
   }
 }
 
-function parseInvitationToken(pathname: string): string | null {
-  const prefix = '/invitations/'
-  if (!pathname.startsWith(prefix)) {
-    return null
-  }
-
-  const remainder = pathname.slice(prefix.length)
-  const token = remainder.split('/').filter(Boolean)[0]
-
-  return token || null
+function isInvitationPath(pathname: string): boolean {
+  return pathname === '/invitations'
 }
 
 function parseSignalActionCreateId(pathname: string): string | null {
@@ -204,9 +196,8 @@ export function parseAppRoute(input: string): AppRoute {
     return scopedRoute
   }
 
-  const invitationToken = parseInvitationToken(pathname)
-  if (invitationToken) {
-    return { kind: 'invitation', token: invitationToken }
+  if (isInvitationPath(pathname)) {
+    return { kind: 'invitation' }
   }
 
   const signalPlanId = parseSignalActionCreateId(pathname)
@@ -298,7 +289,7 @@ export function serializeAppRoute(route: AppRoute): string {
     case 'team-member-detail':
       return `/team/${route.membershipId}`
     case 'invitation':
-      return `/invitations/${route.token}`
+      return '/invitations'
     case 'unknown':
       return route.pathname
   }
@@ -307,6 +298,7 @@ export function serializeAppRoute(route: AppRoute): string {
 type AppRouteContextValue = {
   route: AppRoute
   search: string
+  hash: string
   navigate: (href: string, options?: { replace?: boolean }) => void
 }
 
@@ -326,6 +318,7 @@ export function AppRouteProvider({ history, children }: AppRouteProviderProps) {
     () => ({
       route,
       search: getHrefSearch(href),
+      hash: getHrefHash(href),
       navigate: history.navigate,
     }),
     [history, href, route],

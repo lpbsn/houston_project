@@ -140,9 +140,13 @@ def test_task_builds_url_from_public_app_url(invitation_bundle):
         )
 
     params = send.call_args.args[0]
-    assert expected_url.startswith(f"{PUBLIC_APP_URL}/invitations/")
+    assert expected_url == f"{PUBLIC_APP_URL}/invitations#{raw_token}"
     assert expected_url in params["html"]
     assert expected_url in params["text"]
+    assert raw_token in params["html"]
+    assert raw_token in params["text"]
+    assert f"{PUBLIC_APP_URL}/invitations/{raw_token}" not in params["html"]
+    assert f"{PUBLIC_APP_URL}/invitations/{raw_token}" not in params["text"]
 
 
 @override_settings(

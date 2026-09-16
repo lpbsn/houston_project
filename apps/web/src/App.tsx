@@ -569,7 +569,6 @@ function App() {
     if (route.kind === 'invitation') {
       return (
         <InvitationAcceptPage
-          token={route.token}
           onAccepted={() => {
             const bootstrap =
               queryClient.getQueryData<BootstrapResponse>(bootstrapQueryKey) ?? auth.bootstrap

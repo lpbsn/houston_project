@@ -298,7 +298,7 @@ Auth throttling for public auth mutation endpoints is implemented via DRF `Scope
 - `POST /api/v1/auth/refresh/`
 - `POST /api/v1/auth/register/`
 - `POST /api/v1/auth/register/validate-owner/`
-- `POST /api/v1/invitations/{token}/accept/`
+- `POST /api/v1/invitations/accept/`
 
 ### Throttling response contract (429)
 

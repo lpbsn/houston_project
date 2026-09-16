@@ -58,6 +58,7 @@ from houston.establishments.business_unit_catalog import (
     suggest_activity_subjects,
     suggest_business_units,
 )
+from houston.establishments.invitation_email import build_invitation_accept_path
 from houston.establishments.membership_scope import parse_membership_scope_inputs
 from houston.establishments.models import (
     Establishment,
@@ -502,7 +503,9 @@ class MembershipReinviteView(APIView):
                 "membership": invitation_result.membership,
                 "invitation_token": invitation_result.invitation_token,
                 "invitation_expires_at": invitation_result.invitation_expires_at,
-                "invitation_accept_path": (f"/invitations/{invitation_result.invitation_token}"),
+                "invitation_accept_path": build_invitation_accept_path(
+                    raw_token=invitation_result.invitation_token
+                ),
                 "email_scheduling_status": invitation_result.email_scheduling_status,
             },
             context={"actor_membership": current_membership},
@@ -1216,7 +1219,9 @@ class MembershipInvitationView(APIView):
                 "membership": invitation_result.membership,
                 "invitation_token": invitation_result.invitation_token,
                 "invitation_expires_at": invitation_result.invitation_expires_at,
-                "invitation_accept_path": (f"/invitations/{invitation_result.invitation_token}"),
+                "invitation_accept_path": build_invitation_accept_path(
+                    raw_token=invitation_result.invitation_token
+                ),
             }
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
@@ -1874,7 +1879,9 @@ class OnboardingSessionDirectorInvitationView(APIView):
                 "membership": invitation_result.membership,
                 "invitation_token": invitation_result.invitation_token,
                 "invitation_expires_at": invitation_result.invitation_expires_at,
-                "invitation_accept_path": (f"/invitations/{invitation_result.invitation_token}"),
+                "invitation_accept_path": build_invitation_accept_path(
+                    raw_token=invitation_result.invitation_token
+                ),
             }
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)

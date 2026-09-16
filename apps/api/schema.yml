@@ -7376,19 +7376,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
           description: ''
-  /api/v1/invitations/{token}/accept/:
+  /api/v1/invitations/accept/:
     post:
       operationId: v1_invitations_accept_create
       description: Accepts an establishment invitation, sets the account password,
-        activates the user and membership, and creates an auth session. Owner invitations
-        activate all compatible owner/invited memberships in the same organization.
-        Cookie transport requires Django CSRF; body transport does not use cookies.
-      parameters:
-      - in: path
-        name: token
-        schema:
-          type: string
-        required: true
+        activates the user and membership, and creates an auth session. The invitation
+        bearer is sent in the JSON body, not in the URI. Owner invitations activate
+        all compatible owner/invited memberships in the same organization. Cookie
+        transport requires Django CSRF; body transport does not use cookies.
       tags:
       - auth
       requestBody:
@@ -11885,6 +11880,8 @@ components:
       properties:
         refresh_token_transport:
           $ref: '#/components/schemas/RefreshTokenTransportEnum'
+        token:
+          type: string
         password:
           type: string
         password_confirmation:
@@ -11895,6 +11892,7 @@ components:
       - password
       - password_confirmation
       - refresh_token_transport
+      - token
     DirectorInvitationAcceptResponse:
       type: object
       properties:

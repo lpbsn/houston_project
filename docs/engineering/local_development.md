@@ -46,7 +46,7 @@ Set `VITE_PUBLIC_APP_URL` to the public HTTP(S) origin (same value as `HOUSTON_P
 Android **handler** QA (intent → app → navigation). This is the Native deep-link socle; it does **not** prove Play/Apple website association:
 
 ```bash
-adb shell am start -W -a android.intent.action.VIEW -d "https://app.spore-os.com/invitations/…" app.spore
+adb shell am start -W -a android.intent.action.VIEW -d "https://app.spore-os.com/invitations" app.spore
 ```
 
 Association files are served from the **web** deploy (`apps/web/public/.well-known/` → Vite `dist/` → nginx), not from the Capacitor bundle. Until store identities exist, nginx must return **404** (not the SPA) for:

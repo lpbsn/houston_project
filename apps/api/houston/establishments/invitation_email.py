@@ -35,9 +35,13 @@ _ROLE_LABELS_FR = {
 }
 
 
+def build_invitation_accept_path(*, raw_token: str) -> str:
+    return f"/invitations#{raw_token}"
+
+
 def build_invitation_accept_url(*, raw_token: str) -> str:
     base_url = settings.HOUSTON_PUBLIC_APP_URL.rstrip("/")
-    return f"{base_url}/invitations/{raw_token}"
+    return f"{base_url}{build_invitation_accept_path(raw_token=raw_token)}"
 
 
 def _format_expires_at_fr(expires_at) -> str:
@@ -155,6 +159,7 @@ def send_establishment_invitation_email(
         "establishment_name": establishment_name,
         "role_label": role_label,
         "accept_url": accept_url,
+        "invitation_code": raw_token,
         "expires_at_label": _format_expires_at_fr(invitation.expires_at),
     }
     subject = _build_invitation_email_subject(establishment_name=establishment_name)
@@ -193,6 +198,7 @@ def build_invitation_idempotency_key(invitation_id: uuid.UUID | str) -> str:
 
 __all__ = [
     "InvitationEmailSchedulingStatus",
+    "build_invitation_accept_path",
     "build_invitation_accept_url",
     "build_invitation_idempotency_key",
     "schedule_establishment_invitation_email",

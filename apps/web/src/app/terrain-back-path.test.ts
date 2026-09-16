@@ -10,7 +10,7 @@ describe('resolveTerrainBackPath', () => {
   it('returns null on hubs and non-terrain routes', () => {
     expect(resolveTerrainBackPath({ kind: 'static', path: '/reporting' })).toBeNull()
     expect(resolveTerrainBackPath({ kind: 'static', path: '/login' })).toBeNull()
-    expect(resolveTerrainBackPath({ kind: 'invitation', token: 't' })).toBeNull()
+    expect(resolveTerrainBackPath({ kind: 'invitation' })).toBeNull()
   })
 
   it('returns the semantic parent for a signal detail', () => {

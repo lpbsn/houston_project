@@ -260,7 +260,7 @@ describe('TeamInvitePage', () => {
   it('shows invitation success message and fallback link after successful submit', () => {
     inviteFormState.current = {
       ...inviteFormState.current,
-      invitationLink: 'https://example.com/invitations/token-1',
+      invitationLink: 'https://example.com/invitations#token-1',
       invitedEmail: 'invitee@example.com',
       canSubmit: true,
     }
@@ -268,7 +268,7 @@ describe('TeamInvitePage', () => {
     render(createElement(TeamInvitePage))
 
     expect(screen.getByText(SUCCESS_MESSAGE)).toBeTruthy()
-    expect(screen.getByText('https://example.com/invitations/token-1')).toBeTruthy()
+    expect(screen.getByText('https://example.com/invitations#token-1')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Copy invitation link/i })).toBeTruthy()
   })
 

@@ -100,8 +100,8 @@ describe('runtime', () => {
     vi.stubEnv('VITE_PUBLIC_APP_URL', 'https://app.example.test/')
 
     expect(getPublicAppOrigin()).toBe('https://app.example.test')
-    expect(resolvePublicAppUrl('/invitations/token-abc')).toBe(
-      'https://app.example.test/invitations/token-abc',
+    expect(resolvePublicAppUrl('/invitations#token-abc')).toBe(
+      'https://app.example.test/invitations#token-abc',
     )
   })
 
@@ -110,16 +110,16 @@ describe('runtime', () => {
     vi.stubEnv('VITE_PUBLIC_APP_URL', '')
 
     expect(getPublicAppOrigin()).toBe(window.location.origin)
-    expect(resolvePublicAppUrl('invitations/token-abc')).toBe(
-      `${window.location.origin}/invitations/token-abc`,
+    expect(resolvePublicAppUrl('invitations#token-abc')).toBe(
+      `${window.location.origin}/invitations#token-abc`,
     )
   })
 
   it('keeps an absolute invitation path unchanged', () => {
     vi.stubEnv('VITE_PUBLIC_APP_URL', 'https://app.example.test')
 
-    expect(resolvePublicAppUrl('https://other.example.test/invitations/token-abc')).toBe(
-      'https://other.example.test/invitations/token-abc',
+    expect(resolvePublicAppUrl('https://other.example.test/invitations#token-abc')).toBe(
+      'https://other.example.test/invitations#token-abc',
     )
   })
 
@@ -128,8 +128,8 @@ describe('runtime', () => {
     vi.stubEnv('VITE_PUBLIC_APP_URL', 'https://app.example.test')
     vi.stubGlobal('window', { location: { origin: 'capacitor://localhost' } })
 
-    expect(resolvePublicAppUrl('/invitations/token-abc')).toBe(
-      'https://app.example.test/invitations/token-abc',
+    expect(resolvePublicAppUrl('/invitations#token-abc')).toBe(
+      'https://app.example.test/invitations#token-abc',
     )
   })
 
