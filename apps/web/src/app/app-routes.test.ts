@@ -206,9 +206,15 @@ describe('parseAppRoute', () => {
   })
 
   it('parses invitation routes', () => {
-    expect(parseAppRoute('/invitations/token-abc')).toEqual({
+    expect(parseAppRoute('/invitations')).toEqual({
       kind: 'invitation',
-      token: 'token-abc',
+    })
+    expect(parseAppRoute('/invitations#token-abc')).toEqual({
+      kind: 'invitation',
+    })
+    expect(parseAppRoute('/invitations/token-abc')).toEqual({
+      kind: 'unknown',
+      pathname: '/invitations/token-abc',
     })
   })
 })
@@ -264,7 +270,7 @@ describe('serializeAppRoute', () => {
       '/chat/conv-1',
       '/team/member-1',
       '/organization/establishments/est-1',
-      '/invitations/token-abc',
+      '/invitations',
       '/foo/bar',
     ]
 

@@ -89,7 +89,7 @@ urlpatterns = [
         name="organization-admin-owner-invitations",
     ),
     path(
-        "invitations/<str:token>/accept/",
+        "invitations/accept/",
         DirectorInvitationAcceptView.as_view(),
         name="director-invitation-accept",
     ),

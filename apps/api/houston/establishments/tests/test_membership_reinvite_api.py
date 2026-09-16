@@ -123,7 +123,7 @@ def test_reinvite_revokes_previous_token_and_returns_disabled_email_status(api_c
     assert body["email_scheduling_status"] == "disabled"
     assert body["invitation_token"]
     assert body["invitation_token"] != old_token
-    assert body["invitation_accept_path"] == f"/invitations/{body['invitation_token']}"
+    assert body["invitation_accept_path"] == f"/invitations#{body['invitation_token']}"
     assert body["membership"]["permission_hints"]["can_reinvite"] is True
     assert body["membership"]["last_invited_at"] is not None
     assert body["membership"]["pending_invitation"] is not None
@@ -132,8 +132,9 @@ def test_reinvite_revokes_previous_token_and_returns_disabled_email_status(api_c
     assert old_invitation.revoked_at is not None
 
     accept = api_client.post(
-        f"/api/v1/invitations/{old_token}/accept/",
+        "/api/v1/invitations/accept/",
         {
+            "token": old_token,
             "password": "SecurePass123!",
             "password_confirmation": "SecurePass123!",
             "refresh_token_transport": "cookie",

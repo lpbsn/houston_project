@@ -82,8 +82,9 @@ def director_invite_payload(*, email: str = "new-director@example.com", **overri
 def post_accept(api_client: APIClient, *, token: str, password: str = REGISTRATION_PASSWORD):
     csrf_token = ensure_csrf(api_client)
     return api_client.post(
-        f"/api/v1/invitations/{token}/accept/",
+        "/api/v1/invitations/accept/",
         {
+            "token": token,
             "password": password,
             "password_confirmation": password,
             "refresh_token_transport": "cookie",

@@ -64,7 +64,7 @@ describe('usesTerrainShell', () => {
 
   it('returns false for non-terrain routes', () => {
     expect(usesTerrainShell({ kind: 'static', path: '/login' })).toBe(false)
-    expect(usesTerrainShell({ kind: 'invitation', token: 't' })).toBe(false)
+    expect(usesTerrainShell({ kind: 'invitation' })).toBe(false)
   })
 
   it('uses TerrainShell for scoped operational config', () => {
@@ -598,7 +598,7 @@ describe('isProtectedRoute', () => {
   it('returns false for public routes', () => {
     expect(isProtectedRoute({ kind: 'static', path: '/login' })).toBe(false)
     expect(isProtectedRoute({ kind: 'static', path: '/' })).toBe(false)
-    expect(isProtectedRoute({ kind: 'invitation', token: 't' })).toBe(false)
+    expect(isProtectedRoute({ kind: 'invitation' })).toBe(false)
     expect(isProtectedRoute({ kind: 'unknown', pathname: '/foo' })).toBe(false)
   })
 })

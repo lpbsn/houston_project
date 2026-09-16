@@ -20,6 +20,7 @@ from houston.establishments.api.serializers import (
     DirectorInvitationErrorResponseSerializer,
     DirectorInvitationResponseSerializer,
 )
+from houston.establishments.invitation_email import build_invitation_accept_path
 from houston.establishments.organization_admin_selectors import (
     get_organization_admin_member_filter_options,
     get_organization_admin_overview,
@@ -288,7 +289,9 @@ class OrganizationAdminOwnerInvitationView(APIView):
                 "membership": invitation_result.membership,
                 "invitation_token": invitation_result.invitation_token,
                 "invitation_expires_at": invitation_result.invitation_expires_at,
-                "invitation_accept_path": f"/invitations/{invitation_result.invitation_token}",
+                "invitation_accept_path": build_invitation_accept_path(
+                    raw_token=invitation_result.invitation_token
+                ),
             }
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)

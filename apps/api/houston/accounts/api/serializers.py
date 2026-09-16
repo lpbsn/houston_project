@@ -347,6 +347,7 @@ class RegistrationResponseSerializer(AuthResponseSerializer):
 
 
 class DirectorInvitationAcceptRequestSerializer(RefreshTokenTransportSerializerMixin):
+    token = serializers.CharField()
     password = serializers.CharField(trim_whitespace=False)
     password_confirmation = serializers.CharField(trim_whitespace=False)
     terms_version = serializers.CharField(required=False, allow_blank=False)

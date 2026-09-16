@@ -730,13 +730,11 @@ export async function acceptInvitationSession(
 ) {
   return runSessionReplacement(async (prepared, generation) => {
     const { data, error, response } = await apiClient.POST(
-      '/api/v1/invitations/{token}/accept/',
+      '/api/v1/invitations/accept/',
       {
-        params: {
-          path: { token },
-        },
         body: {
           ...input,
+          token,
           refresh_token_transport: prepared.transport,
         },
         credentials: prepared.credentials,

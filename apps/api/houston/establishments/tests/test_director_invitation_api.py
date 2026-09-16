@@ -67,7 +67,7 @@ def test_director_invitation_creates_invited_director_membership(api_client):
     assert membership.status == EstablishmentMembership.Status.INVITED
     assert membership.user.status == User.Status.PENDING
     assert body["invitation_token"]
-    assert body["invitation_accept_path"] == f"/invitations/{body['invitation_token']}"
+    assert body["invitation_accept_path"] == f"/invitations#{body['invitation_token']}"
 
 
 def test_director_invitation_rejects_duplicate_email(api_client):

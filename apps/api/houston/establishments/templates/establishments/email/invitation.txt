@@ -5,6 +5,9 @@ Vous êtes invité·e à rejoindre {{ establishment_name }} sur Spore en tant qu
 Acceptez votre invitation avant le {{ expires_at_label }} :
 {{ accept_url }}
 
+Si le lien n'ouvre pas le formulaire, utilisez ce code d'invitation :
+{{ invitation_code }}
+
 Ce lien est personnel — ne le partagez pas.
 
 Si vous ne reconnaissez pas cette invitation, vous pouvez ignorer ce message.

@@ -1,6 +1,7 @@
 import { LoaderCircle } from 'lucide-react'
-import { useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 
+import { useAppRoute } from '@/app/app-routes'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -12,7 +13,6 @@ import {
 import { CURRENT_TERMS_VERSION } from '@/lib/legal'
 
 type InvitationAcceptPageProps = {
-  token: string
   onAccepted: () => void
 }
 
@@ -28,7 +28,15 @@ function getAcceptErrorMessage(error: unknown) {
   return 'Invitation could not be accepted.'
 }
 
-export function InvitationAcceptPage({ token, onAccepted }: InvitationAcceptPageProps) {
+export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) {
+  const { hash, navigate } = useAppRoute()
+  const fragmentToken = hash.trim()
+  const [capturedToken, setCapturedToken] = useState('')
+  if (fragmentToken && capturedToken !== fragmentToken) {
+    setCapturedToken(fragmentToken)
+  }
+  const [typedToken, setTypedToken] = useState('')
+  const token = capturedToken || typedToken
   const [password, setPassword] = useState('')
   const [passwordConfirmation, setPasswordConfirmation] = useState('')
   const [fieldError, setFieldError] = useState<string | null>(null)
@@ -36,10 +44,23 @@ export function InvitationAcceptPage({ token, onAccepted }: InvitationAcceptPage
   const [acceptTerms, setAcceptTerms] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  useLayoutEffect(() => {
+    if (!fragmentToken) {
+      return
+    }
+    navigate('/invitations', { replace: true })
+  }, [fragmentToken, navigate])
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setFieldError(null)
     setSubmitError(null)
+
+    const invitationToken = token.trim()
+    if (!invitationToken) {
+      setFieldError('Invitation code is required.')
+      return
+    }
 
     if (!password || !passwordConfirmation) {
       setFieldError('Password and confirmation are required.')
@@ -54,7 +75,7 @@ export function InvitationAcceptPage({ token, onAccepted }: InvitationAcceptPage
     setIsSubmitting(true)
 
     try {
-      await acceptDirectorInvitation(token, {
+      await acceptDirectorInvitation(invitationToken, {
         password,
         password_confirmation: passwordConfirmation,
         ...(acceptTerms ? { terms_version: CURRENT_TERMS_VERSION } : {}),
@@ -81,6 +102,27 @@ export function InvitationAcceptPage({ token, onAccepted }: InvitationAcceptPage
 
       <CardContent>
         <form className="space-y-4" onSubmit={handleSubmit}>
+          {capturedToken ? null : (
+            <div className="space-y-2">
+              <label className="text-sm font-semibold" htmlFor="invitation-code">
+                Invitation code
+              </label>
+              <Input
+                id="invitation-code"
+                type="text"
+                autoComplete="off"
+                spellCheck={false}
+                value={typedToken}
+                onChange={(event) => {
+                  setTypedToken(event.target.value)
+                  setFieldError(null)
+                  setSubmitError(null)
+                }}
+                className="h-11 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
+              />
+            </div>
+          )}
+
           <div className="space-y-2">
             <label className="text-sm font-semibold" htmlFor="invitation-password">
               Password

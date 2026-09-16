@@ -163,7 +163,7 @@ afterEach(() => {
 describe('useMembershipInviteForm', () => {
   it('stores invitedEmail and invitationLink after successful submit', async () => {
     inviteMembership.mockResolvedValue({
-      invitation_accept_path: '/invitations/token-abc',
+      invitation_accept_path: '/invitations#token-abc',
     })
 
     renderWithQueryClient(
@@ -183,7 +183,7 @@ describe('useMembershipInviteForm', () => {
     })
 
     expect(screen.getByTestId('invitation-link').textContent).toBe(
-      `${window.location.origin}/invitations/token-abc`,
+      `${window.location.origin}/invitations#token-abc`,
     )
     expect(invalidateMembershipListQueries).toHaveBeenCalledWith('est-1', expect.anything())
   })
@@ -191,7 +191,7 @@ describe('useMembershipInviteForm', () => {
   it('builds invitation links from VITE_PUBLIC_APP_URL', async () => {
     vi.stubEnv('VITE_PUBLIC_APP_URL', 'https://app.example.test')
     inviteMembership.mockResolvedValue({
-      invitation_accept_path: '/invitations/token-abc',
+      invitation_accept_path: '/invitations#token-abc',
     })
 
     renderWithQueryClient(
@@ -208,14 +208,14 @@ describe('useMembershipInviteForm', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('invitation-link').textContent).toBe(
-        'https://app.example.test/invitations/token-abc',
+        'https://app.example.test/invitations#token-abc',
       )
     })
   })
 
   it('shows success UI when list invalidation is still pending', async () => {
     inviteMembership.mockResolvedValue({
-      invitation_accept_path: '/invitations/token-abc',
+      invitation_accept_path: '/invitations#token-abc',
     })
     const deferred = createDeferred<void>()
     invalidateMembershipListQueries.mockReturnValue(deferred.promise)
@@ -241,7 +241,7 @@ describe('useMembershipInviteForm', () => {
 
   it('keeps invite success when list invalidation rejects', async () => {
     inviteMembership.mockResolvedValue({
-      invitation_accept_path: '/invitations/token-director',
+      invitation_accept_path: '/invitations#token-director',
     })
     invalidateMembershipListQueries.mockRejectedValue(new Error('cache refresh failed'))
 
@@ -276,7 +276,7 @@ describe('useMembershipInviteForm', () => {
 
   it('submits director invites without scopes and invalidates membership list', async () => {
     inviteMembership.mockResolvedValue({
-      invitation_accept_path: '/invitations/token-director',
+      invitation_accept_path: '/invitations#token-director',
     })
 
     renderWithQueryClient(
@@ -319,7 +319,7 @@ describe('useMembershipInviteForm', () => {
 
   it('submits owner invites through the organization API without membership scopes', async () => {
     inviteOrganizationOwner.mockResolvedValue({
-      invitation_accept_path: '/invitations/token-owner',
+      invitation_accept_path: '/invitations#token-owner',
     })
 
     renderWithQueryClient(
@@ -363,7 +363,7 @@ describe('useMembershipInviteForm', () => {
 
   it('submits owner invites for the targeted establishment when several orgs exist', async () => {
     inviteOrganizationOwner.mockResolvedValue({
-      invitation_accept_path: '/invitations/token-owner-multi',
+      invitation_accept_path: '/invitations#token-owner-multi',
     })
 
     renderWithQueryClient(
@@ -434,7 +434,7 @@ describe('useMembershipInviteForm', () => {
 
   it('exposes invitedEmail from hook state', async () => {
     inviteMembership.mockResolvedValue({
-      invitation_accept_path: '/invitations/token-abc',
+      invitation_accept_path: '/invitations#token-abc',
     })
 
     const { result } = renderHookWithQueryClient(() =>
@@ -463,13 +463,13 @@ describe('useMembershipInviteForm', () => {
       expect(result.current.invitedEmail).toBe('manager@example.com')
     })
 
-    expect(result.current.invitationLink).toBe(`${window.location.origin}/invitations/token-abc`)
+    expect(result.current.invitationLink).toBe(`${window.location.origin}/invitations#token-abc`)
   })
 
   it('clears invitation success state when a new submit starts', async () => {
     inviteMembership
       .mockResolvedValueOnce({
-        invitation_accept_path: '/invitations/token-first',
+        invitation_accept_path: '/invitations#token-first',
       })
       .mockImplementationOnce(() => {
         const deferred = createDeferred<{ invitation_accept_path: string }>()
@@ -505,7 +505,7 @@ describe('useMembershipInviteForm', () => {
   it('clears invitation success state when a retry fails', async () => {
     inviteMembership
       .mockResolvedValueOnce({
-        invitation_accept_path: '/invitations/token-first',
+        invitation_accept_path: '/invitations#token-first',
       })
       .mockRejectedValueOnce(new Error('Invitation could not be created.'))
 

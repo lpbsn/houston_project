@@ -155,14 +155,14 @@ describe('native deep links', () => {
   })
 
   it('opens a public invitation without waiting for a session', async () => {
-    getLaunchUrl.mockResolvedValue({ url: `${PUBLIC_ORIGIN}/invitations/token-abc` })
+    getLaunchUrl.mockResolvedValue({ url: `${PUBLIC_ORIGIN}/invitations#token-abc` })
     const history = await configure()
     setNativeDeepLinkSessionGetters({
       isReady: () => true,
       isAuthenticated: () => false,
     })
     await applyPendingNativeDeepLink()
-    expect(history.getHref()).toBe('/invitations/token-abc')
+    expect(history.getHref()).toBe('/invitations#token-abc')
   })
 
   it('clears a pending open on demand', async () => {

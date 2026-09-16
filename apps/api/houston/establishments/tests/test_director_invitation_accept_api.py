@@ -29,9 +29,9 @@ def api_client():
 
 
 def post_accept(api_client: APIClient, csrf_token: str, token: str, payload: dict, **extra_headers):
-    payload = {"refresh_token_transport": "cookie", **payload}
+    payload = {"refresh_token_transport": "cookie", "token": token, **payload}
     return api_client.post(
-        f"/api/v1/invitations/{token}/accept/",
+        "/api/v1/invitations/accept/",
         payload,
         format="json",
         HTTP_X_CSRFTOKEN=csrf_token,
@@ -69,7 +69,7 @@ def test_director_invitation_response_includes_token(api_client):
     body = response.json()
     assert body["invitation_token"]
     assert body["invitation_expires_at"]
-    assert body["invitation_accept_path"] == f"/invitations/{body['invitation_token']}"
+    assert body["invitation_accept_path"] == f"/invitations#{body['invitation_token']}"
 
     invitation = EstablishmentInvitation.objects.get(
         token_digest=auth_tokens.digest_token(body["invitation_token"]),
@@ -127,8 +127,9 @@ def test_accept_invitation_with_body_transport_skips_csrf_and_sets_no_cookie(api
     invitation_result = invite_director_for_session(session=session, owner=owner)
 
     response = api_client.post(
-        f"/api/v1/invitations/{invitation_result.invitation_token}/accept/",
+        "/api/v1/invitations/accept/",
         {
+            "token": invitation_result.invitation_token,
             "password": REGISTRATION_PASSWORD,
             "password_confirmation": REGISTRATION_PASSWORD,
             "refresh_token_transport": "body",
@@ -140,6 +141,26 @@ def test_accept_invitation_with_body_transport_skips_csrf_and_sets_no_cookie(api
     assert response.data["refresh_token"]
     assert response.data["refresh_token_expires_at"]
     assert settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME not in response.cookies
+
+
+def test_former_path_token_accept_route_is_gone(api_client):
+    owner = create_user(username="director_accept_legacy_path_owner")
+    session = create_onboarding_session(actor=owner)
+    invitation_result = invite_director_for_session(session=session, owner=owner)
+    csrf_token = ensure_csrf(api_client)
+
+    response = api_client.post(
+        f"/api/v1/invitations/{invitation_result.invitation_token}/accept/",
+        {
+            "password": REGISTRATION_PASSWORD,
+            "password_confirmation": REGISTRATION_PASSWORD,
+            "refresh_token_transport": "cookie",
+        },
+        format="json",
+        HTTP_X_CSRFTOKEN=csrf_token,
+    )
+
+    assert response.status_code == 404
 
 
 def test_accepted_director_can_log_in_with_password(api_client):

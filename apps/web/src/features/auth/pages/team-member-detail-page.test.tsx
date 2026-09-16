@@ -210,7 +210,7 @@ describe('TeamMemberDetailPage', () => {
   it('confirms then calls reinvite mutation for invited members', async () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     mutations.reinvite.mutateAsync.mockResolvedValue({
-      invitation_accept_path: '/invitations/new-token',
+      invitation_accept_path: '/invitations#new-token',
       email_scheduling_status: 'requested',
       membership: detailState.current.data,
     })
