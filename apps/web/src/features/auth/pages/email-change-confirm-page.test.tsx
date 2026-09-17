@@ -9,6 +9,10 @@ import { createMemoryHistory } from '@/app/app-history'
 
 const confirmEmailChange = vi.hoisted(() => vi.fn())
 const fetchBootstrap = vi.hoisted(() => vi.fn())
+const authState = vi.hoisted(() => ({
+  isAuthenticated: false,
+  isReady: true,
+}))
 
 vi.mock('@/features/auth/api', () => ({
   AuthApiError: class AuthApiError extends Error {
@@ -26,7 +30,10 @@ vi.mock('@/features/auth/api', () => ({
 }))
 
 vi.mock('@/app/auth-provider', () => ({
-  useAuth: () => ({ isAuthenticated: false }),
+  useAuth: () => ({
+    isAuthenticated: authState.isAuthenticated,
+    isReady: authState.isReady,
+  }),
 }))
 
 import { EmailChangeConfirmPage } from './email-change-confirm-page'
@@ -36,8 +43,8 @@ function renderPage(initialHref: string) {
   function Wrapper({ children }: { children: ReactNode }) {
     return createElement(AppRouteProvider, { history }, children)
   }
-  render(createElement(EmailChangeConfirmPage), { wrapper: Wrapper })
-  return { history }
+  const view = render(createElement(EmailChangeConfirmPage), { wrapper: Wrapper })
+  return { history, ...view }
 }
 
 afterEach(() => {
@@ -48,6 +55,8 @@ beforeEach(() => {
   confirmEmailChange.mockReset()
   fetchBootstrap.mockReset()
   confirmEmailChange.mockResolvedValue({ email: 'next@example.com' })
+  authState.isAuthenticated = false
+  authState.isReady = true
 })
 
 describe('EmailChangeConfirmPage', () => {
@@ -59,5 +68,24 @@ describe('EmailChangeConfirmPage', () => {
       expect(confirmEmailChange).toHaveBeenCalledWith('confirm-token')
     })
     expect(fetchBootstrap).not.toHaveBeenCalled()
+  })
+
+  it('waits for auth readiness before confirming a logged-in session', async () => {
+    authState.isReady = false
+    authState.isAuthenticated = false
+    const { rerender } = renderPage('/email-change#confirm-token')
+
+    expect(confirmEmailChange).not.toHaveBeenCalled()
+
+    authState.isReady = true
+    authState.isAuthenticated = true
+    rerender(createElement(EmailChangeConfirmPage))
+
+    await vi.waitFor(() => {
+      expect(confirmEmailChange).toHaveBeenCalledWith('confirm-token')
+    })
+    await vi.waitFor(() => {
+      expect(fetchBootstrap).toHaveBeenCalledTimes(1)
+    })
   })
 })

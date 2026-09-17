@@ -71,7 +71,9 @@ import {
   acceptInvitationSession,
   bootstrapQueryKey,
   clearAuthState,
+  confirmPasswordReset,
   deleteAccount,
+  fetchBootstrap,
   login,
   logout,
   refreshAccessToken,
@@ -1560,6 +1562,52 @@ describe('auth api cache isolation', () => {
         resyncBootstrapAfterLegalError({ code: AI_CONSENT_REQUIRED_CODE }),
       ).resolves.toBeNull()
       expect(queryClient.getQueryData(bootstrapQueryKey)).toEqual(bootstrapPayload)
+    })
+  })
+
+  describe('fetchBootstrap', () => {
+    it('writes a successful bootstrap fetch into the query cache', async () => {
+      const staleBootstrap = {
+        ...bootstrapPayload,
+        user: { ...bootstrapPayload.user, email: 'old@example.com' },
+      }
+      const nextBootstrap = {
+        ...bootstrapPayload,
+        user: { ...bootstrapPayload.user, email: 'next@example.com' },
+      }
+      queryClient.setQueryData(bootstrapQueryKey, staleBootstrap)
+      withAuthRetryMock.mockResolvedValueOnce({
+        response: { status: 200 },
+        data: nextBootstrap,
+        error: undefined,
+      })
+
+      const result = await fetchBootstrap()
+
+      expect(result).toEqual(nextBootstrap)
+      expect(queryClient.getQueryData(bootstrapQueryKey)).toEqual(nextBootstrap)
+    })
+  })
+
+  describe('confirmPasswordReset', () => {
+    it('uses password field errors as the AuthApiError message', async () => {
+      apiClientPostMock.mockResolvedValueOnce({
+        response: { status: 400 },
+        data: undefined,
+        error: { password: ['This password is too common.'] },
+      })
+
+      await expect(
+        confirmPasswordReset({
+          token: 'reset-token',
+          password: 'weak',
+          password_confirmation: 'weak',
+        }),
+      ).rejects.toMatchObject({
+        name: 'AuthApiError',
+        message: 'This password is too common.',
+        code: null,
+      })
     })
   })
 })

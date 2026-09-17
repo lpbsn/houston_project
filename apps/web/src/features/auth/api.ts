@@ -834,6 +834,7 @@ export async function fetchBootstrap() {
     throw buildAuthError(result.response, result.error, 'Your session is not available.')
   }
 
+  queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, result.data)
   return result.data
 }
 
@@ -903,7 +904,6 @@ export async function resyncBootstrapAfterLegalError(error: unknown) {
   }
   try {
     const data = await fetchBootstrap()
-    queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, data)
     return data
   } catch {
     return null
@@ -1225,7 +1225,14 @@ export async function confirmPasswordReset(input: {
   })
 
   if (result.error || !result.data) {
-    throw buildAuthError(result.response, result.error, 'Password reset could not be confirmed.')
+    const fieldErrors = parseRegistrationFieldErrors(result.error)
+    const passwordMessage =
+      fieldErrors?.password?.join(' ') ?? fieldErrors?.password_confirmation?.[0]
+    throw buildAuthError(
+      result.response,
+      result.error,
+      passwordMessage ?? 'Password reset could not be confirmed.',
+    )
   }
 
   return result.data

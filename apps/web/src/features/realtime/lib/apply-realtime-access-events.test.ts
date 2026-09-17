@@ -160,7 +160,10 @@ describe('applyRealtimeAccessEvent', () => {
   it('refetches bootstrap when another tab receives establishment.switched', async () => {
     const onIntentionalClose = vi.fn()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-    vi.mocked(fetchBootstrap).mockResolvedValueOnce(freshBootstrap)
+    vi.mocked(fetchBootstrap).mockImplementation(async () => {
+      queryClient.setQueryData(bootstrapQueryKey, freshBootstrap)
+      return freshBootstrap
+    })
 
     queryClient.setQueryData(['signals', 'feed', 'est-a', 'general', {}], { items: ['stale'] })
     queryClient.setQueryData(['workspace', 'summary', 'est-a'], { name: 'A' })

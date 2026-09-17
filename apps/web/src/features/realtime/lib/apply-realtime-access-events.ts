@@ -31,8 +31,7 @@ async function resyncBootstrapAfterRealtimeSwitch(
   onIntentionalClose: () => void,
 ) {
   try {
-    const bootstrap = await fetchBootstrap()
-    queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, bootstrap)
+    await fetchBootstrap()
   } catch {
     void queryClient.invalidateQueries({ queryKey: bootstrapQueryKey, exact: true })
   } finally {

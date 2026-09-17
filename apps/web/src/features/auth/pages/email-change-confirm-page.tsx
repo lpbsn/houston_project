@@ -24,7 +24,7 @@ function getConfirmErrorMessage(error: unknown) {
 
 export function EmailChangeConfirmPage() {
   const { hash, navigate } = useAppRoute()
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, isReady } = useAuth()
   const fragmentToken = hash.trim()
   const [token] = useState(fragmentToken)
   const started = useRef(false)
@@ -44,7 +44,7 @@ export function EmailChangeConfirmPage() {
   }, [fragmentToken, navigate])
 
   useLayoutEffect(() => {
-    if (!token || started.current) {
+    if (!token || started.current || !isReady) {
       return
     }
     started.current = true
@@ -60,7 +60,7 @@ export function EmailChangeConfirmPage() {
         setError(getConfirmErrorMessage(caught))
         setStatus('error')
       })
-  }, [isAuthenticated, token])
+  }, [isAuthenticated, isReady, token])
 
   return (
     <Card className="mx-auto w-full max-w-lg rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_22px_48px_-38px_rgba(59,90,184,0.28)]">

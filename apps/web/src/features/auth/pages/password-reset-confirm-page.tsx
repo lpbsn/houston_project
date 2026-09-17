@@ -74,7 +74,9 @@ export function PasswordResetConfirmPage() {
       setStatus('success')
     } catch (caught) {
       setError(getConfirmErrorMessage(caught))
-      setStatus('error')
+      if (caught instanceof AuthApiError && caught.code === 'password_reset_invalid') {
+        setStatus('error')
+      }
     } finally {
       setIsSubmitting(false)
     }

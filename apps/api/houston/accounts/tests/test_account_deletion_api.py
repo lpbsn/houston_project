@@ -13,7 +13,14 @@ from rest_framework.test import APIClient
 from houston.accounts.deletion_constants import REMOVED_COMMENT_BODY, REMOVED_OBSERVATION_TEXT
 from houston.accounts.deletion_services import delete_authenticated_account
 from houston.accounts.display import DELETED_ACCOUNT_DISPLAY_NAME, user_display_name
-from houston.accounts.models import User, UserSession
+from houston.accounts.email_change_services import (
+    InvalidEmailChangeTokenError,
+    confirm_email_change,
+    request_email_change,
+)
+from houston.accounts.models import EmailChangeRequest, PasswordResetRequest, User, UserSession
+from houston.accounts.password_services import request_password_reset
+from houston.accounts.tokens import digest_token
 from houston.accounts.tests.helpers import ensure_csrf, post_register, registration_payload
 from houston.chat.api.serializers import membership_display_name as chat_membership_display_name
 from houston.chat.models import ChatConversation, ChatMessage
@@ -524,3 +531,50 @@ def test_last_owner_close_org_rolls_back_on_anonymize_failure():
     assert membership.establishment.status == Establishment.Status.ACTIVE
     assert membership.status == EstablishmentMembership.Status.ACTIVE
     assert user.status == User.Status.ACTIVE
+
+
+@override_settings(RESEND_API_KEY="re_test_key")
+def test_delete_revokes_live_email_change_and_password_reset(monkeypatch):
+    user = create_user(username="delete_proofs", email="live@example.com")
+    create_membership(user=user, role=EstablishmentMembership.Role.STAFF)
+    raw_tokens = iter(["email-del-token", "reset-del-token"])
+    monkeypatch.setattr(
+        "houston.accounts.tokens.generate_raw_token",
+        lambda: next(raw_tokens),
+    )
+    monkeypatch.setattr(
+        "houston.accounts.email_change_services._enqueue_email_change_email",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "houston.accounts.password_services._enqueue_password_reset_email",
+        lambda *args, **kwargs: None,
+    )
+
+    request_email_change(
+        user=user,
+        password=TEST_PASSWORD,
+        new_email="next@example.com",
+    )
+    request_password_reset(email="live@example.com")
+
+    delete_authenticated_account(
+        user=user,
+        password=TEST_PASSWORD,
+        close_organizations=False,
+    )
+
+    change = EmailChangeRequest.objects.get(token_digest=digest_token("email-del-token"))
+    assert change.revoked_at is not None
+    assert change.consumed_at is None
+    reset = PasswordResetRequest.objects.get(token_digest=digest_token("reset-del-token"))
+    assert reset.revoked_at is not None
+    assert reset.consumed_at is None
+
+    with pytest.raises(InvalidEmailChangeTokenError):
+        confirm_email_change(raw_token="email-del-token")
+
+    user.refresh_from_db()
+    assert user.status == User.Status.ANONYMIZED
+    assert user.email is None
+    assert not User.objects.filter(email__iexact="next@example.com").exists()
