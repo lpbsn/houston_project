@@ -64,7 +64,10 @@ En cas d’ambiguïté ou de donnée manquante, le plan doit exposer le point à
 - la refonte générale de la navigation ou de la sidebar ;
 - la modification des autres pages de Spore, hors ajustements indispensables à l’accès au Dashboard ;
 - l’ajout d’indicateurs ou de fonctionnalités absents de ce document et des maquettes ;
-- la création d’une architecture analytique, d’un cache ou d’un système d’agrégation sans besoin démontré.
+- la création d’une architecture analytique, d’un cache ou d’un système d’agrégation sans besoin démontré ;
+- la suppression de l’archivage des observations, traitée dans un chantier distinct.
+
+Le Dashboard ne doit ni afficher une destination « Archivée », ni calculer un délai associé, ni prévoir de compatibilité ou de comportement hérités pour l’archivage.
 
 ## 6. Périmètre établissement et navigation
 
@@ -85,8 +88,8 @@ Les cartes sont affichées dans une seule colonne et dans l’ordre fixe suivant
 3. Nombre d’observations
 4. Destination des observations
 5. Délai avant chaque destination
-6. Délais et taux de résolution des plans d’action
-7. Plans d’action en retard
+6. Respect des échéances des plans d’action
+7. Plans d’action actuellement en retard
 8. Qualité des résolutions de plans d’action
 9. Classement des contributeurs
 10. Lieux les plus cités
@@ -112,6 +115,15 @@ Le comportement du bouton « Exporter » doit être constaté dans le projet :
 - s’il n’existe pas ou n’est pas opérationnel, le bouton reste un placeholder en attendant son cadrage.
 
 ## 9. Contenu des cartes
+
+Pour les cartes « Sujets récurrents », « Nouveaux sujets » et « Lieux les plus cités » :
+
+- afficher les cinq premiers éléments par défaut ;
+- afficher « Voir tout » lorsqu’il existe plus de cinq éléments ;
+- permettre l’accès à tous les résultats ;
+- ne pas appliquer de limite métier arbitraire aux données disponibles.
+
+La manière de charger les résultats supplémentaires n’est pas imposée.
 
 ### 9.1. Sujets récurrents
 
@@ -163,20 +175,53 @@ Une légende associe chaque couleur à son pôle. Sous le graphique, afficher un
 
 ### 9.4. Destination des observations
 
-Présenter la répartition des observations selon les destinations réellement disponibles :
+Présenter la répartition exclusive des observations selon les sept catégories suivantes :
 
-- résolue directement, sans plan d’action ;
-- transformée en plan d’action ;
-- épinglée ;
-- intéressante ;
-- annulée ;
-- toute autre destination réellement existante et pertinente dans les données.
+1. En attente
+2. Intéressante
+3. Plan d’action en cours
+4. Résolue directement
+5. Résolue via un plan d’action
+6. Résolue après demande de résolution
+7. Annulée
 
-Pour chaque destination, afficher sa part et son évolution par rapport à la période précédente. Ne créer aucune catégorie artificielle.
+Règles :
+
+- chaque observation n’apparaît que dans une seule catégorie ;
+- la répartition totalise 100 % ;
+- la catégorie correspond à la situation de l’observation à la fin de la période analysée ;
+- les catégories sont calculées à partir de la situation réellement applicable à cette période, sans réinterpréter une période ancienne avec l’état actuel de l’observation ;
+- « En attente » correspond aux observations encore ouvertes et entre dans le dénominateur ;
+- « Résolue directement » correspond à une résolution déclenchée directement par un utilisateur depuis le bouton « Résolue » ;
+- une observation peut être « Résolue directement » même si un ou plusieurs plans lui ont été associés auparavant puis annulés ;
+- « Résolue via un plan d’action » correspond uniquement aux observations dont la résolution a été déclenchée par l’aboutissement d’un plan d’action ;
+- « Résolue après demande de résolution » reste distincte des deux catégories précédentes ;
+- « Plan d’action en cours » correspond à une observation actuellement prise en charge par un plan, mais pas encore résolue.
+
+Cette carte n’inclut ni « Épinglée » ni « Archivée ».
+
+Pour chaque destination, afficher sa part et son évolution par rapport à la période précédente.
 
 ### 9.5. Délai avant chaque destination
 
-Afficher le délai moyen nécessaire pour qu’une observation atteigne chaque destination :
+Afficher le délai moyen entre la création de l’observation et l’atteinte de sa destination.
+
+Afficher uniquement :
+
+- Intéressante ;
+- Plan d’action en cours ;
+- Résolue directement ;
+- Résolue via un plan d’action ;
+- Résolue après demande de résolution ;
+- Annulée.
+
+Ne pas afficher :
+
+- En attente, car il s’agit de l’état initial de l’observation ;
+- Archivée ;
+- Épinglée.
+
+Pour chaque destination affichée :
 
 - nom de la destination ;
 - barre horizontale proportionnelle ;
@@ -185,9 +230,13 @@ Afficher le délai moyen nécessaire pour qu’une observation atteigne chaque d
 
 La comparaison entre destinations doit être lisible immédiatement.
 
-### 9.6. Délais et taux de résolution des plans d’action
+Lorsqu’une date d’atteinte ne peut pas être déterminée de manière fiable, ne pas inventer de délai.
 
-Afficher la répartition des plans d’action terminés selon les catégories suivantes :
+### 9.6. Respect des échéances des plans d’action
+
+Cette carte mesure la capacité des équipes à terminer leur travail dans le délai planifié. Elle ne mesure pas le délai de validation du manager.
+
+Afficher la répartition des plans concernés selon les catégories suivantes :
 
 - terminé en avance ;
 - terminé à temps ;
@@ -195,15 +244,57 @@ Afficher la répartition des plans d’action terminés selon les catégories su
 
 La carte présente une barre de répartition, la part de chaque catégorie et son évolution par rapport à la période précédente.
 
-Les règles permettant de distinguer ces trois catégories doivent être constatées dans le fonctionnement métier existant. Toute règle absente ou ambiguë doit être signalée dans le plan.
+La fin du travail de l’équipe correspond :
 
-### 9.7. Plans d’action en retard
+- à l’envoi du plan en validation lorsque celle-ci est requise ;
+- à la fin directe du plan lorsqu’aucune validation n’est requise ;
+- à la dernière nouvelle soumission lorsqu’un plan a été rejeté puis retravaillé.
 
-Cette carte concerne uniquement les plans actuellement en retard. Elle les répartit selon leur taux de dépassement.
+Le temps passé à attendre une validation du manager ne doit jamais influencer le classement.
 
-Le taux de dépassement compare le temps de retard à la durée initialement prévue du plan :
+Les calculs utilisent le jour et l’heure complets, sans arrondi au jour.
 
-`Taux de dépassement = (temps de retard / durée prévue du plan) × 100`
+```text
+Durée planifiée = échéance − début planifié
+Fenêtre « À temps » = 10 % de la durée planifiée
+Seuil « À temps » = échéance − fenêtre « À temps »
+```
+
+Classement :
+
+- **Terminé en avance** : fin du travail avant le seuil « À temps » ;
+- **Terminé à temps** : fin du travail comprise entre le seuil « À temps » et l’échéance, incluses ;
+- **Terminé en retard** : fin du travail postérieure à l’échéance.
+
+Tout dépassement de l’échéance, même d’une minute, doit être considéré comme un retard.
+
+Les plans dont les dates nécessaires sont absentes, incohérentes ou non fiables ne doivent pas être classés artificiellement.
+
+### 9.7. Plans d’action actuellement en retard
+
+Cette carte concerne uniquement les plans dont le travail de l’équipe n’est pas terminé et dont l’échéance est dépassée. Elle les répartit selon leur taux de dépassement.
+
+Inclure :
+
+- les plans planifiés mais non commencés dont l’échéance est dépassée ;
+- les plans en cours dont l’échéance est dépassée.
+
+Exclure :
+
+- les plans en attente de validation ;
+- les plans terminés ;
+- les plans annulés ;
+- tout plan pour lequel l’équipe a déjà terminé son travail.
+
+Le taux de dépassement est :
+
+```text
+Durée planifiée = échéance actuelle − début planifié actuel
+Temps de retard = heure actuelle − échéance actuelle
+Taux de dépassement = temps de retard / durée planifiée × 100
+```
+
+Employer partout le terme « durée planifiée ».
 
 Exemples :
 
@@ -228,11 +319,20 @@ Chaque tranche affiche :
 
 Un pictogramme d’information placé près du titre affiche le tooltip suivant :
 
-> Le taux de dépassement compare le temps de retard à la durée initialement prévue du plan. Plus le pourcentage est élevé, plus le retard est important par rapport au délai prévu. Exemple : 2 jours de retard sur un plan de 30 jours représentent 6,7 %, tandis que 2 jours de retard sur un plan de 2 jours représentent 100 %.
+> Le taux de dépassement compare le temps de retard à la durée planifiée du plan. Plus le pourcentage est élevé, plus le retard est important par rapport au délai prévu. Exemple : 2 jours de retard sur un plan de 30 jours représentent 6,7 %, tandis que 2 jours de retard sur un plan de 2 jours représentent 100 %.
 
 ### 9.8. Qualité des résolutions de plans d’action
 
-Afficher la répartition des évaluations de résolution, de cinq étoiles à une étoile.
+Afficher la répartition des évaluations de résolution selon six niveaux :
+
+- 5 étoiles ;
+- 4 étoiles ;
+- 3 étoiles ;
+- 2 étoiles ;
+- 1 étoile ;
+- 0 étoile.
+
+La période correspond à la date de l’évaluation. Les évaluations à 0 étoile entrent dans le dénominateur comme les autres.
 
 Chaque niveau affiche :
 
@@ -260,8 +360,6 @@ Chaque ligne comprend :
 - le nombre d’observations ;
 - une barre représentant sa proportion par rapport au lieu le plus cité.
 
-La liste est repliée à cinq lieux par défaut. Le lien « Voir tout » permet d’afficher les lieux supplémentaires lorsqu’ils existent.
-
 ## 10. Exigences visuelles et responsive
 
 - reproduire fidèlement les maquettes dans leur structure, leurs espacements, leur hiérarchie et leur densité ;
@@ -280,6 +378,7 @@ Les poignées de déplacement et le texte relatif au glisser-déposer visibles d
 - aucune donnée fictive ne doit être ajoutée ;
 - les états de chargement, d’absence de données et d’erreur doivent être prévus ;
 - le changement de période doit produire des comparaisons cohérentes pour l’ensemble des cartes concernées ;
+- les indicateurs d’une période fermée doivent rester fidèles à la situation applicable à cette période, sans substitution par l’état actuel ;
 - l’ordre des cartes est défini par le produit et reste fixe ;
 - le futur Dashboard Cross doit rester indépendant du Dashboard établissement ;
 - le nettoyage doit supprimer le code devenu inutile, sans créer d’abstraction de remplacement non justifiée ;
@@ -296,7 +395,9 @@ Les poignées de déplacement et le texte relatif au glisser-déposer visibles d
 - nouveau filtre non cadré ;
 - nouvelle navigation en dehors de l’entrée « Dashboard Cross » demandée ;
 - nouvelle logique métier sans validation ;
-- mécanisme de glisser-déposer ou de personnalisation des cartes.
+- mécanisme de glisser-déposer ou de personnalisation des cartes ;
+- destination « Épinglée » ;
+- destination « Archivée », délai associé, ou comportement hérités d’archivage.
 
 ## 13. Attendus du plan d’implémentation
 
@@ -327,7 +428,17 @@ La refonte sera considérée conforme lorsque :
 - aucun mécanisme de glisser-déposer ou de personnalisation de l’ordre n’est présent ;
 - les filtres non cadrés et les analyses IA sont clairement présentés comme indisponibles ;
 - les graphiques utilisent les données réelles et respectent les proportions affichées ;
-- les calculs, catégories, périodes et comparaisons sont cohérents ;
+- la carte « Destination des observations » présente exactement les sept catégories exclusives, totalise 100 %, et inclut les observations en attente dans le dénominateur ;
+- les catégories « Épinglée » et « Archivée » sont absentes du Dashboard, y compris des délais ;
+- les trois mécanismes de résolution restent distincts : résolue directement, résolue via un plan d’action, résolue après demande de résolution ;
+- les catégories et origines de résolution d’une période correspondent à la situation applicable à cette période, sans réinterprétation par l’état actuel ;
+- la carte des délais n’affiche pas En attente ;
+- les échéances des plans d’action sont calculées avec le jour et l’heure complets, sans arrondi au jour ;
+- la fenêtre « À temps » correspond à 10 % de la durée planifiée ;
+- le temps d’attente de validation du manager n’influence pas le classement des échéances ;
+- la carte des retards actuels exclut les plans en attente de validation et tout plan dont le travail d’équipe est déjà terminé ;
+- la qualité des résolutions affiche les évaluations de 0 à 5 étoiles, 0 étoile compris dans le dénominateur ;
+- les cartes Sujets récurrents, Nouveaux sujets et Lieux les plus cités affichent cinq éléments par défaut, proposent « Voir tout » au-delà, et donnent accès à tous les résultats, sans limite métier fixée à cinq ;
 - les états de chargement, d’absence de données et d’erreur sont traités ;
 - l’affichage reste utilisable sur desktop et sur écran plus étroit ;
 - les tests couvrent le périmètre établissement, les principaux calculs et les risques de régression ;

@@ -4,7 +4,6 @@ import { useLayoutEffect, useState } from 'react'
 import { useAppRoute } from '@/app/app-routes'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { TermsAcceptCheckbox } from '@/features/auth/components/terms-accept-checkbox'
 import { PasswordCreationFields } from '@/features/auth/components/password-creation-fields'
 import {
@@ -37,12 +36,7 @@ function getAcceptErrorMessage(error: unknown) {
 export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) {
   const { hash, navigate } = useAppRoute()
   const fragmentToken = hash.trim()
-  const [capturedToken, setCapturedToken] = useState('')
-  if (fragmentToken && capturedToken !== fragmentToken) {
-    setCapturedToken(fragmentToken)
-  }
-  const [typedToken, setTypedToken] = useState('')
-  const token = capturedToken || typedToken
+  const [token] = useState(fragmentToken)
   const [password, setPassword] = useState('')
   const [passwordConfirmation, setPasswordConfirmation] = useState('')
   const [fieldError, setFieldError] = useState<string | null>(null)
@@ -64,7 +58,6 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
 
     const invitationToken = token.trim()
     if (!invitationToken) {
-      setFieldError('Invitation code is required.')
       return
     }
 
@@ -94,6 +87,30 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
     }
   }
 
+  if (!token) {
+    return (
+      <Card className="mx-auto w-full max-w-lg rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_22px_48px_-38px_rgba(59,90,184,0.28)]">
+        <CardHeader className="gap-2">
+          <CardTitle className="text-[1.55rem] font-black tracking-[-0.05em]">
+            Accept invitation
+          </CardTitle>
+          <CardDescription className="text-sm leading-6">
+            This invitation link is missing or invalid. Open the link from your email to continue.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            type="button"
+            className="h-11 w-full rounded-[1rem] sm:w-auto"
+            onClick={() => navigate('/login')}
+          >
+            Sign in
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <Card className="mx-auto w-full max-w-lg rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_22px_48px_-38px_rgba(59,90,184,0.28)]">
       <CardHeader className="gap-2">
@@ -107,27 +124,6 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
 
       <CardContent>
         <form className="space-y-4" onSubmit={handleSubmit}>
-          {capturedToken ? null : (
-            <div className="space-y-2">
-              <label className="text-sm font-semibold" htmlFor="invitation-code">
-                Invitation code
-              </label>
-              <Input
-                id="invitation-code"
-                type="text"
-                autoComplete="off"
-                spellCheck={false}
-                value={typedToken}
-                onChange={(event) => {
-                  setTypedToken(event.target.value)
-                  setFieldError(null)
-                  setSubmitError(null)
-                }}
-                className="h-11 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
-              />
-            </div>
-          )}
-
           <PasswordCreationFields
             password={password}
             confirmation={passwordConfirmation}
