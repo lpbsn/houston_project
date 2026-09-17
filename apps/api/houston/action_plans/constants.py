@@ -151,6 +151,7 @@ EXECUTION_LIFECYCLE_METADATA_SAFE_KEYS = frozenset(
         "reactivation_origin",
         "to_status",
         "end_at",
+        "start_at",
         "from_end_at",
         "to_end_at",
     }
@@ -158,6 +159,7 @@ EXECUTION_LIFECYCLE_METADATA_SAFE_KEYS = frozenset(
 EXECUTION_LIFECYCLE_NULLABLE_METADATA_KEYS = frozenset(
     {
         "end_at",
+        "start_at",
         "from_end_at",
         "to_end_at",
     }

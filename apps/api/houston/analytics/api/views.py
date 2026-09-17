@@ -15,6 +15,7 @@ from rest_framework.views import APIView
 from houston.accounts.api.serializers import ApiErrorResponseSerializer
 from houston.accounts.authentication import BearerAccessTokenAuthentication
 from houston.analytics.api.serializers import (
+    AnalyticsDashboardRankingsResponseSerializer,
     AnalyticsDashboardResponseSerializer,
     AnalyticsOwnerGovernanceResponseSerializer,
     AnalyticsOwnerGovernanceTargetListResponseSerializer,
@@ -30,7 +31,13 @@ from houston.analytics.api.serializers import (
     AnalyticsPatternSplitToExistingRequestSerializer,
     AnalyticsPatternSplitToNewRequestSerializer,
 )
-from houston.analytics.dashboard import DEFAULT_DASHBOARD_PERIOD_DAYS, get_analytics_dashboard
+from houston.analytics.dashboard import (
+    DEFAULT_DASHBOARD_PERIOD_DAYS,
+    DEFAULT_RANKING_PAGE_SIZE,
+    MAX_RANKING_PAGE_SIZE,
+    get_analytics_dashboard,
+    list_analytics_dashboard_rankings,
+)
 from houston.analytics.exceptions import AnalyticsValidationError
 from houston.analytics.pattern_detail import get_analytics_pattern_detail
 from houston.analytics.pattern_list import (
@@ -72,6 +79,9 @@ ANALYTICS_READ_BAD_REQUEST_CODES = frozenset(
         "analytics_period_start_naive",
         "analytics_period_end_naive",
         "analytics_scope_invalid",
+        "analytics_dashboard_rankings_kind_invalid",
+        "analytics_dashboard_rankings_page_size_invalid",
+        "analytics_dashboard_rankings_cursor_invalid",
         "analytics_comparison_period_required",
         "analytics_recurrence_as_of_required",
         "analytics_recurrence_as_of_naive",
@@ -270,6 +280,16 @@ def _parse_period(query_params):
     )
 
 
+def _parse_required_uuid(query_params, field_name: str) -> uuid.UUID:
+    value = _parse_optional_uuid(query_params, field_name)
+    if value is None:
+        raise AnalyticsValidationError(
+            f"{field_name} is required.",
+            code="analytics_scope_invalid",
+        )
+    return value
+
+
 def _parse_optional_uuid(query_params, field_name: str) -> uuid.UUID | None:
     raw_value = query_params.get(field_name)
     if raw_value in (None, ""):
@@ -444,7 +464,19 @@ DASHBOARD_PARAMETERS = [
         enum=[3, 7, 15, 30, 90],
         description="Sliding window length in days. Default 7.",
     ),
-    OpenApiParameter(name="establishment_id", required=False, type=OpenApiTypes.UUID),
+    OpenApiParameter(name="establishment_id", required=True, type=OpenApiTypes.UUID),
+]
+
+DASHBOARD_RANKINGS_PARAMETERS = [
+    *DASHBOARD_PARAMETERS,
+    OpenApiParameter(
+        name="kind",
+        required=True,
+        type=str,
+        enum=["recurring", "new", "locations"],
+    ),
+    _page_size_param(DEFAULT_RANKING_PAGE_SIZE, MAX_RANKING_PAGE_SIZE),
+    OpenApiParameter(name="cursor", required=False, type=str),
 ]
 
 PATTERN_LIST_FILTER_PARAMETERS = [
@@ -487,11 +519,40 @@ class AnalyticsDashboardView(AnalyticsAPIView):
             result = get_analytics_dashboard(
                 request.user,
                 period_days=_parse_period_days(request.query_params),
-                establishment_id=_parse_optional_uuid(request.query_params, "establishment_id"),
+                establishment_id=_parse_required_uuid(request.query_params, "establishment_id"),
             )
         except AnalyticsValidationError as exc:
             return _analytics_error_response(exc)
         return Response(AnalyticsDashboardResponseSerializer(_serialize_dashboard(result)).data)
+
+
+class AnalyticsDashboardRankingsView(AnalyticsAPIView):
+    @extend_schema(
+        tags=["analytics"],
+        operation_id="v1_analytics_dashboard_rankings_retrieve",
+        parameters=DASHBOARD_RANKINGS_PARAMETERS,
+        responses={
+            200: AnalyticsDashboardRankingsResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def get(self, request):
+        try:
+            result = list_analytics_dashboard_rankings(
+                request.user,
+                period_days=_parse_period_days(request.query_params),
+                establishment_id=_parse_required_uuid(request.query_params, "establishment_id"),
+                kind=str(request.query_params.get("kind") or ""),
+                page_size=request.query_params.get("page_size", DEFAULT_RANKING_PAGE_SIZE),
+                cursor=request.query_params.get("cursor"),
+            )
+        except AnalyticsValidationError as exc:
+            return _analytics_error_response(exc)
+        return Response(
+            AnalyticsDashboardRankingsResponseSerializer(_serialize_dashboard(result)).data
+        )
 
 
 class AnalyticsPatternListView(AnalyticsAPIView):

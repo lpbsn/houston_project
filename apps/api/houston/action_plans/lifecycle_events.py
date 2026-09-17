@@ -65,8 +65,19 @@ def record_execution_lifecycle_event(
     )
 
 
-def execution_transition_metadata(*, status: str, end_at: datetime | None) -> dict[str, Any]:
-    return {"to_status": status, "end_at": end_at}
+_UNSET = object()
+
+
+def execution_transition_metadata(
+    *,
+    status: str,
+    end_at: datetime | None,
+    start_at: datetime | None | object = _UNSET,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"to_status": status, "end_at": end_at}
+    if start_at is not _UNSET:
+        payload["start_at"] = start_at
+    return payload
 
 
 def record_execution_deadline_changed(

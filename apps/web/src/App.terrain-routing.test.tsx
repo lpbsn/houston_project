@@ -90,6 +90,7 @@ vi.mock('@/app/lazy-terrain-pages', () => {
     LazyChatConversationPage: () => createElement(Page, { name: 'chat-conversation' }),
     LazyChatPage: () => createElement(Page, { name: 'chat' }),
     LazyChatRealtimeProvider: ({ children }: { children: React.ReactNode }) => children,
+    LazyComingSoonPage: ({ title }: { title: string }) => createElement('h1', null, title),
     LazyExecutionFeedPage: () => createElement(Page, { name: 'execution' }),
     LazyExecutionUpcomingPage: () => createElement(Page, { name: 'execution-upcoming' }),
     LazyNotificationsCenterPage: () => createElement(Page, { name: 'notifications' }),
@@ -332,7 +333,7 @@ describe('App terrain active membership routing', () => {
     })
   })
 
-  it('keeps analytics as a hub without a back control when operational access is available', () => {
+  it('keeps analytics as a hub without a back control when operational access is available', async () => {
     const bootstrap = bootstrapWithActiveMembership()
     authState.bootstrap = bootstrap
     authState.memberships = bootstrap.memberships
@@ -340,9 +341,10 @@ describe('App terrain active membership routing', () => {
 
     render(wrapApp())
 
-    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeTruthy()
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith('/e/est-1?period=7d', { replace: true })
+    })
     expect(screen.queryByRole('button', { name: 'Retour' })).toBeNull()
-    expect(navigate).not.toHaveBeenCalled()
   })
 
   it('keeps analytics as a hub without a back control without active membership', () => {
@@ -353,7 +355,7 @@ describe('App terrain active membership routing', () => {
 
     render(wrapApp())
 
-    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeTruthy()
+    expect(screen.getByText('analytics')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Retour' })).toBeNull()
     expect(navigate).not.toHaveBeenCalled()
   })
@@ -378,7 +380,7 @@ describe('App terrain active membership routing', () => {
 
     render(wrapApp())
 
-    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeTruthy()
+    expect(screen.getByText('analytics')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Retour' })).toBeNull()
     expect(navigate).not.toHaveBeenCalled()
   })
@@ -541,11 +543,11 @@ describe('App terrain active membership routing', () => {
 
     render(wrapApp())
 
-    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Dashboard Cross' })).toBeTruthy()
     expect(navigate).not.toHaveBeenCalled()
   })
 
-  it('redirects /analytics to the cross dashboard on a large viewport without selection', async () => {
+  it('does not redirect /analytics to Cross when no establishment is selected', async () => {
     stubLgViewport(true)
     const bootstrap = bootstrapWithoutActiveMembership()
     authState.bootstrap = bootstrap
@@ -554,12 +556,11 @@ describe('App terrain active membership routing', () => {
 
     render(wrapApp())
 
-    await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith('/cross?period=7d', { replace: true })
-    })
+    expect(navigate).not.toHaveBeenCalled()
+    expect(screen.getByText('analytics')).toBeTruthy()
   })
 
-  it('does not redirect /analytics to cross when only one establishment is eligible', () => {
+  it('redirects /analytics to the selected establishment dashboard', async () => {
     stubLgViewport(true)
     const bootstrap = bootstrapWithActiveMembership()
     authState.bootstrap = bootstrap
@@ -568,8 +569,9 @@ describe('App terrain active membership routing', () => {
 
     render(wrapApp())
 
-    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeTruthy()
-    expect(navigate).not.toHaveBeenCalled()
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith('/e/est-1?period=7d', { replace: true })
+    })
   })
 
   it('switches to a pending establishment before opening the target from login', async () => {
@@ -596,7 +598,7 @@ describe('App terrain active membership routing', () => {
         { replace: true },
       )
     })
-    expect(navigate).not.toHaveBeenCalledWith('/cross?period=7d', { replace: true })
+    expect(navigate).not.toHaveBeenCalledWith('/cross/signals', { replace: true })
   })
 
   it('lands a membership-required login next without a hint on the desktop landing', async () => {
@@ -615,7 +617,7 @@ describe('App terrain active membership routing', () => {
     render(wrapApp())
 
     await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith('/cross?period=7d', { replace: true })
+      expect(navigate).toHaveBeenCalledWith('/cross/signals', { replace: true })
     })
     expect(switchEstablishment).not.toHaveBeenCalled()
     expect(navigate).not.toHaveBeenCalledWith(
@@ -667,7 +669,7 @@ describe('App terrain active membership routing', () => {
     await waitFor(() => {
       expect(navigate).toHaveBeenCalledWith(`/e/${establishmentId}/signals`, { replace: true })
     })
-    expect(navigate).not.toHaveBeenCalledWith('/cross?period=7d', { replace: true })
+    expect(navigate).not.toHaveBeenCalledWith('/cross/signals', { replace: true })
     expect(navigate).not.toHaveBeenCalledWith(
       expect.stringMatching(/^\/select-establishment/),
       expect.anything(),
@@ -729,7 +731,7 @@ describe('App terrain active membership routing', () => {
     render(wrapApp())
 
     await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith('/cross?period=7d', { replace: true })
+      expect(navigate).toHaveBeenCalledWith('/cross/signals', { replace: true })
     })
     expect(switchEstablishment).not.toHaveBeenCalled()
     expect(navigate).not.toHaveBeenCalledWith(
@@ -749,7 +751,7 @@ describe('App terrain active membership routing', () => {
     render(wrapApp())
 
     await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith('/cross?period=7d', { replace: true })
+      expect(navigate).toHaveBeenCalledWith('/cross/signals', { replace: true })
     })
     expect(switchEstablishment).not.toHaveBeenCalled()
   })
@@ -945,7 +947,7 @@ describe('App terrain active membership routing', () => {
 
     await waitFor(() => {
       expect(switchEstablishment).toHaveBeenCalledWith({ establishment_id: 'est-2' })
-      expect(navigate).toHaveBeenCalledWith('/cross?period=7d', { replace: true })
+      expect(navigate).toHaveBeenCalledWith('/cross/signals', { replace: true })
     })
   })
 
@@ -1016,7 +1018,7 @@ describe('App terrain active membership routing', () => {
     render(wrapApp())
 
     expect(await screen.findByTestId('select-establishment-page')).toBeTruthy()
-    expect(navigate).not.toHaveBeenCalledWith('/cross?period=7d', { replace: true })
+    expect(navigate).not.toHaveBeenCalledWith('/cross/signals', { replace: true })
     expect(switchEstablishment).not.toHaveBeenCalled()
   })
 
@@ -1035,7 +1037,7 @@ describe('App terrain active membership routing', () => {
     await waitFor(() => {
       expect(navigate).toHaveBeenCalledWith('/select-establishment', { replace: true })
     })
-    expect(navigate).not.toHaveBeenCalledWith('/cross?period=7d', { replace: true })
+    expect(navigate).not.toHaveBeenCalledWith('/cross/signals', { replace: true })
   })
 
   it('silently switches on desktop when operational config differs from the session', async () => {

@@ -9,7 +9,6 @@ export type AnalyticsDashboardResponse =
   components['schemas']['AnalyticsDashboardResponse']
 export type AnalyticsDashboardMetricComparison =
   components['schemas']['AnalyticsDashboardMetricComparison']
-export type AnalyticsDelayStats = components['schemas']['AnalyticsDelayStats']
 export type AnalyticsContributorItem =
   components['schemas']['AnalyticsContributorItem']
 export type AnalyticsNamedCountItem =
@@ -18,6 +17,8 @@ export type AnalyticsNewPatternItem =
   components['schemas']['AnalyticsNewPatternItem']
 export type AnalyticsRecurringPatternItem =
   components['schemas']['AnalyticsRecurringPatternItem']
+export type AnalyticsDashboardRankingsResponse =
+  components['schemas']['AnalyticsDashboardRankingsResponse']
 export type AnalyticsMetricComparison =
   components['schemas']['AnalyticsMetricComparison']
 export type AnalyticsPatternListResponse =
@@ -65,6 +66,22 @@ export const analyticsQueryKeys = {
       {
         periodDays: options.periodDays,
         establishmentId: options.establishmentId,
+      },
+    ] as const,
+  dashboardRankings: (options: {
+    periodDays: DashboardPeriodDays
+    establishmentId: string
+    kind: 'recurring' | 'new' | 'locations'
+    pageSize?: number
+  }) =>
+    [
+      'analytics',
+      'dashboard-rankings',
+      {
+        periodDays: options.periodDays,
+        establishmentId: options.establishmentId,
+        kind: options.kind,
+        pageSize: options.pageSize ?? null,
       },
     ] as const,
   patterns: (state: AnalyticsUrlState, pageSize?: number) =>
@@ -171,11 +188,11 @@ function assertAnalyticsData<T>(result: {
 
 function buildDashboardQuery(options: {
   periodDays: DashboardPeriodDays
-  establishmentId: string | null
+  establishmentId: string
 }) {
   return {
     period_days: options.periodDays,
-    ...(options.establishmentId ? { establishment_id: options.establishmentId } : {}),
+    establishment_id: options.establishmentId,
   }
 }
 
@@ -248,9 +265,36 @@ function buildGovernanceTargetsQuery(options: {
   }
 }
 
+export async function fetchAnalyticsDashboardRankings(options: {
+  periodDays: DashboardPeriodDays
+  establishmentId: string
+  kind: 'recurring' | 'new' | 'locations'
+  cursor?: string
+  pageSize?: number
+}): Promise<AnalyticsDashboardRankingsResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/analytics/dashboard/rankings/', {
+        params: {
+          query: {
+            period_days: options.periodDays,
+            establishment_id: options.establishmentId,
+            kind: options.kind,
+            ...(options.cursor ? { cursor: options.cursor } : {}),
+            ...(options.pageSize ? { page_size: options.pageSize } : {}),
+          },
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  return assertAnalyticsData<AnalyticsDashboardRankingsResponse>(result)
+}
+
 export async function fetchAnalyticsDashboard(options: {
   periodDays: DashboardPeriodDays
-  establishmentId: string | null
+  establishmentId: string
 }): Promise<AnalyticsDashboardResponse> {
   const result = await withAuthRetry(
     (accessToken) =>

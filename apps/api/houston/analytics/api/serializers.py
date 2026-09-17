@@ -28,33 +28,6 @@ class AnalyticsDashboardMetricComparisonSerializer(AnalyticsMetricComparisonSeri
     coverage = serializers.ChoiceField(choices=["complete", "partial", "not_comparable"])
 
 
-class AnalyticsDelayStatsSerializer(serializers.Serializer):
-    median_seconds = serializers.FloatField(allow_null=True)
-    mean_seconds = serializers.FloatField(allow_null=True)
-    p90_seconds = serializers.FloatField(allow_null=True)
-    n = serializers.IntegerField()
-    comparison = AnalyticsDashboardMetricComparisonSerializer()
-    undatable_in_scope = serializers.IntegerField()
-    unstarted_in_scope = serializers.IntegerField()
-
-
-class AnalyticsRecurringPatternItemSerializer(serializers.Serializer):
-    pattern_id = serializers.UUIDField()
-    name = serializers.CharField()
-    signal_count = serializers.IntegerField()
-    comparison = AnalyticsDashboardMetricComparisonSerializer()
-
-
-class AnalyticsNewPatternItemSerializer(serializers.Serializer):
-    pattern_id = serializers.UUIDField()
-    name = serializers.CharField()
-    first_seen_at = serializers.DateTimeField()
-    observation_count = serializers.IntegerField()
-    establishment_count = serializers.IntegerField(allow_null=True)
-    establishment_id = serializers.UUIDField(allow_null=True)
-    establishment_name = serializers.CharField(allow_null=True)
-
-
 class AnalyticsContributorItemSerializer(serializers.Serializer):
     user_id = serializers.UUIDField()
     name = serializers.CharField()
@@ -64,31 +37,72 @@ class AnalyticsContributorItemSerializer(serializers.Serializer):
     establishment_names = serializers.ListField(child=serializers.CharField())
 
 
-class AnalyticsAgingBucketSerializer(serializers.Serializer):
-    key = serializers.CharField()
-    label = serializers.CharField()
-    count = serializers.IntegerField()
-    share = serializers.FloatField(allow_null=True)
+class AnalyticsRecurringPatternItemSerializer(serializers.Serializer):
+    pattern_id = serializers.UUIDField()
+    name = serializers.CharField()
+    signal_count = serializers.IntegerField()
+    last_seen_at = serializers.DateTimeField()
+    comparison = AnalyticsDashboardMetricComparisonSerializer()
+
+
+class AnalyticsNewPatternItemSerializer(serializers.Serializer):
+    pattern_id = serializers.UUIDField()
+    name = serializers.CharField()
+    first_seen_at = serializers.DateTimeField()
 
 
 class AnalyticsNamedCountItemSerializer(serializers.Serializer):
     id = serializers.CharField()
     name = serializers.CharField()
     count = serializers.IntegerField()
-    establishment_id = serializers.UUIDField(allow_null=True)
-    establishment_name = serializers.CharField(allow_null=True)
     comparison = AnalyticsDashboardMetricComparisonSerializer()
 
 
-class AnalyticsUndatableSignalTerminalsSerializer(serializers.Serializer):
-    canceled = serializers.IntegerField()
-    resolved = serializers.IntegerField()
-    archived = serializers.IntegerField()
+class AnalyticsRecurringPreviewSerializer(serializers.Serializer):
+    items = AnalyticsRecurringPatternItemSerializer(many=True)
+    total_count = serializers.IntegerField()
 
 
-class AnalyticsUndatableExecutionTerminalsSerializer(serializers.Serializer):
-    canceled = serializers.IntegerField()
-    done = serializers.IntegerField()
+class AnalyticsNewPreviewSerializer(serializers.Serializer):
+    items = AnalyticsNewPatternItemSerializer(many=True)
+    total_count = serializers.IntegerField()
+
+
+class AnalyticsLocationPreviewSerializer(serializers.Serializer):
+    items = AnalyticsNamedCountItemSerializer(many=True)
+    total_count = serializers.IntegerField()
+
+
+class AnalyticsDestinationShareSerializer(serializers.Serializer):
+    count = serializers.IntegerField()
+    share = serializers.FloatField(allow_null=True)
+    comparison = AnalyticsDashboardMetricComparisonSerializer()
+
+
+class AnalyticsDestinationDelaySerializer(serializers.Serializer):
+    mean_seconds = serializers.FloatField(allow_null=True)
+    n = serializers.IntegerField()
+    undatable_in_scope = serializers.IntegerField()
+
+
+class AnalyticsVolumeSegmentSerializer(serializers.Serializer):
+    pole_id = serializers.CharField()
+    name = serializers.CharField()
+    count = serializers.IntegerField()
+    share = serializers.FloatField(allow_null=True)
+
+
+class AnalyticsVolumeWindowSerializer(serializers.Serializer):
+    offset = serializers.IntegerField()
+    label_key = serializers.CharField()
+    total = serializers.IntegerField()
+    segments = AnalyticsVolumeSegmentSerializer(many=True)
+
+
+class AnalyticsObservationVolumeSerializer(serializers.Serializer):
+    windows = AnalyticsVolumeWindowSerializer(many=True)
+    current_total = serializers.IntegerField()
+    comparison = AnalyticsDashboardMetricComparisonSerializer()
 
 
 class AnalyticsDeadlineShareSerializer(serializers.Serializer):
@@ -99,9 +113,22 @@ class AnalyticsDeadlineShareSerializer(serializers.Serializer):
     early_count = serializers.IntegerField()
     on_time_count = serializers.IntegerField()
     late_count = serializers.IntegerField()
+    excluded_count = serializers.IntegerField()
     early_comparison = AnalyticsDashboardMetricComparisonSerializer()
     on_time_comparison = AnalyticsDashboardMetricComparisonSerializer()
     late_comparison = AnalyticsDashboardMetricComparisonSerializer()
+
+
+class AnalyticsOverrunBucketSerializer(serializers.Serializer):
+    key = serializers.CharField()
+    count = serializers.IntegerField()
+    share = serializers.FloatField(allow_null=True)
+
+
+class AnalyticsQualityBucketSerializer(serializers.Serializer):
+    stars = serializers.IntegerField()
+    count = serializers.IntegerField()
+    share = serializers.FloatField(allow_null=True)
 
 
 class AnalyticsDashboardResponseSerializer(serializers.Serializer):
@@ -109,33 +136,30 @@ class AnalyticsDashboardResponseSerializer(serializers.Serializer):
     current_period = AnalyticsPeriodSerializer()
     previous_period = AnalyticsPeriodSerializer()
     history_reliable_from = serializers.DateTimeField()
-    scope_type = serializers.ChoiceField(choices=["cross", "establishment"])
-    establishment_id = serializers.UUIDField(allow_null=True)
-    establishment_ids = serializers.ListField(child=serializers.UUIDField())
-    recurring_patterns = AnalyticsRecurringPatternItemSerializer(many=True)
-    new_patterns = AnalyticsNewPatternItemSerializer(many=True)
-    new_patterns_preview_limit = serializers.IntegerField()
+    establishment_id = serializers.UUIDField()
+    establishment_name = serializers.CharField()
+    recurring_patterns = AnalyticsRecurringPreviewSerializer()
+    new_patterns = AnalyticsNewPreviewSerializer()
+    locations = AnalyticsLocationPreviewSerializer()
+    observation_volume = serializers.DictField(child=AnalyticsObservationVolumeSerializer())
+    observation_destinations = serializers.DictField(child=AnalyticsDestinationShareSerializer())
+    observation_destination_delays = serializers.DictField(
+        child=AnalyticsDestinationDelaySerializer()
+    )
+    plan_deadline_respect = AnalyticsDeadlineShareSerializer()
+    plan_overrun = AnalyticsOverrunBucketSerializer(many=True)
+    resolution_quality = AnalyticsQualityBucketSerializer(many=True)
     contributors = AnalyticsContributorItemSerializer(many=True)
-    observation_delay_canceled = AnalyticsDelayStatsSerializer()
-    observation_delay_resolved = AnalyticsDelayStatsSerializer()
-    observation_delay_transformed = AnalyticsDelayStatsSerializer()
-    operational_resolution_rate = AnalyticsDashboardMetricComparisonSerializer()
-    closure_resolved_share = AnalyticsDashboardMetricComparisonSerializer()
-    closure_measured_resolved_count = serializers.IntegerField()
-    closure_measured_canceled_count = serializers.IntegerField()
-    undatable_signal_terminals = AnalyticsUndatableSignalTerminalsSerializer()
-    undatable_execution_terminals = AnalyticsUndatableExecutionTerminalsSerializer()
-    reopenings = AnalyticsDashboardMetricComparisonSerializer()
-    open_observation_count = serializers.IntegerField()
-    aging_buckets = AnalyticsAgingBucketSerializer(many=True)
-    aging_over_15d_share = AnalyticsDashboardMetricComparisonSerializer()
-    plan_delay_canceled = AnalyticsDelayStatsSerializer()
-    plan_delay_resolved = AnalyticsDelayStatsSerializer()
-    plan_validation = AnalyticsDelayStatsSerializer()
-    plan_deadlines = AnalyticsDeadlineShareSerializer()
-    locations = AnalyticsNamedCountItemSerializer(many=True)
-    locations_preview_limit = serializers.IntegerField()
-    poles = AnalyticsNamedCountItemSerializer(many=True)
+
+
+class AnalyticsDashboardRankingsResponseSerializer(serializers.Serializer):
+    kind = serializers.ChoiceField(choices=["recurring", "new", "locations"])
+    current_period = AnalyticsPeriodSerializer()
+    items = serializers.ListField()
+    total_count = serializers.IntegerField()
+    page_size = serializers.IntegerField()
+    has_more = serializers.BooleanField()
+    next_cursor = serializers.CharField(allow_null=True)
 
 
 class AnalyticsPatternEstablishmentSummarySerializer(serializers.Serializer):

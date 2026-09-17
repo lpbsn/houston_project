@@ -16,6 +16,7 @@ from houston.action_plans.constants import (
     EXECUTION_LIFECYCLE_EVENT_REOPENED,
     EXECUTION_LIFECYCLE_EVENT_STARTED,
     EXECUTION_LIFECYCLE_EVENT_VALIDATED,
+    EXECUTION_LIFECYCLE_METADATA_SAFE_KEYS,
     EXECUTION_STATUS_CANCELED,
     EXECUTION_STATUS_IN_PROGRESS,
     EXECUTION_STATUS_SCHEDULED,
@@ -66,12 +67,15 @@ def _events_of_type(
 
 
 def test_sanitize_lifecycle_metadata_safe_allowlist():
+    assert "start_at" in EXECUTION_LIFECYCLE_METADATA_SAFE_KEYS
     assert sanitize_lifecycle_metadata_safe(
         {
             "initial_status": "scheduled",
             "cancel_origin": "manual",
             "reactivation_origin": "schedule_sync",
             "to_status": "in_progress",
+            "start_at": "2026-08-01T10:00:00+00:00",
+            "end_at": "2026-08-01T12:00:00+00:00",
             "secret_note": "drop me",
             "nested": {"a": 1},
         }
@@ -80,6 +84,8 @@ def test_sanitize_lifecycle_metadata_safe_allowlist():
         "cancel_origin": "manual",
         "reactivation_origin": "schedule_sync",
         "to_status": "in_progress",
+        "start_at": "2026-08-01T10:00:00+00:00",
+        "end_at": "2026-08-01T12:00:00+00:00",
     }
 
 
@@ -260,6 +266,14 @@ def test_mark_done_validate_sets_current_fields_and_rejects_reopen(
     assert pending.marked_done_by_membership_id == owner_membership.id
     assert pending.marked_done_at == marked[0].occurred_at
     assert marked[0].actor_membership_id == owner_membership.id
+    start_snapshot = pending.start_at
+    end_snapshot = pending.end_at
+    assert marked[0].metadata_safe.get("start_at") == (
+        start_snapshot.isoformat() if start_snapshot is not None else None
+    )
+    assert marked[0].metadata_safe.get("end_at") == (
+        end_snapshot.isoformat() if end_snapshot is not None else None
+    )
     assert not _events_of_type(execution=pending, event_type=EXECUTION_LIFECYCLE_EVENT_VALIDATED)
 
     done = validate_action_plan_execution(

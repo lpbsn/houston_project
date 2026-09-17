@@ -3,6 +3,7 @@ import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query'
 import {
   analyticsQueryKeys,
   fetchAnalyticsDashboard,
+  fetchAnalyticsDashboardRankings,
   fetchAnalyticsPatternDetail,
   fetchAnalyticsPatternFilterOptions,
   fetchAnalyticsPatternGovernanceTargets,
@@ -30,6 +31,33 @@ type UseAnalyticsDashboardQueryOptions = {
   enabled?: boolean
 }
 
+export function useAnalyticsDashboardRankingsInfiniteQuery(
+  options: {
+    periodDays: DashboardPeriodDays
+    establishmentId: string
+    kind: 'recurring' | 'new' | 'locations'
+    pageSize?: number
+  },
+  queryOptions?: UseAnalyticsDashboardQueryOptions,
+) {
+  return useInfiniteQuery({
+    queryKey: analyticsQueryKeys.dashboardRankings(options),
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) =>
+      fetchAnalyticsDashboardRankings({
+        ...options,
+        cursor: pageParam,
+      }),
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.has_more || !lastPage.next_cursor) {
+        return undefined
+      }
+      return lastPage.next_cursor
+    },
+    enabled: queryOptions?.enabled ?? true,
+  })
+}
+
 export function useAnalyticsDashboardQuery(
   options: {
     periodDays: DashboardPeriodDays
@@ -39,7 +67,15 @@ export function useAnalyticsDashboardQuery(
 ) {
   return useQuery({
     queryKey: analyticsQueryKeys.dashboard(options),
-    queryFn: () => fetchAnalyticsDashboard(options),
+    queryFn: () => {
+      if (!options.establishmentId) {
+        throw new Error('establishment_id is required for the dashboard.')
+      }
+      return fetchAnalyticsDashboard({
+        periodDays: options.periodDays,
+        establishmentId: options.establishmentId,
+      })
+    },
     enabled: queryOptions?.enabled ?? true,
   })
 }

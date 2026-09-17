@@ -134,12 +134,12 @@ def test_analytics_roles_can_access_dashboard(api_client, role):
     response = authenticated_get(
         api_client,
         membership.user,
-        dashboard_url(),
+        dashboard_url(f"?establishment_id={membership.establishment_id}"),
     )
 
     assert response.status_code == 200
     assert response.json()["period_days"] == 7
-    assert response.json()["scope_type"] == "cross"
+    assert response.json()["establishment_id"] == str(membership.establishment_id)
     assert "recurring_patterns" in response.json()
 
 
@@ -175,10 +175,23 @@ def test_staff_current_membership_does_not_block_other_analytics_membership(api_
     assert response.json()["items"][0]["pattern_id"] == str(pattern.id)
 
 
+def test_dashboard_requires_establishment_id(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+
+    response = authenticated_get(api_client, owner.user, dashboard_url())
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "analytics_scope_invalid"
+
+
 def test_invalid_period_days_returns_validation_error(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
 
-    response = authenticated_get(api_client, owner.user, dashboard_url("?period_days=14"))
+    response = authenticated_get(
+        api_client,
+        owner.user,
+        dashboard_url(f"?period_days=14&establishment_id={owner.establishment_id}"),
+    )
 
     assert response.status_code == 400
     assert response.json()["code"] == "analytics_period_invalid"
@@ -287,19 +300,27 @@ def test_dashboard_response_matches_backend_primitive(api_client):
     now = timezone.now()
     signal = create_signal(owner, title="Current", created_at=now - timedelta(days=1))
     assign_signal(signal, pattern)
-    expected = get_analytics_dashboard(owner.user, period_days=7)
+    expected = get_analytics_dashboard(
+        owner.user,
+        period_days=7,
+        establishment_id=owner.establishment_id,
+    )
 
-    response = authenticated_get(api_client, owner.user, dashboard_url("?period_days=7"))
+    response = authenticated_get(
+        api_client,
+        owner.user,
+        dashboard_url(f"?period_days=7&establishment_id={owner.establishment_id}"),
+    )
     body = response.json()
 
     assert response.status_code == 200
     assert body["period_days"] == expected.period_days
-    assert body["open_observation_count"] == expected.open_observation_count
-    assert len(body["recurring_patterns"]) == len(expected.recurring_patterns)
-    deadlines = body["plan_deadlines"]
-    assert deadlines["early_count"] == expected.plan_deadlines.early_count
-    assert deadlines["on_time_count"] == expected.plan_deadlines.on_time_count
-    assert deadlines["late_count"] == expected.plan_deadlines.late_count
+    assert body["establishment_id"] == str(expected.establishment_id)
+    assert len(body["recurring_patterns"]["items"]) == len(expected.recurring_patterns.items)
+    deadlines = body["plan_deadline_respect"]
+    assert deadlines["early_count"] == expected.plan_deadline_respect.early_count
+    assert deadlines["on_time_count"] == expected.plan_deadline_respect.on_time_count
+    assert deadlines["late_count"] == expected.plan_deadline_respect.late_count
     assert (
         deadlines["early_count"] + deadlines["on_time_count"] + deadlines["late_count"]
         == deadlines["n"]
@@ -382,11 +403,15 @@ def test_dashboard_contributor_payload_includes_establishment_names(api_client):
             idempotency_key=f"tx:{tx_id}",
         )
 
-    response = authenticated_get(api_client, owner, dashboard_url())
+    response = authenticated_get(
+        api_client,
+        owner,
+        dashboard_url(f"?establishment_id={anbu.id}"),
+    )
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["scope_type"] == "cross"
-    assert payload["contributors"][0]["establishment_names"] == ["AKATSUKI", "ANBU"]
+    assert payload["establishment_id"] == str(anbu.id)
+    assert payload["contributors"][0]["establishment_names"] == ["ANBU"]
     assert "roles" in payload["contributors"][0]
     assert "poles" in payload["contributors"][0]

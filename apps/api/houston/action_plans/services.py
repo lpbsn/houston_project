@@ -1934,6 +1934,7 @@ def mark_action_plan_execution_done(
             actor_membership=actor_membership,
             metadata_safe=execution_transition_metadata(
                 status=EXECUTION_STATUS_PENDING_VALIDATION,
+                start_at=execution.start_at,
                 end_at=execution.end_at,
             ),
         )
@@ -1969,6 +1970,7 @@ def mark_action_plan_execution_done(
         actor_membership=actor_membership,
         metadata_safe=execution_transition_metadata(
             status=EXECUTION_STATUS_DONE,
+            start_at=execution.start_at,
             end_at=execution.end_at,
         ),
     )

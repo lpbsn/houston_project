@@ -774,17 +774,24 @@ def _build_read_scenarios(
 
     scenarios: list[tuple[str, Callable[[], Any]]] = []
     for days in (7, 30, 90):
-        query = _period_query(now=now, days=days, organization_id=dataset.organization_id)
+        query = {
+            **_period_query(now=now, days=days, organization_id=dataset.organization_id),
+            "establishment_id": str(dataset.establishment_ids[0]),
+            "period_days": str(days),
+        }
         scenarios.append(
             (
                 f"dashboard_{days}d",
                 view_request(AnalyticsDashboardView, "/api/v1/analytics/dashboard/", query),
             )
         )
+        patterns_query = _period_query(
+            now=now, days=days, organization_id=dataset.organization_id
+        )
         scenarios.append(
             (
                 f"patterns_{days}d_page1",
-                view_request(AnalyticsPatternListView, "/api/v1/analytics/patterns/", query),
+                view_request(AnalyticsPatternListView, "/api/v1/analytics/patterns/", patterns_query),
             )
         )
 

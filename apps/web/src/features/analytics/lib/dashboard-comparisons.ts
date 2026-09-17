@@ -180,22 +180,14 @@ export function collectDashboardComparisons(
   data: AnalyticsDashboardResponse,
 ): AnalyticsDashboardMetricComparison[] {
   return [
-    data.operational_resolution_rate,
-    data.closure_resolved_share,
-    data.reopenings,
-    data.aging_over_15d_share,
-    data.observation_delay_canceled.comparison,
-    data.observation_delay_resolved.comparison,
-    data.observation_delay_transformed.comparison,
-    data.plan_delay_canceled.comparison,
-    data.plan_delay_resolved.comparison,
-    data.plan_validation.comparison,
-    data.plan_deadlines.early_comparison,
-    data.plan_deadlines.on_time_comparison,
-    data.plan_deadlines.late_comparison,
-    ...data.recurring_patterns.map((item) => item.comparison),
-    ...data.locations.map((item) => item.comparison),
-    ...data.poles.map((item) => item.comparison),
+    data.plan_deadline_respect.early_comparison,
+    data.plan_deadline_respect.on_time_comparison,
+    data.plan_deadline_respect.late_comparison,
+    data.observation_volume.affected.comparison,
+    data.observation_volume.responsible.comparison,
+    ...Object.values(data.observation_destinations).map((item) => item.comparison),
+    ...data.recurring_patterns.items.map((item) => item.comparison),
+    ...data.locations.items.map((item) => item.comparison),
   ]
 }
 
