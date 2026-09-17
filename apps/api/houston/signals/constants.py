@@ -36,7 +36,10 @@ CANCEL_RESOLVE_SIGNAL_STATUSES = frozenset({"open", "in_progress"})
 
 # Manual cancel / resolve API + permission_hints only (EVO-SIG-03).
 # in_progress must be resolved via action plans, not manual commands.
-MANUAL_CANCEL_RESOLVE_SIGNAL_STATUSES = frozenset({"open"})
+# interesting leaves via cancel only (not resolve).
+MANUAL_RESOLVE_SIGNAL_STATUSES = frozenset({"open"})
+MANUAL_CANCEL_SIGNAL_STATUSES = frozenset({"open", "interesting"})
+MANUAL_CANCEL_RESOLVE_SIGNAL_STATUSES = MANUAL_RESOLVE_SIGNAL_STATUSES
 
 SIGNAL_IN_PROGRESS_MANUAL_RESOLVE_DETAIL = (
     "Signal in progress must be resolved through its action plans."
@@ -45,7 +48,7 @@ SIGNAL_IN_PROGRESS_MANUAL_CANCEL_DETAIL = (
     "Signal in progress cannot be canceled manually; cancel via its action plans."
 )
 
-# Default Signal Feed visibility (excludes archived).
+# Default Signal Feed visibility.
 FEED_SIGNAL_STATUSES = frozenset(
     {"open", "in_progress", "interesting", "resolved", "canceled"}
 )
@@ -95,7 +98,6 @@ SIGNAL_RESOLUTION_ORIGIN_VALUES = frozenset(
 SIGNAL_LIFECYCLE_EVENT_CREATED = "signal.created"
 SIGNAL_LIFECYCLE_EVENT_HISTORY_BASELINE = "signal.history_baseline"
 SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING = "signal.marked_interesting"
-SIGNAL_LIFECYCLE_EVENT_ARCHIVED = "signal.archived"
 SIGNAL_LIFECYCLE_EVENT_RESOLVED = "signal.resolved"
 SIGNAL_LIFECYCLE_EVENT_CANCELED = "signal.canceled"
 SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS = "signal.moved_in_progress"
@@ -105,7 +107,6 @@ SIGNAL_LIFECYCLE_EVENT_TYPE_VALUES = frozenset(
         SIGNAL_LIFECYCLE_EVENT_CREATED,
         SIGNAL_LIFECYCLE_EVENT_HISTORY_BASELINE,
         SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING,
-        SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
         SIGNAL_LIFECYCLE_EVENT_RESOLVED,
         SIGNAL_LIFECYCLE_EVENT_CANCELED,
         SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS,
@@ -121,7 +122,5 @@ SIGNAL_LIFECYCLE_METADATA_SAFE_KEYS = frozenset(
         "resolution_origin",
         "origin",
         "action_plan_execution_id",
-        "merged_into_signal_id",
-        "source_signal_id",
     }
 )

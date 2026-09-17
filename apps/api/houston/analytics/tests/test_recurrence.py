@@ -37,7 +37,6 @@ def create_signal(
     routing_status=Signal.RoutingStatus.RESOLVED,
     created_at=None,
     resolved_at=None,
-    merged_into=None,
     affected_business_unit=None,
     responsible_business_unit=None,
 ):
@@ -51,7 +50,6 @@ def create_signal(
         structured_summary="Structured signal summary.",
         issue_focus=title.lower().replace(" ", "-"),
         resolved_at=resolved_at,
-        merged_into=merged_into,
         last_activity_at=created_at or timezone.now(),
     )
     if created_at is not None:
@@ -223,7 +221,6 @@ def test_recurrence_window_start_is_inclusive_and_end_is_exclusive():
     [
         Signal.Status.INTERESTING,
         Signal.Status.RESOLVED,
-        Signal.Status.ARCHIVED,
     ],
 )
 def test_recurrence_includes_default_analytics_statuses_and_ignores_resolved_at(status):
@@ -252,11 +249,10 @@ def test_recurrence_includes_default_analytics_statuses_and_ignores_resolved_at(
     assert stats.is_recurrent is True
 
 
-def test_recurrence_excludes_canceled_and_merged_sources():
+def test_recurrence_excludes_canceled():
     owner = build_membership(role=EstablishmentMembership.Role.OWNER)
     pattern = create_pattern(owner, label="Excluded")
     as_of = timezone.now()
-    survivor = create_signal(owner, title="Survivor")
 
     add_signal(
         owner,
@@ -264,13 +260,6 @@ def test_recurrence_excludes_canceled_and_merged_sources():
         title="Canceled",
         status=Signal.Status.CANCELED,
         created_at=as_of - timedelta(days=1),
-    )
-    add_signal(
-        owner,
-        pattern,
-        title="Merged",
-        created_at=as_of - timedelta(days=2),
-        merged_into=survivor,
     )
 
     stats = analytics_pattern_recurrence_stats(owner.user, as_of=as_of)

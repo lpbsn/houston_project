@@ -31,9 +31,6 @@ def select_explicit_backfill_signal_ids(
             "signal-id values were not found in the selected scope: "
             + ", ".join(sorted(missing))
         )
-    merged = [str(signal.id) for signal in signals if signal.merged_into_id is not None]
-    if merged:
-        raise ValueError("merged signals cannot be backfilled explicitly: " + ", ".join(merged))
     return [signal.id for signal in signals], {"merged": 0}, ""
 
 

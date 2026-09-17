@@ -107,6 +107,17 @@ def test_signal_detail_only_allows_get(api_client):
     assert api_client.delete(url, **headers).status_code == 405
 
 
+def test_archive_route_is_absent(api_client):
+    membership = build_api_membership()
+    signal = _signal_with_linked_observation(membership)
+    token = login(api_client, user=membership.user)
+    url = signal_detail_url(membership.establishment_id, signal.id) + "archive/"
+
+    response = api_client.post(url, **auth_headers(token))
+
+    assert response.status_code == 404
+
+
 def test_staff_forbidden_pin_and_unpin(api_client):
     membership = build_api_membership(role=EstablishmentMembership.Role.STAFF)
     signal = _signal_with_linked_observation(membership)

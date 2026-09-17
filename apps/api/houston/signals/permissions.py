@@ -9,7 +9,8 @@ from houston.establishments.role_constants import ADMIN_ROLES
 from houston.signals.constants import (
     ACTIVE_SIGNAL_STATUSES,
     FEED_SIGNAL_STATUSES,
-    MANUAL_CANCEL_RESOLVE_SIGNAL_STATUSES,
+    MANUAL_CANCEL_SIGNAL_STATUSES,
+    MANUAL_RESOLVE_SIGNAL_STATUSES,
 )
 from houston.signals.models import Signal
 
@@ -184,29 +185,26 @@ def can_mark_signal_interesting(
     )
 
 
-def can_archive_signal(
-    membership: EstablishmentMembership | None,
-    signal: Signal,
-) -> bool:
-    return _signal_commandable_by_membership(
-        membership,
-        signal,
-        statuses=frozenset({Signal.Status.INTERESTING}),
-    )
-
-
 def can_cancel_signal(
     membership: EstablishmentMembership | None,
     signal: Signal,
 ) -> bool:
-    return _can_cancel_or_resolve_signal(membership, signal)
+    return _can_lifecycle_command_signal(
+        membership,
+        signal,
+        statuses=MANUAL_CANCEL_SIGNAL_STATUSES,
+    )
 
 
 def can_resolve_signal(
     membership: EstablishmentMembership | None,
     signal: Signal,
 ) -> bool:
-    if not _can_cancel_or_resolve_signal(membership, signal):
+    if not _can_lifecycle_command_signal(
+        membership,
+        signal,
+        statuses=MANUAL_RESOLVE_SIGNAL_STATUSES,
+    ):
         return False
     # UX hint: requester with pending Manager→Director (or any route) cannot resolve.
     if membership_is_pending_resolution_requester(membership, signal):
@@ -214,15 +212,17 @@ def can_resolve_signal(
     return True
 
 
-def _can_cancel_or_resolve_signal(
+def _can_lifecycle_command_signal(
     membership: EstablishmentMembership | None,
     signal: Signal,
+    *,
+    statuses: frozenset[str],
 ) -> bool:
     if membership is None:
         return False
     if signal.establishment_id != membership.establishment_id:
         return False
-    if signal.status not in MANUAL_CANCEL_RESOLVE_SIGNAL_STATUSES:
+    if signal.status not in statuses:
         return False
     if membership.role == EstablishmentMembership.Role.STAFF:
         return False
@@ -244,11 +244,8 @@ def can_access_qualify_routing_endpoint(
 ) -> bool:
     """Gate for the qualify HTTP endpoint.
 
-    Allows already-merged (typically archived) sources through so the service can
-    evaluate idempotent 200 / 409. Staff always denied.
-
-    Live path: triage roles (Owner/Director/Manager) may access any unassigned;
-    managers need source pole visibility for resolved routing.
+    Staff always denied. Live path: triage roles (Owner/Director/Manager) may
+    access any unassigned; managers need source pole visibility for resolved routing.
     """
     if membership is None:
         return False
@@ -256,8 +253,6 @@ def can_access_qualify_routing_endpoint(
         return False
     if membership.role == EstablishmentMembership.Role.STAFF:
         return False
-    if signal.merged_into_id is not None:
-        return True
     if signal.status not in ACTIVE_SIGNAL_STATUSES:
         return False
     if membership.role in ADMIN_ROLES:
@@ -275,7 +270,7 @@ def can_qualify_routing(
     proposed_responsible_business_unit: BusinessUnit | None = None,
     proposed_activity_subject: ActivitySubject | None = None,
 ) -> bool:
-    """Live qualify permission (signal not yet merged).
+    """Live qualify permission.
 
     Unassigned: Owner/Director/Manager may qualify establishment-wide when the
     signal is readable and active (Lot 8 H5 B1–B4). Resolved routing: managers
@@ -284,8 +279,6 @@ def can_qualify_routing(
     if membership is None:
         return False
     if signal.establishment_id != membership.establishment_id:
-        return False
-    if signal.merged_into_id is not None:
         return False
     if signal.status not in ACTIVE_SIGNAL_STATUSES:
         return False

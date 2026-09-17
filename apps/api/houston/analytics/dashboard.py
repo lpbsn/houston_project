@@ -474,7 +474,6 @@ def _load_dashboard_context(
     volume_start = period_end - timedelta(days=period_days * VOLUME_WINDOW_COUNT)
     signals = list(
         read_scope.readable_signals_queryset()
-        .filter(merged_into__isnull=True)
         .filter(
             Q(created_at__gte=volume_start, created_at__lt=period_end)
             | Q(
@@ -716,7 +715,7 @@ def _destination_for_signal(
         reliable_from=reliable_from,
         events=events,
     )
-    if status == Signal.Status.ARCHIVED or status is None:
+    if status is None:
         return None
     if status == Signal.Status.OPEN:
         return DESTINATION_WAITING

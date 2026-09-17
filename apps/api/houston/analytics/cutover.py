@@ -20,7 +20,6 @@ from houston.action_plans.constants import (
 from houston.action_plans.models import ActionPlanExecution, ActionPlanExecutionLifecycleEvent
 from houston.analytics.models import AnalyticsHistoryCoverage
 from houston.signals.constants import (
-    SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
     SIGNAL_LIFECYCLE_EVENT_CANCELED,
     SIGNAL_LIFECYCLE_EVENT_HISTORY_BASELINE,
     SIGNAL_LIFECYCLE_EVENT_RESOLVED,
@@ -159,7 +158,6 @@ def _signal_terminal_statements(tables: _CutoverTables) -> list[tuple[str, list]
     terminals = (
         ("resolved", "resolved_at", SIGNAL_LIFECYCLE_EVENT_RESOLVED),
         ("canceled", "canceled_at", SIGNAL_LIFECYCLE_EVENT_CANCELED),
-        ("archived", "archived_at", SIGNAL_LIFECYCLE_EVENT_ARCHIVED),
     )
     statements = []
     for status, timestamp_field, event_type in terminals:

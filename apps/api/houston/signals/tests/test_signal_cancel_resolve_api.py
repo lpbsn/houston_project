@@ -73,6 +73,37 @@ def test_owner_can_cancel_without_body(api_client):
     assert response.json()["permission_hints"]["can_cancel"] is False
 
 
+def test_owner_can_cancel_interesting_without_body(api_client):
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = _signal(membership, status=Signal.Status.INTERESTING)
+    token = login(api_client, user=membership.user)
+
+    response = api_client.post(
+        signal_detail_url(membership.establishment_id, signal.id) + "cancel/",
+        **auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == Signal.Status.CANCELED
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.CANCELED
+
+
+def test_owner_cannot_resolve_interesting(api_client):
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = _signal(membership, status=Signal.Status.INTERESTING)
+    token = login(api_client, user=membership.user)
+
+    response = api_client.post(
+        signal_detail_url(membership.establishment_id, signal.id) + "resolve/",
+        **auth_headers(token),
+    )
+
+    assert response.status_code == 403
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.INTERESTING
+
+
 def test_director_can_resolve_open_without_body(api_client):
     membership = build_api_membership(role=EstablishmentMembership.Role.DIRECTOR)
     signal = _signal(membership, status=Signal.Status.OPEN)

@@ -33,7 +33,6 @@ from houston.analytics.models import SignalPatternAssignment
 from houston.analytics.services import create_operational_pattern
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.constants import (
-    SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
     SIGNAL_LIFECYCLE_EVENT_CANCELED,
     SIGNAL_LIFECYCLE_EVENT_CREATED,
     SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING,
@@ -158,15 +157,6 @@ def test_destinations_seven_keys_include_waiting_exclude_archived_and_pinned():
         SIGNAL_LIFECYCLE_EVENT_CANCELED,
         created + timedelta(hours=4),
         to_status=Signal.Status.CANCELED,
-    )
-    archived = _create_signal(
-        membership, title="Archived", created_at=created, status=Signal.Status.ARCHIVED
-    )
-    _event(
-        archived,
-        SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
-        created + timedelta(hours=5),
-        to_status=Signal.Status.ARCHIVED,
     )
 
     result = _dashboard(membership, now=now)

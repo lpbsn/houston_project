@@ -64,7 +64,7 @@ describe('analytics URL state', () => {
   it('parses valid table filters and ignores unsupported establishment_id', () => {
     expect(
       parseAnalyticsUrlState(
-        `?establishment_id=ignored&establishment_ids=${EST_ID}&q=+retard+&recurrence=recurrent&responsible_business_unit_ids=${BU_ID}&responsible_business_unit_unassigned=true&signal_statuses=open,canceled,archived`,
+        `?establishment_id=ignored&establishment_ids=${EST_ID}&q=+retard+&recurrence=recurrent&responsible_business_unit_ids=${BU_ID}&responsible_business_unit_unassigned=true&signal_statuses=open,canceled,interesting`,
         { now: NOW },
       ),
     ).toMatchObject({
@@ -73,7 +73,7 @@ describe('analytics URL state', () => {
       recurrence: 'recurrent',
       responsibleBusinessUnitIds: [BU_ID],
       responsibleBusinessUnitUnassigned: true,
-      signalStatuses: ['archived', 'open'],
+      signalStatuses: ['interesting', 'open'],
     })
   })
 

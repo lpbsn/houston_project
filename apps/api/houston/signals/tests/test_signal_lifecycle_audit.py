@@ -17,7 +17,7 @@ from houston.signals.api.serializers import (
     serialize_signal_feed_item,
 )
 from houston.signals.constants import (
-    SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
+    SIGNAL_LIFECYCLE_EVENT_CANCELED,
     SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING,
     SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS,
     SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
@@ -36,7 +36,7 @@ from houston.signals.resolution_request_services import (
     reject_signal_resolution_request,
 )
 from houston.signals.services import (
-    archive_signal,
+    cancel_signal,
     mark_signal_interesting,
     merge_signal_into_resolved,
     resolve_signal,
@@ -188,9 +188,9 @@ def test_reject_and_cancel_resolution_request_do_not_emit_lifecycle_events():
     assert SignalLifecycleEvent.objects.filter(signal=signal).count() == 0
 
 
-def test_mark_interesting_and_archive_record_actor_fields_and_events():
+def test_mark_interesting_and_cancel_record_actor_fields_and_events():
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    signal = create_minimal_v3_signal(membership, title="Interesting archive audit")
+    signal = create_minimal_v3_signal(membership, title="Interesting cancel audit")
 
     interesting = mark_signal_interesting(signal=signal, actor_membership=membership)
     assert interesting.status == Signal.Status.INTERESTING
@@ -200,21 +200,21 @@ def test_mark_interesting_and_archive_record_actor_fields_and_events():
     assert events[-1].event_type == SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING
     assert events[-1].occurred_at == interesting.marked_interesting_at
 
-    archived = archive_signal(signal=interesting, actor_membership=membership)
-    assert archived.status == Signal.Status.ARCHIVED
-    assert archived.archived_by_membership_id == membership.id
-    assert archived.archived_at is not None
-    events = _lifecycle_events(signal=archived)
-    assert events[-1].event_type == SIGNAL_LIFECYCLE_EVENT_ARCHIVED
+    canceled = cancel_signal(signal=interesting, actor_membership=membership)
+    assert canceled.status == Signal.Status.CANCELED
+    assert canceled.canceled_by_membership_id == membership.id
+    assert canceled.canceled_at is not None
+    events = _lifecycle_events(signal=canceled)
+    assert events[-1].event_type == SIGNAL_LIFECYCLE_EVENT_CANCELED
     assert events[-1].actor_membership_id == membership.id
-    assert events[-1].occurred_at == archived.archived_at
+    assert events[-1].occurred_at == canceled.canceled_at
 
 
-def test_merge_archive_null_actor():
+def test_merge_hard_deletes_source():
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     source = create_minimal_v3_signal(membership, title="Merge source")
     target = create_minimal_v3_signal(membership, title="Merge target")
-    from_status = source.status
+    source_id = source.id
 
     merge_signal_into_resolved(
         source=source,
@@ -222,20 +222,9 @@ def test_merge_archive_null_actor():
         resolution_audit={},
         candidate_expected_action=None,
     )
-    source.refresh_from_db()
 
-    assert source.status == Signal.Status.ARCHIVED
-    assert source.archived_by_membership_id is None
-    assert source.archived_at is not None
-    events = [
-        e
-        for e in _lifecycle_events(signal=source)
-        if e.event_type == SIGNAL_LIFECYCLE_EVENT_ARCHIVED
-    ]
-    assert len(events) == 1
-    assert events[0].actor_membership_id is None
-    assert events[0].metadata_safe["origin"] == "qualify_merge"
-    assert events[0].metadata_safe["from_status"] == from_status
+    assert not Signal.objects.filter(id=source_id).exists()
+    assert Signal.objects.filter(id=target.id).exists()
 
 
 def test_create_linked_plan_emits_moved_in_progress_with_creator_actor():

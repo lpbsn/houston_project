@@ -17,7 +17,6 @@ from houston.action_plans.template_deletion_services import (
 from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
 from houston.analytics.journal import JournalEvent, first_signal_created_at, signal_status_at
 from houston.signals.constants import (
-    SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
     SIGNAL_LIFECYCLE_EVENT_CREATED,
 )
 from houston.signals.models import Signal, SignalLifecycleEvent
@@ -193,14 +192,12 @@ def test_merge_keeps_older_survivor_created_at_and_mins_association(
         resolution_audit={},
         candidate_expected_action=None,
     )
-    source.refresh_from_db()
+    source_id = source.id
     target.refresh_from_db()
 
-    assert source.first_action_plan_associated_at == earlier
+    assert not Signal.objects.filter(id=source_id).exists()
     assert target.first_action_plan_associated_at == earlier
-    assert source.created_at == source_created
     assert target.created_at == target_created
-    assert source.merged_into_id == target.id
 
 
 def test_merge_rewinds_newer_survivor_birth_and_adds_created_origin(
@@ -220,6 +217,7 @@ def test_merge_rewinds_newer_survivor_birth_and_adds_created_origin(
     Signal.objects.filter(pk=target.pk).update(created_at=target_created)
     source.refresh_from_db()
     target.refresh_from_db()
+    source_id = source.id
 
     merge_signal_into_resolved(
         source=source,
@@ -227,23 +225,11 @@ def test_merge_rewinds_newer_survivor_birth_and_adds_created_origin(
         resolution_audit={},
         candidate_expected_action=None,
     )
-    created_count = SignalLifecycleEvent.objects.filter(
-        signal=target,
-        event_type=SIGNAL_LIFECYCLE_EVENT_CREATED,
-    ).count()
-    merge_signal_into_resolved(
-        source=source,
-        target=target,
-        resolution_audit={},
-        candidate_expected_action=None,
-    )
-    source.refresh_from_db()
     target.refresh_from_db()
 
-    assert source.created_at == source_created
+    assert not Signal.objects.filter(id=source_id).exists()
     assert target.created_at == source_created
     assert target.first_action_plan_associated_at == plan_at
-    assert source.merged_into_id == target.id
     created_events = list(
         SignalLifecycleEvent.objects.filter(
             signal=target,
@@ -254,18 +240,7 @@ def test_merge_rewinds_newer_survivor_birth_and_adds_created_origin(
     assert len(created_events) == 1
     assert created_events[0].metadata_safe.get("to_status") == Signal.Status.OPEN
     assert created_events[0].metadata_safe.get("origin") == "qualify_merge"
-    assert created_events[0].metadata_safe.get("source_signal_id") == str(source.id)
-    assert not SignalLifecycleEvent.objects.filter(
-        signal=target,
-        event_type=SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
-    ).exists()
-    assert (
-        SignalLifecycleEvent.objects.filter(
-            signal=target,
-            event_type=SIGNAL_LIFECYCLE_EVENT_CREATED,
-        ).count()
-        == created_count
-    )
+    assert "source_signal_id" not in created_events[0].metadata_safe
 
     events = _journal_events(target)
     assert first_signal_created_at(events, fallback=target.created_at) == source_created

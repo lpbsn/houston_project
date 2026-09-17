@@ -24,9 +24,6 @@ def schedule_reclassification_if_signature_changed(
     signal: Signal,
     before_signature: str,
 ) -> bool:
-    signal = Signal.objects.only("id", "merged_into").get(pk=signal.pk)
-    if signal.merged_into_id is not None:
-        return False
     after_signature = build_signal_pattern_signature(signal)
     if before_signature == after_signature:
         return False

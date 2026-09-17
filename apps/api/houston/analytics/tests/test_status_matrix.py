@@ -41,7 +41,6 @@ def create_signal(
     routing_status=Signal.RoutingStatus.RESOLVED,
     title="Signal",
     resolved_at=None,
-    merged_into=None,
     affected_business_unit=None,
     responsible_business_unit=None,
 ):
@@ -56,7 +55,6 @@ def create_signal(
         structured_summary="Structured signal summary.",
         issue_focus=f"issue-{suffix}",
         resolved_at=resolved_at,
-        merged_into=merged_into,
         last_activity_at=timezone.now(),
     )
 
@@ -72,7 +70,6 @@ def matches(query, signal) -> bool:
         Signal.Status.IN_PROGRESS,
         Signal.Status.INTERESTING,
         Signal.Status.RESOLVED,
-        Signal.Status.ARCHIVED,
     ],
 )
 def test_default_population_includes_every_non_merged_non_canceled_status(status):
@@ -83,21 +80,13 @@ def test_default_population_includes_every_non_merged_non_canceled_status(status
     assert matches(default_analytics_signal_q(), signal)
 
 
-def test_default_population_excludes_canceled_and_merged_sources():
+def test_default_population_excludes_canceled():
     membership = build_membership(role=EstablishmentMembership.Role.OWNER)
     target = create_signal(membership, title="Target")
     canceled = create_signal(membership, status=Signal.Status.CANCELED)
-    merged = create_signal(
-        membership,
-        status=Signal.Status.ARCHIVED,
-        merged_into=target,
-        title="Merged",
-    )
 
     assert not signal_participates_in_default_analytics(canceled)
-    assert not signal_participates_in_default_analytics(merged)
     assert not matches(default_analytics_signal_q(), canceled)
-    assert not matches(default_analytics_signal_q(), merged)
     assert signal_participates_in_default_analytics(target)
 
 
@@ -109,20 +98,12 @@ def test_recurrence_is_alias_of_default_population_and_ignores_resolved_at():
         resolved_at=None,
         title="Resolved without timestamp",
     )
-    archived_without_timestamp = create_signal(
-        membership,
-        status=Signal.Status.ARCHIVED,
-        resolved_at=None,
-        title="Archived without timestamp",
-    )
     canceled = create_signal(membership, status=Signal.Status.CANCELED)
 
     assert recurrence_signal_q() == default_analytics_signal_q()
     assert signal_participates_in_recurrence(resolved_without_timestamp)
-    assert signal_participates_in_recurrence(archived_without_timestamp)
     assert not signal_participates_in_recurrence(canceled)
     assert matches(recurrence_signal_q(), resolved_without_timestamp)
-    assert matches(recurrence_signal_q(), archived_without_timestamp)
     assert not matches(recurrence_signal_q(), canceled)
 
 
@@ -133,7 +114,6 @@ def test_recurrence_is_alias_of_default_population_and_ignores_resolved_at():
         (Signal.Status.IN_PROGRESS, True),
         (Signal.Status.INTERESTING, False),
         (Signal.Status.RESOLVED, False),
-        (Signal.Status.ARCHIVED, False),
         (Signal.Status.CANCELED, False),
     ],
 )
@@ -145,7 +125,7 @@ def test_actionable_queue_population(status, expected):
     assert matches(actionable_signal_q(), signal) is expected
 
 
-def test_resolution_time_requires_resolved_at_for_resolved_or_archived():
+def test_resolution_time_requires_resolved_at():
     membership = build_membership(role=EstablishmentMembership.Role.OWNER)
     timestamp = timezone.now()
     resolved_with_timestamp = create_signal(
@@ -160,27 +140,11 @@ def test_resolution_time_requires_resolved_at_for_resolved_or_archived():
         resolved_at=None,
         title="Resolved without timestamp",
     )
-    archived_with_timestamp = create_signal(
-        membership,
-        status=Signal.Status.ARCHIVED,
-        resolved_at=timestamp,
-        title="Archived with timestamp",
-    )
-    archived_without_timestamp = create_signal(
-        membership,
-        status=Signal.Status.ARCHIVED,
-        resolved_at=None,
-        title="Archived without timestamp",
-    )
 
     assert signal_participates_in_resolution_time(resolved_with_timestamp)
-    assert signal_participates_in_resolution_time(archived_with_timestamp)
     assert not signal_participates_in_resolution_time(resolved_without_timestamp)
-    assert not signal_participates_in_resolution_time(archived_without_timestamp)
     assert matches(resolution_time_signal_q(), resolved_with_timestamp)
-    assert matches(resolution_time_signal_q(), archived_with_timestamp)
     assert not matches(resolution_time_signal_q(), resolved_without_timestamp)
-    assert not matches(resolution_time_signal_q(), archived_without_timestamp)
 
 
 def test_status_anomaly_only_flags_resolved_without_resolved_at():
@@ -191,17 +155,9 @@ def test_status_anomaly_only_flags_resolved_without_resolved_at():
         resolved_at=None,
         title="Resolved without timestamp",
     )
-    archived_without_timestamp = create_signal(
-        membership,
-        status=Signal.Status.ARCHIVED,
-        resolved_at=None,
-        title="Archived without timestamp",
-    )
 
     assert signal_has_analytics_status_anomaly(resolved_without_timestamp)
-    assert not signal_has_analytics_status_anomaly(archived_without_timestamp)
     assert matches(status_anomaly_q(), resolved_without_timestamp)
-    assert not matches(status_anomaly_q(), archived_without_timestamp)
 
 
 def test_unassigned_routing_does_not_override_status_matrix():

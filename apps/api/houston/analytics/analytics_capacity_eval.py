@@ -505,7 +505,6 @@ def _copy_capacity_signals_and_assignments(
         "structured_summary",
         "location_text",
         "issue_focus",
-        "merged_into_id",
         "last_activity_at",
         "marked_interesting_by_membership_id",
         "marked_interesting_at",
@@ -514,8 +513,6 @@ def _copy_capacity_signals_and_assignments(
         "resolution_origin",
         "canceled_by_membership_id",
         "canceled_at",
-        "archived_by_membership_id",
-        "archived_at",
         "created_at",
         "updated_at",
     )
@@ -547,7 +544,6 @@ def _copy_capacity_signals_and_assignments(
         Signal.Status.RESOLVED,
         Signal.Status.RESOLVED,
         Signal.Status.RESOLVED,
-        Signal.Status.ARCHIVED,
         Signal.Status.CANCELED,
     )
     assignment_count = 0
@@ -583,11 +579,6 @@ def _copy_capacity_signals_and_assignments(
                     if status == Signal.Status.CANCELED
                     else None
                 )
-                archived_at = (
-                    created_at + timedelta(hours=3 + index % 72)
-                    if status == Signal.Status.ARCHIVED
-                    else None
-                )
                 pattern_index = _assigned_pattern_index(index, len(patterns))
                 copy.write_row(
                     (
@@ -607,7 +598,6 @@ def _copy_capacity_signals_and_assignments(
                         f"Synthetic analytics capacity summary for pattern {pattern_index}.",
                         f"Zone {index % 50}",
                         f"capacity-focus-{pattern_index}-{index}",
-                        None,
                         created_at,
                         None,
                         None,
@@ -620,8 +610,6 @@ def _copy_capacity_signals_and_assignments(
                         ),
                         None,
                         canceled_at,
-                        None,
-                        archived_at,
                         created_at,
                         created_at,
                     )

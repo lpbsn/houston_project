@@ -35,7 +35,6 @@ def create_signal(
     routing_status=Signal.RoutingStatus.RESOLVED,
     created_at=None,
     resolved_at=None,
-    merged_into=None,
     affected_business_unit=None,
     responsible_business_unit=None,
 ):
@@ -48,7 +47,6 @@ def create_signal(
         title=title,
         structured_summary=f"Summary for {title}.",
         issue_focus=title.lower().replace(" ", "-"),
-        merged_into=merged_into,
         last_activity_at=created_at or timezone.now(),
         resolved_at=resolved_at,
     )
@@ -272,7 +270,6 @@ def test_pattern_signals_uses_status_matrix():
     pattern = create_pattern(owner, label="Status matrix")
     start = timezone.now()
     end = start + timedelta(days=1)
-    survivor = create_signal(owner, title="Survivor", created_at=start)
     included = [
         add_signal(owner, pattern, title="Open", created_at=start),
         add_signal(
@@ -289,13 +286,6 @@ def test_pattern_signals_uses_status_matrix():
             status=Signal.Status.RESOLVED,
             created_at=start + timedelta(minutes=2),
         ),
-        add_signal(
-            owner,
-            pattern,
-            title="Archived",
-            status=Signal.Status.ARCHIVED,
-            created_at=start + timedelta(minutes=3),
-        ),
     ]
     add_signal(
         owner,
@@ -303,13 +293,6 @@ def test_pattern_signals_uses_status_matrix():
         title="Canceled",
         status=Signal.Status.CANCELED,
         created_at=start + timedelta(minutes=4),
-    )
-    add_signal(
-        owner,
-        pattern,
-        title="Merged",
-        created_at=start + timedelta(minutes=5),
-        merged_into=survivor,
     )
 
     result = list_analytics_pattern_signals(

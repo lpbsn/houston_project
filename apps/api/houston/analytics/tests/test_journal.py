@@ -41,7 +41,6 @@ from houston.analytics.journal import (
 from houston.analytics.models import AnalyticsHistoryCoverage, PatternEstablishmentSighting
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.constants import (
-    SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
     SIGNAL_LIFECYCLE_EVENT_CANCELED,
     SIGNAL_LIFECYCLE_EVENT_CREATED,
     SIGNAL_LIFECYCLE_EVENT_HISTORY_BASELINE,
@@ -143,7 +142,6 @@ def _seed_cutover_mix(*, establishment, owner, business_unit, count: int, prefix
         (Signal.Status.IN_PROGRESS, {}),
         (Signal.Status.RESOLVED, {"resolved_at": now}),
         (Signal.Status.CANCELED, {"canceled_at": now}),
-        (Signal.Status.ARCHIVED, {"archived_at": now}),
     )
     execution_specs = (
         (EXECUTION_STATUS_PENDING_VALIDATION, {"marked_done_at": now, "end_at": now}),
@@ -396,7 +394,6 @@ def test_cutover_signal_terminals_skip_missing_timestamps():
     establishment = create_establishment()
     resolved_at = timezone.now() - timedelta(days=1)
     canceled_at = timezone.now() - timedelta(hours=12)
-    archived_at = timezone.now() - timedelta(hours=6)
     in_progress = _create_cutover_signal(
         establishment,
         status=Signal.Status.IN_PROGRESS,
@@ -418,12 +415,6 @@ def test_cutover_signal_terminals_skip_missing_timestamps():
         status=Signal.Status.CANCELED,
         title="Cutover canceled",
         canceled_at=canceled_at,
-    )
-    archived = _create_cutover_signal(
-        establishment,
-        status=Signal.Status.ARCHIVED,
-        title="Cutover archived",
-        archived_at=archived_at,
     )
 
     reliable_from = apply_analytics_history_cutover()
@@ -453,11 +444,6 @@ def test_cutover_signal_terminals_skip_missing_timestamps():
         event_type=SIGNAL_LIFECYCLE_EVENT_CANCELED,
     )
     assert canceled_terminal.occurred_at == canceled_at
-    archived_terminal = SignalLifecycleEvent.objects.get(
-        signal=archived,
-        event_type=SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
-    )
-    assert archived_terminal.occurred_at == archived_at
     assert (
         SignalLifecycleEvent.objects.filter(
             signal=resolved,

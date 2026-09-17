@@ -40,7 +40,6 @@ function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem 
     permission_hints: {
       can_pin: true,
       can_mark_interesting: false,
-      can_archive: false,
       can_cancel: false,
       can_resolve: false,
       can_create_linked_action_plan: false,
@@ -75,7 +74,6 @@ function buildDetail(overrides: Partial<SignalDetail> = {}): SignalDetail {
     permission_hints: {
       can_pin: true,
       can_mark_interesting: false,
-      can_archive: false,
       can_cancel: false,
       can_resolve: false,
       can_create_linked_action_plan: false,
@@ -97,8 +95,6 @@ function buildDetail(overrides: Partial<SignalDetail> = {}): SignalDetail {
     resolution_origin: null,
     canceled_by_membership_id: null,
     canceled_at: null,
-    archived_by_membership_id: null,
-    archived_at: null,
     ...overrides,
   }
 }

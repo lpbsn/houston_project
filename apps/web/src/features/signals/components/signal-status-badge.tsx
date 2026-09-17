@@ -16,10 +16,8 @@ const LABELS: Record<string, string> = {
   interesting: 'Intéressant',
   resolved: 'Résolue',
   canceled: 'Annulée',
-  archived: 'Archivée',
 }
 
-const ARCHIVED_BADGE_CLASS = 'bg-[#555] text-white'
 const INTERESTING_FEED_BADGE_CLASS = 'bg-[#E5F7F5] text-[#2A7A73]'
 const INTERESTING_DETAIL_BADGE_CLASS = 'bg-[#A4E5E0] text-white'
 
@@ -31,7 +29,6 @@ const FEED_STATUS_CLASS: Record<string, string> = {
   interesting: INTERESTING_FEED_BADGE_CLASS,
   resolved: 'bg-[#E6F4EA] text-[#137333]',
   canceled: 'bg-[#F0EFE9] text-[#7D7B75]',
-  archived: 'bg-[#F0EFE9] text-[#7D7B75]',
 }
 
 export function SignalStatusBadge({
@@ -56,14 +53,6 @@ export function SignalStatusBadge({
   }
 
   const badgeVariant = getSignalStatusBadgeVariant(status)
-
-  if (status === 'archived') {
-    return (
-      <HoustonBadge variant={badgeVariant} className={cn(DETAIL_BADGE_CLASS, ARCHIVED_BADGE_CLASS)}>
-        {label}
-      </HoustonBadge>
-    )
-  }
 
   if (status === 'interesting') {
     return (

@@ -86,10 +86,10 @@ def test_signal_comments_400_on_empty_body(api_client):
 
 def test_signal_comments_404_when_signal_detail_would_404(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    signal = _signal(owner, status=Signal.Status.ARCHIVED)
+    missing_id = uuid.uuid4()
     token = login(api_client, user=owner.user)
-    detail_url = signal_detail_url(owner.establishment_id, signal.id)
-    comments_url = signal_comments_url(owner.establishment_id, signal.id)
+    detail_url = signal_detail_url(owner.establishment_id, missing_id)
+    comments_url = signal_comments_url(owner.establishment_id, missing_id)
 
     detail_resp = api_client.get(detail_url, **auth_headers(token))
     assert detail_resp.status_code == 404

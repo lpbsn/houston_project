@@ -50,7 +50,6 @@ const detailBase = {
   permission_hints: {
     can_pin: false,
     can_mark_interesting: false,
-    can_archive: false,
     can_cancel: false,
     can_resolve: false,
     can_create_linked_action_plan: false,

@@ -31,7 +31,6 @@ function item(overrides: Partial<SignalFeedItem> & { id: string }): SignalFeedIt
     permission_hints: {
       can_pin: false,
       can_mark_interesting: false,
-      can_archive: false,
       can_cancel: false,
       can_resolve: false,
       can_create_linked_action_plan: false,
@@ -194,10 +193,10 @@ describe('getSignalCardLeftAccentClass', () => {
     ).toBe(SIGNAL_CARD_LEFT_ACCENT.resolved)
   })
 
-  it('returns dedicated archived accent and neutral for canceled or unknown', () => {
+  it('returns dedicated accent for resolved and neutral for canceled or unknown', () => {
     expect(
-      getSignalCardLeftAccentClass(item({ id: '1', status: 'archived' })),
-    ).toBe(SIGNAL_CARD_LEFT_ACCENT.archived)
+      getSignalCardLeftAccentClass(item({ id: '1', status: 'resolved' })),
+    ).toBe(SIGNAL_CARD_LEFT_ACCENT.resolved)
     expect(
       getSignalCardLeftAccentClass(item({ id: '2', status: 'canceled' })),
     ).toBe(SIGNAL_CARD_LEFT_ACCENT.neutral)
@@ -233,10 +232,10 @@ describe('getSignalCardLeftAccentColor', () => {
     ).toBe(SIGNAL_CARD_LEFT_ACCENT_COLOR.resolved)
   })
 
-  it('returns dedicated archived accent and neutral for canceled or unknown', () => {
+  it('returns dedicated accent for resolved and neutral for canceled or unknown', () => {
     expect(
-      getSignalCardLeftAccentColor(item({ id: '1', status: 'archived' })),
-    ).toBe(SIGNAL_CARD_LEFT_ACCENT_COLOR.archived)
+      getSignalCardLeftAccentColor(item({ id: '1', status: 'resolved' })),
+    ).toBe(SIGNAL_CARD_LEFT_ACCENT_COLOR.resolved)
     expect(
       getSignalCardLeftAccentColor(item({ id: '2', status: 'canceled' })),
     ).toBe(SIGNAL_CARD_LEFT_ACCENT_COLOR.neutral)
@@ -271,8 +270,7 @@ describe('getSignalStatusBadgeVariant', () => {
     expect(getSignalStatusBadgeVariant('resolved')).toBe('green')
   })
 
-  it('maps archived, canceled, and unknown to gray', () => {
-    expect(getSignalStatusBadgeVariant('archived')).toBe('gray')
+  it('maps canceled and unknown to gray', () => {
     expect(getSignalStatusBadgeVariant('canceled')).toBe('gray')
     expect(getSignalStatusBadgeVariant('draft')).toBe('gray')
   })

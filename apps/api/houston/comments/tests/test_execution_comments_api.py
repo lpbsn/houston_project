@@ -81,11 +81,11 @@ def test_execution_comments_include_inherited_signal_comments(api_client):
     assert items[1]["is_resolved"] is False
 
 
-def test_execution_comments_include_inherited_when_signal_archived(api_client):
+def test_execution_comments_include_inherited_when_signal_canceled(api_client):
     owner, staff, signal, execution = _setup_linked_execution()
-    create_signal_comment(author_membership=owner, signal=signal, body="signal note before archive")
+    create_signal_comment(author_membership=owner, signal=signal, body="signal note before cancel")
 
-    signal.status = Signal.Status.ARCHIVED
+    signal.status = Signal.Status.CANCELED
     signal.save(update_fields=["status", "updated_at"])
 
     token = login(api_client, user=staff.user)

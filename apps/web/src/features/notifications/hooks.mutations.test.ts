@@ -26,7 +26,6 @@ const markNotificationRead = vi.fn(async () => ({
   actor: null,
   created_at: '2026-06-23T10:00:00.000Z',
   read_at: '2026-06-23T10:05:00.000Z',
-  archived_at: null,
 }))
 
 const markAllNotificationsRead = vi.fn(async () => ({ updated_count: 2 }))

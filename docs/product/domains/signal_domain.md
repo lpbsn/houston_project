@@ -2,7 +2,7 @@
 
 Status: authoritative
 Last reviewed: 2026-07-29
-Implementation status: partial (feed, detail, pin, mark interesting, archive, cancel, resolve implemented; Phase 5 core Action side effects implemented; pipeline **v6** aggregation on normalized `issue_focus` for `routing_status=resolved` only; Signal lifecycle actor fields + append-only `SignalLifecycleEvent` journal implemented write-side; user-facing timeline API not implemented)
+Implementation status: partial (feed, detail, pin, mark interesting, cancel, resolve implemented; Phase 5 core Action side effects implemented; pipeline **v6** aggregation on normalized `issue_focus` for `routing_status=resolved` only; Signal lifecycle actor fields + append-only `SignalLifecycleEvent` journal implemented write-side; user-facing timeline API not implemented)
 
 ## 1. Purpose
 
@@ -29,7 +29,7 @@ Signal is the operational object between Observation and Action. It is not the r
 
 - Signal creation from backend-validated candidate Signals proposed from Observation pipeline output.
 - Aggregation of a candidate Signal into an existing active Signal when backend validation decides it matches an ongoing situation.
-- Signal lifecycle statuses: `open`, `in_progress`, `resolved`, `canceled`, `archived`.
+- Signal lifecycle statuses: `open`, `in_progress`, `interesting`, `resolved`, `canceled`.
 - Routing through **BusinessUnit / ActivitySubject classification** per Signal: `affected_business_unit`, `responsible_business_unit`, `activity_subject` (optional `operational_unit` for structured location; `location_text` for free text; **`issue_focus`** for operational focus and aggregation discriminant).
 - Candidate pinned-open behavior for important visible Signals.
 - Safe Signal summaries for feed and detail surfaces.
@@ -83,7 +83,7 @@ This domain describes the validated MVP target behavior. Current code and `apps/
   - Not business truth until backend validation creates or aggregates a Signal.
 
 - `SignalStatus`
-  - Lifecycle state such as `open`, `in_progress`, `resolved`, `canceled`, or `archived`.
+  - Lifecycle state such as `open`, `in_progress`, `interesting`, `resolved`, or `canceled`.
   - Controls whether the Signal remains part of active operational supervision.
 
 - `SignalCategorization`
@@ -120,11 +120,10 @@ This domain describes the validated MVP target behavior. Current code and `apps/
   - Useful situation kept outside the default operational urgency buckets.
   - Transition `open → interesting` via `POST .../signals/{id}/mark-interesting/`.
   - Not pinnable; marking interesting always clears pin fields (`status == interesting` ⇒ `is_pinned == false`).
-  - Cancel and resolve are not allowed.
+  - Cancel is allowed via `POST .../signals/{id}/cancel/` (same RBAC as cancel on `open`). Resolve is not allowed.
   - Remains an aggregation target and participates in the active uniqueness constraint with `open` / `in_progress`.
   - Linked Action Plan execution creation transitions `interesting → in_progress` via the same `_activate_linked_signal_on_execution_create` path as `open`.
   - No reverse transition to `open`.
-  - User archive: `interesting → archived` via `POST .../signals/{id}/archive/` (Owner/Director/Manager scope-or-unassigned; Staff denied). Feed sheet action only in UI.
 
 - `in_progress`
   - Active situation with linked execution work underway.
@@ -140,38 +139,28 @@ This domain describes the validated MVP target behavior. Current code and `apps/
 
 - `canceled`
   - Situation intentionally closed as no longer relevant to pursue.
-  - Manual cancellation is available via `POST .../signals/{id}/cancel/` from `open` only (same eligibility as manual resolve).
+  - Manual cancellation is available via `POST .../signals/{id}/cancel/` from `open` and `interesting` (same RBAC). Resolve remains `open` only.
   - **MVP cancellation does not require a category, reason, or justification payload.** The command has no mandatory request body.
-
-- `archived`
-  - Historical / terminal storage state outside all product surfaces in this version (no feed, no status filter, detail GET → 404).
-  - User archive from `interesting` only (`POST .../signals/{id}/archive/`). Does **not** set `merged_into` (distinct from qualify merge archive).
-  - Applies the same CREATED_FROM media cleanup policy as cancel/resolve (delete when last active sibling).
-  - Releases the active uniqueness / aggregation key so a new identical occurrence creates a new active Signal.
-  - Concurrent with linked Action Plan create: Signal row locks in UUID order; archive locks CREATED_FROM sibling set (or self); AP create locks the source Signal only. Winner: AP → `in_progress` and archive refused, or archive → `archived` and AP refused; never `in_progress → archived`.
-  - No restore in this version.
 
 Validated target transition rules:
 - Signal is created as `open`.
 - A candidate Signal may aggregate only into an active Signal (`open`, `in_progress`, `interesting`).
-- Aggregation must not target `resolved`, `canceled`, or `archived` Signals.
+- Aggregation must not target `resolved` or `canceled` Signals.
 - A recurring issue after a closed Signal should create a new Signal rather than silently reuse the closed one.
-- `archived` is out of the active Signal feed by default.
 
 Validated in current code:
-- Manual cancel and resolve from `open` only (`MANUAL_CANCEL_RESOLVE_SIGNAL_STATUSES`). `in_progress` must be resolved via Action Plans.
+- Manual cancel from `open` and `interesting`; manual resolve from `open` only (`MANUAL_CANCEL_SIGNAL_STATUSES` / `MANUAL_RESOLVE_SIGNAL_STATUSES`). `in_progress` must be resolved via Action Plans.
 - Mark interesting from `open` only (Owner/Director/Manager with scope or unassigned triage; Staff denied).
-- Archive from `interesting` only (same RBAC shape as pin / mark interesting; Staff denied). Archived Signals are not exposed (feed/detail/filtre); `merged_into` stays null; media cleanup matches cancel/resolve.
-- Linked Action Plan creation from an active Signal (`open`, `in_progress`, or `interesting`) transitions `open`/`interesting` → `in_progress` and unpins if pinned; creation is rejected when the Signal is terminal (`resolved`, `canceled`, `archived`). When `source_signal_id` is set: if the Signal has a `responsible_business_unit_id`, `pilot_business_unit_id` must equal it; if responsible is null but an `activity_subject` is present, the pilot must equal the subject's owning BusinessUnit.
-- Default Signal Feed includes `open`, `in_progress`, `interesting`, `resolved`, and `canceled`; `archived` is excluded.
+- Qualify merge on aggregation-key collision absorbs observations (`MERGED_FROM`) and related FKs onto the survivor, then **hard-deletes** the source. Retry on the deleted id returns 404. Response may include ephemeral `merged_signal_id`.
+- Linked Action Plan creation from an active Signal (`open`, `in_progress`, or `interesting`) transitions `open`/`interesting` → `in_progress` and unpins if pinned; creation is rejected when the Signal is terminal (`resolved`, `canceled`). When `source_signal_id` is set: if the Signal has a `responsible_business_unit_id`, `pilot_business_unit_id` must equal it; if responsible is null but an `activity_subject` is present, the pilot must equal the subject's owning BusinessUnit.
+- Default Signal Feed includes `open`, `in_progress`, `interesting`, `resolved`, and `canceled`.
 - Feed sorting places operational active Signals (`open`/`in_progress`) first, then `interesting`, then `resolved`, then `canceled` (`status_group_rank` before pin). UI section « Intéressants » is dynamic and collapsed by default.
-- `resolved`, `canceled`, and `interesting` Signals are readable on detail (action hints accordingly); `canceled` detail requires pole visibility for Manager/Staff; `archived` detail returns 404 (not exposed).
-- Resolve transition forces unpin (clears pin fields). Mark interesting also forces unpin. User archive forces unpin defensively.
+- `resolved`, `canceled`, and `interesting` Signals are readable on detail (action hints accordingly); `canceled` detail requires pole visibility for Manager/Staff.
+- Resolve transition forces unpin (clears pin fields). Mark interesting also forces unpin.
 - Automatic transition from active states to `resolved` when all linked Action Plan executions are terminal and at least one is `done` (triggered by mark-done or validate via `sync_signal_after_execution_change`).
 
 Not validated yet:
 - exact reopen behavior
-- restore of archived Signals
 - exact stored representation of confidence scores
 - exact recurrence/count field name
 
@@ -183,17 +172,16 @@ Not validated yet:
 - Manager target behavior: actionability requires RBAC (`MembershipScope` BusinessUnit coverage) and Signal BU classification.
 - Ma vue (`view_mode=personal`) filters by **`MembershipScope`** for Manager/Staff (affected **or** responsible BusinessUnit in scope). Owner/Director: all feed-visible establishment Signals.
 - Vue générale (`view_mode=general`) shows all feed-visible establishment Signals for Owner/Director; for Manager/Staff, active and `resolved` Signals are establishment-wide while `canceled` Signals follow pole visibility on the feed list.
-- Detail access (implemented): any member who passes `can_view_signal_feed` may read **feed-visible** Signal detail by ID, including deep-links to Signals outside their Ma vue BU scope. Pin, mark interesting, archive, cancel, resolve, and create-action commands remain scope-aware for Manager (see [`rbac_permissions_domain.md`](rbac_permissions_domain.md) §7).
+- Detail access (implemented): any member who passes `can_view_signal_feed` may read **feed-visible** Signal detail by ID, including deep-links to Signals outside their Ma vue BU scope. Pin, mark interesting, cancel, resolve, and create-action commands remain scope-aware for Manager (see [`rbac_permissions_domain.md`](rbac_permissions_domain.md) §7).
 - Visibility does not imply actionability.
-- Resolving Signals, canceling Signals, pinning, marking interesting, and archiving require backend command authorization (implemented). Creating Actions from Signals remains a separate workflow.
-- **Cancel and resolve** (implemented): Owner and Director may act on any `open` Signal in the establishment; Manager may act only when `MembershipScope` covers the Signal taxonomy (or unassigned triage); **Staff are denied** cancel and resolve. Manual cancel/resolve on `in_progress` is refused (permission hints false; API returns business error).
+- Resolving Signals, canceling Signals, pinning, and marking interesting require backend command authorization (implemented). Creating Actions from Signals remains a separate workflow.
+- **Cancel and resolve** (implemented): Owner and Director may act on any eligible Signal in the establishment; Manager may act only when `MembershipScope` covers the Signal taxonomy (or unassigned triage); **Staff are denied** cancel and resolve. Cancel is allowed on `open` and `interesting`. Manual cancel/resolve on `in_progress` is refused (permission hints false; API returns business error). Manual resolve is `open` only.
 - **Resolution request workflow** (implemented): Staff may request review from eligible Managers; Managers with current responsible-pole coverage may request review from eligible Directors. A pending request blocks **the requester Manager only** from resolving directly until they cancel the request or a reviewer decides; another authorized resolver may still resolve and auto-cancel the request.
 - **Mark interesting** (implemented): same RBAC shape as pin — Owner/Director/Manager (scope or unassigned triage) on `open` only; **Staff denied**. Staff may still view `interesting` Signals in personal and general feed.
-- **Archive** (implemented): same RBAC shape as pin — Owner/Director/Manager (scope or unassigned triage) on `interesting` only; **Staff denied**. Archived Signals are not product-exposed.
 - Notifications and realtime events do not grant Signal access.
 - Raw Observation text is not exposed through Signal permissions.
 
-API responses expose `permission_hints` (`can_pin`, `can_mark_interesting`, `can_archive`, `can_cancel`, `can_resolve`, `can_create_linked_action_plan`, `can_qualify_routing`, `can_request_resolution`, `can_approve_resolution_request`, `can_reject_resolution_request`, `can_cancel_resolution_request`) for UI display; backend permission checks on command endpoints remain authoritative. `can_create_linked_action_plan` is signal-scoped: it indicates whether the current membership may create a linked Action Plan from this Signal. Action Plan create enforcement remains the final authority.
+API responses expose `permission_hints` (`can_pin`, `can_mark_interesting`, `can_cancel`, `can_resolve`, `can_create_linked_action_plan`, `can_qualify_routing`, `can_request_resolution`, `can_approve_resolution_request`, `can_reject_resolution_request`, `can_cancel_resolution_request`) for UI display; backend permission checks on command endpoints remain authoritative. `can_create_linked_action_plan` is signal-scoped: it indicates whether the current membership may create a linked Action Plan from this Signal. Action Plan create enforcement remains the final authority.
 
 ## 8. Events
 
@@ -204,7 +192,6 @@ Detail API exposes (not feed):
 - `marked_interesting_by_membership_id` / `marked_interesting_at`
 - `resolved_by_membership_id` / `resolved_at` / `resolution_origin` (`manual` | `resolution_request` | `action_plan`)
 - `canceled_by_membership_id` / `canceled_at`
-- `archived_by_membership_id` / `archived_at`
 
 On `resolved → in_progress` (defensive path if an execution reopen ever reactivates a linked Signal), `resolved_*` and `resolution_origin` are cleared. Prior resolution remains in the journal. Product reopen is only allowed from `pending_validation`, which does not resolve the Signal, so this path is not reached by the legal reopen API.
 
@@ -227,7 +214,6 @@ Invariants:
 Event types:
 
 - `signal.marked_interesting`
-- `signal.archived`
 - `signal.resolved`
 - `signal.canceled`
 - `signal.moved_in_progress`
@@ -247,7 +233,6 @@ Implemented in `apps/api/schema.yml` (establishment-scoped under `/api/v1/establ
 - `POST signals/{signal_id}/cancel/` — **no mandatory body**; sets status `canceled`
 - `POST signals/{signal_id}/resolve/` — **no mandatory body**; sets status `resolved`
 - `POST signals/{signal_id}/mark-interesting/` — **no mandatory body**; sets status `interesting`
-- `POST signals/{signal_id}/archive/` — **no mandatory body**; `interesting` → `archived` (not exposed afterward)
 - `POST signals/{signal_id}/resolution-requests/` — create a pending resolution request; Signal remains `open`
 - `POST signals/{signal_id}/resolution-requests/{request_id}/approve/` — approve request and resolve Signal atomically
 - `POST signals/{signal_id}/resolution-requests/{request_id}/reject/` — reject request; Signal remains `open`
@@ -255,7 +240,6 @@ Implemented in `apps/api/schema.yml` (establishment-scoped under `/api/v1/establ
 
 Not implemented in current schema:
 - fetch Signal timeline or `SignalLifecycleEvent` list
-- restore archived Signal
 
 Action Plan creation from a Signal is via `POST .../action-plans/` with optional `signal_id` (linked plan), not a nested Signal sub-resource.
 
@@ -319,8 +303,7 @@ Aligned with `FEED_SIGNAL_STATUSES` in `apps/api/houston/signals/constants.py`.
 
 | Status | In active Signal Feed (default) |
 | --- | --- |
-| `open`, `in_progress`, `resolved`, `canceled` | Yes |
-| `archived` | No |
+| `open`, `in_progress`, `interesting`, `resolved`, `canceled` | Yes |
 
 ### Aggregation (when pipeline exists)
 
@@ -330,6 +313,6 @@ Aligned with `FEED_SIGNAL_STATUSES` in `apps/api/houston/signals/constants.py`.
 | Candidate same taxonomy but different `issue_focus` | Create new Signal |
 | Candidate `routing_status=unassigned` (even identical keys) | Always create a new Signal (no auto-aggregation) |
 | Candidate matches resolved lifecycle-closed Signal | Create new Signal |
-| Aggregation target closed/archived | Rejected |
+| Aggregation target closed | Rejected |
 
 Tests must use BU/AS runtime taxonomy keys from onboarding, not legacy flat domain keys.

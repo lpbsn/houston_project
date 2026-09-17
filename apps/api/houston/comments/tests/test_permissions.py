@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 import pytest
 
 from houston.action_plans.services import create_action_plan_with_execution
@@ -26,18 +28,10 @@ from houston.testing.taxonomy import create_signal_v3_for_membership, hotel_main
 pytestmark = pytest.mark.django_db
 
 
-def test_owner_cannot_access_signal_comments_on_archived_signal():
+def test_owner_cannot_access_signal_comments_on_missing_signal():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
-    signal = create_signal_v3_for_membership(
-        owner,
-        affected_business_unit=hotel,
-        responsible_business_unit=maintenance,
-        activity_subject=electricite,
-        status=Signal.Status.ARCHIVED,
-    )
 
-    assert can_access_signal_comments(membership=owner, signal_id=signal.id) is False
+    assert can_access_signal_comments(membership=owner, signal_id=uuid.uuid4()) is False
 
 
 def _linked_execution():

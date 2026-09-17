@@ -576,11 +576,10 @@ def _scan_signal_ids(
         )
         input_cursor = str(cursor_signal.id)
     exclusions = {
-        "merged": scoped.filter(merged_into_id__isnull=False).count(),
+        "merged": 0,
     }
     ids = list(
-        scoped.filter(merged_into_id__isnull=True)
-        .order_by("created_at", "id")
+        scoped.order_by("created_at", "id")
         .values_list("id", flat=True)[:limit]
     )
     next_cursor = str(ids[-1]) if ids else ""
@@ -624,7 +623,6 @@ def _load_signal(signal_id: uuid.UUID) -> Signal:
         "responsible_business_unit",
         "activity_subject",
         "operational_unit",
-        "merged_into",
     ).get(pk=signal_id)
 
 

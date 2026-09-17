@@ -124,7 +124,6 @@ export const SIGNAL_CARD_LEFT_ACCENT = {
   in_progress: 'border-l-[#3A7A96]',
   interesting: 'border-l-[#A4E5E0]',
   resolved: 'border-l-[#1D9E75]',
-  archived: 'border-l-[#555]',
   neutral: 'border-l-[#7D7B75]',
 } as const
 
@@ -135,7 +134,6 @@ export const SIGNAL_CARD_LEFT_ACCENT_COLOR = {
   in_progress: terrainInProgress.color,
   interesting: '#A4E5E0',
   resolved: '#1D9E75',
-  archived: '#555',
   neutral: '#7D7B75',
 } as const
 
@@ -169,7 +167,7 @@ export function getPinnedSignalCardClassName(): string {
 
 /**
  * Left border accent for standard feed cards.
- * Priority: status (archived and canceled/unknown use distinct neutrals).
+ * Priority: status (canceled/unknown use a shared neutral).
  */
 export function getSignalCardLeftAccentClass(item: SignalFeedItem): string {
   return SIGNAL_CARD_LEFT_ACCENT[getSignalCardLeftAccentColorKey(item)]
@@ -189,9 +187,6 @@ function getSignalCardLeftAccentColorKey(
   }
   if (item.status === 'resolved') {
     return 'resolved'
-  }
-  if (item.status === 'archived') {
-    return 'archived'
   }
   return 'neutral'
 }

@@ -31,6 +31,19 @@ describe('mapSignalQualifyError', () => {
     ).toBe('Subject outside responsible.')
   })
 
+  it('maps 404 when the source no longer exists', () => {
+    expect(
+      mapSignalQualifyError({
+        code: null,
+        detail: 'Not found.',
+        status: 404,
+      }),
+    ).toEqual({
+      message: 'Cette observation n’existe plus.',
+      survivingSignalId: null,
+    })
+  })
+
   it('maps invalid_issue_focus as validation', () => {
     expect(
       mapSignalQualifyError({

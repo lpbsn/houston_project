@@ -1559,7 +1559,7 @@ def test_dashboard_after_operational_cleanup_reset():
         resolution_audit={},
         candidate_expected_action=None,
     )
-    source.refresh_from_db()
+    source_id = source.id
 
     result = get_analytics_dashboard(
         membership.user,
@@ -1577,7 +1577,7 @@ def test_dashboard_after_operational_cleanup_reset():
     assert {item.name for item in responsible.segments} == {"Maintenance"}
     assert result.locations.items[0].comparison.coverage == COVERAGE_COMPLETE
     assert result.contributors == ()
-    assert source.merged_into_id == survivor.id
+    assert not Signal.objects.filter(id=source_id).exists()
 
     later = get_analytics_dashboard(
         membership.user,

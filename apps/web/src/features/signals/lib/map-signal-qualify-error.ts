@@ -19,9 +19,17 @@ export function mapSignalQualifyError(options: {
   code: string | null | undefined
   detail: string | null | undefined
   payload?: unknown
+  status?: number | null
 }): SignalQualifyErrorMapping {
   const code = options.code ?? null
   const survivor = readSurvivorId(options.payload)
+
+  if (options.status === 404 || code === 'signal_not_found' || code === 'not_found') {
+    return {
+      message: 'Cette observation n’existe plus.',
+      survivingSignalId: null,
+    }
+  }
 
   if (code === 'already_merged') {
     return {

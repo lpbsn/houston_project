@@ -302,12 +302,12 @@ def test_merge_binds_execution_to_surviving_signal(
         ],
     )
 
-    source.refresh_from_db()
+    source_id = source.id
     survivor.refresh_from_db()
-    assert source.status == Signal.Status.ARCHIVED
-    assert source.merged_into_id == survivor.id
+    execution.refresh_from_db()
+    assert not Signal.objects.filter(id=source_id).exists()
     assert execution.source_signal_id == survivor.id
-    assert ActionPlanExecution.objects.filter(source_signal_id=source.id).count() == 0
+    assert ActionPlanExecution.objects.filter(source_signal_id=source_id).count() == 0
 
 
 def test_existing_responsible_preserved(owner_membership, maintenance_business_unit, signal):

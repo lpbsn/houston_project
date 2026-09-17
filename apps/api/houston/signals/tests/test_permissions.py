@@ -95,15 +95,6 @@ def test_can_view_signal_detail_allows_resolved():
     assert can_view_signal_detail(owner, signal)
 
 
-def test_can_view_signal_detail_denies_archived():
-    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
-    signal = _build_signal(membership=owner)
-    signal.status = Signal.Status.ARCHIVED
-    signal.save(update_fields=["status", "updated_at"])
-
-    assert not can_view_signal_detail(owner, signal)
-
-
 def test_can_view_signal_detail_canceled_delegates_to_pole_visibility():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(

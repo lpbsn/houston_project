@@ -19,10 +19,6 @@ const markSignalInteresting = vi.fn(async () => ({
   id: 'signal-1',
   status: 'interesting',
 }))
-const archiveSignal = vi.fn(async () => ({
-  id: 'signal-1',
-  status: 'archived',
-}))
 
 vi.mock('../hooks', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks')>()
@@ -33,7 +29,6 @@ vi.mock('../hooks', async (importOriginal) => {
     useResolveSignalMutation: actual.useResolveSignalMutation,
     useCancelSignalMutation: actual.useCancelSignalMutation,
     useMarkSignalInterestingMutation: actual.useMarkSignalInterestingMutation,
-    useArchiveSignalMutation: actual.useArchiveSignalMutation,
   }
 })
 
@@ -46,7 +41,6 @@ vi.mock('../api', async (importOriginal) => {
     resolveSignal: (...args: unknown[]) => resolveSignal(...args),
     cancelSignal: (...args: unknown[]) => cancelSignal(...args),
     markSignalInteresting: (...args: unknown[]) => markSignalInteresting(...args),
-    archiveSignal: (...args: unknown[]) => archiveSignal(...args),
   }
 })
 
@@ -74,7 +68,6 @@ function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem 
     permission_hints: {
       can_pin: true,
       can_mark_interesting: false,
-      can_archive: false,
       can_cancel: true,
       can_resolve: true,
       can_create_linked_action_plan: false,
@@ -117,7 +110,6 @@ describe('useSignalFeedQuickActions', () => {
     resolveSignal.mockClear()
     cancelSignal.mockClear()
     markSignalInteresting.mockClear()
-    archiveSignal.mockClear()
     vi.spyOn(window, 'confirm').mockReturnValue(true)
   })
 
@@ -255,7 +247,6 @@ describe('useSignalFeedQuickActions', () => {
           permission_hints: {
             can_pin: false,
             can_mark_interesting: true,
-            can_archive: false,
             can_cancel: false,
             can_resolve: false,
             can_create_linked_action_plan: false,
@@ -291,7 +282,6 @@ describe('useSignalFeedQuickActions', () => {
           permission_hints: {
             can_pin: false,
             can_mark_interesting: true,
-            can_archive: false,
             can_cancel: false,
             can_resolve: false,
             can_create_linked_action_plan: false,
@@ -312,7 +302,7 @@ describe('useSignalFeedQuickActions', () => {
     expect(result.current.activeItem).not.toBeNull()
   })
 
-  it('runs archive mutation when confirm is accepted and returns stay-open', async () => {
+  it('runs cancel mutation for interesting when confirm is accepted', async () => {
     const { result } = renderQuickActionsHook()
 
     act(() => {
@@ -322,8 +312,7 @@ describe('useSignalFeedQuickActions', () => {
           permission_hints: {
             can_pin: false,
             can_mark_interesting: false,
-            can_archive: true,
-            can_cancel: false,
+            can_cancel: true,
             can_resolve: false,
             can_create_linked_action_plan: false,
             can_qualify_routing: false,
@@ -334,13 +323,13 @@ describe('useSignalFeedQuickActions', () => {
 
     let actionResult: string | undefined
     act(() => {
-      actionResult = result.current.runAction('archive')
+      actionResult = result.current.runAction('cancel')
     })
 
     expect(actionResult).toBe('stay-open')
 
     await waitFor(() => {
-      expect(archiveSignal).toHaveBeenCalledWith('est-1', 'signal-1')
+      expect(cancelSignal).toHaveBeenCalledWith('est-1', 'signal-1')
     })
 
     await waitFor(() => {
@@ -348,7 +337,7 @@ describe('useSignalFeedQuickActions', () => {
     })
   })
 
-  it('returns abort when archive confirm is declined', () => {
+  it('returns abort when cancel confirm is declined', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(false)
     const { result } = renderQuickActionsHook()
 
@@ -359,8 +348,7 @@ describe('useSignalFeedQuickActions', () => {
           permission_hints: {
             can_pin: false,
             can_mark_interesting: false,
-            can_archive: true,
-            can_cancel: false,
+            can_cancel: true,
             can_resolve: false,
             can_create_linked_action_plan: false,
             can_qualify_routing: false,
@@ -371,11 +359,11 @@ describe('useSignalFeedQuickActions', () => {
 
     let actionResult: string | undefined
     act(() => {
-      actionResult = result.current.runAction('archive')
+      actionResult = result.current.runAction('cancel')
     })
 
     expect(actionResult).toBe('abort')
-    expect(archiveSignal).not.toHaveBeenCalled()
+    expect(cancelSignal).not.toHaveBeenCalled()
     expect(result.current.actionsOpen).toBe(true)
     expect(result.current.activeItem).not.toBeNull()
   })

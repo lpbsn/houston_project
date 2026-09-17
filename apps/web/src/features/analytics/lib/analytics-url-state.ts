@@ -23,7 +23,6 @@ export const ANALYTICS_SIGNAL_STATUS_VALUES = [
   'in_progress',
   'interesting',
   'resolved',
-  'archived',
 ] as const
 export type AnalyticsSignalStatusFilter = (typeof ANALYTICS_SIGNAL_STATUS_VALUES)[number]
 

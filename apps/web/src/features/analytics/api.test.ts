@@ -191,7 +191,7 @@ describe('analytics api', () => {
         recurrence: 'recurrent',
         responsibleBusinessUnitIds: ['33333333-3333-4333-8333-333333333333'],
         responsibleBusinessUnitUnassigned: true,
-        signalStatuses: ['open', 'archived'],
+        signalStatuses: ['open', 'interesting'],
       },
       { cursor: 'cursor-1', pageSize: 25 },
     )
@@ -209,7 +209,7 @@ describe('analytics api', () => {
             recurrence: 'recurrent',
             responsible_business_unit_ids: '33333333-3333-4333-8333-333333333333',
             responsible_business_unit_unassigned: true,
-            signal_statuses: 'open,archived',
+            signal_statuses: 'open,interesting',
             cursor: 'cursor-1',
             page_size: 25,
           },
