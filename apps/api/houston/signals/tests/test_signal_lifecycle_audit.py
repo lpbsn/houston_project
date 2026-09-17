@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from django.db import transaction
+from django.utils import timezone
 
 from houston.action_plans.services import (
     cancel_action_plan_execution,
@@ -225,6 +226,83 @@ def test_merge_hard_deletes_source():
 
     assert not Signal.objects.filter(id=source_id).exists()
     assert Signal.objects.filter(id=target.id).exists()
+
+
+def test_merge_hard_deletes_source_transfers_or_cleans_related_rows():
+    from houston.analytics.models import PatternIssueReport
+    from houston.analytics.services import create_operational_pattern
+    from houston.comments.models import Comment
+    from houston.gamification.constants import CURRENT_RULE_VERSION, SOURCE_TYPE_SIGNAL
+    from houston.gamification.models import PointTransaction
+    from houston.gamification.services import open_season
+    from houston.notifications.models import Notification
+
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    source = create_minimal_v3_signal(membership, title="Merge source relations")
+    target = create_minimal_v3_signal(membership, title="Merge target relations")
+    source_id = source.id
+    target_id = target.id
+
+    comment = Comment.objects.create(
+        establishment=membership.establishment,
+        signal=source,
+        author_membership=membership,
+        body="Source comment",
+    )
+    notification = Notification.objects.create(
+        establishment_id=membership.establishment_id,
+        recipient_membership=membership,
+        actor_membership=membership,
+        event_key=Notification.EventKey.SIGNAL_CREATED,
+        subject_type=Notification.SubjectType.SIGNAL,
+        subject_id=source.id,
+        priority=Notification.Priority.INFO,
+        title="Source signal",
+        body="notify source",
+    )
+    season = open_season(membership.establishment)
+    tx = PointTransaction.objects.create(
+        membership=membership,
+        establishment=membership.establishment,
+        season=season,
+        delta=5,
+        reason_code="test.merge.repaint",
+        source_type=SOURCE_TYPE_SIGNAL,
+        source_id=str(source.id),
+        rule_version=CURRENT_RULE_VERSION,
+        occurred_at=timezone.now(),
+        idempotency_key=f"tx:merge-repaint:{source.id}",
+        metadata_safe={"signal_id": str(source.id)},
+    )
+    pattern = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Merge pattern",
+        created_by_membership=membership,
+    )
+    report = PatternIssueReport.objects.create(
+        pattern=pattern,
+        organization=membership.establishment.organization,
+        signal=source,
+        reported_by_membership=membership,
+        report_type="duplicate",
+    )
+
+    merge_signal_into_resolved(
+        source=source,
+        target=target,
+        resolution_audit={},
+        candidate_expected_action=None,
+    )
+
+    assert not Signal.objects.filter(id=source_id).exists()
+    comment.refresh_from_db()
+    assert comment.signal_id == target_id
+    assert not Notification.objects.filter(id=notification.id).exists()
+    tx.refresh_from_db()
+    assert tx.source_id == str(target_id)
+    assert tx.metadata_safe["signal_id"] == str(target_id)
+    report.refresh_from_db()
+    assert report.signal_id == target_id
 
 
 def test_create_linked_plan_emits_moved_in_progress_with_creator_actor():

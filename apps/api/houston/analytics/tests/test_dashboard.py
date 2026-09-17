@@ -1379,8 +1379,8 @@ def test_qualify_splits_current_affected_volume_without_operational_unit():
     )
     subject = create_activity_subject(
         establishment=membership.establishment,
-        business_unit=maintenance,
-        label="Plomberie",
+        business_unit=evenements,
+        label="Privatisation",
     )
     unassigned = _create_signal(
         membership,

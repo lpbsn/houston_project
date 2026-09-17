@@ -137,7 +137,7 @@ def test_backfill_selection_includes_canceled():
     payload = backfill_simulation_report_to_dict(report)
 
     assert payload["metrics"]["signals_inspected_count"] == 3
-    assert payload["exclusions"] == {"merged": 0}
+    assert "exclusions" not in payload
     assert Signal.Status.CANCELED in {
         signal_result["signal_status"] for signal_result in payload["signals"]
     }
@@ -199,7 +199,7 @@ def test_backfill_simulation_explicit_signal_ids_are_deduped_bounded_scoped_and_
     assert payload["mode"] == "explicit_signal_ids"
     assert payload["metrics"]["signals_inspected_count"] == 1
     assert payload["start_after_signal_id"] == ""
-    assert payload["exclusions"] == {"merged": 0}
+    assert "exclusions" not in payload
     assert payload["signals"][0]["signal_id"] == str(signal.id)
     assert not hasattr(signal, "pattern_assignment")
     assert OperationalPattern.objects.count() == before_patterns

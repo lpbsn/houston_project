@@ -170,7 +170,6 @@ class BackfillSimulationReport:
     effective_limit: int
     max_limit: int
     start_after_signal_id: str
-    exclusions: dict[str, int]
     signal_results: tuple[BackfillSignalSimulationResult, ...]
     provider_calls: tuple[BackfillSimulationProviderCall, ...]
     payload_safety_status: str
@@ -213,14 +212,14 @@ def simulate_analytics_pattern_backfill(
     if normalized_signal_ids:
         if start_after_signal_id:
             raise ValueError("signal-id cannot be combined with start-after-signal-id")
-        selected_signal_ids, exclusions, cursor = select_explicit_backfill_signal_ids(
+        selected_signal_ids, cursor = select_explicit_backfill_signal_ids(
             signal_ids=normalized_signal_ids,
             scope=scope,
             limit=effective_limit,
         )
         mode = "explicit_signal_ids"
     else:
-        selected_signal_ids, exclusions, cursor = _selected_signal_ids(
+        selected_signal_ids, cursor = _selected_signal_ids(
             scope=scope,
             start_after_signal_id=start_after_signal_id,
             limit=effective_limit,
@@ -234,7 +233,6 @@ def simulate_analytics_pattern_backfill(
             provider=capturing_provider,
             scope=scope,
             selected_signal_ids=selected_signal_ids,
-            exclusions=exclusions,
             cursor=cursor,
             mode=mode,
             effective_limit=effective_limit,
@@ -278,7 +276,6 @@ def backfill_simulation_report_to_dict(report: BackfillSimulationReport) -> dict
         "max_limit": report.max_limit,
         "start_after_signal_id": report.start_after_signal_id,
         "metrics": metrics,
-        "exclusions": report.exclusions,
         "payload_safety_status": report.payload_safety_status,
         "payload_safety_errors": list(report.payload_safety_errors),
         "signals": signal_results,
@@ -319,7 +316,6 @@ def _simulate_selected_signals(
     provider: CapturingBackfillPatternClassifierProvider,
     scope: dict[str, str | None],
     selected_signal_ids: list[uuid.UUID],
-    exclusions: dict[str, int],
     cursor: str,
     mode: str,
     effective_limit: int,
@@ -366,7 +362,6 @@ def _simulate_selected_signals(
         effective_limit=effective_limit,
         max_limit=max_limit,
         start_after_signal_id=cursor,
-        exclusions=exclusions,
         signal_results=tuple(signal_results),
         provider_calls=tuple(provider.call_records),
         payload_safety_status="pass" if not payload_errors else "fail",
@@ -638,7 +633,7 @@ def _selected_signal_ids(
     scope: dict[str, str | None],
     start_after_signal_id: uuid.UUID | str | None,
     limit: int,
-) -> tuple[list[uuid.UUID], dict[str, int], str]:
+) -> tuple[list[uuid.UUID], str]:
     scoped = _scoped_signals(scope=scope)
     cursor = ""
     if start_after_signal_id:
@@ -651,14 +646,11 @@ def _selected_signal_ids(
             | Q(created_at=cursor_signal.created_at, id__gt=cursor_signal.id)
         )
         cursor = str(cursor_signal.id)
-    exclusions = {
-        "merged": 0,
-    }
     ids = list(
         scoped.order_by("created_at", "id")
         .values_list("id", flat=True)[:limit]
     )
-    return ids, exclusions, cursor
+    return ids, cursor
 
 
 def _scoped_signals(*, scope: dict[str, str | None]):

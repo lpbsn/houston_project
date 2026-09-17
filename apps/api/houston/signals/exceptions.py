@@ -25,9 +25,5 @@ class SignalBusinessConflictError(SignalServiceError):
     error_code = "business_conflict"
 
 
-class SignalAlreadyMergedError(SignalServiceError):
-    error_code = "already_merged"
-
-
 class SignalPipelineCandidateError(SignalServiceError):
     error_code = "invalid_issue_focus"

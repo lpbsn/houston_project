@@ -88,7 +88,6 @@ class BackfillReport:
     max_limit: int
     start_after_signal_id: str
     next_scan_cursor: str
-    exclusions: dict[str, int]
     signal_results: tuple[BackfillSignalResult, ...]
     provider_calls: tuple[Any, ...]
     errors: tuple[dict[str, str], ...] = field(default_factory=tuple)
@@ -119,7 +118,7 @@ def backfill_analytics_patterns(
     scope = _scope(organization_id=organization_id, establishment_id=establishment_id)
     normalized_signal_ids = normalize_backfill_signal_ids(signal_ids)
     if normalized_signal_ids:
-        selected_signal_ids, exclusions, next_scan_cursor = select_explicit_backfill_signal_ids(
+        selected_signal_ids, next_scan_cursor = select_explicit_backfill_signal_ids(
             signal_ids=normalized_signal_ids,
             scope=scope,
             limit=effective_limit,
@@ -127,7 +126,7 @@ def backfill_analytics_patterns(
         mode = "explicit_signal_ids"
         cursor = ""
     else:
-        selected_signal_ids, exclusions, cursor, _ = _scan_signal_ids(
+        selected_signal_ids, cursor, _ = _scan_signal_ids(
             scope=scope,
             start_after_signal_id=start_after_signal_id,
             limit=effective_limit,
@@ -183,7 +182,6 @@ def backfill_analytics_patterns(
         max_limit=max_limit,
         start_after_signal_id=cursor,
         next_scan_cursor=next_scan_cursor,
-        exclusions=exclusions,
         signal_results=tuple(signal_results),
         provider_calls=tuple(capturing_provider.call_records),
         errors=tuple(errors),
@@ -220,7 +218,6 @@ def backfill_report_to_dict(report: BackfillReport) -> dict[str, Any]:
         "start_after_signal_id": report.start_after_signal_id,
         "next_scan_cursor": report.next_scan_cursor,
         "metrics": _metrics(report.signal_results, report.provider_calls),
-        "exclusions": report.exclusions,
         "errors": list(report.errors),
         "payload_safety_status": report.payload_safety_status,
         "payload_safety_errors": list(report.payload_safety_errors),
@@ -562,7 +559,7 @@ def _scan_signal_ids(
     scope: dict[str, str | None],
     start_after_signal_id: uuid.UUID | str | None,
     limit: int,
-) -> tuple[list[uuid.UUID], dict[str, int], str, str]:
+) -> tuple[list[uuid.UUID], str, str]:
     scoped = _scoped_signals(scope=scope)
     input_cursor = ""
     if start_after_signal_id:
@@ -575,15 +572,12 @@ def _scan_signal_ids(
             | Q(created_at=cursor_signal.created_at, id__gt=cursor_signal.id)
         )
         input_cursor = str(cursor_signal.id)
-    exclusions = {
-        "merged": 0,
-    }
     ids = list(
         scoped.order_by("created_at", "id")
         .values_list("id", flat=True)[:limit]
     )
     next_cursor = str(ids[-1]) if ids else ""
-    return ids, exclusions, input_cursor, next_cursor
+    return ids, input_cursor, next_cursor
 
 
 def _scoped_signals(*, scope: dict[str, str | None]):

@@ -221,7 +221,7 @@ def test_backfill_selection_includes_canceled_and_tracks_cursor(settings):
     payload = backfill_report_to_dict(report)
 
     assert payload["metrics"]["signals_inspected_count"] == 2
-    assert payload["exclusions"] == {"merged": 0}
+    assert "exclusions" not in payload
     assert payload["start_after_signal_id"] == str(open_signal.id)
     assert payload["next_scan_cursor"] == str(target.id)
     assert Signal.Status.CANCELED in {
