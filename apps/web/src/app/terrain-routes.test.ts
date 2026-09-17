@@ -600,6 +600,8 @@ describe('isProtectedRoute', () => {
     expect(isProtectedRoute({ kind: 'static', path: '/' })).toBe(false)
     expect(isProtectedRoute({ kind: 'invitation' })).toBe(false)
     expect(isProtectedRoute({ kind: 'email-change' })).toBe(false)
+    expect(isProtectedRoute({ kind: 'password-reset' })).toBe(false)
+    expect(isProtectedRoute({ kind: 'static', path: '/forgot-password' })).toBe(false)
     expect(isProtectedRoute({ kind: 'unknown', pathname: '/foo' })).toBe(false)
   })
 })

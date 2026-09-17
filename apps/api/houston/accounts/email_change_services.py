@@ -122,7 +122,19 @@ def confirm_email_change(*, raw_token: str) -> User:
 
         change.consumed_at = now
         change.save(update_fields=["consumed_at", "updated_at"])
+        from houston.accounts.password_services import revoke_live_password_reset_requests
+
+        revoke_live_password_reset_requests(user=locked_user, now=now)
         return locked_user
+
+
+def revoke_live_email_change_requests(*, user: User, now: datetime | None = None) -> None:
+    stamp = now or timezone.now()
+    EmailChangeRequest.objects.filter(
+        user=user,
+        revoked_at__isnull=True,
+        consumed_at__isnull=True,
+    ).update(revoked_at=stamp, updated_at=stamp)
 
 
 def _email_change_skip_reason(

@@ -1180,6 +1180,57 @@ export async function confirmEmailChange(token: string) {
   return result.data
 }
 
+export async function changePassword(input: {
+  current_password: string
+  password: string
+  password_confirmation: string
+}) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/auth/password-change/', {
+        body: input,
+        headers: accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+            }
+          : undefined,
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || result.response.status !== 204) {
+    throw buildAuthError(result.response, result.error, 'Password could not be changed.')
+  }
+}
+
+export async function requestPasswordReset(input: { email: string }) {
+  const result = await apiClient.POST('/api/v1/auth/password-reset/', {
+    body: input,
+  })
+
+  if (result.error || !result.data) {
+    throw buildAuthError(result.response, result.error, 'Password reset could not be requested.')
+  }
+
+  return result.data
+}
+
+export async function confirmPasswordReset(input: {
+  token: string
+  password: string
+  password_confirmation: string
+}) {
+  const result = await apiClient.POST('/api/v1/auth/password-reset/confirm/', {
+    body: input,
+  })
+
+  if (result.error || !result.data) {
+    throw buildAuthError(result.response, result.error, 'Password reset could not be confirmed.')
+  }
+
+  return result.data
+}
+
 export async function inviteMembership(
   establishmentId: string,
   input: MembershipInvitationRequest,

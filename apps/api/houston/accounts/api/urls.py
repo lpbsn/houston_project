@@ -12,6 +12,9 @@ from houston.accounts.api.views import (
     EmailChangeRequestView,
     LoginView,
     LogoutView,
+    PasswordChangeView,
+    PasswordResetConfirmView,
+    PasswordResetRequestView,
     RefreshView,
     RegisterView,
     SwitchEstablishmentView,
@@ -42,6 +45,21 @@ urlpatterns = [
         "email-change/confirm/",
         EmailChangeConfirmView.as_view(),
         name="auth-email-change-confirm",
+    ),
+    path(
+        "password-change/",
+        PasswordChangeView.as_view(),
+        name="auth-password-change",
+    ),
+    path(
+        "password-reset/",
+        PasswordResetRequestView.as_view(),
+        name="auth-password-reset",
+    ),
+    path(
+        "password-reset/confirm/",
+        PasswordResetConfirmView.as_view(),
+        name="auth-password-reset-confirm",
     ),
     path(
         "me/deletion-preview/",

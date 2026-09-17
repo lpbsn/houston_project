@@ -99,7 +99,10 @@ export function routeAllowsMissingActiveMembership(path: string): boolean {
 }
 
 export function shouldRedirectAuthenticatedPublicRoute(route: AppRoute): boolean {
-  return route.kind === 'static' && (route.path === '/' || route.path === '/login')
+  return (
+    route.kind === 'static' &&
+    (route.path === '/' || route.path === '/login' || route.path === '/forgot-password')
+  )
 }
 
 export function shouldRedirectUnauthenticatedPublicRoute(route: AppRoute): boolean {
@@ -123,7 +126,7 @@ export function allowsUnauthenticatedAccess(route: AppRoute): boolean {
     return false
   }
 
-  return route.path === '/login' || route.path === '/onboarding'
+  return route.path === '/login' || route.path === '/onboarding' || route.path === '/forgot-password'
 }
 
 export function shouldShowAuthRoutingLoading(

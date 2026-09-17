@@ -23,6 +23,7 @@ export type { ScopedTerrainPage, ScopedTerrainRoute, TerrainScope } from '@/app/
 export type AppPath =
   | '/'
   | '/login'
+  | '/forgot-password'
   | '/onboarding'
   | '/pending-onboarding'
   | '/select-establishment'
@@ -57,6 +58,7 @@ export type AppRoute =
   | { kind: 'team-member-detail'; membershipId: string }
   | { kind: 'invitation' }
   | { kind: 'email-change' }
+  | { kind: 'password-reset' }
   | { kind: 'unknown'; pathname: string }
 
 export function normalizeRoutePath(input: string): string {
@@ -95,6 +97,8 @@ export function getAppRouteKey(route: AppRoute): string {
       return 'invitation'
     case 'email-change':
       return 'email-change'
+    case 'password-reset':
+      return 'password-reset'
     case 'unknown':
       return `unknown:${route.pathname}`
   }
@@ -108,8 +112,16 @@ function isEmailChangePath(pathname: string): boolean {
   return pathname === '/email-change'
 }
 
+function isPasswordResetPath(pathname: string): boolean {
+  return pathname === '/password-reset'
+}
+
 export function isHashTokenPublicRoute(route: AppRoute): boolean {
-  return route.kind === 'invitation' || route.kind === 'email-change'
+  return (
+    route.kind === 'invitation' ||
+    route.kind === 'email-change' ||
+    route.kind === 'password-reset'
+  )
 }
 
 function parseSignalActionCreateId(pathname: string): string | null {
@@ -215,6 +227,10 @@ export function parseAppRoute(input: string): AppRoute {
     return { kind: 'email-change' }
   }
 
+  if (isPasswordResetPath(pathname)) {
+    return { kind: 'password-reset' }
+  }
+
   const signalPlanId = parseSignalActionCreateId(pathname)
   if (signalPlanId) {
     return { kind: 'signal-action-create', signalId: signalPlanId }
@@ -248,6 +264,7 @@ export function parseAppRoute(input: string): AppRoute {
   if (
     pathname === '/' ||
     pathname === '/login' ||
+    pathname === '/forgot-password' ||
     pathname === '/onboarding' ||
     pathname === '/pending-onboarding' ||
     pathname === '/select-establishment' ||
@@ -307,6 +324,8 @@ export function serializeAppRoute(route: AppRoute): string {
       return '/invitations'
     case 'email-change':
       return '/email-change'
+    case 'password-reset':
+      return '/password-reset'
     case 'unknown':
       return route.pathname
   }

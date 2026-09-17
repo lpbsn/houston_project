@@ -188,6 +188,7 @@ vi.mock('@/features/auth/api', () => ({
   })),
   deleteAccount: vi.fn(async () => undefined),
   requestEmailChange: vi.fn(async () => ({ pending_email: 'next@example.com', expires_at: '' })),
+  changePassword: vi.fn(async () => undefined),
   fetchBootstrap: vi.fn(async () => undefined),
   acceptCurrentAiConsent: () => acceptCurrentAiConsent(),
   withdrawAiConsent: () => withdrawAiConsent(),

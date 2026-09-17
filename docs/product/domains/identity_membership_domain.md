@@ -36,7 +36,6 @@ This domain owns global user identity, organization and establishment membership
 - Fine-grained RBAC matrices.
 - Arbitrary admin browsing across tenants.
 - Cross-tenant access.
-- Password reset flows.
 - Public signup.
 - Old-stack implementation assumptions or terminology.
 
@@ -120,6 +119,9 @@ Implemented endpoints confirmed in `apps/api/schema.yml`:
 - `PATCH /api/v1/auth/me/` (first name / last name only; email is not writable here)
 - `POST /api/v1/auth/email-change/`
 - `POST /api/v1/auth/email-change/confirm/` (token in JSON body; public; does not create a session)
+- `POST /api/v1/auth/password-change/` (authenticated; current password required; other sessions revoked)
+- `POST /api/v1/auth/password-reset/` (public; HTTP response does not reveal whether the email exists)
+- `POST /api/v1/auth/password-reset/confirm/` (token in JSON body; public; does not create a session; new password must differ from the current secret; all sessions revoked)
 - `GET /api/v1/auth/me/deletion-preview/`
 - `POST /api/v1/auth/me/delete/`
 - `POST /api/v1/auth/switch_establishment/`
@@ -153,9 +155,7 @@ Implemented response truths:
 - Onboarding Director invite with token: `POST /api/v1/onboarding-sessions/{session_id}/director-invitations/` returns `invitation_token` and schedules a transactional invitation email when enabled (draft onboarding; exactly one non-owner director gate).
 - Workspace membership invitations: `POST /api/v1/establishments/{establishment_id}/membership-invitations/` may invite `staff`, `manager`, or `director` (active establishment; director invites require an active path). Organizational `owner` invitations use organization-admin endpoints (`POST /api/v1/organizations/{organization_id}/owner-invitations/`), not this Team path. Staff/manager invites are also allowed on a **draft** path via the actor’s active membership on that draft when session selection is on a different active establishment. Returns `invitation_token` and schedules a transactional invitation email when enabled.
 
-Candidate endpoints only:
-
-- Password reset endpoints
+Candidate endpoints only: none currently listed for identity/password.
 
 ## 10. Frontend Expectations
 

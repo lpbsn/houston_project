@@ -46,6 +46,9 @@ THROTTLE_TEST_RATES = {
     "auth_invitation_accept": "2/hour",
     "auth_email_change": "2/minute",
     "auth_email_change_confirm": "2/hour",
+    "auth_password_change": "2/minute",
+    "auth_password_reset": "2/hour",
+    "auth_password_reset_confirm": "2/hour",
 }
 
 
@@ -329,6 +332,94 @@ def test_email_change_confirm_over_limit_returns_429_for_invalid_token(api_clien
     response = api_client.post(
         "/api/v1/auth/email-change/confirm/",
         {"token": "invalid-token"},
+        format="json",
+        **ip_headers,
+    )
+    assert_throttled_response(response)
+
+
+def test_password_change_over_limit_returns_429_including_wrong_password(api_client, active_user):
+    create_membership(user=active_user)
+    csrf_token = ensure_csrf(api_client)
+    ip_headers = _client_ip_headers("203.0.113.50")
+    login_response = login(
+        api_client,
+        csrf_token,
+        identifier=active_user.email,
+        password="secret",
+        **ip_headers,
+    )
+    assert login_response.status_code == 200
+    access_token = login_response.json()["access_token"]
+    auth = {"HTTP_AUTHORIZATION": f"Bearer {access_token}"}
+    payload = {
+        "current_password": "wrong-password",
+        "password": "AnotherSecurePass456!",
+        "password_confirmation": "AnotherSecurePass456!",
+    }
+
+    for _ in range(2):
+        response = api_client.post(
+            "/api/v1/auth/password-change/",
+            payload,
+            format="json",
+            **auth,
+            **ip_headers,
+        )
+        assert response.status_code == 403
+
+    response = api_client.post(
+        "/api/v1/auth/password-change/",
+        payload,
+        format="json",
+        **auth,
+        **ip_headers,
+    )
+    assert_throttled_response(response)
+
+
+@override_settings(RESEND_API_KEY="re_test_key")
+def test_password_reset_over_limit_returns_429(api_client):
+    ip_headers = _client_ip_headers("203.0.113.51")
+
+    for _ in range(2):
+        response = api_client.post(
+            "/api/v1/auth/password-reset/",
+            {"email": "anyone@example.com"},
+            format="json",
+            **ip_headers,
+        )
+        assert response.status_code == 200
+
+    response = api_client.post(
+        "/api/v1/auth/password-reset/",
+        {"email": "anyone@example.com"},
+        format="json",
+        **ip_headers,
+    )
+    assert_throttled_response(response)
+
+
+def test_password_reset_confirm_over_limit_returns_429_for_invalid_token(api_client):
+    ip_headers = _client_ip_headers("203.0.113.52")
+    payload = {
+        "token": "invalid-token",
+        "password": "AnotherSecurePass456!",
+        "password_confirmation": "AnotherSecurePass456!",
+    }
+
+    for _ in range(2):
+        response = api_client.post(
+            "/api/v1/auth/password-reset/confirm/",
+            payload,
+            format="json",
+            **ip_headers,
+        )
+        assert response.status_code == 400
+
+    response = api_client.post(
+        "/api/v1/auth/password-reset/confirm/",
+        payload,
         format="json",
         **ip_headers,
     )

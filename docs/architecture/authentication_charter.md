@@ -107,6 +107,9 @@ Required MVP endpoints:
 
 - `GET /api/v1/auth/csrf/` — sets the CSRF cookie and returns `csrf_token` in JSON
 - `POST /api/v1/auth/login/`
+- `POST /api/v1/auth/password-change/`
+- `POST /api/v1/auth/password-reset/`
+- `POST /api/v1/auth/password-reset/confirm/`
 - `POST /api/v1/auth/refresh/`
 - `POST /api/v1/auth/logout/`
 - `GET /api/v1/auth/bootstrap/`
@@ -121,6 +124,29 @@ Login must:
 - require an explicit refresh transport
 - enforce CSRF and set only an HttpOnly refresh cookie for `cookie`
 - omit cookies and return refresh token + expiry in JSON for `body`
+- re-check the submitted password under a `User` row lock before inserting a session, so a concurrent password change/reset cannot leave a session issued from a stale first `check_password`
+
+Password change must:
+
+- require the current password
+- reject a new password that still matches the current hash
+- revoke other `UserSession` rows for that user; keep the current session
+- revoke live email-change and password-reset proofs in the same transaction after locking `User`
+
+Password reset request must:
+
+- return the same HTTP status and JSON body whether or not the email belongs to an eligible account
+- not include tokens, expiry, or account identifiers
+- return 503 before any user lookup when `RESEND_API_KEY` is missing
+
+Password reset confirm must:
+
+- accept the token in the JSON body
+- not create a session
+- reject a new password that still matches the current hash
+- revoke all sessions for that user
+
+These HTTP guarantees do not include equal response timings or whether an email is delivered.
 
 Refresh must:
 
@@ -301,6 +327,9 @@ Auth throttling for public auth mutation endpoints is implemented via DRF `Scope
 - `POST /api/v1/invitations/accept/`
 - `POST /api/v1/auth/email-change/`
 - `POST /api/v1/auth/email-change/confirm/`
+- `POST /api/v1/auth/password-change/`
+- `POST /api/v1/auth/password-reset/`
+- `POST /api/v1/auth/password-reset/confirm/`
 
 ### Throttling response contract (429)
 
@@ -328,6 +357,9 @@ Auth throttling for public auth mutation endpoints is implemented via DRF `Scope
 - `HOUSTON_THROTTLE_AUTH_INVITATION_ACCEPT`
 - `HOUSTON_THROTTLE_AUTH_EMAIL_CHANGE`
 - `HOUSTON_THROTTLE_AUTH_EMAIL_CHANGE_CONFIRM`
+- `HOUSTON_THROTTLE_AUTH_PASSWORD_CHANGE`
+- `HOUSTON_THROTTLE_AUTH_PASSWORD_RESET`
+- `HOUSTON_THROTTLE_AUTH_PASSWORD_RESET_CONFIRM`
 
 ### Known intentional debts (post-MVP)
 
@@ -335,7 +367,7 @@ Auth throttling for public auth mutation endpoints is implemented via DRF `Scope
 - no fingerprint per identifier
 - no throttling by refresh-cookie hash
 - Redis shared requirement in prod multi-worker
-- invitation and email-change Celery tasks receive the raw confirmation token as a broker argument (`argsrepr` redacts Celery UI, not Redis payload)
+- invitation, email-change, and password-reset Celery tasks receive the raw confirmation token as a broker argument (`argsrepr` redacts Celery UI, not Redis payload)
 
 ### Remaining security TODOs
 

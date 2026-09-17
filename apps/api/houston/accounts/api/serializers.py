@@ -6,6 +6,7 @@ from drf_spectacular.utils import extend_schema_serializer
 from rest_framework import serializers
 
 from houston.accounts.models import User
+from houston.accounts.tokens import digest_token
 
 REFRESH_TOKEN_TRANSPORT_COOKIE = "cookie"
 REFRESH_TOKEN_TRANSPORT_BODY = "body"
@@ -141,6 +142,72 @@ class EmailChangeConfirmRequestSerializer(serializers.Serializer):
 
 class EmailChangeConfirmResponseSerializer(serializers.Serializer):
     email = serializers.EmailField()
+
+
+class PasswordChangeRequestSerializer(serializers.Serializer):
+    current_password = serializers.CharField(trim_whitespace=False)
+    password = serializers.CharField(trim_whitespace=False)
+    password_confirmation = serializers.CharField(trim_whitespace=False)
+
+    def validate_current_password(self, value: str) -> str:
+        if not value:
+            raise serializers.ValidationError("This field may not be blank.")
+        return value
+
+    def validate_password(self, value: str) -> str:
+        if not value:
+            raise serializers.ValidationError("This field may not be blank.")
+        return value
+
+    def validate_password_confirmation(self, value: str) -> str:
+        if not value:
+            raise serializers.ValidationError("This field may not be blank.")
+        return value
+
+    def validate(self, attrs: dict) -> dict:
+        return validate_created_password_pair(
+            attrs=attrs,
+            user=self.context.get("user"),
+        )
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class PasswordResetRequestResponseSerializer(serializers.Serializer):
+    detail = serializers.CharField()
+
+
+class PasswordResetConfirmRequestSerializer(serializers.Serializer):
+    token = serializers.CharField()
+    password = serializers.CharField(trim_whitespace=False)
+    password_confirmation = serializers.CharField(trim_whitespace=False)
+
+    def validate_token(self, value: str) -> str:
+        if not value.strip():
+            raise serializers.ValidationError("This field may not be blank.")
+        return value
+
+    def validate_password(self, value: str) -> str:
+        if not value:
+            raise serializers.ValidationError("This field may not be blank.")
+        return value
+
+    def validate_password_confirmation(self, value: str) -> str:
+        if not value:
+            raise serializers.ValidationError("This field may not be blank.")
+        return value
+
+    def validate(self, attrs: dict) -> dict:
+        return validate_created_password_pair(
+            attrs=attrs,
+            user=_user_for_password_reset_validation(attrs["token"]),
+        )
+
+
+class PasswordResetConfirmResponseSerializer(serializers.Serializer):
+    detail = serializers.CharField()
 
 
 class AccountDeletionOrganizationSerializer(serializers.Serializer):
@@ -288,6 +355,22 @@ def _user_for_invitation_password_validation(raw_token: str) -> User | None:
     if invitation is None:
         return None
     return invitation.membership.user
+
+
+def _user_for_password_reset_validation(raw_token: str) -> User | None:
+    from houston.accounts.models import PasswordResetRequest
+
+    token = raw_token.strip()
+    if not token:
+        return None
+    reset = (
+        PasswordResetRequest.objects.select_related("user")
+        .filter(token_digest=digest_token(token))
+        .first()
+    )
+    if reset is None:
+        return None
+    return reset.user
 
 
 class RegistrationOwnerValidateRequestSerializer(serializers.Serializer):

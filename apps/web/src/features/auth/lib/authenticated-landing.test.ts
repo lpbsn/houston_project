@@ -318,9 +318,12 @@ describe('resolveAuthenticatedLanding', () => {
 })
 
 describe('shouldRedirectAuthenticatedPublicRoute', () => {
-  it('returns true for root and login only', () => {
+  it('returns true for root, login, and forgot-password', () => {
     expect(shouldRedirectAuthenticatedPublicRoute({ kind: 'static', path: '/' })).toBe(true)
     expect(shouldRedirectAuthenticatedPublicRoute({ kind: 'static', path: '/login' })).toBe(true)
+    expect(
+      shouldRedirectAuthenticatedPublicRoute({ kind: 'static', path: '/forgot-password' }),
+    ).toBe(true)
     expect(shouldRedirectAuthenticatedPublicRoute({ kind: 'unknown', pathname: '/foo' })).toBe(
       false,
     )
@@ -377,9 +380,10 @@ describe('routeAllowsMissingActiveMembership', () => {
 })
 
 describe('allowsUnauthenticatedAccess', () => {
-  it('returns true for login and onboarding', () => {
+  it('returns true for login, onboarding, and forgot-password', () => {
     expect(allowsUnauthenticatedAccess({ kind: 'static', path: '/login' })).toBe(true)
     expect(allowsUnauthenticatedAccess({ kind: 'static', path: '/onboarding' })).toBe(true)
+    expect(allowsUnauthenticatedAccess({ kind: 'static', path: '/forgot-password' })).toBe(true)
   })
 
   it('returns false for protected and unknown routes', () => {

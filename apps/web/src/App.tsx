@@ -81,6 +81,8 @@ import {
 } from '@/features/auth/lib/team-list-ui-state'
 import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-accept-page'
 import { EmailChangeConfirmPage } from '@/features/auth/pages/email-change-confirm-page'
+import { ForgotPasswordPage } from '@/features/auth/pages/forgot-password-page'
+import { PasswordResetConfirmPage } from '@/features/auth/pages/password-reset-confirm-page'
 import { OperationalConfigPage } from '@/features/establishment-config/pages/operational-config-page'
 import { OnboardingPage } from '@/features/onboarding/pages/onboarding-page'
 import { NotificationCenter } from '@/features/notifications/components/notification-center'
@@ -179,6 +181,12 @@ function App() {
     const landingPath = getAuthenticatedLandingPath(auth.bootstrap, {
       isDesktop: isDesktopWeb,
     })
+    if (route.kind === 'static' && route.path === '/forgot-password') {
+      navigate(auth.hasOperationalAccess ? '/general' : (landingPath ?? '/login'), {
+        replace: true,
+      })
+      return
+    }
     const openSession = {
       getActiveEstablishmentId: () =>
         auth.bootstrap?.active_membership?.establishment_id ?? null,
@@ -587,6 +595,10 @@ function App() {
       return <EmailChangeConfirmPage />
     }
 
+    if (route.kind === 'password-reset') {
+      return <PasswordResetConfirmPage />
+    }
+
     if (route.kind === 'unknown') {
       const fallbackPath = !auth.isAuthenticated
         ? '/login'
@@ -942,6 +954,10 @@ function App() {
     return <LoginPage onNavigate={navigate} />
   }
 
+  if (route.kind === 'static' && route.path === '/forgot-password') {
+    return <ForgotPasswordPage onNavigate={navigate} />
+  }
+
   if (route.kind === 'static' && route.path === '/onboarding') {
     const onboardingPage = (
       <div
@@ -995,6 +1011,14 @@ function App() {
               'Validez la nouvelle adresse depuis le lien reçu. Votre session n’est pas créée ici.',
             actions: auth.isAuthenticated ? signOutAction : signInAction,
           }
+        : route.kind === 'password-reset'
+          ? {
+              headingBadge: 'Compte',
+              title: 'Nouveau mot de passe',
+              description:
+                'Définissez un nouveau mot de passe depuis le lien reçu, puis reconnectez-vous.',
+              actions: auth.isAuthenticated ? signOutAction : signInAction,
+            }
       : route.kind === 'static' && route.path === '/onboarding'
             ? {
                 headingBadge: 'Onboarding',

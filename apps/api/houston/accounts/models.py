@@ -96,6 +96,36 @@ class EmailChangeRequest(BaseModel):
         return f"Email change for {self.user_id}"
 
 
+class PasswordResetRequest(BaseModel):
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="password_reset_requests",
+        db_index=False,
+    )
+    email_at_issue = models.EmailField()
+    token_digest = models.CharField(max_length=64, unique=True, db_index=True)
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user"],
+                condition=Q(revoked_at__isnull=True, consumed_at__isnull=True),
+                name="accounts_password_reset_one_live",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["user"], name="password_reset_user_idx"),
+            models.Index(fields=["expires_at"], name="password_reset_expires_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Password reset for {self.user_id}"
+
+
 class UserSession(BaseModel):
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"

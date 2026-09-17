@@ -5,7 +5,7 @@ from django.middleware.csrf import CsrfViewMiddleware, get_token
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework import permissions, status
+from rest_framework import permissions, serializers, status
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
@@ -30,6 +30,11 @@ from houston.accounts.api.serializers import (
     LegalVersionRequestSerializer,
     LoginRequestSerializer,
     LogoutRequestSerializer,
+    PasswordChangeRequestSerializer,
+    PasswordResetConfirmRequestSerializer,
+    PasswordResetConfirmResponseSerializer,
+    PasswordResetRequestResponseSerializer,
+    PasswordResetRequestSerializer,
     RefreshRequestSerializer,
     RegistrationOwnerValidateRequestSerializer,
     RegistrationRequestSerializer,
@@ -61,6 +66,20 @@ from houston.accounts.email_change_services import (
     confirm_email_change,
     request_email_change,
 )
+from houston.accounts.password_services import (
+    INVALID_PASSWORD_RESET_TOKEN_DETAIL,
+    PASSWORD_RESET_REQUEST_DETAIL,
+    PASSWORD_RESET_UNAVAILABLE_DETAIL,
+    PASSWORD_UNCHANGED_DETAIL,
+    InvalidPasswordChangeCredentialsError,
+    InvalidPasswordResetTokenError,
+    PasswordRejectedError,
+    PasswordResetUnavailableError,
+    PasswordUnchangedError,
+    change_password,
+    confirm_password_reset,
+    request_password_reset,
+)
 from houston.accounts.selectors import _serialize_user, build_bootstrap_payload
 from houston.accounts.services import (
     AUTHENTICATION_FAILED_DETAIL,
@@ -75,7 +94,7 @@ from houston.accounts.services import (
     RegistrationDuplicateEmailError,
     authenticate_user,
     clear_refresh_cookie,
-    create_login_session,
+    create_password_authenticated_session,
     refresh_session,
     register_onboarding_owner,
     resolve_session_for_logout,
@@ -164,6 +183,11 @@ class LoginView(AuthRateLimitedMixin, APIView):
                 identifier=serializer.validated_data["identifier"],
                 password=serializer.validated_data["password"],
             )
+            bundle = create_password_authenticated_session(
+                request=request,
+                user=user,
+                password=serializer.validated_data["password"],
+            )
         except InvalidCredentialsError:
             return _api_error_response(
                 code="not_authenticated",
@@ -171,7 +195,6 @@ class LoginView(AuthRateLimitedMixin, APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        bundle = create_login_session(request=request, user=user)
         return _build_auth_response(
             payload=bundle.payload,
             raw_refresh_token=bundle.refresh_token.raw_token,
@@ -637,6 +660,127 @@ class EmailChangeConfirmView(AuthRateLimitedMixin, APIView):
             )
 
         return Response({"email": user.email})
+
+
+class PasswordChangeView(AuthRateLimitedMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_scope = settings.AUTH_THROTTLE_SCOPE_PASSWORD_CHANGE
+
+    @extend_schema(
+        tags=["auth"],
+        request=PasswordChangeRequestSerializer,
+        responses={
+            204: OpenApiResponse(description="Password changed."),
+            400: OpenApiResponse(response=ValidationErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            429: _THROTTLED_OPENAPI_RESPONSE,
+        },
+        description=(
+            "Changes the authenticated user's password. Requires the current password. "
+            "Revokes other sessions; the current session remains valid."
+        ),
+    )
+    def post(self, request):
+        serializer = PasswordChangeRequestSerializer(
+            data=request.data,
+            context={"user": request.user},
+        )
+        serializer.is_valid(raise_exception=True)
+        try:
+            change_password(
+                user=request.user,
+                current_password=serializer.validated_data["current_password"],
+                new_password=serializer.validated_data["password"],
+                current_session=request.auth.session,
+            )
+        except InvalidPasswordChangeCredentialsError:
+            return _api_error_response(
+                code="invalid_credentials",
+                detail=INVALID_CREDENTIALS_DETAIL,
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        except PasswordUnchangedError:
+            raise serializers.ValidationError({"password": [PASSWORD_UNCHANGED_DETAIL]}) from None
+        except PasswordRejectedError as exc:
+            raise serializers.ValidationError({"password": exc.messages}) from exc
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PasswordResetRequestView(AuthRateLimitedMixin, APIView):
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = settings.AUTH_THROTTLE_SCOPE_PASSWORD_RESET
+
+    @extend_schema(
+        tags=["auth"],
+        request=PasswordResetRequestSerializer,
+        responses={
+            200: PasswordResetRequestResponseSerializer,
+            400: OpenApiResponse(response=ValidationErrorResponseSerializer),
+            429: _THROTTLED_OPENAPI_RESPONSE,
+            503: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+        description=(
+            "Requests a password reset email. The HTTP response does not reveal whether "
+            "the address belongs to an account."
+        ),
+    )
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            request_password_reset(email=serializer.validated_data["email"])
+        except PasswordResetUnavailableError:
+            return _api_error_response(
+                code="password_reset_unavailable",
+                detail=PASSWORD_RESET_UNAVAILABLE_DETAIL,
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        return Response({"detail": PASSWORD_RESET_REQUEST_DETAIL})
+
+
+class PasswordResetConfirmView(AuthRateLimitedMixin, APIView):
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = settings.AUTH_THROTTLE_SCOPE_PASSWORD_RESET_CONFIRM
+
+    @extend_schema(
+        tags=["auth"],
+        request=PasswordResetConfirmRequestSerializer,
+        responses={
+            200: PasswordResetConfirmResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            429: _THROTTLED_OPENAPI_RESPONSE,
+        },
+        description=(
+            "Confirms a password reset with the token from the email. "
+            "The bearer is sent in the JSON body. Does not create a session."
+        ),
+    )
+    def post(self, request):
+        serializer = PasswordResetConfirmRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            confirm_password_reset(
+                raw_token=serializer.validated_data["token"],
+                new_password=serializer.validated_data["password"],
+            )
+        except InvalidPasswordResetTokenError:
+            return _api_error_response(
+                code="password_reset_invalid",
+                detail=INVALID_PASSWORD_RESET_TOKEN_DETAIL,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except PasswordUnchangedError:
+            raise serializers.ValidationError({"password": [PASSWORD_UNCHANGED_DETAIL]}) from None
+        except PasswordRejectedError as exc:
+            raise serializers.ValidationError({"password": exc.messages}) from exc
+
+        return Response({"detail": "Password has been reset."})
 
 
 class AccountDeletionPreviewView(APIView):

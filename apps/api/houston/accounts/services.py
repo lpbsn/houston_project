@@ -269,6 +269,22 @@ def create_login_session(*, request: HttpRequest, user: User) -> AuthSessionBund
     )
 
 
+@transaction.atomic
+def create_password_authenticated_session(
+    *,
+    request: HttpRequest,
+    user: User,
+    password: str,
+) -> AuthSessionBundle:
+    try:
+        locked_user = User.objects.select_for_update().get(pk=user.pk)
+    except User.DoesNotExist:
+        raise InvalidCredentialsError
+    if locked_user.status != User.Status.ACTIVE or not locked_user.check_password(password):
+        raise InvalidCredentialsError
+    return create_login_session(request=request, user=locked_user)
+
+
 def refresh_session(*, raw_refresh_token: str) -> AuthSessionBundle:
     reuse_detected = False
 
@@ -409,6 +425,17 @@ def revoke_session(*, session: UserSession) -> None:
         establishment_id=session.selected_establishment_id,
         session_id=session.id,
     )
+
+
+def revoke_user_sessions(*, user: User, exclude_session: UserSession | None = None) -> None:
+    sessions = UserSession.objects.filter(
+        user=user,
+        status=UserSession.Status.ACTIVE,
+    ).order_by("id")
+    for session in sessions:
+        if exclude_session is not None and session.pk == exclude_session.pk:
+            continue
+        revoke_session(session=session)
 
 
 def switch_selected_establishment(
