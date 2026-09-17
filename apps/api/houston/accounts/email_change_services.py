@@ -53,13 +53,8 @@ def request_email_change(*, user: User, password: str, new_email: str) -> EmailC
     normalized_email = User.normalize_email_value(new_email)
     if normalized_email is None:
         raise EmailChangeUnchangedError
-    if normalized_email == user.email:
-        raise EmailChangeUnchangedError
     if not settings.RESEND_API_KEY:
         raise EmailChangeUnavailableError
-
-    if User.objects.filter(email__iexact=normalized_email).exclude(pk=user.pk).exists():
-        raise EmailChangeDuplicateError
 
     raw_token = tokens.generate_raw_token()
     token_digest = tokens.digest_token(raw_token)
@@ -68,6 +63,14 @@ def request_email_change(*, user: User, password: str, new_email: str) -> EmailC
 
     with transaction.atomic():
         locked_user = User.objects.select_for_update().get(pk=user.pk)
+        if locked_user.status != User.Status.ACTIVE:
+            raise InvalidEmailChangeCredentialsError
+        if not locked_user.check_password(password):
+            raise InvalidEmailChangeCredentialsError
+        if normalized_email == locked_user.email:
+            raise EmailChangeUnchangedError
+        if User.objects.filter(email__iexact=normalized_email).exclude(pk=locked_user.pk).exists():
+            raise EmailChangeDuplicateError
         EmailChangeRequest.objects.filter(
             user=locked_user,
             revoked_at__isnull=True,
@@ -105,6 +108,8 @@ def confirm_email_change(*, raw_token: str) -> User:
             .first()
         )
         if change is None or _email_change_skip_reason(change, now=now) is not None:
+            raise InvalidEmailChangeTokenError
+        if locked_user.status != User.Status.ACTIVE:
             raise InvalidEmailChangeTokenError
 
         if (

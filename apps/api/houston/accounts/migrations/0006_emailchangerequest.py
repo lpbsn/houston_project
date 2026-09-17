@@ -53,8 +53,8 @@ class Migration(migrations.Migration):
             model_name="emailchangerequest",
             constraint=models.UniqueConstraint(
                 condition=models.Q(
-                    ("revoked_at__isnull", True),
                     ("consumed_at__isnull", True),
+                    ("revoked_at__isnull", True),
                 ),
                 fields=("user",),
                 name="accounts_email_change_one_live",

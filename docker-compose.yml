@@ -17,7 +17,7 @@ x-api-environment: &api_environment
   POSTGRES_PORT: ${POSTGRES_PORT:-5432}
   POSTGRES_USER: ${POSTGRES_USER:-houston}
   POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-}
-  
+
   REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
   CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
   CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}

@@ -28,14 +28,17 @@ const authState = vi.hoisted(() => ({
   memberships: [] as unknown[],
 }))
 
-vi.mock('@/app/app-routes', () => ({
-  useAppRoute: () => ({
-    route: routeState.route,
-    navigate,
-    search: window.location.search,
-  }),
-  serializeAppRoute: () => '/',
-}))
+vi.mock('@/app/app-routes', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/app/app-routes')>()
+  return {
+    ...actual,
+    useAppRoute: () => ({
+      route: routeState.route,
+      navigate,
+      search: window.location.search,
+    }),
+  }
+})
 
 vi.mock('@/app/auth-provider', () => ({
   useAuth: () => authState,

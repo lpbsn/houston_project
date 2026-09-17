@@ -91,6 +91,82 @@ def test_missing_resend_key_is_fail_closed():
 
 
 @override_settings(RESEND_API_KEY="re_test_key")
+def test_stale_password_after_lock_does_not_create_request(monkeypatch):
+    user = _user()
+    monkeypatch.setattr(
+        "houston.accounts.email_change_services._enqueue_email_change_email",
+        _enqueue_inline,
+    )
+    user_select_for_update = User.objects.select_for_update
+
+    def _user_select_for_update(*args, **kwargs):
+        user.set_password("AnotherSecurePass456!")
+        user.save(update_fields=["password"])
+        return user_select_for_update(*args, **kwargs)
+
+    monkeypatch.setattr(User.objects, "select_for_update", _user_select_for_update)
+
+    with pytest.raises(InvalidEmailChangeCredentialsError):
+        request_email_change(
+            user=user,
+            password=TEST_PASSWORD,
+            new_email="next@example.com",
+        )
+
+    assert EmailChangeRequest.objects.count() == 0
+
+
+@override_settings(RESEND_API_KEY="re_test_key")
+def test_email_already_applied_after_lock_is_unchanged(monkeypatch):
+    user = _user()
+    monkeypatch.setattr(
+        "houston.accounts.email_change_services._enqueue_email_change_email",
+        _enqueue_inline,
+    )
+    user_select_for_update = User.objects.select_for_update
+
+    def _user_select_for_update(*args, **kwargs):
+        user.email = "next@example.com"
+        user.save(update_fields=["email"])
+        return user_select_for_update(*args, **kwargs)
+
+    monkeypatch.setattr(User.objects, "select_for_update", _user_select_for_update)
+
+    with pytest.raises(EmailChangeUnchangedError):
+        request_email_change(
+            user=user,
+            password=TEST_PASSWORD,
+            new_email="next@example.com",
+        )
+
+    assert EmailChangeRequest.objects.count() == 0
+
+
+@override_settings(RESEND_API_KEY="re_test_key")
+@pytest.mark.parametrize(
+    "status",
+    [User.Status.PENDING, User.Status.SUSPENDED, User.Status.ANONYMIZED],
+)
+def test_initiate_rejects_non_active_user(monkeypatch, status):
+    user = _user(username=f"email-{status}")
+    user.status = status
+    user.save(update_fields=["status"])
+    monkeypatch.setattr(
+        "houston.accounts.email_change_services._enqueue_email_change_email",
+        _enqueue_inline,
+    )
+
+    with pytest.raises(InvalidEmailChangeCredentialsError):
+        request_email_change(
+            user=user,
+            password=TEST_PASSWORD,
+            new_email="next@example.com",
+        )
+
+    assert EmailChangeRequest.objects.count() == 0
+
+
+@override_settings(RESEND_API_KEY="re_test_key")
 def test_same_email_is_rejected(monkeypatch):
     user = _user()
     monkeypatch.setattr(
@@ -163,6 +239,32 @@ def test_confirm_applies_new_email(monkeypatch):
 
     with pytest.raises(InvalidEmailChangeTokenError):
         confirm_email_change(raw_token="confirm-token")
+
+
+@override_settings(RESEND_API_KEY="re_test_key")
+@pytest.mark.parametrize(
+    "status",
+    [User.Status.PENDING, User.Status.SUSPENDED, User.Status.ANONYMIZED],
+)
+def test_confirm_rejects_non_active_user(monkeypatch, status):
+    user = _user(username=f"confirm-{status}")
+    monkeypatch.setattr("houston.accounts.tokens.generate_raw_token", lambda: "inactive-token")
+    monkeypatch.setattr(
+        "houston.accounts.email_change_services._enqueue_email_change_email",
+        _enqueue_inline,
+    )
+    request_email_change(user=user, password=TEST_PASSWORD, new_email="next@example.com")
+    user.status = status
+    user.save(update_fields=["status"])
+
+    with pytest.raises(InvalidEmailChangeTokenError):
+        confirm_email_change(raw_token="inactive-token")
+
+    user.refresh_from_db()
+    assert user.email == "live@example.com"
+    change = EmailChangeRequest.objects.get(token_digest=digest_token("inactive-token"))
+    assert change.consumed_at is None
+    assert change.revoked_at is None
 
 
 @override_settings(RESEND_API_KEY="re_test_key")
