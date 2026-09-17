@@ -444,3 +444,55 @@ def test_accept_over_limit_returns_429(api_client, monkeypatch):
         assert response.json()["code"] == "throttled"
         assert response.json()["detail"].startswith("Request was throttled")
         caches["default"].clear()
+
+
+def test_accept_invitation_short_password_returns_400_and_leaves_membership(api_client):
+    owner = create_user(username="director_weak_password_owner")
+    session = create_onboarding_session(actor=owner)
+    invitation_result = invite_director_for_session(session=session, owner=owner)
+    csrf_token = ensure_csrf(api_client)
+    short_password = "a" * 11
+
+    response = post_accept(
+        api_client,
+        csrf_token,
+        invitation_result.invitation_token,
+        {
+            "password": short_password,
+            "password_confirmation": short_password,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.data["code"] == "validation_error"
+    assert "password" in response.data["errors"]
+    invitation_result.membership.refresh_from_db()
+    assert invitation_result.membership.status == EstablishmentMembership.Status.INVITED
+    user = invitation_result.membership.user
+    user.refresh_from_db()
+    assert user.status == User.Status.PENDING
+
+
+def test_accept_invitation_common_password_returns_400_and_leaves_membership(api_client):
+    owner = create_user(username="director_common_password_owner")
+    session = create_onboarding_session(actor=owner)
+    invitation_result = invite_director_for_session(session=session, owner=owner)
+    csrf_token = ensure_csrf(api_client)
+    common_password = "password12345"
+
+    response = post_accept(
+        api_client,
+        csrf_token,
+        invitation_result.invitation_token,
+        {
+            "password": common_password,
+            "password_confirmation": common_password,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.data["code"] == "validation_error"
+    assert "password" in response.data["errors"]
+    invitation_result.membership.refresh_from_db()
+    assert invitation_result.membership.status == EstablishmentMembership.Status.INVITED
+

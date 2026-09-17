@@ -165,6 +165,28 @@ describe('native deep links', () => {
     expect(history.getHref()).toBe('/invitations#token-abc')
   })
 
+  it('opens a public email-change confirm without waiting for a session', async () => {
+    getLaunchUrl.mockResolvedValue({ url: `${PUBLIC_ORIGIN}/email-change#token-abc` })
+    const history = await configure()
+    setNativeDeepLinkSessionGetters({
+      isReady: () => true,
+      isAuthenticated: () => false,
+    })
+    await applyPendingNativeDeepLink()
+    expect(history.getHref()).toBe('/email-change#token-abc')
+  })
+
+  it('opens a public password-reset confirm without waiting for a session', async () => {
+    getLaunchUrl.mockResolvedValue({ url: `${PUBLIC_ORIGIN}/password-reset#token-abc` })
+    const history = await configure()
+    setNativeDeepLinkSessionGetters({
+      isReady: () => true,
+      isAuthenticated: () => false,
+    })
+    await applyPendingNativeDeepLink()
+    expect(history.getHref()).toBe('/password-reset#token-abc')
+  })
+
   it('clears a pending open on demand', async () => {
     getLaunchUrl.mockResolvedValue({ url: SIGNAL_URL })
     await configure()

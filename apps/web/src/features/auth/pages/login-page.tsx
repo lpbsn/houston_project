@@ -73,7 +73,7 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
             className="size-20 object-contain"
           />
         </div>
-        <LoginForm />
+        <LoginForm onNavigate={onNavigate} />
       </main>
 
       <footer className="pb-[max(1.5rem,var(--app-safe-bottom))] text-center text-xs text-[#9CA3AF]">

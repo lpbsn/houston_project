@@ -834,6 +834,7 @@ export async function fetchBootstrap() {
     throw buildAuthError(result.response, result.error, 'Your session is not available.')
   }
 
+  queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, result.data)
   return result.data
 }
 
@@ -903,7 +904,6 @@ export async function resyncBootstrapAfterLegalError(error: unknown) {
   }
   try {
     const data = await fetchBootstrap()
-    queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, data)
     return data
   } catch {
     return null
@@ -1123,7 +1123,6 @@ export async function activateMembership(establishmentId: string, membershipId: 
 export type UserProfileUpdateRequest = {
   first_name?: string
   last_name?: string
-  email?: string | null
 }
 
 export async function updateUserProfile(input: UserProfileUpdateRequest) {
@@ -1145,6 +1144,97 @@ export async function updateUserProfile(input: UserProfileUpdateRequest) {
   }
 
   queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, result.data)
+  return result.data
+}
+
+export async function requestEmailChange(input: { password: string; new_email: string }) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/auth/email-change/', {
+        body: input,
+        headers: accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+            }
+          : undefined,
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildAuthError(result.response, result.error, 'Email change could not be requested.')
+  }
+
+  return result.data
+}
+
+export async function confirmEmailChange(token: string) {
+  const result = await apiClient.POST('/api/v1/auth/email-change/confirm/', {
+    body: { token },
+  })
+
+  if (result.error || !result.data) {
+    throw buildAuthError(result.response, result.error, 'Email change could not be confirmed.')
+  }
+
+  return result.data
+}
+
+export async function changePassword(input: {
+  current_password: string
+  password: string
+  password_confirmation: string
+}) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/auth/password-change/', {
+        body: input,
+        headers: accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+            }
+          : undefined,
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || result.response.status !== 204) {
+    throw buildAuthError(result.response, result.error, 'Password could not be changed.')
+  }
+}
+
+export async function requestPasswordReset(input: { email: string }) {
+  const result = await apiClient.POST('/api/v1/auth/password-reset/', {
+    body: input,
+  })
+
+  if (result.error || !result.data) {
+    throw buildAuthError(result.response, result.error, 'Password reset could not be requested.')
+  }
+
+  return result.data
+}
+
+export async function confirmPasswordReset(input: {
+  token: string
+  password: string
+  password_confirmation: string
+}) {
+  const result = await apiClient.POST('/api/v1/auth/password-reset/confirm/', {
+    body: input,
+  })
+
+  if (result.error || !result.data) {
+    const fieldErrors = parseRegistrationFieldErrors(result.error)
+    const passwordMessage =
+      fieldErrors?.password?.join(' ') ?? fieldErrors?.password_confirmation?.[0]
+    throw buildAuthError(
+      result.response,
+      result.error,
+      passwordMessage ?? 'Password reset could not be confirmed.',
+    )
+  }
+
   return result.data
 }
 

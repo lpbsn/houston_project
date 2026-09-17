@@ -52,24 +52,41 @@ describe('InvitationAcceptPage', () => {
     expect(screen.queryByLabelText('Invitation code')).toBeNull()
   })
 
-  it('shows a code field when the fragment is missing', () => {
-    renderPage('/invitations')
+  it('shows a missing-link state when the fragment is absent', () => {
+    const { history } = renderPage('/invitations')
 
-    expect(screen.getByLabelText('Invitation code')).toBeTruthy()
+    expect(screen.queryByLabelText('Invitation code')).toBeNull()
+    expect(screen.queryByLabelText(/^mot de passe$/i)).toBeNull()
+    expect(
+      screen.getByText(
+        'This invitation link is missing or invalid. Open the link from your email to continue.',
+      ),
+    ).toBeTruthy()
+    expect(acceptDirectorInvitation).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(history.getHref()).toBe('/login')
   })
 
   it('does not treat a path segment as an invitation secret', () => {
     const { history } = renderPage('/invitations/legacy-token')
 
     expect(history.getHref()).toBe('/invitations/legacy-token')
-    expect(screen.getByLabelText('Invitation code')).toBeTruthy()
+    expect(screen.queryByLabelText('Invitation code')).toBeNull()
+    expect(screen.queryByLabelText(/^mot de passe$/i)).toBeNull()
+    expect(
+      screen.getByText(
+        'This invitation link is missing or invalid. Open the link from your email to continue.',
+      ),
+    ).toBeTruthy()
+    expect(acceptDirectorInvitation).not.toHaveBeenCalled()
   })
 
   it('submits the remembered fragment token in the accept call', async () => {
     renderPage('/invitations#invite-token')
 
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'SecurePass123!' } })
-    fireEvent.change(screen.getByLabelText('Confirm password'), {
+    fireEvent.change(screen.getByLabelText(/^mot de passe$/i), { target: { value: 'SecurePass123!' } })
+    fireEvent.change(screen.getByLabelText(/confirmer le mot de passe/i), {
       target: { value: 'SecurePass123!' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Accept invitation' }))
@@ -80,5 +97,15 @@ describe('InvitationAcceptPage', () => {
         password_confirmation: 'SecurePass123!',
       })
     })
+  })
+
+  it('does not submit when confirmation does not match', () => {
+    renderPage('/invitations#invite-token')
+    fireEvent.change(screen.getByLabelText(/^mot de passe$/i), { target: { value: 'SecurePass123!' } })
+    fireEvent.change(screen.getByLabelText(/confirmer le mot de passe/i), {
+      target: { value: 'DifferentPass12' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Accept invitation' }))
+    expect(acceptDirectorInvitation).not.toHaveBeenCalled()
   })
 })

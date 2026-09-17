@@ -86,9 +86,20 @@ def delete_authenticated_account(
     if required_orgs and not close_organizations:
         raise OrganizationClosureRequiredError
 
+    locked_user = User.objects.select_for_update().get(pk=user.pk)
+    if locked_user.status != User.Status.ACTIVE or not locked_user.check_password(password):
+        raise InvalidAccountDeletionPasswordError
+
+    now = timezone.now()
+    from houston.accounts.email_change_services import revoke_live_email_change_requests
+    from houston.accounts.password_services import revoke_live_password_reset_requests
+
+    revoke_live_email_change_requests(user=locked_user, now=now)
+    revoke_live_password_reset_requests(user=locked_user, now=now)
+
     memberships = list(
         EstablishmentMembership.objects.select_for_update()
-        .filter(user=user)
+        .filter(user=locked_user)
         .order_by("id")
     )
     membership_ids = [membership.id for membership in memberships]
@@ -99,10 +110,10 @@ def delete_authenticated_account(
 
     _deactivate_user_memberships(memberships=memberships)
     _scrub_submitted_content(membership_ids=membership_ids)
-    _delete_unlinked_uploads(user=user)
-    _revoke_push_devices(user=user)
-    _anonymize_user(user=user)
-    _destroy_sessions(user=user)
+    _delete_unlinked_uploads(user=locked_user)
+    _revoke_push_devices(user=locked_user)
+    _anonymize_user(user=locked_user)
+    _destroy_sessions(user=locked_user)
 
 
 def _deactivate_user_memberships(*, memberships: list[EstablishmentMembership]) -> None:

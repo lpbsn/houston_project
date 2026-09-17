@@ -1,4 +1,4 @@
-import { parseAppRoute, serializeAppRoute, type AppRoute } from '@/app/app-routes'
+import { parseAppRoute, serializeAppRoute, type AppRoute, isHashTokenPublicRoute } from '@/app/app-routes'
 import {
   allowsUnauthenticatedAccess,
   shouldRedirectUnauthenticatedPublicRoute,
@@ -34,7 +34,7 @@ function searchWithoutEstablishmentId(search: string): string {
 
 export function isPublicAppOpenTarget(target: AppOpenTarget): boolean {
   const route = parseAppRoute(target.href)
-  return route.kind === 'invitation' || allowsUnauthenticatedAccess(route)
+  return isHashTokenPublicRoute(route) || allowsUnauthenticatedAccess(route)
 }
 
 export function isPendingDestinationHref(href: string): boolean {
@@ -43,7 +43,7 @@ export function isPendingDestinationHref(href: string): boolean {
   }
 
   const route = parseAppRoute(href)
-  if (route.kind === 'unknown' || route.kind === 'invitation') {
+  if (route.kind === 'unknown' || isHashTokenPublicRoute(route)) {
     return false
   }
   if (allowsUnauthenticatedAccess(route) || shouldRedirectUnauthenticatedPublicRoute(route)) {
@@ -77,7 +77,7 @@ export function parseExternalAppUrl(
   const establishmentId = readEstablishmentIdParam(params)
   params.delete('establishment_id')
   const qs = params.toString()
-  const hash = parseAppRoute(incoming.pathname).kind === 'invitation' ? incoming.hash : ''
+  const hash = isHashTokenPublicRoute(parseAppRoute(incoming.pathname)) ? incoming.hash : ''
   const href = `${incoming.pathname}${qs ? `?${qs}` : ''}${hash}`
   const route = parseAppRoute(href)
   if (route.kind === 'unknown') {
@@ -88,7 +88,7 @@ export function parseExternalAppUrl(
 }
 
 export function parseAppOpenTargetFromLocation(route: AppRoute, search: string): AppOpenTarget | null {
-  if (route.kind === 'unknown' || route.kind === 'invitation') {
+  if (route.kind === 'unknown' || isHashTokenPublicRoute(route)) {
     return null
   }
   if (allowsUnauthenticatedAccess(route) || shouldRedirectUnauthenticatedPublicRoute(route)) {

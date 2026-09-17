@@ -217,6 +217,32 @@ describe('parseAppRoute', () => {
       pathname: '/invitations/token-abc',
     })
   })
+
+  it('parses email-change routes', () => {
+    expect(parseAppRoute('/email-change')).toEqual({
+      kind: 'email-change',
+    })
+    expect(parseAppRoute('/email-change#token-abc')).toEqual({
+      kind: 'email-change',
+    })
+    expect(parseAppRoute('/email-change/token-abc')).toEqual({
+      kind: 'unknown',
+      pathname: '/email-change/token-abc',
+    })
+  })
+
+  it('parses password-reset routes', () => {
+    expect(parseAppRoute('/password-reset')).toEqual({
+      kind: 'password-reset',
+    })
+    expect(parseAppRoute('/password-reset#token-abc')).toEqual({
+      kind: 'password-reset',
+    })
+    expect(parseAppRoute('/password-reset/token-abc')).toEqual({
+      kind: 'unknown',
+      pathname: '/password-reset/token-abc',
+    })
+  })
 })
 
 describe('getAppRouteKey', () => {
@@ -271,6 +297,9 @@ describe('serializeAppRoute', () => {
       '/team/member-1',
       '/organization/establishments/est-1',
       '/invitations',
+      '/email-change',
+      '/password-reset',
+      '/forgot-password',
       '/foo/bar',
     ]
 

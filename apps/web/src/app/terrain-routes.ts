@@ -1,4 +1,4 @@
-import type { AppRoute } from '@/app/app-routes'
+import { isHashTokenPublicRoute, type AppRoute } from '@/app/app-routes'
 import {
   serializeScopedTerrainPath,
   type ScopedTerrainPage,
@@ -88,7 +88,7 @@ const TERRAIN_HUB_PATHS = new Set<string>([
 ])
 
 export function isProtectedRoute(route: AppRoute): boolean {
-  if (route.kind === 'unknown' || route.kind === 'invitation') {
+  if (route.kind === 'unknown' || isHashTokenPublicRoute(route)) {
     return false
   }
 
@@ -104,7 +104,7 @@ export function isProtectedRoute(route: AppRoute): boolean {
 }
 
 export function requiresActiveMembership(route: AppRoute): boolean {
-  if (route.kind === 'unknown' || route.kind === 'invitation') {
+  if (route.kind === 'unknown' || isHashTokenPublicRoute(route)) {
     return false
   }
 
@@ -136,7 +136,7 @@ export function requiresActiveMembership(route: AppRoute): boolean {
 }
 
 export function usesTerrainShell(route: AppRoute): boolean {
-  if (route.kind === 'unknown' || route.kind === 'invitation') {
+  if (route.kind === 'unknown' || isHashTokenPublicRoute(route)) {
     return false
   }
 

@@ -28,14 +28,17 @@ const authState = vi.hoisted(() => ({
   memberships: [] as unknown[],
 }))
 
-vi.mock('@/app/app-routes', () => ({
-  useAppRoute: () => ({
-    route: routeState.route,
-    navigate,
-    search: window.location.search,
-  }),
-  serializeAppRoute: () => '/',
-}))
+vi.mock('@/app/app-routes', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/app/app-routes')>()
+  return {
+    ...actual,
+    useAppRoute: () => ({
+      route: routeState.route,
+      navigate,
+      search: window.location.search,
+    }),
+  }
+})
 
 vi.mock('@/app/auth-provider', () => ({
   useAuth: () => authState,
@@ -110,6 +113,8 @@ function operationalBootstrap(): BootstrapResponse {
       identity_type: 'human',
       first_name: 'Staff',
       last_name: 'Member',
+      pending_email: null,
+      pending_email_expires_at: null,
       terms_version: 'cgu-v1',
       terms_accepted_at: '2026-01-01T00:00:00.000Z',
       current_terms_version: 'cgu-v1',

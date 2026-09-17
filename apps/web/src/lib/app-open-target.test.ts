@@ -34,6 +34,12 @@ describe('parseExternalAppUrl', () => {
     expect(parseExternalAppUrl('https://app.example.test/invitations#token-abc', PUBLIC_ORIGIN)).toEqual({
       href: '/invitations#token-abc',
     })
+    expect(parseExternalAppUrl('https://app.example.test/email-change#token-abc', PUBLIC_ORIGIN)).toEqual({
+      href: '/email-change#token-abc',
+    })
+    expect(parseExternalAppUrl('https://app.example.test/password-reset#token-abc', PUBLIC_ORIGIN)).toEqual({
+      href: '/password-reset#token-abc',
+    })
   })
 
   it('rejects http, other origins, custom schemes, and unknown product paths', () => {
@@ -57,6 +63,9 @@ describe('pending destination href', () => {
   it('allowlists AppRoute product destinations and rejects open redirects', () => {
     expect(isPendingDestinationHref('/signals/s1?tab=comments')).toBe(true)
     expect(isPendingDestinationHref('/invitations')).toBe(false)
+    expect(isPendingDestinationHref('/email-change')).toBe(false)
+    expect(isPendingDestinationHref('/password-reset')).toBe(false)
+    expect(isPendingDestinationHref('/forgot-password')).toBe(false)
     expect(isPendingDestinationHref('/login')).toBe(false)
     expect(isPendingDestinationHref('/')).toBe(false)
     expect(isPendingDestinationHref('https://evil.example/signals/s1')).toBe(false)
@@ -65,6 +74,8 @@ describe('pending destination href', () => {
 
   it('treats invitations as public opens', () => {
     expect(isPublicAppOpenTarget({ href: '/invitations#token-abc' })).toBe(true)
+    expect(isPublicAppOpenTarget({ href: '/email-change#token-abc' })).toBe(true)
+    expect(isPublicAppOpenTarget({ href: '/password-reset#token-abc' })).toBe(true)
     expect(isPublicAppOpenTarget({ href: '/signals/s1' })).toBe(false)
   })
 })
@@ -82,6 +93,8 @@ describe('parseAppOpenTargetFromLocation', () => {
   it('does not stash login, invitation, or public routes', () => {
     expect(parseAppOpenTargetFromLocation(parseAppRoute('/login'), '?next=/signals/s1')).toBeNull()
     expect(parseAppOpenTargetFromLocation(parseAppRoute('/invitations'), '')).toBeNull()
+    expect(parseAppOpenTargetFromLocation(parseAppRoute('/email-change'), '')).toBeNull()
+    expect(parseAppOpenTargetFromLocation(parseAppRoute('/password-reset'), '')).toBeNull()
     expect(parseAppOpenTargetFromLocation(parseAppRoute('/'), '')).toBeNull()
   })
 })

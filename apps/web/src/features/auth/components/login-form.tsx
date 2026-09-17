@@ -9,6 +9,10 @@ import { useAuth } from '@/app/auth-provider'
 import { terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
+type LoginFormProps = {
+  onNavigate: (path: string, options?: { replace?: boolean }) => void
+}
+
 function getLoginErrorMessage(error: Error | null) {
   if (error instanceof AuthApiError && error.status === 401) {
     return 'Identifiants invalides.'
@@ -17,7 +21,7 @@ function getLoginErrorMessage(error: Error | null) {
   return error ? 'La connexion a échoué.' : null
 }
 
-export function LoginForm() {
+export function LoginForm({ onNavigate }: LoginFormProps) {
   const { isLoggingIn, login, loginError } = useAuth()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
@@ -107,6 +111,13 @@ export function LoginForm() {
             </>
           )}
         </Button>
+        <button
+          type="button"
+          className="w-full text-center text-sm text-[#6B7280] underline-offset-2 hover:underline"
+          onClick={() => onNavigate('/forgot-password')}
+        >
+          Mot de passe oublié
+        </button>
       </form>
     </section>
   )

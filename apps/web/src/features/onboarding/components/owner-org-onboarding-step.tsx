@@ -11,6 +11,12 @@ import {
 import { resolvePendingLanding } from '@/features/auth/lib/pending-onboarding'
 import { OnboardingStepper } from '@/features/onboarding/components/onboarding-stepper'
 import { TermsAcceptCheckbox } from '@/features/auth/components/terms-accept-checkbox'
+import { PasswordCreationFields } from '@/features/auth/components/password-creation-fields'
+import {
+  canSubmitPasswordCreation,
+  evaluatePasswordCreation,
+  passwordCreationBlockerMessage,
+} from '@/features/auth/lib/password-creation'
 import { CURRENT_TERMS_VERSION } from '@/lib/legal'
 import {
   clearRegistrationSessionSnapshot,
@@ -100,8 +106,12 @@ export function OwnerOrgOnboardingStep({
       return false
     }
 
-    if (form.password !== form.password_confirmation) {
-      setFieldError('Les mots de passe ne correspondent pas.')
+    if (!canSubmitPasswordCreation(form.password, form.password_confirmation)) {
+      setFieldError(
+        passwordCreationBlockerMessage(
+          evaluatePasswordCreation(form.password, form.password_confirmation),
+        ) ?? 'Tous les champs sont obligatoires.',
+      )
       return false
     }
 
@@ -278,37 +288,12 @@ export function OwnerOrgOnboardingStep({
           />
         </label>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="block space-y-1.5" htmlFor="password">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
-              Mot de passe
-            </span>
-            <Input
-              id="password"
-              type="password"
-              autoComplete="new-password"
-              value={form.password}
-              onChange={(event) => updateField('password', event.target.value)}
-              className="h-11 rounded-xl border-spore-forest/15"
-              required
-            />
-          </label>
-
-          <label className="block space-y-1.5" htmlFor="password_confirmation">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">
-              Confirmer le mot de passe
-            </span>
-            <Input
-              id="password_confirmation"
-              type="password"
-              autoComplete="new-password"
-              value={form.password_confirmation}
-              onChange={(event) => updateField('password_confirmation', event.target.value)}
-              className="h-11 rounded-xl border-spore-forest/15"
-              required
-            />
-          </label>
-        </div>
+        <PasswordCreationFields
+          password={form.password}
+          confirmation={form.password_confirmation}
+          onPasswordChange={(value) => updateField('password', value)}
+          onConfirmationChange={(value) => updateField('password_confirmation', value)}
+        />
 
         <label className="block space-y-1.5" htmlFor="organization_name">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-spore-muted">

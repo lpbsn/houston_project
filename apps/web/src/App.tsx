@@ -1,7 +1,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 
-import { parseAppRoute, serializeAppRoute, useAppRoute, type AppRoute } from '@/app/app-routes'
+import { isHashTokenPublicRoute, parseAppRoute, serializeAppRoute, useAppRoute, type AppRoute } from '@/app/app-routes'
 import {
   serializeScopedExecutionDetailPath,
   serializeScopedSignalDetailPath,
@@ -80,6 +80,9 @@ import {
   shouldPreserveTeamListUiState,
 } from '@/features/auth/lib/team-list-ui-state'
 import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-accept-page'
+import { EmailChangeConfirmPage } from '@/features/auth/pages/email-change-confirm-page'
+import { ForgotPasswordPage } from '@/features/auth/pages/forgot-password-page'
+import { PasswordResetConfirmPage } from '@/features/auth/pages/password-reset-confirm-page'
 import { OperationalConfigPage } from '@/features/establishment-config/pages/operational-config-page'
 import { OnboardingPage } from '@/features/onboarding/pages/onboarding-page'
 import { NotificationCenter } from '@/features/notifications/components/notification-center'
@@ -145,7 +148,7 @@ function App() {
       }
 
   useEffect(() => {
-    if (!auth.isReady || route.kind === 'invitation') {
+    if (!auth.isReady || isHashTokenPublicRoute(route)) {
       return
     }
 
@@ -178,6 +181,12 @@ function App() {
     const landingPath = getAuthenticatedLandingPath(auth.bootstrap, {
       isDesktop: isDesktopWeb,
     })
+    if (route.kind === 'static' && route.path === '/forgot-password') {
+      navigate(auth.hasOperationalAccess ? '/general' : (landingPath ?? '/login'), {
+        replace: true,
+      })
+      return
+    }
     const openSession = {
       getActiveEstablishmentId: () =>
         auth.bootstrap?.active_membership?.establishment_id ?? null,
@@ -582,6 +591,14 @@ function App() {
       )
     }
 
+    if (route.kind === 'email-change') {
+      return <EmailChangeConfirmPage />
+    }
+
+    if (route.kind === 'password-reset') {
+      return <PasswordResetConfirmPage />
+    }
+
     if (route.kind === 'unknown') {
       const fallbackPath = !auth.isAuthenticated
         ? '/login'
@@ -929,12 +946,16 @@ function App() {
     [navigate, route],
   )
 
-  if (route.kind !== 'invitation' && shouldShowAuthRoutingLoading(route, auth)) {
+  if (!isHashTokenPublicRoute(route) && shouldShowAuthRoutingLoading(route, auth)) {
     return <AuthRoutingLoading />
   }
 
   if (route.kind === 'static' && route.path === '/login') {
     return <LoginPage onNavigate={navigate} />
+  }
+
+  if (route.kind === 'static' && route.path === '/forgot-password') {
+    return <ForgotPasswordPage onNavigate={navigate} />
   }
 
   if (route.kind === 'static' && route.path === '/onboarding') {
@@ -982,6 +1003,22 @@ function App() {
           description: 'Create your password to join this establishment in Houston.',
           actions: signInAction,
         }
+      : route.kind === 'email-change'
+        ? {
+            headingBadge: 'Compte',
+            title: 'Confirmer l’e-mail',
+            description:
+              'Validez la nouvelle adresse depuis le lien reçu. Votre session n’est pas créée ici.',
+            actions: auth.isAuthenticated ? signOutAction : signInAction,
+          }
+        : route.kind === 'password-reset'
+          ? {
+              headingBadge: 'Compte',
+              title: 'Nouveau mot de passe',
+              description:
+                'Définissez un nouveau mot de passe depuis le lien reçu, puis reconnectez-vous.',
+              actions: auth.isAuthenticated ? signOutAction : signInAction,
+            }
       : route.kind === 'static' && route.path === '/onboarding'
             ? {
                 headingBadge: 'Onboarding',

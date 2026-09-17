@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <body>
+    <p>Bonjour {{ first_name }},</p>
+    <p>Vous avez demandé à changer l'adresse e-mail de votre compte Spore.</p>
+    <p>
+      <a href="{{ confirm_url }}">Confirmer cette nouvelle adresse</a>
+    </p>
+    <p>Confirmez avant le {{ expires_at_label }}.</p>
+    <p>
+      Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer ce message.
+      Votre adresse actuelle reste inchangée.
+    </p>
+    <p>— Spore</p>
+  </body>
+</html>

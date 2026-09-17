@@ -69,7 +69,6 @@ type TeamMemberDetailPageProps = {
 type EditorDraft = {
   firstName: string
   lastName: string
-  email: string
   role: RoleEnum
   scopes: ReturnType<typeof businessUnitScopesFromApiItems>
 }
@@ -85,7 +84,6 @@ function buildEditorDraft(membership: EstablishmentMembershipDetailResponse): Ed
   return {
     firstName: membership.user.first_name ?? '',
     lastName: membership.user.last_name ?? '',
-    email: membership.user.email ?? '',
     role: normalizeTeamRole(membership.role),
     scopes: businessUnitScopesFromApiItems(membership.scopes),
   }
@@ -245,7 +243,7 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
     try {
       const membershipUpdates: { role?: RoleEnum; scopes?: typeof draft.scopes } = {}
       let profileChanged = false
-      const profilePayload: { first_name?: string; last_name?: string; email?: string } = {}
+      const profilePayload: { first_name?: string; last_name?: string } = {}
 
       if (hints?.can_edit_personal_info) {
         if (draft.firstName.trim() !== (membership.user.first_name ?? '')) {
@@ -254,10 +252,6 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
         }
         if (draft.lastName.trim() !== (membership.user.last_name ?? '')) {
           profilePayload.last_name = draft.lastName.trim()
-          profileChanged = true
-        }
-        if ((draft.email.trim() || null) !== (membership.user.email ?? null)) {
-          profilePayload.email = draft.email.trim() || null
           profileChanged = true
         }
       }
@@ -408,18 +402,7 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
               )}
             </TerrainDetailFieldCard>
             <TerrainDetailFieldCard label="Email">
-              {isEditing && hints?.can_edit_personal_info ? (
-                <Input
-                  type="email"
-                  value={effectiveDraft.email}
-                  onChange={(event) =>
-                    setDraft((current) =>
-                      current ? { ...current, email: event.target.value } : current,
-                    )
-                  }
-                  className="h-9 border-[#E8E6DF]"
-                />
-              ) : membership.user.email ? (
+              {membership.user.email ? (
                 <a href={`mailto:${membership.user.email}`} className="text-[#1B4FD8]">
                   {membership.user.email}
                 </a>

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from django.utils import timezone
+
 from houston.accounts.legal_constants import CURRENT_AI_CONSENT_VERSION, CURRENT_TERMS_VERSION
 from houston.accounts.legal_services import (
     has_current_ai_consent,
     has_current_terms,
     resolve_ai_consent_status,
 )
-from houston.accounts.models import User, UserSession
+from houston.accounts.models import EmailChangeRequest, User, UserSession
 from houston.accounts.permission_hints import build_bootstrap_permission_hints
 from houston.establishments.membership_scope import (
     membership_scope_prefetch,
@@ -177,11 +179,27 @@ def _active_membership_queryset(user: User):
     )
 
 
+def _live_email_change_for_user(user: User) -> EmailChangeRequest | None:
+    return (
+        EmailChangeRequest.objects.filter(
+            user=user,
+            revoked_at__isnull=True,
+            consumed_at__isnull=True,
+            expires_at__gt=timezone.now(),
+        )
+        .order_by("-created_at")
+        .first()
+    )
+
+
 def _serialize_user(user: User) -> dict:
+    pending = _live_email_change_for_user(user)
     return {
         "id": str(user.id),
         "username": user.username,
         "email": user.email,
+        "pending_email": None if pending is None else pending.new_email,
+        "pending_email_expires_at": None if pending is None else pending.expires_at,
         "identity_type": user.identity_type,
         "first_name": user.first_name or "",
         "last_name": user.last_name or "",

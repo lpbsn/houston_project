@@ -958,6 +958,116 @@ paths:
               schema:
                 $ref: '#/components/schemas/CsrfResponse'
           description: ''
+  /api/v1/auth/email-change/:
+    post:
+      operationId: v1_auth_email_change_create
+      description: Starts an email change. Requires the current password. The live
+        email does not change until the token sent to the new address is confirmed.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailChangeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EmailChangeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EmailChangeRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailChangeRequestResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/auth/email-change/confirm/:
+    post:
+      operationId: v1_auth_email_change_confirm_create
+      description: Confirms an email change with the token from the new inbox. The
+        bearer is sent in the JSON body. Does not create a session.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailChangeConfirmRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EmailChangeConfirmRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EmailChangeConfirmRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailChangeConfirmResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/auth/login/:
     post:
       operationId: v1_auth_login_create
@@ -1068,12 +1178,6 @@ paths:
                 $ref: '#/components/schemas/ValidationErrorResponse'
           description: ''
         '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '409':
           content:
             application/json:
               schema:
@@ -1277,6 +1381,140 @@ paths:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/auth/password-change/:
+    post:
+      operationId: v1_auth_password_change_create
+      description: Changes the authenticated user's password. Requires the current
+        password. Revokes other sessions; the current session remains valid.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '204':
+          description: Password changed.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/auth/password-reset/:
+    post:
+      operationId: v1_auth_password_reset_create
+      description: Requests a password reset email. The HTTP response does not reveal
+        whether the address belongs to an account.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordResetRequestResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/auth/password-reset/confirm/:
+    post:
+      operationId: v1_auth_password_reset_confirm_create
+      description: Confirms a password reset with the token from the email. The bearer
+        is sent in the JSON body. Does not create a session.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirmRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirmRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirmRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordResetConfirmResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '429':
           content:
             application/json:
               schema:
@@ -11996,6 +12234,44 @@ components:
       - invitation_expires_at
       - invitation_token
       - membership
+    EmailChangeConfirmRequest:
+      type: object
+      properties:
+        token:
+          type: string
+      required:
+      - token
+    EmailChangeConfirmResponse:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+      required:
+      - email
+    EmailChangeRequest:
+      type: object
+      properties:
+        password:
+          type: string
+        new_email:
+          type: string
+          format: email
+      required:
+      - new_email
+      - password
+    EmailChangeRequestResponse:
+      type: object
+      properties:
+        pending_email:
+          type: string
+          format: email
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - expires_at
+      - pending_email
     EmailSchedulingStatusEnum:
       enum:
       - requested
@@ -13849,6 +14125,54 @@ components:
       description: |-
         * `signal` - signal
         * `action_plan_execution` - action_plan_execution
+    PasswordChangeRequest:
+      type: object
+      properties:
+        current_password:
+          type: string
+        password:
+          type: string
+        password_confirmation:
+          type: string
+      required:
+      - current_password
+      - password
+      - password_confirmation
+    PasswordResetConfirmRequest:
+      type: object
+      properties:
+        token:
+          type: string
+        password:
+          type: string
+        password_confirmation:
+          type: string
+      required:
+      - password
+      - password_confirmation
+      - token
+    PasswordResetConfirmResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
+    PasswordResetRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+      required:
+      - email
+    PasswordResetRequestResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
     PatchedActionPlanExecutionUpdateRequest:
       type: object
       properties:
@@ -13980,10 +14304,6 @@ components:
           type: string
         last_name:
           type: string
-        email:
-          type: string
-          format: email
-          nullable: true
     PendingOnboardingMembership:
       type: object
       properties:
@@ -15112,6 +15432,14 @@ components:
           type: string
         last_name:
           type: string
+        pending_email:
+          type: string
+          format: email
+          nullable: true
+        pending_email_expires_at:
+          type: string
+          format: date-time
+          nullable: true
         terms_version:
           type: string
           nullable: true
@@ -15149,6 +15477,8 @@ components:
       - last_name
       - needs_ai_consent
       - needs_terms_acceptance
+      - pending_email
+      - pending_email_expires_at
       - terms_accepted_at
       - terms_version
       - username

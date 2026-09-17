@@ -30,17 +30,17 @@ afterEach(() => {
 
 describe('LoginForm', () => {
   it('renders French labels and placeholder', () => {
-    render(createElement(LoginForm))
+    render(createElement(LoginForm, { onNavigate: vi.fn() }))
 
     expect(screen.getByLabelText('Email ou identifiant')).toBeTruthy()
     expect(screen.getByLabelText('Mot de passe')).toBeTruthy()
     expect(screen.getByPlaceholderText('vous@spore.app')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Se connecter' })).toBeTruthy()
-    expect(screen.queryByText('Oublié ?')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Mot de passe oublié' })).toBeTruthy()
   })
 
   it('toggles password visibility', () => {
-    render(createElement(LoginForm))
+    render(createElement(LoginForm, { onNavigate: vi.fn() }))
 
     const passwordInput = screen.getByLabelText('Mot de passe') as HTMLInputElement
     const toggle = screen.getByRole('button', { name: 'Afficher le mot de passe' })
@@ -54,7 +54,7 @@ describe('LoginForm', () => {
   })
 
   it('submits trimmed identifier and password via useAuth.login', async () => {
-    render(createElement(LoginForm))
+    render(createElement(LoginForm, { onNavigate: vi.fn() }))
 
     fireEvent.change(screen.getByLabelText('Email ou identifiant'), {
       target: { value: '  owner@example.com  ' },
@@ -70,10 +70,19 @@ describe('LoginForm', () => {
     })
   })
 
+  it('navigates to forgot-password', () => {
+    const onNavigate = vi.fn()
+    render(createElement(LoginForm, { onNavigate }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mot de passe oublié' }))
+
+    expect(onNavigate).toHaveBeenCalledWith('/forgot-password')
+  })
+
   it('shows French invalid credentials message on 401', () => {
     authState.loginError = new AuthApiError('Unauthorized', 401)
 
-    render(createElement(LoginForm))
+    render(createElement(LoginForm, { onNavigate: vi.fn() }))
 
     expect(screen.getByText('Identifiants invalides.')).toBeTruthy()
   })
@@ -81,7 +90,7 @@ describe('LoginForm', () => {
   it('shows generic French error message for other failures', () => {
     authState.loginError = new Error('Network error')
 
-    render(createElement(LoginForm))
+    render(createElement(LoginForm, { onNavigate: vi.fn() }))
 
     expect(screen.getByText('La connexion a échoué.')).toBeTruthy()
   })

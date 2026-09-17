@@ -18,6 +18,8 @@ import {
 import { resolvePendingLandingPath } from '@/features/auth/lib/pending-onboarding'
 import { canSwitchEstablishment } from '@/features/auth/lib/establishment-switch'
 import { AccountDeletionCard } from '@/features/auth/pages/account-deletion-card'
+import { EmailChangeCard } from '@/features/auth/pages/email-change-card'
+import { PasswordChangeCard } from '@/features/auth/pages/password-change-card'
 import {
   AuthApiError,
   acceptCurrentAiConsent,
@@ -448,6 +450,14 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
           </button>
         </TerrainCard>
       ) : null}
+
+      <EmailChangeCard
+        email={user?.email ?? null}
+        pendingEmail={user?.pending_email ?? null}
+        disabled={isLoggingOut}
+      />
+
+      <PasswordChangeCard disabled={isLoggingOut} />
 
       <AccountDeletionCard
         disabled={isLoggingOut}
