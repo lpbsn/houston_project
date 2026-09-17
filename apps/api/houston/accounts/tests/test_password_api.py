@@ -6,7 +6,6 @@ from rest_framework.test import APIClient
 
 from houston.accounts.models import PasswordResetRequest, User, UserSession
 from houston.accounts.password_services import PASSWORD_RESET_REQUEST_DETAIL
-from houston.accounts.tokens import digest_token
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.tests.membership_api_helpers import (
     auth_headers,
