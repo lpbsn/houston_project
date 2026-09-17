@@ -1,11 +1,29 @@
+// @vitest-environment jsdom
+
+import { QueryClientProvider, useQuery } from '@tanstack/react-query'
+import { renderHook, waitFor } from '@testing-library/react'
+import { createElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { queryClient } from '@/lib/query-client'
+import { analyticsQueryKeys } from '@/features/analytics/api'
 import {
   applyOperationalInvalidation,
   applyOperationalReconnectInvalidation,
 } from '@/features/realtime/lib/apply-operational-invalidation'
 import type { OperationalRealtimeInvalidateEvent } from '@/features/realtime/types'
+import { queryClient } from '@/lib/query-client'
+import { createTestQueryClient } from '@/test-utils'
+
+function signalEvent(reason: string, establishmentId = 'est-1'): OperationalRealtimeInvalidateEvent {
+  return {
+    type: 'invalidate',
+    subject_type: 'signal',
+    reason,
+    establishment_id: establishmentId,
+    entity_id: 'sig-1',
+    occurred_at: '2026-06-19T12:00:00Z',
+  }
+}
 
 describe('applyOperationalInvalidation', () => {
   it('invalidates signal queries for signal subject_type', () => {
@@ -26,6 +44,7 @@ describe('applyOperationalInvalidation', () => {
     expect(invalidateSpy).not.toHaveBeenCalledWith({
       queryKey: ['action-plans', 'action-plan-execution-feed', 'est-1'],
     })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ predicate: expect.any(Function) })
     invalidateSpy.mockRestore()
   })
 
@@ -213,6 +232,108 @@ describe('applyOperationalReconnectInvalidation', () => {
       queryKey: ['action-plans', 'action-plan-execution-feed', 'est-1'],
     })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['notifications', 'list', 'est-1'] })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ predicate: expect.any(Function) })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['analytics', 'dashboard'] })
     invalidateSpy.mockRestore()
+  })
+
+  it('does not invalidate dashboard queries', () => {
+    const client = createTestQueryClient()
+    const dashboardKey = analyticsQueryKeys.dashboard({
+      periodDays: 7,
+      establishmentId: 'est-1',
+    })
+    client.setQueryData(dashboardKey, { total: 1 })
+
+    applyOperationalReconnectInvalidation(client, 'est-1')
+
+    expect(client.getQueryState(dashboardKey)?.isInvalidated).toBe(false)
+  })
+})
+
+describe('signal created dashboard invalidation', () => {
+  it('invalidates dashboard and rankings for the WS establishment only on signal.created', () => {
+    const client = createTestQueryClient()
+    const dashboardEst1 = analyticsQueryKeys.dashboard({
+      periodDays: 7,
+      establishmentId: 'est-1',
+    })
+    const rankingsEst1 = analyticsQueryKeys.dashboardRankings({
+      periodDays: 7,
+      establishmentId: 'est-1',
+      kind: 'recurring',
+    })
+    const dashboardEst2 = analyticsQueryKeys.dashboard({
+      periodDays: 7,
+      establishmentId: 'est-2',
+    })
+    client.setQueryData(dashboardEst1, { total: 1 })
+    client.setQueryData(rankingsEst1, { items: [] })
+    client.setQueryData(dashboardEst2, { total: 2 })
+
+    applyOperationalInvalidation(signalEvent('signal.created'), {
+      queryClient: client,
+      establishmentId: 'est-1',
+    })
+
+    expect(client.getQueryState(dashboardEst1)?.isInvalidated).toBe(true)
+    expect(client.getQueryState(rankingsEst1)?.isInvalidated).toBe(true)
+    expect(client.getQueryState(dashboardEst2)?.isInvalidated).toBe(false)
+  })
+
+  it('does not invalidate dashboard on signal.updated', () => {
+    const client = createTestQueryClient()
+    const dashboardEst1 = analyticsQueryKeys.dashboard({
+      periodDays: 7,
+      establishmentId: 'est-1',
+    })
+    client.setQueryData(dashboardEst1, { total: 1 })
+
+    applyOperationalInvalidation(signalEvent('signal.updated'), {
+      queryClient: client,
+      establishmentId: 'est-1',
+    })
+
+    expect(client.getQueryState(dashboardEst1)?.isInvalidated).toBe(false)
+  })
+
+  it('measures dashboard refetches for successive signal.created without extra anti-burst', async () => {
+    const client = createTestQueryClient()
+    const dashboardKey = analyticsQueryKeys.dashboard({
+      periodDays: 7,
+      establishmentId: 'est-1',
+    })
+    const queryFn = vi.fn().mockResolvedValue({ total: 1 })
+    const wrapper = ({ children }: { children?: unknown }) =>
+      createElement(QueryClientProvider, { client }, children)
+    const { result, unmount } = renderHook(
+      () => useQuery({ queryKey: dashboardKey, queryFn }),
+      { wrapper },
+    )
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    const baseline = queryFn.mock.calls.length
+
+    applyOperationalInvalidation(signalEvent('signal.created', 'est-1'), {
+      queryClient: client,
+      establishmentId: 'est-1',
+    })
+    applyOperationalInvalidation(
+      {
+        ...signalEvent('signal.created', 'est-1'),
+        entity_id: 'sig-2',
+      },
+      { queryClient: client, establishmentId: 'est-1' },
+    )
+
+    await waitFor(() => {
+      expect(queryFn.mock.calls.length).toBeGreaterThan(baseline)
+    })
+    const extraRefetches = queryFn.mock.calls.length - baseline
+    unmount()
+    // Two successive signal.created each trigger one active refetch (2 total).
+    // Not a storm: no extra anti-burst layer.
+    expect(extraRefetches).toBe(2)
   })
 })

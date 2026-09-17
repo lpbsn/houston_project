@@ -56,6 +56,7 @@ from houston.signals.services import merge_signal_into_resolved, qualify_signal_
 from houston.testing.auth import auth_headers, build_api_membership, login
 from houston.testing.factories import create_establishment, create_membership, create_user
 from houston.testing.taxonomy import (
+    create_activity_subject,
     create_business_unit,
     create_membership_with_business_unit_scope,
     create_restaurant_v3_taxonomy,
@@ -76,7 +77,9 @@ def _create_signal(
     title="Signal",
     created_at=None,
     status=Signal.Status.OPEN,
+    routing_status=Signal.RoutingStatus.RESOLVED,
     operational_unit=None,
+    affected_business_unit=None,
     responsible_business_unit=None,
     location_text="",
 ):
@@ -84,12 +87,13 @@ def _create_signal(
     signal = Signal.objects.create(
         establishment=membership.establishment,
         status=status,
-        routing_status=Signal.RoutingStatus.RESOLVED,
+        routing_status=routing_status,
         title=title,
         structured_summary=f"Summary for {title}.",
         issue_focus=title.lower().replace(" ", "-"),
         last_activity_at=moment,
         operational_unit=operational_unit,
+        affected_business_unit=affected_business_unit,
         responsible_business_unit=responsible_business_unit,
         location_text=location_text,
     )
@@ -1311,6 +1315,7 @@ def test_qualify_moves_period_volume_to_current_pole_and_zone():
         title="Requalified current",
         created_at=now - timedelta(days=1),
         operational_unit=zone_a,
+        affected_business_unit=cuisine,
         responsible_business_unit=cuisine,
     )
     previous = _create_signal(
@@ -1318,10 +1323,12 @@ def test_qualify_moves_period_volume_to_current_pole_and_zone():
         title="Requalified previous",
         created_at=now - timedelta(days=10),
         operational_unit=zone_a,
+        affected_business_unit=cuisine,
         responsible_business_unit=cuisine,
     )
     Signal.objects.filter(pk__in=[current.pk, previous.pk]).update(
         operational_unit=zone_b,
+        affected_business_unit=maintenance,
         responsible_business_unit=maintenance,
     )
 
@@ -1353,7 +1360,86 @@ def test_qualify_moves_period_volume_to_current_pole_and_zone():
     assert result.locations.items[0].count == 1
     assert previous_responsible.total == 1
     assert result.locations.items[0].comparison.previous_value == 1
-    assert {item.name for item in current_affected.segments} == {"Zone B"}
+    assert {item.name for item in current_affected.segments} == {"Maintenance"}
+
+
+def test_qualify_splits_current_affected_volume_without_operational_unit():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    _cutover_complete_for_period(now=now)
+    evenements = create_business_unit(
+        establishment=membership.establishment,
+        key="evenements",
+        label="Événements & privatisations",
+    )
+    maintenance = create_business_unit(
+        establishment=membership.establishment,
+        key="maintenance",
+        label="Maintenance",
+    )
+    subject = create_activity_subject(
+        establishment=membership.establishment,
+        business_unit=maintenance,
+        label="Plomberie",
+    )
+    unassigned = _create_signal(
+        membership,
+        title="Fuite chambre 304",
+        created_at=now - timedelta(hours=2),
+        routing_status=Signal.RoutingStatus.UNASSIGNED,
+        responsible_business_unit=maintenance,
+    )
+    to_qualify = _create_signal(
+        membership,
+        title="Fuite chambre 502",
+        created_at=now - timedelta(hours=1),
+        routing_status=Signal.RoutingStatus.UNASSIGNED,
+        responsible_business_unit=maintenance,
+    )
+
+    qualify_signal_routing(
+        signal=to_qualify,
+        membership=membership,
+        patch={
+            "affected_business_unit_id": evenements.id,
+            "responsible_business_unit_id": maintenance.id,
+            "activity_subject_id": subject.id,
+            "issue_focus": "fuite chambre 502",
+        },
+    )
+
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
+    current_affected = next(
+        window
+        for window in result.observation_volume["affected"].windows
+        if window.label_key == "current"
+    )
+    current_responsible = next(
+        window
+        for window in result.observation_volume["responsible"].windows
+        if window.label_key == "current"
+    )
+
+    assert current_affected.total == 2
+    assert result.observation_volume["affected"].current_total == 2
+    assert {item.name: item.count for item in current_affected.segments} == {
+        "Sans pôle": 1,
+        "Événements & privatisations": 1,
+    }
+    assert {item.name: item.count for item in current_responsible.segments} == {
+        "Maintenance": 2,
+    }
+    unassigned.refresh_from_db()
+    to_qualify.refresh_from_db()
+    assert unassigned.operational_unit_id is None
+    assert to_qualify.operational_unit_id is None
+    assert unassigned.affected_business_unit_id is None
+    assert to_qualify.affected_business_unit_id == evenements.id
 
 
 def test_dashboard_locations_merge_case_variants_in_current_period():

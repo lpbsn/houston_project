@@ -6,6 +6,7 @@ import {
   invalidateActionPlanExecutionSurfaces,
   invalidateActionPlanMutationSurfaces,
   invalidateEstablishmentActionPlanCatalogQueries,
+  invalidateEstablishmentDashboardQueries,
   invalidateEstablishmentNotificationQueries,
   invalidateEstablishmentSignalQueries,
   invalidateExecutionCommentQueries,
@@ -31,6 +32,9 @@ export function applyOperationalInvalidation(
 ) {
   if (event.subject_type === 'signal') {
     invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+    if (event.reason === 'signal.created') {
+      invalidateEstablishmentDashboardQueries(queryClient, establishmentId)
+    }
     return
   }
   if (event.subject_type === 'action_plan') {

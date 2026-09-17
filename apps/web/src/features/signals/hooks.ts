@@ -6,7 +6,10 @@ import {
   type QueryClient,
 } from '@tanstack/react-query'
 
-import { invalidateEstablishmentSignalQueries } from '@/lib/query-invalidation'
+import {
+  invalidateEstablishmentDashboardQueries,
+  invalidateEstablishmentSignalQueries,
+} from '@/lib/query-invalidation'
 
 import {
   approveSignalResolutionRequest,
@@ -382,6 +385,7 @@ export function useQualifySignalRoutingMutation(establishmentId: string | null) 
         return
       }
       invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+      invalidateEstablishmentDashboardQueries(queryClient, establishmentId)
       const survivorId = response.surviving_signal_id
       const detail = toSignalDetailFromQualifyResponse(response)
       queryClient.setQueryData(signalsQueryKeys.detail(establishmentId, survivorId), detail)

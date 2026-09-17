@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { analyticsQueryKeys } from '@/features/analytics/api'
 import {
   clearAuthenticatedQueryCache,
+  invalidateEstablishmentDashboardQueries,
   invalidateEstablishmentSignalQueries,
   invalidateExecutionCommentQueries,
   invalidateSignalCommentQueries,
@@ -117,6 +119,50 @@ describe('query-invalidation', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'feed', 'est-1'] })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'detail', 'est-1'] })
     expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['signals'] })
+  })
+
+  it('invalidates only dashboard and rankings for the given establishment', () => {
+    const queryClient = createTestQueryClient()
+    const dashboardA = analyticsQueryKeys.dashboard({
+      periodDays: 7,
+      establishmentId: 'est-a',
+    })
+    const rankingsA = analyticsQueryKeys.dashboardRankings({
+      periodDays: 7,
+      establishmentId: 'est-a',
+      kind: 'recurring',
+    })
+    const dashboardB = analyticsQueryKeys.dashboard({
+      periodDays: 7,
+      establishmentId: 'est-b',
+    })
+    const rankingsB = analyticsQueryKeys.dashboardRankings({
+      periodDays: 30,
+      establishmentId: 'est-b',
+      kind: 'locations',
+    })
+    const patternsA = ['analytics', 'patterns', { establishmentId: 'est-a' }] as const
+
+    queryClient.setQueryData(dashboardA, { total: 1 })
+    queryClient.setQueryData(rankingsA, { items: [] })
+    queryClient.setQueryData(dashboardB, { total: 2 })
+    queryClient.setQueryData(rankingsB, { items: ['b'] })
+    queryClient.setQueryData(patternsA, { items: ['pattern'] })
+
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    invalidateEstablishmentDashboardQueries(queryClient, 'est-a')
+
+    expect(invalidateSpy).toHaveBeenCalledOnce()
+    expect(invalidateSpy.mock.calls[0]?.[0]).toEqual({ predicate: expect.any(Function) })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['analytics'] })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['analytics', 'dashboard'] })
+    expect(queryClient.getQueryState(dashboardA)?.isInvalidated).toBe(true)
+    expect(queryClient.getQueryState(rankingsA)?.isInvalidated).toBe(true)
+    expect(queryClient.getQueryState(dashboardB)?.isInvalidated).toBe(false)
+    expect(queryClient.getQueryState(rankingsB)?.isInvalidated).toBe(false)
+    expect(queryClient.getQueryState(patternsA)?.isInvalidated).toBe(false)
+    expect(queryClient.getQueryData(dashboardB)).toEqual({ total: 2 })
+    expect(queryClient.getQueryData(patternsA)).toEqual({ items: ['pattern'] })
   })
 
   it('invalidates signal comment queries without global keys', () => {

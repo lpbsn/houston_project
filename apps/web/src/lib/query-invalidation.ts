@@ -28,6 +28,32 @@ export function invalidateEstablishmentSignalQueries(
   void queryClient.invalidateQueries({ queryKey: ['signals', 'detail', establishmentId] })
 }
 
+function isEstablishmentDashboardQueryKey(
+  queryKey: readonly unknown[],
+  establishmentId: string,
+): boolean {
+  const [root, kind, params] = queryKey
+  if (root !== 'analytics') {
+    return false
+  }
+  if (kind !== 'dashboard' && kind !== 'dashboard-rankings') {
+    return false
+  }
+  if (params === null || typeof params !== 'object' || Array.isArray(params)) {
+    return false
+  }
+  return (params as { establishmentId?: unknown }).establishmentId === establishmentId
+}
+
+export function invalidateEstablishmentDashboardQueries(
+  queryClient: QueryClient,
+  establishmentId: string,
+) {
+  void queryClient.invalidateQueries({
+    predicate: (query) => isEstablishmentDashboardQueryKey(query.queryKey, establishmentId),
+  })
+}
+
 export function invalidateSignalCommentQueries(
   queryClient: QueryClient,
   establishmentId: string,

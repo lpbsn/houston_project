@@ -484,6 +484,7 @@ def _load_dashboard_context(
         .select_related(
             "establishment",
             "operational_unit",
+            "affected_business_unit",
             "responsible_business_unit",
             "pattern_assignment__pattern__merged_into",
         )
@@ -928,10 +929,10 @@ def _observation_volume(
                 if not (window_start <= signal.created_at < window_end):
                     continue
                 if mode == "affected":
-                    pole = signal.operational_unit
+                    pole = signal.affected_business_unit
                     pole_id = (
-                        str(signal.operational_unit_id)
-                        if signal.operational_unit_id
+                        str(signal.affected_business_unit_id)
+                        if signal.affected_business_unit_id
                         else "unassigned"
                     )
                 else:
