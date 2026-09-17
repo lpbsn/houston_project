@@ -20,8 +20,8 @@ from houston.accounts.email_change_services import (
 )
 from houston.accounts.models import EmailChangeRequest, PasswordResetRequest, User, UserSession
 from houston.accounts.password_services import request_password_reset
-from houston.accounts.tokens import digest_token
 from houston.accounts.tests.helpers import ensure_csrf, post_register, registration_payload
+from houston.accounts.tokens import digest_token
 from houston.chat.api.serializers import membership_display_name as chat_membership_display_name
 from houston.chat.models import ChatConversation, ChatMessage
 from houston.comments.api.serializers import serialize_comment
