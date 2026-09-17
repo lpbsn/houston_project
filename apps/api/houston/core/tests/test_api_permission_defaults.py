@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 from houston.accounts.api.views import (
     CsrfCookieView,
     DirectorInvitationAcceptView,
+    EmailChangeConfirmView,
     LoginView,
     LogoutView,
     RefreshView,
@@ -31,6 +32,7 @@ PUBLIC_API_VIEWS = frozenset(
         RegisterView,
         ValidateOwnerRegistrationView,
         DirectorInvitationAcceptView,
+        EmailChangeConfirmView,
         RefreshView,
         LogoutView,
         ObservationMediaPreviewView,

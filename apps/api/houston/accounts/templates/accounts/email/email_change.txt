@@ -1,0 +1,10 @@
+Bonjour {{ first_name }},
+
+Vous avez demandé à changer l'adresse e-mail de votre compte Spore.
+
+Confirmez cette nouvelle adresse avant le {{ expires_at_label }} :
+{{ confirm_url }}
+
+Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer ce message. Votre adresse actuelle reste inchangée.
+
+— Spore

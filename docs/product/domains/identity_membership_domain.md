@@ -13,7 +13,7 @@ This domain owns global user identity, organization and establishment membership
 
 ## 2. MVP Scope
 
-- Global `User` identity.
+- Global `User` identity. `User.email` is the login identifier. Changing it requires a password-authenticated pending request plus confirmation of a token sent to the new address. The live email does not change on `PATCH /api/v1/auth/me/`.
 - `Organization` as the parent business container.
 - `Establishment` as the operational tenant context.
 - `EstablishmentMembership` as the access link between a user and an establishment.
@@ -117,6 +117,9 @@ Implemented endpoints confirmed in `apps/api/schema.yml`:
 - `POST /api/v1/auth/refresh/`
 - `POST /api/v1/auth/logout/`
 - `GET /api/v1/auth/bootstrap/`
+- `PATCH /api/v1/auth/me/` (first name / last name only; email is not writable here)
+- `POST /api/v1/auth/email-change/`
+- `POST /api/v1/auth/email-change/confirm/` (token in JSON body; public; does not create a session)
 - `GET /api/v1/auth/me/deletion-preview/`
 - `POST /api/v1/auth/me/delete/`
 - `POST /api/v1/auth/switch_establishment/`

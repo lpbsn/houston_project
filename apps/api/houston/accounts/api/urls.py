@@ -8,6 +8,8 @@ from houston.accounts.api.views import (
     AiConsentWithdrawView,
     BootstrapView,
     CsrfCookieView,
+    EmailChangeConfirmView,
+    EmailChangeRequestView,
     LoginView,
     LogoutView,
     RefreshView,
@@ -31,6 +33,16 @@ urlpatterns = [
     path("logout/", LogoutView.as_view(), name="auth-logout"),
     path("bootstrap/", BootstrapView.as_view(), name="auth-bootstrap"),
     path("me/", UserProfileView.as_view(), name="auth-profile"),
+    path(
+        "email-change/",
+        EmailChangeRequestView.as_view(),
+        name="auth-email-change",
+    ),
+    path(
+        "email-change/confirm/",
+        EmailChangeConfirmView.as_view(),
+        name="auth-email-change-confirm",
+    ),
     path(
         "me/deletion-preview/",
         AccountDeletionPreviewView.as_view(),

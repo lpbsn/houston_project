@@ -85,6 +85,16 @@ describe('OwnerOrgOnboardingStep', () => {
     expect(document.body.textContent).not.toMatch(/draft-/i)
   })
 
+  it('uses shared password creation checks and does not submit on mismatch', async () => {
+    render(createElement(OwnerOrgOnboardingStep, { onRegistered: vi.fn() }))
+    fillForm()
+    fireEvent.change(screen.getByLabelText(/confirmer le mot de passe/i), {
+      target: { value: 'DifferentPass12' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /continuer/i }))
+    expect(registerOnboarding).not.toHaveBeenCalled()
+  })
+
   it('auto-logs in on duplicate_email when credentials are in memory and clears storage', async () => {
     const onRegistered = vi.fn()
     registerOnboarding.mockRejectedValue(

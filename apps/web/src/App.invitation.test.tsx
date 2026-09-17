@@ -110,6 +110,8 @@ function operationalBootstrap(): BootstrapResponse {
       identity_type: 'human',
       first_name: 'Staff',
       last_name: 'Member',
+      pending_email: null,
+      pending_email_expires_at: null,
       terms_version: 'cgu-v1',
       terms_accepted_at: '2026-01-01T00:00:00.000Z',
       current_terms_version: 'cgu-v1',

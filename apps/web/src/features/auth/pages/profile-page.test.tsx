@@ -187,6 +187,8 @@ vi.mock('@/features/auth/api', () => ({
     leaves_establishments_without_director: [],
   })),
   deleteAccount: vi.fn(async () => undefined),
+  requestEmailChange: vi.fn(async () => ({ pending_email: 'next@example.com', expires_at: '' })),
+  fetchBootstrap: vi.fn(async () => undefined),
   acceptCurrentAiConsent: () => acceptCurrentAiConsent(),
   withdrawAiConsent: () => withdrawAiConsent(),
 }))

@@ -23,6 +23,10 @@ from houston.accounts.api.serializers import (
     DirectorInvitationAcceptErrorResponseSerializer,
     DirectorInvitationAcceptRequestSerializer,
     DirectorInvitationAcceptResponseSerializer,
+    EmailChangeConfirmRequestSerializer,
+    EmailChangeConfirmResponseSerializer,
+    EmailChangeRequestResponseSerializer,
+    EmailChangeRequestSerializer,
     LegalVersionRequestSerializer,
     LoginRequestSerializer,
     LogoutRequestSerializer,
@@ -44,6 +48,19 @@ from houston.accounts.deletion_services import (
     build_account_deletion_preview,
     delete_authenticated_account,
 )
+from houston.accounts.email_change_services import (
+    EMAIL_CHANGE_DUPLICATE_DETAIL,
+    EMAIL_CHANGE_UNAVAILABLE_DETAIL,
+    EMAIL_CHANGE_UNCHANGED_DETAIL,
+    INVALID_EMAIL_CHANGE_TOKEN_DETAIL,
+    EmailChangeDuplicateError,
+    EmailChangeUnavailableError,
+    EmailChangeUnchangedError,
+    InvalidEmailChangeCredentialsError,
+    InvalidEmailChangeTokenError,
+    confirm_email_change,
+    request_email_change,
+)
 from houston.accounts.selectors import _serialize_user, build_bootstrap_payload
 from houston.accounts.services import (
     AUTHENTICATION_FAILED_DETAIL,
@@ -54,7 +71,6 @@ from houston.accounts.services import (
     InvalidRefreshTokenError,
     InvalidRegistrationInviteCodeError,
     InvalidSelectedEstablishmentError,
-    ProfileDuplicateEmailError,
     RefreshTokenReuseError,
     RegistrationDuplicateEmailError,
     authenticate_user,
@@ -502,7 +518,6 @@ class UserProfileView(APIView):
             200: BootstrapResponseSerializer,
             400: OpenApiResponse(response=ValidationErrorResponseSerializer),
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
-            409: OpenApiResponse(response=ApiErrorResponseSerializer),
         },
         description="Updates the authenticated user's personal profile fields.",
     )
@@ -511,23 +526,117 @@ class UserProfileView(APIView):
         serializer.is_valid(raise_exception=True)
 
         validated = serializer.validated_data
+        update_user_profile(
+            user=request.user,
+            first_name=validated.get("first_name"),
+            last_name=validated.get("last_name"),
+        )
+
+        return Response(build_bootstrap_payload(request.user, session=request.auth.session))
+
+
+class EmailChangeRequestView(AuthRateLimitedMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_scope = settings.AUTH_THROTTLE_SCOPE_EMAIL_CHANGE
+
+    @extend_schema(
+        tags=["auth"],
+        request=EmailChangeRequestSerializer,
+        responses={
+            200: EmailChangeRequestResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            409: OpenApiResponse(response=ApiErrorResponseSerializer),
+            429: _THROTTLED_OPENAPI_RESPONSE,
+            503: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+        description=(
+            "Starts an email change. Requires the current password. The live email "
+            "does not change until the token sent to the new address is confirmed."
+        ),
+    )
+    def post(self, request):
+        serializer = EmailChangeRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         try:
-            update_user_profile(
+            result = request_email_change(
                 user=request.user,
-                first_name=validated.get("first_name"),
-                last_name=validated.get("last_name"),
-                email=validated.get("email"),
+                password=serializer.validated_data["password"],
+                new_email=serializer.validated_data["new_email"],
             )
-        except ProfileDuplicateEmailError:
-            return Response(
-                {
-                    "code": "profile_duplicate_email",
-                    "detail": "An account with this email already exists.",
-                },
+        except InvalidEmailChangeCredentialsError:
+            return _api_error_response(
+                code="invalid_credentials",
+                detail=INVALID_CREDENTIALS_DETAIL,
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        except EmailChangeUnchangedError:
+            return _api_error_response(
+                code="email_change_unchanged",
+                detail=EMAIL_CHANGE_UNCHANGED_DETAIL,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except EmailChangeUnavailableError:
+            return _api_error_response(
+                code="email_change_unavailable",
+                detail=EMAIL_CHANGE_UNAVAILABLE_DETAIL,
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except EmailChangeDuplicateError:
+            return _api_error_response(
+                code="email_change_duplicate",
+                detail=EMAIL_CHANGE_DUPLICATE_DETAIL,
                 status=status.HTTP_409_CONFLICT,
             )
 
-        return Response(build_bootstrap_payload(request.user, session=request.auth.session))
+        return Response(
+            {
+                "pending_email": result.pending_email,
+                "expires_at": result.expires_at,
+            }
+        )
+
+
+class EmailChangeConfirmView(AuthRateLimitedMixin, APIView):
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = settings.AUTH_THROTTLE_SCOPE_EMAIL_CHANGE_CONFIRM
+
+    @extend_schema(
+        tags=["auth"],
+        request=EmailChangeConfirmRequestSerializer,
+        responses={
+            200: EmailChangeConfirmResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            409: OpenApiResponse(response=ApiErrorResponseSerializer),
+            429: _THROTTLED_OPENAPI_RESPONSE,
+        },
+        description=(
+            "Confirms an email change with the token from the new inbox. "
+            "The bearer is sent in the JSON body. Does not create a session."
+        ),
+    )
+    def post(self, request):
+        serializer = EmailChangeConfirmRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            user = confirm_email_change(raw_token=serializer.validated_data["token"])
+        except InvalidEmailChangeTokenError:
+            return _api_error_response(
+                code="email_change_invalid",
+                detail=INVALID_EMAIL_CHANGE_TOKEN_DETAIL,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except EmailChangeDuplicateError:
+            return _api_error_response(
+                code="email_change_duplicate",
+                detail=EMAIL_CHANGE_DUPLICATE_DETAIL,
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        return Response({"email": user.email})
 
 
 class AccountDeletionPreviewView(APIView):

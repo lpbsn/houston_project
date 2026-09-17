@@ -1,7 +1,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 
-import { parseAppRoute, serializeAppRoute, useAppRoute, type AppRoute } from '@/app/app-routes'
+import { isHashTokenPublicRoute, parseAppRoute, serializeAppRoute, useAppRoute, type AppRoute } from '@/app/app-routes'
 import {
   serializeScopedExecutionDetailPath,
   serializeScopedSignalDetailPath,
@@ -80,6 +80,7 @@ import {
   shouldPreserveTeamListUiState,
 } from '@/features/auth/lib/team-list-ui-state'
 import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-accept-page'
+import { EmailChangeConfirmPage } from '@/features/auth/pages/email-change-confirm-page'
 import { OperationalConfigPage } from '@/features/establishment-config/pages/operational-config-page'
 import { OnboardingPage } from '@/features/onboarding/pages/onboarding-page'
 import { NotificationCenter } from '@/features/notifications/components/notification-center'
@@ -145,7 +146,7 @@ function App() {
       }
 
   useEffect(() => {
-    if (!auth.isReady || route.kind === 'invitation') {
+    if (!auth.isReady || isHashTokenPublicRoute(route)) {
       return
     }
 
@@ -582,6 +583,10 @@ function App() {
       )
     }
 
+    if (route.kind === 'email-change') {
+      return <EmailChangeConfirmPage />
+    }
+
     if (route.kind === 'unknown') {
       const fallbackPath = !auth.isAuthenticated
         ? '/login'
@@ -929,7 +934,7 @@ function App() {
     [navigate, route],
   )
 
-  if (route.kind !== 'invitation' && shouldShowAuthRoutingLoading(route, auth)) {
+  if (!isHashTokenPublicRoute(route) && shouldShowAuthRoutingLoading(route, auth)) {
     return <AuthRoutingLoading />
   }
 
@@ -982,6 +987,14 @@ function App() {
           description: 'Create your password to join this establishment in Houston.',
           actions: signInAction,
         }
+      : route.kind === 'email-change'
+        ? {
+            headingBadge: 'Compte',
+            title: 'Confirmer l’e-mail',
+            description:
+              'Validez la nouvelle adresse depuis le lien reçu. Votre session n’est pas créée ici.',
+            actions: auth.isAuthenticated ? signOutAction : signInAction,
+          }
       : route.kind === 'static' && route.path === '/onboarding'
             ? {
                 headingBadge: 'Onboarding',

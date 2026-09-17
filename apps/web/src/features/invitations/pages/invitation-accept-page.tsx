@@ -6,6 +6,12 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { TermsAcceptCheckbox } from '@/features/auth/components/terms-accept-checkbox'
+import { PasswordCreationFields } from '@/features/auth/components/password-creation-fields'
+import {
+  canSubmitPasswordCreation,
+  evaluatePasswordCreation,
+  passwordCreationBlockerMessage,
+} from '@/features/auth/lib/password-creation'
 import {
   InvitationAcceptApiError,
   acceptDirectorInvitation,
@@ -62,13 +68,12 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
       return
     }
 
-    if (!password || !passwordConfirmation) {
-      setFieldError('Password and confirmation are required.')
-      return
-    }
-
-    if (password !== passwordConfirmation) {
-      setFieldError('Passwords do not match.')
+    if (!canSubmitPasswordCreation(password, passwordConfirmation)) {
+      setFieldError(
+        passwordCreationBlockerMessage(
+          evaluatePasswordCreation(password, passwordConfirmation),
+        ) ?? 'Password and confirmation are required.',
+      )
       return
     }
 
@@ -123,41 +128,22 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
             </div>
           )}
 
-          <div className="space-y-2">
-            <label className="text-sm font-semibold" htmlFor="invitation-password">
-              Password
-            </label>
-            <Input
-              id="invitation-password"
-              type="password"
-              autoComplete="new-password"
-              value={password}
-              onChange={(event) => {
-                setPassword(event.target.value)
-                setFieldError(null)
-                setSubmitError(null)
-              }}
-              className="h-11 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-semibold" htmlFor="invitation-password-confirmation">
-              Confirm password
-            </label>
-            <Input
-              id="invitation-password-confirmation"
-              type="password"
-              autoComplete="new-password"
-              value={passwordConfirmation}
-              onChange={(event) => {
-                setPasswordConfirmation(event.target.value)
-                setFieldError(null)
-                setSubmitError(null)
-              }}
-              className="h-11 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
-            />
-          </div>
+          <PasswordCreationFields
+            password={password}
+            confirmation={passwordConfirmation}
+            onPasswordChange={(value) => {
+              setPassword(value)
+              setFieldError(null)
+              setSubmitError(null)
+            }}
+            onConfirmationChange={(value) => {
+              setPasswordConfirmation(value)
+              setFieldError(null)
+              setSubmitError(null)
+            }}
+            passwordId="invitation-password"
+            confirmationId="invitation-password-confirmation"
+          />
 
           <TermsAcceptCheckbox checked={acceptTerms} onCheckedChange={setAcceptTerms} />
 

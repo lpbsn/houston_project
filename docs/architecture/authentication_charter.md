@@ -299,6 +299,8 @@ Auth throttling for public auth mutation endpoints is implemented via DRF `Scope
 - `POST /api/v1/auth/register/`
 - `POST /api/v1/auth/register/validate-owner/`
 - `POST /api/v1/invitations/accept/`
+- `POST /api/v1/auth/email-change/`
+- `POST /api/v1/auth/email-change/confirm/`
 
 ### Throttling response contract (429)
 
@@ -324,6 +326,8 @@ Auth throttling for public auth mutation endpoints is implemented via DRF `Scope
 - `HOUSTON_THROTTLE_AUTH_REGISTER`
 - `HOUSTON_THROTTLE_AUTH_REGISTER_VALIDATE`
 - `HOUSTON_THROTTLE_AUTH_INVITATION_ACCEPT`
+- `HOUSTON_THROTTLE_AUTH_EMAIL_CHANGE`
+- `HOUSTON_THROTTLE_AUTH_EMAIL_CHANGE_CONFIRM`
 
 ### Known intentional debts (post-MVP)
 
@@ -331,6 +335,7 @@ Auth throttling for public auth mutation endpoints is implemented via DRF `Scope
 - no fingerprint per identifier
 - no throttling by refresh-cookie hash
 - Redis shared requirement in prod multi-worker
+- invitation and email-change Celery tasks receive the raw confirmation token as a broker argument (`argsrepr` redacts Celery UI, not Redis payload)
 
 ### Remaining security TODOs
 

@@ -56,6 +56,7 @@ export type AppRoute =
   | { kind: 'chat-conversation-detail'; conversationId: string }
   | { kind: 'team-member-detail'; membershipId: string }
   | { kind: 'invitation' }
+  | { kind: 'email-change' }
   | { kind: 'unknown'; pathname: string }
 
 export function normalizeRoutePath(input: string): string {
@@ -92,6 +93,8 @@ export function getAppRouteKey(route: AppRoute): string {
       return `team-member-detail:${route.membershipId}`
     case 'invitation':
       return 'invitation'
+    case 'email-change':
+      return 'email-change'
     case 'unknown':
       return `unknown:${route.pathname}`
   }
@@ -99,6 +102,14 @@ export function getAppRouteKey(route: AppRoute): string {
 
 function isInvitationPath(pathname: string): boolean {
   return pathname === '/invitations'
+}
+
+function isEmailChangePath(pathname: string): boolean {
+  return pathname === '/email-change'
+}
+
+export function isHashTokenPublicRoute(route: AppRoute): boolean {
+  return route.kind === 'invitation' || route.kind === 'email-change'
 }
 
 function parseSignalActionCreateId(pathname: string): string | null {
@@ -200,6 +211,10 @@ export function parseAppRoute(input: string): AppRoute {
     return { kind: 'invitation' }
   }
 
+  if (isEmailChangePath(pathname)) {
+    return { kind: 'email-change' }
+  }
+
   const signalPlanId = parseSignalActionCreateId(pathname)
   if (signalPlanId) {
     return { kind: 'signal-action-create', signalId: signalPlanId }
@@ -290,6 +305,8 @@ export function serializeAppRoute(route: AppRoute): string {
       return `/team/${route.membershipId}`
     case 'invitation':
       return '/invitations'
+    case 'email-change':
+      return '/email-change'
     case 'unknown':
       return route.pathname
   }

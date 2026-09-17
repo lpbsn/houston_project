@@ -66,6 +66,36 @@ class User(AbstractUser):
         return self.get_username()
 
 
+class EmailChangeRequest(BaseModel):
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="email_change_requests",
+        db_index=False,
+    )
+    new_email = models.EmailField()
+    token_digest = models.CharField(max_length=64, unique=True, db_index=True)
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user"],
+                condition=Q(revoked_at__isnull=True, consumed_at__isnull=True),
+                name="accounts_email_change_one_live",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["user"], name="email_change_user_idx"),
+            models.Index(fields=["expires_at"], name="email_change_expires_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Email change for {self.user_id}"
+
+
 class UserSession(BaseModel):
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"

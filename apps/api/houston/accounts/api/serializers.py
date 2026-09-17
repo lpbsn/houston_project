@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from drf_spectacular.utils import extend_schema_serializer
@@ -86,6 +85,8 @@ class UserPublicSerializer(serializers.Serializer):
     identity_type = serializers.CharField()
     first_name = serializers.CharField(allow_blank=True)
     last_name = serializers.CharField(allow_blank=True)
+    pending_email = serializers.EmailField(allow_null=True)
+    pending_email_expires_at = serializers.DateTimeField(allow_null=True)
     terms_version = serializers.CharField(allow_null=True)
     terms_accepted_at = serializers.DateTimeField(allow_null=True)
     current_terms_version = serializers.CharField()
@@ -102,12 +103,44 @@ class UserPublicSerializer(serializers.Serializer):
 class UserProfileUpdateRequestSerializer(serializers.Serializer):
     first_name = serializers.CharField(trim_whitespace=True, required=False, allow_blank=True)
     last_name = serializers.CharField(trim_whitespace=True, required=False, allow_blank=True)
-    email = serializers.EmailField(required=False, allow_null=True, allow_blank=True)
 
     def validate(self, attrs):
+        unknown = set(self.initial_data.keys()) - set(self.fields.keys())
+        if unknown:
+            raise serializers.ValidationError(
+                {field: "This field is not allowed." for field in sorted(unknown)}
+            )
         if not attrs:
             raise serializers.ValidationError("At least one field must be provided.")
         return attrs
+
+
+class EmailChangeRequestSerializer(serializers.Serializer):
+    password = serializers.CharField(trim_whitespace=False)
+    new_email = serializers.EmailField()
+
+    def validate_password(self, value: str) -> str:
+        if not value:
+            raise serializers.ValidationError("This field may not be blank.")
+        return value
+
+
+class EmailChangeRequestResponseSerializer(serializers.Serializer):
+    pending_email = serializers.EmailField()
+    expires_at = serializers.DateTimeField()
+
+
+class EmailChangeConfirmRequestSerializer(serializers.Serializer):
+    token = serializers.CharField()
+
+    def validate_token(self, value: str) -> str:
+        if not value.strip():
+            raise serializers.ValidationError("This field may not be blank.")
+        return value
+
+
+class EmailChangeConfirmResponseSerializer(serializers.Serializer):
+    email = serializers.EmailField()
 
 
 class AccountDeletionOrganizationSerializer(serializers.Serializer):
@@ -212,31 +245,49 @@ class AuthResponseSerializer(BootstrapResponseSerializer):
     refresh_token_expires_at = serializers.DateTimeField(required=False)
 
 
-def validate_registration_password_pair(
-    *,
-    attrs: dict,
-    email: str,
-    first_name: str,
-    last_name: str,
-) -> dict:
+def validate_created_password_pair(*, attrs: dict, user: User | None = None) -> dict:
     if attrs["password"] != attrs["password_confirmation"]:
         raise serializers.ValidationError(
             {"password_confirmation": "Passwords do not match."},
         )
 
-    if settings.AUTH_PASSWORD_VALIDATORS:
-        provisional_user = User(
-            email=User.normalize_email_value(email),
-            first_name=first_name.strip(),
-            last_name=last_name.strip(),
-        )
-        try:
-            validate_password(attrs["password"], user=provisional_user)
-        except DjangoValidationError as exc:
-            raise serializers.ValidationError({"password": list(exc.messages)}) from exc
+    try:
+        validate_password(attrs["password"], user=user)
+    except DjangoValidationError as exc:
+        raise serializers.ValidationError({"password": list(exc.messages)}) from exc
 
     attrs.pop("password_confirmation")
     return attrs
+
+
+def _provisional_user_for_password_validation(
+    *,
+    email: str,
+    first_name: str,
+    last_name: str,
+) -> User:
+    return User(
+        email=User.normalize_email_value(email),
+        first_name=first_name.strip(),
+        last_name=last_name.strip(),
+    )
+
+
+def _user_for_invitation_password_validation(raw_token: str) -> User | None:
+    from houston.accounts.tokens import digest_token
+    from houston.establishments.models import EstablishmentInvitation
+
+    token = raw_token.strip()
+    if not token:
+        return None
+    invitation = (
+        EstablishmentInvitation.objects.select_related("membership__user")
+        .filter(token_digest=digest_token(token))
+        .first()
+    )
+    if invitation is None:
+        return None
+    return invitation.membership.user
 
 
 class RegistrationOwnerValidateRequestSerializer(serializers.Serializer):
@@ -273,11 +324,13 @@ class RegistrationOwnerValidateRequestSerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs: dict) -> dict:
-        return validate_registration_password_pair(
+        return validate_created_password_pair(
             attrs=attrs,
-            email=attrs["email"],
-            first_name=attrs["first_name"],
-            last_name=attrs["last_name"],
+            user=_provisional_user_for_password_validation(
+                email=attrs["email"],
+                first_name=attrs["first_name"],
+                last_name=attrs["last_name"],
+            ),
         )
 
 
@@ -328,11 +381,13 @@ class RegistrationRequestSerializer(RefreshTokenTransportSerializerMixin):
         return value
 
     def validate(self, attrs: dict) -> dict:
-        return validate_registration_password_pair(
+        return validate_created_password_pair(
             attrs=attrs,
-            email=attrs["email"],
-            first_name=attrs["first_name"],
-            last_name=attrs["last_name"],
+            user=_provisional_user_for_password_validation(
+                email=attrs["email"],
+                first_name=attrs["first_name"],
+                last_name=attrs["last_name"],
+            ),
         )
 
 
@@ -363,19 +418,10 @@ class DirectorInvitationAcceptRequestSerializer(RefreshTokenTransportSerializerM
         return value
 
     def validate(self, attrs: dict) -> dict:
-        if attrs["password"] != attrs["password_confirmation"]:
-            raise serializers.ValidationError(
-                {"password_confirmation": "Passwords do not match."},
-            )
-
-        if settings.AUTH_PASSWORD_VALIDATORS:
-            try:
-                validate_password(attrs["password"])
-            except DjangoValidationError as exc:
-                raise serializers.ValidationError({"password": list(exc.messages)}) from exc
-
-        attrs.pop("password_confirmation")
-        return attrs
+        return validate_created_password_pair(
+            attrs=attrs,
+            user=_user_for_invitation_password_validation(attrs["token"]),
+        )
 
 
 class DirectorInvitationAcceptResponseSerializer(AuthResponseSerializer):

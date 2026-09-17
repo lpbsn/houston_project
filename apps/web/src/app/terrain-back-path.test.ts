@@ -11,6 +11,7 @@ describe('resolveTerrainBackPath', () => {
     expect(resolveTerrainBackPath({ kind: 'static', path: '/reporting' })).toBeNull()
     expect(resolveTerrainBackPath({ kind: 'static', path: '/login' })).toBeNull()
     expect(resolveTerrainBackPath({ kind: 'invitation' })).toBeNull()
+    expect(resolveTerrainBackPath({ kind: 'email-change' })).toBeNull()
   })
 
   it('returns the semantic parent for a signal detail', () => {

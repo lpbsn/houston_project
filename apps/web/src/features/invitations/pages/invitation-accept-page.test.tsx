@@ -68,8 +68,8 @@ describe('InvitationAcceptPage', () => {
   it('submits the remembered fragment token in the accept call', async () => {
     renderPage('/invitations#invite-token')
 
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'SecurePass123!' } })
-    fireEvent.change(screen.getByLabelText('Confirm password'), {
+    fireEvent.change(screen.getByLabelText(/^mot de passe$/i), { target: { value: 'SecurePass123!' } })
+    fireEvent.change(screen.getByLabelText(/confirmer le mot de passe/i), {
       target: { value: 'SecurePass123!' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Accept invitation' }))
@@ -80,5 +80,15 @@ describe('InvitationAcceptPage', () => {
         password_confirmation: 'SecurePass123!',
       })
     })
+  })
+
+  it('does not submit when confirmation does not match', () => {
+    renderPage('/invitations#invite-token')
+    fireEvent.change(screen.getByLabelText(/^mot de passe$/i), { target: { value: 'SecurePass123!' } })
+    fireEvent.change(screen.getByLabelText(/confirmer le mot de passe/i), {
+      target: { value: 'DifferentPass12' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Accept invitation' }))
+    expect(acceptDirectorInvitation).not.toHaveBeenCalled()
   })
 })
