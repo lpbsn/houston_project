@@ -1,9 +1,4 @@
-// @vitest-environment jsdom
-
-import { QueryClientProvider, useQuery } from '@tanstack/react-query'
-import { renderHook, waitFor } from '@testing-library/react'
-import { createElement } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { analyticsQueryKeys } from '@/features/analytics/api'
 import {
@@ -11,6 +6,7 @@ import {
   applyOperationalReconnectInvalidation,
 } from '@/features/realtime/lib/apply-operational-invalidation'
 import type { OperationalRealtimeInvalidateEvent } from '@/features/realtime/types'
+import { DASHBOARD_REALTIME_INVALIDATION_MS } from '@/lib/query-invalidation'
 import { queryClient } from '@/lib/query-client'
 import { createTestQueryClient } from '@/test-utils'
 
@@ -252,6 +248,15 @@ describe('applyOperationalReconnectInvalidation', () => {
 })
 
 describe('signal created dashboard invalidation', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.advanceTimersByTime(DASHBOARD_REALTIME_INVALIDATION_MS)
+    vi.useRealTimers()
+  })
+
   it('invalidates dashboard and rankings for the WS establishment only on signal.created', () => {
     const client = createTestQueryClient()
     const dashboardEst1 = analyticsQueryKeys.dashboard({
@@ -275,7 +280,13 @@ describe('signal created dashboard invalidation', () => {
       queryClient: client,
       establishmentId: 'est-1',
     })
+    applyOperationalInvalidation(
+      { ...signalEvent('signal.created'), entity_id: 'sig-2' },
+      { queryClient: client, establishmentId: 'est-1' },
+    )
 
+    expect(client.getQueryState(dashboardEst1)?.isInvalidated).toBe(false)
+    vi.advanceTimersByTime(DASHBOARD_REALTIME_INVALIDATION_MS)
     expect(client.getQueryState(dashboardEst1)?.isInvalidated).toBe(true)
     expect(client.getQueryState(rankingsEst1)?.isInvalidated).toBe(true)
     expect(client.getQueryState(dashboardEst2)?.isInvalidated).toBe(false)
@@ -293,27 +304,19 @@ describe('signal created dashboard invalidation', () => {
       queryClient: client,
       establishmentId: 'est-1',
     })
+    vi.advanceTimersByTime(DASHBOARD_REALTIME_INVALIDATION_MS)
 
     expect(client.getQueryState(dashboardEst1)?.isInvalidated).toBe(false)
   })
 
-  it('measures dashboard refetches for successive signal.created without extra anti-burst', async () => {
+  it('refetches dashboard once for a close signal.created burst', () => {
     const client = createTestQueryClient()
     const dashboardKey = analyticsQueryKeys.dashboard({
       periodDays: 7,
       establishmentId: 'est-1',
     })
-    const queryFn = vi.fn().mockResolvedValue({ total: 1 })
-    const wrapper = ({ children }: { children?: unknown }) =>
-      createElement(QueryClientProvider, { client }, children)
-    const { result, unmount } = renderHook(
-      () => useQuery({ queryKey: dashboardKey, queryFn }),
-      { wrapper },
-    )
-    await waitFor(() => {
-      expect(result.current.isSuccess).toBe(true)
-    })
-    const baseline = queryFn.mock.calls.length
+    client.setQueryData(dashboardKey, { total: 1 })
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
 
     applyOperationalInvalidation(signalEvent('signal.created', 'est-1'), {
       queryClient: client,
@@ -326,14 +329,23 @@ describe('signal created dashboard invalidation', () => {
       },
       { queryClient: client, establishmentId: 'est-1' },
     )
+    applyOperationalInvalidation(
+      {
+        ...signalEvent('signal.created', 'est-1'),
+        entity_id: 'sig-3',
+      },
+      { queryClient: client, establishmentId: 'est-1' },
+    )
 
-    await waitFor(() => {
-      expect(queryFn.mock.calls.length).toBeGreaterThan(baseline)
-    })
-    const extraRefetches = queryFn.mock.calls.length - baseline
-    unmount()
-    // Two successive signal.created each trigger one active refetch (2 total).
-    // Not a storm: no extra anti-burst layer.
-    expect(extraRefetches).toBe(2)
+    const dashboardCallsBeforeTimer = invalidateSpy.mock.calls.filter((call) =>
+      'predicate' in (call[0] ?? {}),
+    )
+    expect(dashboardCallsBeforeTimer).toHaveLength(0)
+    vi.advanceTimersByTime(DASHBOARD_REALTIME_INVALIDATION_MS)
+    const dashboardCalls = invalidateSpy.mock.calls.filter((call) =>
+      'predicate' in (call[0] ?? {}),
+    )
+    expect(dashboardCalls).toHaveLength(1)
+    expect(client.getQueryState(dashboardKey)?.isInvalidated).toBe(true)
   })
 })

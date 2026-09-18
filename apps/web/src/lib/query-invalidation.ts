@@ -54,6 +54,34 @@ export function invalidateEstablishmentDashboardQueries(
   })
 }
 
+/** Trailing window for realtime `signal.created` bursts (not used after qualify). */
+export const DASHBOARD_REALTIME_INVALIDATION_MS = 50
+
+const pendingRealtimeDashboardInvalidations = new WeakMap<
+  QueryClient,
+  Map<string, ReturnType<typeof setTimeout>>
+>()
+
+export function scheduleEstablishmentDashboardInvalidation(
+  queryClient: QueryClient,
+  establishmentId: string,
+) {
+  let byEstablishment = pendingRealtimeDashboardInvalidations.get(queryClient)
+  if (!byEstablishment) {
+    byEstablishment = new Map()
+    pendingRealtimeDashboardInvalidations.set(queryClient, byEstablishment)
+  }
+  const existing = byEstablishment.get(establishmentId)
+  if (existing !== undefined) {
+    clearTimeout(existing)
+  }
+  const timer = setTimeout(() => {
+    byEstablishment.delete(establishmentId)
+    invalidateEstablishmentDashboardQueries(queryClient, establishmentId)
+  }, DASHBOARD_REALTIME_INVALIDATION_MS)
+  byEstablishment.set(establishmentId, timer)
+}
+
 export function invalidateSignalCommentQueries(
   queryClient: QueryClient,
   establishmentId: string,

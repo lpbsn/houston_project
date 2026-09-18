@@ -1,13 +1,15 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { analyticsQueryKeys } from '@/features/analytics/api'
 import {
+  DASHBOARD_REALTIME_INVALIDATION_MS,
   clearAuthenticatedQueryCache,
   invalidateEstablishmentDashboardQueries,
   invalidateEstablishmentSignalQueries,
   invalidateExecutionCommentQueries,
   invalidateSignalCommentQueries,
   purgeNonAuthQueries,
+  scheduleEstablishmentDashboardInvalidation,
 } from '@/lib/query-invalidation'
 import { createTestQueryClient } from '@/test-utils'
 
@@ -163,6 +165,81 @@ describe('query-invalidation', () => {
     expect(queryClient.getQueryState(patternsA)?.isInvalidated).toBe(false)
     expect(queryClient.getQueryData(dashboardB)).toEqual({ total: 2 })
     expect(queryClient.getQueryData(patternsA)).toEqual({ items: ['pattern'] })
+  })
+
+  describe('scheduleEstablishmentDashboardInvalidation', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      vi.advanceTimersByTime(DASHBOARD_REALTIME_INVALIDATION_MS)
+      vi.useRealTimers()
+    })
+
+    it('coalesces close schedules for one establishment into a single invalidation', () => {
+      const queryClient = createTestQueryClient()
+      const dashboardA = analyticsQueryKeys.dashboard({
+        periodDays: 7,
+        establishmentId: 'est-a',
+      })
+      queryClient.setQueryData(dashboardA, { total: 1 })
+      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+      scheduleEstablishmentDashboardInvalidation(queryClient, 'est-a')
+      scheduleEstablishmentDashboardInvalidation(queryClient, 'est-a')
+      scheduleEstablishmentDashboardInvalidation(queryClient, 'est-a')
+
+      expect(invalidateSpy).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(DASHBOARD_REALTIME_INVALIDATION_MS - 1)
+      expect(invalidateSpy).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1)
+      expect(invalidateSpy).toHaveBeenCalledOnce()
+      expect(queryClient.getQueryState(dashboardA)?.isInvalidated).toBe(true)
+    })
+
+    it('keeps establishment schedules isolated', () => {
+      const queryClient = createTestQueryClient()
+      const dashboardA = analyticsQueryKeys.dashboard({
+        periodDays: 7,
+        establishmentId: 'est-a',
+      })
+      const dashboardB = analyticsQueryKeys.dashboard({
+        periodDays: 7,
+        establishmentId: 'est-b',
+      })
+      queryClient.setQueryData(dashboardA, { total: 1 })
+      queryClient.setQueryData(dashboardB, { total: 2 })
+      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+      scheduleEstablishmentDashboardInvalidation(queryClient, 'est-a')
+      scheduleEstablishmentDashboardInvalidation(queryClient, 'est-b')
+      scheduleEstablishmentDashboardInvalidation(queryClient, 'est-a')
+
+      vi.advanceTimersByTime(DASHBOARD_REALTIME_INVALIDATION_MS)
+
+      expect(invalidateSpy).toHaveBeenCalledTimes(2)
+      expect(queryClient.getQueryState(dashboardA)?.isInvalidated).toBe(true)
+      expect(queryClient.getQueryState(dashboardB)?.isInvalidated).toBe(true)
+    })
+
+    it('runs a second invalidation after the window for spaced schedules', () => {
+      const queryClient = createTestQueryClient()
+      const dashboardA = analyticsQueryKeys.dashboard({
+        periodDays: 7,
+        establishmentId: 'est-a',
+      })
+      queryClient.setQueryData(dashboardA, { total: 1 })
+      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+      scheduleEstablishmentDashboardInvalidation(queryClient, 'est-a')
+      vi.advanceTimersByTime(DASHBOARD_REALTIME_INVALIDATION_MS)
+      expect(invalidateSpy).toHaveBeenCalledOnce()
+
+      scheduleEstablishmentDashboardInvalidation(queryClient, 'est-a')
+      vi.advanceTimersByTime(DASHBOARD_REALTIME_INVALIDATION_MS)
+      expect(invalidateSpy).toHaveBeenCalledTimes(2)
+    })
   })
 
   it('invalidates signal comment queries without global keys', () => {
