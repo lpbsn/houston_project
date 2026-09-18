@@ -16,6 +16,9 @@ import {
   dashboardNewBadgeTone,
   dashboardNewLabel,
   dashboardTrendTone,
+  emptyDeadlineRespectMessage,
+  emptyOverrunMessage,
+  emptyResolutionQualityMessage,
   formatAbsentPreviousPeriodLabel,
   formatContributorPoles,
   formatDashboardCountDelta,
@@ -24,7 +27,13 @@ import {
   formatDashboardPercent,
   formatDashboardPercentDelta,
   formatDashboardPointsDelta,
+  formatDeadlineAnalyzedTotal,
+  formatDeadlineExclusionNote,
+  formatOverrunExclusionNote,
+  formatOverrunTotal,
   formatRelativeDaysAgo,
+  formatResolutionQualityTotal,
+  formatUnevaluatedPlansNote,
   type DashboardTrendSense,
 } from '@/features/analytics/lib/dashboard-comparisons'
 import type { DashboardPeriodDays } from '@/features/analytics/lib/dashboard-url-state'
@@ -600,109 +609,153 @@ export function PlanDeadlineRespectCard({
   data: AnalyticsDashboardResponse['plan_deadline_respect']
   periodDays: number
 }) {
+  const exclusionNote = formatDeadlineExclusionNote(data.excluded_count)
+  const isEmpty = data.n === 0 && data.excluded_count === 0
   return (
-    <DashboardCard title="Délais et taux de résolution des plans d’action">
-      <div className="flex h-3.5 overflow-hidden rounded-full bg-[#F0EFE9]">
-        {data.early ? <span className="bg-[#1F7A4D]" style={{ width: `${data.early * 100}%` }} /> : null}
-        {data.on_time ? <span className="bg-[#111111]" style={{ width: `${data.on_time * 100}%` }} /> : null}
-        {data.late ? <span className="bg-[#E24B4A]" style={{ width: `${data.late * 100}%` }} /> : null}
-      </div>
-      <div className="mt-4 grid gap-4 sm:grid-cols-3">
-        {(
-          [
-            ['Terminé en avance', data.early, data.early_comparison, 'positive-up'],
-            ['Terminé à temps', data.on_time, data.on_time_comparison, 'positive-up'],
-            ['Terminé en retard', data.late, data.late_comparison, 'negative-up'],
-          ] as const
-        ).map(([label, share, comparison, sense]) => (
-          <div key={label}>
-            <p className="text-[12px] text-[#7D7B75]">{label}</p>
-            <p className="text-lg font-semibold tabular-nums">{formatDashboardPercent(share)}</p>
-            <TrendBadge comparison={comparison} sense={sense} format="percent" periodDays={periodDays} />
-          </div>
-        ))}
-      </div>
-      {data.excluded_count > 0 ? (
-        <p className="mt-3 text-[12px] text-[#7D7B75]">
-          {data.excluded_count} soumission{data.excluded_count > 1 ? 's' : ''} exclue
-          {data.excluded_count > 1 ? 's' : ''} : dates de planification non fiables.
-        </p>
-      ) : null}
+    <DashboardCard title="Respect des échéances des plans d’action">
+      {isEmpty ? (
+        <p className="text-sm text-[#7D7B75]">{emptyDeadlineRespectMessage()}</p>
+      ) : (
+        <>
+          <p className="text-2xl font-semibold tabular-nums">{formatDeadlineAnalyzedTotal(data.n)}</p>
+          {data.n > 0 ? (
+            <>
+              <div className="mt-4 flex h-3.5 overflow-hidden rounded-full bg-[#F0EFE9]">
+                {data.early ? (
+                  <span className="bg-[#1F7A4D]" style={{ width: `${data.early * 100}%` }} />
+                ) : null}
+                {data.on_time ? (
+                  <span className="bg-[#111111]" style={{ width: `${data.on_time * 100}%` }} />
+                ) : null}
+                {data.late ? (
+                  <span className="bg-[#E24B4A]" style={{ width: `${data.late * 100}%` }} />
+                ) : null}
+              </div>
+              <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                {(
+                  [
+                    ['Terminé en avance', data.early, data.early_comparison, 'positive-up'],
+                    ['Terminé à temps', data.on_time, data.on_time_comparison, 'positive-up'],
+                    ['Terminé en retard', data.late, data.late_comparison, 'negative-up'],
+                  ] as const
+                ).map(([label, share, comparison, sense]) => (
+                  <div key={label}>
+                    <p className="text-[12px] text-[#7D7B75]">{label}</p>
+                    <p className="text-lg font-semibold tabular-nums">{formatDashboardPercent(share)}</p>
+                    <TrendBadge
+                      comparison={comparison}
+                      sense={sense}
+                      format="percent"
+                      periodDays={periodDays}
+                    />
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : null}
+          {exclusionNote ? <p className="mt-3 text-[12px] text-[#7D7B75]">{exclusionNote}</p> : null}
+        </>
+      )}
     </DashboardCard>
   )
 }
 
 export function PlanOverrunCard({
-  buckets,
+  data,
 }: {
-  buckets: AnalyticsDashboardResponse['plan_overrun']
+  data: AnalyticsDashboardResponse['plan_overrun']
 }) {
-  const max = Math.max(...buckets.map((bucket) => bucket.count), 1)
+  const exclusionNote = formatOverrunExclusionNote(data.excluded_count)
+  const max = Math.max(...data.buckets.map((bucket) => bucket.count), 1)
   return (
     <DashboardCard
-      title="Plan d’action en retard"
-      subtitle="Répartition des plans d’action en retard selon leur taux de dépassement."
+      title="Plans d’action en retard"
+      subtitle="Stock actuel, indépendant de la période. Répartition selon le taux de dépassement."
       titleTooltip="Le taux de dépassement compare le temps de retard à la durée planifiée du plan. Plus le pourcentage est élevé, plus le retard est important par rapport au délai prévu. Exemple : 2 jours de retard sur un plan de 30 jours représentent 6,7 %, tandis que 2 jours de retard sur un plan de 2 jours représentent 100 %."
     >
-      <ul className="flex flex-col gap-2">
-        {buckets.map((bucket) => (
-          <li key={bucket.key} className="rounded-xl bg-[#F5F4F0] px-3 py-2">
-            <div className="flex items-center justify-between gap-3 text-sm">
-              <span>{OVERRUN_LABELS[bucket.key] ?? bucket.key}</span>
-              <span className="tabular-nums text-[#7D7B75]">
-                {bucket.count} {formatDashboardPercent(bucket.share)}
-              </span>
-            </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
-              <span
-                className="block h-full bg-[#111111]"
-                style={{ width: `${(bucket.count / max) * 100}%` }}
-              />
-            </div>
-          </li>
-        ))}
-      </ul>
-      <p className="mt-3 text-[11px] tracking-[0.08em] text-[#7D7B75] uppercase">
-        Nombre de plans concernés et part relative
-      </p>
+      {data.total_count === 0 ? (
+        <p className="text-sm text-[#7D7B75]">{emptyOverrunMessage()}</p>
+      ) : (
+        <>
+          <p className="text-2xl font-semibold tabular-nums">{formatOverrunTotal(data.total_count)}</p>
+          {data.analyzed_count > 0 ? (
+            <ul className="mt-4 flex flex-col gap-2">
+              {data.buckets.map((bucket) => (
+                <li key={bucket.key} className="rounded-xl bg-[#F5F4F0] px-3 py-2">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span>{OVERRUN_LABELS[bucket.key] ?? bucket.key}</span>
+                    <span className="tabular-nums text-[#7D7B75]">
+                      {bucket.count} {formatDashboardPercent(bucket.share)}
+                    </span>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
+                    <span
+                      className="block h-full bg-[#111111]"
+                      style={{ width: `${(bucket.count / max) * 100}%` }}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {exclusionNote ? <p className="mt-3 text-[12px] text-[#7D7B75]">{exclusionNote}</p> : null}
+        </>
+      )}
     </DashboardCard>
   )
 }
 
 function StarRow({ filled }: { filled: number }) {
+  const label = filled === 0 ? '0 étoile' : `${filled} étoile${filled > 1 ? 's' : ''}`
   return (
-    <span className="inline-flex gap-0.5 text-[#1F7A4D]" aria-label={`${filled} étoile${filled > 1 ? 's' : ''}`}>
-      {Array.from({ length: 5 }, (_, index) => (
-        <span key={index}>{index < filled ? '★' : '☆'}</span>
-      ))}
+    <span className="inline-flex items-center gap-2 text-[#1F7A4D]" aria-label={label}>
+      <span className="inline-flex gap-0.5">
+        {Array.from({ length: 5 }, (_, index) => (
+          <span key={index}>{index < filled ? '★' : '☆'}</span>
+        ))}
+      </span>
+      {filled === 0 ? <span className="text-[12px] text-[#7D7B75]">0 étoile</span> : null}
     </span>
   )
 }
 
 export function ResolutionQualityCard({
-  buckets,
+  data,
 }: {
-  buckets: AnalyticsDashboardResponse['resolution_quality']
+  data: AnalyticsDashboardResponse['resolution_quality']
 }) {
-  const max = Math.max(...buckets.map((bucket) => bucket.share ?? 0), 0.01)
+  const unevaluatedNote = formatUnevaluatedPlansNote(data.unevaluated_count)
+  const max = Math.max(...data.buckets.map((bucket) => bucket.share ?? 0), 0.01)
   return (
     <DashboardCard title="Qualité des résolutions de plans d’action">
-      <ul className="flex flex-col gap-2">
-        {buckets.map((bucket) => (
-          <li key={bucket.stars} className="flex items-center gap-3">
-            <StarRow filled={bucket.stars} />
-            <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-[#F0EFE9]">
-              <span
-                className="block h-full bg-[#1F7A4D]"
-                style={{ width: `${((bucket.share ?? 0) / max) * 100}%` }}
-              />
-            </div>
-            <span className="w-10 text-right text-sm tabular-nums">
-              {formatDashboardPercent(bucket.share)}
-            </span>
-          </li>
-        ))}
-      </ul>
+      {data.n === 0 ? (
+        <p className="text-sm text-[#7D7B75]">{emptyResolutionQualityMessage()}</p>
+      ) : (
+        <>
+          <p className="text-2xl font-semibold tabular-nums">{formatResolutionQualityTotal(data.n)}</p>
+          {unevaluatedNote ? (
+            <p className="mt-2 text-[12px] text-[#7D7B75]">{unevaluatedNote}</p>
+          ) : null}
+          <ul className="mt-4 flex flex-col gap-2">
+            {data.buckets.map((bucket) => (
+              <li key={bucket.stars} className="flex items-center gap-3">
+                <StarRow filled={bucket.stars} />
+                <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-[#F0EFE9]">
+                  {bucket.share != null ? (
+                    <span
+                      className="block h-full bg-[#1F7A4D]"
+                      style={{ width: `${(bucket.share / max) * 100}%` }}
+                    />
+                  ) : null}
+                </div>
+                <span className="w-10 text-right text-sm tabular-nums">
+                  {formatDashboardPercent(bucket.share)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </DashboardCard>
   )
 }

@@ -15,7 +15,6 @@ from django.utils import timezone
 from houston.accounts.models import User
 from houston.action_plans.constants import (
     EXECUTION_LIFECYCLE_EVENT_MARKED_DONE,
-    EXECUTION_STATUS_CANCELED,
     EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
     EXECUTION_STATUS_PENDING_VALIDATION,
@@ -251,6 +250,22 @@ class QualityBucket:
 
 
 @dataclass(frozen=True)
+class PlanOverrun:
+    total_count: int
+    analyzed_count: int
+    excluded_count: int
+    buckets: tuple[OverrunBucket, ...]
+
+
+@dataclass(frozen=True)
+class ResolutionQuality:
+    n: int
+    evaluated_count: int
+    unevaluated_count: int
+    buckets: tuple[QualityBucket, ...]
+
+
+@dataclass(frozen=True)
 class AnalyticsDashboardResult:
     period_days: int
     current_period: AnalyticsComparisonPeriod
@@ -265,8 +280,8 @@ class AnalyticsDashboardResult:
     observation_destinations: dict[str, DestinationShare]
     observation_destination_delays: dict[str, DestinationDelay]
     plan_deadline_respect: DeadlineShare
-    plan_overrun: tuple[OverrunBucket, ...]
-    resolution_quality: tuple[QualityBucket, ...]
+    plan_overrun: PlanOverrun
+    resolution_quality: ResolutionQuality
     contributors: tuple[ContributorItem, ...]
 
 
@@ -347,6 +362,7 @@ def get_analytics_dashboard(
         ),
         plan_overrun=_plan_overrun(executions=context.live_executions, now=context.moment),
         resolution_quality=_resolution_quality(
+            read_scope=context.read_scope,
             establishment_id=establishment_id,
             current_period=context.current_period,
         ),
@@ -1099,65 +1115,92 @@ def _plan_overrun(
     *,
     executions: list[ActionPlanExecution],
     now: datetime,
-) -> tuple[OverrunBucket, ...]:
+) -> PlanOverrun:
     counts = {key: 0 for key in OVERRUN_BUCKET_KEYS}
+    excluded = 0
     for execution in executions:
         if execution.status not in {EXECUTION_STATUS_SCHEDULED, EXECUTION_STATUS_IN_PROGRESS}:
             continue
-        if execution.status in {
-            EXECUTION_STATUS_PENDING_VALIDATION,
-            EXECUTION_STATUS_DONE,
-            EXECUTION_STATUS_CANCELED,
-        }:
+        if execution.end_at is None or execution.end_at >= now:
             continue
-        if execution.start_at is None or execution.end_at is None:
-            continue
-        if execution.end_at >= now:
+        if execution.start_at is None:
+            excluded += 1
             continue
         planned = execution.end_at - execution.start_at
         if planned.total_seconds() <= 0:
+            excluded += 1
             continue
         percent = ((now - execution.end_at) / planned) * 100
         counts[_overrun_bucket_key(percent)] += 1
-    total = sum(counts.values())
-    return tuple(
-        OverrunBucket(
-            key=key,
-            count=counts[key],
-            share=(counts[key] / total) if total else None,
-        )
-        for key in OVERRUN_BUCKET_KEYS
+    analyzed = sum(counts.values())
+    return PlanOverrun(
+        total_count=analyzed + excluded,
+        analyzed_count=analyzed,
+        excluded_count=excluded,
+        buckets=tuple(
+            OverrunBucket(
+                key=key,
+                count=counts[key],
+                share=(counts[key] / analyzed) if analyzed else None,
+            )
+            for key in OVERRUN_BUCKET_KEYS
+        ),
     )
 
 
 def _resolution_quality(
     *,
+    read_scope: AnalyticsReadScope,
     establishment_id: UUID,
     current_period: AnalyticsComparisonPeriod,
-) -> tuple[QualityBucket, ...]:
-    rows = (
-        ActionPlanExecutionReview.objects.filter(
-            is_active=True,
-            reviewed_at__gte=current_period.period_start,
-            reviewed_at__lt=current_period.period_end,
-            action_plan_execution__establishment_id=establishment_id,
+) -> ResolutionQuality:
+    executions = list(
+        read_scope.readable_executions_queryset()
+        .filter(
+            establishment_id=establishment_id,
+            status=EXECUTION_STATUS_DONE,
         )
-        .values("stars")
-        .annotate(count=Count("id"))
+        .filter(
+            Q(
+                validated_at__gte=current_period.period_start,
+                validated_at__lt=current_period.period_end,
+            )
+            | Q(
+                validated_at__isnull=True,
+                marked_done_at__gte=current_period.period_start,
+                marked_done_at__lt=current_period.period_end,
+            )
+        )
     )
+    stars_by_execution = {
+        row["action_plan_execution_id"]: int(row["stars"])
+        for row in ActionPlanExecutionReview.objects.filter(
+            is_active=True,
+            action_plan_execution_id__in=[execution.id for execution in executions],
+        ).values("action_plan_execution_id", "stars")
+    }
     counts = {stars: 0 for stars in range(6)}
-    for row in rows:
-        stars = int(row["stars"])
-        if 0 <= stars <= 5:
-            counts[stars] = int(row["count"])
-    total = sum(counts.values())
-    return tuple(
-        QualityBucket(
-            stars=stars,
-            count=counts[stars],
-            share=(counts[stars] / total) if total else None,
-        )
-        for stars in range(5, -1, -1)
+    evaluated = 0
+    unevaluated = 0
+    for execution in executions:
+        stars = stars_by_execution.get(execution.id)
+        if stars is None or not 0 <= stars <= 5:
+            unevaluated += 1
+            continue
+        evaluated += 1
+        counts[stars] += 1
+    return ResolutionQuality(
+        n=len(executions),
+        evaluated_count=evaluated,
+        unevaluated_count=unevaluated,
+        buckets=tuple(
+            QualityBucket(
+                stars=stars,
+                count=counts[stars],
+                share=(counts[stars] / evaluated) if evaluated else None,
+            )
+            for stars in range(5, -1, -1)
+        ),
     )
 
 

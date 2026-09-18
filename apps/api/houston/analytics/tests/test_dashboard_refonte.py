@@ -46,7 +46,10 @@ from houston.signals.constants import (
 from houston.signals.lifecycle_events import record_signal_lifecycle_event
 from houston.signals.models import Signal
 from houston.testing.auth import auth_headers, build_api_membership, login
-from houston.testing.taxonomy import create_business_unit
+from houston.testing.taxonomy import (
+    create_business_unit,
+    create_membership_with_business_unit_scope,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -393,9 +396,65 @@ def test_current_overrun_excludes_pending_validation_and_measures_133_percent():
         pilot_business_unit=bu,
     )
     result = _dashboard(membership, now=now)
-    buckets = {bucket.key: bucket.count for bucket in result.plan_overrun}
+    overrun = result.plan_overrun
+    buckets = {bucket.key: bucket.count for bucket in overrun.buckets}
     assert buckets["gte_100"] == 2
+    assert overrun.analyzed_count == 2
+    assert overrun.total_count == 2
+    assert overrun.excluded_count == 0
     assert sum(buckets.values()) == 2
+
+
+def test_current_overrun_counts_unclassifiable_separately_and_ignores_period():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    apply_analytics_history_cutover(now=now - timedelta(days=30))
+    bu = create_business_unit(establishment=membership.establishment, key="salle")
+    plan = ActionPlan.objects.create(
+        establishment=membership.establishment,
+        created_by=membership,
+        title="Overrun exclusions",
+        pilot_business_unit=bu,
+        affected_business_unit=bu,
+        responsible_business_unit=bu,
+    )
+    ActionPlanExecution.objects.create(
+        action_plan=plan,
+        establishment=membership.establishment,
+        created_by=membership,
+        title="Classable",
+        status=EXECUTION_STATUS_IN_PROGRESS,
+        start_at=now - timedelta(hours=7),
+        end_at=now - timedelta(hours=4),
+        last_activity_at=now,
+        use_shared_chronology=True,
+        affected_business_unit=bu,
+        responsible_business_unit=bu,
+        pilot_business_unit=bu,
+    )
+    ActionPlanExecution.objects.create(
+        action_plan=plan,
+        establishment=membership.establishment,
+        created_by=membership,
+        title="Missing start",
+        status=EXECUTION_STATUS_IN_PROGRESS,
+        start_at=None,
+        end_at=now - timedelta(hours=1),
+        last_activity_at=now,
+        use_shared_chronology=True,
+        affected_business_unit=bu,
+        responsible_business_unit=bu,
+        pilot_business_unit=bu,
+    )
+    short = _dashboard(membership, now=now, period_days=3)
+    long = _dashboard(membership, now=now, period_days=90)
+    for result in (short, long):
+        assert result.plan_overrun.total_count == 2
+        assert result.plan_overrun.analyzed_count == 1
+        assert result.plan_overrun.excluded_count == 1
+        assert result.plan_overrun.analyzed_count == sum(
+            bucket.count for bucket in result.plan_overrun.buckets
+        )
 
 
 def test_resolution_quality_includes_zero_stars():
@@ -417,6 +476,8 @@ def test_resolution_quality_includes_zero_stars():
         created_by=membership,
         title="Reviewed",
         status=EXECUTION_STATUS_DONE,
+        marked_done_at=now - timedelta(hours=2),
+        validated_at=now - timedelta(hours=1),
         last_activity_at=now,
         use_shared_chronology=True,
         affected_business_unit=bu,
@@ -431,9 +492,167 @@ def test_resolution_quality_includes_zero_stars():
         is_active=True,
     )
     result = _dashboard(membership, now=now)
-    zero = next(bucket for bucket in result.resolution_quality if bucket.stars == 0)
+    quality = result.resolution_quality
+    zero = next(bucket for bucket in quality.buckets if bucket.stars == 0)
+    assert quality.n == 1
+    assert quality.evaluated_count == 1
+    assert quality.unevaluated_count == 0
     assert zero.count == 1
     assert zero.share == 1.0
+
+
+def test_resolution_quality_counts_done_executions_not_review_date():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    apply_analytics_history_cutover(now=now - timedelta(days=30))
+    bu = create_business_unit(establishment=membership.establishment, key="bar")
+    plan = ActionPlan.objects.create(
+        establishment=membership.establishment,
+        created_by=membership,
+        title="Recurring quality",
+        pilot_business_unit=bu,
+        affected_business_unit=bu,
+        responsible_business_unit=bu,
+    )
+    ActionPlanExecution.objects.create(
+        action_plan=plan,
+        establishment=membership.establishment,
+        created_by=membership,
+        title="Direct done",
+        status=EXECUTION_STATUS_DONE,
+        requires_validation=False,
+        marked_done_at=now - timedelta(hours=2),
+        last_activity_at=now,
+        use_shared_chronology=True,
+        affected_business_unit=bu,
+        responsible_business_unit=bu,
+        pilot_business_unit=bu,
+    )
+    outside = ActionPlanExecution.objects.create(
+        action_plan=plan,
+        establishment=membership.establishment,
+        created_by=membership,
+        title="Outside period",
+        status=EXECUTION_STATUS_DONE,
+        requires_validation=False,
+        marked_done_at=now - timedelta(days=10),
+        last_activity_at=now,
+        use_shared_chronology=True,
+        affected_business_unit=bu,
+        responsible_business_unit=bu,
+        pilot_business_unit=bu,
+    )
+    revalidated = ActionPlanExecution.objects.create(
+        action_plan=plan,
+        establishment=membership.establishment,
+        created_by=membership,
+        title="Revalidated",
+        status=EXECUTION_STATUS_DONE,
+        marked_done_at=now - timedelta(hours=3),
+        validated_at=now - timedelta(hours=1),
+        last_activity_at=now,
+        use_shared_chronology=True,
+        affected_business_unit=bu,
+        responsible_business_unit=bu,
+        pilot_business_unit=bu,
+    )
+    ActionPlanExecutionReview.objects.create(
+        action_plan_execution=revalidated,
+        reviewer_membership=membership,
+        stars=2,
+        reviewed_at=now - timedelta(days=20),
+        is_active=False,
+    )
+    ActionPlanExecutionReview.objects.create(
+        action_plan_execution=revalidated,
+        reviewer_membership=membership,
+        stars=5,
+        reviewed_at=now - timedelta(hours=1),
+        is_active=True,
+    )
+    ActionPlanExecutionReview.objects.create(
+        action_plan_execution=outside,
+        reviewer_membership=membership,
+        stars=4,
+        reviewed_at=now - timedelta(hours=1),
+        is_active=True,
+    )
+    result = _dashboard(membership, now=now)
+    quality = result.resolution_quality
+    buckets = {bucket.stars: bucket for bucket in quality.buckets}
+    assert quality.n == 2
+    assert quality.evaluated_count == 1
+    assert quality.unevaluated_count == 1
+    assert buckets[5].count == 1
+    assert buckets[5].share == 1.0
+    assert buckets[0].count == 0
+    assert buckets[2].count == 0
+    assert buckets[4].count == 0
+
+
+def test_resolution_quality_excludes_out_of_scope_executions():
+    membership = build_api_membership(role=EstablishmentMembership.Role.MANAGER)
+    now = timezone.now()
+    apply_analytics_history_cutover(now=now - timedelta(days=30))
+    in_scope_bu = create_business_unit(
+        establishment=membership.establishment,
+        key="quality_in_scope",
+    )
+    out_scope_bu = create_business_unit(
+        establishment=membership.establishment,
+        key="quality_out_scope",
+    )
+    create_membership_with_business_unit_scope(
+        membership=membership,
+        business_unit=in_scope_bu,
+    )
+    in_plan = ActionPlan.objects.create(
+        establishment=membership.establishment,
+        created_by=membership,
+        title="In scope",
+        pilot_business_unit=in_scope_bu,
+        affected_business_unit=in_scope_bu,
+        responsible_business_unit=in_scope_bu,
+    )
+    out_plan = ActionPlan.objects.create(
+        establishment=membership.establishment,
+        created_by=membership,
+        title="Out of scope",
+        pilot_business_unit=out_scope_bu,
+        affected_business_unit=out_scope_bu,
+        responsible_business_unit=out_scope_bu,
+    )
+    ActionPlanExecution.objects.create(
+        action_plan=in_plan,
+        establishment=membership.establishment,
+        created_by=membership,
+        title="In scope done",
+        status=EXECUTION_STATUS_DONE,
+        requires_validation=False,
+        marked_done_at=now - timedelta(hours=1),
+        last_activity_at=now,
+        use_shared_chronology=True,
+        affected_business_unit=in_scope_bu,
+        responsible_business_unit=in_scope_bu,
+        pilot_business_unit=in_scope_bu,
+    )
+    ActionPlanExecution.objects.create(
+        action_plan=out_plan,
+        establishment=membership.establishment,
+        created_by=membership,
+        title="Out of scope done",
+        status=EXECUTION_STATUS_DONE,
+        requires_validation=False,
+        marked_done_at=now - timedelta(hours=1),
+        last_activity_at=now,
+        use_shared_chronology=True,
+        affected_business_unit=out_scope_bu,
+        responsible_business_unit=out_scope_bu,
+        pilot_business_unit=out_scope_bu,
+    )
+    result = _dashboard(membership, now=now)
+    assert result.resolution_quality.n == 1
+    assert result.resolution_quality.unevaluated_count == 1
 
 
 def test_rankings_paginate_all_locations(api_client):

@@ -3324,8 +3324,8 @@ export interface components {
                 [key: string]: components["schemas"]["AnalyticsDestinationDelay"];
             };
             plan_deadline_respect: components["schemas"]["AnalyticsDeadlineShare"];
-            plan_overrun: components["schemas"]["AnalyticsOverrunBucket"][];
-            resolution_quality: components["schemas"]["AnalyticsQualityBucket"][];
+            plan_overrun: components["schemas"]["AnalyticsPlanOverrun"];
+            resolution_quality: components["schemas"]["AnalyticsResolutionQuality"];
             contributors: components["schemas"]["AnalyticsContributorItem"][];
         };
         AnalyticsDeadlineShare: {
@@ -3616,6 +3616,12 @@ export interface components {
             /** Format: date-time */
             period_end: string;
         };
+        AnalyticsPlanOverrun: {
+            total_count: number;
+            analyzed_count: number;
+            excluded_count: number;
+            buckets: components["schemas"]["AnalyticsOverrunBucket"][];
+        };
         AnalyticsQualityBucket: {
             stars: number;
             count: number;
@@ -3640,6 +3646,12 @@ export interface components {
         AnalyticsRecurringPreview: {
             items: components["schemas"]["AnalyticsRecurringPatternItem"][];
             total_count: number;
+        };
+        AnalyticsResolutionQuality: {
+            n: number;
+            evaluated_count: number;
+            unevaluated_count: number;
+            buckets: components["schemas"]["AnalyticsQualityBucket"][];
         };
         AnalyticsSignalBusinessUnitRef: {
             /** Format: uuid */

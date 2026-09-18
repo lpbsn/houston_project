@@ -125,10 +125,24 @@ class AnalyticsOverrunBucketSerializer(serializers.Serializer):
     share = serializers.FloatField(allow_null=True)
 
 
+class AnalyticsPlanOverrunSerializer(serializers.Serializer):
+    total_count = serializers.IntegerField()
+    analyzed_count = serializers.IntegerField()
+    excluded_count = serializers.IntegerField()
+    buckets = AnalyticsOverrunBucketSerializer(many=True)
+
+
 class AnalyticsQualityBucketSerializer(serializers.Serializer):
     stars = serializers.IntegerField()
     count = serializers.IntegerField()
     share = serializers.FloatField(allow_null=True)
+
+
+class AnalyticsResolutionQualitySerializer(serializers.Serializer):
+    n = serializers.IntegerField()
+    evaluated_count = serializers.IntegerField()
+    unevaluated_count = serializers.IntegerField()
+    buckets = AnalyticsQualityBucketSerializer(many=True)
 
 
 class AnalyticsDashboardResponseSerializer(serializers.Serializer):
@@ -147,8 +161,8 @@ class AnalyticsDashboardResponseSerializer(serializers.Serializer):
         child=AnalyticsDestinationDelaySerializer()
     )
     plan_deadline_respect = AnalyticsDeadlineShareSerializer()
-    plan_overrun = AnalyticsOverrunBucketSerializer(many=True)
-    resolution_quality = AnalyticsQualityBucketSerializer(many=True)
+    plan_overrun = AnalyticsPlanOverrunSerializer()
+    resolution_quality = AnalyticsResolutionQualitySerializer()
     contributors = AnalyticsContributorItemSerializer(many=True)
 
 

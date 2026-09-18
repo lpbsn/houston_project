@@ -325,6 +325,16 @@ def test_dashboard_response_matches_backend_primitive(api_client):
         deadlines["early_count"] + deadlines["on_time_count"] + deadlines["late_count"]
         == deadlines["n"]
     )
+    overrun = body["plan_overrun"]
+    assert overrun["total_count"] == expected.plan_overrun.total_count
+    assert overrun["analyzed_count"] == expected.plan_overrun.analyzed_count
+    assert overrun["excluded_count"] == expected.plan_overrun.excluded_count
+    assert overrun["analyzed_count"] + overrun["excluded_count"] == overrun["total_count"]
+    quality = body["resolution_quality"]
+    assert quality["n"] == expected.resolution_quality.n
+    assert quality["evaluated_count"] == expected.resolution_quality.evaluated_count
+    assert quality["unevaluated_count"] == expected.resolution_quality.unevaluated_count
+    assert quality["evaluated_count"] + quality["unevaluated_count"] == quality["n"]
 
 
 def test_pattern_list_detail_and_signals_payloads_are_allowlisted(api_client):

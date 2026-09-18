@@ -214,8 +214,8 @@ describe('AnalyticsPage', () => {
         'Nombre d’observations',
         'Destination des observations',
         'Délai avant chaque destination',
-        'Délais et taux de résolution des plans d’action',
-        'Plan d’action en retard',
+        'Respect des échéances des plans d’action',
+        'Plans d’action en retard',
         'Qualité des résolutions de plans d’action',
         'Classement des contributeurs',
         'Lieux les plus cités',
@@ -223,6 +223,9 @@ describe('AnalyticsPage', () => {
     )
     expect(screen.queryByText(/glissez-déposez/i)).toBeNull()
     expect(screen.getAllByText('Bientôt disponible').length).toBeGreaterThan(0)
+    expect(screen.getByText('10 plans analysés')).toBeTruthy()
+    expect(screen.getByText('15 plans actuellement en retard')).toBeTruthy()
+    expect(screen.getByText('25 plans résolus sur la période')).toBeTruthy()
   })
 
   it('exposes period controls and dashboard widgets without fake confidence copy', () => {

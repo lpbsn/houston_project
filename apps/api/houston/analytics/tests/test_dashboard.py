@@ -1281,7 +1281,8 @@ def test_manager_dashboard_plan_metrics_exclude_out_of_scope_executions():
     )
 
     assert result.plan_deadline_respect.n == 0
-    assert result.plan_overrun[0].count == 0
+    assert result.plan_overrun.total_count == 0
+    assert result.plan_overrun.analyzed_count == 0
 
 
 def test_qualify_moves_period_volume_to_current_pole_and_zone():

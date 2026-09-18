@@ -167,21 +167,31 @@ export function dashboardResponseFixture(
       on_time_comparison: dashboardComparison(0.54, 'complete', -0.03),
       late_comparison: dashboardComparison(0.25, 'complete', -0.02),
     },
-    plan_overrun: [
-      { key: 'lt_10', count: 3, share: 0.2 },
-      { key: 'from_10_to_25', count: 3, share: 0.2 },
-      { key: 'from_25_to_50', count: 2, share: 0.18 },
-      { key: 'from_50_to_100', count: 4, share: 0.27 },
-      { key: 'gte_100', count: 3, share: 0.2 },
-    ],
-    resolution_quality: [
-      { stars: 5, count: 10, share: 0.38 },
-      { stars: 4, count: 8, share: 0.31 },
-      { stars: 3, count: 4, share: 0.17 },
-      { stars: 2, count: 2, share: 0.09 },
-      { stars: 1, count: 1, share: 0.05 },
-      { stars: 0, count: 0, share: 0 },
-    ],
+    plan_overrun: {
+      total_count: 15,
+      analyzed_count: 15,
+      excluded_count: 0,
+      buckets: [
+        { key: 'lt_10', count: 3, share: 0.2 },
+        { key: 'from_10_to_25', count: 3, share: 0.2 },
+        { key: 'from_25_to_50', count: 2, share: 0.18 },
+        { key: 'from_50_to_100', count: 4, share: 0.27 },
+        { key: 'gte_100', count: 3, share: 0.2 },
+      ],
+    },
+    resolution_quality: {
+      n: 25,
+      evaluated_count: 25,
+      unevaluated_count: 0,
+      buckets: [
+        { stars: 5, count: 10, share: 0.38 },
+        { stars: 4, count: 8, share: 0.31 },
+        { stars: 3, count: 4, share: 0.17 },
+        { stars: 2, count: 2, share: 0.09 },
+        { stars: 1, count: 1, share: 0.05 },
+        { stars: 0, count: 0, share: 0 },
+      ],
+    },
     contributors: [
       {
         user_id: '33333333-3333-4333-8333-333333333333',

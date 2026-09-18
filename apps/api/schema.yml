@@ -10634,13 +10634,9 @@ components:
         plan_deadline_respect:
           $ref: '#/components/schemas/AnalyticsDeadlineShare'
         plan_overrun:
-          type: array
-          items:
-            $ref: '#/components/schemas/AnalyticsOverrunBucket'
+          $ref: '#/components/schemas/AnalyticsPlanOverrun'
         resolution_quality:
-          type: array
-          items:
-            $ref: '#/components/schemas/AnalyticsQualityBucket'
+          $ref: '#/components/schemas/AnalyticsResolutionQuality'
         contributors:
           type: array
           items:
@@ -11419,6 +11415,24 @@ components:
       required:
       - period_end
       - period_start
+    AnalyticsPlanOverrun:
+      type: object
+      properties:
+        total_count:
+          type: integer
+        analyzed_count:
+          type: integer
+        excluded_count:
+          type: integer
+        buckets:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsOverrunBucket'
+      required:
+      - analyzed_count
+      - buckets
+      - excluded_count
+      - total_count
     AnalyticsQualityBucket:
       type: object
       properties:
@@ -11479,6 +11493,24 @@ components:
       required:
       - items
       - total_count
+    AnalyticsResolutionQuality:
+      type: object
+      properties:
+        n:
+          type: integer
+        evaluated_count:
+          type: integer
+        unevaluated_count:
+          type: integer
+        buckets:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsQualityBucket'
+      required:
+      - buckets
+      - evaluated_count
+      - n
+      - unevaluated_count
     AnalyticsSignalBusinessUnitRef:
       type: object
       properties:

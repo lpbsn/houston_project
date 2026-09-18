@@ -320,6 +320,55 @@ export function emptyPlanDelayMessage(
   return 'Aucune validation sur la période'
 }
 
+export function formatDeadlineAnalyzedTotal(n: number): string {
+  return formatCountedNoun(n, 'plan analysé', 'plans analysés')
+}
+
+export function formatDeadlineExclusionNote(excludedCount: number): string | null {
+  if (excludedCount <= 0) {
+    return null
+  }
+  return `${formatCountedNoun(excludedCount, 'plan exclu', 'plans exclus')} : dates de planification non fiables.`
+}
+
+export function emptyDeadlineRespectMessage(): string {
+  return 'Aucun plan d’action terminé mesurable sur la période.'
+}
+
+export function formatOverrunTotal(totalCount: number): string {
+  return formatCountedNoun(
+    totalCount,
+    'plan actuellement en retard',
+    'plans actuellement en retard',
+  )
+}
+
+export function formatOverrunExclusionNote(excludedCount: number): string | null {
+  if (excludedCount <= 0) {
+    return null
+  }
+  return `${formatCountedNoun(excludedCount, 'plan exclu', 'plans exclus')} : dates de planification non fiables.`
+}
+
+export function emptyOverrunMessage(): string {
+  return 'Aucun plan d’action actuellement en retard.'
+}
+
+export function formatResolutionQualityTotal(n: number): string {
+  return `${formatCountedNoun(n, 'plan résolu', 'plans résolus')} sur la période`
+}
+
+export function emptyResolutionQualityMessage(): string {
+  return 'Aucun plan résolu sur la période'
+}
+
+export function formatUnevaluatedPlansNote(unevaluatedCount: number): string | null {
+  if (unevaluatedCount <= 0) {
+    return null
+  }
+  return formatCountedNoun(unevaluatedCount, 'plan non évalué', 'plans non évalués')
+}
+
 export function delayExclusionNote(undatableInScope: number): string | null {
   if (undatableInScope <= 0) {
     return null

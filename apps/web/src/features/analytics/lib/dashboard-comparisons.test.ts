@@ -12,6 +12,15 @@ import {
   dashboardCoverageBannerMessage,
   dashboardNewBadgeTone,
   emptyObservationDelayMessage,
+  emptyDeadlineRespectMessage,
+  emptyOverrunMessage,
+  emptyResolutionQualityMessage,
+  formatDeadlineAnalyzedTotal,
+  formatDeadlineExclusionNote,
+  formatOverrunExclusionNote,
+  formatOverrunTotal,
+  formatResolutionQualityTotal,
+  formatUnevaluatedPlansNote,
   observationTransformDelayHint,
   canonicalRoutingVolumeHint,
   formatAbsentPreviousPeriodLabel,
@@ -278,6 +287,28 @@ describe('empty delay copy', () => {
 
   it('keeps the median hint oriented to the duration', () => {
     expect(medianDurationHint('1,8 j')).toBe('La moitié des cas en 1,8 j ou moins.')
+  })
+})
+
+describe('dashboard plan totals copy', () => {
+  it('separates analyzed totals from exclusions and empty states', () => {
+    expect(formatDeadlineAnalyzedTotal(1)).toBe('1 plan analysé')
+    expect(formatDeadlineAnalyzedTotal(10)).toBe('10 plans analysés')
+    expect(formatDeadlineExclusionNote(0)).toBeNull()
+    expect(formatDeadlineExclusionNote(2)).toBe(
+      '2 plans exclus : dates de planification non fiables.',
+    )
+    expect(emptyDeadlineRespectMessage()).toBe(
+      'Aucun plan d’action terminé mesurable sur la période.',
+    )
+    expect(formatOverrunTotal(1)).toBe('1 plan actuellement en retard')
+    expect(formatOverrunExclusionNote(1)).toBe(
+      '1 plan exclu : dates de planification non fiables.',
+    )
+    expect(emptyOverrunMessage()).toBe('Aucun plan d’action actuellement en retard.')
+    expect(formatResolutionQualityTotal(3)).toBe('3 plans résolus sur la période')
+    expect(emptyResolutionQualityMessage()).toBe('Aucun plan résolu sur la période')
+    expect(formatUnevaluatedPlansNote(4)).toBe('4 plans non évalués')
   })
 })
 

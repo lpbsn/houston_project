@@ -216,8 +216,8 @@ export function AnalyticsPage({ scope = { type: 'session' } }: AnalyticsPageProp
             data={dashboardQuery.data.plan_deadline_respect}
             periodDays={periodDays}
           />
-          <PlanOverrunCard buckets={dashboardQuery.data.plan_overrun} />
-          <ResolutionQualityCard buckets={dashboardQuery.data.resolution_quality} />
+          <PlanOverrunCard data={dashboardQuery.data.plan_overrun} />
+          <ResolutionQualityCard data={dashboardQuery.data.resolution_quality} />
           <ContributorsCard items={dashboardQuery.data.contributors} />
           <LocationsCard
             preview={dashboardQuery.data.locations}
