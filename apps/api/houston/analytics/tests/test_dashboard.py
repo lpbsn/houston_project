@@ -1379,8 +1379,8 @@ def test_qualify_splits_current_affected_volume_without_operational_unit():
     )
     subject = create_activity_subject(
         establishment=membership.establishment,
-        business_unit=evenements,
-        label="Privatisation",
+        business_unit=maintenance,
+        label="Plomberie",
     )
     unassigned = _create_signal(
         membership,
@@ -1440,6 +1440,9 @@ def test_qualify_splits_current_affected_volume_without_operational_unit():
     assert to_qualify.operational_unit_id is None
     assert unassigned.affected_business_unit_id is None
     assert to_qualify.affected_business_unit_id == evenements.id
+    assert to_qualify.responsible_business_unit_id == maintenance.id
+    assert to_qualify.activity_subject_id == subject.id
+    assert to_qualify.activity_subject.business_unit_id == maintenance.id
 
 
 def test_dashboard_locations_merge_case_variants_in_current_period():

@@ -3,7 +3,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-from django.db import close_old_connections
+from django.db import close_old_connections, connections
 from django.utils import timezone
 
 from houston.action_plans.materialization import (
@@ -231,10 +231,13 @@ def test_concurrent_materialization_creates_single_execution(
                 occurrence_date=occurrence_date,
             )
         finally:
-            close_old_connections()
+            connections.close_all()
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        results = list(executor.map(_worker, range(2)))
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(_worker, range(2)))
+    finally:
+        connections.close_all()
 
     assert results[0].id == results[1].id
     assert ActionPlanExecution.objects.filter(action_plan_schedule_id=schedule_id).count() == 1
