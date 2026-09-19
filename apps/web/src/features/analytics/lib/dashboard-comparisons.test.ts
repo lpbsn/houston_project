@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import type {
   AnalyticsDashboardMetricComparison,
   AnalyticsDashboardResponse,
-  AnalyticsDelayStats,
 } from '@/features/analytics/api'
+import { dashboardComparison, dashboardResponseFixture } from '@/features/analytics/lib/dashboard-test-fixture'
 import {
   canShowDashboardDelta,
   collectDashboardComparisons,
@@ -12,6 +12,15 @@ import {
   dashboardCoverageBannerMessage,
   dashboardNewBadgeTone,
   emptyObservationDelayMessage,
+  emptyDeadlineRespectMessage,
+  emptyOverrunMessage,
+  emptyResolutionQualityMessage,
+  formatDeadlineAnalyzedTotal,
+  formatDeadlineExclusionNote,
+  formatOverrunExclusionNote,
+  formatOverrunTotal,
+  formatResolutionQualityTotal,
+  formatUnevaluatedPlansNote,
   observationTransformDelayHint,
   canonicalRoutingVolumeHint,
   formatAbsentPreviousPeriodLabel,
@@ -37,82 +46,19 @@ import {
 function comparison(
   coverage: AnalyticsDashboardMetricComparison['coverage'] = 'complete',
 ): AnalyticsDashboardMetricComparison {
-  return {
-    current_value: 1,
-    previous_value: 1,
-    absolute_delta: 0,
-    relative_change: 0,
-    relative_change_status: coverage === 'complete' ? 'computed' : 'not_applicable',
-    coverage,
-  }
-}
-
-function delay(coverage: AnalyticsDashboardMetricComparison['coverage'] = 'complete'): AnalyticsDelayStats {
-  return {
-    median_seconds: 86400,
-    mean_seconds: 86400,
-    p90_seconds: null,
-    n: 1,
-    comparison: comparison(coverage),
-    undatable_in_scope: 0,
-    unstarted_in_scope: 0,
-  }
+  return dashboardComparison(1, coverage, 0)
 }
 
 function dashboard(
   overrides: Partial<AnalyticsDashboardResponse> = {},
 ): AnalyticsDashboardResponse {
-  return {
-    period_days: 7,
-    current_period: {
-      period_start: '2026-08-14T12:00:00.000Z',
-      period_end: '2026-08-21T12:00:00.000Z',
-    },
-    previous_period: {
-      period_start: '2026-08-07T12:00:00.000Z',
-      period_end: '2026-08-14T12:00:00.000Z',
-    },
-    history_reliable_from: '2026-01-01T00:00:00.000Z',
-    scope_type: 'cross',
-    establishment_id: null,
-    establishment_ids: [],
-    recurring_patterns: [],
-    new_patterns: [],
-    new_patterns_preview_limit: 5,
+  return dashboardResponseFixture({
+    recurring_patterns: { items: [], total_count: 0 },
+    new_patterns: { items: [], total_count: 0 },
+    locations: { items: [], total_count: 0 },
     contributors: [],
-    observation_delay_canceled: delay(),
-    observation_delay_resolved: delay(),
-    observation_delay_transformed: delay(),
-    operational_resolution_rate: comparison(),
-    closure_resolved_share: comparison(),
-    closure_measured_resolved_count: 0,
-    closure_measured_canceled_count: 0,
-    undatable_signal_terminals: { canceled: 0, resolved: 0, archived: 0 },
-    undatable_execution_terminals: { canceled: 0, done: 0 },
-    reopenings: comparison(),
-    open_observation_count: 0,
-    aging_buckets: [],
-    aging_over_15d_share: comparison(),
-    plan_delay_canceled: delay(),
-    plan_delay_resolved: delay(),
-    plan_validation: delay(),
-    plan_deadlines: {
-      early: 0.2,
-      on_time: 0.5,
-      late: 0.3,
-      n: 10,
-      early_count: 2,
-      on_time_count: 5,
-      late_count: 3,
-      early_comparison: comparison(),
-      on_time_comparison: comparison(),
-      late_comparison: comparison(),
-    },
-    locations: [],
-    locations_preview_limit: 7,
-    poles: [],
     ...overrides,
-  }
+  })
 }
 
 describe('worstDashboardCoverage', () => {
@@ -179,15 +125,22 @@ describe('dashboardCoverageBannerMessage', () => {
 describe('collectDashboardComparisons', () => {
   it('aggregates backend coverage values already present on the payload', () => {
     const data = dashboard({
-      aging_over_15d_share: comparison('partial'),
-      recurring_patterns: [
-        {
-          pattern_id: '11111111-1111-4111-8111-111111111111',
-          name: 'Chaîne du froid',
-          signal_count: 2,
-          comparison: comparison('not_comparable'),
-        },
-      ],
+      plan_deadline_respect: {
+        ...dashboard().plan_deadline_respect,
+        late_comparison: comparison('partial'),
+      },
+      recurring_patterns: {
+        items: [
+          {
+            pattern_id: '11111111-1111-4111-8111-111111111111',
+            name: 'Chaîne du froid',
+            signal_count: 2,
+            last_seen_at: '2026-08-20T12:00:00.000Z',
+            comparison: comparison('not_comparable'),
+          },
+        ],
+        total_count: 1,
+      },
     })
     expect(worstDashboardCoverage(collectDashboardComparisons(data))).toBe('not_comparable')
   })
@@ -334,6 +287,28 @@ describe('empty delay copy', () => {
 
   it('keeps the median hint oriented to the duration', () => {
     expect(medianDurationHint('1,8 j')).toBe('La moitié des cas en 1,8 j ou moins.')
+  })
+})
+
+describe('dashboard plan totals copy', () => {
+  it('separates analyzed totals from exclusions and empty states', () => {
+    expect(formatDeadlineAnalyzedTotal(1)).toBe('1 plan analysé')
+    expect(formatDeadlineAnalyzedTotal(10)).toBe('10 plans analysés')
+    expect(formatDeadlineExclusionNote(0)).toBeNull()
+    expect(formatDeadlineExclusionNote(2)).toBe(
+      '2 plans exclus : dates de planification non fiables.',
+    )
+    expect(emptyDeadlineRespectMessage()).toBe(
+      'Aucun plan d’action terminé mesurable sur la période.',
+    )
+    expect(formatOverrunTotal(1)).toBe('1 plan actuellement en retard')
+    expect(formatOverrunExclusionNote(1)).toBe(
+      '1 plan exclu : dates de planification non fiables.',
+    )
+    expect(emptyOverrunMessage()).toBe('Aucun plan d’action actuellement en retard.')
+    expect(formatResolutionQualityTotal(3)).toBe('3 plans résolus sur la période')
+    expect(emptyResolutionQualityMessage()).toBe('Aucun plan résolu sur la période')
+    expect(formatUnevaluatedPlansNote(4)).toBe('4 plans non évalués')
   })
 })
 

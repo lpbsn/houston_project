@@ -57,7 +57,6 @@ PATTERN_LIST_SIGNAL_STATUSES = frozenset(
         Signal.Status.IN_PROGRESS,
         Signal.Status.INTERESTING,
         Signal.Status.RESOLVED,
-        Signal.Status.ARCHIVED,
     }
 )
 MAX_PATTERN_LIST_SEARCH_LENGTH = 100

@@ -441,7 +441,6 @@ def _qualify_linked_signal_for_create(
 ) -> Signal:
     """Assign responsible via qualify_signal_routing; return surviving signal."""
     from houston.signals.exceptions import (
-        SignalAlreadyMergedError,
         SignalPermissionError,
         SignalStateError,
         SignalValidationError,
@@ -460,8 +459,6 @@ def _qualify_linked_signal_for_create(
         )
     except SignalPermissionError as exc:
         raise ActionPlanPermissionError(str(exc) or "Permission denied.") from exc
-    except SignalAlreadyMergedError as exc:
-        raise ActionPlanValidationError(str(exc), code="already_merged") from exc
     except SignalStateError as exc:
         raise ActionPlanValidationError(str(exc), code="invalid_signal_state") from exc
     except SignalValidationError as exc:
@@ -1934,6 +1931,7 @@ def mark_action_plan_execution_done(
             actor_membership=actor_membership,
             metadata_safe=execution_transition_metadata(
                 status=EXECUTION_STATUS_PENDING_VALIDATION,
+                start_at=execution.start_at,
                 end_at=execution.end_at,
             ),
         )
@@ -1969,6 +1967,7 @@ def mark_action_plan_execution_done(
         actor_membership=actor_membership,
         metadata_safe=execution_transition_metadata(
             status=EXECUTION_STATUS_DONE,
+            start_at=execution.start_at,
             end_at=execution.end_at,
         ),
     )

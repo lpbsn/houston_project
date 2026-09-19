@@ -80,7 +80,7 @@ def test_cannot_pin_interesting_signal():
         pin_signal(signal=signal, membership=membership)
 
 
-def test_cannot_cancel_or_resolve_interesting_signal():
+def test_can_cancel_but_not_resolve_interesting_signal():
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     signal = create_minimal_v3_signal(
         membership,
@@ -88,7 +88,7 @@ def test_cannot_cancel_or_resolve_interesting_signal():
         status=Signal.Status.INTERESTING,
     )
 
-    assert can_cancel_signal(membership, signal) is False
+    assert can_cancel_signal(membership, signal) is True
     assert can_resolve_signal(membership, signal) is False
 
 
@@ -130,7 +130,7 @@ def test_owner_can_mark_interesting_api(api_client):
     assert payload["is_pinned"] is False
     assert payload["permission_hints"]["can_mark_interesting"] is False
     assert payload["permission_hints"]["can_pin"] is False
-    assert payload["permission_hints"]["can_cancel"] is False
+    assert payload["permission_hints"]["can_cancel"] is True
     assert payload["permission_hints"]["can_resolve"] is False
 
 

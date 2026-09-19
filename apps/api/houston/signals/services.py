@@ -56,17 +56,16 @@ from houston.signals.constants import (
     MAX_CANDIDATES_PER_OBSERVATION,
     SIGNAL_IN_PROGRESS_MANUAL_CANCEL_DETAIL,
     SIGNAL_IN_PROGRESS_MANUAL_RESOLVE_DETAIL,
-    SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
     SIGNAL_LIFECYCLE_EVENT_CANCELED,
     SIGNAL_LIFECYCLE_EVENT_CREATED,
     SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING,
     SIGNAL_LIFECYCLE_EVENT_RESOLVED,
     SIGNAL_RESOLUTION_ORIGIN_ACTION_PLAN,
     SIGNAL_RESOLUTION_ORIGIN_MANUAL,
+    SIGNAL_RESOLUTION_ORIGIN_VALUES,
     STRUCTURED_SUMMARY_SHORT_MAX_LENGTH,
 )
 from houston.signals.exceptions import (
-    SignalAlreadyMergedError,
     SignalPermissionError,
     SignalPipelineCandidateError,
     SignalStateError,
@@ -1359,59 +1358,6 @@ def mark_signal_interesting(
 
 
 @transaction.atomic
-def archive_signal(
-    *,
-    signal: Signal,
-    actor_membership: EstablishmentMembership | None = None,
-) -> Signal:
-    """User archive: interesting → archived. Does not set merged_into."""
-    locked_self, related_signals, observation_id = _lock_signal_created_from_set_or_self(
-        signal=signal,
-    )
-    from_status = locked_self.status
-    if from_status != Signal.Status.INTERESTING:
-        raise SignalStateError("Only interesting signals can be archived.")
-    _maybe_delete_created_from_media_under_locks(
-        signal=locked_self,
-        related_signals=related_signals,
-        observation_id=observation_id,
-    )
-    now = timezone.now()
-    locked_self.status = Signal.Status.ARCHIVED
-    locked_self.is_pinned = False
-    locked_self.pinned_at = None
-    locked_self.pinned_by_membership = None
-    locked_self.archived_by_membership = actor_membership
-    locked_self.archived_at = now
-    touch_signal_activity(signal=locked_self)
-    locked_self.save(
-        update_fields=[
-            "status",
-            "is_pinned",
-            "pinned_at",
-            "pinned_by_membership",
-            "archived_by_membership",
-            "archived_at",
-            "last_activity_at",
-            "updated_at",
-        ]
-    )
-    record_signal_lifecycle_event(
-        signal=locked_self,
-        event_type=SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
-        occurred_at=now,
-        actor_membership=actor_membership,
-        metadata_safe={
-            "from_status": from_status,
-            "to_status": Signal.Status.ARCHIVED,
-            "origin": "user_archive",
-        },
-    )
-    _schedule_signal_invalidation(signal=locked_self, reason="signal.updated")
-    return locked_self
-
-
-@transaction.atomic
 def unpin_signal(*, signal: Signal) -> Signal:
     signal.is_pinned = False
     signal.pinned_at = None
@@ -1626,7 +1572,11 @@ def _transition_active_signal_to_terminal(
         signal=signal,
     )
     from_status = locked_self.status
-    if from_status not in CANCEL_RESOLVE_SIGNAL_STATUSES:
+    if target_status == Signal.Status.CANCELED:
+        allowed = CANCEL_RESOLVE_SIGNAL_STATUSES | {Signal.Status.INTERESTING}
+    else:
+        allowed = CANCEL_RESOLVE_SIGNAL_STATUSES
+    if from_status not in allowed:
         raise SignalStateError("Only active signals can be canceled or resolved.")
     if from_status == target_status:
         return locked_self
@@ -1661,7 +1611,7 @@ def _transition_active_signal_to_terminal(
         update_fields.extend(
             ["resolved_by_membership", "resolved_at", "resolution_origin"]
         )
-        if resolution_origin is not None:
+        if resolution_origin in SIGNAL_RESOLUTION_ORIGIN_VALUES:
             metadata_safe["resolution_origin"] = resolution_origin
     elif target_status == Signal.Status.CANCELED:
         locked_self.canceled_by_membership = actor_membership
@@ -1909,45 +1859,6 @@ def _apply_routing_patch_to_base(
     return affected, responsible, subject, operational_unit, issue_focus, expected_action
 
 
-def _qualification_payload_compatible_with_survivor(
-    *,
-    survivor: Signal,
-    patch: dict[str, uuid.UUID | str | None],
-) -> bool:
-    (
-        affected,
-        responsible,
-        subject,
-        operational_unit,
-        issue_focus,
-        requested_expected_action,
-    ) = _apply_routing_patch_to_base(
-        establishment_id=survivor.establishment_id,
-        base_affected=survivor.affected_business_unit,
-        base_responsible=survivor.responsible_business_unit,
-        base_subject=survivor.activity_subject,
-        base_operational_unit=survivor.operational_unit,
-        base_issue_focus=survivor.issue_focus or "",
-        base_expected_action=survivor.expected_action or None,
-        patch=patch,
-    )
-    if (affected.id if affected else None) != survivor.affected_business_unit_id:
-        return False
-    if (responsible.id if responsible else None) != survivor.responsible_business_unit_id:
-        return False
-    if (subject.id if subject else None) != survivor.activity_subject_id:
-        return False
-    if (operational_unit.id if operational_unit else None) != survivor.operational_unit_id:
-        return False
-    if normalize_issue_focus(issue_focus) != normalize_issue_focus(survivor.issue_focus):
-        return False
-    effective_expected, _ = _d3_expected_action_decision(
-        signal_expected_action=survivor.expected_action or None,
-        candidate_expected_action=requested_expected_action,
-    )
-    return effective_expected == (survivor.expected_action or None)
-
-
 def _append_qualification_audit(
     *,
     signal: Signal,
@@ -1978,7 +1889,6 @@ def _qualification_previous_attention_recipient_ids(
 
 def _lock_signals_by_uuid_order(*signals: Signal) -> list[Signal]:
     ordered_ids = sorted({signal.id for signal in signals})
-    # of=("self",): avoid FOR UPDATE on nullable outer joins (merged_into).
     locked = list(
         Signal.objects.select_for_update(of=("self",))
         .select_related(
@@ -2017,11 +1927,16 @@ def merge_signal_into_resolved(
     resolution_audit: dict,
     candidate_expected_action: str | None,
 ) -> Signal:
-    """Merge source into target. Caller must hold locks on both in UUID order."""
+    """Absorb source into target then hard-delete the source. Caller holds UUID-order locks."""
     if source.id == target.id:
         return target
-    if source.merged_into_id == target.id:
-        return target
+
+    from houston.action_plans.models import ActionPlanExecution
+    from houston.analytics.models import PatternIssueReport
+    from houston.comments.models import Comment
+    from houston.gamification.constants import SOURCE_TYPE_SIGNAL
+    from houston.gamification.models import PointTransaction
+    from houston.notifications.models import Notification
 
     apply_expected_action_on_aggregation(
         signal=target,
@@ -2038,7 +1953,6 @@ def merge_signal_into_resolved(
 
     audit_envelope = {
         "source": "manual_qualification_merged",
-        "merged_signal_id": str(source.id),
         "surviving_signal_id": str(target.id),
         "resolution_audit": resolution_audit,
     }
@@ -2056,44 +1970,26 @@ def merge_signal_into_resolved(
         row.resolution_audit = resolution_audit_payload
         row.save(update_fields=["resolution_audit", "updated_at"])
     CandidateSignal.objects.filter(result_signal=source).update(result_signal=target)
+    ActionPlanExecution.objects.filter(source_signal=source).update(source_signal=target)
+    Comment.objects.filter(signal=source).update(signal=target)
+    PatternIssueReport.objects.filter(signal=source).update(signal=target)
+    Notification.objects.filter(
+        subject_type=Notification.SubjectType.SIGNAL,
+        subject_id=source.id,
+    ).delete()
+    for tx in PointTransaction.objects.filter(
+        source_type=SOURCE_TYPE_SIGNAL,
+        source_id=str(source.id),
+    ):
+        tx.source_id = str(target.id)
+        metadata = tx.metadata_safe or {}
+        if isinstance(metadata, dict):
+            tx.metadata_safe = {
+                key: (str(target.id) if value == str(source.id) else value)
+                for key, value in metadata.items()
+            }
+        tx.save(update_fields=["source_id", "metadata_safe", "updated_at"])
 
-    from_status = source.status
-    now = timezone.now()
-    source.status = Signal.Status.ARCHIVED
-    source.merged_into = target
-    source.is_pinned = False
-    source.pinned_at = None
-    source.pinned_by_membership = None
-    source.archived_by_membership = None
-    source.archived_at = now
-    touch_signal_activity(signal=source)
-    source.save(
-        update_fields=[
-            "status",
-            "merged_into",
-            "is_pinned",
-            "pinned_at",
-            "pinned_by_membership",
-            "archived_by_membership",
-            "archived_at",
-            "last_activity_at",
-            "updated_at",
-        ]
-    )
-    if from_status != Signal.Status.ARCHIVED:
-        record_signal_lifecycle_event(
-            signal=source,
-            event_type=SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
-            occurred_at=now,
-            actor_membership=None,
-            metadata_safe={
-                "from_status": from_status,
-                "to_status": Signal.Status.ARCHIVED,
-                "origin": "qualify_merge",
-                "merged_into_signal_id": target.id,
-                "source_signal_id": source.id,
-            },
-        )
     associated_times = [
         timestamp
         for timestamp in (
@@ -2119,7 +2015,6 @@ def merge_signal_into_resolved(
             metadata_safe={
                 "to_status": Signal.Status.OPEN,
                 "origin": "qualify_merge",
-                "source_signal_id": source.id,
             },
         )
     touch_signal_activity(signal=target)
@@ -2131,6 +2026,7 @@ def merge_signal_into_resolved(
     target.save(update_fields=target_update_fields)
     _schedule_signal_invalidation(signal=source, reason="signal.updated")
     _schedule_signal_invalidation(signal=target, reason="signal.updated")
+    source.delete()
     return target
 
 
@@ -2156,12 +2052,7 @@ def qualify_signal_routing(
             "responsible_business_unit",
             "activity_subject",
             "operational_unit",
-            "merged_into",
             "establishment",
-            "merged_into__affected_business_unit",
-            "merged_into__responsible_business_unit",
-            "merged_into__activity_subject",
-            "merged_into__operational_unit",
         )
         .filter(id=signal.id, establishment_id=membership.establishment_id)
         .first()
@@ -2169,36 +2060,6 @@ def qualify_signal_routing(
     if source is None:
         raise SignalValidationError("Signal not found.", code="signal_not_found")
 
-    # 1–2: idempotence before lifecycle when already merged
-    if source.merged_into_id is not None:
-        if membership.role == EstablishmentMembership.Role.STAFF:
-            raise SignalPermissionError("Permission denied.")
-        from houston.establishments.role_constants import ADMIN_ROLES
-        from houston.signals.permissions import signal_visible_in_membership_scope
-        from houston.signals.selectors import get_signal_for_detail
-
-        survivor = get_signal_for_detail(
-            membership=membership,
-            signal_id=source.merged_into_id,
-        )
-        if survivor is None:
-            raise SignalPermissionError("Permission denied.")
-        # Detail allows general open reads; qualify idempotence still requires BU scope.
-        if membership.role not in ADMIN_ROLES and not signal_visible_in_membership_scope(
-            membership,
-            survivor,
-        ):
-            raise SignalPermissionError("Permission denied.")
-        if _qualification_payload_compatible_with_survivor(survivor=survivor, patch=patch):
-            return QualifySignalRoutingResult(
-                signal=survivor,
-                qualification_outcome="merged",
-                surviving_signal_id=survivor.id,
-                merged_signal_id=source.id,
-            )
-        raise SignalAlreadyMergedError("Signal already merged into another signal.")
-
-    # 3: lifecycle active only when not already merged
     if source.status not in ACTIVE_SIGNAL_STATUSES:
         raise SignalStateError("Only active signals can be qualified.")
 
@@ -2267,17 +2128,6 @@ def qualify_signal_routing(
         locked = _lock_signals_by_uuid_order(source, collision)
         source = next(item for item in locked if item.id == source.id)
         collision = next(item for item in locked if item.id == collision.id)
-        if source.merged_into_id is not None:
-            survivor = source.merged_into
-            assert survivor is not None
-            if _qualification_payload_compatible_with_survivor(survivor=survivor, patch=patch):
-                return QualifySignalRoutingResult(
-                    signal=survivor,
-                    qualification_outcome="merged",
-                    surviving_signal_id=survivor.id,
-                    merged_signal_id=source.id,
-                )
-            raise SignalAlreadyMergedError("Signal already merged into another signal.")
         if source.status not in ACTIVE_SIGNAL_STATUSES:
             raise SignalStateError("Only active signals can be qualified.")
         collision = find_active_signal_for_aggregation(
@@ -2300,6 +2150,7 @@ def qualify_signal_routing(
             survivor=collision,
         )
         survivor_signature_before = build_signal_pattern_signature(collision)
+        merged_source_id = source.id
         survivor = merge_signal_into_resolved(
             source=source,
             target=collision,
@@ -2324,22 +2175,11 @@ def qualify_signal_routing(
             signal=survivor,
             qualification_outcome="merged",
             surviving_signal_id=survivor.id,
-            merged_signal_id=source.id,
+            merged_signal_id=merged_source_id,
         )
 
     # Update in place (lock source alone)
     locked_source = _lock_signals_by_uuid_order(source)[0]
-    if locked_source.merged_into_id is not None:
-        survivor = locked_source.merged_into
-        assert survivor is not None
-        if _qualification_payload_compatible_with_survivor(survivor=survivor, patch=patch):
-            return QualifySignalRoutingResult(
-                signal=survivor,
-                qualification_outcome="merged",
-                surviving_signal_id=survivor.id,
-                merged_signal_id=locked_source.id,
-            )
-        raise SignalAlreadyMergedError("Signal already merged into another signal.")
     if locked_source.status not in ACTIVE_SIGNAL_STATUSES:
         raise SignalStateError("Only active signals can be qualified.")
 
@@ -2389,6 +2229,7 @@ def qualify_signal_routing(
             survivor=collision,
         )
         survivor_signature_before = build_signal_pattern_signature(collision)
+        merged_source_id = locked_source.id
         survivor = merge_signal_into_resolved(
             source=locked_source,
             target=collision,
@@ -2413,7 +2254,7 @@ def qualify_signal_routing(
             signal=survivor,
             qualification_outcome="merged",
             surviving_signal_id=survivor.id,
-            merged_signal_id=locked_source.id,
+            merged_signal_id=merged_source_id,
         )
 
     apply_expected_action_on_aggregation(

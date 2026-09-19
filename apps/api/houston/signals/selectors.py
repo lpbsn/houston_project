@@ -257,7 +257,7 @@ def get_signal_for_qualify_routing(
     membership: EstablishmentMembership,
     signal_id: uuid.UUID,
 ) -> Signal | None:
-    """Load a signal for qualify, including archived already-merged sources."""
+    """Load a signal for qualify."""
     return (
         Signal.objects.filter(
             establishment_id=membership.establishment_id,
@@ -265,12 +265,7 @@ def get_signal_for_qualify_routing(
         )
         .select_related(
             "pinned_by_membership__user",
-            "merged_into",
             *_SIGNAL_LIST_SELECT_RELATED,
-            "merged_into__affected_business_unit",
-            "merged_into__responsible_business_unit",
-            "merged_into__activity_subject",
-            "merged_into__operational_unit",
         )
         .prefetch_related(*_SIGNAL_LIST_PREFETCH)
         .annotate(**_signal_list_annotations())
@@ -294,7 +289,6 @@ def get_signal_for_detail(
             "marked_interesting_by_membership",
             "resolved_by_membership",
             "canceled_by_membership",
-            "archived_by_membership",
         )
         .first()
     )
@@ -315,7 +309,6 @@ def get_signal_for_detail(
             "marked_interesting_by_membership",
             "resolved_by_membership",
             "canceled_by_membership",
-            "archived_by_membership",
             *_SIGNAL_LIST_SELECT_RELATED,
         )
         .prefetch_related(*_SIGNAL_LIST_PREFETCH),

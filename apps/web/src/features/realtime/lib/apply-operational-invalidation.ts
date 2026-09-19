@@ -10,6 +10,7 @@ import {
   invalidateEstablishmentSignalQueries,
   invalidateExecutionCommentQueries,
   invalidateSignalCommentQueries,
+  scheduleEstablishmentDashboardInvalidation,
 } from '@/lib/query-invalidation'
 
 import type { OperationalRealtimeInvalidateEvent } from '../types'
@@ -31,6 +32,9 @@ export function applyOperationalInvalidation(
 ) {
   if (event.subject_type === 'signal') {
     invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+    if (event.reason === 'signal.created') {
+      scheduleEstablishmentDashboardInvalidation(queryClient, establishmentId)
+    }
     return
   }
   if (event.subject_type === 'action_plan') {

@@ -525,8 +525,14 @@ export function ExecutionCalendarView({
   if (shownCalendar && !hasShownCalendar) {
     setHasShownCalendar(true)
   }
-  const items = data ? unwrapActionPlanExecutionFeedItems(data.items) : []
-  const unplanned = data ? unwrapActionPlanExecutionFeedItems(data.unplanned) : []
+  const items = useMemo(
+    () => (data ? unwrapActionPlanExecutionFeedItems(data.items) : []),
+    [data],
+  )
+  const unplanned = useMemo(
+    () => (data ? unwrapActionPlanExecutionFeedItems(data.unplanned) : []),
+    [data],
+  )
   const overflowItems = useMemo(() => {
     if (!overflowDay) {
       return []

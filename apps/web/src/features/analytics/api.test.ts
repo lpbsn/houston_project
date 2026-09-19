@@ -16,6 +16,7 @@ import {
   AnalyticsApiError,
   analyticsQueryKeys,
   fetchAnalyticsDashboard,
+  fetchAnalyticsDashboardRankings,
   fetchAnalyticsPatternGovernanceTargets,
   fetchAnalyticsPatternDetail,
   fetchAnalyticsPatternFilterOptions,
@@ -27,198 +28,10 @@ import {
   reportAnalyticsPatternIssue,
   splitAnalyticsPatternToExisting,
   splitAnalyticsPatternToNew,
-  type AnalyticsDashboardResponse,
 } from './api'
+import { dashboardResponseFixture } from './lib/dashboard-test-fixture'
 
-const dashboardResponse = {
-  period_days: 7,
-  current_period: {
-    period_start: '2026-07-13T10:30:00.000Z',
-    period_end: '2026-08-12T10:30:00.000Z',
-  },
-  previous_period: {
-    period_start: '2026-06-13T10:30:00.000Z',
-    period_end: '2026-07-13T10:30:00.000Z',
-  },
-  history_reliable_from: '2026-01-01T00:00:00.000Z',
-  scope_type: 'cross',
-  establishment_id: null,
-  establishment_ids: [],
-  recurring_patterns: [],
-  new_patterns: [],
-  new_patterns_preview_limit: 5,
-  contributors: [],
-  observation_delay_canceled: {
-    median_seconds: null,
-    mean_seconds: null,
-    p90_seconds: null,
-    n: 0,
-    comparison: {
-      current_value: null,
-      previous_value: null,
-      absolute_delta: null,
-      relative_change: null,
-      relative_change_status: 'not_applicable',
-      coverage: 'complete',
-    },
-    undatable_in_scope: 0,
-    unstarted_in_scope: 0,
-  },
-  observation_delay_resolved: {
-    median_seconds: null,
-    mean_seconds: null,
-    p90_seconds: null,
-    n: 0,
-    comparison: {
-      current_value: null,
-      previous_value: null,
-      absolute_delta: null,
-      relative_change: null,
-      relative_change_status: 'not_applicable',
-      coverage: 'complete',
-    },
-    undatable_in_scope: 0,
-    unstarted_in_scope: 0,
-  },
-  observation_delay_transformed: {
-    median_seconds: null,
-    mean_seconds: null,
-    p90_seconds: null,
-    n: 0,
-    comparison: {
-      current_value: null,
-      previous_value: null,
-      absolute_delta: null,
-      relative_change: null,
-      relative_change_status: 'not_applicable',
-      coverage: 'complete',
-    },
-    undatable_in_scope: 0,
-    unstarted_in_scope: 0,
-  },
-  operational_resolution_rate: {
-    current_value: null,
-    previous_value: null,
-    absolute_delta: null,
-    relative_change: null,
-    relative_change_status: 'not_applicable',
-    coverage: 'complete',
-  },
-  closure_resolved_share: {
-    current_value: null,
-    previous_value: null,
-    absolute_delta: null,
-    relative_change: null,
-    relative_change_status: 'not_applicable',
-    coverage: 'complete',
-  },
-  closure_measured_resolved_count: 0,
-  closure_measured_canceled_count: 0,
-  undatable_signal_terminals: { canceled: 0, resolved: 0, archived: 0 },
-  undatable_execution_terminals: { canceled: 0, done: 0 },
-  reopenings: {
-    current_value: 0,
-    previous_value: 0,
-    absolute_delta: 0,
-    relative_change: null,
-    relative_change_status: 'undefined_previous_zero',
-    coverage: 'complete',
-  },
-  open_observation_count: 0,
-  aging_buckets: [],
-  aging_over_15d_share: {
-    current_value: null,
-    previous_value: null,
-    absolute_delta: null,
-    relative_change: null,
-    relative_change_status: 'not_applicable',
-    coverage: 'complete',
-  },
-  plan_delay_canceled: {
-    median_seconds: null,
-    mean_seconds: null,
-    p90_seconds: null,
-    n: 0,
-    comparison: {
-      current_value: null,
-      previous_value: null,
-      absolute_delta: null,
-      relative_change: null,
-      relative_change_status: 'not_applicable',
-      coverage: 'complete',
-    },
-    undatable_in_scope: 0,
-    unstarted_in_scope: 0,
-  },
-  plan_delay_resolved: {
-    median_seconds: null,
-    mean_seconds: null,
-    p90_seconds: null,
-    n: 0,
-    comparison: {
-      current_value: null,
-      previous_value: null,
-      absolute_delta: null,
-      relative_change: null,
-      relative_change_status: 'not_applicable',
-      coverage: 'complete',
-    },
-    undatable_in_scope: 0,
-    unstarted_in_scope: 0,
-  },
-  plan_validation: {
-    median_seconds: null,
-    mean_seconds: null,
-    p90_seconds: null,
-    n: 0,
-    comparison: {
-      current_value: null,
-      previous_value: null,
-      absolute_delta: null,
-      relative_change: null,
-      relative_change_status: 'not_applicable',
-      coverage: 'complete',
-    },
-    undatable_in_scope: 0,
-    unstarted_in_scope: 0,
-  },
-  plan_deadlines: {
-    early: null,
-    on_time: null,
-    late: null,
-    n: 0,
-    early_count: 0,
-    on_time_count: 0,
-    late_count: 0,
-    early_comparison: {
-      current_value: null,
-      previous_value: null,
-      absolute_delta: null,
-      relative_change: null,
-      relative_change_status: 'not_applicable',
-      coverage: 'complete',
-    },
-    on_time_comparison: {
-      current_value: null,
-      previous_value: null,
-      absolute_delta: null,
-      relative_change: null,
-      relative_change_status: 'not_applicable',
-      coverage: 'complete',
-    },
-    late_comparison: {
-      current_value: null,
-      previous_value: null,
-      absolute_delta: null,
-      relative_change: null,
-      relative_change_status: 'not_applicable',
-      coverage: 'complete',
-    },
-  },
-  locations: [],
-  locations_preview_limit: 7,
-  poles: [],
-} satisfies AnalyticsDashboardResponse
+const dashboardResponse = dashboardResponseFixture()
 
 describe('analytics api', () => {
   beforeEach(() => {
@@ -231,10 +44,10 @@ describe('analytics api', () => {
     })
   })
 
-  it('fetches the dashboard with period_days and no establishment in Cross', async () => {
+  it('fetches the dashboard with period_days and establishment_id', async () => {
     await fetchAnalyticsDashboard({
       periodDays: 7,
-      establishmentId: null,
+      establishmentId: '22222222-2222-4222-8222-222222222222',
     })
 
     expect(getMock).toHaveBeenCalledWith(
@@ -243,12 +56,49 @@ describe('analytics api', () => {
         params: {
           query: {
             period_days: 7,
+            establishment_id: '22222222-2222-4222-8222-222222222222',
           },
         },
         headers: { Authorization: 'Bearer test-token' },
       }),
     )
-    expect(getMock.mock.calls[0]?.[1]?.params?.query).not.toHaveProperty('establishment_id')
+  })
+
+  it('fetches dashboard rankings with kind and cursor', async () => {
+    getMock.mockResolvedValue({
+      data: {
+        kind: 'recurring',
+        current_period: dashboardResponse.current_period,
+        items: [],
+        total_count: 0,
+        page_size: 20,
+        has_more: false,
+        next_cursor: null,
+      },
+      error: undefined,
+      response: { ok: true, status: 200 } as Response,
+    })
+
+    await fetchAnalyticsDashboardRankings({
+      periodDays: 7,
+      establishmentId: '22222222-2222-4222-8222-222222222222',
+      kind: 'recurring',
+      cursor: '20',
+    })
+
+    expect(getMock).toHaveBeenCalledWith(
+      '/api/v1/analytics/dashboard/rankings/',
+      expect.objectContaining({
+        params: {
+          query: {
+            period_days: 7,
+            establishment_id: '22222222-2222-4222-8222-222222222222',
+            kind: 'recurring',
+            cursor: '20',
+          },
+        },
+      }),
+    )
   })
 
   it('includes establishment_id when an establishment dashboard is requested', async () => {
@@ -273,7 +123,7 @@ describe('analytics api', () => {
     await expect(
       fetchAnalyticsDashboard({
         periodDays: 7,
-        establishmentId: null,
+        establishmentId: '22222222-2222-4222-8222-222222222222',
       }),
     ).rejects.toMatchObject({
       code: 'analytics_period_invalid',
@@ -284,7 +134,7 @@ describe('analytics api', () => {
     await expect(
       fetchAnalyticsDashboard({
         periodDays: 7,
-        establishmentId: null,
+        establishmentId: '22222222-2222-4222-8222-222222222222',
       }),
     ).rejects.toBeInstanceOf(AnalyticsApiError)
   })
@@ -341,7 +191,7 @@ describe('analytics api', () => {
         recurrence: 'recurrent',
         responsibleBusinessUnitIds: ['33333333-3333-4333-8333-333333333333'],
         responsibleBusinessUnitUnassigned: true,
-        signalStatuses: ['open', 'archived'],
+        signalStatuses: ['open', 'interesting'],
       },
       { cursor: 'cursor-1', pageSize: 25 },
     )
@@ -359,7 +209,7 @@ describe('analytics api', () => {
             recurrence: 'recurrent',
             responsible_business_unit_ids: '33333333-3333-4333-8333-333333333333',
             responsible_business_unit_unassigned: true,
-            signal_statuses: 'open,archived',
+            signal_statuses: 'open,interesting',
             cursor: 'cursor-1',
             page_size: 25,
           },

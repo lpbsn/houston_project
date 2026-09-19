@@ -1,83 +1,118 @@
-import { useState, type ReactNode } from 'react'
-import { ArrowDownRight, ArrowUpRight, Download } from 'lucide-react'
+import { useMemo, useState, type ReactNode } from 'react'
+import { ArrowDownRight, ArrowUpRight, Download, Info } from 'lucide-react'
 
 import type {
   AnalyticsContributorItem,
   AnalyticsDashboardMetricComparison,
   AnalyticsDashboardResponse,
-  AnalyticsDelayStats,
   AnalyticsNamedCountItem,
   AnalyticsNewPatternItem,
   AnalyticsRecurringPatternItem,
 } from '@/features/analytics/api'
+import { useAnalyticsDashboardRankingsInfiniteQuery } from '@/features/analytics/hooks'
 import {
   canShowDashboardDelta,
   contributorInitials,
   dashboardNewBadgeTone,
   dashboardNewLabel,
   dashboardTrendTone,
-  emptyObservationDelayMessage,
-  emptyPlanDelayMessage,
-  observationCancellationDelayHint,
-  observationTransformDelayHint,
-  canonicalRoutingVolumeHint,
-  closureResolvedShareHint,
-  delayExclusionNote,
-  formatAgingBucketLabel,
-  formatContributorEstablishments,
+  emptyDeadlineRespectMessage,
+  emptyOverrunMessage,
+  emptyResolutionQualityMessage,
+  formatAbsentPreviousPeriodLabel,
   formatContributorPoles,
-  formatCountedNoun,
   formatDashboardCountDelta,
   formatDashboardDuration,
   formatDashboardDurationDelta,
-  formatDashboardObservationCount,
   formatDashboardPercent,
   formatDashboardPercentDelta,
   formatDashboardPointsDelta,
-  formatAbsentPreviousPeriodLabel,
-  formatLateCountOnMeasured,
-  formatMeasuredSample,
-  formatNewPatternVolume,
+  formatDeadlineAnalyzedTotal,
+  formatDeadlineExclusionNote,
+  formatOverrunExclusionNote,
+  formatOverrunTotal,
   formatRelativeDaysAgo,
-  isOver15dAgingBucket,
-  longTailDurationHint,
-  medianDurationHint,
-  newPatternsVolumeTooltip,
-  operationalResolutionRateHint,
-  planDeadlinesDenominatorCopy,
-  planDeadlinesStripTooltip,
-  reopeningsHint,
-  resolutionStripTooltip,
-  shouldShowDashboardDelayMean,
-  shouldShowDashboardDelayP90,
+  formatResolutionQualityTotal,
+  formatUnevaluatedPlansNote,
   type DashboardTrendSense,
 } from '@/features/analytics/lib/dashboard-comparisons'
-import { formatMembershipRoleDisplay } from '@/lib/display-names'
+import {
+  assignPoleColors,
+  destinationChartColor,
+  poleChartColor,
+} from '@/features/analytics/lib/dashboard-chart-colors'
+import {
+  barHeightPercent,
+  integerYAxis,
+  VOLUME_PLOT_HEIGHT_PX,
+  volumeSegmentLabelVisible,
+} from '@/features/analytics/lib/dashboard-chart-scale'
+import type { DashboardPeriodDays } from '@/features/analytics/lib/dashboard-url-state'
 import { cn } from '@/lib/utils'
+
+const CURRENT_VOLUME_WINDOW = 'current'
+
+const VOLUME_LABEL_LINES: Record<string, readonly [string, string]> = {
+  four_periods_ago: ['Il y a 4', 'périodes'],
+  three_periods_ago: ['Il y a 3', 'périodes'],
+  two_periods_ago: ['Il y a 2', 'périodes'],
+  previous: ['Période', 'précédente'],
+  current: ['Période', 'en cours'],
+}
+
+const DESTINATION_LABELS: Record<string, string> = {
+  waiting: 'En attente',
+  interesting: 'Intéressante',
+  action_plan_in_progress: 'Plan d’action en cours',
+  resolved_direct: 'Résolue directement',
+  resolved_via_action_plan: 'Résolue via un plan d’action',
+  resolved_via_resolution_request: 'Résolue après demande de résolution',
+  canceled: 'Annulée',
+}
+
+
+const DELAY_ORDER = [
+  'interesting',
+  'action_plan_in_progress',
+  'resolved_direct',
+  'resolved_via_action_plan',
+  'resolved_via_resolution_request',
+  'canceled',
+] as const
+
+const OVERRUN_LABELS: Record<string, string> = {
+  lt_10: 'moins de 10 % de dépassement',
+  from_10_to_25: 'de 10 % à moins de 25 %',
+  from_25_to_50: 'de 25 % à moins de 50 %',
+  from_50_to_100: 'de 50 % à moins de 100 %',
+  gte_100: '100 % de dépassement ou plus',
+}
 
 function DashboardCard({
   title,
   subtitle,
   children,
-  className,
   titleTooltip,
 }: {
   title: string
   subtitle?: string
   children: ReactNode
-  className?: string
   titleTooltip?: string
 }) {
   return (
-    <section
-      className={cn(
-        'flex h-auto min-w-0 max-w-full flex-col rounded-2xl border border-[#E8E6DF] bg-white p-5 lg:p-6',
-        className,
-      )}
-      title={titleTooltip}
-    >
-      <h2 className="text-base font-semibold tracking-tight text-[#1a1a1a]">{title}</h2>
-      {subtitle ? <p className="mt-1 text-[12px] text-[#7D7B75]">{subtitle}</p> : null}
+    <section className="flex min-w-0 flex-col rounded-2xl border border-[#E8E6DF] bg-white p-5 lg:p-6">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold tracking-tight text-[#1a1a1a]">{title}</h2>
+          {subtitle ? <p className="mt-1 text-[12px] text-[#7D7B75]">{subtitle}</p> : null}
+        </div>
+        {titleTooltip ? (
+          <span title={titleTooltip} className="shrink-0 text-[#7D7B75]">
+            <Info className="h-4 w-4" aria-hidden />
+            <span className="sr-only">{titleTooltip}</span>
+          </span>
+        ) : null}
+      </div>
       <div className="mt-4 min-w-0">{children}</div>
     </section>
   )
@@ -155,259 +190,6 @@ export function TrendBadge({
   )
 }
 
-type ShareSegment = {
-  key: string
-  label: string
-  value: number | null
-  className: string
-  count?: number
-  comparison?: AnalyticsDashboardMetricComparison
-  sense?: DashboardTrendSense
-  emphasize?: boolean
-}
-
-function StackedShareBar({
-  segments,
-  periodDays,
-}: {
-  segments: ShareSegment[]
-  periodDays: number
-}) {
-  return (
-    <div className="min-w-0">
-      <div className="flex h-3.5 min-w-0 overflow-hidden rounded-full bg-[#F0EFE9]">
-        {segments.map((segment) =>
-          segment.value && segment.value > 0 ? (
-            <span
-              key={segment.key}
-              className={segment.className}
-              style={{ width: `${segment.value * 100}%` }}
-            />
-          ) : null,
-        )}
-      </div>
-      <ul className="mt-3 flex min-w-0 flex-wrap gap-x-4 gap-y-2">
-        {segments.map((segment) => (
-          <li
-            key={segment.key}
-            className={cn(
-              'flex min-w-0 flex-wrap items-center gap-1.5 text-[13px] text-[#7D7B75]',
-              segment.emphasize && 'font-medium text-[#1a1a1a]',
-            )}
-          >
-            <span>
-              {segment.label}{' '}
-              <span className="tabular-nums text-[#1a1a1a]">
-                {segment.count != null
-                  ? `${segment.count} · ${formatDashboardPercent(segment.value)}`
-                  : formatDashboardPercent(segment.value)}
-              </span>
-            </span>
-            {segment.comparison && segment.sense ? (
-              <TrendBadge
-                comparison={segment.comparison}
-                sense={segment.sense}
-                format="points"
-                periodDays={periodDays}
-              />
-            ) : null}
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-function DurationHero({
-  label,
-  stats,
-  sense,
-  emptyLabel,
-  hint,
-  extraHint,
-  unit = 'observation',
-  periodDays,
-}: {
-  label: string
-  stats: AnalyticsDelayStats
-  sense: DashboardTrendSense
-  emptyLabel: string
-  hint?: string
-  extraHint?: string
-  unit?: 'observation' | 'plan'
-  periodDays: number
-}) {
-  if (stats.n === 0 || stats.median_seconds == null) {
-    return (
-      <div className="min-w-0">
-        <p className="text-[12px] font-medium text-[#7D7B75]">{label}</p>
-        <p className="mt-1 text-sm text-[#7D7B75]">{emptyLabel}</p>
-        {hint ? <p className="mt-2 text-[12px] text-[#7D7B75]">{hint}</p> : null}
-        {extraHint ? <p className="mt-2 text-[12px] text-[#7D7B75]">{extraHint}</p> : null}
-      </div>
-    )
-  }
-
-  const duration = formatDashboardDuration(stats.median_seconds)
-  const showMean = shouldShowDashboardDelayMean(stats.n) && stats.mean_seconds != null
-  const showP90 =
-    shouldShowDashboardDelayP90(stats.n) && stats.p90_seconds != null
-  const sample = formatMeasuredSample(stats.n, unit)
-  const exclusion = delayExclusionNote(stats.undatable_in_scope)
-
-  return (
-    <div className="min-w-0">
-      <p className="text-[12px] font-medium text-[#7D7B75]">{label}</p>
-      <p className="mt-1 flex min-w-0 flex-wrap items-baseline gap-2 text-[1.75rem] font-semibold leading-none tabular-nums tracking-tight text-[#1a1a1a] lg:text-[2rem]">
-        {duration}
-        <TrendBadge
-          comparison={stats.comparison}
-          sense={sense}
-          format="duration"
-          periodDays={periodDays}
-        />
-      </p>
-      <p className="mt-2 min-w-0 break-words text-[12px] text-[#7D7B75]">
-        {[
-          stats.n === 1
-            ? `médiane · ${sample}`
-            : [
-                `médiane · ${sample}`,
-                showMean ? `en moyenne ${formatDashboardDuration(stats.mean_seconds)}` : null,
-                showP90 ? longTailDurationHint(formatDashboardDuration(stats.p90_seconds)) : null,
-              ]
-                .filter(Boolean)
-                .join(' · '),
-          exclusion,
-        ]
-          .filter(Boolean)
-          .join(' · ')}
-      </p>
-      {hint ? <p className="mt-2 text-[12px] text-[#7D7B75]">{hint}</p> : null}
-      {extraHint ? <p className="mt-2 text-[12px] text-[#7D7B75]">{extraHint}</p> : null}
-    </div>
-  )
-}
-
-function CompactDuration({
-  label,
-  stats,
-  sense,
-  emptyLabel,
-  unit = 'plan',
-  periodDays,
-}: {
-  label: string
-  stats: AnalyticsDelayStats
-  sense: DashboardTrendSense
-  emptyLabel: string
-  unit?: 'observation' | 'plan'
-  periodDays: number
-}) {
-  if (stats.n === 0 || stats.median_seconds == null) {
-    return (
-      <div className="min-w-0">
-        <p className="text-[12px] text-[#7D7B75]">{label}</p>
-        <p className="mt-0.5 text-[13px] text-[#7D7B75]">{emptyLabel}</p>
-      </div>
-    )
-  }
-
-  const exclusion = delayExclusionNote(stats.undatable_in_scope)
-
-  return (
-    <div className="min-w-0">
-      <p className="text-[12px] text-[#7D7B75]">{label}</p>
-      <p className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-1.5 text-base font-semibold tabular-nums text-[#1a1a1a]">
-        {formatDashboardDuration(stats.median_seconds)}
-        <TrendBadge
-          comparison={stats.comparison}
-          sense={sense}
-          format="duration"
-          periodDays={periodDays}
-        />
-        <span className="text-[12px] font-medium text-[#7D7B75]">
-          {formatMeasuredSample(stats.n, unit)}
-        </span>
-      </p>
-      {exclusion ? <p className="mt-0.5 text-[12px] text-[#A8A59E]">{exclusion}</p> : null}
-    </div>
-  )
-}
-
-function SecondaryMetric({
-  label,
-  value,
-  comparison,
-  sense,
-  format,
-  hint,
-  tooltip,
-  periodDays,
-}: {
-  label: string
-  value: string
-  comparison: AnalyticsDashboardMetricComparison
-  sense: DashboardTrendSense
-  format: 'percent' | 'points' | 'count' | 'duration'
-  hint?: string
-  tooltip?: string
-  periodDays: number
-}) {
-  return (
-    <div className="min-w-0" title={tooltip}>
-      <p className="text-[12px] font-medium text-[#7D7B75]">{label}</p>
-      <p className="mt-1 flex min-w-0 flex-wrap items-baseline gap-2 text-lg font-semibold tabular-nums text-[#1a1a1a]">
-        {value}
-        <TrendBadge comparison={comparison} sense={sense} format={format} periodDays={periodDays} />
-      </p>
-      {hint ? <p className="mt-0.5 text-[12px] text-[#A8A59E]">{hint}</p> : null}
-    </div>
-  )
-}
-
-function ComingSoonBadge() {
-  return (
-    <span className="inline-flex rounded-full bg-[#1a1a1a] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white">
-      Bientôt disponible
-    </span>
-  )
-}
-
-export function DashboardAiSummaryPlaceholder() {
-  return (
-    <section className="min-w-0 max-w-full rounded-2xl border border-[#E8E6DF] bg-white px-5 py-4">
-      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold tracking-tight text-[#1a1a1a]">Résumé IA</h2>
-          <p className="mt-1 text-[13px] text-[#7D7B75]">
-            Une synthèse des évolutions et points d’attention sera disponible ici.
-          </p>
-        </div>
-        <ComingSoonBadge />
-      </div>
-    </section>
-  )
-}
-
-export function DashboardRevenuePlaceholder() {
-  return (
-    <section className="min-w-0 max-w-full rounded-2xl border border-[#E8E6DF] bg-white px-5 py-4">
-      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold tracking-tight text-[#1a1a1a]">
-            Chiffre d’affaires vs observations
-          </h2>
-          <p className="mt-1 text-[13px] text-[#7D7B75]">
-            Croisement avec les données d’activité à venir.
-          </p>
-        </div>
-        <ComingSoonBadge />
-      </div>
-    </section>
-  )
-}
-
 export function DashboardExportButton() {
   return (
     <button
@@ -417,229 +199,742 @@ export function DashboardExportButton() {
     >
       <Download className="h-4 w-4" aria-hidden />
       Exporter
-      <span className="text-[11px] font-medium opacity-90">Bientôt</span>
     </button>
   )
 }
 
-export function OperationalSummaryStrip({
-  data,
-  periodDays,
-}: {
-  data: AnalyticsDashboardResponse
-  periodDays: number
-}) {
-  const over15 = data.aging_buckets.find(isOver15dAgingBucket)
-  const over15Count = over15?.count ?? 0
-  const resolved = data.observation_delay_resolved
-  const deadlines = data.plan_deadlines
-  const openLabel =
-    data.open_observation_count <= 1
-      ? 'observation encore ouverte'
-      : 'observations encore ouvertes'
-
+export function DashboardFilterPlaceholders() {
   return (
-    <section className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-4 rounded-2xl border border-[#E8E6DF] bg-white px-5 py-4 lg:grid-cols-4 lg:gap-6 lg:px-6 lg:py-5">
-      <div className="min-w-0">
-        <p className="text-[1.75rem] font-semibold leading-none tabular-nums tracking-tight text-[#1a1a1a] lg:text-[2rem]">
-          {data.open_observation_count}
-        </p>
-        <p className="mt-1.5 text-[13px] text-[#7D7B75]">{openLabel}</p>
-        <p className="mt-0.5 text-[12px] text-[#A8A59E]">En ce moment</p>
+    <div className="grid min-w-0 gap-3 rounded-2xl border border-[#E8E6DF] bg-white p-3 lg:grid-cols-3">
+      {(
+        [
+          ['Pôles d’activités', 'Tous les pôles'],
+          ['Sujets', 'Tous les sujets'],
+          ['Responsable', 'Tous les responsables'],
+        ] as const
+      ).map(([label, value]) => (
+        <label key={label} className="min-w-0">
+          <span className="mb-1.5 block text-[11px] font-semibold tracking-[0.06em] text-[#7D7B75] uppercase">
+            {label}
+          </span>
+          <div className="flex h-11 items-center justify-between rounded-xl border border-[#E8E6DF] px-3 text-sm text-[#7D7B75]">
+            <span>{value}</span>
+            <span aria-hidden>▾</span>
+          </div>
+        </label>
+      ))}
+    </div>
+  )
+}
+
+function AiPlaceholder() {
+  return (
+    <div className="mt-4 rounded-xl bg-[#F5F4F0] px-4 py-3">
+      <p className="text-[11px] font-semibold tracking-[0.08em] text-[#1F7A4D] uppercase">
+        Impact futur potentiel · IA
+      </p>
+      <p className="mt-1 text-[13px] text-[#7D7B75]">Bientôt disponible</p>
+    </div>
+  )
+}
+
+function RankingOverlay({
+  title,
+  children,
+  onClose,
+}: {
+  title: string
+  children: ReactNode
+  onClose: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" role="dialog" aria-modal>
+      <div className="flex h-full w-full max-w-lg flex-col bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-[#E8E6DF] px-5 py-4">
+          <h2 className="text-base font-semibold">{title}</h2>
+          <button type="button" className="text-sm text-[#7D7B75]" onClick={onClose}>
+            Fermer
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
       </div>
-      <div className="min-w-0">
-        <p className="flex min-w-0 flex-wrap items-baseline gap-1.5 text-[1.75rem] font-semibold leading-none tabular-nums tracking-tight text-[#1a1a1a] lg:text-[2rem]">
-          {over15Count}
-          {data.open_observation_count > 0 ? (
-            <span className="text-base font-semibold text-[#7D7B75]">
-              · {formatDashboardPercent(data.aging_over_15d_share.current_value)}
-            </span>
-          ) : null}
-        </p>
-        <p className="mt-1.5 text-[13px] text-[#7D7B75]">depuis plus de 15 jours</p>
-        {data.open_observation_count > 0 ? (
-          <p className="mt-0.5 text-[12px] text-[#A8A59E]">
-            parmi les {formatCountedNoun(data.open_observation_count, 'ouverte', 'ouvertes')}
-          </p>
-        ) : null}
-      </div>
-      <div className="min-w-0" title={resolutionStripTooltip()}>
-        {resolved.n === 0 || resolved.median_seconds == null ? (
-          <>
-            <p className="text-[1.75rem] font-semibold leading-none text-[#1a1a1a] lg:text-[2rem]">
-              —
-            </p>
-            <p className="mt-1.5 text-[13px] text-[#7D7B75]">
-              {emptyObservationDelayMessage('resolved', resolved.undatable_in_scope)}
-            </p>
-          </>
-        ) : (
-          <>
-            <p className="flex min-w-0 flex-wrap items-baseline gap-2 text-[1.75rem] font-semibold leading-none tabular-nums tracking-tight text-[#1a1a1a] lg:text-[2rem]">
-              {formatDashboardDuration(resolved.median_seconds)}
-              <TrendBadge
-                comparison={resolved.comparison}
-                sense="negative-up"
-                format="duration"
-                periodDays={periodDays}
-              />
-            </p>
-            <p className="mt-1.5 text-[13px] text-[#7D7B75]">
-              pour résoudre · médiane
-            </p>
-            <p className="mt-0.5 text-[12px] text-[#A8A59E]">
-              {formatMeasuredSample(resolved.n)} · sur la période
-            </p>
-          </>
-        )}
-      </div>
-      <div className="min-w-0" title={planDeadlinesStripTooltip()}>
-        {deadlines.n === 0 ? (
-          <>
-            <p className="text-[1.75rem] font-semibold leading-none text-[#1a1a1a] lg:text-[2rem]">
-              —
-            </p>
-            <p className="mt-1.5 text-[13px] text-[#7D7B75]">Aucun plan avec date d’échéance</p>
-          </>
-        ) : (
-          <>
-            <p className="flex min-w-0 flex-wrap items-baseline gap-2 text-[1.75rem] font-semibold leading-none tabular-nums tracking-tight text-[#1a1a1a] lg:text-[2rem]">
-              {deadlines.n < 5
-                ? deadlines.late_count
-                : formatDashboardPercent(deadlines.late)}
-              <TrendBadge
-                comparison={deadlines.late_comparison}
-                sense="negative-up"
-                format="points"
-                periodDays={periodDays}
-              />
-            </p>
-            <p className="mt-1.5 min-w-0 break-words text-[13px] text-[#7D7B75]">
-              {deadlines.n < 5
-                ? formatLateCountOnMeasured(deadlines.late_count, deadlines.n)
-                : `en retard · ${formatLateCountOnMeasured(deadlines.late_count, deadlines.n)}`}
-            </p>
-          </>
-        )}
-      </div>
-    </section>
+    </div>
+  )
+}
+
+function SeeAllButton({
+  visible,
+  onClick,
+}: {
+  visible: boolean
+  onClick: () => void
+}) {
+  if (!visible) {
+    return null
+  }
+  return (
+    <button type="button" onClick={onClick} className="mt-3 text-sm font-semibold text-[#1F7A4D]">
+      Voir tout
+    </button>
   )
 }
 
 export function RecurringPatternsCard({
+  preview,
+  establishmentId,
+  periodDays,
+}: {
+  preview: AnalyticsDashboardResponse['recurring_patterns']
+  establishmentId: string
+  periodDays: DashboardPeriodDays
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <DashboardCard title="Sujets récurrents">
+      <RecurringList items={preview.items} periodDays={periodDays} />
+      <SeeAllButton visible={preview.total_count > preview.items.length} onClick={() => setOpen(true)} />
+      <AiPlaceholder />
+      {open ? (
+        <RankingOverlay title="Sujets récurrents" onClose={() => setOpen(false)}>
+          <RankingPages
+            kind="recurring"
+            establishmentId={establishmentId}
+            periodDays={periodDays}
+            renderItem={(item) => {
+              const row = item as AnalyticsRecurringPatternItem
+              return (
+                <RecurringRow
+                  key={row.pattern_id}
+                  item={row}
+                  periodDays={periodDays}
+                />
+              )
+            }}
+          />
+        </RankingOverlay>
+      ) : null}
+    </DashboardCard>
+  )
+}
+
+function RecurringList({
   items,
-  isCross,
   periodDays,
 }: {
   items: AnalyticsRecurringPatternItem[]
-  isCross: boolean
   periodDays: number
 }) {
-  const max = Math.max(...items.map((item) => item.signal_count), 1)
-  const subtitle = isCross
-    ? 'Sujets vus au moins 2 fois sur la période · Tous établissements'
-    : 'Sujets vus au moins 2 fois sur la période'
+  if (items.length === 0) {
+    return <p className="text-sm text-[#7D7B75]">Aucun sujet récurrent sur cette période.</p>
+  }
   return (
-    <DashboardCard title="Motifs récurrents" subtitle={subtitle}>
-      {items.length === 0 ? (
-        <div>
-          <p className="text-sm font-medium text-[#1a1a1a]">Aucun problème récurrent détecté</p>
-          <p className="mt-1 text-[13px] text-[#7D7B75]">
-            Aucun motif n’apparaît sur plusieurs observations pendant cette période.
-          </p>
-        </div>
+    <ul className="flex flex-col gap-3">
+      {items.map((item) => (
+        <RecurringRow key={item.pattern_id} item={item} periodDays={periodDays} />
+      ))}
+    </ul>
+  )
+}
+
+function RecurringRow({
+  item,
+  periodDays,
+}: {
+  item: AnalyticsRecurringPatternItem
+  periodDays: number
+}) {
+  return (
+    <li className="flex min-w-0 items-start justify-between gap-3">
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium text-[#1a1a1a]">{item.name}</p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <span className="tabular-nums text-sm font-semibold">{item.signal_count}</span>
+        <TrendBadge comparison={item.comparison} sense="neutral" format="count" periodDays={periodDays} />
+      </div>
+    </li>
+  )
+}
+
+export function NewPatternsCard({
+  preview,
+  establishmentId,
+  periodDays,
+}: {
+  preview: AnalyticsDashboardResponse['new_patterns']
+  establishmentId: string
+  periodDays: DashboardPeriodDays
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <DashboardCard title="Nouveaux sujets">
+      {preview.items.length === 0 ? (
+        <p className="text-sm text-[#7D7B75]">Aucun nouveau sujet sur cette période.</p>
       ) : (
-        <ol className="flex flex-col gap-4">
-          {items.map((item, index) => (
-            <li key={item.pattern_id} className="min-w-0">
-              <div className="flex min-w-0 items-baseline justify-between gap-3">
-                <span className="min-w-0 truncate text-sm font-medium text-[#1a1a1a]">
-                  <span className="mr-2 font-semibold tabular-nums text-[#1F7A4D]">
-                    {index + 1}
-                  </span>
-                  {item.name}
-                </span>
-                <span className="flex shrink-0 flex-wrap items-center justify-end gap-2 text-sm font-semibold tabular-nums text-[#1a1a1a]">
-                  {formatDashboardObservationCount(item.signal_count)}
-                  <TrendBadge
-                    comparison={item.comparison}
-                    sense="negative-up"
-                    format="count"
-                    periodDays={periodDays}
-                  />
-                </span>
-              </div>
-              <span className="mt-1.5 block h-2.5 overflow-hidden rounded-full bg-[#F0EFE9]">
+        <ul className="flex flex-col gap-3">
+          {preview.items.map((item) => (
+            <NewRow key={item.pattern_id} item={item} />
+          ))}
+        </ul>
+      )}
+      <SeeAllButton visible={preview.total_count > preview.items.length} onClick={() => setOpen(true)} />
+      <AiPlaceholder />
+      {open ? (
+        <RankingOverlay title="Nouveaux sujets" onClose={() => setOpen(false)}>
+          <RankingPages
+            kind="new"
+            establishmentId={establishmentId}
+            periodDays={periodDays}
+            renderItem={(item) => <NewRow key={(item as AnalyticsNewPatternItem).pattern_id} item={item as AnalyticsNewPatternItem} />}
+          />
+        </RankingOverlay>
+      ) : null}
+    </DashboardCard>
+  )
+}
+
+function NewRow({ item }: { item: AnalyticsNewPatternItem }) {
+  return (
+    <li className="min-w-0">
+      <p className="truncate text-sm font-medium text-[#1a1a1a]">{item.name}</p>
+      <p className="text-[12px] text-[#7D7B75]">{formatRelativeDaysAgo(item.first_seen_at)}</p>
+    </li>
+  )
+}
+
+export function ObservationVolumeCard({
+  volume,
+  periodDays,
+}: {
+  volume: AnalyticsDashboardResponse['observation_volume']
+  periodDays: number
+}) {
+  const [mode, setMode] = useState<'affected' | 'responsible'>('affected')
+  const [selectedWindowKey, setSelectedWindowKey] = useState(CURRENT_VOLUME_WINDOW)
+  const selected = volume[mode]
+  const windowKeys = selected.windows.map((window) => window.label_key)
+  const poleColors = useMemo(() => assignPoleColors(selected.windows), [selected.windows])
+  const maxTotal = Math.max(...selected.windows.map((window) => window.total), 0)
+  const { scaleMax, ticks } = integerYAxis(maxTotal)
+  const legend = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          selected.windows.flatMap((window) =>
+            window.segments.map((segment) => [segment.pole_id, segment.name] as const),
+          ),
+        ),
+      ),
+    [selected.windows],
+  )
+  const selectedWindow =
+    selected.windows.find((window) => window.label_key === selectedWindowKey) ??
+    selected.windows.find((window) => window.label_key === CURRENT_VOLUME_WINDOW)
+
+  return (
+    <DashboardCard title="Nombre d’observations">
+      <div className="mb-4 inline-flex rounded-lg bg-[#F5F4F0] p-1">
+        <button
+          type="button"
+          onClick={() => {
+            setMode('affected')
+            setSelectedWindowKey(CURRENT_VOLUME_WINDOW)
+          }}
+          className={cn(
+            'rounded-md px-3 py-1.5 text-[12px] font-semibold',
+            mode === 'affected' ? 'bg-white text-[#1a1a1a] shadow-sm' : 'text-[#7D7B75]',
+          )}
+        >
+          Pôle concerné
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMode('responsible')
+            setSelectedWindowKey(CURRENT_VOLUME_WINDOW)
+          }}
+          className={cn(
+            'rounded-md px-3 py-1.5 text-[12px] font-semibold',
+            mode === 'responsible' ? 'bg-white text-[#1a1a1a] shadow-sm' : 'text-[#7D7B75]',
+          )}
+        >
+          Pôle responsable
+        </button>
+      </div>
+      <div className="min-w-0">
+        <div className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-1">
+          <div />
+          <div className="grid grid-cols-5 gap-1">
+            {selected.windows.map((window) => (
+              <p
+                key={`${window.label_key}-total`}
+                className="mb-1 text-center text-sm font-semibold tabular-nums sm:text-lg"
+              >
+                {window.total}
+              </p>
+            ))}
+          </div>
+          <div className="relative" style={{ height: VOLUME_PLOT_HEIGHT_PX }}>
+            {ticks.map((tick) => (
+              <span
+                key={tick}
+                className="absolute right-0 -translate-y-1/2 text-[10px] leading-none text-[#7D7B75] tabular-nums"
+                style={{ bottom: scaleMax === 0 ? '0%' : `${barHeightPercent(tick, scaleMax)}%` }}
+              >
+                {tick}
+              </span>
+            ))}
+          </div>
+          <div className="relative min-w-0" style={{ height: VOLUME_PLOT_HEIGHT_PX }}>
+            {ticks.map((tick) => (
+              <div
+                key={tick}
+                className="absolute inset-x-0 border-t border-[#E8E6DF]"
+                style={{
+                  bottom:
+                    scaleMax === 0
+                      ? '0%'
+                      : `${barHeightPercent(tick, scaleMax)}%`,
+                }}
+              />
+            ))}
+            <div className="relative z-[1] grid h-full grid-cols-5 items-end gap-1.5 sm:gap-3">
+              {selected.windows.map((window) => {
+                const isSelected = selectedWindow?.label_key === window.label_key
+                return (
+                  <button
+                    key={window.label_key}
+                    type="button"
+                    aria-pressed={isSelected}
+                    aria-label={
+                      VOLUME_LABEL_LINES[window.label_key]
+                        ? VOLUME_LABEL_LINES[window.label_key].join(' ')
+                        : window.label_key
+                    }
+                    data-volume-window={window.label_key}
+                    onClick={() => setSelectedWindowKey(window.label_key)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Home' || event.key === 'End') {
+                        event.preventDefault()
+                        let nextKey = selectedWindowKey
+                        if (event.key === 'ArrowLeft') {
+                          const currentIndex = Math.max(0, windowKeys.indexOf(selectedWindowKey))
+                          nextKey = windowKeys[(currentIndex - 1 + windowKeys.length) % windowKeys.length] ?? nextKey
+                        }
+                        if (event.key === 'ArrowRight') {
+                          const currentIndex = Math.max(0, windowKeys.indexOf(selectedWindowKey))
+                          nextKey = windowKeys[(currentIndex + 1) % windowKeys.length] ?? nextKey
+                        }
+                        if (event.key === 'Home') {
+                          nextKey = windowKeys[0] ?? nextKey
+                        }
+                        if (event.key === 'End') {
+                          nextKey = windowKeys.at(-1) ?? nextKey
+                        }
+                        setSelectedWindowKey(nextKey)
+                        requestAnimationFrame(() => {
+                          const node = document.querySelector<HTMLButtonElement>(
+                            `[data-volume-window="${nextKey}"]`,
+                          )
+                          node?.focus()
+                        })
+                      }
+                    }}
+                    className="flex h-full min-w-0 w-full flex-col items-center justify-end"
+                  >
+                    <div
+                      className={cn(
+                        'flex w-full min-w-0 flex-col-reverse overflow-hidden rounded-md',
+                        isSelected && 'ring-2 ring-[#1F7A4D] ring-offset-1',
+                      )}
+                      style={{
+                        height: scaleMax === 0 ? 0 : `${barHeightPercent(window.total, scaleMax)}%`,
+                      }}
+                    >
+                      {window.segments.map((segment) => {
+                        const showLabel = volumeSegmentLabelVisible(segment.count, scaleMax)
+                        return (
+                          <span
+                            key={segment.pole_id}
+                            data-pole-id={segment.pole_id}
+                            className="flex min-h-0 w-full items-center justify-center px-0.5 text-center text-[10px] leading-tight font-semibold text-white sm:text-[11px]"
+                            style={{
+                              height:
+                                window.total === 0
+                                  ? '0%'
+                                  : `${(segment.count / window.total) * 100}%`,
+                              backgroundColor: poleChartColor(segment.pole_id, poleColors),
+                            }}
+                          >
+                            {showLabel
+                              ? `${segment.count} (${formatDashboardPercent(segment.share)})`
+                              : null}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          <div />
+          <div className="mt-2 grid grid-cols-5 gap-1">
+            {selected.windows.map((window) => {
+              const lines = VOLUME_LABEL_LINES[window.label_key]
+              return (
+                <p
+                  key={`${window.label_key}-label`}
+                  className={cn(
+                    'text-center text-[10px] leading-tight text-[#7D7B75] sm:text-[11px]',
+                    window.label_key === 'current' && 'font-semibold text-[#1a1a1a]',
+                  )}
+                >
+                  {lines ? (
+                    <>
+                      {lines[0]}
+                      <br />
+                      {lines[1]}
+                    </>
+                  ) : (
+                    window.label_key
+                  )}
+                </p>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+      {selectedWindow ? (
+        <ul
+          className="mt-3 rounded-xl bg-[#F5F4F0] px-3 py-2 text-[12px] text-[#7D7B75]"
+          data-volume-detail={selectedWindow.label_key}
+        >
+          {selectedWindow.segments.map((segment) => (
+            <li key={segment.pole_id} className="flex items-center justify-between gap-3 py-0.5">
+              <span className="inline-flex min-w-0 items-center gap-1.5">
                 <span
-                  className="block h-full rounded-full bg-[#3D3C38]"
-                  style={{ width: `${(item.signal_count / max) * 100}%` }}
+                  className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                  style={{ backgroundColor: poleChartColor(segment.pole_id, poleColors) }}
                 />
+                <span className="truncate">{segment.name}</span>
+              </span>
+              <span className="shrink-0 tabular-nums">
+                {segment.count} ({formatDashboardPercent(segment.share)})
               </span>
             </li>
           ))}
-        </ol>
+        </ul>
+      ) : null}
+      <div className="mt-4 flex flex-wrap gap-3 text-[12px] text-[#7D7B75]">
+        {legend.map(([poleId, name]) => (
+          <span key={poleId} className="inline-flex items-center gap-1.5">
+            <span
+              className="h-2.5 w-2.5 rounded-sm"
+              data-legend-pole-id={poleId}
+              style={{ backgroundColor: poleChartColor(poleId, poleColors) }}
+            />
+            {name}
+          </span>
+        ))}
+      </div>
+      <div className="mt-4 flex items-end justify-between border-t border-[#E8E6DF] pt-3">
+        <div>
+          <p className="text-[12px] text-[#7D7B75]">Total période</p>
+          <p className="text-2xl font-semibold tabular-nums">{selected.current_total}</p>
+        </div>
+        <TrendBadge
+          comparison={selected.comparison}
+          sense="positive-up"
+          format="count"
+          periodDays={periodDays}
+        />
+      </div>
+    </DashboardCard>
+  )
+}
+
+export function ObservationDestinationsCard({
+  destinations,
+  periodDays,
+}: {
+  destinations: AnalyticsDashboardResponse['observation_destinations']
+  periodDays: number
+}) {
+  const keys = Object.keys(DESTINATION_LABELS)
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const selectedLabel = selectedKey ? DESTINATION_LABELS[selectedKey] : null
+  const selectedItem = selectedKey ? destinations[selectedKey] : null
+
+  return (
+    <DashboardCard title="Destination des observations">
+      <div className="flex h-3.5 overflow-hidden rounded-full bg-[#F0EFE9]">
+        {keys.map((key) => {
+          const share = destinations[key]?.share ?? 0
+          if (share <= 0) {
+            return null
+          }
+          const color = destinationChartColor(key)
+          return (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={selectedKey === key}
+              aria-label={`${DESTINATION_LABELS[key]} ${formatDashboardPercent(share)}`}
+              className="h-full min-w-0 p-0"
+              style={{ width: `${share * 100}%`, backgroundColor: color }}
+              onClick={() => setSelectedKey((current) => (current === key ? null : key))}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  setSelectedKey(null)
+                }
+              }}
+            />
+          )
+        })}
+      </div>
+      {selectedLabel && selectedItem ? (
+        <p className="mt-2 text-[12px] text-[#7D7B75]">
+          <span
+            className="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm align-middle"
+            style={{ backgroundColor: destinationChartColor(selectedKey) }}
+          />
+          {selectedLabel} · {formatDashboardPercent(selectedItem.share)}
+        </p>
+      ) : null}
+      <ul className="mt-4 flex flex-col gap-2">
+        {keys.map((key) => {
+          const item = destinations[key]
+          if (!item) {
+            return null
+          }
+          const color = destinationChartColor(key)
+          return (
+            <li key={key} className="flex items-center justify-between gap-3 text-sm">
+              <span className="inline-flex items-center gap-2 text-[#7D7B75]">
+                <span
+                  className="h-2.5 w-2.5 rounded-sm"
+                  data-destination-swatch={key}
+                  style={{ backgroundColor: color }}
+                />
+                {DESTINATION_LABELS[key]}
+              </span>
+              <span className="flex items-center gap-2">
+                <span className="tabular-nums font-medium text-[#1a1a1a]">
+                  {formatDashboardPercent(item.share)}
+                </span>
+                <TrendBadge
+                  comparison={item.comparison}
+                  sense="neutral"
+                  format="percent"
+                  periodDays={periodDays}
+                />
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+      <p className="mt-3 text-[11px] tracking-[0.08em] text-[#7D7B75] uppercase">
+        vs période précédente
+      </p>
+    </DashboardCard>
+  )
+}
+
+export function ObservationDestinationDelaysCard({
+  delays,
+}: {
+  delays: AnalyticsDashboardResponse['observation_destination_delays']
+}) {
+  const max = Math.max(
+    ...DELAY_ORDER.map((key) => delays[key]?.mean_seconds ?? 0),
+    1,
+  )
+  return (
+    <DashboardCard
+      title="Délai avant chaque destination"
+      subtitle="Délai moyen entre l’observation et sa destination"
+    >
+      <ul className="flex flex-col gap-3">
+        {DELAY_ORDER.map((key) => {
+          const item = delays[key]
+          const value = item?.mean_seconds ?? null
+          return (
+            <li key={key} className="min-w-0">
+              <div className="mb-1 flex items-center justify-between gap-3 text-sm">
+                <span className="text-[#1a1a1a]">{DESTINATION_LABELS[key]}</span>
+                <span className="tabular-nums font-medium">
+                  {item && item.n > 0 ? formatDashboardDuration(value) : '—'}
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-[#F0EFE9]">
+                {value != null && item && item.n > 0 ? (
+                  <span
+                    className="block h-full rounded-full bg-[#1F7A4D]"
+                    style={{ width: `${(value / max) * 100}%` }}
+                  />
+                ) : null}
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+    </DashboardCard>
+  )
+}
+
+export function PlanDeadlineRespectCard({
+  data,
+  periodDays,
+}: {
+  data: AnalyticsDashboardResponse['plan_deadline_respect']
+  periodDays: number
+}) {
+  const exclusionNote = formatDeadlineExclusionNote(data.excluded_count)
+  const isEmpty = data.n === 0 && data.excluded_count === 0
+  return (
+    <DashboardCard title="Respect des échéances des plans d’action">
+      {isEmpty ? (
+        <p className="text-sm text-[#7D7B75]">{emptyDeadlineRespectMessage()}</p>
+      ) : (
+        <>
+          <p className="text-2xl font-semibold tabular-nums">{formatDeadlineAnalyzedTotal(data.n)}</p>
+          {data.n > 0 ? (
+            <>
+              <div className="mt-4 flex h-3.5 overflow-hidden rounded-full bg-[#F0EFE9]">
+                {data.early ? (
+                  <span className="bg-[#1F7A4D]" style={{ width: `${data.early * 100}%` }} />
+                ) : null}
+                {data.on_time ? (
+                  <span className="bg-[#111111]" style={{ width: `${data.on_time * 100}%` }} />
+                ) : null}
+                {data.late ? (
+                  <span className="bg-[#E24B4A]" style={{ width: `${data.late * 100}%` }} />
+                ) : null}
+              </div>
+              <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                {(
+                  [
+                    ['Terminé en avance', data.early, data.early_comparison, 'positive-up'],
+                    ['Terminé à temps', data.on_time, data.on_time_comparison, 'positive-up'],
+                    ['Terminé en retard', data.late, data.late_comparison, 'negative-up'],
+                  ] as const
+                ).map(([label, share, comparison, sense]) => (
+                  <div key={label}>
+                    <p className="text-[12px] text-[#7D7B75]">{label}</p>
+                    <p className="text-lg font-semibold tabular-nums">{formatDashboardPercent(share)}</p>
+                    <TrendBadge
+                      comparison={comparison}
+                      sense={sense}
+                      format="percent"
+                      periodDays={periodDays}
+                    />
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : null}
+          {exclusionNote ? <p className="mt-3 text-[12px] text-[#7D7B75]">{exclusionNote}</p> : null}
+        </>
       )}
     </DashboardCard>
   )
 }
 
-export function NewPatternsCard({
-  items,
-  previewLimit,
-  isCross,
+export function PlanOverrunCard({
+  data,
 }: {
-  items: AnalyticsNewPatternItem[]
-  previewLimit: number
-  isCross: boolean
+  data: AnalyticsDashboardResponse['plan_overrun']
 }) {
-  const [expanded, setExpanded] = useState(false)
-  const visible = expanded ? items : items.slice(0, previewLimit)
+  const exclusionNote = formatOverrunExclusionNote(data.excluded_count)
+  const max = Math.max(...data.buckets.map((bucket) => bucket.count), 1)
   return (
     <DashboardCard
-      title="Nouveaux motifs"
-      subtitle="Première apparition ici"
-      titleTooltip={newPatternsVolumeTooltip()}
+      title="Plans d’action en retard"
+      subtitle="Stock actuel, indépendant de la période. Répartition selon le taux de dépassement."
+      titleTooltip="Le taux de dépassement compare le temps de retard à la durée planifiée du plan. Plus le pourcentage est élevé, plus le retard est important par rapport au délai prévu. Exemple : 2 jours de retard sur un plan de 30 jours représentent 6,7 %, tandis que 2 jours de retard sur un plan de 2 jours représentent 100 %."
     >
-      {items.length === 0 ? (
-        <div>
-          <p className="text-sm font-medium text-[#1a1a1a]">Aucun nouveau motif détecté</p>
-          <p className="mt-1 text-[13px] text-[#7D7B75]">
-            Aucun sujet inédit n’est apparu sur cette période.
-          </p>
-        </div>
+      {data.total_count === 0 ? (
+        <p className="text-sm text-[#7D7B75]">{emptyOverrunMessage()}</p>
       ) : (
         <>
-          <ul className="flex flex-col">
-            {visible.map((item) => (
-              <li
-                key={item.pattern_id}
-                className="flex min-w-0 flex-col gap-1 border-b border-[#F0EFE9] py-3 last:border-b-0 sm:flex-row sm:items-start sm:justify-between sm:gap-3"
-              >
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium text-[#1a1a1a]">{item.name}</span>
-                  <span className="mt-0.5 block text-[12px] text-[#7D7B75]">
-                    {formatRelativeDaysAgo(item.first_seen_at)}
-                  </span>
-                </span>
-                <span className="min-w-0 text-[13px] text-[#7D7B75] sm:max-w-[48%] sm:text-right">
-                  {formatNewPatternVolume({
-                    isCross,
-                    observationCount: item.observation_count,
-                    establishmentCount: item.establishment_count,
-                  })}
+          <p className="text-2xl font-semibold tabular-nums">{formatOverrunTotal(data.total_count)}</p>
+          {data.analyzed_count > 0 ? (
+            <ul className="mt-4 flex flex-col gap-2">
+              {data.buckets.map((bucket) => (
+                <li key={bucket.key} className="rounded-xl bg-[#F5F4F0] px-3 py-2">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span>{OVERRUN_LABELS[bucket.key] ?? bucket.key}</span>
+                    <span className="tabular-nums text-[#7D7B75]">
+                      {bucket.count} {formatDashboardPercent(bucket.share)}
+                    </span>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
+                    <span
+                      className="block h-full bg-[#111111]"
+                      style={{ width: `${(bucket.count / max) * 100}%` }}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {exclusionNote ? <p className="mt-3 text-[12px] text-[#7D7B75]">{exclusionNote}</p> : null}
+        </>
+      )}
+    </DashboardCard>
+  )
+}
+
+function StarRow({ filled }: { filled: number }) {
+  const label = filled === 0 ? '0 étoile' : `${filled} étoile${filled > 1 ? 's' : ''}`
+  return (
+    <span className="inline-flex items-center gap-2 text-[#1F7A4D]" aria-label={label}>
+      <span className="inline-flex gap-0.5">
+        {Array.from({ length: 5 }, (_, index) => (
+          <span key={index}>{index < filled ? '★' : '☆'}</span>
+        ))}
+      </span>
+      {filled === 0 ? <span className="text-[12px] text-[#7D7B75]">0 étoile</span> : null}
+    </span>
+  )
+}
+
+export function ResolutionQualityCard({
+  data,
+}: {
+  data: AnalyticsDashboardResponse['resolution_quality']
+}) {
+  const unevaluatedNote = formatUnevaluatedPlansNote(data.unevaluated_count)
+  const max = Math.max(...data.buckets.map((bucket) => bucket.share ?? 0), 0.01)
+  return (
+    <DashboardCard title="Qualité des résolutions de plans d’action">
+      {data.n === 0 ? (
+        <p className="text-sm text-[#7D7B75]">{emptyResolutionQualityMessage()}</p>
+      ) : (
+        <>
+          <p className="text-2xl font-semibold tabular-nums">{formatResolutionQualityTotal(data.n)}</p>
+          {unevaluatedNote ? (
+            <p className="mt-2 text-[12px] text-[#7D7B75]">{unevaluatedNote}</p>
+          ) : null}
+          <ul className="mt-4 flex flex-col gap-2">
+            {data.buckets.map((bucket) => (
+              <li key={bucket.stars} className="flex items-center gap-3">
+                <StarRow filled={bucket.stars} />
+                <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-[#F0EFE9]">
+                  {bucket.share != null ? (
+                    <span
+                      className="block h-full bg-[#1F7A4D]"
+                      style={{ width: `${(bucket.share / max) * 100}%` }}
+                    />
+                  ) : null}
+                </div>
+                <span className="w-10 text-right text-sm tabular-nums">
+                  {formatDashboardPercent(bucket.share)}
                 </span>
               </li>
             ))}
           </ul>
-          {items.length > previewLimit ? (
-            <button
-              type="button"
-              className="mt-3 text-[12px] font-semibold text-[#1B4FD8]"
-              onClick={() => setExpanded((value) => !value)}
-            >
-              {expanded ? 'Réduire' : 'Voir tout'}
-            </button>
-          ) : null}
         </>
       )}
     </DashboardCard>
@@ -648,528 +943,139 @@ export function NewPatternsCard({
 
 export function ContributorsCard({
   items,
-  isCross,
 }: {
   items: AnalyticsContributorItem[]
-  isCross: boolean
 }) {
   return (
-    <DashboardCard title="Qui a le plus contribué">
+    <DashboardCard title="Classement des contributeurs">
       {items.length === 0 ? (
-        <p className="text-sm text-[#7D7B75]">
-          Aucune contribution comptabilisée sur cette période
-        </p>
+        <p className="text-sm text-[#7D7B75]">Aucun contributeur sur cette période.</p>
       ) : (
-        <ol className="flex flex-col">
-          {items.map((item, index) => {
-            const establishmentLine = isCross
-              ? formatContributorEstablishments(item.establishment_names)
-              : ''
-            return (
-              <li
-                key={item.user_id}
-                className="flex min-w-0 items-center justify-between gap-3 border-b border-[#F0EFE9] py-3 last:border-b-0"
-              >
-                <span className="flex min-w-0 items-center gap-3">
-                  <span className="w-4 shrink-0 text-sm font-semibold tabular-nums text-[#1F7A4D]">
-                    {index + 1}
-                  </span>
-                  <span
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F0EFE9] text-[11px] font-semibold text-[#3D3C38]"
-                    aria-hidden
-                  >
-                    {contributorInitials(item.name)}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-[#1a1a1a]">
-                      {item.name}
-                    </span>
-                    <span className="block min-w-0 break-words text-[12px] text-[#7D7B75]">
-                      {item.roles.map(formatMembershipRoleDisplay).join(', ')}
-                      {' · '}
-                      {formatContributorPoles(item.poles)}
-                    </span>
-                    {establishmentLine ? (
-                      <span className="mt-0.5 block min-w-0 truncate text-[12px] text-[#7D7B75]">
-                        {establishmentLine}
-                      </span>
-                    ) : null}
-                  </span>
-                </span>
-                <span className="shrink-0 text-sm font-semibold tabular-nums text-[#7D7B75]">
-                  {item.pts} points
-                </span>
-              </li>
-            )
-          })}
-        </ol>
-      )}
-    </DashboardCard>
-  )
-}
-
-export function ObservationTreatmentCard({
-  data,
-  periodDays,
-}: {
-  data: AnalyticsDashboardResponse
-  periodDays: number
-}) {
-  const resolvedDuration =
-    data.observation_delay_resolved.median_seconds != null
-      ? formatDashboardDuration(data.observation_delay_resolved.median_seconds)
-      : null
-  const canceledDuration =
-    data.observation_delay_canceled.median_seconds != null
-      ? formatDashboardDuration(data.observation_delay_canceled.median_seconds)
-      : null
-  const closureHint = closureResolvedShareHint({
-    measuredResolvedCount: data.closure_measured_resolved_count,
-    measuredCanceledCount: data.closure_measured_canceled_count,
-    undatableResolved: data.undatable_signal_terminals.resolved,
-    undatableCanceled: data.undatable_signal_terminals.canceled,
-  })
-  const resolutionHint = operationalResolutionRateHint()
-
-  return (
-    <DashboardCard
-      title="Temps de traitement"
-      subtitle="Sur la période, parmi les cas déjà clôturés ou mis en plan"
-    >
-      <div className="flex min-w-0 flex-col gap-5 lg:grid lg:grid-cols-3 lg:gap-6">
-        <DurationHero
-          label="Délai pour résoudre"
-          stats={data.observation_delay_resolved}
-          sense="negative-up"
-          emptyLabel={emptyObservationDelayMessage(
-            'resolved',
-            data.observation_delay_resolved.undatable_in_scope,
-          )}
-          hint={resolvedDuration ? medianDurationHint(resolvedDuration) : undefined}
-          periodDays={periodDays}
-        />
-        <DurationHero
-          label="Délai avant annulation"
-          stats={data.observation_delay_canceled}
-          sense="negative-up"
-          emptyLabel={emptyObservationDelayMessage(
-            'canceled',
-            data.observation_delay_canceled.undatable_in_scope,
-          )}
-          hint={canceledDuration ? medianDurationHint(canceledDuration) : undefined}
-          extraHint={observationCancellationDelayHint()}
-          periodDays={periodDays}
-        />
-        <DurationHero
-          label="Délai avant plan d’action"
-          stats={data.observation_delay_transformed}
-          sense="negative-up"
-          emptyLabel={emptyObservationDelayMessage('transformed')}
-          hint={observationTransformDelayHint()}
-          periodDays={periodDays}
-        />
-      </div>
-      <div className="mt-5 grid min-w-0 gap-4 border-t border-[#F0EFE9] pt-4 lg:grid-cols-3">
-        <SecondaryMetric
-          label="Part des sujets résolus"
-          value={formatDashboardPercent(data.operational_resolution_rate.current_value)}
-          comparison={data.operational_resolution_rate}
-          sense="positive-up"
-          format="points"
-          hint={resolutionHint}
-          tooltip={resolutionHint}
-          periodDays={periodDays}
-        />
-        <SecondaryMetric
-          label="Résolutions parmi les dossiers fermés"
-          value={
-            data.closure_resolved_share.current_value == null
-              ? '—'
-              : formatDashboardPercent(data.closure_resolved_share.current_value)
-          }
-          comparison={data.closure_resolved_share}
-          sense="positive-up"
-          format="points"
-          hint={closureHint}
-          tooltip={closureHint}
-          periodDays={periodDays}
-        />
-        <SecondaryMetric
-          label="Observations rouvertes"
-          value={new Intl.NumberFormat('fr-FR').format(data.reopenings.current_value ?? 0)}
-          comparison={data.reopenings}
-          sense="negative-up"
-          format="count"
-          hint={reopeningsHint()}
-          periodDays={periodDays}
-        />
-      </div>
-    </DashboardCard>
-  )
-}
-
-const AGING_BAR_TONES = ['bg-[#D4D1C8]', 'bg-[#B4B1A8]', 'bg-[#7D7B75]', 'bg-[#1a1a1a]']
-
-export function OpenObservationsCard({
-  data,
-  periodDays,
-}: {
-  data: AnalyticsDashboardResponse
-  periodDays: number
-}) {
-  const over15 = data.aging_buckets.find(isOver15dAgingBucket)
-  const max = Math.max(...data.aging_buckets.map((bucket) => bucket.count), 1)
-
-  return (
-    <DashboardCard
-      title="Observations encore ouvertes"
-      subtitle="En ce moment · toutes les ouvertes, pas seulement la période"
-    >
-      {data.open_observation_count === 0 ? (
-        <div>
-          <p className="text-sm font-medium text-[#1a1a1a]">Aucune observation encore ouverte</p>
-          <p className="mt-1 text-[13px] text-[#7D7B75]">
-            Toutes les observations sont actuellement clôturées.
-          </p>
-        </div>
-      ) : (
-        <>
-          <p className="text-[1.75rem] font-semibold leading-none tabular-nums tracking-tight text-[#1a1a1a] lg:text-[2rem]">
-            {data.open_observation_count}
-            <span className="ml-2 text-base font-medium text-[#7D7B75]">encore ouvertes</span>
-          </p>
-          <ul className="mt-5 flex flex-col gap-3">
-            {data.aging_buckets.map((bucket, index) => (
-              <li key={bucket.key} className="min-w-0">
-                <div className="flex min-w-0 items-center justify-between gap-2 text-[13px]">
-                  <span
-                    className={cn(
-                      'min-w-0 truncate text-[#7D7B75]',
-                      isOver15dAgingBucket(bucket) && 'font-medium text-[#1a1a1a]',
-                    )}
-                  >
-                    {formatAgingBucketLabel(bucket)}
-                  </span>
-                  <span className="shrink-0 font-semibold tabular-nums text-[#1a1a1a]">
-                    {bucket.count}
-                  </span>
-                </div>
-                <span className="mt-1.5 block h-2.5 overflow-hidden rounded-full bg-[#F0EFE9]">
-                  <span
-                    className={cn(
-                      'block h-full rounded-full',
-                      AGING_BAR_TONES[index] ?? 'bg-[#7D7B75]',
-                    )}
-                    style={{ width: `${(bucket.count / max) * 100}%` }}
-                  />
-                </span>
-              </li>
-            ))}
-          </ul>
-          {over15 ? (
-            <div className="mt-4 min-w-0">
-              <p className="flex min-w-0 flex-wrap items-baseline gap-2 text-sm font-medium text-[#1a1a1a]">
-                {formatCountedNoun(
-                  over15.count,
-                  'observation ouverte depuis plus de 15 jours',
-                  'observations ouvertes depuis plus de 15 jours',
-                )}
-                <TrendBadge
-                  comparison={data.aging_over_15d_share}
-                  sense="negative-up"
-                  format="points"
-                  periodDays={periodDays}
-                />
-              </p>
-              <p className="mt-0.5 text-[12px] text-[#7D7B75]">
-                {formatDashboardPercent(data.aging_over_15d_share.current_value)} des ouvertes
-              </p>
-            </div>
-          ) : null}
-        </>
-      )}
-    </DashboardCard>
-  )
-}
-
-export function PlanDeadlinesCard({
-  data,
-  periodDays,
-}: {
-  data: AnalyticsDashboardResponse
-  periodDays: number
-}) {
-  const deadlines = data.plan_deadlines
-  const segments: ShareSegment[] = [
-    {
-      key: 'early',
-      label: 'En avance',
-      value: deadlines.early,
-      count: deadlines.early_count,
-      className: 'bg-[#1F7A4D]',
-      comparison: deadlines.early_comparison,
-      sense: 'positive-up',
-    },
-    {
-      key: 'on_time',
-      label: 'À temps',
-      value: deadlines.on_time,
-      count: deadlines.on_time_count,
-      className: 'bg-[#1a1a1a]',
-      comparison: deadlines.on_time_comparison,
-      sense: 'neutral',
-    },
-    {
-      key: 'late',
-      label: 'En retard',
-      value: deadlines.late,
-      count: deadlines.late_count,
-      className: 'bg-[#E24B4A]',
-      comparison: deadlines.late_comparison,
-      sense: 'negative-up',
-      emphasize: true,
-    },
-  ]
-
-  return (
-    <DashboardCard title="Respect des échéances">
-      {deadlines.n === 0 ? (
-        <p className="text-sm text-[#7D7B75]">Aucun plan avec date d’échéance sur la période</p>
-      ) : (
-        <>
-          <p className="text-[1.75rem] font-semibold leading-none tracking-tight text-[#1a1a1a] lg:text-[2rem]">
-            {deadlines.n < 5
-              ? formatLateCountOnMeasured(deadlines.late_count, deadlines.n)
-              : formatDashboardPercent(deadlines.late)}
-          </p>
-          <p className="mt-2 min-w-0 break-words text-[13px] text-[#7D7B75]">
-            {planDeadlinesDenominatorCopy()}
-          </p>
-          {deadlines.n >= 5 ? (
-            <p className="mt-1 flex min-w-0 flex-wrap items-center gap-2 text-[13px] text-[#7D7B75]">
-              {`en retard · ${formatLateCountOnMeasured(deadlines.late_count, deadlines.n)}`}
-              <TrendBadge
-                comparison={deadlines.late_comparison}
-                sense="negative-up"
-                format="points"
-                periodDays={periodDays}
-              />
-            </p>
-          ) : (
-            <p className="mt-1">
-              <TrendBadge
-                comparison={deadlines.late_comparison}
-                sense="negative-up"
-                format="points"
-                periodDays={periodDays}
-              />
-            </p>
-          )}
-          <div className="mt-4">
-            <StackedShareBar segments={segments} periodDays={periodDays} />
-          </div>
-        </>
-      )}
-      <div className="mt-5 grid min-w-0 gap-3 border-t border-[#F0EFE9] pt-4">
-        <CompactDuration
-          label="Attente de validation une fois le plan terminé"
-          stats={data.plan_validation}
-          sense="negative-up"
-          emptyLabel={emptyPlanDelayMessage('validated', {
-            undatableInScope: data.plan_validation.undatable_in_scope,
-          })}
-          periodDays={periodDays}
-        />
-        <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-          <CompactDuration
-            label="Délai d’annulation des plans"
-            stats={data.plan_delay_canceled}
-            sense="negative-up"
-            emptyLabel={emptyPlanDelayMessage('canceled', {
-              undatableInScope: data.plan_delay_canceled.undatable_in_scope,
-              unstartedInScope: data.plan_delay_canceled.unstarted_in_scope,
-            })}
-            periodDays={periodDays}
-          />
-          <CompactDuration
-            label="Délai de clôture des plans"
-            stats={data.plan_delay_resolved}
-            sense="negative-up"
-            emptyLabel={emptyPlanDelayMessage('resolved', {
-              undatableInScope: data.plan_delay_resolved.undatable_in_scope,
-            })}
-            periodDays={periodDays}
-          />
-        </div>
-      </div>
-    </DashboardCard>
-  )
-}
-
-function VolumeBarList({
-  items,
-  previewLimit,
-  showEstablishment,
-  periodDays,
-}: {
-  items: AnalyticsNamedCountItem[]
-  previewLimit?: number
-  showEstablishment: boolean
-  periodDays: number
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const limit = previewLimit ?? items.length
-  const overflow = previewLimit != null && items.length > previewLimit
-  const visible = expanded || !overflow ? items : items.slice(0, limit)
-  const hiddenCount = items.length - limit
-  const displayItems =
-    !expanded && overflow && hiddenCount > 0
-      ? [
-          ...visible,
-          {
-            id: 'others',
-            name: 'Autres',
-            count: items.slice(limit).reduce((sum, item) => sum + item.count, 0),
-            establishment_id: null,
-            establishment_name: null,
-            comparison: visible[0]?.comparison,
-          } satisfies AnalyticsNamedCountItem,
-        ]
-      : visible
-  const max = Math.max(...items.map((item) => item.count), 1)
-
-  return (
-    <>
-      <ul className="flex flex-col gap-3">
-        {displayItems.map((item) => (
-          <li key={item.id} className="flex min-w-0 flex-col gap-1.5">
-            <div className="flex min-w-0 items-end justify-between gap-2 text-sm">
-              <span className="min-w-0">
-                <span className="block truncate font-medium text-[#1a1a1a]">{item.name}</span>
-                {showEstablishment && item.establishment_name ? (
-                  <span className="mt-0.5 block truncate text-[12px] text-[#7D7B75]">
-                    {item.establishment_name}
-                  </span>
-                ) : null}
-              </span>
-              <span className="flex shrink-0 flex-wrap items-center justify-end gap-2 font-semibold tabular-nums text-[#1a1a1a]">
-                {formatDashboardObservationCount(item.count)}
-                {item.id !== 'others' ? (
-                  <TrendBadge
-                    comparison={item.comparison}
-                    sense="neutral"
-                    format="count"
-                    periodDays={periodDays}
-                  />
-                ) : null}
-              </span>
-            </div>
-            <span className="h-2.5 overflow-hidden rounded-full bg-[#F0EFE9]">
-              <span
-                className="block h-full rounded-full bg-[#3D3C38]"
-                style={{ width: `${(item.count / max) * 100}%` }}
-              />
-            </span>
-          </li>
-        ))}
-      </ul>
-      {overflow ? (
-        <button
-          type="button"
-          className="mt-3 text-[12px] font-semibold text-[#1B4FD8]"
-          onClick={() => setExpanded((value) => !value)}
-        >
-          {expanded ? 'Réduire' : 'Voir tout'}
-        </button>
-      ) : null}
-    </>
-  )
-}
-
-export function LocationsCard({
-  items,
-  previewLimit,
-  isCross,
-  periodDays,
-}: {
-  items: AnalyticsNamedCountItem[]
-  previewLimit: number
-  isCross: boolean
-  periodDays: number
-}) {
-  return (
-    <DashboardCard
-      title="Lieux les plus cités"
-      subtitle="Observations créées sur la période, pas les dossiers encore ouverts"
-    >
-      {items.length === 0 ? (
-        <p className="text-sm text-[#7D7B75]">Aucun lieu cité sur la période</p>
-      ) : (
-        <VolumeBarList
-          items={items}
-          previewLimit={previewLimit}
-          showEstablishment={isCross}
-          periodDays={periodDays}
-        />
-      )}
-    </DashboardCard>
-  )
-}
-
-export function PolesCard({
-  items,
-  isCross,
-  periodDays,
-}: {
-  items: AnalyticsNamedCountItem[]
-  isCross: boolean
-  periodDays: number
-}) {
-  return (
-    <DashboardCard
-      title="Activité du pôle"
-      subtitle="Observations créées sur la période, selon le pôle responsable aujourd’hui"
-    >
-      <p className="mb-3 text-[12px] text-[#7D7B75]">{canonicalRoutingVolumeHint()}</p>
-      {items.length === 0 ? (
-        <p className="text-sm text-[#7D7B75]">
-          Aucune observation rattachée à un pôle sur la période
-        </p>
-      ) : (
-        <ol className="flex flex-col">
+        <ol className="flex flex-col gap-3">
           {items.map((item, index) => (
-            <li
-              key={item.id}
-              className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 border-b border-[#F0EFE9] py-3 last:border-b-0 sm:grid-cols-[auto_minmax(0,1fr)_auto_auto]"
-            >
-              <span className="w-4 shrink-0 text-sm font-semibold tabular-nums text-[#1F7A4D]">
-                {index + 1}
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-medium text-[#1a1a1a]">
-                  {item.name}
+            <li key={item.user_id} className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="w-4 text-sm text-[#7D7B75]">{index + 1}</span>
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F0EFE9] text-[11px] font-semibold">
+                  {contributorInitials(item.name)}
                 </span>
-                {isCross && item.establishment_name ? (
-                  <span className="mt-0.5 block truncate text-[12px] text-[#7D7B75]">
-                    {item.establishment_name}
-                  </span>
-                ) : null}
-              </span>
-              <span className="text-right text-sm font-semibold tabular-nums text-[#1a1a1a]">
-                {formatDashboardObservationCount(item.count)}
-              </span>
-              <span className="justify-self-end empty:hidden max-sm:col-start-3 max-sm:row-start-2">
-                <TrendBadge
-                  comparison={item.comparison}
-                  sense="neutral"
-                  format="count"
-                  periodDays={periodDays}
-                />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{item.name}</p>
+                  <p className="truncate text-[12px] text-[#7D7B75]">{formatContributorPoles(item.poles)}</p>
+                </div>
+              </div>
+              <span className="shrink-0 text-sm font-semibold text-[#1F7A4D] tabular-nums">
+                {new Intl.NumberFormat('fr-FR').format(item.pts)} pts
               </span>
             </li>
           ))}
         </ol>
       )}
     </DashboardCard>
+  )
+}
+
+export function LocationsCard({
+  preview,
+  establishmentId,
+  periodDays,
+}: {
+  preview: AnalyticsDashboardResponse['locations']
+  establishmentId: string
+  periodDays: DashboardPeriodDays
+}) {
+  const [open, setOpen] = useState(false)
+  const max = Math.max(...preview.items.map((item) => item.count), 1)
+  return (
+    <DashboardCard title="Lieux les plus cités">
+      {preview.items.length === 0 ? (
+        <p className="text-sm text-[#7D7B75]">Aucun lieu cité sur cette période.</p>
+      ) : (
+        <LocationList items={preview.items} max={max} />
+      )}
+      <SeeAllButton visible={preview.total_count > preview.items.length} onClick={() => setOpen(true)} />
+      {open ? (
+        <RankingOverlay title="Lieux les plus cités" onClose={() => setOpen(false)}>
+          <RankingPages
+            kind="locations"
+            establishmentId={establishmentId}
+            periodDays={periodDays}
+            renderItem={(item) => {
+              const location = item as AnalyticsNamedCountItem
+              return <LocationRow key={location.id} item={location} max={max} />
+            }}
+          />
+        </RankingOverlay>
+      ) : null}
+    </DashboardCard>
+  )
+}
+
+function LocationList({
+  items,
+  max,
+}: {
+  items: AnalyticsNamedCountItem[]
+  max: number
+}) {
+  return (
+    <ul className="flex flex-col gap-3">
+      {items.map((item) => (
+        <LocationRow key={item.id} item={item} max={max} />
+      ))}
+    </ul>
+  )
+}
+
+function LocationRow({ item, max }: { item: AnalyticsNamedCountItem; max: number }) {
+  return (
+    <li>
+      <div className="mb-1 flex items-center justify-between gap-3 text-sm">
+        <span>{item.name}</span>
+        <span className="text-[#7D7B75] tabular-nums">{item.count} observations</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-[#F0EFE9]">
+        <span
+          className="block h-full bg-[#111111]"
+          style={{ width: `${(item.count / max) * 100}%` }}
+        />
+      </div>
+    </li>
+  )
+}
+
+function RankingPages({
+  kind,
+  establishmentId,
+  periodDays,
+  renderItem,
+}: {
+  kind: 'recurring' | 'new' | 'locations'
+  establishmentId: string
+  periodDays: DashboardPeriodDays
+  renderItem: (item: unknown) => ReactNode
+}) {
+  const query = useAnalyticsDashboardRankingsInfiniteQuery(
+    { establishmentId, periodDays, kind },
+  )
+  const items = useMemo(
+    () => query.data?.pages.flatMap((page) => page.items) ?? [],
+    [query.data],
+  )
+  return (
+    <div>
+      {query.isLoading ? <p className="text-sm text-[#7D7B75]">Chargement…</p> : null}
+      {query.isError ? <p className="text-sm text-[#E24B4A]">Impossible de charger la liste.</p> : null}
+      <ul className="flex flex-col gap-3">{items.map((item) => renderItem(item))}</ul>
+      {query.hasNextPage ? (
+        <button
+          type="button"
+          className="mt-4 text-sm font-semibold text-[#1F7A4D]"
+          onClick={() => void query.fetchNextPage()}
+        >
+          Charger plus
+        </button>
+      ) : null}
+    </div>
   )
 }

@@ -28,6 +28,60 @@ export function invalidateEstablishmentSignalQueries(
   void queryClient.invalidateQueries({ queryKey: ['signals', 'detail', establishmentId] })
 }
 
+function isEstablishmentDashboardQueryKey(
+  queryKey: readonly unknown[],
+  establishmentId: string,
+): boolean {
+  const [root, kind, params] = queryKey
+  if (root !== 'analytics') {
+    return false
+  }
+  if (kind !== 'dashboard' && kind !== 'dashboard-rankings') {
+    return false
+  }
+  if (params === null || typeof params !== 'object' || Array.isArray(params)) {
+    return false
+  }
+  return (params as { establishmentId?: unknown }).establishmentId === establishmentId
+}
+
+export function invalidateEstablishmentDashboardQueries(
+  queryClient: QueryClient,
+  establishmentId: string,
+) {
+  void queryClient.invalidateQueries({
+    predicate: (query) => isEstablishmentDashboardQueryKey(query.queryKey, establishmentId),
+  })
+}
+
+/** Trailing window for realtime `signal.created` bursts (not used after qualify). */
+export const DASHBOARD_REALTIME_INVALIDATION_MS = 50
+
+const pendingRealtimeDashboardInvalidations = new WeakMap<
+  QueryClient,
+  Map<string, ReturnType<typeof setTimeout>>
+>()
+
+export function scheduleEstablishmentDashboardInvalidation(
+  queryClient: QueryClient,
+  establishmentId: string,
+) {
+  let byEstablishment = pendingRealtimeDashboardInvalidations.get(queryClient)
+  if (!byEstablishment) {
+    byEstablishment = new Map()
+    pendingRealtimeDashboardInvalidations.set(queryClient, byEstablishment)
+  }
+  const existing = byEstablishment.get(establishmentId)
+  if (existing !== undefined) {
+    clearTimeout(existing)
+  }
+  const timer = setTimeout(() => {
+    byEstablishment.delete(establishmentId)
+    invalidateEstablishmentDashboardQueries(queryClient, establishmentId)
+  }, DASHBOARD_REALTIME_INVALIDATION_MS)
+  byEstablishment.set(establishmentId, timer)
+}
+
 export function invalidateSignalCommentQueries(
   queryClient: QueryClient,
   establishmentId: string,

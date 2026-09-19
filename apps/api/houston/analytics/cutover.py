@@ -20,10 +20,10 @@ from houston.action_plans.constants import (
 from houston.action_plans.models import ActionPlanExecution, ActionPlanExecutionLifecycleEvent
 from houston.analytics.models import AnalyticsHistoryCoverage
 from houston.signals.constants import (
-    SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
     SIGNAL_LIFECYCLE_EVENT_CANCELED,
     SIGNAL_LIFECYCLE_EVENT_HISTORY_BASELINE,
     SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+    SIGNAL_RESOLUTION_ORIGIN_VALUES,
 )
 from houston.signals.models import Signal, SignalLifecycleEvent
 
@@ -155,17 +155,25 @@ def _history_cutover_insert_statements(
     ]
 
 
+def _resolution_origin_sql_in_list() -> str:
+    return ", ".join(f"'{value}'" for value in sorted(SIGNAL_RESOLUTION_ORIGIN_VALUES))
+
+
 def _signal_terminal_statements(tables: _CutoverTables) -> list[tuple[str, list]]:
-    terminals = (
-        ("resolved", "resolved_at", SIGNAL_LIFECYCLE_EVENT_RESOLVED),
-        ("canceled", "canceled_at", SIGNAL_LIFECYCLE_EVENT_CANCELED),
-        ("archived", "archived_at", SIGNAL_LIFECYCLE_EVENT_ARCHIVED),
+    origin_in_list = _resolution_origin_sql_in_list()
+    resolved_metadata = (
+        "CASE "
+        f"WHEN s.resolution_origin IN ({origin_in_list}) "
+        "THEN jsonb_build_object("
+        f"'to_status', '{Signal.Status.RESOLVED}', "
+        "'resolution_origin', s.resolution_origin"
+        ") "
+        f"ELSE jsonb_build_object('to_status', '{Signal.Status.RESOLVED}') "
+        "END"
     )
-    statements = []
-    for status, timestamp_field, event_type in terminals:
-        statements.append(
-            (
-                f"""
+    statements = [
+        (
+            f"""
                 INSERT INTO {tables.signal_events} (
                     id, created_at, updated_at, signal_id, establishment_id,
                     event_type, actor_membership_id, occurred_at, metadata_safe
@@ -176,24 +184,53 @@ def _signal_terminal_statements(tables: _CutoverTables) -> list[tuple[str, list]
                     now(),
                     s.id,
                     s.establishment_id,
-                    '{event_type}',
+                    '{SIGNAL_LIFECYCLE_EVENT_RESOLVED}',
                     NULL,
-                    s.{timestamp_field},
-                    jsonb_build_object('to_status', '{status}')
+                    s.resolved_at,
+                    {resolved_metadata}
                 FROM {tables.signals} s
-                WHERE s.status = '{status}'
-                  AND s.{timestamp_field} IS NOT NULL
+                WHERE s.status = '{Signal.Status.RESOLVED}'
+                  AND s.resolved_at IS NOT NULL
                   AND NOT EXISTS (
                     SELECT 1
                     FROM {tables.signal_events} existing
                     WHERE existing.signal_id = s.id
-                      AND existing.event_type = '{event_type}'
-                      AND existing.occurred_at = s.{timestamp_field}
+                      AND existing.event_type = '{SIGNAL_LIFECYCLE_EVENT_RESOLVED}'
+                      AND existing.occurred_at = s.resolved_at
                   )
                 """,
-                [],
-            )
-        )
+            [],
+        ),
+        (
+            f"""
+                INSERT INTO {tables.signal_events} (
+                    id, created_at, updated_at, signal_id, establishment_id,
+                    event_type, actor_membership_id, occurred_at, metadata_safe
+                )
+                SELECT
+                    gen_random_uuid(),
+                    now(),
+                    now(),
+                    s.id,
+                    s.establishment_id,
+                    '{SIGNAL_LIFECYCLE_EVENT_CANCELED}',
+                    NULL,
+                    s.canceled_at,
+                    jsonb_build_object('to_status', '{Signal.Status.CANCELED}')
+                FROM {tables.signals} s
+                WHERE s.status = '{Signal.Status.CANCELED}'
+                  AND s.canceled_at IS NOT NULL
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM {tables.signal_events} existing
+                    WHERE existing.signal_id = s.id
+                      AND existing.event_type = '{SIGNAL_LIFECYCLE_EVENT_CANCELED}'
+                      AND existing.occurred_at = s.canceled_at
+                  )
+                """,
+            [],
+        ),
+    ]
     return statements
 
 

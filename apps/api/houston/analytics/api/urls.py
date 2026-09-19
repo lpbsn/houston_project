@@ -3,6 +3,7 @@ from __future__ import annotations
 from django.urls import path
 
 from houston.analytics.api.views import (
+    AnalyticsDashboardRankingsView,
     AnalyticsDashboardView,
     AnalyticsPatternDetailView,
     AnalyticsPatternFilterOptionsView,
@@ -19,6 +20,11 @@ from houston.analytics.api.views import (
 
 urlpatterns = [
     path("analytics/dashboard/", AnalyticsDashboardView.as_view(), name="analytics-dashboard"),
+    path(
+        "analytics/dashboard/rankings/",
+        AnalyticsDashboardRankingsView.as_view(),
+        name="analytics-dashboard-rankings",
+    ),
     path(
         "analytics/pattern-filter-options/",
         AnalyticsPatternFilterOptionsView.as_view(),

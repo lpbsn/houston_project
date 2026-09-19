@@ -164,7 +164,7 @@ def test_qualify_signal_routing_merge_does_not_reclassify_source_or_unchanged_su
         role=EstablishmentMembership.Role.OWNER,
     )
     focus = normalize_issue_focus("stock")
-    survivor = create_resolved_signal(
+    create_resolved_signal(
         membership,
         bar,
         subject,
@@ -192,6 +192,6 @@ def test_qualify_signal_routing_merge_does_not_reclassify_source_or_unchanged_su
             },
         )
 
-    source.refresh_from_db()
-    assert source.merged_into_id == survivor.id
+    source_id = source.id
     delay.assert_not_called()
+    assert not Signal.objects.filter(id=source_id).exists()

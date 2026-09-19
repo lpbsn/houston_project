@@ -4,7 +4,6 @@ import { resolveApiErrorMessage } from '@/lib/error-message'
 
 import { SignalsApiError } from '../api'
 import {
-  useArchiveSignalMutation,
   useCancelSignalMutation,
   useMarkSignalInterestingMutation,
   usePinSignalMutation,
@@ -12,7 +11,6 @@ import {
   useUnpinSignalMutation,
 } from '../hooks'
 import {
-  SIGNAL_ARCHIVE_CONFIRM_MESSAGE,
   SIGNAL_CANCEL_CONFIRM_MESSAGE,
   SIGNAL_MARK_INTERESTING_CONFIRM_MESSAGE,
   type SignalFeedCardActionId,
@@ -44,13 +42,11 @@ export function useSignalFeedQuickActions({
   const resolveMutation = useResolveSignalMutation(establishmentId)
   const cancelMutation = useCancelSignalMutation(establishmentId)
   const markInterestingMutation = useMarkSignalInterestingMutation(establishmentId)
-  const archiveMutation = useArchiveSignalMutation(establishmentId)
 
   const isLifecyclePending =
     resolveMutation.isPending ||
     cancelMutation.isPending ||
-    markInterestingMutation.isPending ||
-    archiveMutation.isPending
+    markInterestingMutation.isPending
 
   const isPending =
     pinMutation.isPending ||
@@ -125,8 +121,7 @@ export function useSignalFeedQuickActions({
     return (
       actionId === 'resolve' ||
       actionId === 'cancel' ||
-      actionId === 'mark_interesting' ||
-      actionId === 'archive'
+      actionId === 'mark_interesting'
     )
   }
 
@@ -155,14 +150,6 @@ export function useSignalFeedQuickActions({
         }
         return startLifecycleMutation(
           (id, options) => void markInterestingMutation.mutate(id, options),
-          signalId,
-        )
-      case 'archive':
-        if (!window.confirm(SIGNAL_ARCHIVE_CONFIRM_MESSAGE)) {
-          return 'abort'
-        }
-        return startLifecycleMutation(
-          (id, options) => void archiveMutation.mutate(id, options),
           signalId,
         )
       case 'resolve':

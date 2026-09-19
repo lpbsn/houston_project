@@ -7,17 +7,17 @@ import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
 import { AnalyticsApiError } from '@/features/analytics/api'
 import {
   ContributorsCard,
-  DashboardAiSummaryPlaceholder,
   DashboardExportButton,
-  DashboardRevenuePlaceholder,
-  NewPatternsCard,
-  ObservationTreatmentCard,
-  OpenObservationsCard,
-  OperationalSummaryStrip,
-  PlanDeadlinesCard,
-  PolesCard,
-  RecurringPatternsCard,
+  DashboardFilterPlaceholders,
   LocationsCard,
+  NewPatternsCard,
+  ObservationDestinationDelaysCard,
+  ObservationDestinationsCard,
+  ObservationVolumeCard,
+  PlanDeadlineRespectCard,
+  PlanOverrunCard,
+  RecurringPatternsCard,
+  ResolutionQualityCard,
 } from '@/features/analytics/components/dashboard-widgets'
 import { useAnalyticsDashboardQuery } from '@/features/analytics/hooks'
 import {
@@ -30,7 +30,6 @@ import {
 import {
   buildDashboardHref,
   DASHBOARD_PERIOD_DAYS,
-  DEFAULT_DASHBOARD_PERIOD_DAYS,
   useDashboardPeriodDays,
   type DashboardPeriodDays,
 } from '@/features/analytics/lib/dashboard-url-state'
@@ -72,23 +71,23 @@ export function AnalyticsPage({ scope = { type: 'session' } }: AnalyticsPageProp
   const canRead = canShowAnalyticsNavigation(auth.bootstrap)
   const sessionEstablishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
   const establishmentId = resolveEstablishmentId(scope, sessionEstablishmentId)
-  const isCross = scope.type === 'cross'
   const scopedEstablishmentId = scope.type === 'establishment' ? scope.establishmentId : null
   const establishmentAllowed =
     scopedEstablishmentId == null ||
     isEstablishmentAuthorized(scopedEstablishmentId, auth.bootstrap?.memberships ?? [])
+  const establishmentName =
+    auth.bootstrap?.memberships.find((membership) => membership.establishment_id === establishmentId)
+      ?.establishment_name ??
+    auth.bootstrap?.active_membership?.establishment_name ??
+    ''
 
   const dashboardQuery = useAnalyticsDashboardQuery(
     { periodDays, establishmentId },
-    { enabled: canRead && establishmentAllowed },
+    { enabled: canRead && establishmentAllowed && Boolean(establishmentId) },
   )
 
   const pathname =
-    scope.type === 'cross'
-      ? '/cross'
-      : scope.type === 'establishment'
-        ? `/e/${scope.establishmentId}`
-        : '/analytics'
+    scope.type === 'establishment' ? `/e/${scope.establishmentId}` : '/analytics'
   const coverageComparisons = dashboardQuery.data
     ? collectDashboardComparisons(dashboardQuery.data)
     : []
@@ -114,25 +113,23 @@ export function AnalyticsPage({ scope = { type: 'session' } }: AnalyticsPageProp
     )
   }
 
-  if (!establishmentAllowed) {
+  if (!establishmentAllowed || !establishmentId) {
     return (
       <TerrainEmptyState
         className="mx-4 mt-6"
         title="Accès refusé"
-        description="Vous n’avez pas accès à cet établissement."
+        description="Le Dashboard représente un établissement précis. Sélectionnez un établissement pour continuer."
       />
     )
   }
 
   return (
     <div className="mx-auto flex w-full min-w-0 max-w-[96rem] flex-col gap-4 px-4 py-5 pb-28 lg:gap-5 lg:px-8 lg:py-6 lg:pb-12 xl:px-10">
-      <header className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="hidden min-w-0 lg:block">
+      <header className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
           <h1 className="text-3xl font-bold tracking-tight text-[#1a1a1a]">Dashboard</h1>
           <p className="mt-1 text-sm text-[#7D7B75]">
-            {isCross
-              ? 'Vue agrégée de tous vos établissements'
-              : 'Vue de l’établissement courant'}
+            {establishmentName || 'Établissement'} · {periodDays} j
           </p>
         </div>
         <div className="flex w-full min-w-0 flex-col gap-1.5 lg:w-auto lg:items-end">
@@ -161,6 +158,8 @@ export function AnalyticsPage({ scope = { type: 'session' } }: AnalyticsPageProp
           </p>
         </div>
       </header>
+
+      <DashboardFilterPlaceholders />
 
       {coverageMessage ? (
         <p className="rounded-xl border border-[#E8E6DF] bg-white px-4 py-2.5 text-[13px] text-[#7D7B75]">
@@ -191,67 +190,44 @@ export function AnalyticsPage({ scope = { type: 'session' } }: AnalyticsPageProp
       ) : null}
 
       {dashboardQuery.data ? (
-        <>
-          <OperationalSummaryStrip data={dashboardQuery.data} periodDays={periodDays} />
-          <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:gap-5">
-            <div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col lg:gap-5">
-              <div className="order-1 min-w-0 lg:order-none">
-                <RecurringPatternsCard
-                  items={dashboardQuery.data.recurring_patterns}
-                  isCross={isCross}
-                  periodDays={periodDays}
-                />
-              </div>
-              <div className="order-4 min-w-0 lg:order-none">
-                <ObservationTreatmentCard data={dashboardQuery.data} periodDays={periodDays} />
-              </div>
-              <div className="order-5 min-w-0 lg:order-none">
-                <PlanDeadlinesCard data={dashboardQuery.data} periodDays={periodDays} />
-              </div>
-              <div className="order-7 min-w-0 lg:order-none">
-                <PolesCard
-                  items={dashboardQuery.data.poles}
-                  isCross={isCross}
-                  periodDays={periodDays}
-                />
-              </div>
-            </div>
-            <div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col lg:gap-5">
-              <div className="order-2 min-w-0 lg:order-none">
-                <NewPatternsCard
-                  items={dashboardQuery.data.new_patterns}
-                  previewLimit={dashboardQuery.data.new_patterns_preview_limit}
-                  isCross={isCross}
-                />
-              </div>
-              <div className="order-3 min-w-0 lg:order-none">
-                <OpenObservationsCard data={dashboardQuery.data} periodDays={periodDays} />
-              </div>
-              <div className="order-6 min-w-0 lg:order-none">
-                <LocationsCard
-                  items={dashboardQuery.data.locations}
-                  previewLimit={dashboardQuery.data.locations_preview_limit}
-                  isCross={isCross}
-                  periodDays={periodDays}
-                />
-              </div>
-              <div className="order-8 min-w-0 lg:order-none">
-                <ContributorsCard items={dashboardQuery.data.contributors} isCross={isCross} />
-              </div>
-            </div>
-          </div>
-          <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5">
-            <div className="min-w-0">
-              <DashboardAiSummaryPlaceholder />
-            </div>
-            <div className="min-w-0">
-              <DashboardRevenuePlaceholder />
-            </div>
-          </div>
-        </>
+        <div className="flex min-w-0 flex-col gap-4">
+          <RecurringPatternsCard
+            preview={dashboardQuery.data.recurring_patterns}
+            establishmentId={establishmentId}
+            periodDays={periodDays}
+          />
+          <NewPatternsCard
+            preview={dashboardQuery.data.new_patterns}
+            establishmentId={establishmentId}
+            periodDays={periodDays}
+          />
+          <ObservationVolumeCard
+            volume={dashboardQuery.data.observation_volume}
+            periodDays={periodDays}
+          />
+          <ObservationDestinationsCard
+            destinations={dashboardQuery.data.observation_destinations}
+            periodDays={periodDays}
+          />
+          <ObservationDestinationDelaysCard
+            delays={dashboardQuery.data.observation_destination_delays}
+          />
+          <PlanDeadlineRespectCard
+            data={dashboardQuery.data.plan_deadline_respect}
+            periodDays={periodDays}
+          />
+          <PlanOverrunCard data={dashboardQuery.data.plan_overrun} />
+          <ResolutionQualityCard data={dashboardQuery.data.resolution_quality} />
+          <ContributorsCard items={dashboardQuery.data.contributors} />
+          <LocationsCard
+            preview={dashboardQuery.data.locations}
+            establishmentId={establishmentId}
+            periodDays={periodDays}
+          />
+        </div>
       ) : null}
     </div>
   )
 }
 
-export { DEFAULT_DASHBOARD_PERIOD_DAYS }
+export { DEFAULT_DASHBOARD_PERIOD_DAYS } from '@/features/analytics/lib/dashboard-url-state'

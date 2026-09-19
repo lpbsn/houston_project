@@ -157,6 +157,7 @@ paths:
         schema:
           type: string
           format: uuid
+        required: true
       - in: query
         name: period_days
         schema:
@@ -178,6 +179,74 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AnalyticsDashboardResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/analytics/dashboard/rankings/:
+    get:
+      operationId: v1_analytics_dashboard_rankings_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: kind
+        schema:
+          type: string
+          enum:
+          - locations
+          - new
+          - recurring
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Page size, default 50, maximum 100.
+      - in: query
+        name: period_days
+        schema:
+          type: integer
+          enum:
+          - 15
+          - 3
+          - 30
+          - 7
+          - 90
+        description: Sliding window length in days. Default 7.
+      tags:
+      - analytics
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsDashboardRankingsResponse'
           description: ''
         '400':
           content:
@@ -6686,51 +6755,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
-  /api/v1/establishments/{establishment_id}/signals/{signal_id}/archive/:
-    post:
-      operationId: v1_establishments_signals_archive_create
-      parameters:
-      - in: path
-        name: establishment_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      - in: path
-        name: signal_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - signals
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SignalDetail'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
   /api/v1/establishments/{establishment_id}/signals/{signal_id}/cancel/:
     post:
       operationId: v1_establishments_signals_cancel_create
@@ -9802,7 +9826,7 @@ components:
           type: string
           format: uuid
         kind:
-          $ref: '#/components/schemas/KindEnum'
+          $ref: '#/components/schemas/ActionPlanPlanningItemKindEnum'
         primary_membership_id:
           type: string
           format: uuid
@@ -9847,6 +9871,14 @@ components:
       required:
       - item_id
       - kind
+    ActionPlanPlanningItemKindEnum:
+      enum:
+      - execution
+      - schedule
+      type: string
+      description: |-
+        * `execution` - execution
+        * `schedule` - schedule
     ActionPlanPlanningResourceResult:
       type: object
       properties:
@@ -10468,24 +10500,6 @@ components:
         * `undecided` - undecided
         * `granted` - granted
         * `declined` - declined
-    AnalyticsAgingBucket:
-      type: object
-      properties:
-        key:
-          type: string
-        label:
-          type: string
-        count:
-          type: integer
-        share:
-          type: number
-          format: double
-          nullable: true
-      required:
-      - count
-      - key
-      - label
-      - share
     AnalyticsContributorItem:
       type: object
       properties:
@@ -10545,6 +10559,43 @@ components:
       - previous_value
       - relative_change
       - relative_change_status
+    AnalyticsDashboardRankingsResponse:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/AnalyticsDashboardRankingsResponseKindEnum'
+        current_period:
+          $ref: '#/components/schemas/AnalyticsPeriod'
+        items:
+          type: array
+          items: {}
+        total_count:
+          type: integer
+        page_size:
+          type: integer
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
+      required:
+      - current_period
+      - has_more
+      - items
+      - kind
+      - next_cursor
+      - page_size
+      - total_count
+    AnalyticsDashboardRankingsResponseKindEnum:
+      enum:
+      - recurring
+      - new
+      - locations
+      type: string
+      description: |-
+        * `recurring` - recurring
+        * `new` - new
+        * `locations` - locations
     AnalyticsDashboardResponse:
       type: object
       properties:
@@ -10557,117 +10608,56 @@ components:
         history_reliable_from:
           type: string
           format: date-time
-        scope_type:
-          $ref: '#/components/schemas/AnalyticsDashboardResponseScopeTypeEnum'
         establishment_id:
           type: string
           format: uuid
-          nullable: true
-        establishment_ids:
-          type: array
-          items:
-            type: string
-            format: uuid
+        establishment_name:
+          type: string
         recurring_patterns:
-          type: array
-          items:
-            $ref: '#/components/schemas/AnalyticsRecurringPatternItem'
+          $ref: '#/components/schemas/AnalyticsRecurringPreview'
         new_patterns:
-          type: array
-          items:
-            $ref: '#/components/schemas/AnalyticsNewPatternItem'
-        new_patterns_preview_limit:
-          type: integer
+          $ref: '#/components/schemas/AnalyticsNewPreview'
+        locations:
+          $ref: '#/components/schemas/AnalyticsLocationPreview'
+        observation_volume:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/AnalyticsObservationVolume'
+        observation_destinations:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/AnalyticsDestinationShare'
+        observation_destination_delays:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/AnalyticsDestinationDelay'
+        plan_deadline_respect:
+          $ref: '#/components/schemas/AnalyticsDeadlineShare'
+        plan_overrun:
+          $ref: '#/components/schemas/AnalyticsPlanOverrun'
+        resolution_quality:
+          $ref: '#/components/schemas/AnalyticsResolutionQuality'
         contributors:
           type: array
           items:
             $ref: '#/components/schemas/AnalyticsContributorItem'
-        observation_delay_canceled:
-          $ref: '#/components/schemas/AnalyticsDelayStats'
-        observation_delay_resolved:
-          $ref: '#/components/schemas/AnalyticsDelayStats'
-        observation_delay_transformed:
-          $ref: '#/components/schemas/AnalyticsDelayStats'
-        operational_resolution_rate:
-          $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
-        closure_resolved_share:
-          $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
-        closure_measured_resolved_count:
-          type: integer
-        closure_measured_canceled_count:
-          type: integer
-        undatable_signal_terminals:
-          $ref: '#/components/schemas/AnalyticsUndatableSignalTerminals'
-        undatable_execution_terminals:
-          $ref: '#/components/schemas/AnalyticsUndatableExecutionTerminals'
-        reopenings:
-          $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
-        open_observation_count:
-          type: integer
-        aging_buckets:
-          type: array
-          items:
-            $ref: '#/components/schemas/AnalyticsAgingBucket'
-        aging_over_15d_share:
-          $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
-        plan_delay_canceled:
-          $ref: '#/components/schemas/AnalyticsDelayStats'
-        plan_delay_resolved:
-          $ref: '#/components/schemas/AnalyticsDelayStats'
-        plan_validation:
-          $ref: '#/components/schemas/AnalyticsDelayStats'
-        plan_deadlines:
-          $ref: '#/components/schemas/AnalyticsDeadlineShare'
-        locations:
-          type: array
-          items:
-            $ref: '#/components/schemas/AnalyticsNamedCountItem'
-        locations_preview_limit:
-          type: integer
-        poles:
-          type: array
-          items:
-            $ref: '#/components/schemas/AnalyticsNamedCountItem'
       required:
-      - aging_buckets
-      - aging_over_15d_share
-      - closure_measured_canceled_count
-      - closure_measured_resolved_count
-      - closure_resolved_share
       - contributors
       - current_period
       - establishment_id
-      - establishment_ids
+      - establishment_name
       - history_reliable_from
       - locations
-      - locations_preview_limit
       - new_patterns
-      - new_patterns_preview_limit
-      - observation_delay_canceled
-      - observation_delay_resolved
-      - observation_delay_transformed
-      - open_observation_count
-      - operational_resolution_rate
+      - observation_destination_delays
+      - observation_destinations
+      - observation_volume
       - period_days
-      - plan_deadlines
-      - plan_delay_canceled
-      - plan_delay_resolved
-      - plan_validation
-      - poles
+      - plan_deadline_respect
+      - plan_overrun
       - previous_period
       - recurring_patterns
-      - reopenings
-      - scope_type
-      - undatable_execution_terminals
-      - undatable_signal_terminals
-    AnalyticsDashboardResponseScopeTypeEnum:
-      enum:
-      - cross
-      - establishment
-      type: string
-      description: |-
-        * `cross` - cross
-        * `establishment` - establishment
+      - resolution_quality
     AnalyticsDeadlineShare:
       type: object
       properties:
@@ -10691,6 +10681,8 @@ components:
           type: integer
         late_count:
           type: integer
+        excluded_count:
+          type: integer
         early_comparison:
           $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
         on_time_comparison:
@@ -10701,6 +10693,7 @@ components:
       - early
       - early_comparison
       - early_count
+      - excluded_count
       - late
       - late_comparison
       - late_count
@@ -10708,37 +10701,48 @@ components:
       - on_time
       - on_time_comparison
       - on_time_count
-    AnalyticsDelayStats:
+    AnalyticsDestinationDelay:
       type: object
       properties:
-        median_seconds:
-          type: number
-          format: double
-          nullable: true
         mean_seconds:
-          type: number
-          format: double
-          nullable: true
-        p90_seconds:
           type: number
           format: double
           nullable: true
         n:
           type: integer
-        comparison:
-          $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
         undatable_in_scope:
           type: integer
-        unstarted_in_scope:
+      required:
+      - mean_seconds
+      - n
+      - undatable_in_scope
+    AnalyticsDestinationShare:
+      type: object
+      properties:
+        count:
           type: integer
+        share:
+          type: number
+          format: double
+          nullable: true
+        comparison:
+          $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
       required:
       - comparison
-      - mean_seconds
-      - median_seconds
-      - n
-      - p90_seconds
-      - undatable_in_scope
-      - unstarted_in_scope
+      - count
+      - share
+    AnalyticsLocationPreview:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsNamedCountItem'
+        total_count:
+          type: integer
+      required:
+      - items
+      - total_count
     AnalyticsMetricComparison:
       type: object
       properties:
@@ -10775,20 +10779,11 @@ components:
           type: string
         count:
           type: integer
-        establishment_id:
-          type: string
-          format: uuid
-          nullable: true
-        establishment_name:
-          type: string
-          nullable: true
         comparison:
           $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
       required:
       - comparison
       - count
-      - establishment_id
-      - establishment_name
       - id
       - name
     AnalyticsNewPatternItem:
@@ -10802,26 +10797,52 @@ components:
         first_seen_at:
           type: string
           format: date-time
-        observation_count:
-          type: integer
-        establishment_count:
-          type: integer
-          nullable: true
-        establishment_id:
-          type: string
-          format: uuid
-          nullable: true
-        establishment_name:
-          type: string
-          nullable: true
       required:
-      - establishment_count
-      - establishment_id
-      - establishment_name
       - first_seen_at
       - name
-      - observation_count
       - pattern_id
+    AnalyticsNewPreview:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsNewPatternItem'
+        total_count:
+          type: integer
+      required:
+      - items
+      - total_count
+    AnalyticsObservationVolume:
+      type: object
+      properties:
+        windows:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsVolumeWindow'
+        current_total:
+          type: integer
+        comparison:
+          $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
+      required:
+      - comparison
+      - current_total
+      - windows
+    AnalyticsOverrunBucket:
+      type: object
+      properties:
+        key:
+          type: string
+        count:
+          type: integer
+        share:
+          type: number
+          format: double
+          nullable: true
+      required:
+      - count
+      - key
+      - share
     AnalyticsOwnerGovernancePatternRef:
       type: object
       properties:
@@ -11394,6 +11415,39 @@ components:
       required:
       - period_end
       - period_start
+    AnalyticsPlanOverrun:
+      type: object
+      properties:
+        total_count:
+          type: integer
+        analyzed_count:
+          type: integer
+        excluded_count:
+          type: integer
+        buckets:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsOverrunBucket'
+      required:
+      - analyzed_count
+      - buckets
+      - excluded_count
+      - total_count
+    AnalyticsQualityBucket:
+      type: object
+      properties:
+        stars:
+          type: integer
+        count:
+          type: integer
+        share:
+          type: number
+          format: double
+          nullable: true
+      required:
+      - count
+      - share
+      - stars
     AnalyticsRecurrenceWindow:
       type: object
       properties:
@@ -11416,13 +11470,47 @@ components:
           type: string
         signal_count:
           type: integer
+        last_seen_at:
+          type: string
+          format: date-time
         comparison:
           $ref: '#/components/schemas/AnalyticsDashboardMetricComparison'
       required:
       - comparison
+      - last_seen_at
       - name
       - pattern_id
       - signal_count
+    AnalyticsRecurringPreview:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsRecurringPatternItem'
+        total_count:
+          type: integer
+      required:
+      - items
+      - total_count
+    AnalyticsResolutionQuality:
+      type: object
+      properties:
+        n:
+          type: integer
+        evaluated_count:
+          type: integer
+        unevaluated_count:
+          type: integer
+        buckets:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsQualityBucket'
+      required:
+      - buckets
+      - evaluated_count
+      - n
+      - unevaluated_count
     AnalyticsSignalBusinessUnitRef:
       type: object
       properties:
@@ -11445,29 +11533,42 @@ components:
       required:
       - id
       - name
-    AnalyticsUndatableExecutionTerminals:
+    AnalyticsVolumeSegment:
       type: object
       properties:
-        canceled:
+        pole_id:
+          type: string
+        name:
+          type: string
+        count:
           type: integer
-        done:
-          type: integer
+        share:
+          type: number
+          format: double
+          nullable: true
       required:
-      - canceled
-      - done
-    AnalyticsUndatableSignalTerminals:
+      - count
+      - name
+      - pole_id
+      - share
+    AnalyticsVolumeWindow:
       type: object
       properties:
-        canceled:
+        offset:
           type: integer
-        resolved:
+        label_key:
+          type: string
+        total:
           type: integer
-        archived:
-          type: integer
+        segments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsVolumeSegment'
       required:
-      - archived
-      - canceled
-      - resolved
+      - label_key
+      - offset
+      - segments
+      - total
     ApiErrorResponse:
       type: object
       properties:
@@ -12683,7 +12784,7 @@ components:
       type: object
       properties:
         scope_type:
-          $ref: '#/components/schemas/ScopeTypeB92Enum'
+          $ref: '#/components/schemas/ScopeTypeEnum'
         scope_id:
           type: string
           format: uuid
@@ -12704,7 +12805,7 @@ components:
       type: object
       properties:
         scope_type:
-          $ref: '#/components/schemas/ScopeTypeB92Enum'
+          $ref: '#/components/schemas/ScopeTypeEnum'
         scope_id:
           type: string
           format: uuid
@@ -13093,14 +13194,6 @@ components:
       - key
       - label
       - source
-    KindEnum:
-      enum:
-      - execution
-      - schedule
-      type: string
-      description: |-
-        * `execution` - execution
-        * `schedule` - schedule
     LegalVersionRequest:
       type: object
       properties:
@@ -14347,8 +14440,6 @@ components:
           type: boolean
         can_mark_interesting:
           type: boolean
-        can_archive:
-          type: boolean
         can_cancel:
           type: boolean
         can_resolve:
@@ -14367,7 +14458,6 @@ components:
           type: boolean
       required:
       - can_approve_resolution_request
-      - can_archive
       - can_cancel
       - can_cancel_resolution_request
       - can_create_linked_action_plan
@@ -14704,7 +14794,7 @@ components:
       required:
       - activity_description
       - optional_units
-    ScopeTypeB92Enum:
+    ScopeTypeEnum:
       enum:
       - business_unit
       type: string
@@ -14864,18 +14954,8 @@ components:
           type: string
           format: date-time
           nullable: true
-        archived_by_membership_id:
-          type: string
-          format: uuid
-          nullable: true
-        archived_at:
-          type: string
-          format: date-time
-          nullable: true
       required:
       - aggregation_count
-      - archived_at
-      - archived_by_membership_id
       - canceled_at
       - canceled_by_membership_id
       - created_at
@@ -15223,14 +15303,6 @@ components:
           type: string
           format: date-time
           nullable: true
-        archived_by_membership_id:
-          type: string
-          format: uuid
-          nullable: true
-        archived_at:
-          type: string
-          format: date-time
-          nullable: true
         qualification_outcome:
           $ref: '#/components/schemas/QualificationOutcomeEnum'
         surviving_signal_id:
@@ -15242,8 +15314,6 @@ components:
           nullable: true
       required:
       - aggregation_count
-      - archived_at
-      - archived_by_membership_id
       - canceled_at
       - canceled_by_membership_id
       - created_at

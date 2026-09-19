@@ -78,7 +78,7 @@ function wrapper({ children }: { children: ReactNode }) {
 
 const dashboardOptions = {
   periodDays: 7 as const,
-  establishmentId: null,
+  establishmentId: 'est-1',
 }
 
 describe('useAnalyticsDashboardQuery', () => {
@@ -124,7 +124,7 @@ describe('useAnalyticsDashboardQuery', () => {
       'dashboard',
       {
         periodDays: 7,
-        establishmentId: null,
+        establishmentId: 'est-1',
       },
     ])
   })

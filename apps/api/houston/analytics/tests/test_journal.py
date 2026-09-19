@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import importlib
 from datetime import timedelta
+from io import StringIO
 
 import pytest
+from django.core.management import call_command
 from django.db import connection
 from django.db.migrations.exceptions import IrreversibleError
 from django.test.utils import CaptureQueriesContext
@@ -39,13 +41,15 @@ from houston.analytics.journal import (
     signal_status_at,
 )
 from houston.analytics.models import AnalyticsHistoryCoverage, PatternEstablishmentSighting
+from houston.analytics.repair_resolved_journal_origins import repair_resolved_journal_origins
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.constants import (
-    SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
     SIGNAL_LIFECYCLE_EVENT_CANCELED,
     SIGNAL_LIFECYCLE_EVENT_CREATED,
     SIGNAL_LIFECYCLE_EVENT_HISTORY_BASELINE,
     SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+    SIGNAL_RESOLUTION_ORIGIN_MANUAL,
+    SIGNAL_RESOLUTION_ORIGIN_VALUES,
 )
 from houston.signals.models import Signal, SignalLifecycleEvent
 from houston.testing.factories import create_establishment, create_membership
@@ -143,7 +147,6 @@ def _seed_cutover_mix(*, establishment, owner, business_unit, count: int, prefix
         (Signal.Status.IN_PROGRESS, {}),
         (Signal.Status.RESOLVED, {"resolved_at": now}),
         (Signal.Status.CANCELED, {"canceled_at": now}),
-        (Signal.Status.ARCHIVED, {"archived_at": now}),
     )
     execution_specs = (
         (EXECUTION_STATUS_PENDING_VALIDATION, {"marked_done_at": now, "end_at": now}),
@@ -396,7 +399,6 @@ def test_cutover_signal_terminals_skip_missing_timestamps():
     establishment = create_establishment()
     resolved_at = timezone.now() - timedelta(days=1)
     canceled_at = timezone.now() - timedelta(hours=12)
-    archived_at = timezone.now() - timedelta(hours=6)
     in_progress = _create_cutover_signal(
         establishment,
         status=Signal.Status.IN_PROGRESS,
@@ -418,12 +420,6 @@ def test_cutover_signal_terminals_skip_missing_timestamps():
         status=Signal.Status.CANCELED,
         title="Cutover canceled",
         canceled_at=canceled_at,
-    )
-    archived = _create_cutover_signal(
-        establishment,
-        status=Signal.Status.ARCHIVED,
-        title="Cutover archived",
-        archived_at=archived_at,
     )
 
     reliable_from = apply_analytics_history_cutover()
@@ -453,11 +449,6 @@ def test_cutover_signal_terminals_skip_missing_timestamps():
         event_type=SIGNAL_LIFECYCLE_EVENT_CANCELED,
     )
     assert canceled_terminal.occurred_at == canceled_at
-    archived_terminal = SignalLifecycleEvent.objects.get(
-        signal=archived,
-        event_type=SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
-    )
-    assert archived_terminal.occurred_at == archived_at
     assert (
         SignalLifecycleEvent.objects.filter(
             signal=resolved,
@@ -474,6 +465,161 @@ def test_cutover_signal_terminals_skip_missing_timestamps():
         == Signal.Status.RESOLVED
     )
     _assert_no_invented_legacy_events()
+
+
+def test_cutover_resolved_terminal_includes_allowlisted_origin_only():
+    establishment = create_establishment()
+    resolved_at = timezone.now() - timedelta(days=1)
+    with_origin = _create_cutover_signal(
+        establishment,
+        status=Signal.Status.RESOLVED,
+        title="Cutover resolved with origin",
+        resolved_at=resolved_at,
+        resolution_origin=SIGNAL_RESOLUTION_ORIGIN_MANUAL,
+    )
+    without_origin = _create_cutover_signal(
+        establishment,
+        status=Signal.Status.RESOLVED,
+        title="Cutover resolved without origin",
+        resolved_at=resolved_at,
+    )
+    garbage = _create_cutover_signal(
+        establishment,
+        status=Signal.Status.RESOLVED,
+        title="Cutover resolved garbage origin",
+        resolved_at=resolved_at,
+        resolution_origin="not-an-origin",
+    )
+
+    apply_analytics_history_cutover()
+
+    with_event = SignalLifecycleEvent.objects.get(
+        signal=with_origin,
+        event_type=SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+    )
+    without_event = SignalLifecycleEvent.objects.get(
+        signal=without_origin,
+        event_type=SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+    )
+    garbage_event = SignalLifecycleEvent.objects.get(
+        signal=garbage,
+        event_type=SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+    )
+    assert with_event.metadata_safe == {
+        "to_status": Signal.Status.RESOLVED,
+        "resolution_origin": SIGNAL_RESOLUTION_ORIGIN_MANUAL,
+    }
+    assert without_event.metadata_safe == {"to_status": Signal.Status.RESOLVED}
+    assert garbage_event.metadata_safe == {"to_status": Signal.Status.RESOLVED}
+    assert "resolution_origin" not in garbage_event.metadata_safe
+
+
+def test_cutover_replay_does_not_patch_existing_resolved_origin():
+    establishment = create_establishment()
+    resolved_at = timezone.now() - timedelta(days=1)
+    signal = _create_cutover_signal(
+        establishment,
+        status=Signal.Status.RESOLVED,
+        title="Legacy resolved",
+        resolved_at=resolved_at,
+    )
+    apply_analytics_history_cutover()
+    Signal.objects.filter(pk=signal.pk).update(
+        resolution_origin=SIGNAL_RESOLUTION_ORIGIN_MANUAL,
+    )
+    apply_analytics_history_cutover()
+    terminal = SignalLifecycleEvent.objects.get(
+        signal=signal,
+        event_type=SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+    )
+    assert terminal.metadata_safe == {"to_status": Signal.Status.RESOLVED}
+
+
+def _legacy_resolved_event(signal, occurred_at, **metadata):
+    return SignalLifecycleEvent.objects.create(
+        signal=signal,
+        establishment=signal.establishment,
+        event_type=SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+        occurred_at=occurred_at,
+        metadata_safe={"to_status": Signal.Status.RESOLVED, **metadata},
+    )
+
+
+def test_repair_resolved_journal_origins_dry_run_apply_and_unrecoverable():
+    establishment = create_establishment()
+    aligned_at = timezone.now() - timedelta(hours=3)
+    later_at = timezone.now() - timedelta(hours=1)
+    patchable = _create_cutover_signal(
+        establishment,
+        status=Signal.Status.RESOLVED,
+        title="Patchable resolved",
+        resolved_at=aligned_at,
+        resolution_origin=SIGNAL_RESOLUTION_ORIGIN_MANUAL,
+    )
+    garbage = _create_cutover_signal(
+        establishment,
+        status=Signal.Status.RESOLVED,
+        title="Garbage origin",
+        resolved_at=aligned_at,
+        resolution_origin="not-an-origin",
+    )
+    mismatched = _create_cutover_signal(
+        establishment,
+        status=Signal.Status.RESOLVED,
+        title="Mismatched timestamp",
+        resolved_at=later_at,
+        resolution_origin=SIGNAL_RESOLUTION_ORIGIN_MANUAL,
+    )
+    already = _create_cutover_signal(
+        establishment,
+        status=Signal.Status.RESOLVED,
+        title="Already allowlisted",
+        resolved_at=aligned_at,
+        resolution_origin=SIGNAL_RESOLUTION_ORIGIN_MANUAL,
+    )
+    patchable_event = _legacy_resolved_event(patchable, aligned_at)
+    garbage_event = _legacy_resolved_event(garbage, aligned_at)
+    mismatched_event = _legacy_resolved_event(mismatched, aligned_at)
+    _legacy_resolved_event(
+        already,
+        aligned_at,
+        resolution_origin=SIGNAL_RESOLUTION_ORIGIN_MANUAL,
+    )
+
+    dry = repair_resolved_journal_origins(dry_run=True)
+    assert dry.would_patch == 1
+    assert dry.patched == 0
+    assert dry.already_ok == 1
+    assert dry.unrecoverable == 2
+    assert patchable.id in dry.signal_ids
+    assert "resolution_origin" not in patchable_event.metadata_safe
+    assert (
+        garbage_event.metadata_safe.get("resolution_origin")
+        not in SIGNAL_RESOLUTION_ORIGIN_VALUES
+    )
+
+    stdout = StringIO()
+    call_command("repair_resolved_journal_origins", stdout=stdout)
+    assert "would_patch=1" in stdout.getvalue()
+    patchable_event.refresh_from_db()
+    assert "resolution_origin" not in patchable_event.metadata_safe
+
+    applied = repair_resolved_journal_origins(dry_run=False)
+    patchable_event.refresh_from_db()
+    garbage_event.refresh_from_db()
+    mismatched_event.refresh_from_db()
+    assert applied.patched == 1
+    assert applied.would_patch == 0
+    assert applied.unrecoverable == 2
+    assert patchable_event.metadata_safe["resolution_origin"] == SIGNAL_RESOLUTION_ORIGIN_MANUAL
+    assert garbage_event.metadata_safe == {"to_status": Signal.Status.RESOLVED}
+    assert "resolution_origin" not in mismatched_event.metadata_safe
+
+    second = repair_resolved_journal_origins(dry_run=False)
+    assert second.patched == 0
+    assert second.would_patch == 0
+    assert second.already_ok == 2
+    assert second.unrecoverable == 2
 
 
 def test_cutover_does_not_invent_canceled_event_from_last_activity_at():
@@ -665,7 +811,7 @@ def test_cutover_query_count_is_independent_of_object_count():
         for query in first.captured_queries
         if query["sql"].lstrip().upper().startswith("INSERT")
     ]
-    assert len(insert_sql) == 9
+    assert len(insert_sql) == 8
     assert all("NOT EXISTS" in sql.upper() for sql in insert_sql)
 
 

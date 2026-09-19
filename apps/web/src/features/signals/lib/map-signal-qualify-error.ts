@@ -3,33 +3,18 @@ export type SignalQualifyErrorMapping = {
   survivingSignalId: string | null
 }
 
-function readSurvivorId(payload: unknown): string | null {
-  if (!payload || typeof payload !== 'object') {
-    return null
-  }
-  const record = payload as Record<string, unknown>
-  const survivor = record.surviving_signal_id
-  if (typeof survivor === 'string' && survivor.trim().length > 0) {
-    return survivor
-  }
-  return null
-}
-
 export function mapSignalQualifyError(options: {
   code: string | null | undefined
   detail: string | null | undefined
   payload?: unknown
+  status?: number | null
 }): SignalQualifyErrorMapping {
   const code = options.code ?? null
-  const survivor = readSurvivorId(options.payload)
 
-  if (code === 'already_merged') {
+  if (options.status === 404 || code === 'signal_not_found' || code === 'not_found') {
     return {
-      message:
-        survivor !== null
-          ? 'Cette observation a déjà été fusionnée.'
-          : 'Cette observation a déjà été fusionnée. Ouvrez l’observation survivante.',
-      survivingSignalId: survivor,
+      message: 'Cette observation n’existe plus.',
+      survivingSignalId: null,
     }
   }
 

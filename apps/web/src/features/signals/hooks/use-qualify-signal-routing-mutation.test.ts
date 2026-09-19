@@ -5,6 +5,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { analyticsQueryKeys } from '@/features/analytics/api'
 import { createTestQueryClient } from '@/test-utils'
 
 import { signalsQueryKeys } from '../api'
@@ -50,7 +51,6 @@ const detailBase = {
   permission_hints: {
     can_pin: false,
     can_mark_interesting: false,
-    can_archive: false,
     can_cancel: false,
     can_resolve: false,
     can_create_linked_action_plan: false,
@@ -81,6 +81,16 @@ describe('useQualifySignalRoutingMutation', () => {
     const { result, queryClient } = renderMutationHook(() =>
       useQualifySignalRoutingMutation('est-1'),
     )
+    const dashboardEst1 = analyticsQueryKeys.dashboard({
+      periodDays: 7,
+      establishmentId: 'est-1',
+    })
+    const dashboardEst2 = analyticsQueryKeys.dashboard({
+      periodDays: 7,
+      establishmentId: 'est-2',
+    })
+    queryClient.setQueryData(dashboardEst1, { total: 1 })
+    queryClient.setQueryData(dashboardEst2, { total: 2 })
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
 
     result.current.mutate({
@@ -97,6 +107,11 @@ describe('useQualifySignalRoutingMutation', () => {
     })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'feed', 'est-1'] })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'detail', 'est-1'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ predicate: expect.any(Function) })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['analytics'] })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['analytics', 'dashboard'] })
+    expect(queryClient.getQueryState(dashboardEst1)?.isInvalidated).toBe(true)
+    expect(queryClient.getQueryState(dashboardEst2)?.isInvalidated).toBe(false)
     expect(queryClient.getQueryData(signalsQueryKeys.detail('est-1', 'signal-1'))).toMatchObject({
       id: 'signal-1',
       issue_focus: 'lampe',

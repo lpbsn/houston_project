@@ -8,7 +8,6 @@ import {
   serializeScopedTerrainPath,
 } from '@/app/scoped-terrain'
 import { useLgViewport } from '@/lib/lg-viewport'
-import { hasTrueCrossEstablishmentScope } from '@/features/navigation/lib/shared-navigation'
 import {
   LazyActionPlanCreatePage,
   LazyActionPlanExecutionDetailPage,
@@ -405,13 +404,20 @@ function App() {
   }, [route])
 
   useEffect(() => {
-    if (!isLgViewport || !hasTrueCrossEstablishmentScope(auth.bootstrap)) {
+    if (route.kind !== 'static' || route.path !== '/analytics') {
       return
     }
-    if (route.kind === 'static' && route.path === '/analytics') {
-      navigate('/cross?period=7d', { replace: true })
+    const activeId = auth.bootstrap?.active_membership?.establishment_id
+    if (!activeId) {
+      return
     }
-  }, [auth.bootstrap, isLgViewport, navigate, route])
+    const params = new URLSearchParams(
+      locationSearch.startsWith('?') ? locationSearch.slice(1) : locationSearch,
+    )
+    const period = params.get('period')
+    const nextSearch = period ? `?period=${period}` : '?period=7d'
+    navigate(`/e/${activeId}${nextSearch}`, { replace: true })
+  }, [auth.bootstrap, locationSearch, navigate, route])
 
   const handleSignOut = useCallback(() => {
     void auth.logout().then(() => {
@@ -710,6 +716,14 @@ function App() {
       const source = scope.type === 'cross' ? 'cross' : 'establishment'
 
       if (route.page === 'dashboard') {
+        if (scope.type === 'cross') {
+          return (
+            <LazyComingSoonPage
+              title="Dashboard Cross"
+              description="Le Dashboard Cross-établissement sera bientôt disponible."
+            />
+          )
+        }
         return <LazyAnalyticsPage scope={scope} />
       }
       if (route.page === 'signals') {

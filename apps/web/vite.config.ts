@@ -61,6 +61,7 @@ export default defineConfig(({ command, mode }) => {
       },
     },
     server: {
+      // Bind all interfaces so the Vite server is reachable from Docker.
       host: '0.0.0.0',
       proxy: {
         '/api': {

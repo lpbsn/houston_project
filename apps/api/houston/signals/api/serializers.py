@@ -33,7 +33,6 @@ from houston.signals.services import structured_summary_short
 class PermissionHintsSerializer(serializers.Serializer):
     can_pin = serializers.BooleanField()
     can_mark_interesting = serializers.BooleanField()
-    can_archive = serializers.BooleanField()
     can_cancel = serializers.BooleanField()
     can_resolve = serializers.BooleanField()
     can_create_linked_action_plan = serializers.BooleanField()
@@ -175,8 +174,6 @@ class SignalDetailSerializer(SignalFeedItemSerializer):
     )
     canceled_by_membership_id = serializers.UUIDField(allow_null=True)
     canceled_at = serializers.DateTimeField(allow_null=True)
-    archived_by_membership_id = serializers.UUIDField(allow_null=True)
-    archived_at = serializers.DateTimeField(allow_null=True)
 
 
 class SignalQualifyRoutingRequestSerializer(serializers.Serializer):
@@ -236,7 +233,6 @@ def serialize_signal_feed_item(*, signal: Signal, membership, read_only: bool = 
     from houston.action_plans.permissions import can_create_linked_action_plan
     from houston.signals.permissions import (
         can_approve_resolution_request,
-        can_archive_signal,
         can_cancel_own_resolution_request,
         can_cancel_signal,
         can_create_resolution_request,
@@ -254,7 +250,6 @@ def serialize_signal_feed_item(*, signal: Signal, membership, read_only: bool = 
         hints = {
             "can_pin": can_pin_signal(membership, signal),
             "can_mark_interesting": can_mark_signal_interesting(membership, signal),
-            "can_archive": can_archive_signal(membership, signal),
             "can_cancel": can_cancel_signal(membership, signal),
             "can_resolve": can_resolve_signal(membership, signal),
             "can_create_linked_action_plan": can_create_linked_action_plan(
@@ -336,7 +331,6 @@ def _read_only_signal_permission_hints() -> dict:
     return {
         "can_pin": False,
         "can_mark_interesting": False,
-        "can_archive": False,
         "can_cancel": False,
         "can_resolve": False,
         "can_create_linked_action_plan": False,
@@ -428,8 +422,6 @@ def serialize_signal_detail(
     payload["resolution_origin"] = signal.resolution_origin
     payload["canceled_by_membership_id"] = signal.canceled_by_membership_id
     payload["canceled_at"] = signal.canceled_at
-    payload["archived_by_membership_id"] = signal.archived_by_membership_id
-    payload["archived_at"] = signal.archived_at
 
     link = created_from_source_observation_link(signal)
     if link is None:

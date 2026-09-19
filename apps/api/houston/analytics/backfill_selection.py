@@ -16,7 +16,7 @@ def select_explicit_backfill_signal_ids(
     signal_ids: list[uuid.UUID],
     scope: dict[str, str | None],
     limit: int,
-) -> tuple[list[uuid.UUID], dict[str, int], str]:
+) -> tuple[list[uuid.UUID], str]:
     unique_ids = sorted(set(signal_ids))
     if len(unique_ids) > limit:
         raise ValueError(
@@ -31,10 +31,7 @@ def select_explicit_backfill_signal_ids(
             "signal-id values were not found in the selected scope: "
             + ", ".join(sorted(missing))
         )
-    merged = [str(signal.id) for signal in signals if signal.merged_into_id is not None]
-    if merged:
-        raise ValueError("merged signals cannot be backfilled explicitly: " + ", ".join(merged))
-    return [signal.id for signal in signals], {"merged": 0}, ""
+    return [signal.id for signal in signals], ""
 
 
 def _scoped_signals(*, scope: dict[str, str | None]):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from django.db import transaction
+from django.utils import timezone
 
 from houston.action_plans.services import (
     cancel_action_plan_execution,
@@ -17,7 +18,7 @@ from houston.signals.api.serializers import (
     serialize_signal_feed_item,
 )
 from houston.signals.constants import (
-    SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
+    SIGNAL_LIFECYCLE_EVENT_CANCELED,
     SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING,
     SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS,
     SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
@@ -36,7 +37,7 @@ from houston.signals.resolution_request_services import (
     reject_signal_resolution_request,
 )
 from houston.signals.services import (
-    archive_signal,
+    cancel_signal,
     mark_signal_interesting,
     merge_signal_into_resolved,
     resolve_signal,
@@ -120,6 +121,10 @@ def test_action_plan_resolve_null_actor_and_origin():
     assert len(resolved_events) == 1
     assert resolved_events[0].actor_membership_id is None
     assert resolved_events[0].occurred_at == signal.resolved_at
+    assert (
+        resolved_events[0].metadata_safe["resolution_origin"]
+        == SIGNAL_RESOLUTION_ORIGIN_ACTION_PLAN
+    )
 
 
 def test_approve_resolution_request_sets_origin_without_rr_lifecycle_events():
@@ -188,9 +193,9 @@ def test_reject_and_cancel_resolution_request_do_not_emit_lifecycle_events():
     assert SignalLifecycleEvent.objects.filter(signal=signal).count() == 0
 
 
-def test_mark_interesting_and_archive_record_actor_fields_and_events():
+def test_mark_interesting_and_cancel_record_actor_fields_and_events():
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    signal = create_minimal_v3_signal(membership, title="Interesting archive audit")
+    signal = create_minimal_v3_signal(membership, title="Interesting cancel audit")
 
     interesting = mark_signal_interesting(signal=signal, actor_membership=membership)
     assert interesting.status == Signal.Status.INTERESTING
@@ -200,21 +205,21 @@ def test_mark_interesting_and_archive_record_actor_fields_and_events():
     assert events[-1].event_type == SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING
     assert events[-1].occurred_at == interesting.marked_interesting_at
 
-    archived = archive_signal(signal=interesting, actor_membership=membership)
-    assert archived.status == Signal.Status.ARCHIVED
-    assert archived.archived_by_membership_id == membership.id
-    assert archived.archived_at is not None
-    events = _lifecycle_events(signal=archived)
-    assert events[-1].event_type == SIGNAL_LIFECYCLE_EVENT_ARCHIVED
+    canceled = cancel_signal(signal=interesting, actor_membership=membership)
+    assert canceled.status == Signal.Status.CANCELED
+    assert canceled.canceled_by_membership_id == membership.id
+    assert canceled.canceled_at is not None
+    events = _lifecycle_events(signal=canceled)
+    assert events[-1].event_type == SIGNAL_LIFECYCLE_EVENT_CANCELED
     assert events[-1].actor_membership_id == membership.id
-    assert events[-1].occurred_at == archived.archived_at
+    assert events[-1].occurred_at == canceled.canceled_at
 
 
-def test_merge_archive_null_actor():
+def test_merge_hard_deletes_source():
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     source = create_minimal_v3_signal(membership, title="Merge source")
     target = create_minimal_v3_signal(membership, title="Merge target")
-    from_status = source.status
+    source_id = source.id
 
     merge_signal_into_resolved(
         source=source,
@@ -222,20 +227,86 @@ def test_merge_archive_null_actor():
         resolution_audit={},
         candidate_expected_action=None,
     )
-    source.refresh_from_db()
 
-    assert source.status == Signal.Status.ARCHIVED
-    assert source.archived_by_membership_id is None
-    assert source.archived_at is not None
-    events = [
-        e
-        for e in _lifecycle_events(signal=source)
-        if e.event_type == SIGNAL_LIFECYCLE_EVENT_ARCHIVED
-    ]
-    assert len(events) == 1
-    assert events[0].actor_membership_id is None
-    assert events[0].metadata_safe["origin"] == "qualify_merge"
-    assert events[0].metadata_safe["from_status"] == from_status
+    assert not Signal.objects.filter(id=source_id).exists()
+    assert Signal.objects.filter(id=target.id).exists()
+
+
+def test_merge_hard_deletes_source_transfers_or_cleans_related_rows():
+    from houston.analytics.models import PatternIssueReport
+    from houston.analytics.services import create_operational_pattern
+    from houston.comments.models import Comment
+    from houston.gamification.constants import CURRENT_RULE_VERSION, SOURCE_TYPE_SIGNAL
+    from houston.gamification.models import PointTransaction
+    from houston.gamification.services import open_season
+    from houston.notifications.models import Notification
+
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    source = create_minimal_v3_signal(membership, title="Merge source relations")
+    target = create_minimal_v3_signal(membership, title="Merge target relations")
+    source_id = source.id
+    target_id = target.id
+
+    comment = Comment.objects.create(
+        establishment=membership.establishment,
+        signal=source,
+        author_membership=membership,
+        body="Source comment",
+    )
+    notification = Notification.objects.create(
+        establishment_id=membership.establishment_id,
+        recipient_membership=membership,
+        actor_membership=membership,
+        event_key=Notification.EventKey.SIGNAL_CREATED,
+        subject_type=Notification.SubjectType.SIGNAL,
+        subject_id=source.id,
+        priority=Notification.Priority.INFO,
+        title="Source signal",
+        body="notify source",
+    )
+    season = open_season(membership.establishment)
+    tx = PointTransaction.objects.create(
+        membership=membership,
+        establishment=membership.establishment,
+        season=season,
+        delta=5,
+        reason_code="test.merge.repaint",
+        source_type=SOURCE_TYPE_SIGNAL,
+        source_id=str(source.id),
+        rule_version=CURRENT_RULE_VERSION,
+        occurred_at=timezone.now(),
+        idempotency_key=f"tx:merge-repaint:{source.id}",
+        metadata_safe={"signal_id": str(source.id)},
+    )
+    pattern = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Merge pattern",
+        created_by_membership=membership,
+    )
+    report = PatternIssueReport.objects.create(
+        pattern=pattern,
+        organization=membership.establishment.organization,
+        signal=source,
+        reported_by_membership=membership,
+        report_type="duplicate",
+    )
+
+    merge_signal_into_resolved(
+        source=source,
+        target=target,
+        resolution_audit={},
+        candidate_expected_action=None,
+    )
+
+    assert not Signal.objects.filter(id=source_id).exists()
+    comment.refresh_from_db()
+    assert comment.signal_id == target_id
+    assert not Notification.objects.filter(id=notification.id).exists()
+    tx.refresh_from_db()
+    assert tx.source_id == str(target_id)
+    assert tx.metadata_safe["signal_id"] == str(target_id)
+    report.refresh_from_db()
+    assert report.signal_id == target_id
 
 
 def test_create_linked_plan_emits_moved_in_progress_with_creator_actor():

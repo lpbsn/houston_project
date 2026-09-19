@@ -60,20 +60,6 @@ def test_feed_includes_open_in_progress_resolved_and_canceled(api_client):
     }
 
 
-def test_feed_excludes_archived(api_client):
-    membership = build_api_membership()
-    _create_signal(membership, status=Signal.Status.ARCHIVED)
-    token = login(api_client, user=membership.user)
-
-    response = api_client.get(
-        signal_feed_url(membership.establishment_id) + "?view_mode=general",
-        **auth_headers(token),
-    )
-
-    assert response.status_code == 200
-    assert response.json()["items"] == []
-
-
 def test_feed_orders_all_active_before_resolved(api_client):
     membership = build_api_membership()
     now = timezone.now()

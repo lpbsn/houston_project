@@ -70,9 +70,9 @@ function crossItems(showChat: boolean): ScopedDesktopNavItem[] {
   const items: ScopedDesktopNavItem[] = [
     {
       id: 'dashboard',
-      label: 'Dashboard',
+      label: 'Dashboard Cross',
       href: serializeScopedTerrainPath(scope),
-      placeholder: false,
+      placeholder: true,
     },
     {
       id: 'reporting',

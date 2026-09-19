@@ -241,7 +241,6 @@ function canShowPatternIssueReportAction({
 
 function formatStatusLabel(status: string): string {
   const labels: Record<string, string> = {
-    archived: 'Archivé',
     in_progress: 'En cours',
     interesting: 'Intéressant',
     open: 'Ouvert',

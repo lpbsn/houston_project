@@ -7,7 +7,6 @@ from houston.core.models import BaseModel
 from houston.signals.constants import (
     ACTIVE_SIGNAL_STATUSES,
     AI_ISSUE_FOCUS_MAX_LENGTH,
-    SIGNAL_LIFECYCLE_EVENT_ARCHIVED,
     SIGNAL_LIFECYCLE_EVENT_CANCELED,
     SIGNAL_LIFECYCLE_EVENT_CREATED,
     SIGNAL_LIFECYCLE_EVENT_HISTORY_BASELINE,
@@ -43,7 +42,6 @@ class Signal(BaseModel):
         IN_PROGRESS = "in_progress", "In progress"
         RESOLVED = "resolved", "Resolved"
         CANCELED = "canceled", "Canceled"
-        ARCHIVED = "archived", "Archived"
 
     class RoutingStatus(models.TextChoices):
         RESOLVED = "resolved", "Resolved"
@@ -127,13 +125,6 @@ class Signal(BaseModel):
         blank=True,
         default="",
     )
-    merged_into = models.ForeignKey(
-        "self",
-        on_delete=models.SET_NULL,
-        related_name="merged_sources",
-        null=True,
-        blank=True,
-    )
     last_activity_at = models.DateTimeField()
     marked_interesting_by_membership = models.ForeignKey(
         "establishments.EstablishmentMembership",
@@ -165,14 +156,6 @@ class Signal(BaseModel):
         blank=True,
     )
     canceled_at = models.DateTimeField(null=True, blank=True)
-    archived_by_membership = models.ForeignKey(
-        "establishments.EstablishmentMembership",
-        on_delete=models.SET_NULL,
-        related_name="archived_signals",
-        null=True,
-        blank=True,
-    )
-    archived_at = models.DateTimeField(null=True, blank=True)
     first_action_plan_associated_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
@@ -230,7 +213,6 @@ class SignalLifecycleEvent(BaseModel):
             SIGNAL_LIFECYCLE_EVENT_MARKED_INTERESTING,
             "Marked interesting",
         )
-        ARCHIVED = SIGNAL_LIFECYCLE_EVENT_ARCHIVED, "Archived"
         RESOLVED = SIGNAL_LIFECYCLE_EVENT_RESOLVED, "Resolved"
         CANCELED = SIGNAL_LIFECYCLE_EVENT_CANCELED, "Canceled"
         MOVED_IN_PROGRESS = (

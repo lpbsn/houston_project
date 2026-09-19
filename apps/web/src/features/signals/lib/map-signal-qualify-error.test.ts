@@ -3,22 +3,6 @@ import { describe, expect, it } from 'vitest'
 import { mapSignalQualifyError } from './map-signal-qualify-error'
 
 describe('mapSignalQualifyError', () => {
-  it('maps already_merged with optional survivor', () => {
-    expect(
-      mapSignalQualifyError({
-        code: 'already_merged',
-        detail: 'merged',
-        payload: { surviving_signal_id: 'surv-1' },
-      }),
-    ).toEqual({
-      message: 'Cette observation a déjà été fusionnée.',
-      survivingSignalId: 'surv-1',
-    })
-    expect(
-      mapSignalQualifyError({ code: 'already_merged', detail: 'merged' }).survivingSignalId,
-    ).toBeNull()
-  })
-
   it('maps invalid routing distinctly from permission', () => {
     expect(
       mapSignalQualifyError({ code: 'permission_denied', detail: 'no' }).message,
@@ -29,6 +13,19 @@ describe('mapSignalQualifyError', () => {
         detail: 'Subject outside responsible.',
       }).message,
     ).toBe('Subject outside responsible.')
+  })
+
+  it('maps 404 when the source no longer exists', () => {
+    expect(
+      mapSignalQualifyError({
+        code: null,
+        detail: 'Not found.',
+        status: 404,
+      }),
+    ).toEqual({
+      message: 'Cette observation n’existe plus.',
+      survivingSignalId: null,
+    })
   })
 
   it('maps invalid_issue_focus as validation', () => {

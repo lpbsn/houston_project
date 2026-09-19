@@ -39,7 +39,6 @@ def create_signal(
     status=Signal.Status.OPEN,
     routing_status=Signal.RoutingStatus.RESOLVED,
     created_at=None,
-    merged_into=None,
     affected_business_unit=None,
     responsible_business_unit=None,
 ):
@@ -52,7 +51,6 @@ def create_signal(
         title=title,
         structured_summary="Structured signal summary.",
         issue_focus=title.lower().replace(" ", "-"),
-        merged_into=merged_into,
         last_activity_at=created_at or timezone.now(),
     )
     if created_at is not None:
@@ -252,14 +250,12 @@ def test_pattern_detail_excludes_canceled_and_merged_but_includes_default_status
     pattern = create_pattern(owner, label="Status mix")
     start = timezone.now()
     end = start + timedelta(days=1)
-    survivor = create_signal(owner, title="Survivor", created_at=start)
 
     for index, status in enumerate(
         [
             Signal.Status.OPEN,
             Signal.Status.INTERESTING,
             Signal.Status.RESOLVED,
-            Signal.Status.ARCHIVED,
         ]
     ):
         add_signal(
@@ -276,13 +272,6 @@ def test_pattern_detail_excludes_canceled_and_merged_but_includes_default_status
         status=Signal.Status.CANCELED,
         created_at=start + timedelta(minutes=10),
     )
-    add_signal(
-        owner,
-        pattern,
-        title="Merged",
-        merged_into=survivor,
-        created_at=start + timedelta(minutes=11),
-    )
 
     result = get_analytics_pattern_detail(
         owner.user,
@@ -294,11 +283,10 @@ def test_pattern_detail_excludes_canceled_and_merged_but_includes_default_status
         bucket.status: bucket.signal_count for bucket in result.status_distribution
     }
 
-    assert result.metrics.signal_count == 4
+    assert result.metrics.signal_count == 3
     assert status_counts[Signal.Status.OPEN] == 1
     assert status_counts[Signal.Status.INTERESTING] == 1
     assert status_counts[Signal.Status.RESOLVED] == 1
-    assert status_counts[Signal.Status.ARCHIVED] == 1
     assert status_counts[Signal.Status.CANCELED] == 0
     assert sum(status_counts.values()) == result.metrics.signal_count
 

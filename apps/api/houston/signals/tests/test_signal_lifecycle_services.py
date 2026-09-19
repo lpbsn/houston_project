@@ -67,6 +67,24 @@ def test_cancel_signal_rejects_in_progress():
     assert signal.status == Signal.Status.IN_PROGRESS
 
 
+def test_cancel_signal_allows_interesting():
+    signal = _signal(status=Signal.Status.INTERESTING)
+
+    result = cancel_signal(signal=signal)
+
+    assert result.status == Signal.Status.CANCELED
+
+
+def test_resolve_signal_rejects_interesting():
+    signal = _signal(status=Signal.Status.INTERESTING)
+
+    with pytest.raises(SignalStateError):
+        resolve_signal(signal=signal)
+
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.INTERESTING
+
+
 def test_resolve_signal_from_execution_sync_allows_in_progress():
     signal = _signal(status=Signal.Status.IN_PROGRESS)
 

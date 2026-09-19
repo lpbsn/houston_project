@@ -180,22 +180,14 @@ export function collectDashboardComparisons(
   data: AnalyticsDashboardResponse,
 ): AnalyticsDashboardMetricComparison[] {
   return [
-    data.operational_resolution_rate,
-    data.closure_resolved_share,
-    data.reopenings,
-    data.aging_over_15d_share,
-    data.observation_delay_canceled.comparison,
-    data.observation_delay_resolved.comparison,
-    data.observation_delay_transformed.comparison,
-    data.plan_delay_canceled.comparison,
-    data.plan_delay_resolved.comparison,
-    data.plan_validation.comparison,
-    data.plan_deadlines.early_comparison,
-    data.plan_deadlines.on_time_comparison,
-    data.plan_deadlines.late_comparison,
-    ...data.recurring_patterns.map((item) => item.comparison),
-    ...data.locations.map((item) => item.comparison),
-    ...data.poles.map((item) => item.comparison),
+    data.plan_deadline_respect.early_comparison,
+    data.plan_deadline_respect.on_time_comparison,
+    data.plan_deadline_respect.late_comparison,
+    data.observation_volume.affected.comparison,
+    data.observation_volume.responsible.comparison,
+    ...Object.values(data.observation_destinations).map((item) => item.comparison),
+    ...data.recurring_patterns.items.map((item) => item.comparison),
+    ...data.locations.items.map((item) => item.comparison),
   ]
 }
 
@@ -326,6 +318,55 @@ export function emptyPlanDelayMessage(
     return 'Aucune résolution de plan sur la période'
   }
   return 'Aucune validation sur la période'
+}
+
+export function formatDeadlineAnalyzedTotal(n: number): string {
+  return formatCountedNoun(n, 'plan analysé', 'plans analysés')
+}
+
+export function formatDeadlineExclusionNote(excludedCount: number): string | null {
+  if (excludedCount <= 0) {
+    return null
+  }
+  return `${formatCountedNoun(excludedCount, 'plan exclu', 'plans exclus')} : dates de planification non fiables.`
+}
+
+export function emptyDeadlineRespectMessage(): string {
+  return 'Aucun plan d’action terminé mesurable sur la période.'
+}
+
+export function formatOverrunTotal(totalCount: number): string {
+  return formatCountedNoun(
+    totalCount,
+    'plan actuellement en retard',
+    'plans actuellement en retard',
+  )
+}
+
+export function formatOverrunExclusionNote(excludedCount: number): string | null {
+  if (excludedCount <= 0) {
+    return null
+  }
+  return `${formatCountedNoun(excludedCount, 'plan exclu', 'plans exclus')} : dates de planification non fiables.`
+}
+
+export function emptyOverrunMessage(): string {
+  return 'Aucun plan d’action actuellement en retard.'
+}
+
+export function formatResolutionQualityTotal(n: number): string {
+  return `${formatCountedNoun(n, 'plan résolu', 'plans résolus')} sur la période`
+}
+
+export function emptyResolutionQualityMessage(): string {
+  return 'Aucun plan résolu sur la période'
+}
+
+export function formatUnevaluatedPlansNote(unevaluatedCount: number): string | null {
+  if (unevaluatedCount <= 0) {
+    return null
+  }
+  return formatCountedNoun(unevaluatedCount, 'plan non évalué', 'plans non évalués')
 }
 
 export function delayExclusionNote(undatableInScope: number): string | null {

@@ -201,7 +201,7 @@ def test_backfill_persists_and_replay_is_idempotent(settings):
     assert second_payload["metrics"]["provider_calls"]["classification_count"] == 0
 
 
-def test_backfill_selection_includes_canceled_excludes_merged_and_tracks_cursor(settings):
+def test_backfill_selection_includes_canceled_and_tracks_cursor(settings):
     settings.DEBUG = True
     owner = build_membership(role=EstablishmentMembership.Role.OWNER)
     open_signal = create_signal_for_membership(owner, title="Open")
@@ -211,10 +211,6 @@ def test_backfill_selection_includes_canceled_excludes_merged_and_tracks_cursor(
         status=Signal.Status.CANCELED,
     )
     target = create_signal_for_membership(owner, title="Target")
-    merged = create_signal_for_membership(owner, title="Merged")
-    merged.merged_into = target
-    merged.status = Signal.Status.ARCHIVED
-    merged.save(update_fields=["merged_into", "status", "updated_at"])
 
     report = backfill_analytics_patterns(
         establishment_id=owner.establishment_id,
@@ -225,7 +221,7 @@ def test_backfill_selection_includes_canceled_excludes_merged_and_tracks_cursor(
     payload = backfill_report_to_dict(report)
 
     assert payload["metrics"]["signals_inspected_count"] == 2
-    assert payload["exclusions"] == {"merged": 1}
+    assert "exclusions" not in payload
     assert payload["start_after_signal_id"] == str(open_signal.id)
     assert payload["next_scan_cursor"] == str(target.id)
     assert Signal.Status.CANCELED in {

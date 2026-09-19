@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
+import uuid
 from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -377,27 +378,15 @@ def test_classify_reuses_existing_active_semantic_alias_without_duplicate_guard(
     assert AIUsageLog.objects.filter(ai_domain=AIUsageLog.Domain.ANALYTICS_PATTERN).count() == 1
 
 
-def test_classify_merged_signal_noops_without_provider_call():
-    membership = build_membership()
-    survivor = create_signal_for_membership(membership, title="Survivor")
-    source = Signal.objects.create(
-        establishment=membership.establishment,
-        routing_status=Signal.RoutingStatus.UNASSIGNED,
-        title="Source",
-        structured_summary="Structured issue summary",
-        status=Signal.Status.ARCHIVED,
-        merged_into=survivor,
-        last_activity_at=timezone.now(),
-    )
+def test_classify_unknown_signal_noops_without_provider_call():
     provider = FakePatternClassifierProvider(
         payload={"canonical_label": "Défaillance climatisation"}
     )
 
-    assignment = classify_signal_pattern(source.id, provider=provider)
+    assignment = classify_signal_pattern(uuid.uuid4(), provider=provider)
 
     assert assignment is None
     assert provider.calls == []
-    assert not SignalPatternAssignment.objects.filter(signal=source).exists()
 
 
 def test_classify_creates_new_canonical_pattern():

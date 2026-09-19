@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { analyticsQueryKeys } from '@/features/analytics/api'
 import { actionPlansQueryKeys } from '@/features/action-plans/api'
 import { commentsQueryKeys } from '@/features/comments/api'
 import { notificationsQueryKeys } from '@/features/notifications/api'
@@ -11,6 +12,7 @@ import {
   invalidateActionPlanExecutionSurfaces,
   invalidateActionPlanMutationSurfaces,
   invalidateEstablishmentActionPlanCatalogQueries,
+  invalidateEstablishmentDashboardQueries,
   invalidateEstablishmentNotificationQueries,
   invalidateEstablishmentSignalQueries,
   invalidateExecutionCommentQueries,
@@ -44,6 +46,26 @@ describe('query-invalidation factory parity', () => {
         signalsQueryKeys.detail(EST, ENTITY).slice(0, 3),
       ]),
     )
+  })
+
+  it('invalidateEstablishmentDashboardQueries matches analytics dashboard keys for one establishment', () => {
+    const queryClient = createTestQueryClient()
+    const dashboardKey = analyticsQueryKeys.dashboard({
+      periodDays: 7,
+      establishmentId: EST,
+    })
+    const rankingsKey = analyticsQueryKeys.dashboardRankings({
+      periodDays: 7,
+      establishmentId: EST,
+      kind: 'new',
+    })
+    queryClient.setQueryData(dashboardKey, { total: 1 })
+    queryClient.setQueryData(rankingsKey, { items: [] })
+
+    invalidateEstablishmentDashboardQueries(queryClient, EST)
+
+    expect(queryClient.getQueryState(dashboardKey)?.isInvalidated).toBe(true)
+    expect(queryClient.getQueryState(rankingsKey)?.isInvalidated).toBe(true)
   })
 
   it('invalidateSignalCommentQueries matches commentsQueryKeys.signalList', () => {

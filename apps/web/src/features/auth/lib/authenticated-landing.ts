@@ -11,7 +11,7 @@ import {
 } from '@/features/navigation/lib/shared-navigation'
 import { getAppRuntime } from '@/lib/runtime'
 
-export const CROSS_DASHBOARD_LANDING_PATH = '/cross?period=7d'
+export const CROSS_DASHBOARD_LANDING_PATH = '/cross/signals'
 
 export type AuthenticatedLanding =
   | { kind: 'operational'; path: '/reporting' }
@@ -83,6 +83,7 @@ export const AUTHENTICATED_LANDING_PATHS = new Set<string>([
   '/reporting',
   '/select-establishment',
   '/cross',
+  '/cross/signals',
   '/analytics',
   '/pending-onboarding',
   '/onboarding',

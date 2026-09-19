@@ -38,7 +38,6 @@ def create_signal(
     title="Signal",
     status=Signal.Status.OPEN,
     routing_status=Signal.RoutingStatus.RESOLVED,
-    merged_into=None,
     affected_business_unit=None,
     responsible_business_unit=None,
 ):
@@ -51,7 +50,6 @@ def create_signal(
         title=title,
         structured_summary="Structured signal summary.",
         issue_focus=title.lower().replace(" ", "-"),
-        merged_into=merged_into,
         last_activity_at=timezone.now(),
     )
 
@@ -281,22 +279,18 @@ def test_inactive_user_membership_establishment_or_organization_is_refused(kwarg
     )
 
 
-def test_canceled_and_merged_signals_are_not_valid_targets():
+def test_canceled_signals_are_not_valid_targets():
     director = build_membership(role=EstablishmentMembership.Role.DIRECTOR)
     pattern = create_pattern(director)
-    survivor = create_signal(director, title="Survivor")
     canceled = create_signal(director, status=Signal.Status.CANCELED)
-    merged = create_signal(director, merged_into=survivor)
     assign_signal(canceled, pattern)
-    assign_signal(merged, pattern)
 
-    for signal in (canceled, merged):
-        assert_report_error(
-            "analytics_pattern_issue_target_not_found",
-            user=director.user,
-            signal_id=signal.id,
-            pattern_id=pattern.id,
-        )
+    assert_report_error(
+        "analytics_pattern_issue_target_not_found",
+        user=director.user,
+        signal_id=canceled.id,
+        pattern_id=pattern.id,
+    )
 
 
 def test_signal_without_assignment_or_without_pattern_is_rejected():

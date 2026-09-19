@@ -142,7 +142,7 @@ describe('resolveAuthenticatedLanding', () => {
         }),
         { isDesktop: true },
       ),
-    ).toEqual({ kind: 'cross', path: '/cross?period=7d' })
+    ).toEqual({ kind: 'cross', path: '/cross/signals' })
   })
 
   it('returns onboarding for owner DRAFT-only', () => {
@@ -221,7 +221,7 @@ describe('resolveAuthenticatedLanding', () => {
         }),
         { isDesktop: true },
       ),
-    ).toEqual({ kind: 'cross', path: '/cross?period=7d' })
+    ).toEqual({ kind: 'cross', path: '/cross/signals' })
   })
 
   it('returns analytics hub on desktop when only one establishment is cross-eligible', () => {

@@ -56,7 +56,6 @@ def create_signal(
     *,
     title="Signal",
     status=Signal.Status.OPEN,
-    merged_into=None,
 ):
     return Signal.objects.create(
         establishment=membership.establishment,
@@ -65,7 +64,6 @@ def create_signal(
         title=title,
         structured_summary="Structured signal summary.",
         issue_focus=title.lower().replace(" ", "-"),
-        merged_into=merged_into,
         last_activity_at=timezone.now(),
     )
 

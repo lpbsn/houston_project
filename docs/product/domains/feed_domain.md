@@ -32,7 +32,7 @@ Feed is a read/projection domain. It is not business truth.
 - Optional permission hints as UX helpers only.
 - Realtime invalidation/refetch boundary only.
 - Media summary only; no raw media URLs or signed URLs in feed items.
-- Target Signal Feed behavior keeps archived Signals out of feed-visible results by default (`open`, `in_progress`, `resolved`; see [`signal_domain.md`](signal_domain.md) §7).
+- Target Signal Feed behavior keeps feed-visible statuses (`open`, `in_progress`, `interesting`, `resolved`, `canceled`; see [`signal_domain.md`](signal_domain.md) §7).
 
 Current truth:
 - `GET signal-feed/` implemented (Phase 4) with required `view_mode=personal|general`.
@@ -236,7 +236,6 @@ Detail routes belong to owning domains (`/action-plans/executions/{id}`), not Fe
 | Owner/Director requests `view_mode=personal` | All feed-visible establishment Signals |
 | Active member requests `view_mode=general` | Returns feed-visible establishment Signals; Manager/Staff see `canceled` only when pole-scoped |
 | `resolved` and `canceled` Signals | Included in default feed-visible results |
-| `archived` Signals | Excluded from default feed-visible results |
 | Cross-establishment access | 404 when establishment does not match session membership |
 | Inactive membership | 403 / no feed access |
 

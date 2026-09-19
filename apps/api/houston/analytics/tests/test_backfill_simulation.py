@@ -123,15 +123,11 @@ def test_backfill_simulation_rolls_back_assignments_patterns_events_and_usage_lo
     assert AIUsageLog.objects.count() == before_logs
 
 
-def test_backfill_selection_includes_canceled_and_excludes_merged_sources():
+def test_backfill_selection_includes_canceled():
     owner = build_membership(role=EstablishmentMembership.Role.OWNER)
     create_signal_for_membership(owner, title="Open")
     create_signal_for_membership(owner, title="Canceled", status=Signal.Status.CANCELED)
-    target = create_signal_for_membership(owner, title="Target")
-    merged = create_signal_for_membership(owner, title="Merged")
-    merged.merged_into = target
-    merged.status = Signal.Status.ARCHIVED
-    merged.save(update_fields=["merged_into", "status", "updated_at"])
+    create_signal_for_membership(owner, title="Target")
 
     report = simulate_analytics_pattern_backfill(
         establishment_id=owner.establishment_id,
@@ -141,7 +137,7 @@ def test_backfill_selection_includes_canceled_and_excludes_merged_sources():
     payload = backfill_simulation_report_to_dict(report)
 
     assert payload["metrics"]["signals_inspected_count"] == 3
-    assert payload["exclusions"] == {"merged": 1}
+    assert "exclusions" not in payload
     assert Signal.Status.CANCELED in {
         signal_result["signal_status"] for signal_result in payload["signals"]
     }
@@ -187,11 +183,6 @@ def test_backfill_simulation_explicit_signal_ids_are_deduped_bounded_scoped_and_
     signal = create_signal_for_membership(owner, title="Scoped")
     other_signal = create_signal_for_membership(other, title="Other")
     extra = create_signal_for_membership(owner, title="Extra")
-    target = create_signal_for_membership(owner, title="Target")
-    merged = create_signal_for_membership(owner, title="Merged")
-    merged.merged_into = target
-    merged.status = Signal.Status.ARCHIVED
-    merged.save(update_fields=["merged_into", "status", "updated_at"])
 
     before_patterns = OperationalPattern.objects.count()
     before_events = PatternLifecycleEvent.objects.count()
@@ -208,7 +199,7 @@ def test_backfill_simulation_explicit_signal_ids_are_deduped_bounded_scoped_and_
     assert payload["mode"] == "explicit_signal_ids"
     assert payload["metrics"]["signals_inspected_count"] == 1
     assert payload["start_after_signal_id"] == ""
-    assert payload["exclusions"] == {"merged": 0}
+    assert "exclusions" not in payload
     assert payload["signals"][0]["signal_id"] == str(signal.id)
     assert not hasattr(signal, "pattern_assignment")
     assert OperationalPattern.objects.count() == before_patterns
@@ -226,13 +217,6 @@ def test_backfill_simulation_explicit_signal_ids_are_deduped_bounded_scoped_and_
         simulate_analytics_pattern_backfill(
             establishment_id=owner.establishment_id,
             signal_ids=[signal.id, extra.id],
-            provider_name="fake",
-            limit=1,
-        )
-    with pytest.raises(ValueError, match="merged signals"):
-        simulate_analytics_pattern_backfill(
-            establishment_id=owner.establishment_id,
-            signal_ids=[merged.id],
             provider_name="fake",
             limit=1,
         )

@@ -347,7 +347,7 @@ def test_needs_qualification_filter_for_manager(api_client):
     assert body["applied_filters"]["needs_qualification"] is True
 
 
-def test_needs_qualification_excludes_resolved_canceled_and_archived(api_client):
+def test_needs_qualification_excludes_resolved_and_canceled(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     manager = build_api_membership_on_establishment(
         owner,
@@ -358,9 +358,6 @@ def test_needs_qualification_excludes_resolved_canceled_and_archived(api_client)
     resolve_signal(signal=lifecycle_resolved, actor_membership=owner)
     lifecycle_canceled = _total_unclassified(owner, title="Canceled unassigned")
     cancel_signal(signal=lifecycle_canceled, actor_membership=owner)
-    archived = _total_unclassified(owner, title="Archived unassigned")
-    archived.status = Signal.Status.ARCHIVED
-    archived.save(update_fields=["status", "updated_at"])
 
     token = login(api_client, user=manager.user)
     response = api_client.get(
@@ -373,9 +370,7 @@ def test_needs_qualification_excludes_resolved_canceled_and_archived(api_client)
     assert str(active.id) in ids
     assert str(lifecycle_resolved.id) not in ids
     assert str(lifecycle_canceled.id) not in ids
-    assert str(archived.id) not in ids
 
-    # Feed base queryset already omits archived; filter itself must still exclude it.
     filtered_ids = set(
         apply_feed_filters(
             Signal.objects.filter(establishment_id=owner.establishment_id),
@@ -385,7 +380,6 @@ def test_needs_qualification_excludes_resolved_canceled_and_archived(api_client)
     assert active.id in filtered_ids
     assert lifecycle_resolved.id not in filtered_ids
     assert lifecycle_canceled.id not in filtered_ids
-    assert archived.id not in filtered_ids
 
 
 def test_needs_qualification_filter_forbidden_for_staff(api_client):

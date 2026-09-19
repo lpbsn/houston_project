@@ -52,6 +52,7 @@ export function useSignalQualifySheet({
         code: error instanceof SignalsApiError ? error.code : null,
         detail: error instanceof SignalsApiError ? error.detail : null,
         payload: error instanceof SignalsApiError ? error.payload : undefined,
+        status: error instanceof SignalsApiError ? error.status : null,
       })
       setErrorMessage(mapped.message)
       setOpen(false)
@@ -108,15 +109,8 @@ export function useSignalQualifySheet({
           code: error.code,
           detail: error.detail,
           payload: error.payload,
+          status: error.status,
         })
-        if (error.code === 'already_merged' && mapped.survivingSignalId) {
-          const sourceId = signalId
-          setOpen(false)
-          setErrorMessage(null)
-          setSignalId(null)
-          handleMergedNavigation(sourceId, mapped.survivingSignalId)
-          return
-        }
         setErrorMessage(mapped.message)
         return
       }

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import uuid
 from unittest.mock import patch
 
 import pytest
 from celery.exceptions import Retry
 from django.utils import timezone
 
-from houston.analytics.models import SignalPatternAssignment
 from houston.analytics.services import (
     PatternClassificationRetryableError,
     mark_assignment_processing,
@@ -39,22 +39,8 @@ def test_task_reloads_by_id_and_calls_service():
     assert classify.call_args.args[0] == signal.id
 
 
-def test_task_noops_for_merged_signal():
-    membership = build_membership()
-    survivor = create_signal_for_membership(membership)
-    source = Signal.objects.create(
-        establishment=membership.establishment,
-        routing_status=Signal.RoutingStatus.UNASSIGNED,
-        title="Merged source",
-        structured_summary="Structured issue summary",
-        status=Signal.Status.ARCHIVED,
-        merged_into=survivor,
-        last_activity_at=timezone.now(),
-    )
-
-    classify_signal_pattern_task.run(str(source.id))
-
-    assert not SignalPatternAssignment.objects.filter(signal=source).exists()
+def test_task_noops_for_unknown_signal():
+    classify_signal_pattern_task.run(str(uuid.uuid4()))
 
 
 def test_task_retryable_with_retry_remaining_records_temporary_failure(settings):

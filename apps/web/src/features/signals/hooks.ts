@@ -6,11 +6,13 @@ import {
   type QueryClient,
 } from '@tanstack/react-query'
 
-import { invalidateEstablishmentSignalQueries } from '@/lib/query-invalidation'
+import {
+  invalidateEstablishmentDashboardQueries,
+  invalidateEstablishmentSignalQueries,
+} from '@/lib/query-invalidation'
 
 import {
   approveSignalResolutionRequest,
-  archiveSignal,
   cancelSignal,
   cancelSignalResolutionRequest,
   createSignalResolutionRequest,
@@ -244,27 +246,6 @@ export function useMarkSignalInterestingMutation(establishmentId: string | null)
   })
 }
 
-export function useArchiveSignalMutation(establishmentId: string | null) {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (signalId: string) => {
-      if (!establishmentId) {
-        throw new Error('Observation introuvable.')
-      }
-      return archiveSignal(establishmentId, signalId)
-    },
-    onSuccess: (_detail: SignalDetail, signalId) => {
-      if (!establishmentId) {
-        return
-      }
-      invalidateEstablishmentSignalQueries(queryClient, establishmentId)
-      queryClient.removeQueries({
-        queryKey: signalsQueryKeys.detail(establishmentId, signalId),
-      })
-    },
-  })
-}
-
 export function useCreateSignalResolutionRequestMutation(establishmentId: string | null) {
   const queryClient = useQueryClient()
   return useMutation({
@@ -404,6 +385,7 @@ export function useQualifySignalRoutingMutation(establishmentId: string | null) 
         return
       }
       invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+      invalidateEstablishmentDashboardQueries(queryClient, establishmentId)
       const survivorId = response.surviving_signal_id
       const detail = toSignalDetailFromQualifyResponse(response)
       queryClient.setQueryData(signalsQueryKeys.detail(establishmentId, survivorId), detail)
@@ -420,7 +402,7 @@ export function useQualifySignalRoutingMutation(establishmentId: string | null) 
   })
 }
 
-/** After merge navigation: drop archived source detail cache. */
+/** After merge navigation: drop source detail cache. */
 export function removeQualifiedSourceSignalDetailCache(
   queryClient: QueryClient,
   establishmentId: string,

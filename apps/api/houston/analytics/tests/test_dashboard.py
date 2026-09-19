@@ -9,7 +9,6 @@ from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from houston.action_plans.constants import EXECUTION_STATUS_DONE
 from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.services import create_action_plan_with_execution
 from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
@@ -19,6 +18,7 @@ from houston.analytics.dashboard import get_analytics_dashboard
 from houston.analytics.journal import COVERAGE_COMPLETE
 from houston.analytics.models import (
     AnalyticsHistoryCoverage,
+    OperationalPattern,
     PatternEstablishmentSighting,
     SignalPatternAssignment,
 )
@@ -44,18 +44,12 @@ from houston.gamification.constants import (
 from houston.gamification.models import PointTransaction
 from houston.gamification.selectors import get_active_season
 from houston.gamification.services import open_season
-from houston.signals.constants import (
-    SIGNAL_LIFECYCLE_EVENT_CANCELED,
-    SIGNAL_LIFECYCLE_EVENT_CREATED,
-    SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
-    SIGNAL_LIFECYCLE_EVENT_RESOLVED,
-)
-from houston.signals.lifecycle_events import record_signal_lifecycle_event
 from houston.signals.models import Signal, SignalResolutionRequest
 from houston.signals.services import merge_signal_into_resolved, qualify_signal_routing
 from houston.testing.auth import auth_headers, build_api_membership, login
-from houston.testing.factories import create_establishment, create_membership, create_user
+from houston.testing.factories import create_establishment, create_membership
 from houston.testing.taxonomy import (
+    create_activity_subject,
     create_business_unit,
     create_membership_with_business_unit_scope,
     create_restaurant_v3_taxonomy,
@@ -76,7 +70,9 @@ def _create_signal(
     title="Signal",
     created_at=None,
     status=Signal.Status.OPEN,
+    routing_status=Signal.RoutingStatus.RESOLVED,
     operational_unit=None,
+    affected_business_unit=None,
     responsible_business_unit=None,
     location_text="",
 ):
@@ -84,12 +80,13 @@ def _create_signal(
     signal = Signal.objects.create(
         establishment=membership.establishment,
         status=status,
-        routing_status=Signal.RoutingStatus.RESOLVED,
+        routing_status=routing_status,
         title=title,
         structured_summary=f"Summary for {title}.",
         issue_focus=title.lower().replace(" ", "-"),
         last_activity_at=moment,
         operational_unit=operational_unit,
+        affected_business_unit=affected_business_unit,
         responsible_business_unit=responsible_business_unit,
         location_text=location_text,
     )
@@ -136,7 +133,7 @@ def _succeed_assign(signal, pattern, *, assigned_at=None):
 
 
 def _new_pattern_names(result):
-    return {item.name for item in result.new_patterns}
+    return {item.name for item in result.new_patterns.items}
 
 
 def test_dashboard_period_days_and_scope_payload():
@@ -151,13 +148,18 @@ def test_dashboard_period_days_and_scope_payload():
     _assign(_create_signal(membership, title="A", created_at=now - timedelta(days=1)), pattern)
     _assign(_create_signal(membership, title="B", created_at=now - timedelta(hours=2)), pattern)
 
-    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
 
     assert result.period_days == 7
-    assert result.scope_type == "cross"
-    assert result.establishment_id is None
-    assert membership.establishment_id in result.establishment_ids
-    assert result.recurring_patterns[0].signal_count == 2
+    assert result.establishment_id == membership.establishment_id
+    assert result.establishment_name == membership.establishment.name
+    assert result.recurring_patterns.items[0].signal_count == 2
+    assert result.recurring_patterns.total_count == 1
     assert result.history_reliable_from is not None
 
 
@@ -167,7 +169,8 @@ def test_dashboard_rejects_invalid_period_and_out_of_scope_establishment(api_cli
     token = login(api_client, user=owner.user)
 
     invalid = api_client.get(
-        "/api/v1/analytics/dashboard/?" + urlencode({"period_days": "14"}),
+        "/api/v1/analytics/dashboard/?"
+        + urlencode({"period_days": "14", "establishment_id": str(owner.establishment_id)}),
         **auth_headers(token),
     )
     forbidden = api_client.get(
@@ -215,110 +218,10 @@ def test_pattern_correction_does_not_give_target_source_first_seen():
         now=now,
         establishment_id=membership.establishment_id,
     )
-    names = {item.name for item in result.new_patterns}
+    names = {item.name for item in result.new_patterns.items}
     assert "Motif B" in names
-    motif_b = next(item for item in result.new_patterns if item.name == "Motif B")
+    motif_b = next(item for item in result.new_patterns.items if item.name == "Motif B")
     assert motif_b.first_seen_at > earlier
-
-
-def test_pattern_correction_cross_does_not_give_target_source_first_seen():
-    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    now = timezone.now()
-    earlier = now - timedelta(days=20)
-    create_operational_pattern(
-        organization=membership.establishment.organization,
-        label="Motif A",
-        created_by_membership=membership,
-        occurred_at=earlier,
-    )
-    pattern_b = create_operational_pattern(
-        organization=membership.establishment.organization,
-        label="Motif B",
-        created_by_membership=membership,
-        occurred_at=now - timedelta(days=1),
-    )
-    signal = _create_signal(membership, title="Moved", created_at=earlier)
-    _assign(signal, pattern_b, assigned_at=now - timedelta(hours=1))
-
-    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
-    motif_b = next(item for item in result.new_patterns if item.name == "Motif B")
-    assert motif_b.first_seen_at > earlier
-
-
-def test_cross_new_patterns_use_assignment_not_created_event():
-    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    now = timezone.now()
-    created_at = now - timedelta(days=20)
-    assigned_at = now - timedelta(hours=2)
-    pattern = create_operational_pattern(
-        organization=membership.establishment.organization,
-        label="Backdated create",
-        created_by_membership=membership,
-        occurred_at=created_at,
-    )
-    _succeed_assign(
-        _create_signal(membership, title="Seen now", created_at=assigned_at),
-        pattern,
-        assigned_at=assigned_at,
-    )
-
-    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
-    item = next(row for row in result.new_patterns if row.name == "Backdated create")
-    assert item.first_seen_at == assigned_at
-
-
-def test_cross_new_patterns_use_earlier_assignment_without_sighting():
-    user = create_user(username="cross-first-seen")
-    first = create_establishment(name="Nord")
-    second = Establishment.objects.create(
-        name="Sud",
-        organization=first.organization,
-        status=Establishment.Status.ACTIVE,
-    )
-    membership_a = create_membership(
-        establishment=first,
-        user=user,
-        role=EstablishmentMembership.Role.OWNER,
-    )
-    membership_b = create_membership(
-        establishment=second,
-        user=user,
-        role=EstablishmentMembership.Role.OWNER,
-    )
-    now = timezone.now()
-    earlier = now - timedelta(days=20)
-    seen = now - timedelta(days=1)
-    pattern = create_operational_pattern(
-        organization=first.organization,
-        label="Shared motif",
-        created_by_membership=membership_a,
-        occurred_at=earlier,
-    )
-    _assign(
-        _create_signal(membership_a, title="Old site", created_at=earlier),
-        pattern,
-        assigned_at=earlier,
-    )
-    _succeed_assign(
-        _create_signal(membership_b, title="New site", created_at=seen),
-        pattern,
-        assigned_at=seen,
-    )
-    assert not PatternEstablishmentSighting.objects.filter(
-        pattern=pattern,
-        establishment=first,
-    ).exists()
-
-    cross = get_analytics_dashboard(user, period_days=7, now=now)
-    establishment_b = get_analytics_dashboard(
-        user,
-        period_days=7,
-        now=now,
-        establishment_id=second.id,
-    )
-    assert "Shared motif" not in _new_pattern_names(cross)
-    item = next(row for row in establishment_b.new_patterns if row.name == "Shared motif")
-    assert item.first_seen_at == seen
 
 
 def test_split_to_new_is_not_listed_as_new_pattern():
@@ -342,7 +245,12 @@ def test_split_to_new_is_not_listed_as_new_pattern():
         occurred_at=now - timedelta(hours=1),
     )
 
-    cross = get_analytics_dashboard(membership.user, period_days=7, now=now)
+    cross = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
     establishment = get_analytics_dashboard(
         membership.user,
         period_days=7,
@@ -430,7 +338,12 @@ def test_pattern_merge_keeps_earliest_sighting_not_merge_clock():
         occurred_at=merge_at,
     )
 
-    cross = get_analytics_dashboard(membership.user, period_days=7, now=now)
+    cross = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
     establishment = get_analytics_dashboard(
         membership.user,
         period_days=7,
@@ -438,7 +351,7 @@ def test_pattern_merge_keeps_earliest_sighting_not_merge_clock():
         establishment_id=membership.establishment_id,
     )
     for result in (cross, establishment):
-        item = next(row for row in result.new_patterns if row.pattern_id == target.id)
+        item = next(row for row in result.new_patterns.items if row.pattern_id == target.id)
         assert item.first_seen_at == first_seen
         assert item.first_seen_at < merge_at
     assert "Older identity" not in _new_pattern_names(cross)
@@ -477,7 +390,12 @@ def test_pattern_merge_hides_survivor_when_earliest_sighting_is_outside_period()
         occurred_at=now - timedelta(hours=1),
     )
 
-    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
     assert "Born in period" not in _new_pattern_names(result)
 
 
@@ -516,8 +434,17 @@ def test_real_pattern_merged_into_split_created_can_appear():
         occurred_at=now - timedelta(hours=1),
     )
 
-    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
-    item = next(row for row in result.new_patterns if row.pattern_id == split.target_pattern.id)
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
+    item = next(
+        row
+        for row in result.new_patterns.items
+        if row.pattern_id == split.target_pattern.id
+    )
     assert item.first_seen_at == seen
 
 
@@ -555,10 +482,202 @@ def test_real_pattern_outside_period_merged_into_split_created_is_absent():
         occurred_at=now - timedelta(hours=1),
     )
 
-    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
     assert split.target_pattern is not None
-    assert split.target_pattern.id not in {row.pattern_id for row in result.new_patterns}
+    assert split.target_pattern.id not in {row.pattern_id for row in result.new_patterns.items}
     assert "Split vessel" not in _new_pattern_names(result)
+
+
+def test_historical_assignment_outside_volume_windows_is_not_new_pattern():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    earlier = now - timedelta(days=40)
+    pattern = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Long-lived motif",
+        created_by_membership=membership,
+        occurred_at=earlier,
+    )
+    _assign(
+        _create_signal(membership, title="Historical", created_at=earlier),
+        pattern,
+        assigned_at=earlier,
+    )
+    _assign(
+        _create_signal(membership, title="Fresh", created_at=now - timedelta(days=1)),
+        pattern,
+        assigned_at=now - timedelta(hours=1),
+    )
+
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
+    assert "Long-lived motif" not in _new_pattern_names(result)
+
+
+def test_source_assignment_survives_merge_chain_outside_period():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    earlier = now - timedelta(days=20)
+    pattern_a = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Chain A",
+        created_by_membership=membership,
+        occurred_at=earlier,
+    )
+    pattern_b = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Chain B",
+        created_by_membership=membership,
+        occurred_at=earlier,
+    )
+    pattern_c = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Chain C",
+        created_by_membership=membership,
+        occurred_at=now - timedelta(days=1),
+    )
+    _succeed_assign(
+        _create_signal(membership, title="On A", created_at=earlier),
+        pattern_a,
+        assigned_at=earlier,
+    )
+    _succeed_assign(
+        _create_signal(membership, title="On C", created_at=now - timedelta(days=1)),
+        pattern_c,
+        assigned_at=now - timedelta(days=1),
+    )
+    merge_operational_patterns(
+        actor_membership=membership,
+        source_pattern=pattern_a,
+        target_pattern=pattern_b,
+        occurred_at=now - timedelta(hours=2),
+    )
+    merge_operational_patterns(
+        actor_membership=membership,
+        source_pattern=pattern_b,
+        target_pattern=pattern_c,
+        occurred_at=now - timedelta(hours=1),
+    )
+
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
+    assert pattern_c.id not in {row.pattern_id for row in result.new_patterns.items}
+    assert "Chain C" not in _new_pattern_names(result)
+
+
+def test_merge_chain_first_seen_on_source_uses_terminal_when_in_period():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    seen = now - timedelta(days=2)
+    pattern_a = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="In-period A",
+        created_by_membership=membership,
+        occurred_at=seen,
+    )
+    pattern_b = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="In-period B",
+        created_by_membership=membership,
+        occurred_at=seen,
+    )
+    pattern_c = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="In-period C",
+        created_by_membership=membership,
+        occurred_at=now - timedelta(hours=3),
+    )
+    _succeed_assign(
+        _create_signal(membership, title="On A", created_at=seen),
+        pattern_a,
+        assigned_at=seen,
+    )
+    merge_operational_patterns(
+        actor_membership=membership,
+        source_pattern=pattern_a,
+        target_pattern=pattern_b,
+        occurred_at=now - timedelta(hours=2),
+    )
+    merge_operational_patterns(
+        actor_membership=membership,
+        source_pattern=pattern_b,
+        target_pattern=pattern_c,
+        occurred_at=now - timedelta(hours=1),
+    )
+
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
+    item = next(row for row in result.new_patterns.items if row.pattern_id == pattern_c.id)
+    assert item.first_seen_at == seen
+    assert "In-period A" not in _new_pattern_names(result)
+    assert "In-period B" not in _new_pattern_names(result)
+
+
+def test_assignment_still_on_source_follows_two_hop_terminal():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    earlier = now - timedelta(days=20)
+    pattern_a = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Stuck A",
+        created_by_membership=membership,
+        occurred_at=earlier,
+    )
+    pattern_b = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Stuck B",
+        created_by_membership=membership,
+        occurred_at=earlier,
+    )
+    pattern_c = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Stuck C",
+        created_by_membership=membership,
+        occurred_at=now - timedelta(days=1),
+    )
+    _assign(
+        _create_signal(membership, title="Still on A", created_at=earlier),
+        pattern_a,
+        assigned_at=earlier,
+    )
+    _assign(
+        _create_signal(membership, title="On C", created_at=now - timedelta(days=1)),
+        pattern_c,
+        assigned_at=now - timedelta(hours=1),
+    )
+    OperationalPattern.objects.filter(pk=pattern_a.pk).update(
+        status=OperationalPattern.Status.MERGED,
+        merged_into_id=pattern_b.id,
+    )
+    OperationalPattern.objects.filter(pk=pattern_b.pk).update(
+        status=OperationalPattern.Status.MERGED,
+        merged_into_id=pattern_c.id,
+    )
+
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
+    assert "Stuck C" not in _new_pattern_names(result)
 
 
 def test_split_created_chain_is_not_entirely_split_when_real_origin_is_two_hops():
@@ -621,9 +740,14 @@ def test_split_created_chain_is_not_entirely_split_when_real_origin_is_two_hops(
     assert real.merged_into_id == split_b.target_pattern.id
     assert split_b.target_pattern.merged_into_id == split_c.target_pattern.id
 
-    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
     item = next(
-        row for row in result.new_patterns if row.pattern_id == split_c.target_pattern.id
+        row for row in result.new_patterns.items if row.pattern_id == split_c.target_pattern.id
     )
     assert item.first_seen_at == seen
 
@@ -657,43 +781,28 @@ def test_recurring_patterns_follow_canonical_after_pattern_merge():
         target_pattern=target,
     )
 
-    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
-    assert len(result.recurring_patterns) == 1
-    assert result.recurring_patterns[0].pattern_id == target.id
-    assert result.recurring_patterns[0].name == "Survivor count"
-    assert result.recurring_patterns[0].signal_count == 2
-
-
-def test_cross_homonyms_stay_separated_by_establishment():
-    user = create_user(username="cross-owner")
-    first = create_establishment(name="Nord")
-    second = create_establishment(name="Sud")
-    membership_a = create_membership(
-        establishment=first,
-        user=user,
-        role=EstablishmentMembership.Role.OWNER,
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
     )
-    membership_b = create_membership(
-        establishment=second,
-        user=user,
-        role=EstablishmentMembership.Role.OWNER,
-    )
-    now = timezone.now()
-    _create_signal(membership_a, title="A", created_at=now - timedelta(hours=1))
-    _create_signal(membership_b, title="B", created_at=now - timedelta(hours=1))
-
-    result = get_analytics_dashboard(user, period_days=7, now=now)
-    assert result.scope_type == "cross"
-    assert set(result.establishment_ids) == {first.id, second.id}
-    assert result.open_observation_count == 2
+    assert len(result.recurring_patterns.items) == 1
+    assert result.recurring_patterns.items[0].pattern_id == target.id
+    assert result.recurring_patterns.items[0].name == "Survivor count"
+    assert result.recurring_patterns.items[0].signal_count == 2
 
 
 def test_dashboard_deadline_counts_match_n_and_empty_shares_are_null():
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     apply_analytics_history_cutover()
-    result = get_analytics_dashboard(membership.user, period_days=7)
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        establishment_id=membership.establishment_id,
+    )
 
-    deadlines = result.plan_deadlines
+    deadlines = result.plan_deadline_respect
     assert deadlines.early_count + deadlines.on_time_count + deadlines.late_count == deadlines.n
     if deadlines.n == 0:
         assert deadlines.early is None
@@ -767,37 +876,6 @@ def _create_execution(
         last_activity_at=timezone.now(),
         use_shared_chronology=True,
     )
-
-
-def test_cross_contributors_expose_unique_sorted_establishment_names():
-    owner = create_user(username="cross-owner-contrib")
-    contributor = create_user(username="contributor-nadia")
-    anbu = create_establishment(name="ANBU")
-    akatsuki = create_establishment(name="AKATSUKI")
-    konoha = create_establishment(name="Konoha")
-    for establishment in (anbu, akatsuki, konoha):
-        create_membership(
-            establishment=establishment,
-            user=owner,
-            role=EstablishmentMembership.Role.OWNER,
-        )
-    staff_memberships = [
-        create_membership(
-            establishment=establishment,
-            user=contributor,
-            role=EstablishmentMembership.Role.STAFF,
-        )
-        for establishment in (anbu, akatsuki, konoha)
-    ]
-    now = timezone.now()
-    for membership in staff_memberships:
-        _award_points(membership=membership, occurred_at=now - timedelta(hours=1))
-
-    result = get_analytics_dashboard(owner, period_days=7, now=now)
-
-    assert result.scope_type == "cross"
-    assert len(result.contributors) == 1
-    assert result.contributors[0].establishment_names == ("AKATSUKI", "ANBU", "Konoha")
 
 
 def test_manager_contributors_scope_activity_not_contributor_bus():
@@ -894,7 +972,12 @@ def test_manager_contributors_scope_activity_not_contributor_bus():
         source_id=unassigned_signal.id,
     )
 
-    result = get_analytics_dashboard(manager.user, period_days=7, now=now)
+    result = get_analytics_dashboard(
+        manager.user,
+        period_days=7,
+        now=now,
+        establishment_id=manager.establishment_id,
+    )
 
     assert _contributor_pts(result, in_scope_staff.user_id) == 4
     assert _contributor_pts(result, out_scope_staff.user_id) == 5
@@ -1012,7 +1095,12 @@ def test_manager_contributors_follow_execution_and_resolution_request_scope():
         source_id=unlinked_out.id,
     )
 
-    result = get_analytics_dashboard(manager.user, period_days=7, now=now)
+    result = get_analytics_dashboard(
+        manager.user,
+        period_days=7,
+        now=now,
+        establishment_id=manager.establishment_id,
+    )
 
     assert _contributor_pts(result, staff.user_id) == 5
 
@@ -1031,7 +1119,12 @@ def test_manager_excludes_unattributable_owner_and_director_keep_them():
             role=EstablishmentMembership.Role.STAFF,
         )
         _ledger_tx(membership=staff, occurred_at=occurred_at, delta=5)
-        result = get_analytics_dashboard(membership.user, period_days=7, now=now)
+        result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
         if role == EstablishmentMembership.Role.MANAGER:
             assert result.contributors == ()
         else:
@@ -1061,7 +1154,12 @@ def test_manager_contributors_exclude_orphan_canonical_source_id():
         source_id=uuid.uuid4(),
     )
 
-    result = get_analytics_dashboard(manager.user, period_days=7, now=now)
+    result = get_analytics_dashboard(
+        manager.user,
+        period_days=7,
+        now=now,
+        establishment_id=manager.establishment_id,
+    )
 
     assert result.contributors == ()
 
@@ -1160,7 +1258,6 @@ def test_mixed_membership_contributors_and_cross_establishment_source_mismatch()
         source_id=director_signal.id,
     )
 
-    cross = get_analytics_dashboard(manager.user, period_days=7, now=now)
     establishment_a = get_analytics_dashboard(
         manager.user,
         period_days=7,
@@ -1200,6 +1297,12 @@ def test_mixed_membership_contributors_and_cross_establishment_source_mismatch()
         source_id=foreign_signal.id,
     )
 
+    director_view = get_analytics_dashboard(
+        manager.user,
+        period_days=7,
+        now=now,
+        establishment_id=second.id,
+    )
     owner_view = get_analytics_dashboard(
         owner_of_a.user,
         period_days=7,
@@ -1207,12 +1310,12 @@ def test_mixed_membership_contributors_and_cross_establishment_source_mismatch()
         establishment_id=owner_of_a.establishment_id,
     )
 
-    assert _contributor_pts(cross, staff_a.user_id) == 4
-    assert _contributor_pts(cross, staff_b.user_id) == 6
     assert _contributor_pts(establishment_a, staff_a.user_id) == 4
+    assert _contributor_pts(establishment_a, staff_b.user_id) == 0
     assert all(item.user_id != staff_b.user_id for item in establishment_a.contributors)
     assert director.establishment_id == second.id
-    assert _contributor_pts(owner_view, owner_staff.user_id) == 13
+    assert _contributor_pts(director_view, staff_b.user_id) == 6
+    assert _contributor_pts(owner_view, owner_staff.user_id) == 0
 
 
 def test_manager_contributors_reversal_one_hop_fail_closed_on_chain():
@@ -1297,7 +1400,12 @@ def test_manager_contributors_reversal_one_hop_fail_closed_on_chain():
         reversed_transaction=reversal,
     )
 
-    result = get_analytics_dashboard(manager.user, period_days=7, now=now)
+    result = get_analytics_dashboard(
+        manager.user,
+        period_days=7,
+        now=now,
+        establishment_id=manager.establishment_id,
+    )
     contributor_ids = {item.user_id for item in result.contributors}
 
     assert chained.reversed_transaction_id == reversal.id
@@ -1305,100 +1413,6 @@ def test_manager_contributors_reversal_one_hop_fail_closed_on_chain():
     assert _contributor_pts(result, in_scope_staff.user_id) == 4
     assert out_scope_staff.user_id not in contributor_ids
     assert _contributor_pts(result, out_scope_staff.user_id) == 0
-
-
-def test_canceled_delay_uses_canonical_timestamp_when_journal_event_is_missing():
-    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    apply_analytics_history_cutover()
-    now = timezone.now()
-    created_at = now - timedelta(days=2)
-    canceled_at = now - timedelta(hours=4)
-    signal = _create_signal(
-        membership,
-        title="Dated cancel",
-        created_at=created_at,
-        status=Signal.Status.CANCELED,
-    )
-    Signal.objects.filter(pk=signal.pk).update(canceled_at=canceled_at)
-
-    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
-
-    assert result.observation_delay_canceled.n == 1
-    assert result.undatable_signal_terminals.canceled == 0
-    assert result.observation_delay_canceled.undatable_in_scope == 0
-
-
-def test_undatable_canceled_is_counted_and_withholds_closure_share():
-    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    apply_analytics_history_cutover()
-    now = timezone.now()
-    _create_signal(
-        membership,
-        title="Legacy cancel",
-        created_at=now - timedelta(days=2),
-        status=Signal.Status.CANCELED,
-    )
-    resolved = _create_signal(
-        membership,
-        title="Dated resolve",
-        created_at=now - timedelta(days=3),
-        status=Signal.Status.RESOLVED,
-    )
-    Signal.objects.filter(pk=resolved.pk).update(resolved_at=now - timedelta(hours=2))
-
-    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
-
-    assert result.undatable_signal_terminals.canceled == 1
-    assert result.observation_delay_canceled.n == 0
-    assert result.observation_delay_canceled.undatable_in_scope == 1
-    assert result.closure_measured_resolved_count == 1
-    assert result.closure_measured_canceled_count == 0
-    assert result.closure_resolved_share.current_value is None
-
-
-def test_done_execution_without_canonical_timestamps_is_undatable():
-    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    apply_analytics_history_cutover()
-    business_unit = create_business_unit(
-        establishment=membership.establishment,
-        key="analytics_undatable_done",
-    )
-    ActionPlanExecution.objects.create(
-        establishment=membership.establishment,
-        created_by=membership,
-        title="Undatable done",
-        pilot_business_unit=business_unit,
-        last_activity_at=timezone.now(),
-        use_shared_chronology=True,
-        status=EXECUTION_STATUS_DONE,
-    )
-
-    result = get_analytics_dashboard(membership.user, period_days=7)
-
-    assert result.undatable_execution_terminals.done == 1
-    assert result.plan_delay_resolved.undatable_in_scope == 1
-    assert result.plan_delay_resolved.n == 0
-
-
-def _create_undatable_done_execution(
-    membership,
-    *,
-    title,
-    business_unit,
-    source_signal=None,
-):
-    return ActionPlanExecution.objects.create(
-        establishment=membership.establishment,
-        created_by=membership,
-        title=title,
-        source_signal=source_signal,
-        pilot_business_unit=business_unit,
-        affected_business_unit=business_unit,
-        responsible_business_unit=business_unit,
-        last_activity_at=timezone.now(),
-        use_shared_chronology=True,
-        status=EXECUTION_STATUS_DONE,
-    )
 
 
 def test_manager_dashboard_plan_metrics_exclude_out_of_scope_executions():
@@ -1427,288 +1441,32 @@ def test_manager_dashboard_plan_metrics_exclude_out_of_scope_executions():
         affected_business_unit=out_scope_bu,
         responsible_business_unit=out_scope_bu,
     )
-    _create_undatable_done_execution(
+    _create_execution(
         membership,
         title="In scope unlinked",
         business_unit=in_scope_bu,
     )
-    _create_undatable_done_execution(
+    _create_execution(
         membership,
         title="Out of scope unlinked",
         business_unit=out_scope_bu,
     )
-    _create_undatable_done_execution(
+    _create_execution(
         membership,
         title="Linked out of scope signal on in-scope execution BU",
         business_unit=in_scope_bu,
         source_signal=out_of_scope_signal,
     )
 
-    result = get_analytics_dashboard(membership.user, period_days=7)
-
-    assert result.undatable_execution_terminals.done == 1
-    assert result.plan_delay_resolved.undatable_in_scope == 1
-    assert result.plan_delay_resolved.n == 0
-
-
-def test_transform_delay_uses_association_field_minus_signal_created_at():
-    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    apply_analytics_history_cutover()
-    now = timezone.now()
-    created_at = now - timedelta(days=4)
-    plan_at = now - timedelta(days=1)
-    journal_created = now - timedelta(days=10)
-    signal = _create_signal(membership, title="Transform field", created_at=created_at)
-    Signal.objects.filter(pk=signal.pk).update(first_action_plan_associated_at=plan_at)
-    record_signal_lifecycle_event(
-        signal=signal,
-        event_type=SIGNAL_LIFECYCLE_EVENT_CREATED,
-        occurred_at=journal_created,
-    )
-
-    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
-
-    assert result.observation_delay_transformed.n == 1
-    assert result.observation_delay_transformed.median_seconds == 3 * 24 * 3600
-
-
-def test_transform_delay_excludes_signal_with_live_execution_but_null_association():
-    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    apply_analytics_history_cutover()
-    now = timezone.now()
-    business_unit = create_business_unit(
-        establishment=membership.establishment,
-        key="analytics_transform_null_field",
-    )
-    signal = _create_signal(
-        membership,
-        title="Legacy execution",
-        created_at=now - timedelta(days=2),
-    )
-    ActionPlanExecution.objects.create(
-        establishment=membership.establishment,
-        created_by=membership,
-        title="Live without stamp",
-        source_signal=signal,
-        pilot_business_unit=business_unit,
-        last_activity_at=now,
-        use_shared_chronology=True,
-        status=EXECUTION_STATUS_DONE,
-    )
-    signal.refresh_from_db()
-    assert signal.first_action_plan_associated_at is None
-
-    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
-
-    assert result.observation_delay_transformed.n == 0
-    assert result.observation_delay_transformed.median_seconds is None
-
-
-def test_transform_and_aging_after_older_source_merged_into_newer_survivor():
-    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    apply_analytics_history_cutover()
-    now = timezone.now()
-    source_created = now - timedelta(days=6)
-    plan_at = now - timedelta(days=5)
-    target_created = now - timedelta(days=1)
-    cuisine = create_business_unit(
-        establishment=membership.establishment,
-        key="cuisine",
-        label="Cuisine",
-    )
-    maintenance = create_business_unit(
-        establishment=membership.establishment,
-        key="maintenance",
-        label="Maintenance",
-    )
-    zone_a = OperationalUnit.objects.create(
-        establishment=membership.establishment,
-        key="zone_a",
-        label="Zone A",
-        active=True,
-    )
-    zone_b = OperationalUnit.objects.create(
-        establishment=membership.establishment,
-        key="zone_b",
-        label="Zone B",
-        active=True,
-    )
-    source = _create_signal(
-        membership,
-        title="Older merged source",
-        created_at=source_created,
-        operational_unit=zone_a,
-        responsible_business_unit=cuisine,
-    )
-    target = _create_signal(
-        membership,
-        title="Newer survivor",
-        created_at=target_created,
-        operational_unit=zone_b,
-        responsible_business_unit=maintenance,
-    )
-    resolved_at = now - timedelta(days=4)
-    reopened_at = now - timedelta(days=3)
-    Signal.objects.filter(pk=source.pk).update(
-        first_action_plan_associated_at=plan_at,
-        status=Signal.Status.RESOLVED,
-        resolved_at=resolved_at,
-    )
-    source.refresh_from_db()
-    record_signal_lifecycle_event(
-        signal=source,
-        event_type=SIGNAL_LIFECYCLE_EVENT_RESOLVED,
-        occurred_at=resolved_at,
-        metadata_safe={"to_status": Signal.Status.RESOLVED},
-    )
-    Signal.objects.filter(pk=source.pk).update(
-        status=Signal.Status.OPEN,
-        resolved_at=None,
-    )
-    source.refresh_from_db()
-    record_signal_lifecycle_event(
-        signal=source,
-        event_type=SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
-        occurred_at=reopened_at,
-        metadata_safe={
-            "from_status": Signal.Status.RESOLVED,
-            "to_status": Signal.Status.OPEN,
-        },
-    )
-    assert source.status == Signal.Status.OPEN
-    merge_signal_into_resolved(
-        source=source,
-        target=target,
-        resolution_audit={},
-        candidate_expected_action=None,
-    )
-    target.refresh_from_db()
-
     result = get_analytics_dashboard(
         membership.user,
         period_days=7,
-        now=now,
         establishment_id=membership.establishment_id,
     )
 
-    assert target.created_at == source_created
-    assert target.first_action_plan_associated_at == plan_at
-    assert result.observation_delay_transformed.n == 1
-    assert result.observation_delay_transformed.median_seconds == 24 * 3600
-    assert result.open_observation_count == 1
-    aging_by_key = {bucket.key: bucket.count for bucket in result.aging_buckets}
-    assert aging_by_key["3–7 j"] == 1
-    assert aging_by_key["< 3 j"] == 0
-    assert {item.name for item in result.poles} == {"Maintenance"}
-    assert {item.name for item in result.locations} == {"Sans localisation"}
-    assert result.poles[0].count == 1
-    assert result.locations[0].count == 1
-    assert result.closure_measured_resolved_count == 0
-    assert result.closure_measured_canceled_count == 0
-
-
-def test_closure_counts_last_journal_terminal_after_reopen_and_resolve():
-    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    now = timezone.now()
-    _cutover_complete_for_period(now=now)
-    signal = _create_signal(
-        membership,
-        title="Reopened",
-        created_at=now - timedelta(days=3),
-        status=Signal.Status.RESOLVED,
-    )
-    first_resolved = now - timedelta(hours=6)
-    reopened = now - timedelta(hours=4)
-    second_resolved = now - timedelta(hours=1)
-    Signal.objects.filter(pk=signal.pk).update(resolved_at=second_resolved)
-    record_signal_lifecycle_event(
-        signal=signal,
-        event_type=SIGNAL_LIFECYCLE_EVENT_RESOLVED,
-        occurred_at=first_resolved,
-        metadata_safe={"to_status": Signal.Status.RESOLVED},
-    )
-    record_signal_lifecycle_event(
-        signal=signal,
-        event_type=SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
-        occurred_at=reopened,
-        metadata_safe={
-            "from_status": Signal.Status.RESOLVED,
-            "to_status": Signal.Status.OPEN,
-        },
-    )
-    record_signal_lifecycle_event(
-        signal=signal,
-        event_type=SIGNAL_LIFECYCLE_EVENT_RESOLVED,
-        occurred_at=second_resolved,
-        metadata_safe={"to_status": Signal.Status.RESOLVED},
-    )
-
-    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
-
-    assert result.closure_measured_resolved_count == 1
-    assert result.closure_measured_canceled_count == 0
-    assert result.closure_resolved_share.current_value == 1.0
-
-
-def test_closure_counts_last_journal_terminal_when_resolve_then_cancel():
-    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    now = timezone.now()
-    _cutover_complete_for_period(now=now)
-    signal = _create_signal(
-        membership,
-        title="Resolved then canceled",
-        created_at=now - timedelta(days=2),
-        status=Signal.Status.CANCELED,
-    )
-    resolved_at = now - timedelta(hours=5)
-    canceled_at = now - timedelta(hours=1)
-    Signal.objects.filter(pk=signal.pk).update(
-        resolved_at=resolved_at,
-        canceled_at=canceled_at,
-    )
-    record_signal_lifecycle_event(
-        signal=signal,
-        event_type=SIGNAL_LIFECYCLE_EVENT_RESOLVED,
-        occurred_at=resolved_at,
-        metadata_safe={"to_status": Signal.Status.RESOLVED},
-    )
-    record_signal_lifecycle_event(
-        signal=signal,
-        event_type=SIGNAL_LIFECYCLE_EVENT_CANCELED,
-        occurred_at=canceled_at,
-        metadata_safe={"to_status": Signal.Status.CANCELED},
-    )
-
-    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
-
-    assert result.closure_measured_resolved_count == 0
-    assert result.closure_measured_canceled_count == 1
-    assert result.closure_resolved_share.current_value == 0.0
-
-
-def test_complete_window_does_not_count_column_only_closure():
-    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    now = timezone.now()
-    _cutover_complete_for_period(now=now)
-    signal = _create_signal(
-        membership,
-        title="Column only resolve",
-        created_at=now - timedelta(days=2),
-        status=Signal.Status.RESOLVED,
-    )
-    Signal.objects.filter(pk=signal.pk).update(resolved_at=now - timedelta(hours=2))
-    signal.refresh_from_db()
-    assert not signal.lifecycle_events.filter(
-        event_type=SIGNAL_LIFECYCLE_EVENT_RESOLVED
-    ).exists()
-
-    result = get_analytics_dashboard(membership.user, period_days=7, now=now)
-
-    assert result.current_period.period_start >= result.history_reliable_from
-    assert result.closure_measured_resolved_count == 0
-    assert result.closure_measured_canceled_count == 0
-    assert result.undatable_signal_terminals.resolved == 0
-    assert result.closure_resolved_share.current_value is None
+    assert result.plan_deadline_respect.n == 0
+    assert result.plan_overrun.total_count == 0
+    assert result.plan_overrun.analyzed_count == 0
 
 
 def test_qualify_moves_period_volume_to_current_pole_and_zone():
@@ -1742,6 +1500,7 @@ def test_qualify_moves_period_volume_to_current_pole_and_zone():
         title="Requalified current",
         created_at=now - timedelta(days=1),
         operational_unit=zone_a,
+        affected_business_unit=cuisine,
         responsible_business_unit=cuisine,
     )
     previous = _create_signal(
@@ -1749,10 +1508,12 @@ def test_qualify_moves_period_volume_to_current_pole_and_zone():
         title="Requalified previous",
         created_at=now - timedelta(days=10),
         operational_unit=zone_a,
+        affected_business_unit=cuisine,
         responsible_business_unit=cuisine,
     )
     Signal.objects.filter(pk__in=[current.pk, previous.pk]).update(
         operational_unit=zone_b,
+        affected_business_unit=maintenance,
         responsible_business_unit=maintenance,
     )
 
@@ -1763,14 +1524,110 @@ def test_qualify_moves_period_volume_to_current_pole_and_zone():
         establishment_id=membership.establishment_id,
     )
 
-    assert {item.name for item in result.poles} == {"Maintenance"}
-    assert {item.name for item in result.locations} == {"Sans localisation"}
-    assert result.poles[0].count == 1
-    assert result.locations[0].count == 1
-    assert result.poles[0].comparison.previous_value == 1
-    assert result.locations[0].comparison.previous_value == 1
-    assert result.poles[0].comparison.coverage == COVERAGE_COMPLETE
-    assert result.locations[0].comparison.coverage == COVERAGE_COMPLETE
+    current_affected = next(
+        window
+        for window in result.observation_volume["affected"].windows
+        if window.label_key == "current"
+    )
+    current_responsible = next(
+        window
+        for window in result.observation_volume["responsible"].windows
+        if window.label_key == "current"
+    )
+    previous_responsible = next(
+        window
+        for window in result.observation_volume["responsible"].windows
+        if window.label_key == "previous"
+    )
+    assert {item.name for item in current_responsible.segments} == {"Maintenance"}
+    assert {item.name for item in result.locations.items} == {"Sans localisation"}
+    assert current_responsible.segments[0].count == 1
+    assert result.locations.items[0].count == 1
+    assert previous_responsible.total == 1
+    assert result.locations.items[0].comparison.previous_value == 1
+    assert {item.name for item in current_affected.segments} == {"Maintenance"}
+
+
+def test_qualify_splits_current_affected_volume_without_operational_unit():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    _cutover_complete_for_period(now=now)
+    evenements = create_business_unit(
+        establishment=membership.establishment,
+        key="evenements",
+        label="Événements & privatisations",
+    )
+    maintenance = create_business_unit(
+        establishment=membership.establishment,
+        key="maintenance",
+        label="Maintenance",
+    )
+    subject = create_activity_subject(
+        establishment=membership.establishment,
+        business_unit=maintenance,
+        label="Plomberie",
+    )
+    unassigned = _create_signal(
+        membership,
+        title="Fuite chambre 304",
+        created_at=now - timedelta(hours=2),
+        routing_status=Signal.RoutingStatus.UNASSIGNED,
+        responsible_business_unit=maintenance,
+    )
+    to_qualify = _create_signal(
+        membership,
+        title="Fuite chambre 502",
+        created_at=now - timedelta(hours=1),
+        routing_status=Signal.RoutingStatus.UNASSIGNED,
+        responsible_business_unit=maintenance,
+    )
+
+    qualify_signal_routing(
+        signal=to_qualify,
+        membership=membership,
+        patch={
+            "affected_business_unit_id": evenements.id,
+            "responsible_business_unit_id": maintenance.id,
+            "activity_subject_id": subject.id,
+            "issue_focus": "fuite chambre 502",
+        },
+    )
+
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
+    current_affected = next(
+        window
+        for window in result.observation_volume["affected"].windows
+        if window.label_key == "current"
+    )
+    current_responsible = next(
+        window
+        for window in result.observation_volume["responsible"].windows
+        if window.label_key == "current"
+    )
+
+    assert current_affected.total == 2
+    assert result.observation_volume["affected"].current_total == 2
+    assert {item.name: item.count for item in current_affected.segments} == {
+        "Sans pôle": 1,
+        "Événements & privatisations": 1,
+    }
+    assert {item.name: item.count for item in current_responsible.segments} == {
+        "Maintenance": 2,
+    }
+    unassigned.refresh_from_db()
+    to_qualify.refresh_from_db()
+    assert unassigned.operational_unit_id is None
+    assert to_qualify.operational_unit_id is None
+    assert unassigned.affected_business_unit_id is None
+    assert to_qualify.affected_business_unit_id == evenements.id
+    assert to_qualify.responsible_business_unit_id == maintenance.id
+    assert to_qualify.activity_subject_id == subject.id
+    assert to_qualify.activity_subject.business_unit_id == maintenance.id
 
 
 def test_dashboard_locations_merge_case_variants_in_current_period():
@@ -1797,10 +1654,10 @@ def test_dashboard_locations_merge_case_variants_in_current_period():
         establishment_id=membership.establishment_id,
     )
 
-    assert len(result.locations) == 1
-    assert result.locations[0].name == "Cuisine"
-    assert result.locations[0].count == 2
-    assert result.locations[0].id == "cuisine"
+    assert len(result.locations.items) == 1
+    assert result.locations.items[0].name == "Cuisine"
+    assert result.locations.items[0].count == 2
+    assert result.locations.items[0].id == "cuisine"
 
 
 def test_dashboard_locations_keep_distinct_texts_separate():
@@ -1827,7 +1684,7 @@ def test_dashboard_locations_keep_distinct_texts_separate():
         establishment_id=membership.establishment_id,
     )
 
-    names = {item.name: item.count for item in result.locations}
+    names = {item.name: item.count for item in result.locations.items}
     assert names == {"Cuisine": 1, "toilettes clients": 1}
 
 
@@ -1856,48 +1713,10 @@ def test_dashboard_locations_empty_text_ignores_operational_unit():
         establishment_id=membership.establishment_id,
     )
 
-    assert len(result.locations) == 1
-    assert result.locations[0].name == "Sans localisation"
-    assert result.locations[0].id == "unassigned"
-    assert result.locations[0].count == 1
-
-
-def test_dashboard_locations_cross_keeps_same_text_per_establishment():
-    user = create_user(username="cross-location-owner")
-    first = create_establishment(name="Nord")
-    second = create_establishment(name="Sud")
-    membership_a = create_membership(
-        establishment=first,
-        user=user,
-        role=EstablishmentMembership.Role.OWNER,
-    )
-    membership_b = create_membership(
-        establishment=second,
-        user=user,
-        role=EstablishmentMembership.Role.OWNER,
-    )
-    now = timezone.now()
-    _cutover_complete_for_period(now=now)
-    _create_signal(
-        membership_a,
-        title="Kitchen north",
-        created_at=now - timedelta(hours=1),
-        location_text="Cuisine",
-    )
-    _create_signal(
-        membership_b,
-        title="Kitchen south",
-        created_at=now - timedelta(hours=1),
-        location_text="Cuisine",
-    )
-
-    result = get_analytics_dashboard(user, period_days=7, now=now)
-
-    assert result.scope_type == "cross"
-    assert len(result.locations) == 2
-    assert {item.name for item in result.locations} == {"Cuisine"}
-    assert {item.establishment_name for item in result.locations} == {"Nord", "Sud"}
-    assert {item.count for item in result.locations} == {1}
+    assert len(result.locations.items) == 1
+    assert result.locations.items[0].name == "Sans localisation"
+    assert result.locations.items[0].id == "unassigned"
+    assert result.locations.items[0].count == 1
 
 
 def test_dashboard_locations_period_comparison_uses_normalized_key():
@@ -1924,8 +1743,8 @@ def test_dashboard_locations_period_comparison_uses_normalized_key():
         establishment_id=membership.establishment_id,
     )
 
-    assert len(result.locations) == 1
-    item = result.locations[0]
+    assert len(result.locations.items) == 1
+    item = result.locations.items[0]
     assert item.count == 1
     assert item.comparison.previous_value == 1
     assert item.comparison.relative_change_status == RELATIVE_CHANGE_COMPUTED
@@ -1948,7 +1767,11 @@ _LOCAL_DATABASES = {
 def test_dashboard_after_operational_cleanup_reset():
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     _award_points(membership=membership, occurred_at=timezone.now() - timedelta(hours=2))
-    stale = get_analytics_dashboard(membership.user, period_days=7)
+    stale = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        establishment_id=membership.establishment_id,
+    )
     assert stale.contributors
 
     cleanup = clean_operational_test_data(dry_run=False)
@@ -2010,7 +1833,7 @@ def test_dashboard_after_operational_cleanup_reset():
         resolution_audit={},
         candidate_expected_action=None,
     )
-    source.refresh_from_db()
+    source_id = source.id
 
     result = get_analytics_dashboard(
         membership.user,
@@ -2019,14 +1842,16 @@ def test_dashboard_after_operational_cleanup_reset():
     )
 
     assert survivor.first_action_plan_associated_at == execution.created_at
-    assert result.observation_delay_transformed.n == 1
-    assert {item.name for item in result.poles} == {"Maintenance"}
-    assert {item.name for item in result.locations} == {"Chambre 12"}
-    assert result.poles[0].count == 1
-    assert result.poles[0].comparison.coverage == COVERAGE_COMPLETE
-    assert result.locations[0].comparison.coverage == COVERAGE_COMPLETE
+    responsible = next(
+        window
+        for window in result.observation_volume["responsible"].windows
+        if window.label_key == "current"
+    )
+    assert {item.name for item in result.locations.items} == {"Chambre 12"}
+    assert {item.name for item in responsible.segments} == {"Maintenance"}
+    assert result.locations.items[0].comparison.coverage == COVERAGE_COMPLETE
     assert result.contributors == ()
-    assert source.merged_into_id == survivor.id
+    assert not Signal.objects.filter(id=source_id).exists()
 
     later = get_analytics_dashboard(
         membership.user,
@@ -2035,6 +1860,5 @@ def test_dashboard_after_operational_cleanup_reset():
         establishment_id=membership.establishment_id,
     )
     assert later.current_period.period_start >= reliable_from
-    assert later.observation_delay_resolved.comparison.coverage == COVERAGE_COMPLETE
-    assert later.operational_resolution_rate.coverage == COVERAGE_COMPLETE
+    assert later.observation_destinations["waiting"].comparison.coverage == COVERAGE_COMPLETE
 
