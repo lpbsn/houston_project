@@ -329,6 +329,7 @@ export function ActionPlanCreatePage({
       resolvedPilotBusinessUnitId,
       requiresValidation,
       saveToLibrary,
+      planningDraft,
       planningSlice,
       tasks,
       title,

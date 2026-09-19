@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { ArrowDownRight, ArrowUpRight, Download, Info } from 'lucide-react'
 
 import type {
@@ -431,16 +431,15 @@ export function ObservationVolumeCard({
     selected.windows.find((window) => window.label_key === selectedWindowKey) ??
     selected.windows.find((window) => window.label_key === CURRENT_VOLUME_WINDOW)
 
-  useEffect(() => {
-    setSelectedWindowKey(CURRENT_VOLUME_WINDOW)
-  }, [mode])
-
   return (
     <DashboardCard title="Nombre d’observations">
       <div className="mb-4 inline-flex rounded-lg bg-[#F5F4F0] p-1">
         <button
           type="button"
-          onClick={() => setMode('affected')}
+          onClick={() => {
+            setMode('affected')
+            setSelectedWindowKey(CURRENT_VOLUME_WINDOW)
+          }}
           className={cn(
             'rounded-md px-3 py-1.5 text-[12px] font-semibold',
             mode === 'affected' ? 'bg-white text-[#1a1a1a] shadow-sm' : 'text-[#7D7B75]',
@@ -450,7 +449,10 @@ export function ObservationVolumeCard({
         </button>
         <button
           type="button"
-          onClick={() => setMode('responsible')}
+          onClick={() => {
+            setMode('responsible')
+            setSelectedWindowKey(CURRENT_VOLUME_WINDOW)
+          }}
           className={cn(
             'rounded-md px-3 py-1.5 text-[12px] font-semibold',
             mode === 'responsible' ? 'bg-white text-[#1a1a1a] shadow-sm' : 'text-[#7D7B75]',
