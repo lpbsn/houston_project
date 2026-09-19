@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ArrowDownRight, ArrowUpRight, Download, Info } from 'lucide-react'
 
 import type {
@@ -36,15 +36,28 @@ import {
   formatUnevaluatedPlansNote,
   type DashboardTrendSense,
 } from '@/features/analytics/lib/dashboard-comparisons'
+import {
+  assignPoleColors,
+  destinationChartColor,
+  poleChartColor,
+} from '@/features/analytics/lib/dashboard-chart-colors'
+import {
+  barHeightPercent,
+  integerYAxis,
+  VOLUME_PLOT_HEIGHT_PX,
+  volumeSegmentLabelVisible,
+} from '@/features/analytics/lib/dashboard-chart-scale'
 import type { DashboardPeriodDays } from '@/features/analytics/lib/dashboard-url-state'
 import { cn } from '@/lib/utils'
 
-const VOLUME_LABELS: Record<string, string> = {
-  four_periods_ago: 'Il y a 4 périodes',
-  three_periods_ago: 'Il y a 3 périodes',
-  two_periods_ago: 'Il y a 2 périodes',
-  previous: 'Période précédente',
-  current: 'Période en cours',
+const CURRENT_VOLUME_WINDOW = 'current'
+
+const VOLUME_LABEL_LINES: Record<string, readonly [string, string]> = {
+  four_periods_ago: ['Il y a 4', 'périodes'],
+  three_periods_ago: ['Il y a 3', 'périodes'],
+  two_periods_ago: ['Il y a 2', 'périodes'],
+  previous: ['Période', 'précédente'],
+  current: ['Période', 'en cours'],
 }
 
 const DESTINATION_LABELS: Record<string, string> = {
@@ -57,15 +70,6 @@ const DESTINATION_LABELS: Record<string, string> = {
   canceled: 'Annulée',
 }
 
-const DESTINATION_COLORS: Record<string, string> = {
-  waiting: 'bg-[#1F7A4D]',
-  interesting: 'bg-[#111111]',
-  action_plan_in_progress: 'bg-[#3A3A3A]',
-  resolved_direct: 'bg-[#6F6F6F]',
-  resolved_via_action_plan: 'bg-[#9A9A9A]',
-  resolved_via_resolution_request: 'bg-[#C8C8C8]',
-  canceled: 'bg-[#E24B4A]',
-}
 
 const DELAY_ORDER = [
   'interesting',
@@ -82,16 +86,6 @@ const OVERRUN_LABELS: Record<string, string> = {
   from_25_to_50: 'de 25 % à moins de 50 %',
   from_50_to_100: 'de 50 % à moins de 100 %',
   gte_100: '100 % de dépassement ou plus',
-}
-
-const POLE_PALETTE = ['#1F7A4D', '#2E9A5F', '#145C38', '#0B2E1C', '#111111']
-
-function poleColor(poleId: string): string {
-  let hash = 0
-  for (const char of poleId) {
-    hash = (hash + char.charCodeAt(0)) % POLE_PALETTE.length
-  }
-  return POLE_PALETTE[hash] ?? POLE_PALETTE[0]
 }
 
 function DashboardCard({
@@ -416,8 +410,31 @@ export function ObservationVolumeCard({
   periodDays: number
 }) {
   const [mode, setMode] = useState<'affected' | 'responsible'>('affected')
+  const [selectedWindowKey, setSelectedWindowKey] = useState(CURRENT_VOLUME_WINDOW)
   const selected = volume[mode]
-  const maxTotal = Math.max(...selected.windows.map((window) => window.total), 1)
+  const windowKeys = selected.windows.map((window) => window.label_key)
+  const poleColors = useMemo(() => assignPoleColors(selected.windows), [selected.windows])
+  const maxTotal = Math.max(...selected.windows.map((window) => window.total), 0)
+  const { scaleMax, ticks } = integerYAxis(maxTotal)
+  const legend = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          selected.windows.flatMap((window) =>
+            window.segments.map((segment) => [segment.pole_id, segment.name] as const),
+          ),
+        ),
+      ),
+    [selected.windows],
+  )
+  const selectedWindow =
+    selected.windows.find((window) => window.label_key === selectedWindowKey) ??
+    selected.windows.find((window) => window.label_key === CURRENT_VOLUME_WINDOW)
+
+  useEffect(() => {
+    setSelectedWindowKey(CURRENT_VOLUME_WINDOW)
+  }, [mode])
+
   return (
     <DashboardCard title="Nombre d’observations">
       <div className="mb-4 inline-flex rounded-lg bg-[#F5F4F0] p-1">
@@ -442,45 +459,179 @@ export function ObservationVolumeCard({
           Pôle responsable
         </button>
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        {selected.windows.map((window) => (
-          <div key={window.label_key} className="min-w-0">
-            <p className="mb-2 text-center text-lg font-semibold tabular-nums">{window.total}</p>
-            <div
-              className={cn(
-                'flex h-40 flex-col-reverse overflow-hidden rounded-xl',
-                window.label_key === 'current' ? 'ring-2 ring-[#1F7A4D]' : 'bg-[#F5F4F0]',
-              )}
-            >
-              {window.segments.map((segment) => (
-                <div
-                  key={segment.pole_id}
-                  className="flex min-h-0 items-center justify-center px-1 text-center text-[10px] text-white"
-                  style={{
-                    height: `${Math.max(8, (segment.count / maxTotal) * 100)}%`,
-                    backgroundColor: poleColor(segment.pole_id),
-                  }}
-                >
-                  {segment.count} ({formatDashboardPercent(segment.share)})
-                </div>
-              ))}
-            </div>
-            <p className="mt-2 text-center text-[11px] text-[#7D7B75]">
-              {VOLUME_LABELS[window.label_key] ?? window.label_key}
-            </p>
+      <div className="min-w-0">
+        <div className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-1">
+          <div />
+          <div className="grid grid-cols-5 gap-1">
+            {selected.windows.map((window) => (
+              <p
+                key={`${window.label_key}-total`}
+                className="mb-1 text-center text-sm font-semibold tabular-nums sm:text-lg"
+              >
+                {window.total}
+              </p>
+            ))}
           </div>
-        ))}
+          <div className="relative" style={{ height: VOLUME_PLOT_HEIGHT_PX }}>
+            {ticks.map((tick) => (
+              <span
+                key={tick}
+                className="absolute right-0 -translate-y-1/2 text-[10px] leading-none text-[#7D7B75] tabular-nums"
+                style={{ bottom: scaleMax === 0 ? '0%' : `${barHeightPercent(tick, scaleMax)}%` }}
+              >
+                {tick}
+              </span>
+            ))}
+          </div>
+          <div className="relative min-w-0" style={{ height: VOLUME_PLOT_HEIGHT_PX }}>
+            {ticks.map((tick) => (
+              <div
+                key={tick}
+                className="absolute inset-x-0 border-t border-[#E8E6DF]"
+                style={{
+                  bottom:
+                    scaleMax === 0
+                      ? '0%'
+                      : `${barHeightPercent(tick, scaleMax)}%`,
+                }}
+              />
+            ))}
+            <div className="relative z-[1] grid h-full grid-cols-5 items-end gap-1.5 sm:gap-3">
+              {selected.windows.map((window) => {
+                const isSelected = selectedWindow?.label_key === window.label_key
+                return (
+                  <button
+                    key={window.label_key}
+                    type="button"
+                    aria-pressed={isSelected}
+                    aria-label={
+                      VOLUME_LABEL_LINES[window.label_key]
+                        ? VOLUME_LABEL_LINES[window.label_key].join(' ')
+                        : window.label_key
+                    }
+                    data-volume-window={window.label_key}
+                    onClick={() => setSelectedWindowKey(window.label_key)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Home' || event.key === 'End') {
+                        event.preventDefault()
+                        let nextKey = selectedWindowKey
+                        if (event.key === 'ArrowLeft') {
+                          const currentIndex = Math.max(0, windowKeys.indexOf(selectedWindowKey))
+                          nextKey = windowKeys[(currentIndex - 1 + windowKeys.length) % windowKeys.length] ?? nextKey
+                        }
+                        if (event.key === 'ArrowRight') {
+                          const currentIndex = Math.max(0, windowKeys.indexOf(selectedWindowKey))
+                          nextKey = windowKeys[(currentIndex + 1) % windowKeys.length] ?? nextKey
+                        }
+                        if (event.key === 'Home') {
+                          nextKey = windowKeys[0] ?? nextKey
+                        }
+                        if (event.key === 'End') {
+                          nextKey = windowKeys.at(-1) ?? nextKey
+                        }
+                        setSelectedWindowKey(nextKey)
+                        requestAnimationFrame(() => {
+                          const node = document.querySelector<HTMLButtonElement>(
+                            `[data-volume-window="${nextKey}"]`,
+                          )
+                          node?.focus()
+                        })
+                      }
+                    }}
+                    className="flex h-full min-w-0 w-full flex-col items-center justify-end"
+                  >
+                    <div
+                      className={cn(
+                        'flex w-full min-w-0 flex-col-reverse overflow-hidden rounded-md',
+                        isSelected && 'ring-2 ring-[#1F7A4D] ring-offset-1',
+                      )}
+                      style={{
+                        height: scaleMax === 0 ? 0 : `${barHeightPercent(window.total, scaleMax)}%`,
+                      }}
+                    >
+                      {window.segments.map((segment) => {
+                        const showLabel = volumeSegmentLabelVisible(segment.count, scaleMax)
+                        return (
+                          <span
+                            key={segment.pole_id}
+                            data-pole-id={segment.pole_id}
+                            className="flex min-h-0 w-full items-center justify-center px-0.5 text-center text-[10px] leading-tight font-semibold text-white sm:text-[11px]"
+                            style={{
+                              height:
+                                window.total === 0
+                                  ? '0%'
+                                  : `${(segment.count / window.total) * 100}%`,
+                              backgroundColor: poleChartColor(segment.pole_id, poleColors),
+                            }}
+                          >
+                            {showLabel
+                              ? `${segment.count} (${formatDashboardPercent(segment.share)})`
+                              : null}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          <div />
+          <div className="mt-2 grid grid-cols-5 gap-1">
+            {selected.windows.map((window) => {
+              const lines = VOLUME_LABEL_LINES[window.label_key]
+              return (
+                <p
+                  key={`${window.label_key}-label`}
+                  className={cn(
+                    'text-center text-[10px] leading-tight text-[#7D7B75] sm:text-[11px]',
+                    window.label_key === 'current' && 'font-semibold text-[#1a1a1a]',
+                  )}
+                >
+                  {lines ? (
+                    <>
+                      {lines[0]}
+                      <br />
+                      {lines[1]}
+                    </>
+                  ) : (
+                    window.label_key
+                  )}
+                </p>
+              )
+            })}
+          </div>
+        </div>
       </div>
+      {selectedWindow ? (
+        <ul
+          className="mt-3 rounded-xl bg-[#F5F4F0] px-3 py-2 text-[12px] text-[#7D7B75]"
+          data-volume-detail={selectedWindow.label_key}
+        >
+          {selectedWindow.segments.map((segment) => (
+            <li key={segment.pole_id} className="flex items-center justify-between gap-3 py-0.5">
+              <span className="inline-flex min-w-0 items-center gap-1.5">
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                  style={{ backgroundColor: poleChartColor(segment.pole_id, poleColors) }}
+                />
+                <span className="truncate">{segment.name}</span>
+              </span>
+              <span className="shrink-0 tabular-nums">
+                {segment.count} ({formatDashboardPercent(segment.share)})
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <div className="mt-4 flex flex-wrap gap-3 text-[12px] text-[#7D7B75]">
-        {Array.from(
-          new Map(
-            selected.windows.flatMap((window) =>
-              window.segments.map((segment) => [segment.pole_id, segment.name] as const),
-            ),
-          ),
-        ).map(([poleId, name]) => (
+        {legend.map(([poleId, name]) => (
           <span key={poleId} className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: poleColor(poleId) }} />
+            <span
+              className="h-2.5 w-2.5 rounded-sm"
+              data-legend-pole-id={poleId}
+              style={{ backgroundColor: poleChartColor(poleId, poleColors) }}
+            />
             {name}
           </span>
         ))}
@@ -509,6 +660,10 @@ export function ObservationDestinationsCard({
   periodDays: number
 }) {
   const keys = Object.keys(DESTINATION_LABELS)
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const selectedLabel = selectedKey ? DESTINATION_LABELS[selectedKey] : null
+  const selectedItem = selectedKey ? destinations[selectedKey] : null
+
   return (
     <DashboardCard title="Destination des observations">
       <div className="flex h-3.5 overflow-hidden rounded-full bg-[#F0EFE9]">
@@ -517,25 +672,49 @@ export function ObservationDestinationsCard({
           if (share <= 0) {
             return null
           }
+          const color = destinationChartColor(key)
           return (
-            <span
+            <button
               key={key}
-              className={DESTINATION_COLORS[key]}
-              style={{ width: `${share * 100}%` }}
+              type="button"
+              aria-pressed={selectedKey === key}
+              aria-label={`${DESTINATION_LABELS[key]} ${formatDashboardPercent(share)}`}
+              className="h-full min-w-0 p-0"
+              style={{ width: `${share * 100}%`, backgroundColor: color }}
+              onClick={() => setSelectedKey((current) => (current === key ? null : key))}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  setSelectedKey(null)
+                }
+              }}
             />
           )
         })}
       </div>
+      {selectedLabel && selectedItem ? (
+        <p className="mt-2 text-[12px] text-[#7D7B75]">
+          <span
+            className="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm align-middle"
+            style={{ backgroundColor: destinationChartColor(selectedKey) }}
+          />
+          {selectedLabel} · {formatDashboardPercent(selectedItem.share)}
+        </p>
+      ) : null}
       <ul className="mt-4 flex flex-col gap-2">
         {keys.map((key) => {
           const item = destinations[key]
           if (!item) {
             return null
           }
+          const color = destinationChartColor(key)
           return (
             <li key={key} className="flex items-center justify-between gap-3 text-sm">
               <span className="inline-flex items-center gap-2 text-[#7D7B75]">
-                <span className={cn('h-2.5 w-2.5 rounded-sm', DESTINATION_COLORS[key])} />
+                <span
+                  className="h-2.5 w-2.5 rounded-sm"
+                  data-destination-swatch={key}
+                  style={{ backgroundColor: color }}
+                />
                 {DESTINATION_LABELS[key]}
               </span>
               <span className="flex items-center gap-2">

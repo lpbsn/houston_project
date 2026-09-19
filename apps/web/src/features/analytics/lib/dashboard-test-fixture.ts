@@ -64,6 +64,57 @@ function volume(coverage: AnalyticsDashboardMetricComparison['coverage'] = 'comp
   }
 }
 
+export function observationVolumeChartFixture(): AnalyticsDashboardResponse['observation_volume'] {
+  return {
+    affected: {
+      windows: [
+        { offset: -4, label_key: 'four_periods_ago', total: 0, segments: [] },
+        {
+          offset: -3,
+          label_key: 'three_periods_ago',
+          total: 3,
+          segments: [
+            { pole_id: 'salle', name: 'Salle', count: 2, share: 2 / 3 },
+            { pole_id: 'unassigned', name: 'Sans pôle', count: 1, share: 1 / 3 },
+          ],
+        },
+        {
+          offset: -2,
+          label_key: 'two_periods_ago',
+          total: 4,
+          segments: [
+            { pole_id: 'salle', name: 'Salle', count: 3, share: 0.75 },
+            { pole_id: 'cuisine', name: 'Cuisine', count: 1, share: 0.25 },
+          ],
+        },
+        {
+          offset: -1,
+          label_key: 'previous',
+          total: 5,
+          segments: [
+            { pole_id: 'salle', name: 'Salle', count: 2, share: 0.4 },
+            { pole_id: 'cuisine', name: 'Cuisine', count: 2, share: 0.4 },
+            { pole_id: 'unassigned', name: 'Sans pôle', count: 1, share: 0.2 },
+          ],
+        },
+        {
+          offset: 0,
+          label_key: 'current',
+          total: 6,
+          segments: [
+            { pole_id: 'salle', name: 'Salle', count: 3, share: 0.5 },
+            { pole_id: 'cuisine', name: 'Cuisine', count: 2, share: 1 / 3 },
+            { pole_id: 'unassigned', name: 'Sans pôle', count: 1, share: 1 / 6 },
+          ],
+        },
+      ],
+      current_total: 6,
+      comparison: dashboardComparison(6, 'complete', 0.2),
+    },
+    responsible: volume(),
+  }
+}
+
 export function dashboardResponseFixture(
   overrides: Partial<AnalyticsDashboardResponse> = {},
 ): AnalyticsDashboardResponse {
