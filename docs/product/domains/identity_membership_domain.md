@@ -1,8 +1,8 @@
 # Identity / Membership Domain
 
 Status: authoritative
-Last reviewed: 2026-05-27
-Implementation status: implemented for Phase 1
+Last reviewed: 2026-09-19
+Implementation status: implemented for Phase 1. **Spore Platform V1 is planned, not implemented.** Current product APIs remain membership-scoped. Target: [`edb_plateforme_interne_spore_v1-3.md`](../../cadrage/edb_plateforme_interne_spore_v1-3.md).
 
 ## 1. Purpose
 
@@ -34,9 +34,9 @@ This domain owns global user identity, organization and establishment membership
 - Advanced organization hierarchy.
 - Complex multi-establishment workspace UX.
 - Fine-grained RBAC matrices.
-- Arbitrary admin browsing across tenants.
-- Cross-tenant access.
-- Public signup.
+- Arbitrary admin browsing across tenants **in the current product APIs**.
+- Cross-tenant access **via `EstablishmentMembership` or a global `User`**.
+- Public signup (current: invite-code owner registration; Platform V1 target removes that entry — see below).
 - Old-stack implementation assumptions or terminology.
 
 ## 4. Core Invariants
@@ -47,9 +47,22 @@ This domain owns global user identity, organization and establishment membership
 - Backend enforces establishment scoping and all access checks.
 - Frontend state cannot grant permissions.
 - Role and operational périmètre (`MembershipScope`) are membership-scoped, not global user attributes.
-- No product API may expose data outside establishments visible through valid memberships.
+- No **current** product API may expose data outside establishments visible through valid memberships.
 - Establishment switching must not bypass backend authorization.
 - A selected establishment context must always be backed by a valid active membership.
+
+## 4.1 Target — Spore Platform V1 (not implemented)
+
+Functional need: [`edb_plateforme_interne_spore_v1-3.md`](../../cadrage/edb_plateforme_interne_spore_v1-3.md). Architecture constraints (do not treat as live):
+
+- Platform authorization is **not** an `EstablishmentMembership` and is **not** `User.is_staff`. It is an independent operator grant, checked on every Platform request.
+- Platform metadata reads (orgs, establishments, users, memberships) are a **separate HTTP surface**. They must not be implemented by weakening tenant selectors or `HasActiveMembership`.
+- Starting onboarding from Platform creates organization + draft establishment **without** creating a membership for the operator. The operator may already have unrelated tenant memberships; those must not authorize Platform and Platform must not extend them.
+- Owner/Director invitations during onboarding remain identity/membership writes (invited memberships, accept path). They are **not** Platform user administration. After incomplete-onboarding cleanup, invitations and establishment memberships of that establishment go away; `User` rows remain.
+- « Organization never operational » cannot be inferred from `Organization.status` (today default `active`). Target: a sticky persistent flag set when an establishment first becomes `active`, never cleared.
+- Cutover target: Platform is the **only** onboarding entry. Current `POST /api/v1/auth/register/` invite-code provisioning and `POST /api/v1/establishments/` owner provision are to be **removed**, not left as permanent 403 stubs.
+
+Until that cutover ships, the current register / owner-led provision behavior in §9 remains the implementation truth.
 
 ## 5. Main Objects
 
@@ -178,4 +191,5 @@ Candidate endpoints only: none currently listed for identity/password.
 - Do not claim invitations, password reset, membership management, or switch endpoints are implemented without schema proof.
 - Do not document Django `request.session["current_establishment_id"]` as public auth-session authority.
 - Do not introduce old-stack terminology.
+- Do not implement Platform by adding a tenant-permission bypass. Do not claim Platform APIs exist until they are in `apps/api/schema.yml`.
 - For auth and session mechanics, read `docs/architecture/authentication_charter.md`.

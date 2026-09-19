@@ -1,8 +1,8 @@
 # RBAC / Permissions Domain
 
 Status: authoritative
-Last reviewed: 2026-09-16
-Implementation status: implemented (Action Plan RBAC in [`action_plans/permissions.py`](../../../apps/api/houston/action_plans/permissions.py); legacy Action/Checklist domains removed Lot 10)
+Last reviewed: 2026-09-19
+Implementation status: implemented (Action Plan RBAC in [`action_plans/permissions.py`](../../../apps/api/houston/action_plans/permissions.py); legacy Action/Checklist domains removed Lot 10). **Spore Platform V1 authorization is planned, not implemented.**
 
 ## 1. Purpose
 
@@ -37,7 +37,7 @@ Identity, organization, establishment, membership lifecycle, and membership sele
   - **Domain services** own business matrices (active BusinessUnit, Owner/Director without scope rows, invite/manage rules). A database constraint does not replace those checks.
   - **DRF default** is deny-by-omission (`DenyByDefault`). Omitting `permission_classes` refuses access, including for an authenticated bearer. Intentionally unauthenticated routes opt in with `AllowAny`; the closed public allowlist is enforced by the urlconf inventory test, not a second permission registry.
   - **Surface permissions** decide HTTP entry for a given context. Path-scoped establishment/organization admin is decided **once** per request (`decide_active_establishment_admin_access` / `decide_organization_admin_access`); the view reads the attached actor or organization. `HasActiveMembership` remains a coarse session gate, not a substitute for object rules.
-- Platform Admin (not implemented) is **not** an `EstablishmentMembership` role and **must not** add an implicit tenant bypass on `HasActiveMembership` or `CanAccessEstablishmentAdmin`.
+- Platform operator access (**not implemented**) is **not** an `EstablishmentMembership` role. When implemented, it **must not** add an implicit tenant bypass on `HasActiveMembership` or `CanAccessEstablishmentAdmin`. Tenant domain code must not import Platform permissions. Authenticated non-operators calling `/api/v1/platform/*` must receive **403** from the Platform permission class, not a missing-route 404. An operator with separate tenant memberships keeps those memberships for client APIs only.
 - Every establishment-scoped operation requires an active membership plus an active user, active establishment, and active organization.
 - Backend validates authorization on every request. Frontend visibility never grants access.
 - Object-level authorization is mandatory for both reads and writes.
@@ -224,7 +224,8 @@ Target API convention from active product docs, not yet confirmed by current pub
 - Inspect [identity_membership_domain.md](/Users/leobsn/Desktop/houston_project/docs/product/domains/identity_membership_domain.md) before changing membership assumptions.
 - Do not move role or BusinessUnit scope onto `User`.
 - Do not treat the UI as the authorization authority.
-- Do not expose cross-establishment resources.
+- Do not expose cross-establishment resources **on tenant APIs**.
+- Do not implement Platform as a super-membership or `is_staff` check on tenant views.
 - Do not add a giant permission matrix unless explicitly requested and separately validated.
 - Do not introduce an external policy engine in MVP.
 - Do not claim candidate endpoints or events are implemented.

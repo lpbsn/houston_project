@@ -1,14 +1,20 @@
 # Runtime Config / Onboarding Domain
 
 Status: authoritative
-Last reviewed: 2026-07-27
-Implementation status: **Lot 1 draft/complete additive** — target path is `OnboardingDraft` + `POST …/complete/`. Legacy `onboarding_proposal_v4` apply → invite → mark-ready → activate remains available until Lot 3. AI onboarding is permanently removed from Houston product scope (Lot 6).
+Last reviewed: 2026-09-19
+Implementation status: **current product** — Lot 1 draft/complete additive; owner-led entry via register / `POST /api/v1/establishments/` / `/api/v1/onboarding-sessions/`. Legacy `onboarding_proposal_v4` remains until Lot 3. AI onboarding is permanently removed (Lot 6).
+
+**Spore Platform V1 is planned, not implemented.** Functional target: [`edb_plateforme_interne_spore_v1-3.md`](../../cadrage/edb_plateforme_interne_spore_v1-3.md). Do not read the current owner-led HTTP surface as the Platform target.
 
 ## 1. Purpose
 
 This domain initializes and later evolves the establishment-scoped runtime structure Houston uses for operational workflows.
 
-Public onboarding/runtime API is implemented. Authoritative contract: [`apps/api/schema.yml`](../../../apps/api/schema.yml) (paths under `/api/v1/onboarding-sessions/`). Runtime onboarding uses BusinessUnit / ActivitySubject manual flow only.
+Public onboarding/runtime API **as implemented today**: [`apps/api/schema.yml`](../../../apps/api/schema.yml) (paths under `/api/v1/onboarding-sessions/`). Runtime onboarding uses BusinessUnit / ActivitySubject manual flow only.
+
+**Current entry (live):** invite-code `POST /api/v1/auth/register/` provisions org + draft establishment + Owner membership; additional drafts via `POST /api/v1/establishments/` for a manageable Owner; wizard is Owner-only on DRAFT. Login CTA and unauthenticated `/onboarding` exist in the Web app.
+
+**Target entry (Platform V1, not live):** only Spore Platform on desktop Web. Operator runs the entire wizard. Owner/Director only accept invitation and activate their account; they never open the wizard. Activation remains blocked until at least one Owner or Director membership is `ACTIVE` (`missing_active_owner_or_director`). Functional display states, first match wins: `activated`, `error`, `ready_to_complete`, `waiting_acceptance`, `in_progress`. Authorization for Platform HTTP is outside this domain’s `get_onboarding_access_context`. Onboarding writes go through an authz-free core called by a Platform wrapper; after cutover the tenant onboarding HTTP wrapper is removed if it has no callers.
 
 Domain boundaries:
 - Identity / Membership owns `User`, `Organization`, `Establishment`, and `EstablishmentMembership` lifecycle.
@@ -141,14 +147,25 @@ Proposal parent/child coherence follows BU/AS hierarchy rules in [`business_unit
 
 ## 7. Permissions
 
-- **DRAFT onboarding is owner-led (MVP):** only **Owner** may configure proposals, wizard steps, and runtime setup while the establishment is `DRAFT` (`can_configure_runtime` owner-only on draft).
-- **Director** is required for activation minimum (non-owner director membership) but **cannot complete the draft wizard** in MVP — intervenes on invitation accept and the activation path as documented.
-- **Director-led onboarding** (director completes draft setup) is a **post-MVP** product variant; not supported without access-model change.
-- Owner and Director are the product-level actors who validate and activate runtime setup.
+**Current implementation:**
+
+- **DRAFT onboarding is owner-led:** only **Owner** may configure the wizard while the establishment is `DRAFT` (`can_configure_runtime` owner-only on draft via `get_onboarding_access_context`).
+- **Director** is required for activation minimum (non-owner director membership) but **cannot complete the draft wizard** today — invitation accept only.
+- Owner and Director validate/activate runtime setup on the current tenant path.
 - Managers may modify some runtime context post-activation only when RBAC allows it.
-- Staff does not configure, validate, or activate onboarding/runtime setup in MVP.
-- Backend permission checks are mandatory for validation, activation, rerun, and post-activation mutation.
-- Pilot onboarding may be operationally supported by Houston/FloorPower admin plus Owner/Director, but this is not a validated public product permission contract.
+- Staff does not configure, validate, or activate onboarding/runtime setup.
+- Backend permission checks are mandatory for validation, activation, and post-activation mutation.
+- Informal Houston/FloorPower operational support is **not** a public product permission contract.
+
+**Target — Platform V1 (not implemented):**
+
+- Tenant permissions (`get_onboarding_access_context`, `resolve_manageable_organization`, `invite_membership_for_establishment` actor membership) **must not** learn about Platform operators.
+- Extract an onboarding/invite/activation **core with no authorization**. Tenant wrappers (until cutover) and Platform wrappers call that core separately.
+- Platform operator is the only actor who starts, edits, resumes, or completes the wizard. Completing still requires the shared readiness gate including `missing_active_owner_or_director`.
+- Owner/Director invitations are allowed **only** as onboarding steps (not Platform user admin, not client-started wizard).
+- After cutover, remove owner-led HTTP create/register/onboarding writes and any leftover tenant onboarding wrapper with no callers.
+
+Director-led wizard (director fills draft setup) remains **out of product** unless separately recadred.
 
 ## 8. Events
 
@@ -185,9 +202,11 @@ Post-activation establishment runtime mutations (active establishments) under `/
 
 ## 10. Frontend Expectations
 
+**Current:** owner-led `/onboarding` (including unauthenticated register), `/pending-onboarding`, AppShell / cream onboarding shell.
+
+**Target — Platform V1 (not implemented):** wizard only under Platform on **desktop Web** (`isDesktopWeb`). No Platform chrome on native or non-desktop Web. Invited Owner/Director use invitation accept only, never the wizard. List/detail diagnostics show the functional states in §1, not draft payload.
+
 - Onboarding should be guided and section-based rather than a raw configuration dump.
-- UI should support accept, edit, reject, and **item-level add/remove** for BusinessUnit / ActivitySubject proposal sections.
-- UI must clearly distinguish draft proposals from validated active runtime state.
 - UI must not treat activation as complete until backend confirmation is returned.
 - TanStack Query owns runtime/onboarding server state.
 - Frontend must use generated API clients only for endpoints confirmed in OpenAPI.
@@ -197,6 +216,8 @@ Post-activation establishment runtime mutations (active establishments) under `/
 - Inspect `apps/api/schema.yml` before claiming any runtime/onboarding endpoint is implemented.
 - Inspect `identity_membership_domain.md` before changing `Organization`, `Establishment`, or membership assumptions.
 - Inspect `rbac_permissions_domain.md` before changing who can validate, activate, rerun, or edit runtime setup.
+- Do not add Platform checks inside `get_onboarding_access_context`.
+- Do not claim Platform onboarding APIs are implemented without `schema.yml`.
 - Inspect [`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md) before changing hierarchy or keys.
 - Do not implement Signal, Feed, or Observation pipeline code in onboarding phases.
 - Do not let non-authorized clients activate runtime elements directly.

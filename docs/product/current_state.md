@@ -126,3 +126,5 @@ Preserved names (do not rename without explicit decision):
 2. Domain docs under [`domains/`](domains/) — start with [`domains/business_unit_taxonomy_domain.md`](domains/business_unit_taxonomy_domain.md) for BU/AS
 3. [`decisions/action_plan.md`](decisions/action_plan.md) — action plan RBAC and schedules  
 4. [`../engineering/local_development.md`](../engineering/local_development.md) — daily workflow
+
+**Planned, not live:** Spore Platform V1 (internal control plane). Functional target [`../cadrage/edb_plateforme_interne_spore_v1-3.md`](../cadrage/edb_plateforme_interne_spore_v1-3.md). Current product onboarding remains owner-led (`/onboarding`, invite codes). This file does not describe Platform as implemented.
