@@ -164,7 +164,7 @@ def test_qualify_signal_routing_merge_does_not_reclassify_source_or_unchanged_su
         role=EstablishmentMembership.Role.OWNER,
     )
     focus = normalize_issue_focus("stock")
-    survivor = create_resolved_signal(
+    create_resolved_signal(
         membership,
         bar,
         subject,

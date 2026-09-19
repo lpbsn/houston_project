@@ -7,7 +7,6 @@ import pytest
 from celery.exceptions import Retry
 from django.utils import timezone
 
-from houston.analytics.models import SignalPatternAssignment
 from houston.analytics.services import (
     PatternClassificationRetryableError,
     mark_assignment_processing,

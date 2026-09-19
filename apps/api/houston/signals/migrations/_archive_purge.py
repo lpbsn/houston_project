@@ -6,7 +6,6 @@ The leading underscore keeps Django from treating this module as a migration.
 
 from __future__ import annotations
 
-import json
 import uuid
 from typing import Any
 

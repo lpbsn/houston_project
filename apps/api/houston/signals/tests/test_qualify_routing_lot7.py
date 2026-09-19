@@ -32,7 +32,6 @@ from houston.signals.services import (
 from houston.signals.tests.conftest import (
     auth_headers,
     build_api_membership,
-    create_minimal_v3_signal,
     create_observation,
     create_restaurant_v3_taxonomy,
     login,

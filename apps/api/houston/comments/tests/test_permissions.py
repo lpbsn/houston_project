@@ -18,7 +18,6 @@ from houston.comments.services import (
 )
 from houston.comments.tests.conftest import build_api_membership
 from houston.establishments.models import EstablishmentMembership
-from houston.signals.models import Signal
 from houston.testing.auth import (
     assign_business_unit_scope,
     build_api_membership_on_establishment,

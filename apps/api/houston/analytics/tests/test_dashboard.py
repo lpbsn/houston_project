@@ -9,7 +9,6 @@ from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from houston.action_plans.constants import EXECUTION_STATUS_DONE
 from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.services import create_action_plan_with_execution
 from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
@@ -44,17 +43,10 @@ from houston.gamification.constants import (
 from houston.gamification.models import PointTransaction
 from houston.gamification.selectors import get_active_season
 from houston.gamification.services import open_season
-from houston.signals.constants import (
-    SIGNAL_LIFECYCLE_EVENT_CANCELED,
-    SIGNAL_LIFECYCLE_EVENT_CREATED,
-    SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
-    SIGNAL_LIFECYCLE_EVENT_RESOLVED,
-)
-from houston.signals.lifecycle_events import record_signal_lifecycle_event
 from houston.signals.models import Signal, SignalResolutionRequest
 from houston.signals.services import merge_signal_into_resolved, qualify_signal_routing
 from houston.testing.auth import auth_headers, build_api_membership, login
-from houston.testing.factories import create_establishment, create_membership, create_user
+from houston.testing.factories import create_establishment, create_membership
 from houston.testing.taxonomy import (
     create_activity_subject,
     create_business_unit,
@@ -447,7 +439,11 @@ def test_real_pattern_merged_into_split_created_can_appear():
         now=now,
         establishment_id=membership.establishment_id,
     )
-    item = next(row for row in result.new_patterns.items if row.pattern_id == split.target_pattern.id)
+    item = next(
+        row
+        for row in result.new_patterns.items
+        if row.pattern_id == split.target_pattern.id
+    )
     assert item.first_seen_at == seen
 
 

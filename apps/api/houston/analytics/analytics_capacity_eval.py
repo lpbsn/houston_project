@@ -779,7 +779,11 @@ def _build_read_scenarios(
         scenarios.append(
             (
                 f"patterns_{days}d_page1",
-                view_request(AnalyticsPatternListView, "/api/v1/analytics/patterns/", patterns_query),
+                view_request(
+                    AnalyticsPatternListView,
+                    "/api/v1/analytics/patterns/",
+                    patterns_query,
+                ),
             )
         )
 
