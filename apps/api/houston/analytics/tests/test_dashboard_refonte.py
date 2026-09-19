@@ -268,6 +268,187 @@ def test_in_progress_delay_uses_second_cycle_not_first_plan():
     assert delay.mean_seconds == pytest.approx((second_plan - created).total_seconds())
 
 
+def test_in_progress_delay_uses_first_plan_association_before_single_move():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    apply_analytics_history_cutover(now=now - timedelta(days=30))
+    created = now - timedelta(days=2)
+    associated_at = created + timedelta(hours=1)
+    moved_at = created + timedelta(hours=3)
+    signal = _create_signal(
+        membership, title="First cycle", created_at=created, status=Signal.Status.IN_PROGRESS
+    )
+    _event(
+        signal,
+        SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS,
+        moved_at,
+        to_status=Signal.Status.IN_PROGRESS,
+    )
+    signal.first_action_plan_associated_at = associated_at
+    signal.save(update_fields=["first_action_plan_associated_at", "updated_at"])
+    result = _dashboard(membership, now=now)
+    delay = result.observation_destination_delays[DESTINATION_ACTION_PLAN_IN_PROGRESS]
+    assert delay.n == 1
+    assert delay.mean_seconds == pytest.approx((associated_at - created).total_seconds())
+
+
+def test_resolved_mix_keeps_first_cycle_origin_after_moved_open_and_plan_resolve():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    reset_history_reliable_from(now=now - timedelta(days=40))
+    created = now - timedelta(days=6)
+    first_resolved = created + timedelta(hours=2)
+    period_a_end = created + timedelta(hours=4)
+    reopen = now - timedelta(days=2)
+    second_resolved = now - timedelta(days=1)
+    signal = _create_signal(
+        membership, title="Manual then plan", created_at=created, status=Signal.Status.RESOLVED
+    )
+    _event(
+        signal,
+        SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+        first_resolved,
+        to_status=Signal.Status.RESOLVED,
+        resolution_origin=SIGNAL_RESOLUTION_ORIGIN_MANUAL,
+    )
+    _event(
+        signal,
+        SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
+        reopen,
+        to_status=Signal.Status.OPEN,
+    )
+    _event(
+        signal,
+        SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+        second_resolved,
+        to_status=Signal.Status.RESOLVED,
+        resolution_origin=SIGNAL_RESOLUTION_ORIGIN_ACTION_PLAN,
+    )
+    Signal.objects.filter(pk=signal.pk).update(
+        status=Signal.Status.RESOLVED,
+        resolution_origin=SIGNAL_RESOLUTION_ORIGIN_ACTION_PLAN,
+        resolved_at=second_resolved,
+    )
+    historical = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=period_a_end,
+        establishment_id=membership.establishment_id,
+    )
+    current = _dashboard(membership, now=now)
+    assert historical.observation_destinations[DESTINATION_RESOLVED_DIRECT].count == 1
+    assert historical.observation_destinations[DESTINATION_RESOLVED_VIA_ACTION_PLAN].count == 0
+    assert current.observation_destinations[DESTINATION_RESOLVED_VIA_ACTION_PLAN].count == 1
+    assert current.observation_destinations[DESTINATION_RESOLVED_DIRECT].count == 0
+
+
+def test_resolved_mix_keeps_first_cycle_origin_after_moved_in_progress_reopen():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    reset_history_reliable_from(now=now - timedelta(days=40))
+    created = now - timedelta(days=6)
+    first_resolved = created + timedelta(hours=2)
+    period_a_end = created + timedelta(hours=4)
+    reopen = now - timedelta(days=2)
+    second_resolved = now - timedelta(days=1)
+    signal = _create_signal(
+        membership,
+        title="Manual then execution reopen",
+        created_at=created,
+        status=Signal.Status.RESOLVED,
+    )
+    _event(
+        signal,
+        SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+        first_resolved,
+        to_status=Signal.Status.RESOLVED,
+        resolution_origin=SIGNAL_RESOLUTION_ORIGIN_MANUAL,
+    )
+    _event(
+        signal,
+        SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS,
+        reopen,
+        to_status=Signal.Status.IN_PROGRESS,
+    )
+    _event(
+        signal,
+        SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+        second_resolved,
+        to_status=Signal.Status.RESOLVED,
+        resolution_origin=SIGNAL_RESOLUTION_ORIGIN_ACTION_PLAN,
+    )
+    Signal.objects.filter(pk=signal.pk).update(
+        status=Signal.Status.RESOLVED,
+        resolution_origin=SIGNAL_RESOLUTION_ORIGIN_ACTION_PLAN,
+        resolved_at=second_resolved,
+    )
+    historical = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=period_a_end,
+        establishment_id=membership.establishment_id,
+    )
+    current = _dashboard(membership, now=now)
+    assert historical.observation_destinations[DESTINATION_RESOLVED_DIRECT].count == 1
+    assert historical.observation_destinations[DESTINATION_RESOLVED_VIA_ACTION_PLAN].count == 0
+    assert current.observation_destinations[DESTINATION_RESOLVED_VIA_ACTION_PLAN].count == 1
+    assert current.observation_destinations[DESTINATION_RESOLVED_DIRECT].count == 0
+
+
+def test_unclassified_resolved_origin_is_excluded_from_mix_and_shares():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    apply_analytics_history_cutover(now=now - timedelta(days=30))
+    created = now - timedelta(days=1)
+    _create_signal(membership, title="Waiting classified", created_at=created)
+    missing = _create_signal(
+        membership, title="Resolved no origin", created_at=created, status=Signal.Status.RESOLVED
+    )
+    _event(
+        missing,
+        SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+        created + timedelta(hours=1),
+        to_status=Signal.Status.RESOLVED,
+    )
+    garbage = _create_signal(
+        membership, title="Resolved garbage origin", created_at=created, status=Signal.Status.RESOLVED
+    )
+    _event(
+        garbage,
+        SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+        created + timedelta(hours=1),
+        to_status=Signal.Status.RESOLVED,
+        resolution_origin="not-an-origin",
+    )
+    Signal.objects.filter(pk=garbage.pk).update(resolution_origin="not-an-origin")
+    result = _dashboard(membership, now=now)
+    destinations = result.observation_destinations
+    assert destinations[DESTINATION_WAITING].count == 1
+    assert destinations[DESTINATION_RESOLVED_DIRECT].count == 0
+    assert destinations[DESTINATION_RESOLVED_VIA_ACTION_PLAN].count == 0
+    assert destinations[DESTINATION_RESOLVED_VIA_RESOLUTION_REQUEST].count == 0
+    classified = sum(item.count for item in destinations.values())
+    assert classified == 1
+    assert destinations[DESTINATION_WAITING].share == pytest.approx(1.0)
+
+
+def test_cutover_allowlisted_origin_classifies_resolved_mix():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    created = now - timedelta(days=1)
+    resolved_at = created + timedelta(hours=2)
+    signal = _create_signal(
+        membership, title="Cutover resolved origin", created_at=created, status=Signal.Status.RESOLVED
+    )
+    Signal.objects.filter(pk=signal.pk).update(
+        resolved_at=resolved_at,
+        resolution_origin=SIGNAL_RESOLUTION_ORIGIN_MANUAL,
+    )
+    apply_analytics_history_cutover(now=now - timedelta(days=30))
+    result = _dashboard(membership, now=now)
+    assert result.observation_destinations[DESTINATION_RESOLVED_DIRECT].count == 1
+
+
 def test_deadline_uses_marked_done_snapshot_and_excludes_missing_start_at():
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     now = timezone.now()

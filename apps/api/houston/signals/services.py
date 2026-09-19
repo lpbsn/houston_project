@@ -62,6 +62,7 @@ from houston.signals.constants import (
     SIGNAL_LIFECYCLE_EVENT_RESOLVED,
     SIGNAL_RESOLUTION_ORIGIN_ACTION_PLAN,
     SIGNAL_RESOLUTION_ORIGIN_MANUAL,
+    SIGNAL_RESOLUTION_ORIGIN_VALUES,
     STRUCTURED_SUMMARY_SHORT_MAX_LENGTH,
 )
 from houston.signals.exceptions import (
@@ -1610,7 +1611,7 @@ def _transition_active_signal_to_terminal(
         update_fields.extend(
             ["resolved_by_membership", "resolved_at", "resolution_origin"]
         )
-        if resolution_origin is not None:
+        if resolution_origin in SIGNAL_RESOLUTION_ORIGIN_VALUES:
             metadata_safe["resolution_origin"] = resolution_origin
     elif target_status == Signal.Status.CANCELED:
         locked_self.canceled_by_membership = actor_membership

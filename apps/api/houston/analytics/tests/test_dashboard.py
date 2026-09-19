@@ -18,6 +18,7 @@ from houston.analytics.dashboard import get_analytics_dashboard
 from houston.analytics.journal import COVERAGE_COMPLETE
 from houston.analytics.models import (
     AnalyticsHistoryCoverage,
+    OperationalPattern,
     PatternEstablishmentSighting,
     SignalPatternAssignment,
 )
@@ -490,6 +491,193 @@ def test_real_pattern_outside_period_merged_into_split_created_is_absent():
     assert split.target_pattern is not None
     assert split.target_pattern.id not in {row.pattern_id for row in result.new_patterns.items}
     assert "Split vessel" not in _new_pattern_names(result)
+
+
+def test_historical_assignment_outside_volume_windows_is_not_new_pattern():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    earlier = now - timedelta(days=40)
+    pattern = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Long-lived motif",
+        created_by_membership=membership,
+        occurred_at=earlier,
+    )
+    _assign(
+        _create_signal(membership, title="Historical", created_at=earlier),
+        pattern,
+        assigned_at=earlier,
+    )
+    _assign(
+        _create_signal(membership, title="Fresh", created_at=now - timedelta(days=1)),
+        pattern,
+        assigned_at=now - timedelta(hours=1),
+    )
+
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
+    assert "Long-lived motif" not in _new_pattern_names(result)
+
+
+def test_source_assignment_survives_merge_chain_outside_period():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    earlier = now - timedelta(days=20)
+    pattern_a = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Chain A",
+        created_by_membership=membership,
+        occurred_at=earlier,
+    )
+    pattern_b = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Chain B",
+        created_by_membership=membership,
+        occurred_at=earlier,
+    )
+    pattern_c = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Chain C",
+        created_by_membership=membership,
+        occurred_at=now - timedelta(days=1),
+    )
+    _succeed_assign(
+        _create_signal(membership, title="On A", created_at=earlier),
+        pattern_a,
+        assigned_at=earlier,
+    )
+    _succeed_assign(
+        _create_signal(membership, title="On C", created_at=now - timedelta(days=1)),
+        pattern_c,
+        assigned_at=now - timedelta(days=1),
+    )
+    merge_operational_patterns(
+        actor_membership=membership,
+        source_pattern=pattern_a,
+        target_pattern=pattern_b,
+        occurred_at=now - timedelta(hours=2),
+    )
+    merge_operational_patterns(
+        actor_membership=membership,
+        source_pattern=pattern_b,
+        target_pattern=pattern_c,
+        occurred_at=now - timedelta(hours=1),
+    )
+
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
+    assert pattern_c.id not in {row.pattern_id for row in result.new_patterns.items}
+    assert "Chain C" not in _new_pattern_names(result)
+
+
+def test_merge_chain_first_seen_on_source_uses_terminal_when_in_period():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    seen = now - timedelta(days=2)
+    pattern_a = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="In-period A",
+        created_by_membership=membership,
+        occurred_at=seen,
+    )
+    pattern_b = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="In-period B",
+        created_by_membership=membership,
+        occurred_at=seen,
+    )
+    pattern_c = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="In-period C",
+        created_by_membership=membership,
+        occurred_at=now - timedelta(hours=3),
+    )
+    _succeed_assign(
+        _create_signal(membership, title="On A", created_at=seen),
+        pattern_a,
+        assigned_at=seen,
+    )
+    merge_operational_patterns(
+        actor_membership=membership,
+        source_pattern=pattern_a,
+        target_pattern=pattern_b,
+        occurred_at=now - timedelta(hours=2),
+    )
+    merge_operational_patterns(
+        actor_membership=membership,
+        source_pattern=pattern_b,
+        target_pattern=pattern_c,
+        occurred_at=now - timedelta(hours=1),
+    )
+
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
+    item = next(row for row in result.new_patterns.items if row.pattern_id == pattern_c.id)
+    assert item.first_seen_at == seen
+    assert "In-period A" not in _new_pattern_names(result)
+    assert "In-period B" not in _new_pattern_names(result)
+
+
+def test_assignment_still_on_source_follows_two_hop_terminal():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    earlier = now - timedelta(days=20)
+    pattern_a = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Stuck A",
+        created_by_membership=membership,
+        occurred_at=earlier,
+    )
+    pattern_b = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Stuck B",
+        created_by_membership=membership,
+        occurred_at=earlier,
+    )
+    pattern_c = create_operational_pattern(
+        organization=membership.establishment.organization,
+        label="Stuck C",
+        created_by_membership=membership,
+        occurred_at=now - timedelta(days=1),
+    )
+    _assign(
+        _create_signal(membership, title="Still on A", created_at=earlier),
+        pattern_a,
+        assigned_at=earlier,
+    )
+    _assign(
+        _create_signal(membership, title="On C", created_at=now - timedelta(days=1)),
+        pattern_c,
+        assigned_at=now - timedelta(hours=1),
+    )
+    OperationalPattern.objects.filter(pk=pattern_a.pk).update(
+        status=OperationalPattern.Status.MERGED,
+        merged_into_id=pattern_b.id,
+    )
+    OperationalPattern.objects.filter(pk=pattern_b.pk).update(
+        status=OperationalPattern.Status.MERGED,
+        merged_into_id=pattern_c.id,
+    )
+
+    result = get_analytics_dashboard(
+        membership.user,
+        period_days=7,
+        now=now,
+        establishment_id=membership.establishment_id,
+    )
+    assert "Stuck C" not in _new_pattern_names(result)
 
 
 def test_split_created_chain_is_not_entirely_split_when_real_origin_is_two_hops():

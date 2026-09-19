@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Min, Q, Sum
 from django.utils import timezone
 
 from houston.accounts.models import User
@@ -74,6 +74,7 @@ from houston.signals.constants import (
     SIGNAL_RESOLUTION_ORIGIN_ACTION_PLAN,
     SIGNAL_RESOLUTION_ORIGIN_MANUAL,
     SIGNAL_RESOLUTION_ORIGIN_RESOLUTION_REQUEST,
+    SIGNAL_RESOLUTION_ORIGIN_VALUES,
 )
 from houston.signals.models import Signal, SignalLifecycleEvent, SignalResolutionRequest
 
@@ -668,6 +669,53 @@ def _canonical_pattern(assignment: SignalPatternAssignment) -> OperationalPatter
     return pattern
 
 
+def _terminal_pattern_id(
+    pattern: OperationalPattern | None,
+    patterns: dict[UUID, OperationalPattern],
+) -> UUID | None:
+    if pattern is None:
+        return None
+    seen: set[UUID] = set()
+    current = pattern
+    while current.id not in seen:
+        seen.add(current.id)
+        target_id = current.merged_into_id
+        if target_id is None:
+            return current.id
+        nxt = patterns.get(target_id)
+        if nxt is None:
+            return target_id
+        current = nxt
+    return None
+
+
+def _allowlisted_resolution_origin(value: object | None) -> str | None:
+    if not isinstance(value, str) or value not in SIGNAL_RESOLUTION_ORIGIN_VALUES:
+        return None
+    return value
+
+
+def _resolution_origin_matches_terminal_event(
+    *,
+    signal: Signal,
+    events: list[JournalEvent],
+    resolved: JournalEvent,
+) -> bool:
+    if _allowlisted_resolution_origin(signal.resolution_origin) is None:
+        return False
+    for event in events:
+        if event.occurred_at <= resolved.occurred_at:
+            continue
+        if event.event_type == SIGNAL_LIFECYCLE_EVENT_RESOLVED:
+            return False
+        if event.event_type in {
+            SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
+            SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS,
+        }:
+            return False
+    return True
+
+
 def _pattern_merge_sources_by_target(
     patterns: dict[UUID, OperationalPattern],
 ) -> dict[UUID, list[UUID]]:
@@ -748,8 +796,20 @@ def _destination_for_signal(
         )
         if resolved is None:
             return None
-        origin = resolved.metadata_safe.get("resolution_origin")
-        return ORIGIN_TO_DESTINATION.get(str(origin)) if origin else None
+        origin = _allowlisted_resolution_origin(
+            resolved.metadata_safe.get("resolution_origin")
+        )
+        if origin is not None:
+            return ORIGIN_TO_DESTINATION[origin]
+        if _resolution_origin_matches_terminal_event(
+            signal=signal,
+            events=events,
+            resolved=resolved,
+        ):
+            origin = _allowlisted_resolution_origin(signal.resolution_origin)
+            if origin is not None:
+                return ORIGIN_TO_DESTINATION[origin]
+        return None
     return None
 
 
@@ -827,9 +887,6 @@ def _in_progress_cycle_start(
         )
         and associated_at <= last.occurred_at
     ):
-        earlier_cycle = associated_at < last.occurred_at
-        if earlier_cycle:
-            return last.occurred_at
         return associated_at
     return last.occurred_at
 
@@ -1279,42 +1336,63 @@ def _new_patterns(
         for pattern in OperationalPattern.objects.filter(organization_id__in=org_ids)
     }
     related_by_canonical: dict[UUID, list[Signal]] = defaultdict(list)
-    assignment_min: dict[UUID, datetime] = {}
     for signal in assigned:
-        pattern = _canonical_pattern(signal.pattern_assignment)
-        if pattern is None:
+        terminal_id = _terminal_pattern_id(signal.pattern_assignment.pattern, patterns)
+        if terminal_id is None:
             continue
-        related_by_canonical[pattern.id].append(signal)
-        assigned_at = signal.pattern_assignment.assigned_at
-        if assigned_at is None:
-            continue
-        previous = assignment_min.get(pattern.id)
-        if previous is None or assigned_at < previous:
-            assignment_min[pattern.id] = assigned_at
+        related_by_canonical[terminal_id].append(signal)
     if not related_by_canonical:
         return ()
 
     canonical_ids = set(related_by_canonical)
-    sighting_qs = PatternEstablishmentSighting.objects.filter(
-        pattern_id__in=canonical_ids,
-        pattern__organization_id__in=org_ids,
-        establishment_id=establishment_id,
-    )
-    sighting_min: dict[UUID, datetime] = {}
-    for sighting in sighting_qs:
-        previous = sighting_min.get(sighting.pattern_id)
-        if previous is None or sighting.observed_at < previous:
-            sighting_min[sighting.pattern_id] = sighting.observed_at
-
     sources_by_target = _pattern_merge_sources_by_target(patterns)
     lineage_ids: set[UUID] = set()
+    pattern_to_terminal: dict[UUID, UUID] = {}
     for canonical_id in canonical_ids:
-        lineage_ids.update(
-            _pattern_merge_lineage_ids(
-                canonical_id=canonical_id,
-                sources_by_target=sources_by_target,
-            )
+        lineage = _pattern_merge_lineage_ids(
+            canonical_id=canonical_id,
+            sources_by_target=sources_by_target,
         )
+        lineage_ids.update(lineage)
+        for pattern_id in lineage:
+            pattern_to_terminal[pattern_id] = canonical_id
+
+    assignment_min: dict[UUID, datetime] = {}
+    for row in (
+        SignalPatternAssignment.objects.filter(
+            classification_status=SignalPatternAssignment.ClassificationStatus.SUCCEEDED,
+            pattern_id__in=lineage_ids,
+            signal__establishment_id=establishment_id,
+            assigned_at__isnull=False,
+        )
+        .values("pattern_id")
+        .annotate(min_assigned_at=Min("assigned_at"))
+    ):
+        terminal_id = pattern_to_terminal.get(row["pattern_id"])
+        stamp = row["min_assigned_at"]
+        if terminal_id is None or stamp is None:
+            continue
+        previous = assignment_min.get(terminal_id)
+        if previous is None or stamp < previous:
+            assignment_min[terminal_id] = stamp
+
+    sighting_min: dict[UUID, datetime] = {}
+    for row in (
+        PatternEstablishmentSighting.objects.filter(
+            pattern_id__in=lineage_ids,
+            pattern__organization_id__in=org_ids,
+            establishment_id=establishment_id,
+        )
+        .values("pattern_id")
+        .annotate(min_observed_at=Min("observed_at"))
+    ):
+        terminal_id = pattern_to_terminal.get(row["pattern_id"])
+        stamp = row["min_observed_at"]
+        if terminal_id is None or stamp is None:
+            continue
+        previous = sighting_min.get(terminal_id)
+        if previous is None or stamp < previous:
+            sighting_min[terminal_id] = stamp
     split_created_ids = {
         event.pattern_id
         for event in PatternLifecycleEvent.objects.filter(
