@@ -411,7 +411,10 @@ def test_unclassified_resolved_origin_is_excluded_from_mix_and_shares():
         to_status=Signal.Status.RESOLVED,
     )
     garbage = _create_signal(
-        membership, title="Resolved garbage origin", created_at=created, status=Signal.Status.RESOLVED
+        membership,
+        title="Resolved garbage origin",
+        created_at=created,
+        status=Signal.Status.RESOLVED,
     )
     _event(
         garbage,
@@ -438,7 +441,10 @@ def test_cutover_allowlisted_origin_classifies_resolved_mix():
     created = now - timedelta(days=1)
     resolved_at = created + timedelta(hours=2)
     signal = _create_signal(
-        membership, title="Cutover resolved origin", created_at=created, status=Signal.Status.RESOLVED
+        membership,
+        title="Cutover resolved origin",
+        created_at=created,
+        status=Signal.Status.RESOLVED,
     )
     Signal.objects.filter(pk=signal.pk).update(
         resolved_at=resolved_at,

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib
 from datetime import timedelta
-
 from io import StringIO
 
 import pytest
@@ -30,7 +29,6 @@ from houston.action_plans.models import ActionPlanExecution, ActionPlanExecution
 from houston.action_plans.services import create_action_plan_with_execution
 from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
 from houston.analytics.cutover import apply_analytics_history_cutover, reset_history_reliable_from
-from houston.analytics.repair_resolved_journal_origins import repair_resolved_journal_origins
 from houston.analytics.journal import (
     COVERAGE_COMPLETE,
     COVERAGE_NOT_COMPARABLE,
@@ -43,6 +41,7 @@ from houston.analytics.journal import (
     signal_status_at,
 )
 from houston.analytics.models import AnalyticsHistoryCoverage, PatternEstablishmentSighting
+from houston.analytics.repair_resolved_journal_origins import repair_resolved_journal_origins
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.constants import (
     SIGNAL_LIFECYCLE_EVENT_CANCELED,
@@ -594,7 +593,10 @@ def test_repair_resolved_journal_origins_dry_run_apply_and_unrecoverable():
     assert dry.unrecoverable == 2
     assert patchable.id in dry.signal_ids
     assert "resolution_origin" not in patchable_event.metadata_safe
-    assert garbage_event.metadata_safe.get("resolution_origin") not in SIGNAL_RESOLUTION_ORIGIN_VALUES
+    assert (
+        garbage_event.metadata_safe.get("resolution_origin")
+        not in SIGNAL_RESOLUTION_ORIGIN_VALUES
+    )
 
     stdout = StringIO()
     call_command("repair_resolved_journal_origins", stdout=stdout)

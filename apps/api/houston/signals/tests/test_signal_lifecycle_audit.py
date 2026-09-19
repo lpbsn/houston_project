@@ -121,7 +121,10 @@ def test_action_plan_resolve_null_actor_and_origin():
     assert len(resolved_events) == 1
     assert resolved_events[0].actor_membership_id is None
     assert resolved_events[0].occurred_at == signal.resolved_at
-    assert resolved_events[0].metadata_safe["resolution_origin"] == SIGNAL_RESOLUTION_ORIGIN_ACTION_PLAN
+    assert (
+        resolved_events[0].metadata_safe["resolution_origin"]
+        == SIGNAL_RESOLUTION_ORIGIN_ACTION_PLAN
+    )
 
 
 def test_approve_resolution_request_sets_origin_without_rr_lifecycle_events():
