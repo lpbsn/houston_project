@@ -138,7 +138,9 @@ describe('ObservationVolumeCard', () => {
       }),
     )
 
-    expect(container.querySelector('[data-volume-detail="current"]')?.textContent).toContain('3 (50 %)')
+    expect(container.querySelector('[data-volume-detail="current"]')?.textContent).toContain(
+      `3 (${formatDashboardPercent(0.5)})`,
+    )
 
     fireEvent.click(screen.getByRole('button', { name: 'Il y a 3 périodes' }))
     expect(container.querySelector('[data-volume-detail="three_periods_ago"]')?.textContent).toContain(

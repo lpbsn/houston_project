@@ -61,10 +61,8 @@ export default defineConfig(({ command, mode }) => {
       },
     },
     server: {
-      // Dev: all interfaces (Docker). Tests: IPv4 loopback. Node 24 resolves
-      // localhost to ::1 first; 0.0.0.0 does not listen on IPv6, so each module
-      // runner fetch waits ~1s and RTL/aria-query exceeds the 60s file timeout.
-      host: mode === 'test' ? '127.0.0.1' : '0.0.0.0',
+      // Bind all interfaces so the Vite server is reachable from Docker.
+      host: '0.0.0.0',
       proxy: {
         '/api': {
           target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8000',
