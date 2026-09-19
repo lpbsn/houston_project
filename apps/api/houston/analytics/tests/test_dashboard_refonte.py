@@ -24,7 +24,6 @@ from houston.analytics.dashboard import (
     DESTINATION_KEYS,
     DESTINATION_RESOLVED_DIRECT,
     DESTINATION_RESOLVED_VIA_ACTION_PLAN,
-    DESTINATION_RESOLVED_VIA_RESOLUTION_REQUEST,
     DESTINATION_WAITING,
     get_analytics_dashboard,
     list_analytics_dashboard_rankings,
@@ -98,7 +97,7 @@ def _event(signal, event_type, occurred_at, **metadata):
     )
 
 
-def test_destinations_seven_keys_include_waiting_exclude_archived_and_pinned():
+def test_destinations_six_keys_include_waiting_exclude_archived_and_pinned():
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     now = timezone.now()
     apply_analytics_history_cutover(now=now - timedelta(days=30))
@@ -167,16 +166,55 @@ def test_destinations_seven_keys_include_waiting_exclude_archived_and_pinned():
     assert tuple(destinations) == DESTINATION_KEYS
     assert "archived" not in destinations
     assert "pinned" not in destinations
+    assert "resolved_via_resolution_request" not in destinations
     assert destinations[DESTINATION_WAITING].count == 1
     assert destinations[DESTINATION_INTERESTING].count == 1
     assert destinations[DESTINATION_ACTION_PLAN_IN_PROGRESS].count == 1
-    assert destinations[DESTINATION_RESOLVED_DIRECT].count == 1
+    assert destinations[DESTINATION_RESOLVED_DIRECT].count == 2
     assert destinations[DESTINATION_RESOLVED_VIA_ACTION_PLAN].count == 1
-    assert destinations[DESTINATION_RESOLVED_VIA_RESOLUTION_REQUEST].count == 1
     assert destinations[DESTINATION_CANCELED].count == 1
+    classified = sum(item.count for item in destinations.values())
+    assert classified == 7
+    assert destinations[DESTINATION_RESOLVED_DIRECT].share == pytest.approx(2 / 7)
     total_share = sum(item.share or 0 for item in destinations.values())
     assert round(total_share, 6) == 1.0
     assert DESTINATION_WAITING not in result.observation_destination_delays
+    assert "resolved_via_resolution_request" not in result.observation_destination_delays
+
+
+def test_resolved_direct_delay_aggregates_manual_and_resolution_request_samples():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    apply_analytics_history_cutover(now=now - timedelta(days=30))
+    created = now - timedelta(days=1)
+    manual = _create_signal(
+        membership, title="Manual delay", created_at=created, status=Signal.Status.RESOLVED
+    )
+    _event(
+        manual,
+        SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+        created + timedelta(hours=2),
+        to_status=Signal.Status.RESOLVED,
+        resolution_origin=SIGNAL_RESOLUTION_ORIGIN_MANUAL,
+    )
+    via_request = _create_signal(
+        membership, title="Request delay", created_at=created, status=Signal.Status.RESOLVED
+    )
+    _event(
+        via_request,
+        SIGNAL_LIFECYCLE_EVENT_RESOLVED,
+        created + timedelta(hours=4),
+        to_status=Signal.Status.RESOLVED,
+        resolution_origin=SIGNAL_RESOLUTION_ORIGIN_RESOLUTION_REQUEST,
+    )
+
+    result = _dashboard(membership, now=now)
+    delays = result.observation_destination_delays
+    assert "resolved_via_resolution_request" not in delays
+    delay = delays[DESTINATION_RESOLVED_DIRECT]
+    assert delay.n == 2
+    assert delay.mean_seconds == pytest.approx(3 * 3600)
+    assert delay.undatable_in_scope == 0
 
 
 def test_resolved_direct_after_canceled_plan_and_historical_period_keeps_origin():
@@ -429,7 +467,7 @@ def test_unclassified_resolved_origin_is_excluded_from_mix_and_shares():
     assert destinations[DESTINATION_WAITING].count == 1
     assert destinations[DESTINATION_RESOLVED_DIRECT].count == 0
     assert destinations[DESTINATION_RESOLVED_VIA_ACTION_PLAN].count == 0
-    assert destinations[DESTINATION_RESOLVED_VIA_RESOLUTION_REQUEST].count == 0
+    assert "resolved_via_resolution_request" not in destinations
     classified = sum(item.count for item in destinations.values())
     assert classified == 1
     assert destinations[DESTINATION_WAITING].share == pytest.approx(1.0)

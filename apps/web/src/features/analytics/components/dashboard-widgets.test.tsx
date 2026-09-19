@@ -180,6 +180,7 @@ describe('ObservationVolumeCard', () => {
 describe('ObservationDestinationsCard', () => {
   it('uses the same hex on the stacked bar and the legend swatch', () => {
     const destinations = dashboardResponseFixture().observation_destinations
+    const waitingShare = destinations.waiting.share
     const { container } = render(
       createElement(ObservationDestinationsCard, {
         destinations,
@@ -188,12 +189,52 @@ describe('ObservationDestinationsCard', () => {
     )
 
     const waitingBar = screen.getByRole('button', {
-      name: `En attente ${formatDashboardPercent(destinations.waiting.share)}`,
+      name: `En attente · ${destinations.waiting.count} · ${formatDashboardPercent(waitingShare)}`,
     })
     const waitingSwatch = container.querySelector('[data-destination-swatch="waiting"]')
     expect(waitingBar.style.backgroundColor).toBe(cssBackground(destinationChartColor('waiting')))
     expect((waitingSwatch as HTMLElement).style.backgroundColor).toBe(waitingBar.style.backgroundColor)
-    expect(waitingBar.style.width).toBe(`${(destinations.waiting.share ?? 0) * 100}%`)
+    expect(waitingBar.style.width).toBe(`${(waitingShare ?? 0) * 100}%`)
+  })
+
+  it('shows count, share, and N/A when the previous period had zero for that destination', () => {
+    const destinations = dashboardResponseFixture().observation_destinations
+    const interesting = {
+      ...destinations.interesting,
+      comparison: comparison({
+        current_value: destinations.interesting.share,
+        previous_value: 0,
+        absolute_delta: destinations.interesting.share,
+        relative_change: null,
+        relative_change_status: 'undefined_previous_zero',
+      }),
+    }
+    const { container } = render(
+      createElement(ObservationDestinationsCard, {
+        destinations: { ...destinations, interesting },
+        periodDays: 7,
+      }),
+    )
+
+    expect(container.textContent).toContain(String(destinations.waiting.count))
+    expect(container.textContent).toContain(formatDashboardPercent(destinations.waiting.share))
+    expect(container.textContent).toContain('N/A')
+    expect(container.textContent).not.toContain(formatAbsentPreviousPeriodLabel(7))
+    expect(container.querySelector('[data-destination-swatch="resolved_via_resolution_request"]')).toBeNull()
+  })
+
+  it('includes count in the selected segment summary', () => {
+    const destinations = dashboardResponseFixture().observation_destinations
+    const { container } = render(
+      createElement(ObservationDestinationsCard, {
+        destinations,
+        periodDays: 7,
+      }),
+    )
+    const summary = `En attente · ${destinations.waiting.count} · ${formatDashboardPercent(destinations.waiting.share)}`
+
+    fireEvent.click(screen.getByRole('button', { name: summary }))
+    expect(container.querySelector('p')?.textContent).toContain(summary)
   })
 })
 

@@ -66,7 +66,6 @@ const DESTINATION_LABELS: Record<string, string> = {
   action_plan_in_progress: 'Plan d’action en cours',
   resolved_direct: 'Résolue directement',
   resolved_via_action_plan: 'Résolue via un plan d’action',
-  resolved_via_resolution_request: 'Résolue après demande de résolution',
   canceled: 'Annulée',
 }
 
@@ -76,9 +75,16 @@ const DELAY_ORDER = [
   'action_plan_in_progress',
   'resolved_direct',
   'resolved_via_action_plan',
-  'resolved_via_resolution_request',
   'canceled',
 ] as const
+
+function formatDestinationCount(count: number): string {
+  return new Intl.NumberFormat('fr-FR').format(count)
+}
+
+function destinationSegmentSummary(label: string, count: number, share: number | null): string {
+  return `${label} · ${formatDestinationCount(count)} · ${formatDashboardPercent(share)}`
+}
 
 const OVERRUN_LABELS: Record<string, string> = {
   lt_10: 'moins de 10 % de dépassement',
@@ -622,10 +628,11 @@ export function ObservationDestinationsCard({
 
   return (
     <DashboardCard title="Destination des observations">
-      <div className="flex h-3.5 overflow-hidden rounded-full bg-[#F0EFE9]">
+      <div className="flex h-6 overflow-hidden rounded-full bg-[#F0EFE9]">
         {keys.map((key) => {
-          const share = destinations[key]?.share ?? 0
-          if (share <= 0) {
+          const item = destinations[key]
+          const share = item?.share ?? 0
+          if (share <= 0 || !item) {
             return null
           }
           const color = destinationChartColor(key)
@@ -634,7 +641,7 @@ export function ObservationDestinationsCard({
               key={key}
               type="button"
               aria-pressed={selectedKey === key}
-              aria-label={`${DESTINATION_LABELS[key]} ${formatDashboardPercent(share)}`}
+              aria-label={destinationSegmentSummary(DESTINATION_LABELS[key], item.count, share)}
               className="h-full min-w-0 p-0"
               style={{ width: `${share * 100}%`, backgroundColor: color }}
               onClick={() => setSelectedKey((current) => (current === key ? null : key))}
@@ -653,10 +660,10 @@ export function ObservationDestinationsCard({
             className="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm align-middle"
             style={{ backgroundColor: destinationChartColor(selectedKey) }}
           />
-          {selectedLabel} · {formatDashboardPercent(selectedItem.share)}
+          {destinationSegmentSummary(selectedLabel, selectedItem.count, selectedItem.share)}
         </p>
       ) : null}
-      <ul className="mt-4 flex flex-col gap-2">
+      <ul className="mt-4 grid grid-cols-[minmax(0,1fr)_max-content_max-content_max-content] gap-x-3 gap-y-2">
         {keys.map((key) => {
           const item = destinations[key]
           if (!item) {
@@ -664,25 +671,35 @@ export function ObservationDestinationsCard({
           }
           const color = destinationChartColor(key)
           return (
-            <li key={key} className="flex items-center justify-between gap-3 text-sm">
-              <span className="inline-flex items-center gap-2 text-[#7D7B75]">
+            <li
+              key={key}
+              className="col-span-full grid grid-cols-subgrid items-center text-sm"
+            >
+              <span className="inline-flex min-w-0 items-center gap-2 text-[#7D7B75]">
                 <span
-                  className="h-2.5 w-2.5 rounded-sm"
+                  className="h-2.5 w-2.5 shrink-0 rounded-sm"
                   data-destination-swatch={key}
                   style={{ backgroundColor: color }}
                 />
-                {DESTINATION_LABELS[key]}
+                <span className="min-w-0">{DESTINATION_LABELS[key]}</span>
               </span>
-              <span className="flex items-center gap-2">
-                <span className="tabular-nums font-medium text-[#1a1a1a]">
-                  {formatDashboardPercent(item.share)}
-                </span>
-                <TrendBadge
-                  comparison={item.comparison}
-                  sense="neutral"
-                  format="percent"
-                  periodDays={periodDays}
-                />
+              <span className="text-right tabular-nums font-medium text-[#1a1a1a]">
+                {formatDestinationCount(item.count)}
+              </span>
+              <span className="text-right tabular-nums font-medium text-[#1a1a1a]">
+                {formatDashboardPercent(item.share)}
+              </span>
+              <span className="justify-self-end text-right">
+                {dashboardNewLabel(item.comparison) ? (
+                  <span className="text-[12px] font-semibold text-[#7D7B75]">N/A</span>
+                ) : (
+                  <TrendBadge
+                    comparison={item.comparison}
+                    sense="neutral"
+                    format="percent"
+                    periodDays={periodDays}
+                  />
+                )}
               </span>
             </li>
           )

@@ -18,9 +18,10 @@ export function dashboardComparison(
   }
 }
 
-function destination(share: number, coverage: AnalyticsDashboardMetricComparison['coverage'] = 'complete') {
+function destination(count: number, total: number, coverage: AnalyticsDashboardMetricComparison['coverage'] = 'complete') {
+  const share = count / total
   return {
-    count: Math.round(share * 10),
+    count,
     share,
     comparison: dashboardComparison(share, coverage),
   }
@@ -189,20 +190,18 @@ export function dashboardResponseFixture(
       responsible: volume(),
     },
     observation_destinations: {
-      waiting: destination(0.12),
-      interesting: destination(0.13),
-      action_plan_in_progress: destination(0.14),
-      resolved_direct: destination(0.34),
-      resolved_via_action_plan: destination(0.27),
-      resolved_via_resolution_request: destination(0.13),
-      canceled: destination(0.12),
+      waiting: destination(3, 25),
+      interesting: destination(3, 25),
+      action_plan_in_progress: destination(4, 25),
+      resolved_direct: destination(8, 25),
+      resolved_via_action_plan: destination(5, 25),
+      canceled: destination(2, 25),
     },
     observation_destination_delays: {
       interesting: delay(0.9 * 86400),
       action_plan_in_progress: delay(2.1 * 86400),
       resolved_direct: delay(1.4 * 86400),
       resolved_via_action_plan: delay(1.6 * 86400),
-      resolved_via_resolution_request: delay(0.61 * 86400),
       canceled: delay(1.2 * 86400),
     },
     plan_deadline_respect: {
