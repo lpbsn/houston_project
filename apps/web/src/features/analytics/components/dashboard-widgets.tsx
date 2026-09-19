@@ -843,13 +843,12 @@ export function PlanOverrunCard({
 function StarRow({ filled }: { filled: number }) {
   const label = filled === 0 ? '0 étoile' : `${filled} étoile${filled > 1 ? 's' : ''}`
   return (
-    <span className="inline-flex items-center gap-2 text-[#1F7A4D]" aria-label={label}>
+    <span role="img" aria-label={label} className="inline-flex items-center text-[#1F7A4D]">
       <span className="inline-flex gap-0.5">
         {Array.from({ length: 5 }, (_, index) => (
           <span key={index}>{index < filled ? '★' : '☆'}</span>
         ))}
       </span>
-      {filled === 0 ? <span className="text-[12px] text-[#7D7B75]">0 étoile</span> : null}
     </span>
   )
 }
@@ -867,7 +866,7 @@ export function ResolutionQualityCard({
         <p className="text-sm text-[#7D7B75]">{emptyResolutionQualityMessage()}</p>
       ) : (
         <>
-          <p className="text-2xl font-semibold tabular-nums">{formatResolutionQualityTotal(data.n)}</p>
+          <p className="text-sm text-[#7D7B75] tabular-nums">{formatResolutionQualityTotal(data.n)}</p>
           {unevaluatedNote ? (
             <p className="mt-2 text-[12px] text-[#7D7B75]">{unevaluatedNote}</p>
           ) : null}

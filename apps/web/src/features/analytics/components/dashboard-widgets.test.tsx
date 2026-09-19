@@ -9,6 +9,7 @@ import {
   ObservationDestinationsCard,
   ObservationVolumeCard,
   PlanOverrunCard,
+  ResolutionQualityCard,
   TrendBadge,
 } from '@/features/analytics/components/dashboard-widgets'
 import { UNASSIGNED_POLE_COLOR, destinationChartColor } from '@/features/analytics/lib/dashboard-chart-colors'
@@ -234,5 +235,16 @@ describe('PlanOverrunCard', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     fireEvent.pointerDown(screen.getByRole('heading', { name: 'Plans d’action en retard' }))
     expect(screen.queryByText(OVERRUN_TOOLTIP)).toBeNull()
+  })
+})
+
+describe('ResolutionQualityCard', () => {
+  it('keeps the zero-star row graphic without a visible 0 étoile label', () => {
+    render(createElement(ResolutionQualityCard, { data: dashboardResponseFixture().resolution_quality }))
+
+    expect(screen.queryByText('0 étoile')).toBeNull()
+    const zeroStars = screen.getByRole('img', { name: '0 étoile' })
+    expect(zeroStars).toBeTruthy()
+    expect(zeroStars.textContent?.replace(/\s/g, '')).toBe('☆☆☆☆☆')
   })
 })
