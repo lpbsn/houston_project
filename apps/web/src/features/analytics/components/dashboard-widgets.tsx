@@ -734,10 +734,10 @@ export function PlanDeadlineRespectCard({
         <p className="text-sm text-[#7D7B75]">{emptyDeadlineRespectMessage()}</p>
       ) : (
         <>
-          <p className="text-2xl font-semibold tabular-nums">{formatDeadlineAnalyzedTotal(data.n)}</p>
+          <p className="text-sm text-[#7D7B75] tabular-nums">{formatDeadlineAnalyzedTotal(data.n)}</p>
           {data.n > 0 ? (
             <>
-              <div className="mt-4 flex h-3.5 overflow-hidden rounded-full bg-[#F0EFE9]">
+              <div className="mt-4 flex h-6 overflow-hidden rounded-full bg-[#F0EFE9]">
                 {data.early ? (
                   <span className="bg-[#1F7A4D]" style={{ width: `${data.early * 100}%` }} />
                 ) : null}
