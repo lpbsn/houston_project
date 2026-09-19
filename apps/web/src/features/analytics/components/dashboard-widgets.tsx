@@ -480,9 +480,9 @@ export function ObservationVolumeCard({
         </button>
       </div>
       <div className="min-w-0">
-        <div className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-1">
-          <div />
-          <div className="grid grid-cols-5 gap-1">
+        <div className="grid grid-cols-1 sm:grid-cols-[2.5rem_minmax(0,1fr)] sm:gap-x-1">
+          <div className="hidden sm:block" />
+          <div className="grid grid-cols-5 gap-1 pl-5 sm:pl-0">
             {selected.windows.map((window) => (
               <p
                 key={`${window.label_key}-total`}
@@ -492,7 +492,7 @@ export function ObservationVolumeCard({
               </p>
             ))}
           </div>
-          <div className="relative" style={{ height: VOLUME_PLOT_HEIGHT_PX }}>
+          <div className="relative hidden sm:block" style={{ height: VOLUME_PLOT_HEIGHT_PX }}>
             {ticks.map((tick) => (
               <span
                 key={tick}
@@ -516,7 +516,16 @@ export function ObservationVolumeCard({
                 }}
               />
             ))}
-            <div className="relative z-[1] grid h-full grid-cols-5 items-end gap-1.5 sm:gap-3">
+            {ticks.map((tick) => (
+              <span
+                key={`mobile-y-${tick}`}
+                className="pointer-events-none absolute left-0 z-[2] -translate-y-1/2 text-[10px] leading-none text-[#7D7B75] tabular-nums sm:hidden"
+                style={{ bottom: scaleMax === 0 ? '0%' : `${barHeightPercent(tick, scaleMax)}%` }}
+              >
+                {tick}
+              </span>
+            ))}
+            <div className="relative z-[1] grid h-full grid-cols-5 items-end gap-1.5 pl-5 sm:gap-3 sm:pl-0">
               {selected.windows.map((window) => (
                 <div
                   key={window.label_key}
@@ -524,7 +533,7 @@ export function ObservationVolumeCard({
                   className="flex h-full min-w-0 w-full flex-col items-center justify-end"
                 >
                   <div
-                    className="flex w-[55%] min-w-0 flex-col-reverse overflow-hidden rounded-md"
+                    className="flex w-[90%] min-w-0 flex-col-reverse overflow-hidden rounded-md sm:w-[55%]"
                     style={{
                       height: scaleMax === 0 ? 0 : `${barHeightPercent(window.total, scaleMax)}%`,
                     }}
@@ -559,8 +568,8 @@ export function ObservationVolumeCard({
               ))}
             </div>
           </div>
-          <div />
-          <div className="mt-2 grid grid-cols-5 gap-1">
+          <div className="hidden sm:block" />
+          <div className="mt-2 grid grid-cols-5 gap-1 pl-5 sm:pl-0">
             {selected.windows.map((window) => {
               const lines = VOLUME_LABEL_LINES[window.label_key]
               return (
