@@ -149,8 +149,8 @@ La zone « Impact futur potentiel · IA » suit la même règle que celle des su
 
 La carte comprend un sélecteur local à deux états :
 
-- « Pôle concerné », actif par défaut ;
-- « Pôle responsable ».
+- « Pôle responsable », actif par défaut ;
+- « Pôle concerné ».
 
 Ce sélecteur agit uniquement sur cette carte.
 

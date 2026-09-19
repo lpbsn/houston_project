@@ -50,8 +50,6 @@ import {
 import type { DashboardPeriodDays } from '@/features/analytics/lib/dashboard-url-state'
 import { cn } from '@/lib/utils'
 
-const CURRENT_VOLUME_WINDOW = 'current'
-
 const VOLUME_LABEL_LINES: Record<string, readonly [string, string]> = {
   four_periods_ago: ['Il y a 4', 'périodes'],
   three_periods_ago: ['Il y a 3', 'périodes'],
@@ -409,10 +407,8 @@ export function ObservationVolumeCard({
   volume: AnalyticsDashboardResponse['observation_volume']
   periodDays: number
 }) {
-  const [mode, setMode] = useState<'affected' | 'responsible'>('affected')
-  const [selectedWindowKey, setSelectedWindowKey] = useState(CURRENT_VOLUME_WINDOW)
+  const [mode, setMode] = useState<'affected' | 'responsible'>('responsible')
   const selected = volume[mode]
-  const windowKeys = selected.windows.map((window) => window.label_key)
   const poleColors = useMemo(() => assignPoleColors(selected.windows), [selected.windows])
   const maxTotal = Math.max(...selected.windows.map((window) => window.total), 0)
   const { scaleMax, ticks } = integerYAxis(maxTotal)
@@ -427,38 +423,36 @@ export function ObservationVolumeCard({
       ),
     [selected.windows],
   )
-  const selectedWindow =
-    selected.windows.find((window) => window.label_key === selectedWindowKey) ??
-    selected.windows.find((window) => window.label_key === CURRENT_VOLUME_WINDOW)
 
   return (
     <DashboardCard title="Nombre d’observations">
-      <div className="mb-4 inline-flex rounded-lg bg-[#F5F4F0] p-1">
+      <div
+        className="mb-4 inline-flex rounded-lg bg-[#F5F4F0] p-1"
+        data-volume-mode={mode}
+      >
         <button
           type="button"
-          onClick={() => {
-            setMode('affected')
-            setSelectedWindowKey(CURRENT_VOLUME_WINDOW)
-          }}
-          className={cn(
-            'rounded-md px-3 py-1.5 text-[12px] font-semibold',
-            mode === 'affected' ? 'bg-white text-[#1a1a1a] shadow-sm' : 'text-[#7D7B75]',
-          )}
-        >
-          Pôle concerné
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setMode('responsible')
-            setSelectedWindowKey(CURRENT_VOLUME_WINDOW)
-          }}
+          aria-pressed={mode === 'responsible'}
+          data-volume-mode-option="responsible"
+          onClick={() => setMode('responsible')}
           className={cn(
             'rounded-md px-3 py-1.5 text-[12px] font-semibold',
             mode === 'responsible' ? 'bg-white text-[#1a1a1a] shadow-sm' : 'text-[#7D7B75]',
           )}
         >
           Pôle responsable
+        </button>
+        <button
+          type="button"
+          aria-pressed={mode === 'affected'}
+          data-volume-mode-option="affected"
+          onClick={() => setMode('affected')}
+          className={cn(
+            'rounded-md px-3 py-1.5 text-[12px] font-semibold',
+            mode === 'affected' ? 'bg-white text-[#1a1a1a] shadow-sm' : 'text-[#7D7B75]',
+          )}
+        >
+          Pôle concerné
         </button>
       </div>
       <div className="min-w-0">
@@ -499,83 +493,46 @@ export function ObservationVolumeCard({
               />
             ))}
             <div className="relative z-[1] grid h-full grid-cols-5 items-end gap-1.5 sm:gap-3">
-              {selected.windows.map((window) => {
-                const isSelected = selectedWindow?.label_key === window.label_key
-                return (
-                  <button
-                    key={window.label_key}
-                    type="button"
-                    aria-pressed={isSelected}
-                    aria-label={
-                      VOLUME_LABEL_LINES[window.label_key]
-                        ? VOLUME_LABEL_LINES[window.label_key].join(' ')
-                        : window.label_key
-                    }
-                    data-volume-window={window.label_key}
-                    onClick={() => setSelectedWindowKey(window.label_key)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Home' || event.key === 'End') {
-                        event.preventDefault()
-                        let nextKey = selectedWindowKey
-                        if (event.key === 'ArrowLeft') {
-                          const currentIndex = Math.max(0, windowKeys.indexOf(selectedWindowKey))
-                          nextKey = windowKeys[(currentIndex - 1 + windowKeys.length) % windowKeys.length] ?? nextKey
-                        }
-                        if (event.key === 'ArrowRight') {
-                          const currentIndex = Math.max(0, windowKeys.indexOf(selectedWindowKey))
-                          nextKey = windowKeys[(currentIndex + 1) % windowKeys.length] ?? nextKey
-                        }
-                        if (event.key === 'Home') {
-                          nextKey = windowKeys[0] ?? nextKey
-                        }
-                        if (event.key === 'End') {
-                          nextKey = windowKeys.at(-1) ?? nextKey
-                        }
-                        setSelectedWindowKey(nextKey)
-                        requestAnimationFrame(() => {
-                          const node = document.querySelector<HTMLButtonElement>(
-                            `[data-volume-window="${nextKey}"]`,
-                          )
-                          node?.focus()
-                        })
-                      }
+              {selected.windows.map((window) => (
+                <div
+                  key={window.label_key}
+                  data-volume-window={window.label_key}
+                  className="flex h-full min-w-0 w-full flex-col items-center justify-end"
+                >
+                  <div
+                    className="flex w-[55%] min-w-0 flex-col-reverse overflow-hidden rounded-md"
+                    style={{
+                      height: scaleMax === 0 ? 0 : `${barHeightPercent(window.total, scaleMax)}%`,
                     }}
-                    className="flex h-full min-w-0 w-full flex-col items-center justify-end"
                   >
-                    <div
-                      className={cn(
-                        'flex w-full min-w-0 flex-col-reverse overflow-hidden rounded-md',
-                        isSelected && 'ring-2 ring-[#1F7A4D] ring-offset-1',
-                      )}
-                      style={{
-                        height: scaleMax === 0 ? 0 : `${barHeightPercent(window.total, scaleMax)}%`,
-                      }}
-                    >
-                      {window.segments.map((segment) => {
-                        const showLabel = volumeSegmentLabelVisible(segment.count, scaleMax)
-                        return (
-                          <span
-                            key={segment.pole_id}
-                            data-pole-id={segment.pole_id}
-                            className="flex min-h-0 w-full items-center justify-center px-0.5 text-center text-[10px] leading-tight font-semibold text-white sm:text-[11px]"
-                            style={{
-                              height:
-                                window.total === 0
-                                  ? '0%'
-                                  : `${(segment.count / window.total) * 100}%`,
-                              backgroundColor: poleChartColor(segment.pole_id, poleColors),
-                            }}
-                          >
-                            {showLabel
-                              ? `${segment.count} (${formatDashboardPercent(segment.share)})`
-                              : null}
-                          </span>
-                        )
-                      })}
-                    </div>
-                  </button>
-                )
-              })}
+                    {window.segments.map((segment) => {
+                      const showLabel = volumeSegmentLabelVisible(
+                        segment.count,
+                        scaleMax,
+                        VOLUME_PLOT_HEIGHT_PX,
+                      )
+                      return (
+                        <span
+                          key={segment.pole_id}
+                          data-pole-id={segment.pole_id}
+                          className="flex min-h-0 w-full items-center justify-center px-0.5 text-center text-[10px] leading-tight font-semibold text-white sm:text-[11px]"
+                          style={{
+                            height:
+                              window.total === 0
+                                ? '0%'
+                                : `${(segment.count / window.total) * 100}%`,
+                            backgroundColor: poleChartColor(segment.pole_id, poleColors),
+                          }}
+                        >
+                          {showLabel
+                            ? `${segment.count} (${formatDashboardPercent(segment.share)})`
+                            : null}
+                        </span>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
           <div />
@@ -605,27 +562,6 @@ export function ObservationVolumeCard({
           </div>
         </div>
       </div>
-      {selectedWindow ? (
-        <ul
-          className="mt-3 rounded-xl bg-[#F5F4F0] px-3 py-2 text-[12px] text-[#7D7B75]"
-          data-volume-detail={selectedWindow.label_key}
-        >
-          {selectedWindow.segments.map((segment) => (
-            <li key={segment.pole_id} className="flex items-center justify-between gap-3 py-0.5">
-              <span className="inline-flex min-w-0 items-center gap-1.5">
-                <span
-                  className="h-2.5 w-2.5 shrink-0 rounded-sm"
-                  style={{ backgroundColor: poleChartColor(segment.pole_id, poleColors) }}
-                />
-                <span className="truncate">{segment.name}</span>
-              </span>
-              <span className="shrink-0 tabular-nums">
-                {segment.count} ({formatDashboardPercent(segment.share)})
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
       <div className="mt-4 flex flex-wrap gap-3 text-[12px] text-[#7D7B75]">
         {legend.map(([poleId, name]) => (
           <span key={poleId} className="inline-flex items-center gap-1.5">

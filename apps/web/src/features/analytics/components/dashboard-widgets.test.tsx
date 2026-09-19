@@ -130,7 +130,7 @@ describe('TrendBadge', () => {
 })
 
 describe('ObservationVolumeCard', () => {
-  it('shows current-period details by default and updates from click or keyboard', () => {
+  it('defaults to responsible pole mode and keeps bars non-interactive', () => {
     const { container } = render(
       createElement(ObservationVolumeCard, {
         volume: observationVolumeChartFixture(),
@@ -138,17 +138,13 @@ describe('ObservationVolumeCard', () => {
       }),
     )
 
-    expect(container.querySelector('[data-volume-detail="current"]')?.textContent).toContain(
-      `3 (${formatDashboardPercent(0.5)})`,
-    )
+    expect(container.querySelector('[data-volume-mode="responsible"]')).toBeTruthy()
+    expect(container.querySelector('[data-volume-detail]')).toBeNull()
+    expect(container.querySelectorAll('[data-volume-window]')).toHaveLength(5)
+    expect(container.querySelector('button[data-volume-window]')).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Il y a 3 périodes' }))
-    expect(container.querySelector('[data-volume-detail="three_periods_ago"]')?.textContent).toContain(
-      `2 (${formatDashboardPercent(2 / 3)})`,
-    )
-
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Il y a 3 périodes' }), { key: 'ArrowRight' })
-    expect(container.querySelector('[data-volume-detail="two_periods_ago"]')).toBeTruthy()
+    fireEvent.click(container.querySelector('[data-volume-mode-option="affected"]') as HTMLElement)
+    expect(container.querySelector('[data-volume-mode="affected"]')).toBeTruthy()
   })
 
   it('does not paint segments on a zero window and matches Sans pôle legend color', () => {
@@ -159,9 +155,11 @@ describe('ObservationVolumeCard', () => {
       }),
     )
 
-    const zeroColumn = screen.getByRole('button', { name: 'Il y a 4 périodes' })
-    expect(zeroColumn.querySelectorAll('[data-pole-id]')).toHaveLength(0)
-    const stackedBar = zeroColumn.querySelector('div')
+    fireEvent.click(container.querySelector('[data-volume-mode-option="affected"]') as HTMLElement)
+
+    const zeroColumn = container.querySelector('[data-volume-window="four_periods_ago"]')
+    expect(zeroColumn?.querySelectorAll('[data-pole-id]')).toHaveLength(0)
+    const stackedBar = zeroColumn?.querySelector('div')
     expect(stackedBar?.style.height).toBe('0%')
 
     const unassignedSegment = container.querySelector('[data-pole-id="unassigned"]')
