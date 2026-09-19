@@ -343,6 +343,10 @@ export function formatOverrunTotal(totalCount: number): string {
   )
 }
 
+export function formatOverrunBucketStat(count: number, share: number | null): string {
+  return `${formatCountedNoun(count, 'plan', 'plans')} · ${formatDashboardPercent(share)}`
+}
+
 export function formatOverrunExclusionNote(excludedCount: number): string | null {
   if (excludedCount <= 0) {
     return null

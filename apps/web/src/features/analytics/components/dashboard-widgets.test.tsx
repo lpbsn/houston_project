@@ -8,10 +8,11 @@ import type { AnalyticsDashboardMetricComparison } from '@/features/analytics/ap
 import {
   ObservationDestinationsCard,
   ObservationVolumeCard,
+  PlanOverrunCard,
   TrendBadge,
 } from '@/features/analytics/components/dashboard-widgets'
 import { UNASSIGNED_POLE_COLOR, destinationChartColor } from '@/features/analytics/lib/dashboard-chart-colors'
-import { formatAbsentPreviousPeriodLabel, formatDashboardPercent } from '@/features/analytics/lib/dashboard-comparisons'
+import { formatAbsentPreviousPeriodLabel, formatDashboardPercent, formatOverrunBucketStat } from '@/features/analytics/lib/dashboard-comparisons'
 import {
   dashboardResponseFixture,
   observationVolumeChartFixture,
@@ -192,5 +193,46 @@ describe('ObservationDestinationsCard', () => {
     expect(waitingBar.style.backgroundColor).toBe(cssBackground(destinationChartColor('waiting')))
     expect((waitingSwatch as HTMLElement).style.backgroundColor).toBe(waitingBar.style.backgroundColor)
     expect(waitingBar.style.width).toBe(`${(destinations.waiting.share ?? 0) * 100}%`)
+  })
+})
+
+const OVERRUN_TOOLTIP =
+  'Le taux de dépassement compare le temps de retard à la durée planifiée du plan. Plus le pourcentage est élevé, plus le retard est important par rapport au délai prévu. Exemple : 2 jours de retard sur un plan de 30 jours représentent 6,7 %, tandis que 2 jours de retard sur un plan de 2 jours représentent 100 %.'
+
+describe('PlanOverrunCard', () => {
+  it('shows bucket counts as plans and share percent', () => {
+    render(createElement(PlanOverrunCard, { data: dashboardResponseFixture().plan_overrun }))
+
+    expect(
+      screen.getByText((_, node) => node?.textContent === formatOverrunBucketStat(4, 0.27)),
+    ).toBeTruthy()
+    expect(
+      screen.getAllByText((_, node) => node?.textContent === formatOverrunBucketStat(3, 0.2)).length,
+    ).toBeGreaterThan(0)
+  })
+
+  it('opens the overrun tooltip from the title trigger and closes on Escape', () => {
+    render(createElement(PlanOverrunCard, { data: dashboardResponseFixture().plan_overrun }))
+
+    const trigger = screen.getByRole('button', { name: 'Informations sur le taux de dépassement' })
+    expect(trigger.getAttribute('title')).toBeNull()
+    expect(screen.queryByText(OVERRUN_TOOLTIP)).toBeNull()
+
+    fireEvent.click(trigger)
+    expect(screen.getByText(OVERRUN_TOOLTIP)).toBeTruthy()
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByText(OVERRUN_TOOLTIP)).toBeNull()
+  })
+
+  it('closes the overrun tooltip on outside click', async () => {
+    render(createElement(PlanOverrunCard, { data: dashboardResponseFixture().plan_overrun }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Informations sur le taux de dépassement' }))
+    expect(screen.getByText(OVERRUN_TOOLTIP)).toBeTruthy()
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    fireEvent.pointerDown(screen.getByRole('heading', { name: 'Plans d’action en retard' }))
+    expect(screen.queryByText(OVERRUN_TOOLTIP)).toBeNull()
   })
 })

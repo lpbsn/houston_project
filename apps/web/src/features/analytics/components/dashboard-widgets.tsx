@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { ArrowDownRight, ArrowUpRight, Download, Info } from 'lucide-react'
+import { Popover } from 'radix-ui'
 
 import type {
   AnalyticsContributorItem,
@@ -29,6 +30,7 @@ import {
   formatDashboardPointsDelta,
   formatDeadlineAnalyzedTotal,
   formatDeadlineExclusionNote,
+  formatOverrunBucketStat,
   formatOverrunExclusionNote,
   formatOverrunTotal,
   formatRelativeDaysAgo,
@@ -91,25 +93,41 @@ function DashboardCard({
   subtitle,
   children,
   titleTooltip,
+  titleTooltipAriaLabel,
 }: {
   title: string
   subtitle?: string
   children: ReactNode
   titleTooltip?: string
+  titleTooltipAriaLabel?: string
 }) {
   return (
     <section className="flex min-w-0 flex-col rounded-2xl border border-[#E8E6DF] bg-white p-5 lg:p-6">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+      <div>
+        <div className="flex min-w-0 items-center gap-1.5">
           <h2 className="text-base font-semibold tracking-tight text-[#1a1a1a]">{title}</h2>
-          {subtitle ? <p className="mt-1 text-[12px] text-[#7D7B75]">{subtitle}</p> : null}
+          {titleTooltip && titleTooltipAriaLabel ? (
+            <Popover.Root>
+              <Popover.Trigger
+                aria-label={titleTooltipAriaLabel}
+                className="inline-flex shrink-0 rounded-md text-[#7D7B75] outline-none focus-visible:ring-2 focus-visible:ring-[#1a1a1a]/20"
+              >
+                <Info className="h-4 w-4" aria-hidden />
+              </Popover.Trigger>
+              <Popover.Portal>
+                <Popover.Content
+                  align="start"
+                  side="bottom"
+                  sideOffset={6}
+                  className="z-50 max-w-sm rounded-xl border border-[#E8E6DF] bg-white p-3 text-sm leading-relaxed text-[#1a1a1a] shadow-sm outline-none"
+                >
+                  {titleTooltip}
+                </Popover.Content>
+              </Popover.Portal>
+            </Popover.Root>
+          ) : null}
         </div>
-        {titleTooltip ? (
-          <span title={titleTooltip} className="shrink-0 text-[#7D7B75]">
-            <Info className="h-4 w-4" aria-hidden />
-            <span className="sr-only">{titleTooltip}</span>
-          </span>
-        ) : null}
+        {subtitle ? <p className="mt-1 text-[12px] text-[#7D7B75]">{subtitle}</p> : null}
       </div>
       <div className="mt-4 min-w-0">{children}</div>
     </section>
@@ -787,14 +805,14 @@ export function PlanOverrunCard({
   return (
     <DashboardCard
       title="Plans d’action en retard"
-      subtitle="Stock actuel, indépendant de la période. Répartition selon le taux de dépassement."
       titleTooltip="Le taux de dépassement compare le temps de retard à la durée planifiée du plan. Plus le pourcentage est élevé, plus le retard est important par rapport au délai prévu. Exemple : 2 jours de retard sur un plan de 30 jours représentent 6,7 %, tandis que 2 jours de retard sur un plan de 2 jours représentent 100 %."
+      titleTooltipAriaLabel="Informations sur le taux de dépassement"
     >
       {data.total_count === 0 ? (
         <p className="text-sm text-[#7D7B75]">{emptyOverrunMessage()}</p>
       ) : (
         <>
-          <p className="text-2xl font-semibold tabular-nums">{formatOverrunTotal(data.total_count)}</p>
+          <p className="text-sm tabular-nums text-[#7D7B75]">{formatOverrunTotal(data.total_count)}</p>
           {data.analyzed_count > 0 ? (
             <ul className="mt-4 flex flex-col gap-2">
               {data.buckets.map((bucket) => (
@@ -802,7 +820,7 @@ export function PlanOverrunCard({
                   <div className="flex items-center justify-between gap-3 text-sm">
                     <span>{OVERRUN_LABELS[bucket.key] ?? bucket.key}</span>
                     <span className="tabular-nums text-[#7D7B75]">
-                      {bucket.count} {formatDashboardPercent(bucket.share)}
+                      {formatOverrunBucketStat(bucket.count, bucket.share)}
                     </span>
                   </div>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">

@@ -17,7 +17,9 @@ import {
   emptyResolutionQualityMessage,
   formatDeadlineAnalyzedTotal,
   formatDeadlineExclusionNote,
+  formatDashboardPercent,
   formatOverrunExclusionNote,
+  formatOverrunBucketStat,
   formatOverrunTotal,
   formatResolutionQualityTotal,
   formatUnevaluatedPlansNote,
@@ -302,6 +304,8 @@ describe('dashboard plan totals copy', () => {
       'Aucun plan d’action terminé mesurable sur la période.',
     )
     expect(formatOverrunTotal(1)).toBe('1 plan actuellement en retard')
+    expect(formatOverrunBucketStat(4, 0.27)).toBe(`4 plans · ${formatDashboardPercent(0.27)}`)
+    expect(formatOverrunBucketStat(1, 0.2)).toBe(`1 plan · ${formatDashboardPercent(0.2)}`)
     expect(formatOverrunExclusionNote(1)).toBe(
       '1 plan exclu : dates de planification non fiables.',
     )
