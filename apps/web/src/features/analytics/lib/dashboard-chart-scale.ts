@@ -27,7 +27,7 @@ function niceNumber(value: number, round: boolean): number {
   return niceFraction * 10 ** exponent
 }
 
-export const VOLUME_PLOT_HEIGHT_PX = 176
+export const VOLUME_PLOT_HEIGHT_PX = 500
 const VOLUME_SEGMENT_LABEL_MIN_PX = 22
 
 export function barHeightPercent(count: number, scaleMax: number): number {
@@ -37,11 +37,15 @@ export function barHeightPercent(count: number, scaleMax: number): number {
   return (count / scaleMax) * 100
 }
 
-export function volumeSegmentLabelVisible(count: number, scaleMax: number): boolean {
+export function volumeSegmentLabelVisible(
+  count: number,
+  scaleMax: number,
+  plotHeightPx: number = VOLUME_PLOT_HEIGHT_PX,
+): boolean {
   if (scaleMax <= 0 || count <= 0) {
     return false
   }
-  return (count / scaleMax) * VOLUME_PLOT_HEIGHT_PX >= VOLUME_SEGMENT_LABEL_MIN_PX
+  return (count / scaleMax) * plotHeightPx >= VOLUME_SEGMENT_LABEL_MIN_PX
 }
 
 export function integerYAxis(maxTotal: number): { scaleMax: number; ticks: number[] } {

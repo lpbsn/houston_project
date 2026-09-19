@@ -149,8 +149,8 @@ La zone « Impact futur potentiel · IA » suit la même règle que celle des su
 
 La carte comprend un sélecteur local à deux états :
 
-- « Pôle concerné », actif par défaut ;
-- « Pôle responsable ».
+- « Pôle responsable », actif par défaut ;
+- « Pôle concerné ».
 
 Ce sélecteur agit uniquement sur cette carte.
 
@@ -175,15 +175,14 @@ Une légende associe chaque couleur à son pôle. Sous le graphique, afficher un
 
 ### 9.4. Destination des observations
 
-Présenter la répartition exclusive des observations selon les sept catégories suivantes :
+Présenter la répartition exclusive des observations selon les six catégories suivantes :
 
 1. En attente
 2. Intéressante
 3. Plan d’action en cours
 4. Résolue directement
 5. Résolue via un plan d’action
-6. Résolue après demande de résolution
-7. Annulée
+6. Annulée
 
 Règles :
 
@@ -192,15 +191,14 @@ Règles :
 - la catégorie correspond à la situation de l’observation à la fin de la période analysée ;
 - les catégories sont calculées à partir de la situation réellement applicable à cette période, sans réinterpréter une période ancienne avec l’état actuel de l’observation ;
 - « En attente » correspond aux observations encore ouvertes et entre dans le dénominateur ;
-- « Résolue directement » correspond à une résolution déclenchée directement par un utilisateur depuis le bouton « Résolue » ;
+- « Résolue directement » regroupe les résolutions déclenchées directement par un utilisateur depuis le bouton « Résolue » et les résolutions après demande de résolution ; cette fusion est une projection analytique du Dashboard et ne change pas la sémantique métier de l’origine de résolution ;
 - une observation peut être « Résolue directement » même si un ou plusieurs plans lui ont été associés auparavant puis annulés ;
 - « Résolue via un plan d’action » correspond uniquement aux observations dont la résolution a été déclenchée par l’aboutissement d’un plan d’action ;
-- « Résolue après demande de résolution » reste distincte des deux catégories précédentes ;
 - « Plan d’action en cours » correspond à une observation actuellement prise en charge par un plan, mais pas encore résolue.
 
 Cette carte n’inclut ni « Épinglée » ni « Archivée ».
 
-Pour chaque destination, afficher sa part et son évolution par rapport à la période précédente.
+Pour chaque destination, afficher le nombre absolu, sa part et son évolution par rapport à la période précédente.
 
 ### 9.5. Délai avant chaque destination
 
@@ -212,8 +210,9 @@ Afficher uniquement :
 - Plan d’action en cours ;
 - Résolue directement ;
 - Résolue via un plan d’action ;
-- Résolue après demande de résolution ;
 - Annulée.
+
+Les résolutions directes et les résolutions après demande de résolution contribuent ensemble à « Résolue directement », comme dans la carte de répartition.
 
 Ne pas afficher :
 
@@ -428,9 +427,9 @@ La refonte sera considérée conforme lorsque :
 - aucun mécanisme de glisser-déposer ou de personnalisation de l’ordre n’est présent ;
 - les filtres non cadrés et les analyses IA sont clairement présentés comme indisponibles ;
 - les graphiques utilisent les données réelles et respectent les proportions affichées ;
-- la carte « Destination des observations » présente exactement les sept catégories exclusives, totalise 100 %, et inclut les observations en attente dans le dénominateur ;
+- la carte « Destination des observations » présente exactement les six catégories exclusives, totalise 100 %, et inclut les observations en attente dans le dénominateur ;
 - les catégories « Épinglée » et « Archivée » sont absentes du Dashboard, y compris des délais ;
-- les trois mécanismes de résolution restent distincts : résolue directement, résolue via un plan d’action, résolue après demande de résolution ;
+- la projection analytique du Dashboard fusionne « résolue directement » et « résolue après demande de résolution » dans « Résolue directement », distincte de « Résolue via un plan d’action » ;
 - les catégories et origines de résolution d’une période correspondent à la situation applicable à cette période, sans réinterprétation par l’état actuel ;
 - la carte des délais n’affiche pas En attente ;
 - les échéances des plans d’action sont calculées avec le jour et l’heure complets, sans arrondi au jour ;

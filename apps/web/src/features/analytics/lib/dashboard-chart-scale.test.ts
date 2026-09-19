@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   barHeightPercent,
   integerYAxis,
+  VOLUME_PLOT_HEIGHT_PX,
   volumeSegmentLabelVisible,
 } from '@/features/analytics/lib/dashboard-chart-scale'
 
@@ -25,9 +26,11 @@ describe('barHeightPercent', () => {
 
 describe('volumeSegmentLabelVisible', () => {
   it('hides labels on small segments without changing their height', () => {
-    expect(volumeSegmentLabelVisible(1, 80)).toBe(false)
-    expect(volumeSegmentLabelVisible(65, 80)).toBe(true)
+    expect(VOLUME_PLOT_HEIGHT_PX).toBeGreaterThan(176)
+    expect(volumeSegmentLabelVisible(1, 80, VOLUME_PLOT_HEIGHT_PX)).toBe(false)
+    expect(volumeSegmentLabelVisible(65, 80, VOLUME_PLOT_HEIGHT_PX)).toBe(true)
     expect(barHeightPercent(1, 80)).toBeCloseTo(1.25)
+    expect(volumeSegmentLabelVisible(1, 80, 1760)).toBe(true)
   })
 })
 

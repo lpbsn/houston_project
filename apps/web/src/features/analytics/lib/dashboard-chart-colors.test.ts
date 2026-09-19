@@ -17,9 +17,8 @@ describe('destinationChartColor', () => {
     expect(destinationChartColor('action_plan_in_progress')).toBe('#7C3AED')
     expect(destinationChartColor('resolved_direct')).toBe('#0D9488')
     expect(destinationChartColor('resolved_via_action_plan')).toBe('#1F7A4D')
-    expect(destinationChartColor('resolved_via_resolution_request')).toBe('#0891B2')
     expect(destinationChartColor('canceled')).toBe('#E24B4A')
-    expect(Object.keys(DESTINATION_CHART_COLORS)).toHaveLength(7)
+    expect(Object.keys(DESTINATION_CHART_COLORS)).toHaveLength(6)
   })
 })
 

@@ -8,10 +8,12 @@ import type { AnalyticsDashboardMetricComparison } from '@/features/analytics/ap
 import {
   ObservationDestinationsCard,
   ObservationVolumeCard,
+  PlanOverrunCard,
+  ResolutionQualityCard,
   TrendBadge,
 } from '@/features/analytics/components/dashboard-widgets'
 import { UNASSIGNED_POLE_COLOR, destinationChartColor } from '@/features/analytics/lib/dashboard-chart-colors'
-import { formatAbsentPreviousPeriodLabel, formatDashboardPercent } from '@/features/analytics/lib/dashboard-comparisons'
+import { formatAbsentPreviousPeriodLabel, formatDashboardPercent, formatOverrunBucketStat } from '@/features/analytics/lib/dashboard-comparisons'
 import {
   dashboardResponseFixture,
   observationVolumeChartFixture,
@@ -130,7 +132,7 @@ describe('TrendBadge', () => {
 })
 
 describe('ObservationVolumeCard', () => {
-  it('shows current-period details by default and updates from click or keyboard', () => {
+  it('defaults to responsible pole mode and keeps bars non-interactive', () => {
     const { container } = render(
       createElement(ObservationVolumeCard, {
         volume: observationVolumeChartFixture(),
@@ -138,17 +140,13 @@ describe('ObservationVolumeCard', () => {
       }),
     )
 
-    expect(container.querySelector('[data-volume-detail="current"]')?.textContent).toContain(
-      `3 (${formatDashboardPercent(0.5)})`,
-    )
+    expect(container.querySelector('[data-volume-mode="responsible"]')).toBeTruthy()
+    expect(container.querySelector('[data-volume-detail]')).toBeNull()
+    expect(container.querySelectorAll('[data-volume-window]')).toHaveLength(5)
+    expect(container.querySelector('button[data-volume-window]')).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Il y a 3 périodes' }))
-    expect(container.querySelector('[data-volume-detail="three_periods_ago"]')?.textContent).toContain(
-      `2 (${formatDashboardPercent(2 / 3)})`,
-    )
-
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Il y a 3 périodes' }), { key: 'ArrowRight' })
-    expect(container.querySelector('[data-volume-detail="two_periods_ago"]')).toBeTruthy()
+    fireEvent.click(container.querySelector('[data-volume-mode-option="affected"]') as HTMLElement)
+    expect(container.querySelector('[data-volume-mode="affected"]')).toBeTruthy()
   })
 
   it('does not paint segments on a zero window and matches Sans pôle legend color', () => {
@@ -159,9 +157,11 @@ describe('ObservationVolumeCard', () => {
       }),
     )
 
-    const zeroColumn = screen.getByRole('button', { name: 'Il y a 4 périodes' })
-    expect(zeroColumn.querySelectorAll('[data-pole-id]')).toHaveLength(0)
-    const stackedBar = zeroColumn.querySelector('div')
+    fireEvent.click(container.querySelector('[data-volume-mode-option="affected"]') as HTMLElement)
+
+    const zeroColumn = container.querySelector('[data-volume-window="four_periods_ago"]')
+    expect(zeroColumn?.querySelectorAll('[data-pole-id]')).toHaveLength(0)
+    const stackedBar = zeroColumn?.querySelector('div')
     expect(stackedBar?.style.height).toBe('0%')
 
     const unassignedSegment = container.querySelector('[data-pole-id="unassigned"]')
@@ -180,6 +180,7 @@ describe('ObservationVolumeCard', () => {
 describe('ObservationDestinationsCard', () => {
   it('uses the same hex on the stacked bar and the legend swatch', () => {
     const destinations = dashboardResponseFixture().observation_destinations
+    const waitingShare = destinations.waiting.share
     const { container } = render(
       createElement(ObservationDestinationsCard, {
         destinations,
@@ -188,11 +189,103 @@ describe('ObservationDestinationsCard', () => {
     )
 
     const waitingBar = screen.getByRole('button', {
-      name: `En attente ${formatDashboardPercent(destinations.waiting.share)}`,
+      name: `En attente · ${destinations.waiting.count} · ${formatDashboardPercent(waitingShare)}`,
     })
     const waitingSwatch = container.querySelector('[data-destination-swatch="waiting"]')
     expect(waitingBar.style.backgroundColor).toBe(cssBackground(destinationChartColor('waiting')))
     expect((waitingSwatch as HTMLElement).style.backgroundColor).toBe(waitingBar.style.backgroundColor)
-    expect(waitingBar.style.width).toBe(`${(destinations.waiting.share ?? 0) * 100}%`)
+    expect(waitingBar.style.width).toBe(`${(waitingShare ?? 0) * 100}%`)
+  })
+
+  it('shows count, share, and N/A when the previous period had zero for that destination', () => {
+    const destinations = dashboardResponseFixture().observation_destinations
+    const interesting = {
+      ...destinations.interesting,
+      comparison: comparison({
+        current_value: destinations.interesting.share,
+        previous_value: 0,
+        absolute_delta: destinations.interesting.share,
+        relative_change: null,
+        relative_change_status: 'undefined_previous_zero',
+      }),
+    }
+    const { container } = render(
+      createElement(ObservationDestinationsCard, {
+        destinations: { ...destinations, interesting },
+        periodDays: 7,
+      }),
+    )
+
+    expect(container.textContent).toContain(String(destinations.waiting.count))
+    expect(container.textContent).toContain(formatDashboardPercent(destinations.waiting.share))
+    expect(container.textContent).toContain('N/A')
+    expect(container.textContent).not.toContain(formatAbsentPreviousPeriodLabel(7))
+    expect(container.querySelector('[data-destination-swatch="resolved_via_resolution_request"]')).toBeNull()
+  })
+
+  it('includes count in the selected segment summary', () => {
+    const destinations = dashboardResponseFixture().observation_destinations
+    const { container } = render(
+      createElement(ObservationDestinationsCard, {
+        destinations,
+        periodDays: 7,
+      }),
+    )
+    const summary = `En attente · ${destinations.waiting.count} · ${formatDashboardPercent(destinations.waiting.share)}`
+
+    fireEvent.click(screen.getByRole('button', { name: summary }))
+    expect(container.querySelector('p')?.textContent).toContain(summary)
+  })
+})
+
+const OVERRUN_TOOLTIP =
+  'Le taux de dépassement compare le temps de retard à la durée planifiée du plan. Plus le pourcentage est élevé, plus le retard est important par rapport au délai prévu. Exemple : 2 jours de retard sur un plan de 30 jours représentent 6,7 %, tandis que 2 jours de retard sur un plan de 2 jours représentent 100 %.'
+
+describe('PlanOverrunCard', () => {
+  it('shows bucket counts as plans and share percent', () => {
+    render(createElement(PlanOverrunCard, { data: dashboardResponseFixture().plan_overrun }))
+
+    expect(
+      screen.getByText((_, node) => node?.textContent === formatOverrunBucketStat(4, 0.27)),
+    ).toBeTruthy()
+    expect(
+      screen.getAllByText((_, node) => node?.textContent === formatOverrunBucketStat(3, 0.2)).length,
+    ).toBeGreaterThan(0)
+  })
+
+  it('opens the overrun tooltip from the title trigger and closes on Escape', () => {
+    render(createElement(PlanOverrunCard, { data: dashboardResponseFixture().plan_overrun }))
+
+    const trigger = screen.getByRole('button', { name: 'Informations sur le taux de dépassement' })
+    expect(trigger.getAttribute('title')).toBeNull()
+    expect(screen.queryByText(OVERRUN_TOOLTIP)).toBeNull()
+
+    fireEvent.click(trigger)
+    expect(screen.getByText(OVERRUN_TOOLTIP)).toBeTruthy()
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByText(OVERRUN_TOOLTIP)).toBeNull()
+  })
+
+  it('closes the overrun tooltip on outside click', async () => {
+    render(createElement(PlanOverrunCard, { data: dashboardResponseFixture().plan_overrun }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Informations sur le taux de dépassement' }))
+    expect(screen.getByText(OVERRUN_TOOLTIP)).toBeTruthy()
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    fireEvent.pointerDown(screen.getByRole('heading', { name: 'Plans d’action en retard' }))
+    expect(screen.queryByText(OVERRUN_TOOLTIP)).toBeNull()
+  })
+})
+
+describe('ResolutionQualityCard', () => {
+  it('keeps the zero-star row graphic without a visible 0 étoile label', () => {
+    render(createElement(ResolutionQualityCard, { data: dashboardResponseFixture().resolution_quality }))
+
+    expect(screen.queryByText('0 étoile')).toBeNull()
+    const zeroStars = screen.getByRole('img', { name: '0 étoile' })
+    expect(zeroStars).toBeTruthy()
+    expect(zeroStars.textContent?.replace(/\s/g, '')).toBe('☆☆☆☆☆')
   })
 })

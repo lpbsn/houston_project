@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { ArrowDownRight, ArrowUpRight, Download, Info } from 'lucide-react'
+import { Popover } from 'radix-ui'
 
 import type {
   AnalyticsContributorItem,
@@ -29,6 +30,7 @@ import {
   formatDashboardPointsDelta,
   formatDeadlineAnalyzedTotal,
   formatDeadlineExclusionNote,
+  formatOverrunBucketStat,
   formatOverrunExclusionNote,
   formatOverrunTotal,
   formatRelativeDaysAgo,
@@ -50,8 +52,6 @@ import {
 import type { DashboardPeriodDays } from '@/features/analytics/lib/dashboard-url-state'
 import { cn } from '@/lib/utils'
 
-const CURRENT_VOLUME_WINDOW = 'current'
-
 const VOLUME_LABEL_LINES: Record<string, readonly [string, string]> = {
   four_periods_ago: ['Il y a 4', 'périodes'],
   three_periods_ago: ['Il y a 3', 'périodes'],
@@ -66,7 +66,6 @@ const DESTINATION_LABELS: Record<string, string> = {
   action_plan_in_progress: 'Plan d’action en cours',
   resolved_direct: 'Résolue directement',
   resolved_via_action_plan: 'Résolue via un plan d’action',
-  resolved_via_resolution_request: 'Résolue après demande de résolution',
   canceled: 'Annulée',
 }
 
@@ -76,9 +75,16 @@ const DELAY_ORDER = [
   'action_plan_in_progress',
   'resolved_direct',
   'resolved_via_action_plan',
-  'resolved_via_resolution_request',
   'canceled',
 ] as const
+
+function formatDestinationCount(count: number): string {
+  return new Intl.NumberFormat('fr-FR').format(count)
+}
+
+function destinationSegmentSummary(label: string, count: number, share: number | null): string {
+  return `${label} · ${formatDestinationCount(count)} · ${formatDashboardPercent(share)}`
+}
 
 const OVERRUN_LABELS: Record<string, string> = {
   lt_10: 'moins de 10 % de dépassement',
@@ -93,25 +99,41 @@ function DashboardCard({
   subtitle,
   children,
   titleTooltip,
+  titleTooltipAriaLabel,
 }: {
   title: string
   subtitle?: string
   children: ReactNode
   titleTooltip?: string
+  titleTooltipAriaLabel?: string
 }) {
   return (
     <section className="flex min-w-0 flex-col rounded-2xl border border-[#E8E6DF] bg-white p-5 lg:p-6">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+      <div>
+        <div className="flex min-w-0 items-center gap-1.5">
           <h2 className="text-base font-semibold tracking-tight text-[#1a1a1a]">{title}</h2>
-          {subtitle ? <p className="mt-1 text-[12px] text-[#7D7B75]">{subtitle}</p> : null}
+          {titleTooltip && titleTooltipAriaLabel ? (
+            <Popover.Root>
+              <Popover.Trigger
+                aria-label={titleTooltipAriaLabel}
+                className="inline-flex shrink-0 rounded-md text-[#7D7B75] outline-none focus-visible:ring-2 focus-visible:ring-[#1a1a1a]/20"
+              >
+                <Info className="h-4 w-4" aria-hidden />
+              </Popover.Trigger>
+              <Popover.Portal>
+                <Popover.Content
+                  align="start"
+                  side="bottom"
+                  sideOffset={6}
+                  className="z-50 max-w-sm rounded-xl border border-[#E8E6DF] bg-white p-3 text-sm leading-relaxed text-[#1a1a1a] shadow-sm outline-none"
+                >
+                  {titleTooltip}
+                </Popover.Content>
+              </Popover.Portal>
+            </Popover.Root>
+          ) : null}
         </div>
-        {titleTooltip ? (
-          <span title={titleTooltip} className="shrink-0 text-[#7D7B75]">
-            <Info className="h-4 w-4" aria-hidden />
-            <span className="sr-only">{titleTooltip}</span>
-          </span>
-        ) : null}
+        {subtitle ? <p className="mt-1 text-[12px] text-[#7D7B75]">{subtitle}</p> : null}
       </div>
       <div className="mt-4 min-w-0">{children}</div>
     </section>
@@ -409,10 +431,8 @@ export function ObservationVolumeCard({
   volume: AnalyticsDashboardResponse['observation_volume']
   periodDays: number
 }) {
-  const [mode, setMode] = useState<'affected' | 'responsible'>('affected')
-  const [selectedWindowKey, setSelectedWindowKey] = useState(CURRENT_VOLUME_WINDOW)
+  const [mode, setMode] = useState<'affected' | 'responsible'>('responsible')
   const selected = volume[mode]
-  const windowKeys = selected.windows.map((window) => window.label_key)
   const poleColors = useMemo(() => assignPoleColors(selected.windows), [selected.windows])
   const maxTotal = Math.max(...selected.windows.map((window) => window.total), 0)
   const { scaleMax, ticks } = integerYAxis(maxTotal)
@@ -427,32 +447,18 @@ export function ObservationVolumeCard({
       ),
     [selected.windows],
   )
-  const selectedWindow =
-    selected.windows.find((window) => window.label_key === selectedWindowKey) ??
-    selected.windows.find((window) => window.label_key === CURRENT_VOLUME_WINDOW)
 
   return (
     <DashboardCard title="Nombre d’observations">
-      <div className="mb-4 inline-flex rounded-lg bg-[#F5F4F0] p-1">
+      <div
+        className="mb-4 inline-flex rounded-lg bg-[#F5F4F0] p-1"
+        data-volume-mode={mode}
+      >
         <button
           type="button"
-          onClick={() => {
-            setMode('affected')
-            setSelectedWindowKey(CURRENT_VOLUME_WINDOW)
-          }}
-          className={cn(
-            'rounded-md px-3 py-1.5 text-[12px] font-semibold',
-            mode === 'affected' ? 'bg-white text-[#1a1a1a] shadow-sm' : 'text-[#7D7B75]',
-          )}
-        >
-          Pôle concerné
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setMode('responsible')
-            setSelectedWindowKey(CURRENT_VOLUME_WINDOW)
-          }}
+          aria-pressed={mode === 'responsible'}
+          data-volume-mode-option="responsible"
+          onClick={() => setMode('responsible')}
           className={cn(
             'rounded-md px-3 py-1.5 text-[12px] font-semibold',
             mode === 'responsible' ? 'bg-white text-[#1a1a1a] shadow-sm' : 'text-[#7D7B75]',
@@ -460,11 +466,23 @@ export function ObservationVolumeCard({
         >
           Pôle responsable
         </button>
+        <button
+          type="button"
+          aria-pressed={mode === 'affected'}
+          data-volume-mode-option="affected"
+          onClick={() => setMode('affected')}
+          className={cn(
+            'rounded-md px-3 py-1.5 text-[12px] font-semibold',
+            mode === 'affected' ? 'bg-white text-[#1a1a1a] shadow-sm' : 'text-[#7D7B75]',
+          )}
+        >
+          Pôle concerné
+        </button>
       </div>
       <div className="min-w-0">
-        <div className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-1">
-          <div />
-          <div className="grid grid-cols-5 gap-1">
+        <div className="grid grid-cols-1 sm:grid-cols-[2.5rem_minmax(0,1fr)] sm:gap-x-1">
+          <div className="hidden sm:block" />
+          <div className="grid grid-cols-5 gap-1 pl-5 sm:pl-0">
             {selected.windows.map((window) => (
               <p
                 key={`${window.label_key}-total`}
@@ -474,7 +492,7 @@ export function ObservationVolumeCard({
               </p>
             ))}
           </div>
-          <div className="relative" style={{ height: VOLUME_PLOT_HEIGHT_PX }}>
+          <div className="relative hidden sm:block" style={{ height: VOLUME_PLOT_HEIGHT_PX }}>
             {ticks.map((tick) => (
               <span
                 key={tick}
@@ -498,88 +516,60 @@ export function ObservationVolumeCard({
                 }}
               />
             ))}
-            <div className="relative z-[1] grid h-full grid-cols-5 items-end gap-1.5 sm:gap-3">
-              {selected.windows.map((window) => {
-                const isSelected = selectedWindow?.label_key === window.label_key
-                return (
-                  <button
-                    key={window.label_key}
-                    type="button"
-                    aria-pressed={isSelected}
-                    aria-label={
-                      VOLUME_LABEL_LINES[window.label_key]
-                        ? VOLUME_LABEL_LINES[window.label_key].join(' ')
-                        : window.label_key
-                    }
-                    data-volume-window={window.label_key}
-                    onClick={() => setSelectedWindowKey(window.label_key)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Home' || event.key === 'End') {
-                        event.preventDefault()
-                        let nextKey = selectedWindowKey
-                        if (event.key === 'ArrowLeft') {
-                          const currentIndex = Math.max(0, windowKeys.indexOf(selectedWindowKey))
-                          nextKey = windowKeys[(currentIndex - 1 + windowKeys.length) % windowKeys.length] ?? nextKey
-                        }
-                        if (event.key === 'ArrowRight') {
-                          const currentIndex = Math.max(0, windowKeys.indexOf(selectedWindowKey))
-                          nextKey = windowKeys[(currentIndex + 1) % windowKeys.length] ?? nextKey
-                        }
-                        if (event.key === 'Home') {
-                          nextKey = windowKeys[0] ?? nextKey
-                        }
-                        if (event.key === 'End') {
-                          nextKey = windowKeys.at(-1) ?? nextKey
-                        }
-                        setSelectedWindowKey(nextKey)
-                        requestAnimationFrame(() => {
-                          const node = document.querySelector<HTMLButtonElement>(
-                            `[data-volume-window="${nextKey}"]`,
-                          )
-                          node?.focus()
-                        })
-                      }
+            {ticks.map((tick) => (
+              <span
+                key={`mobile-y-${tick}`}
+                className="pointer-events-none absolute left-0 z-[2] -translate-y-1/2 text-[10px] leading-none text-[#7D7B75] tabular-nums sm:hidden"
+                style={{ bottom: scaleMax === 0 ? '0%' : `${barHeightPercent(tick, scaleMax)}%` }}
+              >
+                {tick}
+              </span>
+            ))}
+            <div className="relative z-[1] grid h-full grid-cols-5 items-end gap-1.5 pl-5 sm:gap-3 sm:pl-0">
+              {selected.windows.map((window) => (
+                <div
+                  key={window.label_key}
+                  data-volume-window={window.label_key}
+                  className="flex h-full min-w-0 w-full flex-col items-center justify-end"
+                >
+                  <div
+                    className="flex w-[90%] min-w-0 flex-col-reverse overflow-hidden rounded-md sm:w-[55%]"
+                    style={{
+                      height: scaleMax === 0 ? 0 : `${barHeightPercent(window.total, scaleMax)}%`,
                     }}
-                    className="flex h-full min-w-0 w-full flex-col items-center justify-end"
                   >
-                    <div
-                      className={cn(
-                        'flex w-full min-w-0 flex-col-reverse overflow-hidden rounded-md',
-                        isSelected && 'ring-2 ring-[#1F7A4D] ring-offset-1',
-                      )}
-                      style={{
-                        height: scaleMax === 0 ? 0 : `${barHeightPercent(window.total, scaleMax)}%`,
-                      }}
-                    >
-                      {window.segments.map((segment) => {
-                        const showLabel = volumeSegmentLabelVisible(segment.count, scaleMax)
-                        return (
-                          <span
-                            key={segment.pole_id}
-                            data-pole-id={segment.pole_id}
-                            className="flex min-h-0 w-full items-center justify-center px-0.5 text-center text-[10px] leading-tight font-semibold text-white sm:text-[11px]"
-                            style={{
-                              height:
-                                window.total === 0
-                                  ? '0%'
-                                  : `${(segment.count / window.total) * 100}%`,
-                              backgroundColor: poleChartColor(segment.pole_id, poleColors),
-                            }}
-                          >
-                            {showLabel
-                              ? `${segment.count} (${formatDashboardPercent(segment.share)})`
-                              : null}
-                          </span>
-                        )
-                      })}
-                    </div>
-                  </button>
-                )
-              })}
+                    {window.segments.map((segment) => {
+                      const showLabel = volumeSegmentLabelVisible(
+                        segment.count,
+                        scaleMax,
+                        VOLUME_PLOT_HEIGHT_PX,
+                      )
+                      return (
+                        <span
+                          key={segment.pole_id}
+                          data-pole-id={segment.pole_id}
+                          className="flex min-h-0 w-full items-center justify-center px-0.5 text-center text-[10px] leading-tight font-semibold text-white sm:text-[11px]"
+                          style={{
+                            height:
+                              window.total === 0
+                                ? '0%'
+                                : `${(segment.count / window.total) * 100}%`,
+                            backgroundColor: poleChartColor(segment.pole_id, poleColors),
+                          }}
+                        >
+                          {showLabel
+                            ? `${segment.count} (${formatDashboardPercent(segment.share)})`
+                            : null}
+                        </span>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-          <div />
-          <div className="mt-2 grid grid-cols-5 gap-1">
+          <div className="hidden sm:block" />
+          <div className="mt-2 grid grid-cols-5 gap-1 pl-5 sm:pl-0">
             {selected.windows.map((window) => {
               const lines = VOLUME_LABEL_LINES[window.label_key]
               return (
@@ -605,27 +595,6 @@ export function ObservationVolumeCard({
           </div>
         </div>
       </div>
-      {selectedWindow ? (
-        <ul
-          className="mt-3 rounded-xl bg-[#F5F4F0] px-3 py-2 text-[12px] text-[#7D7B75]"
-          data-volume-detail={selectedWindow.label_key}
-        >
-          {selectedWindow.segments.map((segment) => (
-            <li key={segment.pole_id} className="flex items-center justify-between gap-3 py-0.5">
-              <span className="inline-flex min-w-0 items-center gap-1.5">
-                <span
-                  className="h-2.5 w-2.5 shrink-0 rounded-sm"
-                  style={{ backgroundColor: poleChartColor(segment.pole_id, poleColors) }}
-                />
-                <span className="truncate">{segment.name}</span>
-              </span>
-              <span className="shrink-0 tabular-nums">
-                {segment.count} ({formatDashboardPercent(segment.share)})
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
       <div className="mt-4 flex flex-wrap gap-3 text-[12px] text-[#7D7B75]">
         {legend.map(([poleId, name]) => (
           <span key={poleId} className="inline-flex items-center gap-1.5">
@@ -668,10 +637,11 @@ export function ObservationDestinationsCard({
 
   return (
     <DashboardCard title="Destination des observations">
-      <div className="flex h-3.5 overflow-hidden rounded-full bg-[#F0EFE9]">
+      <div className="flex h-6 overflow-hidden rounded-full bg-[#F0EFE9]">
         {keys.map((key) => {
-          const share = destinations[key]?.share ?? 0
-          if (share <= 0) {
+          const item = destinations[key]
+          const share = item?.share ?? 0
+          if (share <= 0 || !item) {
             return null
           }
           const color = destinationChartColor(key)
@@ -680,7 +650,7 @@ export function ObservationDestinationsCard({
               key={key}
               type="button"
               aria-pressed={selectedKey === key}
-              aria-label={`${DESTINATION_LABELS[key]} ${formatDashboardPercent(share)}`}
+              aria-label={destinationSegmentSummary(DESTINATION_LABELS[key], item.count, share)}
               className="h-full min-w-0 p-0"
               style={{ width: `${share * 100}%`, backgroundColor: color }}
               onClick={() => setSelectedKey((current) => (current === key ? null : key))}
@@ -699,10 +669,10 @@ export function ObservationDestinationsCard({
             className="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm align-middle"
             style={{ backgroundColor: destinationChartColor(selectedKey) }}
           />
-          {selectedLabel} · {formatDashboardPercent(selectedItem.share)}
+          {destinationSegmentSummary(selectedLabel, selectedItem.count, selectedItem.share)}
         </p>
       ) : null}
-      <ul className="mt-4 flex flex-col gap-2">
+      <ul className="mt-4 grid grid-cols-[minmax(0,1fr)_max-content_max-content_max-content] gap-x-3 gap-y-2">
         {keys.map((key) => {
           const item = destinations[key]
           if (!item) {
@@ -710,25 +680,35 @@ export function ObservationDestinationsCard({
           }
           const color = destinationChartColor(key)
           return (
-            <li key={key} className="flex items-center justify-between gap-3 text-sm">
-              <span className="inline-flex items-center gap-2 text-[#7D7B75]">
+            <li
+              key={key}
+              className="col-span-full grid grid-cols-subgrid items-center text-sm"
+            >
+              <span className="inline-flex min-w-0 items-center gap-2 text-[#7D7B75]">
                 <span
-                  className="h-2.5 w-2.5 rounded-sm"
+                  className="h-2.5 w-2.5 shrink-0 rounded-sm"
                   data-destination-swatch={key}
                   style={{ backgroundColor: color }}
                 />
-                {DESTINATION_LABELS[key]}
+                <span className="min-w-0">{DESTINATION_LABELS[key]}</span>
               </span>
-              <span className="flex items-center gap-2">
-                <span className="tabular-nums font-medium text-[#1a1a1a]">
-                  {formatDashboardPercent(item.share)}
-                </span>
-                <TrendBadge
-                  comparison={item.comparison}
-                  sense="neutral"
-                  format="percent"
-                  periodDays={periodDays}
-                />
+              <span className="text-right tabular-nums font-medium text-[#1a1a1a]">
+                {formatDestinationCount(item.count)}
+              </span>
+              <span className="text-right tabular-nums font-medium text-[#1a1a1a]">
+                {formatDashboardPercent(item.share)}
+              </span>
+              <span className="justify-self-end text-right">
+                {dashboardNewLabel(item.comparison) ? (
+                  <span className="text-[12px] font-semibold text-[#7D7B75]">N/A</span>
+                ) : (
+                  <TrendBadge
+                    comparison={item.comparison}
+                    sense="neutral"
+                    format="percent"
+                    periodDays={periodDays}
+                  />
+                )}
               </span>
             </li>
           )
@@ -798,10 +778,10 @@ export function PlanDeadlineRespectCard({
         <p className="text-sm text-[#7D7B75]">{emptyDeadlineRespectMessage()}</p>
       ) : (
         <>
-          <p className="text-2xl font-semibold tabular-nums">{formatDeadlineAnalyzedTotal(data.n)}</p>
+          <p className="text-sm text-[#7D7B75] tabular-nums">{formatDeadlineAnalyzedTotal(data.n)}</p>
           {data.n > 0 ? (
             <>
-              <div className="mt-4 flex h-3.5 overflow-hidden rounded-full bg-[#F0EFE9]">
+              <div className="mt-4 flex h-6 overflow-hidden rounded-full bg-[#F0EFE9]">
                 {data.early ? (
                   <span className="bg-[#1F7A4D]" style={{ width: `${data.early * 100}%` }} />
                 ) : null}
@@ -851,14 +831,14 @@ export function PlanOverrunCard({
   return (
     <DashboardCard
       title="Plans d’action en retard"
-      subtitle="Stock actuel, indépendant de la période. Répartition selon le taux de dépassement."
       titleTooltip="Le taux de dépassement compare le temps de retard à la durée planifiée du plan. Plus le pourcentage est élevé, plus le retard est important par rapport au délai prévu. Exemple : 2 jours de retard sur un plan de 30 jours représentent 6,7 %, tandis que 2 jours de retard sur un plan de 2 jours représentent 100 %."
+      titleTooltipAriaLabel="Informations sur le taux de dépassement"
     >
       {data.total_count === 0 ? (
         <p className="text-sm text-[#7D7B75]">{emptyOverrunMessage()}</p>
       ) : (
         <>
-          <p className="text-2xl font-semibold tabular-nums">{formatOverrunTotal(data.total_count)}</p>
+          <p className="text-sm tabular-nums text-[#7D7B75]">{formatOverrunTotal(data.total_count)}</p>
           {data.analyzed_count > 0 ? (
             <ul className="mt-4 flex flex-col gap-2">
               {data.buckets.map((bucket) => (
@@ -866,7 +846,7 @@ export function PlanOverrunCard({
                   <div className="flex items-center justify-between gap-3 text-sm">
                     <span>{OVERRUN_LABELS[bucket.key] ?? bucket.key}</span>
                     <span className="tabular-nums text-[#7D7B75]">
-                      {bucket.count} {formatDashboardPercent(bucket.share)}
+                      {formatOverrunBucketStat(bucket.count, bucket.share)}
                     </span>
                   </div>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
@@ -889,13 +869,12 @@ export function PlanOverrunCard({
 function StarRow({ filled }: { filled: number }) {
   const label = filled === 0 ? '0 étoile' : `${filled} étoile${filled > 1 ? 's' : ''}`
   return (
-    <span className="inline-flex items-center gap-2 text-[#1F7A4D]" aria-label={label}>
+    <span role="img" aria-label={label} className="inline-flex items-center text-[#1F7A4D]">
       <span className="inline-flex gap-0.5">
         {Array.from({ length: 5 }, (_, index) => (
           <span key={index}>{index < filled ? '★' : '☆'}</span>
         ))}
       </span>
-      {filled === 0 ? <span className="text-[12px] text-[#7D7B75]">0 étoile</span> : null}
     </span>
   )
 }
@@ -913,7 +892,7 @@ export function ResolutionQualityCard({
         <p className="text-sm text-[#7D7B75]">{emptyResolutionQualityMessage()}</p>
       ) : (
         <>
-          <p className="text-2xl font-semibold tabular-nums">{formatResolutionQualityTotal(data.n)}</p>
+          <p className="text-sm text-[#7D7B75] tabular-nums">{formatResolutionQualityTotal(data.n)}</p>
           {unevaluatedNote ? (
             <p className="mt-2 text-[12px] text-[#7D7B75]">{unevaluatedNote}</p>
           ) : null}

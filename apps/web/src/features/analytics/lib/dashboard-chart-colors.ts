@@ -4,7 +4,6 @@ export const DESTINATION_CHART_COLORS = {
   action_plan_in_progress: '#7C3AED',
   resolved_direct: '#0D9488',
   resolved_via_action_plan: '#1F7A4D',
-  resolved_via_resolution_request: '#0891B2',
   canceled: '#E24B4A',
 } as const
 
