@@ -113,10 +113,13 @@ def repair_resolved_journal_origins(*, dry_run: bool = True) -> RepairResolvedJo
     action = "would_patch" if dry_run else "patched"
     for event_id, signal_id in zip(event_ids, signal_ids, strict=True):
         logger.info(
-            "repair_resolved_journal_origins %s event_id=%s signal_id=%s",
-            action,
-            event_id,
-            signal_id,
+            "repair_resolved_journal_origins",
+            extra={
+                "event": "repair_resolved_journal_origins",
+                "action": action,
+                "event_id": str(event_id),
+                "signal_id": str(signal_id),
+            },
         )
     if not dry_run and len(patched_rows) != patch_count:
         raise RuntimeError("Resolved journal origin repair updated an unexpected row set.")
