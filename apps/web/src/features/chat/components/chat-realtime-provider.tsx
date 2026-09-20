@@ -180,7 +180,9 @@ export function ChatRealtimeProvider({
 
   const failMessage = useCallback(
     async (draft: ChatOutboxDraft, rejectCode?: string) => {
-      const next = { ...draft, status: 'failed' as const, rejectCode }
+      const stored = (await loadChatOutboxDrafts({ clientMessageId: draft.clientMessageId }))[0]
+      const base = stored ?? draft
+      const next = { ...base, status: 'failed' as const, rejectCode }
       await saveChatOutboxDraft(next)
       patchLocalMessage(draft.clientMessageId, (message) => ({
         ...message,
@@ -246,13 +248,20 @@ export function ChatRealtimeProvider({
               abortController.signal,
             )
         const sent = result as ChatSendMessageResponse | undefined
-        if (sent?.message && establishmentId) {
-          appendMessageToCache(establishmentId, draft.conversationId, sent.message, {
-            viewerMembershipId,
-            activeConversationId,
+        try {
+          if (sent?.message && establishmentId) {
+            appendMessageToCache(establishmentId, draft.conversationId, sent.message, {
+              viewerMembershipId,
+              activeConversationId,
+            })
+          }
+          await clearChatOutbox({ clientMessageId: draft.clientMessageId })
+        } catch {
+          console.info('[houston:chat] post-send cleanup failed', {
+            clientMessageId: draft.clientMessageId,
+            conversationId: draft.conversationId,
           })
         }
-        await clearChatOutbox({ clientMessageId: draft.clientMessageId })
         patchLocalMessage(draft.clientMessageId, (message) => ({ ...message, status: 'sent' }))
         setLocalMessages((current) =>
           current.filter((message) => message.clientMessageId !== draft.clientMessageId),

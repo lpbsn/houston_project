@@ -8,10 +8,11 @@ vi.stubGlobal('fetch', fetchMock)
 
 import { clearApiClientAuth, configureApiClientAuth } from '@/api/client'
 
-import { putChatUploadBytes, reserveChatUpload } from '../api'
+import { completeChatUpload, putChatUploadBytes, reserveChatUpload, sendChatMessage } from '../api'
 import {
   __resetChatOutboxTestStores,
   __setChatOutboxTestStores,
+  loadChatOutboxDrafts,
   persistChatOutboxAttachmentBytes,
   saveChatOutboxDraft,
   type ChatOutboxDraft,
@@ -149,6 +150,32 @@ describe('chat first attachment send (reserve → pipeline → transport)', () =
         authorization: headers.get('Authorization'),
       })
 
+      if (method === 'POST' && url.includes('/complete/')) {
+        return jsonResponse(200, {
+          upload_id: UPLOAD_ID,
+          status: 'ready',
+          kind: 'image',
+          content_type: 'image/jpeg',
+          size_bytes: 3,
+        })
+      }
+      if (method === 'POST' && url.includes('/messages/')) {
+        return jsonResponse(201, {
+          created: true,
+          message: {
+            id: '33333333-3333-4333-8333-333333333333',
+            author_membership_id: 'mbr-1',
+            author_display_name: 'Alice',
+            body: 'Hello',
+            client_message_id: 'client-1',
+            created_at: '2026-06-09T10:00:00.000Z',
+            is_reply: false,
+            reply_to: null,
+            mentions: [],
+            attachments: [],
+          },
+        })
+      }
       if (method === 'POST' && url.includes('/chat/uploads/') && !url.includes('/content/')) {
         return jsonResponse(201, {
           upload_id: UPLOAD_ID,
@@ -179,8 +206,8 @@ describe('chat first attachment send (reserve → pipeline → transport)', () =
           ...payload,
         })
       },
-      completeUpload: vi.fn(),
-      sendMessage: vi.fn(),
+      completeUpload: (uploadId) => completeChatUpload(ESTABLISHMENT_ID, uploadId),
+      sendMessage: (payload) => sendChatMessage(ESTABLISHMENT_ID, item.conversationId, payload),
     })
 
     return { fetchCalls, reservedPutUrl, putBytesPutUrl }
@@ -229,5 +256,35 @@ describe('chat first attachment send (reserve → pipeline → transport)', () =
     expect(xhrOpens).toEqual([{ method: 'PUT', url: presigned }])
     expect(xhrHeaders[0]?.Authorization).toBeUndefined()
     expect(fetchCalls.some((call) => call.method === 'PUT')).toBe(false)
+  })
+
+  it('completes the upload and POSTs the message once after a Houston PUT', async () => {
+    const { fetchCalls } = await dispatchFirstSend('')
+
+    const complete = fetchCalls.find(
+      (call) => call.method === 'POST' && call.url.includes('/complete/'),
+    )
+    const messages = fetchCalls.filter(
+      (call) => call.method === 'POST' && call.url.includes('/messages/'),
+    )
+
+    expect(complete?.authorization).toBe(`Bearer ${ACCESS_TOKEN}`)
+    expect(complete?.url).toContain(
+      `/api/v1/establishments/${ESTABLISHMENT_ID}/chat/uploads/${UPLOAD_ID}/complete/`,
+    )
+    expect(messages).toHaveLength(1)
+    expect(messages[0]?.authorization).toBe(`Bearer ${ACCESS_TOKEN}`)
+    expect(messages[0]?.url).toContain(
+      `/api/v1/establishments/${ESTABLISHMENT_ID}/chat/conversations/conv-1/messages/`,
+    )
+
+    const stored = await loadChatOutboxDrafts({ clientMessageId: 'client-1' })
+    expect(stored[0]?.attachments[0]).toEqual(
+      expect.objectContaining({
+        uploadId: UPLOAD_ID,
+        state: 'ready',
+      }),
+    )
+    expect(stored[0]?.status).toBe('pending')
   })
 })

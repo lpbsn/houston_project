@@ -6,8 +6,9 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { chatQueryKeys } from '../api'
-import { __resetChatOutboxTestStores, __setChatOutboxTestStores } from '../lib/chat-outbox'
+import { ChatApiError, chatQueryKeys } from '../api'
+import { __resetChatOutboxTestStores, __setChatOutboxTestStores, loadChatOutboxDrafts } from '../lib/chat-outbox'
+import { MessageBubble } from './message-bubble'
 import type {
   ChatConversationListItem,
   ChatWsConversationUpdatedEvent,
@@ -24,29 +25,49 @@ let capturedOnMessageCreated: ((event: ChatWsMessageCreatedEvent) => void) | und
 let capturedOnMessageRejected: ((event: ChatWsMessageRejectedEvent) => void) | undefined
 let capturedOnConversationUpdated: ((event: ChatWsConversationUpdatedEvent) => void) | undefined
 let capturedOnReconnect: (() => void) | undefined
-const { sendChatMessageHttp } = vi.hoisted(() => ({
-  sendChatMessageHttp: vi.fn(async () => ({
-    created: true,
-    message: {
-      id: 'msg-sent',
-      author_membership_id: 'mbr-viewer',
-      author_display_name: 'Viewer',
-      body: 'Hello',
-      client_message_id: 'ignored',
-      created_at: '2026-06-09T16:00:00.000Z',
-      is_reply: false,
-      reply_to: null,
-      mentions: [],
-      attachments: [],
-    },
-  })),
-}))
+const UPLOAD_ID = '11111111-1111-4111-8111-111111111111'
+
+const { sendChatMessageHttp, reserveChatUpload, putChatUploadBytes, completeChatUpload, appendCache } =
+  vi.hoisted(() => ({
+    sendChatMessageHttp: vi.fn(async () => ({
+      created: true,
+      message: {
+        id: 'msg-sent',
+        author_membership_id: 'mbr-viewer',
+        author_display_name: 'Viewer',
+        body: 'Hello',
+        client_message_id: 'ignored',
+        created_at: '2026-06-09T16:00:00.000Z',
+        is_reply: false,
+        reply_to: null,
+        mentions: [],
+        attachments: [],
+      },
+    })),
+    reserveChatUpload: vi.fn(async () => ({
+      upload_id: '11111111-1111-4111-8111-111111111111',
+      put_url: '',
+      expires_at: '2099-01-01T00:00:00.000Z',
+    })),
+    putChatUploadBytes: vi.fn(async () => undefined),
+    completeChatUpload: vi.fn(async () => ({
+      upload_id: '11111111-1111-4111-8111-111111111111',
+      status: 'ready',
+      kind: 'image',
+      content_type: 'image/jpeg',
+      size_bytes: 3,
+    })),
+    appendCache: { throwOnAppend: false },
+  }))
 
 vi.mock('../api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api')>()
   return {
     ...actual,
     sendChatMessage: sendChatMessageHttp as typeof actual.sendChatMessage,
+    reserveChatUpload: reserveChatUpload as typeof actual.reserveChatUpload,
+    putChatUploadBytes: putChatUploadBytes as typeof actual.putChatUploadBytes,
+    completeChatUpload: completeChatUpload as typeof actual.completeChatUpload,
   }
 })
 
@@ -101,6 +122,15 @@ vi.mock('../hooks', async (importOriginal) => {
         can_manage_settings: false,
       },
     }),
+    useAppendChatMessageToCache: () => {
+      const append = actual.useAppendChatMessageToCache()
+      return (...args: Parameters<typeof append>) => {
+        if (appendCache.throwOnAppend) {
+          throw new Error('cache merge failed')
+        }
+        return append(...args)
+      }
+    },
   }
 })
 
@@ -118,7 +148,7 @@ const sampleConversation = (): ChatConversationListItem => ({
   can_delete: false,
 })
 
-function Probe() {
+function Probe({ files }: { files?: File[] } = {}) {
   const { localMessages, sendChatMessage } = useChatRealtime()
   return createElement(
     'div',
@@ -133,9 +163,18 @@ function Probe() {
             body: 'Hello',
             authorMembershipId: VIEWER_MEMBERSHIP_ID,
             authorDisplayName: 'Viewer',
+            files,
           }),
       },
       'send',
+    ),
+    ...localMessages.map((message) =>
+      createElement(MessageBubble, {
+        key: message.clientMessageId,
+        message,
+        isOwn: true,
+        onRetry: message.status === 'failed' ? () => undefined : undefined,
+      }),
     ),
     createElement('pre', { 'data-testid': 'local-messages' }, JSON.stringify(localMessages)),
   )
@@ -145,7 +184,7 @@ function readLocalMessages(): LocalChatMessage[] {
   return JSON.parse(screen.getByTestId('local-messages').textContent ?? '[]') as LocalChatMessage[]
 }
 
-function renderProviderWithProbe() {
+function renderProviderWithProbe(files?: File[]) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -156,7 +195,7 @@ function renderProviderWithProbe() {
       createElement(
         ChatRealtimeProvider,
         { establishmentId: ESTABLISHMENT_ID, activeConversationId: 'conv-1' },
-        createElement(Probe),
+        createElement(Probe, { files }),
       ),
     ),
   )
@@ -169,6 +208,10 @@ describe('ChatRealtimeProvider', () => {
     capturedOnConversationUpdated = undefined
     capturedOnReconnect = undefined
     sendChatMessageHttp.mockReset()
+    reserveChatUpload.mockClear()
+    putChatUploadBytes.mockClear()
+    completeChatUpload.mockClear()
+    appendCache.throwOnAppend = false
     sendChatMessageHttp.mockResolvedValue({
       created: true,
       message: {
@@ -525,5 +568,52 @@ describe('ChatRealtimeProvider', () => {
         rejectCode: 'terms_acceptance_required',
       }),
     )
+  })
+
+  it('keeps the persisted uploadId when send fails before POST', async () => {
+    sendChatMessageHttp.mockRejectedValue(new ChatApiError({ status: 500, detail: 'send failed' }))
+    renderProviderWithProbe([new File(['abc'], 'a.jpg', { type: 'image/jpeg' })])
+    fireEvent.click(screen.getByText('send'))
+
+    await waitFor(async () => {
+      const [message] = readLocalMessages()
+      expect(message?.status).toBe('failed')
+      const stored = await loadChatOutboxDrafts({ clientMessageId: message.clientMessageId })
+      expect(stored[0]?.attachments[0]).toEqual(
+        expect.objectContaining({
+          uploadId: UPLOAD_ID,
+          state: 'ready',
+        }),
+      )
+      expect(stored[0]?.status).toBe('failed')
+    })
+    expect(screen.getByRole('button', { name: 'Réessayer' })).toBeTruthy()
+    expect(sendChatMessageHttp).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not mark failed or offer retry when POST succeeds and local cleanup throws', async () => {
+    appendCache.throwOnAppend = true
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(
+          ChatRealtimeProvider,
+          { establishmentId: ESTABLISHMENT_ID, activeConversationId: 'conv-1' },
+          createElement(Probe),
+        ),
+      ),
+    )
+    fireEvent.click(screen.getByText('send'))
+
+    await waitFor(() => {
+      expect(sendChatMessageHttp).toHaveBeenCalledTimes(1)
+      expect(readLocalMessages()).toEqual([])
+    })
+    expect(screen.queryByRole('button', { name: 'Réessayer' })).toBeNull()
+    expect(readLocalMessages().some((message) => message.status === 'failed')).toBe(false)
   })
 })
