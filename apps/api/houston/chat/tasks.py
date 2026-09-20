@@ -77,7 +77,9 @@ def cleanup_chat_upload_orphans_task() -> int:
 
     now = timezone.now()
     orphans = list(
-        ChatUpload.objects.filter(status__in=[ChatUpload.Status.RESERVED, ChatUpload.Status.VALIDATED])
+        ChatUpload.objects.filter(
+            status__in=[ChatUpload.Status.RESERVED, ChatUpload.Status.VALIDATED]
+        )
         .filter(expires_at__lt=now)
     )
     keys = chat_object_keys_for_uploads(orphans)

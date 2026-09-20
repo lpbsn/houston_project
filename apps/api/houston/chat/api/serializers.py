@@ -351,7 +351,9 @@ def serialize_message(
 
 
 def serialize_messages(messages: list[ChatMessage]) -> list[dict]:
-    parent_ids = [message.reply_to_id for message in messages if getattr(message, "reply_to_id", None)]
+    parent_ids = [
+        message.reply_to_id for message in messages if getattr(message, "reply_to_id", None)
+    ]
     parents_by_id = {}
     if parent_ids:
         parents_by_id = {

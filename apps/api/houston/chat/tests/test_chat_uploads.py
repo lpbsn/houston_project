@@ -13,7 +13,6 @@ from houston.chat.tests.helpers import chat_url, create_dm, send_message
 from houston.chat.upload_services import generate_chat_upload_thumbnail
 from PIL import Image
 
-
 pytestmark = pytest.mark.django_db
 
 
@@ -41,10 +40,20 @@ def _setup(api_client):
         target_membership_id=receiver_membership.id,
     )
     conversation_id = uuid.UUID(dm.json()["conversation"]["id"])
-    return establishment, sender, receiver, sender_membership, receiver_membership, token, conversation_id
+    return (
+        establishment,
+        sender,
+        receiver,
+        sender_membership,
+        receiver_membership,
+        token,
+        conversation_id,
+    )
 
 
-def _reserve(api_client, *, token, establishment_id, conversation_id, filename, content_type, size_bytes):
+def _reserve(
+    api_client, *, token, establishment_id, conversation_id, filename, content_type, size_bytes
+):
     return api_client.post(
         chat_url(establishment_id, "uploads/"),
         {

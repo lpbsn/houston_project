@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from datetime import timedelta
 
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 from houston.chat.constants import CHAT_MESSAGE_RETENTION_DAYS, CHAT_PURGE_BATCH_SIZE
-from django.db import transaction
 from houston.chat.models import ChatConversation, ChatMessage, ChatUpload
 from houston.chat.upload_services import chat_object_keys_for_uploads, delete_chat_storage_keys
 

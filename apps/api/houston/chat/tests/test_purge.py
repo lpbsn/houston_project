@@ -9,9 +9,9 @@ from houston.chat.account_deletion import delete_messages_authored_by_membership
 from houston.chat.models import ChatConversation, ChatMessage, ChatUpload
 from houston.chat.purge import purge_chat_messages
 from houston.chat.tasks import purge_chat_messages_task
-from houston.chat.upload_services import chat_upload_storage_key
 from houston.chat.tests.conftest import create_establishment, create_membership, create_user, login
 from houston.chat.tests.helpers import create_dm
+from houston.chat.upload_services import chat_upload_storage_key
 
 
 @pytest.mark.django_db

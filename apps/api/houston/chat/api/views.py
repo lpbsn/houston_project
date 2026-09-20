@@ -21,9 +21,9 @@ from houston.chat.api.serializers import (
     ChatCreateGroupRequestSerializer,
     ChatEligibleMembershipsResponseSerializer,
     ChatMessageListResponseSerializer,
+    ChatRenameGroupRequestSerializer,
     ChatSendMessageRequestSerializer,
     ChatSendMessageResponseSerializer,
-    ChatRenameGroupRequestSerializer,
     ChatSettingsPatchRequestSerializer,
     ChatStatusSerializer,
     ChatWsTicketResponseSerializer,
@@ -43,6 +43,7 @@ from houston.chat.exceptions import (
 )
 from houston.chat.models import ChatConversation, ChatParticipant
 from houston.chat.permissions import can_delete_group, can_manage_group
+from houston.chat.rate_limits import ChatMessageRateLimitExceeded, check_message_send_rate_limit
 from houston.chat.selectors import (
     count_unread_messages_for_participant,
     get_conversation_for_participant,
@@ -53,7 +54,6 @@ from houston.chat.selectors import (
     list_conversations_for_membership,
     list_messages_for_conversation,
 )
-from houston.chat.rate_limits import ChatMessageRateLimitExceeded, check_message_send_rate_limit
 from houston.chat.services import (
     add_group_participant,
     build_chat_status,

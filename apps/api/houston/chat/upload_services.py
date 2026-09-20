@@ -55,7 +55,10 @@ def chat_upload_storage_key(
     extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else "bin"
     if len(extension) > 8 or "/" in extension:
         extension = "bin"
-    return f"establishments/{establishment_id}/chat/{conversation_id}/{upload_id}/original.{extension}"
+    return (
+        f"establishments/{establishment_id}/chat/{conversation_id}/"
+        f"{upload_id}/original.{extension}"
+    )
 
 
 def _ttl_hours() -> int:
