@@ -93,7 +93,10 @@ Forbidden placeholders: `replace-me-for-local-dev`, empty values.
 | AI provider vars (`HOUSTON_AI_*`) | yes | yes | yes |
 | `HOUSTON_PRIVATE_MEDIA_BACKEND` | yes — `s3` | yes — `s3` | no |
 | `HOUSTON_S3_ENDPOINT_URL`, `HOUSTON_S3_BUCKET`, `HOUSTON_S3_ACCESS_KEY_ID`, `HOUSTON_S3_SECRET_ACCESS_KEY`, `HOUSTON_S3_REGION`, `HOUSTON_S3_ADDRESSING_STYLE` | yes — same values | yes — same values | no |
+| `HOUSTON_CHAT_S3_ENDPOINT_URL`, `HOUSTON_CHAT_S3_BUCKET`, `HOUSTON_CHAT_S3_ACCESS_KEY_ID`, `HOUSTON_CHAT_S3_SECRET_ACCESS_KEY`, `HOUSTON_CHAT_S3_REGION`, `HOUSTON_CHAT_S3_ADDRESSING_STYLE` | yes — refs to bucket `chat-attachement` | yes — same refs | no |
+| `HOUSTON_CHAT_MESSAGE_RETENTION_DAYS` | optional (`30` default in code) | optional (same) | no |
 | `HOUSTON_PRIVATE_MEDIA_ROOT` | not media truth when backend=s3 | not media truth when backend=s3 | no |
+| `HOUSTON_CHAT_PRIVATE_MEDIA_ROOT` | local/CI filesystem only | local/CI filesystem only | no |
 | `PORT` | injected by Railway | n/a | n/a |
 | `HOUSTON_ENABLE_API_DOCS` | optional (`0` default prod-test) | optional | optional |
 | `HOUSTON_LOG_LEVEL` | optional (`INFO`) | optional | optional |
@@ -120,6 +123,34 @@ Prod-test media truth is S3. Set the same `HOUSTON_PRIVATE_MEDIA_BACKEND=s3` and
 | `celery-beat` | N/A | not required |
 
 See [Known limitations V1](railway_deploy_contract.md#known-limitations-v1--private-media) in the deploy contract (historical filesystem volume vs worker `/tmp`, not current S3 prod-test).
+
+### Chat attachments (`chat-attachement`)
+
+Chat media is a **second** private Railway bucket (display name exact `chat-attachement`, region `ams`). Do not reuse the Signal `HOUSTON_S3_*` bucket as a multi-domain store.
+
+Map Railway bucket credentials with **variable references**, not copied secrets. Django reads Houston names only — never set Railway `BUCKET_*` names in the app env:
+
+| Houston variable | Railway reference |
+|---|---|
+| `HOUSTON_CHAT_S3_ENDPOINT_URL` | `${{chat-attachement.ENDPOINT}}` |
+| `HOUSTON_CHAT_S3_BUCKET` | `${{chat-attachement.BUCKET}}` |
+| `HOUSTON_CHAT_S3_ACCESS_KEY_ID` | `${{chat-attachement.ACCESS_KEY_ID}}` |
+| `HOUSTON_CHAT_S3_SECRET_ACCESS_KEY` | `${{chat-attachement.SECRET_ACCESS_KEY}}` |
+| `HOUSTON_CHAT_S3_REGION` | `${{chat-attachement.REGION}}` |
+| `HOUSTON_CHAT_S3_ADDRESSING_STYLE` | `path` (literal, same as Signal) |
+
+Bucket CORS (S3 `PutBucketCors`, not Houston CORS) must allow browser/WebView **presigned** access:
+
+- Methods: `PUT`, `GET`, `HEAD` — **no** `POST` (complete + send stay on Houston)
+- Origins: `https://app.spore-os.com`, plus Native WebView origins from `HOUSTON_CLIENT_ORIGINS` (`capacitor://localhost`, `https://localhost`)
+
+Local/CI filesystem backend uses `HOUSTON_CHAT_PRIVATE_MEDIA_ROOT` (distinct from `HOUSTON_PRIVATE_MEDIA_ROOT`).
+
+Message retention default in code is **30** days (`HOUSTON_CHAT_MESSAGE_RETENTION_DAYS`). Override on `houston_project` + `Celery-worker` only if ops need a different window.
+
+### Live `houston_project` startCommand (ops risk)
+
+Repo IaC [`infra/railway/api-web/railway.toml`](../../infra/railway/api-web/railway.toml) declares `startCommand = /app/infra/docker/railway/start-api-web.sh` and `builder = DOCKERFILE`. Live Railway `describe-service` on 2026-09-20 showed `RAILPACK` plus `startCommand` `migrate && sleep 3600`. Confirm and correct the live start command **before** treating a deploy as serving HTTP — this is an ops blocker, not a chat-design issue.
 
 ---
 
