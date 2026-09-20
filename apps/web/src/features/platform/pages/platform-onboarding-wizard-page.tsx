@@ -3,8 +3,8 @@ import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { resolveInvitationErrorMessage } from '@/features/auth/lib/invitation-errors'
 import { DraftOnboardingWizard } from '@/features/onboarding/components/draft-onboarding-wizard'
-import { getCompleteErrorMessage } from '@/features/onboarding/lib/onboarding-draft-errors'
 import {
   completePlatformOnboarding,
   getPlatformOnboarding,
@@ -52,7 +52,7 @@ export function PlatformOnboardingWizardPage({
       await queryClient.invalidateQueries({ queryKey: platformQueryKeys.onboarding(sessionId) })
     },
     onError: (error) => {
-      setInviteError(getCompleteErrorMessage(error, 'Impossible d’inviter l’Owner.'))
+      setInviteError(resolveInvitationErrorMessage(error, 'Impossible d’inviter l’Owner.'))
     },
   })
 

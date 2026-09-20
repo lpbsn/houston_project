@@ -26,6 +26,10 @@ export function mapInvitationErrorMessage(
       return 'Ce rôle ne peut pas être invité avec votre profil actuel.'
     case 'membership_invitation_invalid':
       return fallbackDetail?.trim() || 'Cette invitation n’est pas valide.'
+    case 'director_invitation_already_exists':
+      return 'Une invitation directeur existe déjà.'
+    case 'director_invitation_owner_not_allowed':
+      return 'Le propriétaire organisationnel ne peut pas être invité comme directeur.'
     default:
       return fallbackDetail?.trim() || 'L’invitation n’a pas pu être créée.'
   }

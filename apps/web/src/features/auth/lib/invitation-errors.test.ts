@@ -17,6 +17,10 @@ describe('invitation-errors', () => {
     expect(mapInvitationErrorMessage('membership_invitation_owner_conflict')).toBeTruthy()
     expect(mapInvitationErrorMessage('organizational_owner_invariant_conflict')).toBeTruthy()
     expect(mapInvitationErrorMessage('membership_invitation_role_not_allowed')).toBeTruthy()
+    expect(mapInvitationErrorMessage('director_invitation_already_exists')).toContain('directeur')
+    expect(mapInvitationErrorMessage('director_invitation_owner_not_allowed')).toContain(
+      'directeur',
+    )
   })
 
   it('falls back to detail or default', () => {

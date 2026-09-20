@@ -2,9 +2,10 @@ from __future__ import annotations
 
 
 class PlatformLifecycleDenied(Exception):
-    def __init__(self, code: str, message: str = "") -> None:
+    def __init__(self, code: str, message: str = "", extra: dict | None = None) -> None:
         self.code = code
         self.message = message or code
+        self.extra = extra
         super().__init__(self.message)
 
 

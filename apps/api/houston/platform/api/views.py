@@ -14,13 +14,7 @@ from houston.establishments.api.serializers import (
 )
 from houston.establishments.models import Establishment, OnboardingSession
 from houston.establishments.services import (
-    DirectorInvitationAlreadyExistsError,
-    DirectorInvitationDuplicateError,
-    DirectorInvitationOwnerNotAllowedError,
-    InvalidDirectorInvitationInputError,
-    InvalidMembershipInvitationInputError,
     InvalidOnboardingActivationStateError,
-    MembershipInvitationUserExistsError,
     OnboardingDraftNotFoundError,
     OnboardingDraftValidationError,
     OnboardingSessionTerminalError,
@@ -99,18 +93,67 @@ def _cursor_response(*, items, next_cursor, serializer_class) -> Response:
     )
 
 
-def _denied_response(exc: PlatformLifecycleDenied) -> Response:
-    http_status = status.HTTP_403_FORBIDDEN
-    if exc.code == "justification_required":
-        http_status = status.HTTP_400_BAD_REQUEST
-    if exc.code in {
+_DENIED_HTTP_400 = frozenset(
+    {
+        "justification_required",
+        "invalid_organization_name",
+        "onboarding_draft_invalid",
+        "membership_invitation_invalid",
+        "invalid_normalized_name",
+        "catalog_subject_business_unit_mismatch",
+        "validation_error",
+    }
+)
+_DENIED_HTTP_404 = frozenset(
+    {
+        "draft_not_found",
+        "business_unit_not_found",
+        "catalog_business_unit_not_found",
+    }
+)
+_DENIED_HTTP_409 = frozenset(
+    {
         "establishment_not_deletable",
         "organization_not_deletable",
         "activation_not_ready",
         "invalid_onboarding_state",
-    }:
+        "establishment_already_active",
+        "runtime_already_materialized",
+        "director_invitation_already_exists",
+        "director_invitation_owner_not_allowed",
+        "membership_invitation_duplicate",
+        "membership_invitation_user_exists",
+        "membership_invitation_owner_conflict",
+        "organizational_owner_invariant_conflict",
+        "catalog_business_unit_inactive",
+        "catalog_activity_subject_inactive",
+        "duplicate_specific_name",
+        "duplicate_transversal_catalog_instance",
+        "business_unit_identity_conflict",
+        "duplicate_activity_subject_normalized_name",
+        "duplicate_activity_subject_routing_key",
+        "activity_subject_identity_conflict",
+        "conflict_error",
+    }
+)
+
+
+def _denied_response(exc: PlatformLifecycleDenied) -> Response:
+    if exc.code in _DENIED_HTTP_400:
+        http_status = status.HTTP_400_BAD_REQUEST
+    elif exc.code in _DENIED_HTTP_404:
+        http_status = status.HTTP_404_NOT_FOUND
+    elif exc.code in _DENIED_HTTP_409:
         http_status = status.HTTP_409_CONFLICT
-    return Response({"code": exc.code, "detail": exc.message}, status=http_status)
+    else:
+        http_status = status.HTTP_403_FORBIDDEN
+    body: dict = {"code": exc.code, "detail": exc.message}
+    if isinstance(exc.extra, dict):
+        for key, value in exc.extra.items():
+            if key in {"code", "detail"}:
+                continue
+            body[key] = value
+    return Response(body, status=http_status)
 
 
 class PlatformSessionView(APIView):
@@ -587,15 +630,6 @@ class PlatformOnboardingDirectorInviteView(APIView):
             )
         except PlatformLifecycleDenied as exc:
             return _denied_response(exc)
-        except (
-            DirectorInvitationAlreadyExistsError,
-            DirectorInvitationDuplicateError,
-            DirectorInvitationOwnerNotAllowedError,
-            MembershipInvitationUserExistsError,
-            InvalidDirectorInvitationInputError,
-            InvalidMembershipInvitationInputError,
-        ) as exc:
-            return Response({"code": type(exc).__name__, "detail": str(exc)}, status=409)
         return Response({"membership_id": str(invitation.membership.id)}, status=201)
 
 
@@ -623,10 +657,4 @@ class PlatformOnboardingOwnerInviteView(APIView):
             )
         except PlatformLifecycleDenied as exc:
             return _denied_response(exc)
-        except (
-            DirectorInvitationDuplicateError,
-            MembershipInvitationUserExistsError,
-            InvalidMembershipInvitationInputError,
-        ) as exc:
-            return Response({"code": type(exc).__name__, "detail": str(exc)}, status=409)
         return Response({"membership_id": str(invitation.membership.id)}, status=201)
