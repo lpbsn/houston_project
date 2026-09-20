@@ -7,7 +7,6 @@ from houston.core.models import BaseModel
 
 class AIUsageLog(BaseModel):
     class Domain(models.TextChoices):
-        ONBOARDING = "onboarding", "Onboarding"
         TRANSCRIPTION = "transcription", "Transcription"
         OBSERVATION_PIPELINE = "observation_pipeline", "Observation pipeline"
         ANALYTICS_PATTERN = "analytics_pattern", "Analytics pattern"
@@ -22,7 +21,7 @@ class AIUsageLog(BaseModel):
     ai_domain = models.CharField(
         max_length=40,
         choices=Domain.choices,
-        default=Domain.ONBOARDING,
+        default=Domain.TRANSCRIPTION,
     )
     provider = models.CharField(max_length=80)
     model = models.CharField(max_length=120, blank=True, default="")
@@ -52,14 +51,6 @@ class AIUsageLog(BaseModel):
         blank=True,
         db_index=False,
     )
-    onboarding_proposal = models.ForeignKey(
-        "establishments.OnboardingProposal",
-        on_delete=models.SET_NULL,
-        related_name="ai_usage_logs",
-        null=True,
-        blank=True,
-        db_index=False,
-    )
     observation = models.ForeignKey(
         "observations.Observation",
         on_delete=models.SET_NULL,
@@ -75,7 +66,6 @@ class AIUsageLog(BaseModel):
             models.Index(fields=["provider", "model"], name="ai_usage_provider_model_idx"),
             models.Index(fields=["establishment"], name="ai_usage_est_idx"),
             models.Index(fields=["onboarding_session"], name="ai_usage_session_idx"),
-            models.Index(fields=["onboarding_proposal"], name="ai_usage_prop_idx"),
             models.Index(fields=["observation"], name="ai_usage_observation_idx"),
             models.Index(fields=["created_at"], name="ai_usage_created_idx"),
         ]

@@ -178,6 +178,9 @@ function renderWizard() {
       }),
       putDraft: (sessionId, payload) => putMock(sessionId, payload),
       completeSession: (sessionId) => completeMock(sessionId),
+      draftQueryKey: ['platform', 'onboardings', 'session-1', 'draft'],
+      detailQueryKey: ['platform', 'onboardings', 'detail', 'session-1'],
+      listQueryKey: ['platform', 'onboardings'],
     }),
     { wrapper },
   )

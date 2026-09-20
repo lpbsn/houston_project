@@ -50,7 +50,6 @@ export function SelectEstablishmentPage({ onNavigate }: SelectEstablishmentPageP
 
   return (
     <EstablishmentSelectorCard
-      variant="post-login"
       errorMessage={selectorError}
       memberships={memberships}
       pendingEstablishmentId={pendingEstablishmentId}

@@ -1,13 +1,9 @@
 from django.conf import settings
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
-from houston.core.views import AppHomeView, HomeView
 from rest_framework.permissions import AllowAny
 
 urlpatterns = [
-    path("", include("houston.accounts.urls")),
-    path("", HomeView.as_view(), name="home"),
-    path("app/", AppHomeView.as_view(), name="app-home"),
     path("api/v1/auth/", include("houston.accounts.api.urls")),
     path("api/v1/", include("houston.core.urls")),
     path("api/v1/platform/", include("houston.platform.api.urls")),

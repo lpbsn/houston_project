@@ -62,14 +62,11 @@ export function useOnboardingDraft(
   sessionId: string | null | undefined,
   options: OnboardingQueryOptions & {
     queryFn: (sessionId: string) => Promise<OnboardingDraftResponse>
-    queryKey?: readonly unknown[]
+    queryKey: readonly unknown[]
   },
 ) {
   return useQuery({
-    queryKey: options.queryKey
-      ?? (sessionId
-        ? onboardingQueryKeys.draft(sessionId)
-        : [...onboardingQueryKeys.sessions(), 'idle', 'draft']),
+    queryKey: options.queryKey,
     queryFn: () => options.queryFn(sessionId!),
     enabled: isQueryEnabled(sessionId, options),
     staleTime: options.staleTime,
@@ -80,20 +77,21 @@ export function useCompleteOnboardingSession(
   sessionId: string,
   options: {
     completeFn: (sessionId: string) => Promise<unknown>
+    draftQueryKey: readonly unknown[]
+    detailQueryKey: readonly unknown[]
+    listQueryKey: readonly unknown[]
   },
 ) {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: () => options.completeFn(sessionId),
-    onSuccess: async (response: unknown) => {
-      if (response && typeof response === 'object' && 'session' in response) {
-        queryClient.setQueryData(onboardingQueryKeys.session(sessionId), response.session)
-      }
+    onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: onboardingQueryKeys.session(sessionId) }),
+        queryClient.invalidateQueries({ queryKey: options.detailQueryKey }),
+        queryClient.invalidateQueries({ queryKey: options.listQueryKey }),
         queryClient.invalidateQueries({ queryKey: bootstrapQueryKey, exact: true }),
-        queryClient.removeQueries({ queryKey: onboardingQueryKeys.draft(sessionId) }),
+        queryClient.removeQueries({ queryKey: options.draftQueryKey }),
       ])
     },
   })
@@ -103,6 +101,7 @@ export type AutosaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
 type UseOnboardingDraftAutosaveOptions = {
   sessionId: string
+  draftQueryKey: readonly unknown[]
   debounceMs?: number
   putDraft: (payload: OnboardingDraftPayload) => Promise<OnboardingDraftResponse>
   onSaved?: (response: OnboardingDraftResponse) => void
@@ -114,7 +113,7 @@ type UseOnboardingDraftAutosaveOptions = {
  * `flush(snapshot)` cancels debounce, awaits in-flight, replaces pending, persists exact snapshot.
  */
 export function useOnboardingDraftAutosave({
-  sessionId,
+  draftQueryKey,
   debounceMs = 1000,
   putDraft,
   onSaved,
@@ -155,7 +154,7 @@ export function useOnboardingDraftAutosave({
         if (token !== writeTokenRef.current) {
           return response
         }
-        queryClient.setQueryData(onboardingQueryKeys.draft(sessionId), response)
+        queryClient.setQueryData(draftQueryKey, response)
         onSavedRef.current?.(response)
         setStatus('saved')
         return response
@@ -167,7 +166,7 @@ export function useOnboardingDraftAutosave({
         throw error
       }
     },
-    [queryClient, sessionId],
+    [queryClient, draftQueryKey],
   )
 
   const awaitInFlight = useCallback(async () => {

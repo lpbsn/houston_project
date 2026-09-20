@@ -27,16 +27,6 @@ from houston.establishments.models import (
 from houston.establishments.role_constants import ADMIN_ROLES
 from houston.organizations.models import Organization
 
-_ONBOARDING_MANAGEMENT_ROLES = (
-    EstablishmentMembership.Role.OWNER,
-    EstablishmentMembership.Role.DIRECTOR,
-)
-_ONBOARDING_ESTABLISHMENT_STATUSES = (
-    Establishment.Status.DRAFT,
-    Establishment.Status.ACTIVE,
-)
-
-
 _TEAM_MEMBERSHIP_ROLE_ORDER = models.Case(
     models.When(role=EstablishmentMembership.Role.OWNER, then=0),
     models.When(role=EstablishmentMembership.Role.DIRECTOR, then=1),
@@ -227,35 +217,6 @@ def search_users_for_establishment(
     ]
 
 
-def get_onboarding_session_for_actor(
-    *,
-    actor: User,
-    session_id,
-) -> OnboardingSession | None:
-    if actor.status != User.Status.ACTIVE:
-        return None
-
-    return _onboarding_session_queryset_for_actor(actor).filter(id=session_id).first()
-
-
-def get_active_onboarding_session_for_establishment(
-    *,
-    actor: User,
-    establishment_id,
-) -> OnboardingSession | None:
-    if actor.status != User.Status.ACTIVE:
-        return None
-
-    return (
-        _onboarding_session_queryset_for_actor(actor)
-        .filter(
-            establishment_id=establishment_id,
-            status__in=OnboardingSession.NON_TERMINAL_STATUSES,
-        )
-        .first()
-    )
-
-
 def get_membership_for_invitation(
     *,
     user: User,
@@ -298,32 +259,6 @@ def get_runtime_config_for_session(*, session: OnboardingSession) -> dict:
             ).order_by("key", "id")
         ),
     }
-
-
-def _onboarding_session_queryset_for_actor(actor: User):
-    accessible_establishment_ids = EstablishmentMembership.objects.filter(
-        user=actor,
-        status=EstablishmentMembership.Status.ACTIVE,
-        role__in=_ONBOARDING_MANAGEMENT_ROLES,
-        establishment__status__in=_ONBOARDING_ESTABLISHMENT_STATUSES,
-        establishment__organization__status=Organization.Status.ACTIVE,
-    ).values("establishment_id")
-
-    return (
-        OnboardingSession.objects.filter(
-            establishment_id__in=accessible_establishment_ids,
-            organization_id=models.F("establishment__organization_id"),
-            establishment__status__in=_ONBOARDING_ESTABLISHMENT_STATUSES,
-            establishment__organization__status=Organization.Status.ACTIVE,
-        )
-        .select_related(
-            "organization",
-            "establishment",
-            "establishment__organization",
-            "started_by",
-        )
-        .order_by("-updated_at", "-created_at", "id")
-    )
 
 
 def _get_activity_description(establishment_id):

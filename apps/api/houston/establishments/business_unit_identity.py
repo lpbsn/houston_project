@@ -12,7 +12,6 @@ if TYPE_CHECKING:
         ActivitySubject,
         BusinessUnit,
         CatalogActivitySubject,
-        OnboardingProposal,
     )
 
 
@@ -98,7 +97,6 @@ def build_generic_activity_subject_row(
     *,
     business_unit: BusinessUnit,
     catalog_activity_subject: CatalogActivitySubject,
-    managed_by_onboarding_proposal: OnboardingProposal | None = None,
 ) -> ActivitySubject:
     from houston.establishments.models import ActivitySubject
 
@@ -117,7 +115,6 @@ def build_generic_activity_subject_row(
         description="",
         source=ActivitySubject.Source.CATALOG_SUGGESTION,
         active=True,
-        managed_by_onboarding_proposal=managed_by_onboarding_proposal,
     )
     derive_activity_subject_establishment(row)
     return row
@@ -128,7 +125,6 @@ def build_free_activity_subject_row(
     business_unit: BusinessUnit,
     label: str,
     description: str = "",
-    managed_by_onboarding_proposal: OnboardingProposal | None = None,
 ) -> ActivitySubject:
     from houston.establishments.models import ActivitySubject
 
@@ -146,7 +142,6 @@ def build_free_activity_subject_row(
         description=description.strip(),
         source=ActivitySubject.Source.MANUAL,
         active=True,
-        managed_by_onboarding_proposal=managed_by_onboarding_proposal,
     )
     row.routing_key = build_free_activity_subject_routing_key(
         activity_subject_id=row.id,
@@ -227,13 +222,11 @@ def build_activity_subject_rows_for_insert(
     business_unit: BusinessUnit,
     catalog_activity_subjects: Iterable[CatalogActivitySubject] = (),
     free_activity_subjects: Iterable[dict[str, str]] = (),
-    managed_by_onboarding_proposal: OnboardingProposal | None = None,
 ) -> list[ActivitySubject]:
     rows = [
         build_generic_activity_subject_row(
             business_unit=business_unit,
             catalog_activity_subject=catalog_subject,
-            managed_by_onboarding_proposal=managed_by_onboarding_proposal,
         )
         for catalog_subject in catalog_activity_subjects
     ]
@@ -242,7 +235,6 @@ def build_activity_subject_rows_for_insert(
             business_unit=business_unit,
             label=subject.get("label", ""),
             description=subject.get("description", ""),
-            managed_by_onboarding_proposal=managed_by_onboarding_proposal,
         )
         for subject in free_activity_subjects
     )

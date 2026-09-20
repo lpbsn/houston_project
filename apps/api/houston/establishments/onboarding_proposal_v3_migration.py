@@ -4,11 +4,20 @@ from __future__ import annotations
 
 from typing import Any
 
-from houston.establishments.models import OnboardingProposal
-
 PROPOSAL_SCHEMA_VERSION_V3 = "onboarding_proposal_v3"
 PROPOSAL_SCHEMA_VERSION_V4 = "onboarding_proposal_v4"
 UNSUPPORTED_SCHEMA_VERSION_V3 = "unsupported_schema_version_v3"
+PROPOSAL_NON_TERMINAL_STATUSES = (
+    "draft",
+    "ready",
+    "partially_validated",
+    "validated",
+)
+PROPOSAL_STATUS_REJECTED = "rejected"
+
+
+def _proposal_model(apps):
+    return apps.get_model("establishments", "OnboardingProposal")
 
 
 def try_convert_v3_payload_to_v4(payload: dict[str, Any]) -> dict[str, Any] | None:
@@ -93,8 +102,9 @@ def try_convert_v3_payload_to_v4(payload: dict[str, Any]) -> dict[str, Any] | No
     }
 
 
-def process_non_terminal_v3_proposals(*, dry_run: bool = False) -> dict[str, int]:
+def process_non_terminal_v3_proposals(*, apps, dry_run: bool = False) -> dict[str, int]:
     """Convert convertible non-terminal v3 proposals; otherwise REJECTED + last_error_code."""
+    proposal_model = _proposal_model(apps)
     counts = {
         "scanned": 0,
         "converted": 0,
@@ -102,7 +112,7 @@ def process_non_terminal_v3_proposals(*, dry_run: bool = False) -> dict[str, int
         "terminal_left": 0,
         "non_v3": 0,
     }
-    proposals = OnboardingProposal.objects.all().iterator()
+    proposals = proposal_model.objects.all().iterator()
     for proposal in proposals:
         payload = proposal.payload if isinstance(proposal.payload, dict) else {}
         schema_version = payload.get("schema_version")
@@ -110,7 +120,7 @@ def process_non_terminal_v3_proposals(*, dry_run: bool = False) -> dict[str, int
             counts["non_v3"] += 1
             continue
         counts["scanned"] += 1
-        if not OnboardingProposal.is_non_terminal_status(proposal.status):
+        if proposal.status not in PROPOSAL_NON_TERMINAL_STATUSES:
             counts["terminal_left"] += 1
             continue
 
@@ -135,16 +145,17 @@ def process_non_terminal_v3_proposals(*, dry_run: bool = False) -> dict[str, int
 
         counts["rejected"] += 1
         if not dry_run:
-            proposal.status = OnboardingProposal.Status.REJECTED
+            proposal.status = PROPOSAL_STATUS_REJECTED
             proposal.last_error_code = UNSUPPORTED_SCHEMA_VERSION_V3
             proposal.save(update_fields=["status", "last_error_code", "updated_at"])
     return counts
 
 
-def assert_no_non_terminal_v3_proposals() -> None:
+def assert_no_non_terminal_v3_proposals(*, apps) -> None:
+    proposal_model = _proposal_model(apps)
     remaining = []
-    for proposal in OnboardingProposal.objects.filter(
-        status__in=OnboardingProposal.NON_TERMINAL_STATUSES
+    for proposal in proposal_model.objects.filter(
+        status__in=PROPOSAL_NON_TERMINAL_STATUSES
     ).iterator():
         payload = proposal.payload if isinstance(proposal.payload, dict) else {}
         if payload.get("schema_version") == PROPOSAL_SCHEMA_VERSION_V3:
@@ -158,18 +169,19 @@ def assert_no_non_terminal_v3_proposals() -> None:
         )
 
 
-def inventory_onboarding_v3_proposals() -> dict[str, int]:
+def inventory_onboarding_v3_proposals(*, apps) -> dict[str, int]:
+    proposal_model = _proposal_model(apps)
     counts = {
         "v3_non_terminal": 0,
         "v3_terminal": 0,
         "other": 0,
     }
-    for proposal in OnboardingProposal.objects.all().iterator():
+    for proposal in proposal_model.objects.all().iterator():
         payload = proposal.payload if isinstance(proposal.payload, dict) else {}
         if payload.get("schema_version") != PROPOSAL_SCHEMA_VERSION_V3:
             counts["other"] += 1
             continue
-        if OnboardingProposal.is_non_terminal_status(proposal.status):
+        if proposal.status in PROPOSAL_NON_TERMINAL_STATUSES:
             counts["v3_non_terminal"] += 1
         else:
             counts["v3_terminal"] += 1

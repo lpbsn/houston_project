@@ -9,32 +9,10 @@ from houston.establishments.business_unit_domain_service import (
     update_business_unit_specific_name,
 )
 from houston.establishments.business_unit_identity import business_unit_public_key
-from houston.establishments.onboarding_proposal_v3_migration import (
-    PROPOSAL_SCHEMA_VERSION_V3,
-)
-from houston.establishments.services import (
-    OnboardingProposalValidationError,
-    validate_onboarding_proposal_payload,
-)
 from houston.testing.factories import create_establishment
 from houston.testing.taxonomy import create_business_unit
 
 pytestmark = pytest.mark.django_db
-
-
-def test_validate_rejects_onboarding_proposal_v3_payload():
-    with pytest.raises(OnboardingProposalValidationError) as exc_info:
-        validate_onboarding_proposal_payload(
-            {
-                "schema_version": PROPOSAL_SCHEMA_VERSION_V3,
-                "business_units": [],
-                "activity_subjects": [],
-            }
-        )
-
-    assert any(
-        error.get("code") == "unsupported_schema_version" for error in exc_info.value.errors
-    )
 
 
 def test_specific_name_accepts_255_char_boundary(imported_catalog):

@@ -71,7 +71,9 @@ type DraftOnboardingWizardProps = {
     payload: OnboardingDraftPayload,
   ) => Promise<OnboardingDraftResponse>
   completeSession: (sessionId: string) => Promise<unknown>
-  draftQueryKey?: readonly unknown[]
+  draftQueryKey: readonly unknown[]
+  detailQueryKey: readonly unknown[]
+  listQueryKey: readonly unknown[]
   afterCompletePath?: string
 }
 
@@ -819,6 +821,8 @@ export function DraftOnboardingWizard({
   putDraft,
   completeSession,
   draftQueryKey,
+  detailQueryKey,
+  listQueryKey,
   afterCompletePath,
 }: DraftOnboardingWizardProps) {
   const queryClient = useQueryClient()
@@ -830,6 +834,9 @@ export function DraftOnboardingWizard({
   const catalogQuery = useCatalogBusinessUnitChips()
   const completeMutation = useCompleteOnboardingSession(sessionId, {
     completeFn: completeSession,
+    draftQueryKey,
+    detailQueryKey,
+    listQueryKey,
   })
 
   const [draft, setDraft] = useState<OnboardingDraftPayload | null>(null)
@@ -842,6 +849,7 @@ export function DraftOnboardingWizard({
 
   const autosave = useOnboardingDraftAutosave({
     sessionId,
+    draftQueryKey,
     putDraft: (payload) => putDraft(sessionId, payload),
   })
   const { enqueue, flush, stop, resume, status: saveStatus } = autosave

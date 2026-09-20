@@ -278,14 +278,6 @@ class CanViewTeamMemberships(BasePermission):
         return can_view_team_memberships(access_context.active_membership)
 
 
-class CanInviteMemberships(BasePermission):
-    message = "You do not have permission to invite memberships."
-
-    def has_permission(self, request, view) -> bool:
-        access_context = get_api_access_context(request)
-        return can_invite_memberships(access_context.active_membership)
-
-
 class CanManageRuntimeContext(BasePermission):
     """DRF guard for active-establishment runtime context; not used on onboarding-session views."""
 

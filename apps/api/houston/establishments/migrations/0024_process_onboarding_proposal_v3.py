@@ -7,8 +7,8 @@ def forwards(apps, schema_editor):
         process_non_terminal_v3_proposals,
     )
 
-    process_non_terminal_v3_proposals(dry_run=False)
-    assert_no_non_terminal_v3_proposals()
+    process_non_terminal_v3_proposals(apps=apps, dry_run=False)
+    assert_no_non_terminal_v3_proposals(apps=apps)
 
 
 def backwards(apps, schema_editor):

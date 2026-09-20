@@ -356,8 +356,6 @@ def test_accept_over_limit_returns_429(api_client, monkeypatch):
     throttle_test_rates = {
         "auth_login": "2/minute",
         "auth_refresh": "3/minute",
-        "auth_register": "2/hour",
-        "auth_register_validate": "2/hour",
         "auth_invitation_accept": "2/hour",
     }
     monkeypatch.setattr(

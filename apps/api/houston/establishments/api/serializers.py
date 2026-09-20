@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from drf_spectacular.utils import (
-    PolymorphicProxySerializer,
     extend_schema_field,
     extend_schema_serializer,
 )
@@ -12,16 +11,10 @@ from houston.establishments.membership_scope import (
     membership_scope_rows_for_membership,
 )
 from houston.establishments.models import (
-    ACTIVITY_DESCRIPTION_MAX_LENGTH,
-    ACTIVITY_DESCRIPTION_MIN_LENGTH,
     BusinessUnit,
     EstablishmentMembership,
-    OnboardingSession,
 )
 from houston.establishments.role_constants import ADMIN_ROLES
-
-PROPOSAL_SCHEMA_VERSION_V3 = "onboarding_proposal_v3"
-PROPOSAL_SCHEMA_VERSION_V4 = "onboarding_proposal_v4"
 
 
 class EmptyStringForNullMixin:
@@ -148,6 +141,18 @@ class MembershipReinviteResponseSerializer(serializers.Serializer):
     invitation_expires_at = serializers.DateTimeField()
     invitation_accept_path = serializers.CharField()
     email_scheduling_status = serializers.ChoiceField(choices=["requested", "disabled"])
+
+
+class DirectorInvitationResponseSerializer(serializers.Serializer):
+    membership = EstablishmentMembershipResponseSerializer()
+    invitation_token = serializers.CharField()
+    invitation_expires_at = serializers.DateTimeField()
+    invitation_accept_path = serializers.CharField()
+
+
+class DirectorInvitationErrorResponseSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    detail = serializers.CharField()
 
 
 class MembershipUpdateRequestSerializer(serializers.Serializer):
@@ -380,307 +385,6 @@ class ScopedUserSearchResultSerializer(serializers.Serializer):
         return [str(bu_id) for bu_id in sorted(scope_ids, key=str)]
 
 
-class OnboardingOrganizationSummarySerializer(serializers.Serializer):
-    id = serializers.UUIDField()
-    name = serializers.CharField()
-    status = serializers.CharField()
-
-
-class OnboardingEstablishmentSummarySerializer(EmptyStringForNullMixin, serializers.Serializer):
-    null_as_empty_fields = ("name",)
-
-    id = serializers.UUIDField()
-    name = serializers.CharField(allow_blank=True)
-    status = serializers.CharField()
-
-
-class OnboardingSessionResponseSerializer(serializers.Serializer):
-    id = serializers.UUIDField()
-    organization = OnboardingOrganizationSummarySerializer()
-    establishment = OnboardingEstablishmentSummarySerializer()
-    started_by_id = serializers.UUIDField(allow_null=True)
-    status = serializers.CharField()
-    source_mode = serializers.CharField()
-    current_step = serializers.CharField()
-    ai_attempts = serializers.IntegerField()
-    last_error_code = serializers.CharField()
-    started_at = serializers.DateTimeField()
-    ready_for_activation_at = serializers.DateTimeField(allow_null=True)
-    activated_at = serializers.DateTimeField(allow_null=True)
-    canceled_at = serializers.DateTimeField(allow_null=True)
-    created_at = serializers.DateTimeField()
-    updated_at = serializers.DateTimeField()
-
-
-class OnboardingSessionCreateRequestSerializer(serializers.Serializer):
-    establishment_id = serializers.UUIDField()
-    source_mode = serializers.CharField(
-        required=False,
-        default=OnboardingSession.SourceMode.MANUAL,
-        trim_whitespace=True,
-    )
-
-    def validate_source_mode(self, source_mode: str) -> str:
-        if source_mode not in {
-            OnboardingSession.SourceMode.MANUAL,
-            OnboardingSession.SourceMode.TEMPLATE,
-        }:
-            raise serializers.ValidationError(
-                "Only manual and template onboarding sessions are supported.",
-                code="unsupported_source_mode",
-            )
-
-        return source_mode
-
-
-class OnboardingSessionCreateResponseSerializer(serializers.Serializer):
-    created = serializers.BooleanField()
-    session = OnboardingSessionResponseSerializer()
-
-
-class ActivityDescriptionRequestSerializer(serializers.Serializer):
-    description = serializers.CharField(
-        trim_whitespace=True,
-        min_length=ACTIVITY_DESCRIPTION_MIN_LENGTH,
-        max_length=ACTIVITY_DESCRIPTION_MAX_LENGTH,
-    )
-
-
-class ActivityDescriptionResponseSerializer(serializers.Serializer):
-    id = serializers.UUIDField()
-    description = serializers.CharField()
-    source = serializers.CharField()
-    submitted_by_id = serializers.UUIDField(allow_null=True)
-    validated_at = serializers.DateTimeField(allow_null=True)
-
-
-class ActivityDescriptionUpdateResponseSerializer(serializers.Serializer):
-    session = OnboardingSessionResponseSerializer()
-    activity_description = ActivityDescriptionResponseSerializer()
-
-
-class KeyedRuntimeItemSerializer(serializers.Serializer):
-    id = serializers.UUIDField()
-    key = serializers.CharField()
-    label = serializers.CharField()
-    source = serializers.CharField()
-    active = serializers.BooleanField()
-
-
-class RuntimeConfigResponseSerializer(serializers.Serializer):
-    activity_description = ActivityDescriptionResponseSerializer(allow_null=True)
-    active_business_units = BusinessUnitTreeItemSerializer(many=True, required=False)
-    optional_units = KeyedRuntimeItemSerializer(many=True)
-
-
-class ActivationBlockerSerializer(serializers.Serializer):
-    code = serializers.CharField()
-    message = serializers.CharField()
-
-
-class ActivationReadinessResponseSerializer(serializers.Serializer):
-    is_ready = serializers.BooleanField()
-    blockers = ActivationBlockerSerializer(many=True)
-    counts = serializers.DictField(child=serializers.IntegerField())
-    sections = serializers.DictField(child=serializers.DictField())
-    establishment_status = serializers.CharField()
-    session_status = serializers.CharField()
-
-
-class OnboardingAccessResponseSerializer(serializers.Serializer):
-    can_activate = serializers.BooleanField()
-
-
-class ActivationSummaryResponseSerializer(serializers.Serializer):
-    organization = OnboardingOrganizationSummarySerializer()
-    establishment = OnboardingEstablishmentSummarySerializer()
-    activity_description = ActivityDescriptionResponseSerializer(allow_null=True)
-    active_business_units = BusinessUnitTreeItemSerializer(many=True, required=False)
-    optional_units = KeyedRuntimeItemSerializer(many=True)
-    initial_owner_director_count = serializers.IntegerField()
-    initial_director_count = serializers.IntegerField()
-    readiness = ActivationReadinessResponseSerializer()
-    blockers = ActivationBlockerSerializer(many=True)
-    access = OnboardingAccessResponseSerializer()
-    effective_can_activate = serializers.BooleanField()
-
-
-class DirectorInvitationRequestSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    first_name = serializers.CharField(trim_whitespace=True)
-    last_name = serializers.CharField(trim_whitespace=True)
-
-
-class DirectorInvitationResponseSerializer(serializers.Serializer):
-    membership = EstablishmentMembershipResponseSerializer()
-    invitation_token = serializers.CharField()
-    invitation_expires_at = serializers.DateTimeField()
-    invitation_accept_path = serializers.CharField()
-
-
-class DirectorInvitationErrorResponseSerializer(serializers.Serializer):
-    code = serializers.CharField()
-    detail = serializers.CharField()
-
-
-class MarkReadyResponseSerializer(serializers.Serializer):
-    session = OnboardingSessionResponseSerializer()
-    activation_summary = ActivationSummaryResponseSerializer()
-
-
-class ActivationResponseSerializer(serializers.Serializer):
-    session = OnboardingSessionResponseSerializer()
-    activation_summary = ActivationSummaryResponseSerializer()
-
-
-class OnboardingErrorResponseSerializer(serializers.Serializer):
-    code = serializers.CharField()
-    detail = serializers.CharField()
-    blockers = ActivationBlockerSerializer(many=True, required=False)
-
-
-class ProposalValidationErrorItemSerializer(serializers.Serializer):
-    code = serializers.CharField()
-    section = serializers.CharField(required=False)
-    field = serializers.CharField(required=False)
-    key = serializers.CharField(required=False)
-
-
-class ProposalBusinessUnitItemV4Serializer(serializers.Serializer):
-    client_key = serializers.CharField()
-    catalog_key = serializers.CharField()
-    specific_name = serializers.CharField()
-    instance_description = serializers.CharField(
-        required=False,
-        allow_blank=True,
-        default="",
-    )
-
-
-class ProposalActivitySubjectItemV4Serializer(serializers.Serializer):
-    client_key = serializers.CharField()
-    business_unit_client_key = serializers.CharField()
-    catalog_key = serializers.CharField(required=False, allow_null=True)
-    label = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    description = serializers.CharField(required=False, allow_blank=True, default="")
-
-
-@extend_schema_serializer(component_name="OnboardingProposalPayloadV4")
-class OnboardingProposalPayloadV4Serializer(serializers.Serializer):
-    schema_version = serializers.CharField()
-    business_units = ProposalBusinessUnitItemV4Serializer(many=True, required=False)
-    activity_subjects = ProposalActivitySubjectItemV4Serializer(many=True, required=False)
-
-    def validate(self, attrs):
-        if attrs.get("schema_version") != PROPOSAL_SCHEMA_VERSION_V4:
-            raise serializers.ValidationError(
-                {"schema_version": ["Must be onboarding_proposal_v4."]}
-            )
-        return {
-            "schema_version": PROPOSAL_SCHEMA_VERSION_V4,
-            "business_units": attrs.get("business_units", []),
-            "activity_subjects": attrs.get("activity_subjects", []),
-        }
-
-
-ONBOARDING_PROPOSAL_PAYLOAD_OPENAPI = PolymorphicProxySerializer(
-    component_name="OnboardingProposalPayload",
-    serializers={
-        PROPOSAL_SCHEMA_VERSION_V4: OnboardingProposalPayloadV4Serializer,
-    },
-    resource_type_field_name="schema_version",
-)
-
-
-@extend_schema_field(ONBOARDING_PROPOSAL_PAYLOAD_OPENAPI)
-class OnboardingProposalPayloadField(serializers.Field):
-    def to_internal_value(self, data):
-        if not isinstance(data, dict):
-            raise serializers.ValidationError("Invalid payload.")
-        schema_version = data.get("schema_version")
-        if schema_version == PROPOSAL_SCHEMA_VERSION_V4:
-            serializer = OnboardingProposalPayloadV4Serializer(data=data)
-        elif schema_version == PROPOSAL_SCHEMA_VERSION_V3:
-            raise serializers.ValidationError(
-                {"schema_version": ["onboarding_proposal_v3 is no longer accepted."]}
-            )
-        else:
-            raise serializers.ValidationError(
-                {"schema_version": ["Unsupported onboarding proposal schema version."]}
-            )
-        serializer.is_valid(raise_exception=True)
-        return serializer.validated_data
-
-    def to_representation(self, value):
-        if not isinstance(value, dict):
-            return value
-        if value.get("schema_version") == PROPOSAL_SCHEMA_VERSION_V4:
-            return OnboardingProposalPayloadV4Serializer(value).data
-        return value
-
-
-class OnboardingProposalCreateRequestSerializer(serializers.Serializer):
-    payload = OnboardingProposalPayloadField()
-
-
-class OnboardingProposalUpdateRequestSerializer(serializers.Serializer):
-    payload = OnboardingProposalPayloadField()
-
-
-class OnboardingProposalResponseSerializer(serializers.Serializer):
-    id = serializers.UUIDField()
-    onboarding_session_id = serializers.UUIDField()
-    establishment_id = serializers.UUIDField()
-    source = serializers.CharField()
-    status = serializers.CharField()
-    payload = OnboardingProposalPayloadField()
-    section_validation = serializers.DictField(child=serializers.CharField())
-    validation_errors = ProposalValidationErrorItemSerializer(many=True)
-    created_by_id = serializers.UUIDField(allow_null=True)
-    validated_by_id = serializers.UUIDField(allow_null=True)
-    applied_by_id = serializers.UUIDField(allow_null=True)
-    validated_at = serializers.DateTimeField(allow_null=True)
-    applied_at = serializers.DateTimeField(allow_null=True)
-    last_error_code = serializers.CharField()
-    created_at = serializers.DateTimeField()
-    updated_at = serializers.DateTimeField()
-
-
-class ProposalCommandResponseSerializer(serializers.Serializer):
-    session = OnboardingSessionResponseSerializer()
-    proposal = OnboardingProposalResponseSerializer()
-
-
-class EstablishmentCreateRequestSerializer(serializers.Serializer):
-    name = serializers.CharField(
-        required=False,
-        allow_null=True,
-        trim_whitespace=False,
-        max_length=255,
-    )
-
-    def validate_name(self, value: str | None) -> str | None:
-        if value is None:
-            return None
-        if not value.strip():
-            raise serializers.ValidationError("This field may not be blank.")
-        return value
-
-
-class EstablishmentCreateResponseSerializer(serializers.Serializer):
-    establishment_id = serializers.UUIDField()
-    organization_id = serializers.UUIDField()
-    name = serializers.CharField(allow_null=True)
-    status = serializers.CharField()
-    onboarding_session_id = serializers.UUIDField()
-
-
-class OnboardingProposalErrorResponseSerializer(serializers.Serializer):
-    code = serializers.CharField()
-    detail = serializers.CharField()
-    errors = ProposalValidationErrorItemSerializer(many=True, required=False)
-
-
 class OnboardingDraftValidationErrorItemSerializer(serializers.Serializer):
     code = serializers.CharField()
     section = serializers.CharField(required=False)
@@ -704,16 +408,3 @@ class OnboardingDraftResponseSerializer(serializers.Serializer):
 
 class OnboardingDraftUpdateRequestSerializer(serializers.Serializer):
     payload = serializers.JSONField()
-
-
-class OnboardingCompleteResponseSerializer(serializers.Serializer):
-    session = OnboardingSessionResponseSerializer()
-    activation_summary = serializers.DictField()
-    activated = serializers.BooleanField()
-    idempotent = serializers.BooleanField()
-
-
-class OnboardingDraftErrorResponseSerializer(serializers.Serializer):
-    code = serializers.CharField()
-    detail = serializers.CharField()
-    errors = OnboardingDraftValidationErrorItemSerializer(many=True, required=False)

@@ -322,8 +322,6 @@ Auth throttling for public auth mutation endpoints is implemented via DRF `Scope
 
 - `POST /api/v1/auth/login/`
 - `POST /api/v1/auth/refresh/`
-- `POST /api/v1/auth/register/`
-- `POST /api/v1/auth/register/validate-owner/`
 - `POST /api/v1/invitations/accept/`
 - `POST /api/v1/auth/email-change/`
 - `POST /api/v1/auth/email-change/confirm/`
@@ -352,8 +350,6 @@ Auth throttling for public auth mutation endpoints is implemented via DRF `Scope
 - `HOUSTON_CACHE_REDIS_URL`
 - `HOUSTON_THROTTLE_AUTH_LOGIN`
 - `HOUSTON_THROTTLE_AUTH_REFRESH`
-- `HOUSTON_THROTTLE_AUTH_REGISTER`
-- `HOUSTON_THROTTLE_AUTH_REGISTER_VALIDATE`
 - `HOUSTON_THROTTLE_AUTH_INVITATION_ACCEPT`
 - `HOUSTON_THROTTLE_AUTH_EMAIL_CHANGE`
 - `HOUSTON_THROTTLE_AUTH_EMAIL_CHANGE_CONFIRM`
