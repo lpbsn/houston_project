@@ -531,12 +531,34 @@ export async function completeChatUpload(
   return assertChatData<ChatUploadCompleteResponse>(result)
 }
 
+export async function refreshChatUploadPresign(
+  establishmentId: string,
+  uploadId: string,
+): Promise<ChatReserveUploadResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/establishments/{establishment_id}/chat/uploads/{upload_id}/presign/', {
+        params: {
+          path: {
+            establishment_id: establishmentId,
+            upload_id: uploadId,
+          },
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  return assertChatData<ChatReserveUploadResponse>(result)
+}
+
 export async function putChatUploadBytes(options: {
   establishmentId: string
   uploadId: string
   putUrl: string
   blob: Blob
   contentType: string
+  signal?: AbortSignal
   onProgress?: (ratio: number) => void
 }): Promise<void> {
   if (options.putUrl) {
@@ -544,6 +566,15 @@ export async function putChatUploadBytes(options: {
       const request = new XMLHttpRequest()
       request.open('PUT', options.putUrl)
       request.setRequestHeader('Content-Type', options.contentType)
+      const abort = () => {
+        request.abort()
+        reject(new ChatApiError({ status: 0, detail: 'Upload cancelled.' }))
+      }
+      if (options.signal?.aborted) {
+        abort()
+        return
+      }
+      options.signal?.addEventListener('abort', abort, { once: true })
       request.upload.onprogress = (event) => {
         if (event.lengthComputable) {
           options.onProgress?.(event.loaded / event.total)
@@ -558,6 +589,7 @@ export async function putChatUploadBytes(options: {
         reject(new ChatApiError({ status: request.status, detail: 'Upload failed.' }))
       }
       request.onerror = () => reject(new ChatApiError({ status: 0, detail: 'Upload failed.' }))
+      request.onabort = () => reject(new ChatApiError({ status: 0, detail: 'Upload cancelled.' }))
       request.send(options.blob)
     })
     return
@@ -573,6 +605,7 @@ export async function putChatUploadBytes(options: {
         'Content-Type': options.contentType,
       },
       body: options.blob,
+      signal: options.signal,
     },
   )
   if (!response.ok) {

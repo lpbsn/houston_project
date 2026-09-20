@@ -1,9 +1,10 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Reply } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
-import { formatChatRelativeTime } from '../lib/chat-display'
+import { formatChatAttachmentSize, formatChatRelativeTime } from '../lib/chat-display'
+import { fetchAuthenticatedChatMedia } from '../lib/chat-media'
 import { splitBodyByMentions } from '../lib/chat-mentions'
 import type { ChatMessage, ChatReplyTo, LocalChatMessage } from '../types'
 
@@ -11,12 +12,47 @@ type MessageBubbleProps = {
   message: ChatMessage | LocalChatMessage
   isOwn: boolean
   onRetry?: () => void
+  onCancel?: () => void
   onReply?: (payload: { id: string; authorDisplayName: string; excerpt: string }) => void
   onJumpToMessage?: (messageId: string) => void
 }
 
 function isLocalMessage(message: ChatMessage | LocalChatMessage): message is LocalChatMessage {
   return 'clientMessageId' in message && !('author_membership_id' in message)
+}
+
+export function ChatMediaImage({ src, alt }: { src: string; alt: string }) {
+  const [resolved, setResolved] = useState(src.startsWith('blob:') || src.startsWith('data:') ? src : null)
+
+  useEffect(() => {
+    if (src.startsWith('blob:') || src.startsWith('data:')) {
+      setResolved(src)
+      return
+    }
+    let objectUrl: string | null = null
+    let cancelled = false
+    void fetchAuthenticatedChatMedia(src).then((url) => {
+      if (cancelled) {
+        if (url?.startsWith('blob:')) {
+          URL.revokeObjectURL(url)
+        }
+        return
+      }
+      objectUrl = url
+      setResolved(url)
+    })
+    return () => {
+      cancelled = true
+      if (objectUrl?.startsWith('blob:')) {
+        URL.revokeObjectURL(objectUrl)
+      }
+    }
+  }, [src])
+
+  if (!resolved) {
+    return <span className="text-[13px]">{alt}</span>
+  }
+  return <img src={resolved} alt={alt} className="max-h-48 max-w-full rounded-lg object-cover" />
 }
 
 function readMessage(message: ChatMessage | LocalChatMessage) {
@@ -31,9 +67,9 @@ function readMessage(message: ChatMessage | LocalChatMessage) {
       replyTo: message.replyToId
         ? ({
             id: message.replyToId,
-            unavailable: false,
-            author_display_name: null,
-            excerpt: null,
+            unavailable: Boolean(message.replyPreview?.unavailable),
+            author_display_name: message.replyPreview?.authorDisplayName ?? null,
+            excerpt: message.replyPreview?.excerpt ?? '',
           } satisfies ChatReplyTo)
         : null,
       attachments: message.attachments.map((attachment) => ({
@@ -41,7 +77,10 @@ function readMessage(message: ChatMessage | LocalChatMessage) {
         kind: attachment.contentType === 'application/pdf' ? 'document' : 'image',
         previewUrl: attachment.previewUrl,
         filename: attachment.filename,
+        contentType: attachment.contentType,
+        sizeBytes: attachment.sizeBytes,
         state: attachment.state,
+        progress: attachment.progress,
       })),
     }
   }
@@ -58,6 +97,8 @@ function readMessage(message: ChatMessage | LocalChatMessage) {
       kind: attachment.kind,
       previewUrl: attachment.thumbnail_url ?? attachment.preview_url,
       filename: attachment.original_filename,
+      contentType: attachment.content_type,
+      sizeBytes: attachment.size_bytes,
       href: attachment.preview_url,
     })),
   }
@@ -67,6 +108,7 @@ export function MessageBubble({
   message,
   isOwn,
   onRetry,
+  onCancel,
   onReply,
   onJumpToMessage,
 }: MessageBubbleProps) {
@@ -148,28 +190,71 @@ export function MessageBubble({
           </p>
         ) : null}
         {parsed.attachments.length > 0 ? (
-          <ul className="mt-2 space-y-1">
-            {parsed.attachments.map((attachment) => (
-              <li key={attachment.id}>
-                {'href' in attachment && attachment.href ? (
-                  <a
-                    href={attachment.href}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-[13px] underline"
-                  >
-                    {attachment.filename}
-                  </a>
-                ) : (
-                  <span className="text-[13px]">
-                    {attachment.filename}
-                    {'state' in attachment && attachment.state && attachment.state !== 'ready'
-                      ? ` · ${attachment.state}`
-                      : ''}
-                  </span>
-                )}
-              </li>
-            ))}
+          <ul className="mt-2 space-y-2">
+            {parsed.attachments.map((attachment) => {
+              const progress =
+                'progress' in attachment && typeof attachment.progress === 'number'
+                  ? Math.round(attachment.progress * 100)
+                  : null
+              const uploading =
+                'state' in attachment &&
+                attachment.state &&
+                attachment.state !== 'ready' &&
+                attachment.state !== 'failed'
+              return (
+                <li key={attachment.id}>
+                  {attachment.kind === 'image' && attachment.previewUrl ? (
+                    'href' in attachment && attachment.href ? (
+                      <a href={attachment.href} target="_blank" rel="noreferrer">
+                        <ChatMediaImage src={attachment.previewUrl} alt={attachment.filename} />
+                      </a>
+                    ) : (
+                      <ChatMediaImage src={attachment.previewUrl} alt={attachment.filename} />
+                    )
+                  ) : 'href' in attachment && attachment.href ? (
+                    <a
+                      href={attachment.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[13px] underline"
+                    >
+                      {attachment.filename}
+                      {'sizeBytes' in attachment && attachment.sizeBytes
+                        ? ` · ${formatChatAttachmentSize(attachment.sizeBytes)}`
+                        : ''}
+                    </a>
+                  ) : (
+                    <span className="text-[13px]">
+                      {attachment.filename}
+                      {'sizeBytes' in attachment && attachment.sizeBytes
+                        ? ` · ${formatChatAttachmentSize(attachment.sizeBytes)}`
+                        : ''}
+                    </span>
+                  )}
+                  {uploading ? (
+                    <div
+                      className="mt-1 h-1.5 overflow-hidden rounded-full bg-black/20"
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={progress ?? 0}
+                      aria-label={`Envoi ${attachment.filename}`}
+                    >
+                      <div
+                        className="h-full bg-white/80"
+                        style={{ width: `${progress ?? 0}%` }}
+                      />
+                    </div>
+                  ) : null}
+                  {uploading ? (
+                    <p className="mt-0.5 text-[11px]">
+                      {attachment.state}
+                      {progress != null ? ` · ${progress} %` : ''}
+                    </p>
+                  ) : null}
+                </li>
+              )
+            })}
           </ul>
         ) : null}
         <div
@@ -189,6 +274,11 @@ export function MessageBubble({
           </button>
           <span>{formatChatRelativeTime(parsed.createdAt)}</span>
           {isPending ? <span>Envoi…</span> : null}
+          {isPending && onCancel ? (
+            <button type="button" className="font-semibold underline" onClick={onCancel}>
+              Annuler
+            </button>
+          ) : null}
           {isFailed ? (
             <button
               type="button"

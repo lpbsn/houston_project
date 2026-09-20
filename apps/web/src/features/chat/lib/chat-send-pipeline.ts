@@ -3,18 +3,26 @@ import type { ChatOutboxAttachmentRecord, ChatOutboxDraft } from './chat-outbox'
 import { readChatOutboxAttachmentBytes, saveChatOutboxDraft } from './chat-outbox'
 import type { LocalChatAttachmentState } from '../types'
 
+export type ChatPresignResponse = {
+  upload_id: string
+  put_url: string
+  expires_at: string
+}
+
 export type ChatSendPipelineDeps = {
   reserveUpload: (payload: {
     conversationId: string
     filename: string
     contentType: string
     sizeBytes: number
-  }) => Promise<{ upload_id: string; put_url: string; expires_at: string }>
+  }) => Promise<ChatPresignResponse>
+  refreshPresign: (uploadId: string) => Promise<ChatPresignResponse>
   putBytes: (payload: {
     uploadId: string
     putUrl: string
     blob: Blob
     contentType: string
+    signal?: AbortSignal
     onProgress?: (ratio: number) => void
   }) => Promise<void>
   completeUpload: (uploadId: string) => Promise<unknown>
@@ -56,6 +64,7 @@ export async function prepareChatOutboxAttachments(
   draft: ChatOutboxDraft,
   deps: ChatSendPipelineDeps,
   hooks: ChatSendPipelineHooks = {},
+  signal?: AbortSignal,
 ): Promise<ChatOutboxDraft> {
   const attachments = [...draft.attachments]
   for (let index = 0; index < attachments.length; index += 1) {
@@ -97,6 +106,12 @@ export async function prepareChatOutboxAttachments(
         state: 'uploading',
       }
       await persistDraft(draft, attachments)
+    } else if (uploadId && attachments[index]?.state !== 'finalizing') {
+      const refreshed = await deps.refreshPresign(uploadId)
+      putUrl = refreshed.put_url
+      expiresAt = refreshed.expires_at
+      attachments[index] = { ...attachments[index]!, uploadId, expiresAt }
+      await persistDraft(draft, attachments)
     }
 
     if (attachments[index]?.state !== 'finalizing') {
@@ -108,6 +123,7 @@ export async function prepareChatOutboxAttachments(
         putUrl,
         blob: blob!,
         contentType: attachment.contentType,
+        signal,
         onProgress: (ratio) =>
           hooks.onAttachmentState?.(attachment.localAttachmentId, 'uploading', {
             uploadId,
@@ -130,11 +146,11 @@ export async function prepareChatOutboxAttachments(
 export async function sendPreparedChatOutboxDraft(
   draft: ChatOutboxDraft,
   deps: ChatSendPipelineDeps,
-): Promise<void> {
+): Promise<unknown> {
   if (draft.attachments.some((attachment) => attachment.state !== 'ready')) {
     throw new ChatApiError({ status: 0, detail: 'Attachments are not ready.' })
   }
-  await deps.sendMessage({
+  return deps.sendMessage({
     clientMessageId: draft.clientMessageId,
     body: draft.body,
     replyToId: draft.replyToId,
@@ -149,7 +165,8 @@ export async function dispatchChatOutboxDraft(
   draft: ChatOutboxDraft,
   deps: ChatSendPipelineDeps,
   hooks: ChatSendPipelineHooks = {},
-): Promise<void> {
-  const prepared = await prepareChatOutboxAttachments(draft, deps, hooks)
-  await sendPreparedChatOutboxDraft(prepared, deps)
+  signal?: AbortSignal,
+): Promise<unknown> {
+  const prepared = await prepareChatOutboxAttachments(draft, deps, hooks, signal)
+  return sendPreparedChatOutboxDraft(prepared, deps)
 }

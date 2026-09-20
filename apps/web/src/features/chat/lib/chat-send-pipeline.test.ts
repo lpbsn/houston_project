@@ -65,6 +65,7 @@ describe('chat-send-pipeline', () => {
           put_url: 'https://example.test/put',
           expires_at: '2099-01-01T00:00:00.000Z',
         })),
+        refreshPresign: vi.fn(),
         putBytes,
         completeUpload: vi.fn(),
         sendMessage,
@@ -97,6 +98,7 @@ describe('chat-send-pipeline', () => {
       }),
       {
         reserveUpload: vi.fn(),
+        refreshPresign: vi.fn(),
         putBytes,
         completeUpload,
         sendMessage,
@@ -128,6 +130,7 @@ describe('chat-send-pipeline', () => {
       }),
       {
         reserveUpload: vi.fn(),
+        refreshPresign: vi.fn(),
         putBytes: vi.fn(),
         completeUpload: vi.fn(),
         sendMessage,
@@ -140,5 +143,97 @@ describe('chat-send-pipeline', () => {
         clientMessageId: 'client-1',
       }),
     )
+  })
+
+  it('resumes an uploading reservation via refreshPresign, never a stored putUrl', async () => {
+    __setChatOutboxTestStores({})
+    await persistChatOutboxAttachmentBytes({
+      userId: 'user-1',
+      establishmentId: 'est-1',
+      localAttachmentId: 'att-1',
+      blob: new Blob(['abc'], { type: 'image/jpeg' }),
+    })
+    const refreshPresign = vi.fn(async () => ({
+      upload_id: 'up-1',
+      put_url: 'https://example.test/put-renewed',
+      expires_at: '2099-01-01T00:00:00.000Z',
+    }))
+    const putBytes = vi.fn(async (payload: { putUrl: string }) => {
+      expect(payload.putUrl).toBe('https://example.test/put-renewed')
+    })
+    const reserveUpload = vi.fn()
+
+    await dispatchChatOutboxDraft(
+      draft({
+        attachments: [
+          {
+            localAttachmentId: 'att-1',
+            uploadId: 'up-1',
+            filename: 'a.jpg',
+            contentType: 'image/jpeg',
+            sizeBytes: 3,
+            state: 'uploading',
+            relativePath: null,
+            expiresAt: '2099-01-01T00:00:00.000Z',
+          },
+        ],
+      }),
+      {
+        reserveUpload,
+        refreshPresign,
+        putBytes,
+        completeUpload: vi.fn(),
+        sendMessage: vi.fn(),
+      },
+    )
+
+    expect(reserveUpload).not.toHaveBeenCalled()
+    expect(refreshPresign).toHaveBeenCalledWith('up-1')
+    expect(putBytes).toHaveBeenCalled()
+    __resetChatOutboxTestStores()
+  })
+
+  it('uses an empty putUrl for the Houston filesystem fallback', async () => {
+    __setChatOutboxTestStores({})
+    await persistChatOutboxAttachmentBytes({
+      userId: 'user-1',
+      establishmentId: 'est-1',
+      localAttachmentId: 'att-1',
+      blob: new Blob(['abc'], { type: 'image/jpeg' }),
+    })
+    const putBytes = vi.fn(async (payload: { putUrl: string }) => {
+      expect(payload.putUrl).toBe('')
+    })
+
+    await dispatchChatOutboxDraft(
+      draft({
+        attachments: [
+          {
+            localAttachmentId: 'att-1',
+            uploadId: null,
+            filename: 'a.jpg',
+            contentType: 'image/jpeg',
+            sizeBytes: 3,
+            state: 'reserving',
+            relativePath: null,
+            expiresAt: null,
+          },
+        ],
+      }),
+      {
+        reserveUpload: vi.fn(async () => ({
+          upload_id: 'up-local',
+          put_url: '',
+          expires_at: '2099-01-01T00:00:00.000Z',
+        })),
+        refreshPresign: vi.fn(),
+        putBytes,
+        completeUpload: vi.fn(),
+        sendMessage: vi.fn(),
+      },
+    )
+
+    expect(putBytes).toHaveBeenCalledWith(expect.objectContaining({ putUrl: '' }))
+    __resetChatOutboxTestStores()
   })
 })

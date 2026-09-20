@@ -64,6 +64,7 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
       queued: false,
     }))
   const retryFailedMessage = realtime?.retryFailedMessage ?? (() => false)
+  const cancelSendingMessage = realtime?.cancelSendingMessage ?? (() => false)
 
   const serverMessages = useMemo(
     () => flattenChatMessagePages(messagesQuery.data?.pages ?? []),
@@ -240,6 +241,13 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
                             }
                           : undefined
                       }
+                      onCancel={
+                        entry.kind === 'local' && entry.message.status === 'pending'
+                          ? () => {
+                              cancelSendingMessage(entry.message.clientMessageId)
+                            }
+                          : undefined
+                      }
                     />
                   </div>
                 )
@@ -252,14 +260,19 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
       <ChatComposer
         participants={detailQuery.data.participants}
         viewerMembershipId={viewerMembershipId}
+        userId={auth.bootstrap?.user.id ?? null}
+        establishmentId={establishmentId}
+        conversationId={conversationId}
         replyTo={replyTo}
         onClearReply={() => setReplyTo(null)}
+        onRestoreReply={setReplyTo}
         onSend={(payload) => {
           sendChatMessage({
             conversationId,
             body: payload.body,
             mentions: payload.mentions,
             replyToId: payload.replyToId,
+            replyPreview: replyTo,
             files: payload.files,
             authorMembershipId: viewerMembershipId,
             authorDisplayName: viewerDisplayName,
@@ -272,6 +285,12 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
         conversation={detailQuery.data}
         open={infoOpen}
         onClose={() => setInfoOpen(false)}
+        knownMessageIds={new Set(serverMessages.map((message) => message.id))}
+        onJumpToMessage={(messageId) => {
+          document.getElementById(`chat-msg-${messageId}`)?.scrollIntoView({
+            block: 'center',
+          })
+        }}
       />
 
       {canManageMembers ? (

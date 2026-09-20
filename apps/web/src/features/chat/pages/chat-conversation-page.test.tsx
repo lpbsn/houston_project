@@ -71,6 +71,7 @@ const realtimeState = {
   localMessages: [],
   sendChatMessage: () => ({ clientMessageId: 'client-local', queued: true }),
   retryFailedMessage: () => false,
+  cancelSendingMessage: () => false,
 }
 
 vi.mock('../components/chat-realtime-provider', () => ({

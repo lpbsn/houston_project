@@ -5,7 +5,11 @@ import {
   __setChatOutboxTestStores,
   chatOutboxNativePath,
   clearChatOutbox,
+  clearExpiredChatOutboxAttachments,
+  composerDraftId,
   loadChatOutboxDrafts,
+  loadComposerDraft,
+  saveComposerDraft,
   persistChatOutboxAttachmentBytes,
   readChatOutboxAttachmentBytes,
   saveChatOutboxDraft,
@@ -144,5 +148,70 @@ describe('chat-outbox', () => {
         expiresAt: null,
       }),
     ).toBeNull()
+  })
+
+  it('rehydrates a composer draft scoped to the conversation', async () => {
+    __setChatOutboxTestStores({})
+    const id = composerDraftId('user-1', 'est-1', 'conv-1')
+    await saveComposerDraft({
+      id,
+      userId: 'user-1',
+      establishmentId: 'est-1',
+      conversationId: 'conv-1',
+      body: 'later',
+      mentions: [],
+      replyTo: null,
+      attachments: [],
+    })
+
+    const restored = await loadComposerDraft({
+      userId: 'user-1',
+      establishmentId: 'est-1',
+      conversationId: 'conv-1',
+    })
+    expect(restored?.body).toBe('later')
+    await clearChatOutbox({ userId: 'user-1', establishmentId: 'est-1' })
+    expect(
+      await loadComposerDraft({
+        userId: 'user-1',
+        establishmentId: 'est-1',
+        conversationId: 'conv-1',
+      }),
+    ).toBeNull()
+  })
+
+  it('drops expired uploading attachments and keeps ready ones', async () => {
+    __setChatOutboxTestStores({})
+    await saveChatOutboxDraft(
+      draft({
+        createdAt: '2020-01-01T00:00:00.000Z',
+        attachments: [
+          {
+            localAttachmentId: 'att-old',
+            uploadId: 'up-old',
+            filename: 'old.jpg',
+            contentType: 'image/jpeg',
+            sizeBytes: 1,
+            state: 'uploading',
+            relativePath: null,
+            expiresAt: '2020-01-01T01:00:00.000Z',
+          },
+          {
+            localAttachmentId: 'att-ready',
+            uploadId: 'up-ready',
+            filename: 'ready.jpg',
+            contentType: 'image/jpeg',
+            sizeBytes: 1,
+            state: 'ready',
+            relativePath: null,
+            expiresAt: '2020-01-01T01:00:00.000Z',
+          },
+        ],
+      }),
+    )
+
+    await clearExpiredChatOutboxAttachments(Date.parse('2026-01-01T00:00:00.000Z'))
+    const restored = await loadChatOutboxDrafts({ clientMessageId: 'client-1' })
+    expect(restored[0]?.attachments.map((item) => item.localAttachmentId)).toEqual(['att-ready'])
   })
 })

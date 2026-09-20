@@ -44,6 +44,7 @@ export type LocalChatAttachment = {
   sizeBytes: number
   state: LocalChatAttachmentState
   previewUrl?: string
+  progress?: number
 }
 
 export type LocalChatMessage = {
@@ -52,6 +53,11 @@ export type LocalChatMessage = {
   body: string
   mentions: Array<Pick<ChatMessageMention, 'membership_id' | 'start' | 'end'>>
   replyToId: string | null
+  replyPreview?: {
+    authorDisplayName: string
+    excerpt: string
+    unavailable?: boolean
+  } | null
   attachments: LocalChatAttachment[]
   status: LocalChatMessageStatus
   createdAt: string

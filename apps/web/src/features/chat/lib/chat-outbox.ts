@@ -38,6 +38,22 @@ export type ChatOutboxScope = {
   clientMessageId?: string
 }
 
+export type ChatComposerPersistedDraft = {
+  id: string
+  userId: string
+  establishmentId: string
+  conversationId: string
+  body: string
+  mentions: ChatMentionDraft[]
+  replyTo: {
+    id: string
+    authorDisplayName: string
+    excerpt: string
+    unavailable?: boolean
+  } | null
+  attachments: ChatOutboxAttachmentRecord[]
+}
+
 type BlobStore = {
   put(id: string, blob: Blob): Promise<void>
   get(id: string): Promise<Blob | null>
@@ -52,6 +68,13 @@ type DraftStore = {
   delete(clientMessageId: string): Promise<void>
 }
 
+type ComposerStore = {
+  put(draft: ChatComposerPersistedDraft): Promise<void>
+  get(id: string): Promise<ChatComposerPersistedDraft | null>
+  list(): Promise<ChatComposerPersistedDraft[]>
+  delete(id: string): Promise<void>
+}
+
 type NativeFileAdapter = {
   write(path: string, blob: Blob): Promise<void>
   read(path: string): Promise<Blob | null>
@@ -60,6 +83,7 @@ type NativeFileAdapter = {
 
 const memoryBlobs = new Map<string, Blob>()
 const memoryDrafts = new Map<string, ChatOutboxDraft>()
+const memoryComposerDrafts = new Map<string, ChatComposerPersistedDraft>()
 
 function memoryBlobStore(): BlobStore {
   return {
@@ -95,9 +119,26 @@ function memoryDraftStore(): DraftStore {
   }
 }
 
+function memoryComposerStore(): ComposerStore {
+  return {
+    async put(draft) {
+      memoryComposerDrafts.set(draft.id, draft)
+    },
+    async get(id) {
+      return memoryComposerDrafts.get(id) ?? null
+    },
+    async list() {
+      return [...memoryComposerDrafts.values()]
+    },
+    async delete(id) {
+      memoryComposerDrafts.delete(id)
+    },
+  }
+}
+
 function openChatOutboxDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open('spore-chat-outbox', 1)
+    const request = indexedDB.open('spore-chat-outbox', 2)
     request.onupgradeneeded = () => {
       const db = request.result
       if (!db.objectStoreNames.contains('drafts')) {
@@ -105,6 +146,9 @@ function openChatOutboxDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains('blobs')) {
         db.createObjectStore('blobs')
+      }
+      if (!db.objectStoreNames.contains('composer')) {
+        db.createObjectStore('composer', { keyPath: 'id' })
       }
     }
     request.onsuccess = () => resolve(request.result)
@@ -119,7 +163,7 @@ function idbRequest<T>(request: IDBRequest<T>): Promise<T> {
   })
 }
 
-function indexedDbStores(): { blobs: BlobStore; drafts: DraftStore } | null {
+function indexedDbStores(): { blobs: BlobStore; drafts: DraftStore; composer: ComposerStore } | null {
   if (typeof indexedDB === 'undefined') {
     return null
   }
@@ -183,6 +227,37 @@ function indexedDbStores(): { blobs: BlobStore; drafts: DraftStore } | null {
           tx.oncomplete = () => resolve()
           tx.onerror = () => reject(tx.error)
         })
+        },
+    },
+    composer: {
+      async put(draft) {
+        const db = await openChatOutboxDb()
+        const tx = db.transaction('composer', 'readwrite')
+        tx.objectStore('composer').put(draft)
+        await new Promise<void>((resolve, reject) => {
+          tx.oncomplete = () => resolve()
+          tx.onerror = () => reject(tx.error)
+        })
+      },
+      async get(id) {
+        const db = await openChatOutboxDb()
+        const tx = db.transaction('composer', 'readonly')
+        return ((await idbRequest(tx.objectStore('composer').get(id))) ??
+          null) as ChatComposerPersistedDraft | null
+      },
+      async list() {
+        const db = await openChatOutboxDb()
+        const tx = db.transaction('composer', 'readonly')
+        return (await idbRequest(tx.objectStore('composer').getAll())) as ChatComposerPersistedDraft[]
+      },
+      async delete(id) {
+        const db = await openChatOutboxDb()
+        const tx = db.transaction('composer', 'readwrite')
+        tx.objectStore('composer').delete(id)
+        await new Promise<void>((resolve, reject) => {
+          tx.oncomplete = () => resolve()
+          tx.onerror = () => reject(tx.error)
+        })
       },
     },
   }
@@ -239,31 +314,46 @@ async function loadNativeFileAdapter(): Promise<NativeFileAdapter | null> {
 
 let blobStoreOverride: BlobStore | null = null
 let draftStoreOverride: DraftStore | null = null
+let composerStoreOverride: ComposerStore | null = null
 let nativeAdapterOverride: NativeFileAdapter | null | undefined
 
-function resolveStores(): { blobs: BlobStore; drafts: DraftStore } {
-  if (blobStoreOverride && draftStoreOverride) {
-    return { blobs: blobStoreOverride, drafts: draftStoreOverride }
+function resolveStores(): { blobs: BlobStore; drafts: DraftStore; composer: ComposerStore } {
+  if (blobStoreOverride && draftStoreOverride && composerStoreOverride) {
+    return {
+      blobs: blobStoreOverride,
+      drafts: draftStoreOverride,
+      composer: composerStoreOverride,
+    }
   }
-  return indexedDbStores() ?? { blobs: memoryBlobStore(), drafts: memoryDraftStore() }
+  return (
+    indexedDbStores() ?? {
+      blobs: memoryBlobStore(),
+      drafts: memoryDraftStore(),
+      composer: memoryComposerStore(),
+    }
+  )
 }
 
 export function __setChatOutboxTestStores(options: {
   blobs?: BlobStore
   drafts?: DraftStore
+  composer?: ComposerStore
   native?: NativeFileAdapter | null
 }) {
   blobStoreOverride = options.blobs ?? memoryBlobStore()
   draftStoreOverride = options.drafts ?? memoryDraftStore()
+  composerStoreOverride = options.composer ?? memoryComposerStore()
   nativeAdapterOverride = options.native
 }
 
 export function __resetChatOutboxTestStores() {
   blobStoreOverride = null
   draftStoreOverride = null
+  composerStoreOverride = null
   nativeAdapterOverride = undefined
   memoryBlobs.clear()
   memoryDrafts.clear()
+  memoryComposerDrafts.clear()
 }
 
 function matchesScope(draft: ChatOutboxDraft, scope: ChatOutboxScope): boolean {
@@ -344,6 +434,55 @@ async function deleteAttachmentBytes(attachment: ChatOutboxAttachmentRecord): Pr
   await blobs.delete(attachment.localAttachmentId)
 }
 
+export function composerDraftId(
+  userId: string,
+  establishmentId: string,
+  conversationId: string,
+): string {
+  return `${userId}:${establishmentId}:${conversationId}`
+}
+
+function matchesComposerScope(
+  draft: ChatComposerPersistedDraft,
+  scope: ChatOutboxScope,
+): boolean {
+  if (scope.conversationId && draft.conversationId !== scope.conversationId) {
+    return false
+  }
+  if (scope.establishmentId && draft.establishmentId !== scope.establishmentId) {
+    return false
+  }
+  if (scope.userId && draft.userId !== scope.userId) {
+    return false
+  }
+  return true
+}
+
+export async function saveComposerDraft(draft: ChatComposerPersistedDraft): Promise<void> {
+  const { composer } = resolveStores()
+  await composer.put(draft)
+}
+
+export async function loadComposerDraft(options: {
+  userId: string
+  establishmentId: string
+  conversationId: string
+}): Promise<ChatComposerPersistedDraft | null> {
+  const { composer } = resolveStores()
+  return composer.get(composerDraftId(options.userId, options.establishmentId, options.conversationId))
+}
+
+export async function clearComposerDrafts(scope: ChatOutboxScope = {}): Promise<void> {
+  const { composer } = resolveStores()
+  const items = (await composer.list()).filter((draft) => matchesComposerScope(draft, scope))
+  await Promise.all(
+    items.map(async (draft) => {
+      await Promise.all(draft.attachments.map((attachment) => deleteAttachmentBytes(attachment)))
+      await composer.delete(draft.id)
+    }),
+  )
+}
+
 export async function clearChatOutbox(scope: ChatOutboxScope = {}): Promise<void> {
   const { drafts } = resolveStores()
   const items = (await drafts.list()).filter((draft) => matchesScope(draft, scope))
@@ -353,6 +492,9 @@ export async function clearChatOutbox(scope: ChatOutboxScope = {}): Promise<void
       await drafts.delete(draft.clientMessageId)
     }),
   )
+  if (!scope.clientMessageId) {
+    await clearComposerDrafts(scope)
+  }
 }
 
 export async function clearExpiredChatOutboxAttachments(now = Date.now()): Promise<void> {

@@ -20,6 +20,7 @@ import {
   completeChatUpload,
   markConversationSeen,
   putChatUploadBytes,
+  refreshChatUploadPresign,
   reserveChatUpload,
   sendChatMessage as sendChatMessageHttp,
 } from '../api'
@@ -46,6 +47,7 @@ import type {
   ChatWsConversationUpdatedEvent,
   ChatWsGlobalAccessRevokedEvent,
   ChatWsMessageCreatedEvent,
+  ChatSendMessageResponse,
   ChatWsMessageRejectedEvent,
   LocalChatAttachment,
   LocalChatMessage,
@@ -59,6 +61,7 @@ type SendChatMessagePayload = {
   files?: File[]
   authorMembershipId: string
   authorDisplayName: string
+  replyPreview?: LocalChatMessage['replyPreview']
 }
 
 type ChatRealtimeContextValue = {
@@ -66,6 +69,7 @@ type ChatRealtimeContextValue = {
   localMessages: LocalChatMessage[]
   sendChatMessage: (payload: SendChatMessagePayload) => { clientMessageId: string; queued: boolean }
   retryFailedMessage: (clientMessageId: string) => boolean
+  cancelSendingMessage: (clientMessageId: string) => boolean
   clearLocalMessagesForConversation: (conversationId: string) => void
   showChatNav: boolean
   hasUnread: boolean
@@ -124,6 +128,7 @@ export function ChatRealtimeProvider({
   const [localMessages, setLocalMessages] = useState<LocalChatMessage[]>([])
   const localMessagesRef = useRef<LocalChatMessage[]>([])
   const inflightRef = useRef(new Set<string>())
+  const abortControllersRef = useRef(new Map<string, AbortController>())
 
   const chatEnabled = Boolean(statusQuery.data?.can_access && statusQuery.data.chat_enabled)
   const hasUnread = (conversationsQuery.data?.items ?? []).some((item) => item.unread)
@@ -151,11 +156,14 @@ export function ChatRealtimeProvider({
         contentType: string
         sizeBytes: number
       }) => reserveChatUpload(conversationEstablishmentId, payload),
+      refreshPresign: (uploadId: string) =>
+        refreshChatUploadPresign(conversationEstablishmentId, uploadId),
       putBytes: (payload: {
         uploadId: string
         putUrl: string
         blob: Blob
         contentType: string
+        signal?: AbortSignal
         onProgress?: (ratio: number) => void
       }) =>
         putChatUploadBytes({
@@ -192,6 +200,8 @@ export function ChatRealtimeProvider({
         return
       }
       inflightRef.current.add(draft.clientMessageId)
+      const abortController = new AbortController()
+      abortControllersRef.current.set(draft.clientMessageId, abortController)
       const deps = {
         ...pipelineDeps(draft.establishmentId),
         sendMessage: (payload: {
@@ -211,20 +221,35 @@ export function ChatRealtimeProvider({
       }
       try {
         const ready = draft.attachments.length > 0 && draft.attachments.every((item) => item.state === 'ready')
-        if (ready) {
-          await sendPreparedChatOutboxDraft(draft, deps)
-        } else {
-          await dispatchChatOutboxDraft(draft, deps, {
-            onAttachmentState: (localAttachmentId, state) => {
-              patchLocalMessage(draft.clientMessageId, (message) => ({
-                ...message,
-                attachments: message.attachments.map((attachment) =>
-                  attachment.localAttachmentId === localAttachmentId
-                    ? { ...attachment, state }
-                    : attachment,
-                ),
-              }))
-            },
+        const result = ready
+          ? await sendPreparedChatOutboxDraft(draft, deps)
+          : await dispatchChatOutboxDraft(
+              draft,
+              deps,
+              {
+                onAttachmentState: (localAttachmentId, state, extras) => {
+                  patchLocalMessage(draft.clientMessageId, (message) => ({
+                    ...message,
+                    attachments: message.attachments.map((attachment) =>
+                      attachment.localAttachmentId === localAttachmentId
+                        ? {
+                            ...attachment,
+                            state,
+                            uploadId: extras?.uploadId ?? attachment.uploadId,
+                            progress: extras?.progress ?? attachment.progress,
+                          }
+                        : attachment,
+                    ),
+                  }))
+                },
+              },
+              abortController.signal,
+            )
+        const sent = result as ChatSendMessageResponse | undefined
+        if (sent?.message && establishmentId) {
+          appendMessageToCache(establishmentId, draft.conversationId, sent.message, {
+            viewerMembershipId,
+            activeConversationId,
           })
         }
         await clearChatOutbox({ clientMessageId: draft.clientMessageId })
@@ -236,10 +261,11 @@ export function ChatRealtimeProvider({
         const rejectCode = error instanceof ChatApiError ? error.code ?? undefined : undefined
         await failMessage(draft, rejectCode)
       } finally {
+        abortControllersRef.current.delete(draft.clientMessageId)
         inflightRef.current.delete(draft.clientMessageId)
       }
     },
-    [failMessage, patchLocalMessage, pipelineDeps],
+    [activeConversationId, appendMessageToCache, establishmentId, failMessage, patchLocalMessage, pipelineDeps, viewerMembershipId],
   )
 
   const handleMessageCreated = useCallback(
@@ -416,6 +442,7 @@ export function ChatRealtimeProvider({
         body: payload.body,
         mentions: payload.mentions ?? [],
         replyToId: payload.replyToId ?? null,
+        replyPreview: payload.replyPreview ?? null,
         attachments,
         status: 'pending',
         createdAt,
@@ -502,17 +529,31 @@ export function ChatRealtimeProvider({
     [connectionStatus, dispatchDraft, reconnect],
   )
 
+  const cancelSendingMessage = useCallback(
+    (clientMessageId: string) => {
+      const controller = abortControllersRef.current.get(clientMessageId)
+      if (!controller) {
+        return false
+      }
+      controller.abort()
+      return true
+    },
+    [],
+  )
+
   const value = useMemo(
     () => ({
       connectionStatus,
       localMessages,
       sendChatMessage,
       retryFailedMessage,
+      cancelSendingMessage,
       clearLocalMessagesForConversation,
       showChatNav: chatEnabled,
       hasUnread,
     }),
     [
+      cancelSendingMessage,
       chatEnabled,
       clearLocalMessagesForConversation,
       connectionStatus,

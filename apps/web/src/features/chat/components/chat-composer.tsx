@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type DragEvent, type ClipboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ClipboardEvent } from 'react'
 import { Paperclip, SendHorizonal, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,14 @@ import {
   trimBodyAndMentions,
   type ChatMentionDraft,
 } from '../lib/chat-mentions'
+import {
+  composerDraftId,
+  loadComposerDraft,
+  persistChatOutboxAttachmentBytes,
+  readChatOutboxAttachmentBytes,
+  saveComposerDraft,
+  type ChatOutboxAttachmentRecord,
+} from '../lib/chat-outbox'
 import type { ChatParticipantSummary, ChatReplyTo } from '../types'
 
 export type ChatComposerReply = {
@@ -38,8 +46,12 @@ type ChatComposerProps = {
   disabled?: boolean
   participants: ChatParticipantSummary[]
   viewerMembershipId: string
+  userId?: string | null
+  establishmentId?: string | null
+  conversationId?: string | null
   replyTo?: ChatComposerReply | ChatReplyTo | null
   onClearReply?: () => void
+  onRestoreReply?: (reply: ChatComposerReply) => void
   onSend: (payload: ChatComposerSendPayload) => void
 }
 
@@ -62,14 +74,20 @@ export function ChatComposer({
   disabled = false,
   participants,
   viewerMembershipId,
+  userId = null,
+  establishmentId = null,
+  conversationId = null,
   replyTo,
   onClearReply,
+  onRestoreReply,
   onSend,
 }: ChatComposerProps) {
   const [draft, setDraft] = useState('')
   const [mentions, setMentions] = useState<ChatMentionDraft[]>([])
   const [files, setFiles] = useState<File[]>([])
   const [cursor, setCursor] = useState(0)
+  const hydratedRef = useRef<string | null>(null)
+  const fileRecordsRef = useRef<ChatOutboxAttachmentRecord[]>([])
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const reply = asReply(replyTo)
@@ -100,10 +118,81 @@ export function ChatComposer({
     setCursor(nextCursor)
   }
 
-  function addFiles(incoming: File[]) {
+  useEffect(() => {
+    if (!userId || !establishmentId || !conversationId) {
+      return
+    }
+    const scopeKey = composerDraftId(userId, establishmentId, conversationId)
+    if (hydratedRef.current === scopeKey) {
+      return
+    }
+    hydratedRef.current = scopeKey
+    void loadComposerDraft({ userId, establishmentId, conversationId }).then(async (saved) => {
+      if (!saved) {
+        return
+      }
+      setDraft(saved.body)
+      setMentions(saved.mentions)
+      fileRecordsRef.current = saved.attachments
+      const restoredFiles: File[] = []
+      for (const attachment of saved.attachments) {
+        const blob = await readChatOutboxAttachmentBytes(attachment)
+        if (blob) {
+          restoredFiles.push(new File([blob], attachment.filename, { type: attachment.contentType }))
+        }
+      }
+      setFiles(restoredFiles)
+      if (saved.replyTo) {
+        onRestoreReply?.(saved.replyTo)
+      }
+    })
+  }, [conversationId, establishmentId, onRestoreReply, userId])
+
+  useEffect(() => {
+    if (!userId || !establishmentId || !conversationId || hydratedRef.current == null) {
+      return
+    }
+    void saveComposerDraft({
+      id: composerDraftId(userId, establishmentId, conversationId),
+      userId,
+      establishmentId,
+      conversationId,
+      body: draft,
+      mentions,
+      replyTo: reply,
+      attachments: fileRecordsRef.current,
+    })
+  }, [conversationId, draft, establishmentId, mentions, reply, userId])
+
+  async function addFiles(incoming: File[]) {
     const accepted = incoming.filter(
       (file) => isAllowedChatAttachmentType(file.type) && file.size <= CHAT_ATTACHMENT_MAX_BYTES,
     )
+    if (!accepted.length || !userId || !establishmentId) {
+      setFiles((current) => [...current, ...accepted].slice(0, CHAT_ATTACHMENTS_MAX_PER_MESSAGE))
+      return
+    }
+    const nextRecords = [...fileRecordsRef.current]
+    for (const file of accepted) {
+      const localAttachmentId = crypto.randomUUID()
+      const relativePath = await persistChatOutboxAttachmentBytes({
+        userId,
+        establishmentId,
+        localAttachmentId,
+        blob: file,
+      })
+      nextRecords.push({
+        localAttachmentId,
+        uploadId: null,
+        filename: file.name,
+        contentType: file.type,
+        sizeBytes: file.size,
+        state: 'reserving',
+        relativePath,
+        expiresAt: null,
+      })
+    }
+    fileRecordsRef.current = nextRecords.slice(0, CHAT_ATTACHMENTS_MAX_PER_MESSAGE)
     setFiles((current) => [...current, ...accepted].slice(0, CHAT_ATTACHMENTS_MAX_PER_MESSAGE))
   }
 
@@ -124,6 +213,19 @@ export function ChatComposer({
     setDraft('')
     setMentions([])
     setFiles([])
+    fileRecordsRef.current = []
+    if (userId && establishmentId && conversationId) {
+      void saveComposerDraft({
+        id: composerDraftId(userId, establishmentId, conversationId),
+        userId,
+        establishmentId,
+        conversationId,
+        body: '',
+        mentions: [],
+        replyTo: null,
+        attachments: [],
+      })
+    }
     onClearReply?.()
   }
 
@@ -200,7 +302,12 @@ export function ChatComposer({
                 type="button"
                 className="absolute -top-1 -right-1 rounded-full bg-white p-0.5 shadow"
                 aria-label={`Retirer ${file.name}`}
-                onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                onClick={() => {
+                  setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))
+                  fileRecordsRef.current = fileRecordsRef.current.filter(
+                    (_, itemIndex) => itemIndex !== index,
+                  )
+                }}
               >
                 <X className="h-3 w-3" />
               </button>

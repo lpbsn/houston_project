@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { __resetChatOutboxTestStores, __setChatOutboxTestStores, loadComposerDraft } from '../lib/chat-outbox'
 import { ChatComposer } from './chat-composer'
 import type { ChatParticipantSummary } from '../types'
 
@@ -26,6 +27,7 @@ const participants: ChatParticipantSummary[] = [
 describe('ChatComposer', () => {
   afterEach(() => {
     cleanup()
+    __resetChatOutboxTestStores()
   })
 
   it('stays enabled and exposes an accessible mention picker', () => {
@@ -50,5 +52,39 @@ describe('ChatComposer', () => {
         mentions: [{ membership_id: 'mbr-peer', start: 0, end: 13 }],
       }),
     )
+  })
+
+  it('rehydrates a persisted composer draft', async () => {
+    __setChatOutboxTestStores({})
+    const { saveComposerDraft, composerDraftId } = await import('../lib/chat-outbox')
+    await saveComposerDraft({
+      id: composerDraftId('user-1', 'est-1', 'conv-1'),
+      userId: 'user-1',
+      establishmentId: 'est-1',
+      conversationId: 'conv-1',
+      body: 'draft hello',
+      mentions: [],
+      replyTo: null,
+      attachments: [],
+    })
+
+    render(
+      <ChatComposer
+        participants={participants}
+        viewerMembershipId="mbr-viewer"
+        userId="user-1"
+        establishmentId="est-1"
+        conversationId="conv-1"
+        onSend={vi.fn()}
+      />,
+    )
+
+    expect(await screen.findByDisplayValue('draft hello')).toBeTruthy()
+    const stored = await loadComposerDraft({
+      userId: 'user-1',
+      establishmentId: 'est-1',
+      conversationId: 'conv-1',
+    })
+    expect(stored?.body).toBe('draft hello')
   })
 })

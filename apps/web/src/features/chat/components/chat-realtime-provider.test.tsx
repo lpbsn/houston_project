@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { createElement } from 'react'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -239,6 +239,39 @@ describe('ChatRealtimeProvider', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: chatQueryKeys.conversations(ESTABLISHMENT_ID),
     })
+  })
+
+  it('merges HTTP send into the messages cache without waiting for WS', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    queryClient.setQueryData(chatQueryKeys.messages(ESTABLISHMENT_ID, 'conv-1'), {
+      pages: [{ items: [], has_more: false }],
+      pageParams: [undefined],
+    })
+
+    render(
+      createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(
+          ChatRealtimeProvider,
+          { establishmentId: ESTABLISHMENT_ID, activeConversationId: 'conv-1' },
+          createElement(Probe),
+        ),
+      ),
+    )
+
+    fireEvent.click(screen.getByText('send'))
+
+    await waitFor(() => {
+      const cached = queryClient.getQueryData<{
+        pages: Array<{ items: Array<{ id: string; body: string }> }>
+      }>(chatQueryKeys.messages(ESTABLISHMENT_ID, 'conv-1'))
+      expect(cached?.pages[0]?.items[0]?.id).toBe('msg-sent')
+      expect(readLocalMessages()).toEqual([])
+    })
+    expect(capturedOnMessageCreated).toBeDefined()
   })
 
   it('does not increment unread_count on duplicate message.created events', () => {
