@@ -15,7 +15,6 @@ type PendingOnboardingPageProps = {
 export function PendingOnboardingPage({
   pendingMemberships,
   memberships,
-  onNavigate,
 }: PendingOnboardingPageProps) {
   const [forceWaiting, setForceWaiting] = useState(false)
   const landing = useMemo(
@@ -48,7 +47,6 @@ export function PendingOnboardingPage({
     return (
       <PendingOnboardingSelectionCard
         pendingMemberships={landing.pendingMemberships}
-        onContinueOnboarding={onNavigate}
         onShowWaiting={() => setForceWaiting(true)}
       />
     )

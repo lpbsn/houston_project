@@ -1,3 +1,4 @@
+import { mapInvitationErrorMessage } from '@/features/auth/lib/invitation-errors'
 import type { OnboardingApiError } from '@/features/onboarding/api'
 
 export type OnboardingDraftValidationErrorItem = {
@@ -34,6 +35,13 @@ const CODE_MESSAGES: Record<string, string> = {
   activation_readiness_failed: 'L’activation a échoué (prérequis incomplets).',
   director_invitation_already_exists: 'Une invitation directeur existe déjà.',
   duplicate_establishment_name: 'Ce nom d’établissement est déjà utilisé.',
+  activation_not_ready: 'L’activation a échoué (prérequis incomplets).',
+  invalid_onboarding_state: 'Cet onboarding ne peut plus être modifié ou finalisé.',
+  draft_not_found: 'Le brouillon d’onboarding est introuvable.',
+  catalog_business_unit_inactive: 'Ce pôle du catalogue n’est plus actif.',
+  catalog_activity_subject_inactive: 'Ce sujet du catalogue n’est plus actif.',
+  unknown_catalog_key: 'Sélectionnez un pôle depuis le catalogue.',
+  invalid_organization_name: 'Le nom de l’organisation est invalide.',
 }
 
 export function messageForDraftErrorCode(code: string): string {
@@ -74,18 +82,29 @@ export function extractDraftValidationErrors(
   )
 }
 
+const INVITATION_ERROR_CODES = new Set([
+  'membership_invitation_user_exists',
+  'membership_invitation_duplicate',
+  'membership_invitation_owner_conflict',
+  'organizational_owner_invariant_conflict',
+  'membership_invitation_role_not_allowed',
+  'membership_invitation_invalid',
+  'director_invitation_already_exists',
+  'director_invitation_owner_not_allowed',
+])
+
 export function getCompleteErrorMessage(error: unknown, fallback: string): string {
-  if (error && typeof error === 'object' && 'code' in error) {
-    const code = (error as OnboardingApiError).code
-    if (typeof code === 'string' && code.length > 0) {
-      return messageForDraftErrorCode(code)
-    }
+  const record = error && typeof error === 'object' ? (error as OnboardingApiError) : null
+  const code = record && typeof record.code === 'string' ? record.code : ''
+  const detail = record && typeof record.detail === 'string' ? record.detail : ''
+  if (code.length > 0 && code in CODE_MESSAGES) {
+    return CODE_MESSAGES[code]
   }
-  if (error && typeof error === 'object' && 'detail' in error) {
-    const detail = (error as OnboardingApiError).detail
-    if (typeof detail === 'string' && detail.length > 0) {
-      return detail
-    }
+  if (code.length > 0 && INVITATION_ERROR_CODES.has(code)) {
+    return mapInvitationErrorMessage(code, detail)
+  }
+  if (detail.length > 0) {
+    return detail
   }
   if (error instanceof Error && error.message) {
     return error.message

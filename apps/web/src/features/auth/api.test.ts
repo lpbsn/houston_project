@@ -77,7 +77,6 @@ import {
   login,
   logout,
   refreshAccessToken,
-  registerOnboarding,
   resyncBootstrapAfterLegalError,
   switchEstablishment,
 } from '@/features/auth/api'
@@ -880,23 +879,6 @@ describe('auth api cache isolation', () => {
       },
     },
     {
-      name: 'register',
-      start: () =>
-        registerOnboarding({
-          invite_code: 'INVITE',
-          first_name: 'Owner',
-          last_name: 'Example',
-          email: 'owner@example.com',
-          password: 'secret',
-          password_confirmation: 'secret',
-        }),
-      failure: {
-        status: 400,
-        detail: 'Registration could not be completed.',
-        pattern: /Registration could not be completed/,
-      },
-    },
-    {
       name: 'invitation',
       start: () =>
         acceptInvitationSession('invite-token', {
@@ -1381,46 +1363,6 @@ describe('auth api cache isolation', () => {
     expect(queryClient.getQueryData(bootstrapQueryKey)).toMatchObject({
       user: { id: 'next-user' },
     })
-  })
-
-  it('purges non-auth queries on registerOnboarding', async () => {
-    seedStaleNonAuthQueries()
-    notifySuccess({ message: 'stale toast', kind: 'created' })
-
-    apiClientPostMock.mockResolvedValueOnce({
-      response: { status: 201 },
-      data: {
-        ...bootstrapPayload,
-        establishment_id: 'est-new',
-        onboarding_session_id: 'session-new',
-      },
-      error: undefined,
-    })
-
-    const result = await registerOnboarding({
-      invite_code: 'INVITE',
-      first_name: 'Owner',
-      last_name: 'Example',
-      email: 'owner@example.com',
-      password: 'secret',
-      password_confirmation: 'secret',
-    })
-
-    expect(result).toEqual({
-      establishment_id: 'est-new',
-      onboarding_session_id: 'session-new',
-    })
-    expectStaleNonAuthQueriesPurged()
-    expect(queryClient.getQueryData(bootstrapQueryKey)).toEqual({
-      authenticated: bootstrapPayload.authenticated,
-      user: bootstrapPayload.user,
-      memberships: bootstrapPayload.memberships,
-      active_membership: bootstrapPayload.active_membership,
-      pending_onboarding_memberships: bootstrapPayload.pending_onboarding_memberships,
-      permission_hints: bootstrapPayload.permission_hints,
-    })
-    expect(setAccessTokenMock).toHaveBeenCalledWith('new-access-token')
-    expect(getSuccessToastsSnapshot()).toEqual([])
   })
 
   it('clears cached frontend auth state on clearAuthState', () => {

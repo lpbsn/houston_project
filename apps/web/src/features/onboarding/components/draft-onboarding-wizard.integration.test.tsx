@@ -115,7 +115,7 @@ function multiMembershipBootstrapWithoutActive() {
       can_manage_runtime_config: false,
       can_view_team: false,
       can_manage_organization: false,
-      can_create_establishment: false,
+      platform_operator_active: false,
     },
   }
 }
@@ -166,7 +166,19 @@ function renderWizard() {
     createElement(QueryClientProvider, { client: queryClient }, children)
 
   return render(
-    createElement(DraftOnboardingWizard, { sessionId: 'session-1', onNavigate: navigate }),
+    createElement(DraftOnboardingWizard, {
+      sessionId: 'session-1',
+      onNavigate: navigate,
+      getDraft: async () => ({
+        id: 'draft-1',
+        onboarding_session_id: 'session-1',
+        updated_at: new Date().toISOString(),
+        payload: emptyOnboardingDraftPayload(),
+        validation: { mode: 'soft', is_ready_for_complete: false, errors: [] },
+      }),
+      putDraft: (sessionId, payload) => putMock(sessionId, payload),
+      completeSession: (sessionId) => completeMock(sessionId),
+    }),
     { wrapper },
   )
 }
@@ -195,7 +207,17 @@ describe('draft onboarding integration', () => {
       active_membership: { id: 'm1' },
       memberships: [{ id: 'm1' }],
       pending_onboarding_memberships: [],
-      permission_hints: {},
+      permission_hints: {
+        chat_available: false,
+        can_create_action_plan: false,
+        can_create_catalog_action_plan: false,
+        can_view_action_plan_catalog: false,
+        can_invite: false,
+        can_manage_runtime_config: false,
+        can_view_team: false,
+        can_manage_organization: false,
+        platform_operator_active: false,
+      },
     })
   })
 

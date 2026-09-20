@@ -20,7 +20,6 @@ from houston.accounts.email_change_services import (
 )
 from houston.accounts.models import EmailChangeRequest, PasswordResetRequest, User, UserSession
 from houston.accounts.password_services import request_password_reset
-from houston.accounts.tests.helpers import ensure_csrf, post_register, registration_payload
 from houston.accounts.tokens import digest_token
 from houston.chat.api.serializers import membership_display_name as chat_membership_display_name
 from houston.chat.models import ChatConversation, ChatMessage
@@ -269,16 +268,7 @@ def test_deleted_email_can_register_a_new_account(api_client):
     assert response.status_code == 204
     deleted_id = user.id
 
-    api_client.cookies.clear()
-    csrf_token = ensure_csrf(api_client)
-    with override_settings(HOUSTON_REGISTRATION_INVITE_CODES=["valid-code"]):
-        register = post_register(
-            api_client,
-            csrf_token,
-            registration_payload(email=email, first_name="Neo", last_name="User"),
-        )
-    assert register.status_code == 201, register.json()
-    new_user = User.objects.get(email__iexact=email)
+    new_user = create_user(username="reuse_after_delete", email=email)
     assert new_user.id != deleted_id
     assert new_user.status == User.Status.ACTIVE
 

@@ -3,20 +3,17 @@ import { ArrowRight, Building2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
-  buildOnboardingUrl,
   type PendingOnboardingMembership,
 } from '@/features/auth/lib/pending-onboarding'
 import { displayEstablishmentName } from '@/features/onboarding/lib/display-establishment-name'
 
 type PendingOnboardingSelectionCardProps = {
   pendingMemberships: PendingOnboardingMembership[]
-  onContinueOnboarding: (path: string) => void
   onShowWaiting: () => void
 }
 
 export function PendingOnboardingSelectionCard({
   pendingMemberships,
-  onContinueOnboarding,
   onShowWaiting,
 }: PendingOnboardingSelectionCardProps) {
   return (
@@ -56,15 +53,10 @@ export function PendingOnboardingSelectionCard({
               type="button"
               className="h-10 rounded-[1rem]"
               onClick={() => {
-                if (pending.can_continue_onboarding) {
-                  onContinueOnboarding(buildOnboardingUrl(pending))
-                  return
-                }
-
                 onShowWaiting()
               }}
             >
-              {pending.can_continue_onboarding ? 'Continuer la configuration' : 'Voir le statut'}
+              Voir le statut
               <ArrowRight className="size-4" />
             </Button>
           </div>

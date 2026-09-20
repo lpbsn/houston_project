@@ -1,37 +1,40 @@
 # Runtime Config / Onboarding Domain
 
 Status: authoritative
-Last reviewed: 2026-07-27
-Implementation status: **Lot 1 draft/complete additive** — target path is `OnboardingDraft` + `POST …/complete/`. Legacy `onboarding_proposal_v4` apply → invite → mark-ready → activate remains available until Lot 3. AI onboarding is permanently removed from Houston product scope (Lot 6).
+Last reviewed: 2026-09-19
+Implementation status: **live** — Platform draft/complete (`/api/v1/platform/onboardings/`). Tenant register / `POST /api/v1/establishments/` / tenant `onboarding-sessions` writes are removed. AI onboarding is permanently removed (Lot 6).
+
+**Spore Platform V1 is implemented.** Functional target: [`edb_plateforme_interne_spore_v1-3.md`](../../cadrage/edb_plateforme_interne_spore_v1-3.md). Do not treat removed owner-led HTTP as current product.
 
 ## 1. Purpose
 
 This domain initializes and later evolves the establishment-scoped runtime structure Houston uses for operational workflows.
 
-Public onboarding/runtime API is implemented. Authoritative contract: [`apps/api/schema.yml`](../../../apps/api/schema.yml) (paths under `/api/v1/onboarding-sessions/`). Runtime onboarding uses BusinessUnit / ActivitySubject manual flow only.
+Public onboarding/runtime API **as implemented today**: [`apps/api/schema.yml`](../../../apps/api/schema.yml) (Platform paths under `/api/v1/platform/onboardings/`; catalog suggest remains tenant-authenticated). Runtime onboarding uses BusinessUnit / ActivitySubject draft materialization on complete.
+
+**Current entry (live):** only Spore Platform on desktop Web (`/platform`). Operator runs the entire wizard. Owner/Director only accept invitation and wait; they never open the wizard. Activation remains blocked until at least one Owner or Director membership is `ACTIVE` (`missing_active_owner_or_director`). Functional display states, first match wins: `activated`, `error`, `ready_to_complete`, `waiting_acceptance`, `in_progress`. List filters do not include `functional_status` (display field only). Platform HTTP authz is `IsActivePlatformOperator`, not tenant `HasActiveMembership`. Onboarding writes go through authz-free cores called by Platform wrappers. `Organization.has_been_operational` is set at activation only (default `False`, no historical backfill).
 
 Domain boundaries:
 - Identity / Membership owns `User`, `Organization`, `Establishment`, and `EstablishmentMembership` lifecycle.
 - RBAC / Permissions owns who may configure, validate, activate, or later modify runtime context.
 - Runtime Config / Onboarding owns the product workflow and invariants for creating, validating, activating, and evolving initial runtime context.
 
-## Lot sequencing (temporary dual path)
+## Lot sequencing
 
 | Lot | Scope |
 |-----|--------|
-| **Lot 1** (done in backend) | Additive `OnboardingDraft`, `GET/PUT …/draft/`, `POST …/complete/`, shared readiness with description 10–5000 |
-| **Lot 2** | Frontend bascule onto draft/complete (Manual V2 wizard/clients FE removed) |
-| **Lot 3** | Remove legacy proposal endpoints/model (backend only; FE vestiges already removed) |
+| **Lot 1** | `OnboardingDraft`, Platform `GET/PUT …/draft/`, `POST …/complete/` |
+| **Lot 2** | Frontend wizard on Platform draft/complete only |
+| **Lot 3** | Tenant proposal HTTP / apply wrappers removed (model may still exist unused) |
 
-Until Lot 3, both paths coexist. `complete` refuses if any `BusinessUnit` already exists (active or inactive) so legacy apply and complete cannot double-materialize.
+Live path: persist incomplete wizard state in `OnboardingDraft`; materialize + invite + activate only in Platform `POST …/complete/`. `complete` refuses if any `BusinessUnit` already exists so a session cannot double-materialize.
 
 ## 2. MVP Scope
 
 - Initialize the initial `Organization` and `Establishment` context required before operational use, while their core lifecycle remains owned by Identity / Membership.
 - Capture a **required** free-text `EstablishmentActivityDescription` (10–5000 chars) as part of activation readiness.
 - Define the initial establishment runtime structure using **BusinessUnit → ActivitySubject**.
-- **Target path:** persist incomplete wizard state in `OnboardingDraft`; materialize + invite + activate only in `POST …/complete/`.
-- **Legacy path (until Lot 3):** `onboarding_proposal_v4` create/update/submit/apply, director invitations, mark-ready, activate.
+- Persist incomplete wizard state in `OnboardingDraft`; materialize + invite + activate only in Platform `POST …/complete/`.
 - Require human validation before backend activation of runtime context.
 - Allow high-level post-activation runtime edits, subject to RBAC and human validation.
 
@@ -71,7 +74,7 @@ Activation minimum:
 - at least 1 activity subject validated in applied proposal
 - at least 1 active Owner or Director
 - exactly one active or invited Director membership on a user distinct from the initial Owner for **draft activation** (at most one invited/active non-owner Director per establishment during onboarding; deactivated Directors do not satisfy the gate)
-- Director invitation during draft onboarding via `POST /api/v1/onboarding-sessions/{session_id}/director-invitations/` (returns one-time `invitation_token`, `invitation_accept_path`, and schedules a transactional invitation email when enabled)
+- Director invitation during draft onboarding via `POST /api/v1/platform/onboardings/{session_id}/director-invitations/` (or from draft complete); schedules a transactional invitation email when enabled
 - Director accepts via `POST /api/v1/invitations/accept/` (bearer in JSON body; sets password, activates user/membership, creates auth session)
 - After the establishment is **active**, additional directors may be invited via `POST /api/v1/establishments/{establishment_id}/membership-invitations/` with `role=director` (multi-director allowed; onboarding single-director gate does not apply)
 
@@ -141,14 +144,18 @@ Proposal parent/child coherence follows BU/AS hierarchy rules in [`business_unit
 
 ## 7. Permissions
 
-- **DRAFT onboarding is owner-led (MVP):** only **Owner** may configure proposals, wizard steps, and runtime setup while the establishment is `DRAFT` (`can_configure_runtime` owner-only on draft).
-- **Director** is required for activation minimum (non-owner director membership) but **cannot complete the draft wizard** in MVP — intervenes on invitation accept and the activation path as documented.
-- **Director-led onboarding** (director completes draft setup) is a **post-MVP** product variant; not supported without access-model change.
-- Owner and Director are the product-level actors who validate and activate runtime setup.
+**Current implementation:**
+
+- **Platform operator** is the only actor who starts, edits, resumes, or completes the wizard. Completing still requires the shared readiness gate including `missing_active_owner_or_director`.
+- **Director** is required for activation minimum (non-owner director membership) but **cannot complete the draft wizard** — invitation accept only.
+- Tenant permissions (`resolve_manageable_organization`, `invite_membership_for_establishment` actor membership) **must not** learn about Platform operators. Platform authz stays on `/api/v1/platform/*`.
+- Owner/Director invitations during onboarding are onboarding steps, not Platform user admin.
 - Managers may modify some runtime context post-activation only when RBAC allows it.
-- Staff does not configure, validate, or activate onboarding/runtime setup in MVP.
-- Backend permission checks are mandatory for validation, activation, rerun, and post-activation mutation.
-- Pilot onboarding may be operationally supported by Houston/FloorPower admin plus Owner/Director, but this is not a validated public product permission contract.
+- Staff does not configure, validate, or activate onboarding/runtime setup.
+- Backend permission checks are mandatory for validation, activation, and post-activation mutation.
+- Informal Houston/FloorPower operational support is **not** a public product permission contract.
+
+Director-led wizard (director fills draft setup) remains **out of product** unless separately recadred.
 
 ## 8. Events
 
@@ -165,29 +172,26 @@ Do not use legacy v1 taxonomy event names (`OperationalModuleActivated`, etc.) i
 
 Current API truth is `apps/api/schema.yml`.
 
-Implemented runtime/onboarding endpoints (under `/api/v1/onboarding-sessions/`):
+Implemented runtime/onboarding endpoints (under `/api/v1/platform/onboardings/`):
 
-- `POST /` — create onboarding session
-- `GET/PATCH /{session_id}/` — session detail and updates
-- `POST /{session_id}/description/` — submit establishment activity description
-- `GET/POST /{session_id}/proposals/` — list/create proposals (write: `onboarding_proposal_v4` only; historical v3 payloads may appear on read for terminal rows)
-- `GET/PATCH /{session_id}/proposals/{proposal_id}/` — draft proposal payload (write: v4 only)
-- `POST .../proposals/{proposal_id}/submit/` — validate proposal sections (v4 only)
-- `POST .../proposals/{proposal_id}/apply/` — apply validated proposal to runtime (`apply_onboarding_proposal_v4`)
-- `POST .../proposals/{proposal_id}/reject/` — reject proposal
-- `POST /{session_id}/mark-ready/` — mark session ready for activation
-- `POST /{session_id}/activate/` — activate establishment
-- `GET /{session_id}/activation-summary/` — activation summary
-- `GET /{session_id}/runtime-config/` — read runtime config snapshot
-- `POST /{session_id}/director-invitations/` — invite Director during onboarding
+- `GET/POST /` — list/start onboarding
+- `GET /{session_id}/` — session summary including derived `functional_status`
+- `GET/PUT /{session_id}/draft/` — draft payload
+- `POST /{session_id}/complete/` — materialize + invite from draft + activate when ready
+- `POST /{session_id}/owner-invitations/` — invite organizational Owner
+- `POST /{session_id}/director-invitations/` — invite Director (also invited from draft complete when needed)
+- `GET /{session_id}/summary/` — activation summary
+- `GET /api/v1/catalog/business-units/suggest/` and `…/activity-subjects/suggest/` — catalog autocomplete
+
+Tenant `onboarding-sessions` writes, mark-ready, activate, and proposal apply HTTP are **removed**.
 
 Post-activation establishment runtime mutations (active establishments) under `/api/v1/establishments/{establishment_id}/` — BusinessUnit create/PATCH/reactivate, ActivitySubject create/reactivate, `runtime-config/`, catalogue suggest. Public shapes omit `routing_key` (Lot 5). See `schema.yml` and [`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md).
 
 ## 10. Frontend Expectations
 
+**Current:** wizard only under Platform on **desktop Web** (`/platform`, `isDesktopWeb`). `/onboarding` redirects to login/landing. Invited Owner/Director use invitation accept then `/pending-onboarding`. List/detail diagnostics show the functional states in §1 (not a list filter).
+
 - Onboarding should be guided and section-based rather than a raw configuration dump.
-- UI should support accept, edit, reject, and **item-level add/remove** for BusinessUnit / ActivitySubject proposal sections.
-- UI must clearly distinguish draft proposals from validated active runtime state.
 - UI must not treat activation as complete until backend confirmation is returned.
 - TanStack Query owns runtime/onboarding server state.
 - Frontend must use generated API clients only for endpoints confirmed in OpenAPI.
@@ -197,6 +201,8 @@ Post-activation establishment runtime mutations (active establishments) under `/
 - Inspect `apps/api/schema.yml` before claiming any runtime/onboarding endpoint is implemented.
 - Inspect `identity_membership_domain.md` before changing `Organization`, `Establishment`, or membership assumptions.
 - Inspect `rbac_permissions_domain.md` before changing who can validate, activate, rerun, or edit runtime setup.
+- Do not add Platform checks inside tenant membership permissions.
+- Inspect `apps/api/schema.yml` for live Platform onboarding APIs.
 - Inspect [`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md) before changing hierarchy or keys.
 - Do not implement Signal, Feed, or Observation pipeline code in onboarding phases.
 - Do not let non-authorized clients activate runtime elements directly.

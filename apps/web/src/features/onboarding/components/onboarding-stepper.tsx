@@ -26,10 +26,10 @@ export function OnboardingStepper({ current }: { current: OnboardingWizardStep }
         return (
           <div
             key={step.id}
-            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${
+            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
               isCurrent
-                ? 'bg-spore-forest/5 font-medium text-spore-forest'
-                : 'text-spore-muted'
+                ? 'border-primary/20 bg-primary/10 font-medium text-foreground'
+                : 'border-border bg-background text-muted-foreground'
             }`}
             data-testid={`onboarding-step-${step.id}`}
             data-state={isCurrent ? 'current' : isDone ? 'done' : 'upcoming'}
@@ -37,10 +37,10 @@ export function OnboardingStepper({ current }: { current: OnboardingWizardStep }
             <span
               className={`flex size-6 items-center justify-center rounded-full text-xs ${
                 isDone
-                  ? 'bg-spore-moss/30 text-spore-forest'
+                  ? 'bg-primary/15 text-primary'
                   : isCurrent
-                    ? 'bg-spore-forest text-white'
-                    : 'bg-spore-forest/10 text-spore-muted'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground'
               }`}
             >
               {isDone ? <Check className="size-3.5" /> : String(index + 1)}

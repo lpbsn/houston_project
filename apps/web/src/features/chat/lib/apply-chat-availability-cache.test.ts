@@ -51,7 +51,7 @@ function bootstrapForEstablishment(establishmentId: string): BootstrapResponse {
       can_manage_runtime_config: false,
       can_view_team: false,
       can_manage_organization: false,
-      can_create_establishment: false,
+      platform_operator_active: false,
     },
   }
 }
@@ -72,7 +72,7 @@ describe('apply-chat-availability-cache', () => {
       can_manage_runtime_config: false,
       can_view_team: false,
       can_manage_organization: false,
-      can_create_establishment: false,
+      platform_operator_active: false,
     })
   })
 

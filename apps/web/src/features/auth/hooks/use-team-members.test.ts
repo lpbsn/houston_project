@@ -36,7 +36,7 @@ vi.mock('@/app/auth-provider', () => ({
       permission_hints: {
         can_view_team: true,
           can_manage_organization: false,
-          can_create_establishment: false,
+          platform_operator_active: false,
       },
     },
   }),

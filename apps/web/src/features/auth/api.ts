@@ -34,17 +34,12 @@ import type {
   AuthResponse,
   BootstrapResponse,
   DirectorInvitationAcceptInput,
-  EstablishmentCreateRequest,
-  EstablishmentCreateResponse,
   EstablishmentMembershipDetailResponse,
   EstablishmentMembershipResponse,
   LoginRequest,
   MembershipUpdateRequest,
   MembershipInvitationRequest,
   MembershipReinviteResponse,
-  RegistrationOwnerValidateRequest,
-  RegistrationRequest,
-  RegistrationResponse,
   SwitchEstablishmentRequest,
   BusinessUnitTreeResponse,
 } from './types'
@@ -161,15 +156,6 @@ export function commitMembershipWriteCache(
   void settleQueryInvalidations(invalidations)
 }
 
-const REGISTRATION_STEP1_FIELDS = new Set([
-  'invite_code',
-  'first_name',
-  'last_name',
-  'email',
-  'password',
-  'password_confirmation',
-])
-
 function getErrorDetail(error: unknown) {
   if (typeof error !== 'object' || !error || !('detail' in error)) {
     return null
@@ -213,70 +199,6 @@ function parseRegistrationFieldErrors(
   }
 
   return Object.keys(fieldErrors).length > 0 ? fieldErrors : undefined
-}
-
-export class RegistrationValidationError extends Error {
-  status: number
-  code: string | null
-  fieldErrors?: Partial<Record<string, string[]>>
-
-  constructor(
-    message: string,
-    status: number,
-    options?: { code?: string | null; fieldErrors?: Partial<Record<string, string[]>> },
-  ) {
-    super(message)
-    this.name = 'RegistrationValidationError'
-    this.status = status
-    this.code = options?.code ?? null
-    this.fieldErrors = options?.fieldErrors
-  }
-}
-
-function buildRegistrationValidationError(
-  response: Response,
-  error: unknown,
-  fallbackMessage: string,
-) {
-  const code = getErrorCode(error)
-  const fieldErrors = parseRegistrationFieldErrors(error)
-  const detail = getErrorDetail(error)
-
-  let message = fallbackMessage
-
-  if (code === 'invalid_invite_code') {
-    message = detail ?? 'Invalid invitation code.'
-  } else if (code === 'duplicate_email') {
-    message = detail ?? 'An account with this email already exists.'
-  } else if (fieldErrors?.password?.length) {
-    message = fieldErrors.password.join(' ')
-  } else if (fieldErrors?.password_confirmation?.length) {
-    message = fieldErrors.password_confirmation[0] ?? message
-  } else if (fieldErrors?.invite_code?.length) {
-    message = fieldErrors.invite_code[0] ?? message
-  } else if (fieldErrors?.email?.length) {
-    message = fieldErrors.email[0] ?? message
-  } else if (detail) {
-    message = detail
-  }
-
-  return new RegistrationValidationError(message, response.status, { code, fieldErrors })
-}
-
-export function isRegistrationStep1Error(error: unknown) {
-  if (!(error instanceof RegistrationValidationError)) {
-    return false
-  }
-
-  if (error.code === 'invalid_invite_code' || error.code === 'duplicate_email') {
-    return true
-  }
-
-  if (!error.fieldErrors) {
-    return false
-  }
-
-  return Object.keys(error.fieldErrors).some((field) => REGISTRATION_STEP1_FIELDS.has(field))
 }
 
 function toBootstrapResponse(payload: AuthResponse): BootstrapResponse {
@@ -670,60 +592,6 @@ export async function login(input: LoginRequest) {
   })
 }
 
-export async function validateRegistrationOwner(input: RegistrationOwnerValidateRequest) {
-  const { error, response } = await apiClient.POST('/api/v1/auth/register/validate-owner/', {
-    body: input,
-    credentials: 'omit',
-  })
-
-  if (response.status === 204) {
-    return
-  }
-
-  throw buildRegistrationValidationError(
-    response,
-    error,
-    'Owner details could not be validated.',
-  )
-}
-
-/** Registration payload; `establishment_name` may be omitted (backend generates a temp name). */
-export type OnboardingRegistrationInput = Omit<RegistrationRequest, 'establishment_name'> & {
-  establishment_name?: string
-}
-
-export async function registerOnboarding(input: OnboardingRegistrationInput) {
-  return runSessionReplacement(async (prepared, generation) => {
-    const { data, error, response } = await apiClient.POST('/api/v1/auth/register/', {
-      body: {
-        ...input,
-        establishment_name: input.establishment_name ?? '',
-        refresh_token_transport: prepared.transport,
-      },
-      credentials: prepared.credentials,
-      headers: buildTransportHeaders(prepared),
-    })
-
-    if (error || !data) {
-      throw buildRegistrationValidationError(
-        response,
-        error,
-        'Registration could not be completed.',
-      )
-    }
-
-    await commitAuthEnvelope(data, prepared, {
-      expectedGeneration: generation,
-      purgeNonAuth: true,
-    })
-
-    return {
-      establishment_id: data.establishment_id,
-      onboarding_session_id: data.onboarding_session_id,
-    } satisfies Pick<RegistrationResponse, 'establishment_id' | 'onboarding_session_id'>
-  })
-}
-
 export async function acceptInvitationSession(
   token: string,
   input: DirectorInvitationAcceptInput,
@@ -952,33 +820,6 @@ export async function switchEstablishment(input: SwitchEstablishmentRequest) {
   clearObservationComposeDrafts()
   clearSuccessToasts()
   queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, result.data)
-  return result.data
-}
-
-export async function createEstablishment(
-  input: EstablishmentCreateRequest,
-): Promise<EstablishmentCreateResponse> {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST('/api/v1/establishments/', {
-        body: input,
-        headers: accessToken
-          ? {
-              Authorization: `Bearer ${accessToken}`,
-            }
-          : undefined,
-      }),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildAuthError(
-      result.response,
-      result.error,
-      'We could not create this establishment.',
-    )
-  }
-
   return result.data
 }
 

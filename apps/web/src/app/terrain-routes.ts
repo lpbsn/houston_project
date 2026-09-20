@@ -96,7 +96,7 @@ export function isProtectedRoute(route: AppRoute): boolean {
     return PROTECTED_STATIC_PATHS.has(route.path)
   }
 
-  if (route.kind === 'analytics-pattern-detail') {
+  if (route.kind === 'analytics-pattern-detail' || route.kind === 'platform') {
     return true
   }
 
@@ -108,7 +108,7 @@ export function requiresActiveMembership(route: AppRoute): boolean {
     return false
   }
 
-  if (route.kind === 'analytics-pattern-detail') {
+  if (route.kind === 'analytics-pattern-detail' || route.kind === 'platform') {
     return false
   }
 

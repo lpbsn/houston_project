@@ -36,8 +36,8 @@ export function getOnboardingErrorBlockers(error: unknown) {
 
 export function OnboardingLoadingState({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-3 rounded-[1.2rem] border border-[#ece5da] bg-white px-4 py-4 text-sm text-muted-foreground shadow-[0_16px_34px_-32px_rgba(46,72,173,0.22)]">
-      <LoaderCircle className="size-4 animate-spin text-[color:var(--primary)]" />
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+      <LoaderCircle className="size-4 animate-spin text-primary" />
       {label}
     </div>
   )
@@ -57,13 +57,13 @@ export function OnboardingNotice({
         : 'bg-[color:var(--primary)]/10 text-[color:var(--primary)]'
 
   return (
-    <Card className="rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_22px_48px_-38px_rgba(59,90,184,0.28)]">
+    <Card className="rounded-xl border-border bg-background shadow-none">
       <CardHeader className="gap-3">
         <span className={`w-fit rounded-full p-2 ${iconClassName}`}>
           {tone === 'danger' ? <ShieldAlert className="size-4" /> : <AlertCircle className="size-4" />}
         </span>
         <div className="space-y-2">
-          <CardTitle className="text-[1.55rem] font-black tracking-[-0.05em]">
+          <CardTitle className="text-lg font-semibold tracking-tight">
             {title}
           </CardTitle>
           <CardDescription className="text-sm leading-6">{message}</CardDescription>
@@ -86,10 +86,10 @@ export function OnboardingErrorState({
   const blockers = getOnboardingErrorBlockers(error)
   const title =
     status === 403
-      ? 'This account cannot access this onboarding session.'
+      ? 'Ce compte ne peut pas accéder à cet onboarding.'
       : status === 404
-        ? 'This onboarding session is unavailable.'
-        : 'Onboarding could not be loaded.'
+        ? 'Cette session d’onboarding est indisponible.'
+        : 'Impossible de charger l’onboarding.'
 
   return (
     <OnboardingNotice
@@ -105,7 +105,7 @@ export function BlockerList({ blockers }: { blockers: ActivationBlocker[] }) {
   if (blockers.length === 0) {
     return (
       <div className="rounded-[1.15rem] border border-[#ebe2d5] bg-[#fbf7f0] px-4 py-3 text-sm text-muted-foreground">
-        No backend blockers were returned.
+        Aucun blocage renvoyé par le serveur.
       </div>
     )
   }
@@ -134,10 +134,10 @@ export function RetryButton({ onClick }: { onClick: () => void }) {
     <Button
       type="button"
       variant="outline"
-      className="h-11 w-full rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2] sm:w-auto"
+      className="h-10 w-full rounded-lg sm:w-auto"
       onClick={onClick}
     >
-      Try again
+      Réessayer
     </Button>
   )
 }

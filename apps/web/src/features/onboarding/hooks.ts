@@ -4,21 +4,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { bootstrapQueryKey } from '@/features/auth/api'
 
 import {
-  completeOnboardingSession,
-  getOnboardingDraft,
-  getOnboardingSession,
   onboardingQueryKeys,
-  putOnboardingDraft,
-  startOnboardingSession,
   suggestActivitySubjects,
   suggestBusinessUnits,
 } from './api'
 import type { OnboardingDraftPayload } from './lib/onboarding-draft-payload'
-import type {
-  OnboardingCompleteResponse,
-  OnboardingDraftResponse,
-  OnboardingSessionCreateRequest,
-} from './types'
+import type { OnboardingDraftResponse } from './types'
 
 type OnboardingQueryOptions = {
   enabled?: boolean
@@ -27,32 +18,6 @@ type OnboardingQueryOptions = {
 
 function isQueryEnabled(sessionId: string | null | undefined, options?: OnboardingQueryOptions) {
   return Boolean(sessionId) && (options?.enabled ?? true)
-}
-
-export function useStartOnboardingSession() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (input: OnboardingSessionCreateRequest) => startOnboardingSession(input),
-    onSuccess: async (response) => {
-      queryClient.setQueryData(onboardingQueryKeys.session(response.session.id), response.session)
-      await queryClient.invalidateQueries({ queryKey: onboardingQueryKeys.sessions() })
-    },
-  })
-}
-
-export function useOnboardingSession(
-  sessionId: string | null | undefined,
-  options?: OnboardingQueryOptions,
-) {
-  return useQuery({
-    queryKey: sessionId
-      ? onboardingQueryKeys.session(sessionId)
-      : [...onboardingQueryKeys.sessions(), 'idle'],
-    queryFn: () => getOnboardingSession(sessionId!),
-    enabled: isQueryEnabled(sessionId, options),
-    staleTime: options?.staleTime,
-  })
 }
 
 export function useBusinessUnitSuggestions(
@@ -95,36 +60,36 @@ export function useCatalogActivitySubjectChips(businessUnitKeys: string[]) {
 
 export function useOnboardingDraft(
   sessionId: string | null | undefined,
-  options?: OnboardingQueryOptions,
+  options: OnboardingQueryOptions & {
+    queryFn: (sessionId: string) => Promise<OnboardingDraftResponse>
+    queryKey?: readonly unknown[]
+  },
 ) {
   return useQuery({
-    queryKey: sessionId
-      ? onboardingQueryKeys.draft(sessionId)
-      : [...onboardingQueryKeys.sessions(), 'idle', 'draft'],
-    queryFn: () => getOnboardingDraft(sessionId!),
+    queryKey: options.queryKey
+      ?? (sessionId
+        ? onboardingQueryKeys.draft(sessionId)
+        : [...onboardingQueryKeys.sessions(), 'idle', 'draft']),
+    queryFn: () => options.queryFn(sessionId!),
     enabled: isQueryEnabled(sessionId, options),
-    staleTime: options?.staleTime,
+    staleTime: options.staleTime,
   })
 }
 
-export function useUpsertOnboardingDraft(sessionId: string) {
+export function useCompleteOnboardingSession(
+  sessionId: string,
+  options: {
+    completeFn: (sessionId: string) => Promise<unknown>
+  },
+) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (payload: OnboardingDraftPayload) => putOnboardingDraft(sessionId, payload),
-    onSuccess: (response) => {
-      queryClient.setQueryData(onboardingQueryKeys.draft(sessionId), response)
-    },
-  })
-}
-
-export function useCompleteOnboardingSession(sessionId: string) {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: () => completeOnboardingSession(sessionId),
-    onSuccess: async (response: OnboardingCompleteResponse) => {
-      queryClient.setQueryData(onboardingQueryKeys.session(sessionId), response.session)
+    mutationFn: () => options.completeFn(sessionId),
+    onSuccess: async (response: unknown) => {
+      if (response && typeof response === 'object' && 'session' in response) {
+        queryClient.setQueryData(onboardingQueryKeys.session(sessionId), response.session)
+      }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: onboardingQueryKeys.session(sessionId) }),
         queryClient.invalidateQueries({ queryKey: bootstrapQueryKey, exact: true }),
@@ -139,7 +104,7 @@ export type AutosaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 type UseOnboardingDraftAutosaveOptions = {
   sessionId: string
   debounceMs?: number
-  putDraft?: (payload: OnboardingDraftPayload) => Promise<OnboardingDraftResponse>
+  putDraft: (payload: OnboardingDraftPayload) => Promise<OnboardingDraftResponse>
   onSaved?: (response: OnboardingDraftResponse) => void
   onError?: (error: unknown) => void
 }
@@ -183,9 +148,7 @@ export function useOnboardingDraftAutosave({
   const runPut = useCallback(
     async (snapshot: OnboardingDraftPayload, token: number) => {
       setStatus('saving')
-      const put =
-        putDraftRef.current ??
-        ((payload: OnboardingDraftPayload) => putOnboardingDraft(sessionId, payload))
+      const put = putDraftRef.current
 
       try {
         const response = await put(snapshot)
@@ -296,4 +259,3 @@ export function useOnboardingDraftAutosave({
 
   return { status, enqueue, flush, stop, resume }
 }
-

@@ -59,7 +59,7 @@ const { authState } = vi.hoisted(() => ({
           can_manage_runtime_config: true,
           can_view_team: true,
           can_manage_organization: false,
-          can_create_establishment: false,
+          platform_operator_active: false,
         },
       } as ProfileBootstrapMock,
       memberships: [
@@ -691,7 +691,7 @@ describe('ProfilePage', () => {
           can_manage_runtime_config: false,
           can_view_team: false,
           can_manage_organization: false,
-          can_create_establishment: false,
+          platform_operator_active: false,
         },
       },
     }
@@ -721,7 +721,7 @@ describe('ProfilePage', () => {
           can_manage_runtime_config: true,
           can_view_team: true,
           can_manage_organization: false,
-          can_create_establishment: false,
+          platform_operator_active: false,
         },
       },
     }
@@ -755,7 +755,7 @@ describe('ProfilePage', () => {
           can_manage_runtime_config: true,
           can_view_team: true,
           can_manage_organization: false,
-          can_create_establishment: false,
+          platform_operator_active: false,
         },
       },
     }
@@ -787,7 +787,6 @@ describe('ProfilePage', () => {
           organization_name: 'Org',
           role: 'owner',
           onboarding_session_id: 'session-1',
-          can_continue_onboarding: true,
         },
       ],
       bootstrap: {
@@ -800,7 +799,7 @@ describe('ProfilePage', () => {
           can_manage_runtime_config: true,
           can_view_team: true,
           can_manage_organization: true,
-          can_create_establishment: true,
+          platform_operator_active: false,
         },
       },
     }
@@ -813,9 +812,7 @@ describe('ProfilePage', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: /Reprendre la configuration/i }))
-    expect(onNavigate).toHaveBeenCalledWith(
-      '/onboarding?establishmentId=est-draft&sessionId=session-1',
-    )
+    expect(onNavigate).toHaveBeenCalledWith('/pending-onboarding')
     expect(screen.queryByRole('button', { name: /Gestion de l'organisation/i })).toBeNull()
   })
 
@@ -836,7 +833,7 @@ describe('ProfilePage', () => {
           can_manage_runtime_config: false,
           can_view_team: true,
           can_manage_organization: false,
-          can_create_establishment: false,
+          platform_operator_active: false,
         },
       },
     }
@@ -865,7 +862,7 @@ describe('ProfilePage', () => {
           can_manage_runtime_config: true,
           can_view_team: true,
           can_manage_organization: false,
-          can_create_establishment: false,
+          platform_operator_active: false,
         },
       },
     }
@@ -898,7 +895,7 @@ describe('ProfilePage', () => {
           can_manage_runtime_config: false,
           can_view_team: true,
           can_manage_organization: false,
-          can_create_establishment: false,
+          platform_operator_active: false,
         },
       },
     }
@@ -958,8 +955,8 @@ describe('ProfilePage', () => {
       bootstrap: {
         permission_hints: {
           ...authState.current.bootstrap.permission_hints,
-          can_create_establishment: true,
           can_manage_organization: true,
+          platform_operator_active: false,
         },
       },
     }

@@ -3,7 +3,6 @@ import { LoaderCircle } from 'lucide-react'
 import sporeIconSrc from '@/assets/brand/spore-icon-green.png'
 import { useAuth } from '@/app/auth-provider'
 import { LoginForm } from '@/features/auth/components/login-form'
-import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 type LoginPageProps = {
@@ -50,18 +49,10 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
 
   return (
     <LoginPageShell>
-      <header className="flex justify-end px-4 pt-[max(1rem,var(--app-safe-top))] sm:px-6 sm:pt-[max(1.5rem,var(--app-safe-top))]">
-        <Button
-          type="button"
-          variant="outline"
-          className="h-10 rounded-2xl border-[#E8E6DF] bg-white text-[#111827] hover:bg-[#F9FAFB]"
-          onClick={() => {
-            onNavigate('/onboarding')
-          }}
-        >
-          Onboarding
-        </Button>
-      </header>
+      <header
+        className="flex justify-end px-4 pt-[max(1rem,var(--app-safe-top))] sm:px-6 sm:pt-[max(1.5rem,var(--app-safe-top))]"
+        aria-hidden
+      />
 
       <main className="flex flex-col items-center justify-center gap-8 px-4">
         <div className="flex items-center gap-2.5">

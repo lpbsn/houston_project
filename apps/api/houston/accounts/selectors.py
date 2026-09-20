@@ -21,12 +21,6 @@ from houston.establishments.models import (
 )
 from houston.organizations.models import Organization
 
-_ONBOARDING_CONTINUE_ROLES = frozenset(
-    {
-        EstablishmentMembership.Role.OWNER,
-    }
-)
-
 
 def list_active_memberships(user: User) -> list[EstablishmentMembership]:
     return list(_active_membership_queryset(user))
@@ -161,7 +155,6 @@ def _serialize_pending_onboarding_membership(
         "onboarding_session_id": (
             None if onboarding_session is None else str(onboarding_session.id)
         ),
-        "can_continue_onboarding": membership.role in _ONBOARDING_CONTINUE_ROLES,
     }
 
 

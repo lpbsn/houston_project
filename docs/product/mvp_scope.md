@@ -43,6 +43,7 @@ Observation → Signal → Action Plan → Execution → Validation → Feed upd
 - Feed subscriptions (deferred — see `feed_subscription_domain.md`)
 - Arbitrary admin console browsing raw tables
 - Advanced analytics and AI review UI
+- Spore Platform internal control plane (planned — [`../cadrage/edb_plateforme_interne_spore_v1-3.md`](../cadrage/edb_plateforme_interne_spore_v1-3.md); not in the current pilot)
 
 ## API truth
 

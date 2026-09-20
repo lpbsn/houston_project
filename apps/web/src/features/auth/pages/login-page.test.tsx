@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { createElement } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { LoginPage } from './login-page'
@@ -41,12 +41,10 @@ describe('LoginPage', () => {
     expect(screen.getByText('© 2026 Spore · Terrain-first')).toBeTruthy()
   })
 
-  it('renders the Onboarding button and navigates to /onboarding', () => {
+  it('does not expose client onboarding from login', () => {
     render(createElement(LoginPage, { onNavigate }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Onboarding' }))
-
-    expect(onNavigate).toHaveBeenCalledWith('/onboarding')
+    expect(screen.queryByRole('button', { name: 'Onboarding' })).toBeNull()
   })
 
   it('renders session-restore loading UI when auth is not ready', () => {

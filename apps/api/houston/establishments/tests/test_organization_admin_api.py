@@ -169,7 +169,6 @@ def test_organization_admin_establishments_lists_active_and_draft_not_deactivate
     assert str(deactivated.id) not in ids
 
     draft_row = next(row for row in results if row["id"] == str(draft.id))
-    assert draft_row["can_continue_onboarding"] is True
     assert draft_row["onboarding_session_id"] is not None
     assert draft_row["onboarding_current_step"] == "description"
 
@@ -325,33 +324,6 @@ def test_organization_admin_owners_and_invite_draft_only(api_client):
         **auth_headers(access_token),
     )
     assert duplicate_active.status_code == 409
-
-
-def test_create_establishment_does_not_switch_via_org_flow(api_client):
-    """Regression: POST /establishments/ (reused by Lot C UI) keeps session selection."""
-    owner, organization, active, _draft = _setup_owner_org(with_draft=False)
-    assert active is not None
-    access_token = login(api_client, user=owner)
-    switch = api_client.post(
-        "/api/v1/auth/switch_establishment/",
-        {"establishment_id": str(active.id)},
-        format="json",
-        **auth_headers(access_token),
-    )
-    assert switch.status_code == 200
-    access_token = switch.json().get("access_token", access_token)
-    before = _selected_establishment_id(owner)
-    assert before == active.id
-
-    created = api_client.post(
-        "/api/v1/establishments/",
-        {"name": f"New Draft {uuid.uuid4().hex[:4]}"},
-        format="json",
-        **auth_headers(access_token),
-    )
-    assert created.status_code == 201, created.json()
-    assert created.json()["organization_id"] == str(organization.id)
-    assert _selected_establishment_id(owner) == before
 
 
 def test_establishment_membership_invitation_still_rejects_owner(api_client):

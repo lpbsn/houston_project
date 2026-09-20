@@ -136,7 +136,7 @@ function bootstrap(options: {
       can_manage_runtime_config: false,
       can_view_team: true,
       can_manage_organization: false,
-      can_create_establishment: false,
+      platform_operator_active: false,
       ...options.permissionHints,
     },
   }
@@ -214,6 +214,7 @@ describe('TeamInvitePage', () => {
       permissionHints: {
         can_invite: false,
         can_manage_organization: false,
+        platform_operator_active: false,
       },
       activeMembership: membership({ role: 'staff' }),
     })
@@ -232,6 +233,7 @@ describe('TeamInvitePage', () => {
       permissionHints: {
         can_invite: false,
         can_manage_organization: false,
+        platform_operator_active: false,
       },
       activeMembership: membership({ role: 'staff' }),
     })
@@ -279,6 +281,7 @@ describe('TeamInvitePage', () => {
       permissionHints: {
         can_invite: false,
         can_manage_organization: true,
+        platform_operator_active: false,
       },
       activeMembership: membership({ role: 'owner' }),
     })
@@ -309,6 +312,7 @@ describe('TeamInvitePage', () => {
       permissionHints: {
         can_invite: false,
         can_manage_organization: true,
+        platform_operator_active: false,
       },
       memberships: [ownerOtherOrg, staffHere],
       activeMembership: staffHere,
@@ -337,6 +341,7 @@ describe('TeamInvitePage', () => {
       permissionHints: {
         can_invite: true,
         can_manage_organization: true,
+        platform_operator_active: false,
       },
       memberships: [ownerOtherOrg, directorHere],
       activeMembership: directorHere,

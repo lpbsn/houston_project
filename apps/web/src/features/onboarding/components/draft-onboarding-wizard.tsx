@@ -60,10 +60,19 @@ import {
   OnboardingLoadingState,
 } from '@/features/onboarding/components/onboarding-state'
 import { OnboardingStepper } from '@/features/onboarding/components/onboarding-stepper'
+import type { OnboardingDraftResponse } from '@/features/onboarding/types'
 
 type DraftOnboardingWizardProps = {
   sessionId: string
   onNavigate?: (path: string) => void
+  getDraft: (sessionId: string) => Promise<OnboardingDraftResponse>
+  putDraft: (
+    sessionId: string,
+    payload: OnboardingDraftPayload,
+  ) => Promise<OnboardingDraftResponse>
+  completeSession: (sessionId: string) => Promise<unknown>
+  draftQueryKey?: readonly unknown[]
+  afterCompletePath?: string
 }
 
 function SaveStatus({ status }: { status: string }) {
@@ -259,10 +268,10 @@ function StructureStep({
     <div className="space-y-6">
       <section className="rounded-2xl border border-spore-forest/10 bg-white p-5 sm:p-6">
         <div className="mb-5 flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded-full bg-spore-forest text-white">
+          <div className="flex size-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
             <Building2 className="size-5" />
           </div>
-          <h2 className="text-lg font-semibold text-spore-forest">Votre établissement</h2>
+          <h2 className="text-lg font-semibold">Votre établissement</h2>
         </div>
         <div className="space-y-4">
           <label className="block space-y-1.5">
@@ -309,7 +318,7 @@ function StructureStep({
       <section className="space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-spore-forest">Pôles d’activité</h2>
+            <h2 className="text-lg font-semibold">Pôles d’activité</h2>
             <p className="mt-1 text-sm text-spore-muted">
               Décrivez vos pôles et ajoutez leurs sujets de suivi.
             </p>
@@ -592,11 +601,11 @@ function TeamStepView({
     <section className="rounded-2xl border border-spore-forest/10 bg-white p-5 sm:p-6">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className="flex size-10 items-center justify-center rounded-full bg-spore-forest text-white">
+          <div className="flex size-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
             <Users className="size-5" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-spore-forest">Invitez votre équipe</h2>
+            <h2 className="text-lg font-semibold">Invitez votre équipe</h2>
             <p className="mt-1 text-sm text-spore-muted">
               Assignez chaque membre aux pôles d’activité qui le concernent.
             </p>
@@ -670,7 +679,7 @@ function TeamStepView({
             </p>
             <Button
               type="button"
-              className="mt-4 h-11 rounded-xl bg-spore-forest text-white hover:bg-spore-moss"
+              className="mt-4 h-10"
               onClick={() =>
                 setDraft((current) => ({
                   ...current,
@@ -803,12 +812,25 @@ function TeamStepView({
   )
 }
 
-export function DraftOnboardingWizard({ sessionId, onNavigate }: DraftOnboardingWizardProps) {
+export function DraftOnboardingWizard({
+  sessionId,
+  onNavigate,
+  getDraft,
+  putDraft,
+  completeSession,
+  draftQueryKey,
+  afterCompletePath,
+}: DraftOnboardingWizardProps) {
   const queryClient = useQueryClient()
   const isLgViewport = useLgViewport()
-  const draftQuery = useOnboardingDraft(sessionId)
+  const draftQuery = useOnboardingDraft(sessionId, {
+    queryKey: draftQueryKey,
+    queryFn: getDraft,
+  })
   const catalogQuery = useCatalogBusinessUnitChips()
-  const completeMutation = useCompleteOnboardingSession(sessionId)
+  const completeMutation = useCompleteOnboardingSession(sessionId, {
+    completeFn: completeSession,
+  })
 
   const [draft, setDraft] = useState<OnboardingDraftPayload | null>(null)
   const [hydrateError, setHydrateError] = useState<Error | null>(null)
@@ -818,7 +840,10 @@ export function DraftOnboardingWizard({ sessionId, onNavigate }: DraftOnboarding
   const [navError, setNavError] = useState<string | null>(null)
   const [isNavigating, setIsNavigating] = useState(false)
 
-  const autosave = useOnboardingDraftAutosave({ sessionId })
+  const autosave = useOnboardingDraftAutosave({
+    sessionId,
+    putDraft: (payload) => putDraft(sessionId, payload),
+  })
   const { enqueue, flush, stop, resume, status: saveStatus } = autosave
 
   if (!hydrated && draftQuery.data) {
@@ -940,9 +965,11 @@ export function DraftOnboardingWizard({ sessionId, onNavigate }: DraftOnboarding
         queryFn: fetchBootstrap,
       })
       const landing =
+        afterCompletePath ??
         getAuthenticatedLandingPath(bootstrap, {
           isDesktop: isDesktopWebLanding(isLgViewport),
-        }) ?? '/reporting'
+        }) ??
+        '/reporting'
       onNavigate?.(landing)
     } catch (error) {
       setNavError(getCompleteErrorMessage(error, 'Impossible de terminer l’onboarding.'))
@@ -952,22 +979,9 @@ export function DraftOnboardingWizard({ sessionId, onNavigate }: DraftOnboarding
 
   return (
     <div
-      className="mx-auto w-full max-w-[96rem] px-4 pb-28 pt-6 sm:px-8 lg:px-10"
+      className="mx-auto w-full max-w-[800px] pb-28 pt-2"
       data-testid="draft-onboarding-wizard"
     >
-      <div className="mb-6 space-y-3">
-        <span className="inline-flex rounded-full bg-spore-moss/20 px-3 py-1 text-xs font-semibold text-spore-forest">
-          ✨ Onboarding Spore
-        </span>
-        <h1 className="text-3xl font-semibold tracking-tight text-spore-forest sm:text-4xl">
-          Configurons votre établissement
-        </h1>
-        <p className="max-w-3xl text-sm leading-6 text-spore-muted sm:text-base">
-          Présentez votre établissement et ses pôles d’activité, puis invitez votre équipe. Vous
-          pourrez tout modifier ensuite.
-        </p>
-      </div>
-
       <OnboardingStepper current={step === 'structure' ? 'structure' : 'team'} />
 
       <SaveStatus status={saveStatus} />
@@ -996,15 +1010,15 @@ export function DraftOnboardingWizard({ sessionId, onNavigate }: DraftOnboarding
       )}
 
       <div className="pointer-events-none fixed inset-x-0 bottom-0 z-20 px-4 pb-[max(1rem,var(--app-safe-bottom))] sm:px-8">
-        <div className="pointer-events-auto mx-auto flex w-full max-w-[96rem] items-center justify-between gap-4 rounded-full border border-spore-forest/10 bg-white/95 px-4 py-3 shadow-lg backdrop-blur">
-          <p className="min-w-0 flex-1 truncate text-sm text-spore-muted">{stickyMessage}</p>
+        <div className="pointer-events-auto mx-auto flex w-full max-w-[800px] items-center justify-between gap-4 rounded-xl border border-border bg-background px-4 py-3 shadow-md">
+          <p className="min-w-0 flex-1 truncate text-sm text-muted-foreground">{stickyMessage}</p>
           <div className="flex shrink-0 items-center gap-2">
             {step === 'team' ? (
               <>
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-10 rounded-xl"
+                  className="h-10"
                   disabled={isNavigating || completeMutation.isPending}
                   onClick={() => void handleBack()}
                 >
@@ -1012,7 +1026,7 @@ export function DraftOnboardingWizard({ sessionId, onNavigate }: DraftOnboarding
                 </Button>
                 <Button
                   type="button"
-                  className="h-10 rounded-xl bg-spore-forest text-white hover:bg-spore-moss disabled:bg-spore-moss/40"
+                  className="h-10"
                   disabled={!completeOk || isNavigating || completeMutation.isPending}
                   onClick={() => void handleComplete()}
                 >
@@ -1022,7 +1036,7 @@ export function DraftOnboardingWizard({ sessionId, onNavigate }: DraftOnboarding
             ) : (
               <Button
                 type="button"
-                className="h-10 rounded-xl bg-spore-forest text-white hover:bg-spore-moss disabled:bg-spore-moss/40"
+                className="h-10"
                 disabled={!structureOk || isNavigating}
                 onClick={() => void handleContinue()}
               >

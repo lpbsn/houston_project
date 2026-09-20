@@ -70,6 +70,7 @@ INSTALLED_APPS = [
     "houston.core",
     "houston.accounts",
     "houston.organizations",
+    "houston.platform",
     "houston.establishments",
     "houston.observations",
     "houston.signals",

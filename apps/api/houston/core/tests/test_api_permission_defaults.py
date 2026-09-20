@@ -17,8 +17,6 @@ from houston.accounts.api.views import (
     PasswordResetConfirmView,
     PasswordResetRequestView,
     RefreshView,
-    RegisterView,
-    ValidateOwnerRegistrationView,
 )
 from houston.core.api.permissions import DenyByDefault
 from houston.core.views import ClientRequirementsView, HealthView
@@ -31,8 +29,6 @@ PUBLIC_API_VIEWS = frozenset(
         ClientRequirementsView,
         CsrfCookieView,
         LoginView,
-        RegisterView,
-        ValidateOwnerRegistrationView,
         DirectorInvitationAcceptView,
         EmailChangeConfirmView,
         PasswordResetRequestView,

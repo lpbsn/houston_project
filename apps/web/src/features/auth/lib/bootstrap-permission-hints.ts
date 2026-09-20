@@ -2,7 +2,7 @@ import type { BootstrapResponse } from '@/features/auth/types'
 
 export type BootstrapPermissionHints = BootstrapResponse['permission_hints']
 
-const EMPTY_BOOTSTRAP_PERMISSION_HINTS: BootstrapPermissionHints = {
+export const EMPTY_BOOTSTRAP_PERMISSION_HINTS: BootstrapPermissionHints = {
   chat_available: false,
   can_create_action_plan: false,
   can_create_catalog_action_plan: false,
@@ -11,7 +11,13 @@ const EMPTY_BOOTSTRAP_PERMISSION_HINTS: BootstrapPermissionHints = {
   can_manage_runtime_config: false,
   can_view_team: false,
   can_manage_organization: false,
-  can_create_establishment: false,
+  platform_operator_active: false,
+}
+
+export function bootstrapPermissionHints(
+  overrides: Partial<BootstrapPermissionHints> = {},
+): BootstrapPermissionHints {
+  return { ...EMPTY_BOOTSTRAP_PERMISSION_HINTS, ...overrides }
 }
 
 export function getBootstrapPermissionHints(
@@ -50,12 +56,6 @@ export function canManageRuntimeConfigFromBootstrapHints(hints: BootstrapPermiss
 
 export function canViewTeamFromBootstrapHints(hints: BootstrapPermissionHints): boolean {
   return hints.can_view_team
-}
-
-export function canCreateEstablishmentFromBootstrapHints(
-  hints: BootstrapPermissionHints,
-): boolean {
-  return hints.can_create_establishment === true
 }
 
 export function canManageOrganizationFromBootstrapHints(

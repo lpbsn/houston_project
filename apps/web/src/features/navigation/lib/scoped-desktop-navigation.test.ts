@@ -43,7 +43,7 @@ function bootstrap(
       can_manage_runtime_config: false,
       can_view_team: false,
       can_manage_organization: false,
-      can_create_establishment: false,
+      platform_operator_active: false,
     },
   }
 }

@@ -2,15 +2,9 @@ import { apiClient, withAuthRetry } from '@/api/client'
 
 import type {
   ActivationBlocker,
-  OnboardingSessionCreateRequest,
-  OnboardingSessionCreateResponse,
-  OnboardingSessionResponse,
   CatalogActivitySubjectSuggestion,
   CatalogBusinessUnitSuggestion,
-  OnboardingCompleteResponse,
-  OnboardingDraftResponse,
 } from './types'
-import type { OnboardingDraftPayload } from './lib/onboarding-draft-payload'
 
 export const onboardingQueryKeys = {
   all: ['onboarding'] as const,
@@ -99,50 +93,6 @@ function buildOnboardingError(response: Response, error: unknown, fallbackDetail
   })
 }
 
-export async function startOnboardingSession(input: OnboardingSessionCreateRequest) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST('/api/v1/onboarding-sessions/', {
-        body: input,
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildOnboardingError(
-      result.response,
-      result.error,
-      'Onboarding session could not be started.',
-    )
-  }
-
-  return result.data as OnboardingSessionCreateResponse
-}
-
-export async function getOnboardingSession(sessionId: string) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.GET('/api/v1/onboarding-sessions/{session_id}/', {
-        params: {
-          path: { session_id: sessionId },
-        },
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildOnboardingError(
-      result.response,
-      result.error,
-      'Onboarding session could not be loaded.',
-    )
-  }
-
-  return result.data as OnboardingSessionResponse
-}
-
 export async function suggestBusinessUnits(
   query: string,
   options?: { limit?: number },
@@ -170,79 +120,6 @@ export async function suggestBusinessUnits(
   }
 
   return result.data as CatalogBusinessUnitSuggestion[]
-}
-
-export async function getOnboardingDraft(sessionId: string) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.GET('/api/v1/onboarding-sessions/{session_id}/draft/', {
-        params: {
-          path: { session_id: sessionId },
-        },
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildOnboardingError(
-      result.response,
-      result.error,
-      'Le brouillon d’onboarding n’a pas pu être chargé.',
-    )
-  }
-
-  return result.data as OnboardingDraftResponse
-}
-
-export async function putOnboardingDraft(
-  sessionId: string,
-  payload: OnboardingDraftPayload,
-) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.PUT('/api/v1/onboarding-sessions/{session_id}/draft/', {
-        params: {
-          path: { session_id: sessionId },
-        },
-        body: { payload },
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildOnboardingError(
-      result.response,
-      result.error,
-      'Le brouillon d’onboarding n’a pas pu être enregistré.',
-    )
-  }
-
-  return result.data as OnboardingDraftResponse
-}
-
-export async function completeOnboardingSession(sessionId: string) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST('/api/v1/onboarding-sessions/{session_id}/complete/', {
-        params: {
-          path: { session_id: sessionId },
-        },
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildOnboardingError(
-      result.response,
-      result.error,
-      'L’onboarding n’a pas pu être terminé.',
-    )
-  }
-
-  return result.data as OnboardingCompleteResponse
 }
 
 export async function suggestActivitySubjects(
@@ -275,4 +152,3 @@ export async function suggestActivitySubjects(
 
   return result.data as CatalogActivitySubjectSuggestion[]
 }
-

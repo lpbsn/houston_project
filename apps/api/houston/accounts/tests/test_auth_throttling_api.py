@@ -16,8 +16,6 @@ from houston.accounts.tests.helpers import (
     create_membership,
     ensure_csrf,
     login,
-    owner_validate_payload,
-    registration_payload,
 )
 
 pytestmark = [pytest.mark.django_db, pytest.mark.auth_throttle]
@@ -223,57 +221,6 @@ def test_refresh_over_limit_returns_429(api_client, active_user):
     response = api_client.post(
         "/api/v1/auth/refresh/",
         {"refresh_token_transport": "cookie"},
-        format="json",
-        HTTP_X_CSRFTOKEN=csrf_token,
-        **ip_headers,
-    )
-    assert_throttled_response(response)
-
-
-@override_settings(HOUSTON_REGISTRATION_INVITE_CODES=["valid-code"])
-def test_register_over_limit_returns_429(api_client):
-    csrf_token = ensure_csrf(api_client)
-    ip_headers = _client_ip_headers("203.0.113.30")
-    payload = registration_payload(email="throttle.register@example.com")
-
-    for index in range(2):
-        response = api_client.post(
-            "/api/v1/auth/register/",
-            registration_payload(email=f"throttle.register.{index}@example.com"),
-            format="json",
-            HTTP_X_CSRFTOKEN=csrf_token,
-            **ip_headers,
-        )
-        assert response.status_code == 201
-
-    response = api_client.post(
-        "/api/v1/auth/register/",
-        payload,
-        format="json",
-        HTTP_X_CSRFTOKEN=csrf_token,
-        **ip_headers,
-    )
-    assert_throttled_response(response)
-
-
-@override_settings(HOUSTON_REGISTRATION_INVITE_CODES=["valid-code"])
-def test_validate_owner_over_limit_returns_429(api_client):
-    csrf_token = ensure_csrf(api_client)
-    ip_headers = _client_ip_headers("203.0.113.31")
-
-    for index in range(2):
-        response = api_client.post(
-            "/api/v1/auth/register/validate-owner/",
-            owner_validate_payload(email=f"validate.owner.{index}@example.com"),
-            format="json",
-            HTTP_X_CSRFTOKEN=csrf_token,
-            **ip_headers,
-        )
-        assert response.status_code == 204
-
-    response = api_client.post(
-        "/api/v1/auth/register/validate-owner/",
-        owner_validate_payload(email="validate.owner.limit@example.com"),
         format="json",
         HTTP_X_CSRFTOKEN=csrf_token,
         **ip_headers,

@@ -59,6 +59,11 @@ export type AppRoute =
   | { kind: 'invitation' }
   | { kind: 'email-change' }
   | { kind: 'password-reset' }
+  | {
+      kind: 'platform'
+      section: 'onboardings' | 'organizations' | 'establishments' | 'users'
+      resourceId?: string
+    }
   | { kind: 'unknown'; pathname: string }
 
 export function normalizeRoutePath(input: string): string {
@@ -99,6 +104,8 @@ export function getAppRouteKey(route: AppRoute): string {
       return 'email-change'
     case 'password-reset':
       return 'password-reset'
+    case 'platform':
+      return `platform:${route.section}:${route.resourceId ?? ''}`
     case 'unknown':
       return `unknown:${route.pathname}`
   }
@@ -211,6 +218,27 @@ function parseTeamMemberId(pathname: string): string | null {
   return membershipId
 }
 
+const PLATFORM_SECTIONS = ['onboardings', 'organizations', 'establishments', 'users'] as const
+
+function parsePlatformRoute(pathname: string): Extract<AppRoute, { kind: 'platform' }> | null {
+  if (pathname === '/platform') {
+    return { kind: 'platform', section: 'onboardings' }
+  }
+  const match = pathname.match(/^\/platform\/([^/]+)(?:\/([^/]+))?$/)
+  if (!match) {
+    return null
+  }
+  const section = match[1]
+  if (!PLATFORM_SECTIONS.includes(section as (typeof PLATFORM_SECTIONS)[number])) {
+    return null
+  }
+  return {
+    kind: 'platform',
+    section: section as (typeof PLATFORM_SECTIONS)[number],
+    resourceId: match[2],
+  }
+}
+
 export function parseAppRoute(input: string): AppRoute {
   const pathname = normalizeRoutePath(input)
 
@@ -229,6 +257,11 @@ export function parseAppRoute(input: string): AppRoute {
 
   if (isPasswordResetPath(pathname)) {
     return { kind: 'password-reset' }
+  }
+
+  const platformRoute = parsePlatformRoute(pathname)
+  if (platformRoute) {
+    return platformRoute
   }
 
   const signalPlanId = parseSignalActionCreateId(pathname)
@@ -326,6 +359,10 @@ export function serializeAppRoute(route: AppRoute): string {
       return '/email-change'
     case 'password-reset':
       return '/password-reset'
+    case 'platform': {
+      const base = `/platform/${route.section}`
+      return route.resourceId ? `${base}/${route.resourceId}` : base
+    }
     case 'unknown':
       return route.pathname
   }
