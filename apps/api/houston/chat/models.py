@@ -121,7 +121,10 @@ class ChatMessage(BaseModel):
         ordering = ["created_at", "id"]
         indexes = [
             models.Index(fields=["conversation", "created_at", "id"]),
-            models.Index(fields=["conversation", "reply_to_id"]),
+            models.Index(
+                fields=["conversation", "reply_to_id"],
+                name="chat_chatme_convers_a91c4d_idx",
+            ),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -147,7 +150,7 @@ class ChatMessageMention(BaseModel):
 
     class Meta:
         indexes = [
-            models.Index(fields=["message", "start"]),
+            models.Index(fields=["message", "start"], name="chat_chatme_message_b2e1f0_idx"),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -201,8 +204,14 @@ class ChatUpload(BaseModel):
 
     class Meta:
         indexes = [
-            models.Index(fields=["conversation", "status", "expires_at"]),
-            models.Index(fields=["uploaded_by_membership", "status"]),
+            models.Index(
+                fields=["conversation", "status", "expires_at"],
+                name="chat_chatu_convers_8f1a2c_idx",
+            ),
+            models.Index(
+                fields=["uploaded_by_membership", "status"],
+                name="chat_chatu_uploade_3c91ab_idx",
+            ),
         ]
 
 
