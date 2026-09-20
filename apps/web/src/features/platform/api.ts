@@ -24,27 +24,42 @@ function throwApiError(response: Response, error: unknown, fallback: string): ne
   })
 }
 
+export type PlatformMembershipFilters = {
+  user_id?: string
+  establishment_id?: string
+  organization_id?: string
+}
+
 export const platformQueryKeys = {
   all: ['platform'] as const,
   organizations: (q: string) => ['platform', 'organizations', q] as const,
   organization: (id: string) => ['platform', 'organizations', 'detail', id] as const,
-  establishments: (q: string) => ['platform', 'establishments', q] as const,
+  establishments: (q: string, organizationId = '') =>
+    ['platform', 'establishments', q, organizationId] as const,
   establishment: (id: string) => ['platform', 'establishments', 'detail', id] as const,
   users: (q: string) => ['platform', 'users', q] as const,
   user: (id: string) => ['platform', 'users', 'detail', id] as const,
   onboardings: (q: string) => ['platform', 'onboardings', q] as const,
   onboarding: (id: string) => ['platform', 'onboardings', 'detail', id] as const,
   draft: (id: string) => ['platform', 'onboardings', id, 'draft'] as const,
-  memberships: (filters: string) => ['platform', 'memberships', filters] as const,
+  memberships: (filters: PlatformMembershipFilters) =>
+    [
+      'platform',
+      'memberships',
+      filters.organization_id ?? '',
+      filters.establishment_id ?? '',
+      filters.user_id ?? '',
+    ] as const,
 }
 
-export async function listPlatformOnboardings(q = '') {
+export async function listPlatformOnboardings(q = '', cursor?: string) {
   const result = await withAuthRetry(
     (accessToken) =>
       apiClient.GET('/api/v1/platform/onboardings/', {
         params: {
           query: {
             q: q || undefined,
+            cursor: cursor || undefined,
           },
         },
         headers: getAuthHeaders(accessToken),
@@ -158,11 +173,11 @@ export async function invitePlatformOwner(
   return result.data
 }
 
-export async function listPlatformOrganizations(q = '') {
+export async function listPlatformOrganizations(q = '', cursor?: string) {
   const result = await withAuthRetry(
     (accessToken) =>
       apiClient.GET('/api/v1/platform/organizations/', {
-        params: { query: { q: q || undefined } },
+        params: { query: { q: q || undefined, cursor: cursor || undefined } },
         headers: getAuthHeaders(accessToken),
       }),
     { refreshable: true },
@@ -203,13 +218,18 @@ export async function deletePlatformOrganization(organizationId: string, justifi
   }
 }
 
-export async function listPlatformEstablishments(q = '') {
+export async function listPlatformEstablishments(
+  q = '',
+  options: { cursor?: string; organization_id?: string } = {},
+) {
   const result = await withAuthRetry(
     (accessToken) =>
       apiClient.GET('/api/v1/platform/establishments/', {
         params: {
           query: {
             q: q || undefined,
+            cursor: options.cursor || undefined,
+            organization_id: options.organization_id || undefined,
           },
         },
         headers: getAuthHeaders(accessToken),
@@ -252,11 +272,11 @@ export async function deletePlatformEstablishment(establishmentId: string, justi
   }
 }
 
-export async function listPlatformUsers(q = '') {
+export async function listPlatformUsers(q = '', cursor?: string) {
   const result = await withAuthRetry(
     (accessToken) =>
       apiClient.GET('/api/v1/platform/users/', {
-        params: { query: { q: q || undefined } },
+        params: { query: { q: q || undefined, cursor: cursor || undefined } },
         headers: getAuthHeaders(accessToken),
       }),
     { refreshable: true },
@@ -282,15 +302,21 @@ export async function getPlatformUser(userId: string) {
   return result.data
 }
 
-export async function listPlatformMemberships(filters: {
-  user_id?: string
-  establishment_id?: string
-  organization_id?: string
-}) {
+export async function listPlatformMemberships(
+  filters: PlatformMembershipFilters,
+  cursor?: string,
+) {
   const result = await withAuthRetry(
     (accessToken) =>
       apiClient.GET('/api/v1/platform/memberships/', {
-        params: { query: filters },
+        params: {
+          query: {
+            user_id: filters.user_id || undefined,
+            establishment_id: filters.establishment_id || undefined,
+            organization_id: filters.organization_id || undefined,
+            cursor: cursor || undefined,
+          },
+        },
         headers: getAuthHeaders(accessToken),
       }),
     { refreshable: true },

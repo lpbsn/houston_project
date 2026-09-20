@@ -7,6 +7,15 @@ export function readSearchParam(search: string, key: string): string {
   return params.get(key) ?? ''
 }
 
+export function withSearchQuery(path: string, q: string): string {
+  if (!q) {
+    return path
+  }
+  const params = new URLSearchParams()
+  params.set('q', q)
+  return `${path}?${params.toString()}`
+}
+
 export function usePlatformListSearch(pathname: string) {
   const { search, navigate } = useAppRoute()
   const q = readSearchParam(search, 'q')

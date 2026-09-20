@@ -1,4 +1,4 @@
-import { PlatformShell } from '@/features/platform/components/platform-shell'
+import { PlatformShell, type PlatformShellLayout } from '@/features/platform/components/platform-shell'
 import { PlatformEstablishmentsPage } from '@/features/platform/pages/platform-establishments-page'
 import { PlatformOnboardingWizardPage } from '@/features/platform/pages/platform-onboarding-wizard-page'
 import { PlatformOnboardingsPage } from '@/features/platform/pages/platform-onboardings-page'
@@ -12,8 +12,14 @@ type PlatformAppProps = {
 }
 
 export function PlatformApp({ section, resourceId, onNavigate }: PlatformAppProps) {
+  const layout: PlatformShellLayout = resourceId
+    ? section === 'onboardings'
+      ? 'form'
+      : 'detail'
+    : 'collection'
+
   return (
-    <PlatformShell section={section}>
+    <PlatformShell section={section} layout={layout}>
       {section === 'onboardings' && resourceId ? (
         <PlatformOnboardingWizardPage sessionId={resourceId} onNavigate={onNavigate} />
       ) : null}

@@ -13,7 +13,9 @@ import {
   platformQueryKeys,
   putPlatformOnboardingDraft,
 } from '@/features/platform/api'
-import { formatFunctionalStatus } from '@/features/platform/lib/functional-status'
+import { PlatformLink } from '@/features/platform/components/platform-link'
+import { PlatformFunctionalStatusBadge } from '@/features/platform/components/platform-status-badge'
+import { usePlatformListSearch, withSearchQuery } from '@/features/platform/lib/platform-search'
 
 type PlatformOnboardingWizardPageProps = {
   sessionId: string
@@ -25,6 +27,8 @@ export function PlatformOnboardingWizardPage({
   onNavigate,
 }: PlatformOnboardingWizardPageProps) {
   const queryClient = useQueryClient()
+  const { q } = usePlatformListSearch('/platform/onboardings')
+  const listHref = withSearchQuery('/platform/onboardings', q)
   const summaryQuery = useQuery({
     queryKey: platformQueryKeys.onboarding(sessionId),
     queryFn: () => getPlatformOnboarding(sessionId),
@@ -56,25 +60,42 @@ export function PlatformOnboardingWizardPage({
   const functionalStatus = summary?.functional_status ?? null
   const showWizard = functionalStatus !== 'activated'
 
+  if (summaryQuery.isPending) {
+    return <p className="text-sm text-[var(--platform-muted)]">Chargement…</p>
+  }
+  if (summaryQuery.isError) {
+    return (
+      <div data-testid="platform-error" className="space-y-3">
+        <p className="text-sm text-[var(--platform-status-problem-fg)]">Onboarding introuvable.</p>
+        <PlatformLink href={listHref} className="text-sm hover:underline">
+          Retour aux onboardings
+        </PlatformLink>
+      </div>
+    )
+  }
+
   return (
     <div>
-      <button
-        type="button"
-        className="mb-4 text-sm text-slate-600 hover:underline"
-        onClick={() => onNavigate('/platform/onboardings')}
-      >
-        ← Onboardings
-      </button>
-      <div className="mb-6">
+      <nav className="mb-4 text-sm text-[var(--platform-muted)]">
+        <PlatformLink href={listHref} className="hover:underline">
+          Onboardings
+        </PlatformLink>
+        <span aria-hidden> / </span>
+        <span className="text-[var(--platform-text)]">
+          {summary?.organization_name ?? 'Onboarding'}
+        </span>
+      </nav>
+      <div className="mb-6 flex flex-wrap items-center gap-3">
         <h2 className="text-2xl font-semibold">{summary?.organization_name ?? 'Onboarding'}</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          {summary?.establishment_name ?? '—'} · {formatFunctionalStatus(functionalStatus)}
-        </p>
+        <PlatformFunctionalStatusBadge status={functionalStatus} />
       </div>
+      <p className="mb-6 text-sm text-[var(--platform-muted)]">
+        {summary?.establishment_name ?? '—'}
+      </p>
 
       {showWizard ? (
         <form
-          className="mb-8 grid max-w-xl gap-3 rounded-xl border border-slate-200 bg-white p-4"
+          className="mb-8 grid max-w-[800px] gap-3 rounded-xl border border-[var(--platform-border)] bg-[var(--platform-surface)] p-4"
           onSubmit={(event) => {
             event.preventDefault()
             inviteMutation.mutate()
@@ -102,8 +123,10 @@ export function PlatformOnboardingWizardPage({
               placeholder="Nom"
             />
           </div>
-          {inviteError ? <p className="text-sm text-red-600">{inviteError}</p> : null}
-          <Button type="submit" disabled={inviteMutation.isPending}>
+          {inviteError ? (
+            <p className="text-sm text-[var(--platform-status-problem-fg)]">{inviteError}</p>
+          ) : null}
+          <Button type="submit" className="h-10 w-fit" disabled={inviteMutation.isPending}>
             Inviter l’Owner
           </Button>
         </form>
@@ -117,10 +140,10 @@ export function PlatformOnboardingWizardPage({
           putDraft={putPlatformOnboardingDraft}
           completeSession={completePlatformOnboarding}
           draftQueryKey={platformQueryKeys.draft(sessionId)}
-          afterCompletePath="/platform/onboardings"
+          afterCompletePath={listHref}
         />
       ) : (
-        <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+        <p className="rounded-xl border border-[var(--platform-border)] bg-[var(--platform-surface)] p-4 text-sm text-[var(--platform-muted)]">
           Cet établissement est activé. Le wizard n’est plus disponible.
         </p>
       )}

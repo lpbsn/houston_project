@@ -1,0 +1,44 @@
+[data-platform-shell] {
+  --platform-nav: #0b1f33;
+  --platform-canvas: #f7f8fc;
+  --platform-surface: #ffffff;
+  --platform-text: #172033;
+  --platform-muted: #64748b;
+  --platform-border: #e2e8f0;
+  --platform-accent: var(--primary);
+  --platform-danger: var(--destructive);
+  --platform-nav-text: #e8eef5;
+  --platform-nav-muted: #9bb0c4;
+  --platform-nav-active: color-mix(in srgb, var(--platform-accent) 28%, transparent);
+  --platform-status-success-bg: #ecfdf3;
+  --platform-status-success-fg: #166534;
+  --platform-status-info-bg: #eff6ff;
+  --platform-status-info-fg: #1e3a8a;
+  --platform-status-attention-bg: #fffbeb;
+  --platform-status-attention-fg: #92400e;
+  --platform-status-action-bg: #f5f3ff;
+  --platform-status-action-fg: #5b21b6;
+  --platform-status-problem-bg: #fef2f2;
+  --platform-status-problem-fg: #991b1b;
+  color: var(--platform-text);
+  background: var(--platform-canvas);
+}
+
+[data-platform-shell] a:focus-visible,
+[data-platform-shell] button:focus-visible,
+[data-platform-shell] input:focus-visible,
+[data-platform-shell] textarea:focus-visible,
+[data-platform-shell] select:focus-visible {
+  outline: 2px solid var(--platform-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-platform-shell] *,
+  [data-platform-shell] *::before,
+  [data-platform-shell] *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
