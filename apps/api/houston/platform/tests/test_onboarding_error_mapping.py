@@ -560,6 +560,56 @@ def test_http_director_invite_non_draft_is_409(api_client):
     )
 
 
+def test_http_owner_invite_terminal_session_is_409(api_client):
+    _operator, token = _operator_client(api_client, "plat_map_own_term")
+    body = _start_onboarding(api_client, token)
+    session_id = body["id"]
+    owner_email = f"owner_{uuid.uuid4().hex[:8]}@example.com"
+    OnboardingSession.objects.filter(pk=session_id).update(status=OnboardingSession.Status.FAILED)
+
+    response = api_client.post(
+        f"/api/v1/platform/onboardings/{session_id}/owner-invitations/",
+        {"email": owner_email, "first_name": "Own", "last_name": "Er"},
+        format="json",
+        **auth_headers(token),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "invalid_onboarding_state"
+    assert not User.objects.filter(email__iexact=owner_email).exists()
+    _assert_denied_event(
+        action="invite_owner",
+        resource_id=session_id,
+        code="invalid_onboarding_state",
+    )
+
+
+def test_http_owner_invite_non_draft_is_409(api_client):
+    _operator, token = _operator_client(api_client, "plat_map_own_nd")
+    body = _start_onboarding(api_client, token)
+    session_id = body["id"]
+    owner_email = f"owner_{uuid.uuid4().hex[:8]}@example.com"
+    Establishment.objects.filter(pk=body["establishment_id"]).update(
+        status=Establishment.Status.DEACTIVATED
+    )
+
+    response = api_client.post(
+        f"/api/v1/platform/onboardings/{session_id}/owner-invitations/",
+        {"email": owner_email, "first_name": "Own", "last_name": "Er"},
+        format="json",
+        **auth_headers(token),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "invalid_onboarding_state"
+    assert not User.objects.filter(email__iexact=owner_email).exists()
+    _assert_denied_event(
+        action="invite_owner",
+        resource_id=session_id,
+        code="invalid_onboarding_state",
+    )
+
+
 def test_http_director_invite_owner_email_not_allowed_is_409(api_client):
     _operator, token = _operator_client(api_client, "plat_map_dir_owner")
     body = _start_onboarding(api_client, token)
