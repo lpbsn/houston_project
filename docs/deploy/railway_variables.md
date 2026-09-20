@@ -264,7 +264,7 @@ Phase 2 (`CELERY_WORKER_PREFETCH_MULTIPLIER`) is out of scope here.
 5. [ ] `POSTGRES_SSLMODE=require`
 6. [ ] Redis URLs mapped to DBs 0–3
 7. [ ] `make backend-deploy-check` passes locally
-8. [ ] `HOUSTON_PRIVATE_MEDIA_BACKEND=s3` and the same `HOUSTON_S3_*` values on `api-web` and `celery-worker`
+8. [ ] `HOUSTON_PRIVATE_MEDIA_BACKEND=s3`, the same `HOUSTON_S3_*` values, and the same `HOUSTON_CHAT_S3_*` refs to bucket `chat-attachement` on `api-web` and `celery-worker`
 9. [ ] `CELERY_WORKER_CONCURRENCY` set on `celery-worker` (positive integer, chosen from isolated staging sizing)
 10. [ ] `celery-worker` and `celery-beat` deployed and running; worker logs show `concurrency: <C> (prefork)` matching the variable
 11. [ ] `import_business_unit_catalog` run manually after migrate

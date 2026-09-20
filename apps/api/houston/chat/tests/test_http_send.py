@@ -277,6 +277,57 @@ def test_mentions_and_reply_validation(api_client):
     _ = receiver
 
 
+def test_mentions_use_unicode_code_point_offsets(api_client):
+    establishment, sender, receiver, sender_membership, receiver_membership = _setup_dm()
+    receiver.first_name = "Léa 👋"
+    receiver.last_name = ""
+    receiver.save(update_fields=["first_name", "last_name"])
+    token = login(api_client, user=sender)
+    dm = create_dm(
+        api_client,
+        token=token,
+        establishment_id=establishment.id,
+        target_membership_id=receiver_membership.id,
+    )
+    conversation_id = uuid.UUID(dm.json()["conversation"]["id"])
+    label = f"@{membership_display_name(receiver_membership)}"
+    prefix = "ok "
+    body = f"{prefix}{label}"
+    start = len(prefix)
+    end = start + len(label)
+    assert list(body)[start:end] == list(label)
+
+    response = send_message(
+        api_client,
+        token=token,
+        establishment_id=establishment.id,
+        conversation_id=conversation_id,
+        body=body,
+        mentions=[
+            {
+                "membership_id": str(receiver_membership.id),
+                "start": start,
+                "end": end,
+            }
+        ],
+    )
+    assert response.status_code == 201
+    mention = response.json()["message"]["mentions"][0]
+    assert mention["start"] == start
+    assert mention["end"] == end
+    _ = sender_membership
+
+
+def test_send_request_serializer_allows_omitted_body():
+    from houston.chat.api.serializers import ChatSendMessageRequestSerializer
+
+    serializer = ChatSendMessageRequestSerializer(
+        data={"client_message_id": str(uuid.uuid4()), "attachment_ids": [str(uuid.uuid4())]}
+    )
+    assert serializer.is_valid(), serializer.errors
+    assert serializer.validated_data["body"] == ""
+
+
 @pytest.mark.django_db(transaction=True)
 def test_message_created_fanout_is_on_commit_only():
     establishment, sender, _receiver, sender_membership, receiver_membership = _setup_dm()

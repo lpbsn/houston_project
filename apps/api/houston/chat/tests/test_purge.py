@@ -5,9 +5,11 @@ from datetime import timedelta
 
 import pytest
 from django.utils import timezone
-from houston.chat.models import ChatConversation, ChatMessage
+from houston.chat.account_deletion import delete_messages_authored_by_memberships
+from houston.chat.models import ChatConversation, ChatMessage, ChatUpload
 from houston.chat.purge import purge_chat_messages
 from houston.chat.tasks import purge_chat_messages_task
+from houston.chat.upload_services import chat_upload_storage_key
 from houston.chat.tests.conftest import create_establishment, create_membership, create_user, login
 from houston.chat.tests.helpers import create_dm
 
@@ -170,3 +172,147 @@ def test_purge_respects_retention_setting(settings):
     result = purge_chat_messages(dry_run=False)
     assert result.deleted_count == 1
     assert not ChatMessage.objects.filter(id=old_message.id).exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_purge_deletes_attachment_storage(settings, tmp_path, monkeypatch):
+    settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "filesystem"
+    settings.HOUSTON_CHAT_PRIVATE_MEDIA_ROOT = str(tmp_path)
+    establishment = create_establishment()
+    sender = create_user(username="chat_purge_attach_sender")
+    receiver = create_user(username="chat_purge_attach_receiver")
+    sender_membership = create_membership(user=sender, establishment=establishment)
+    receiver_membership = create_membership(user=receiver, establishment=establishment)
+    conversation = ChatConversation.objects.create(
+        establishment=establishment,
+        type=ChatConversation.Type.DM,
+        created_by_membership=sender_membership,
+        dm_membership_a=sender_membership,
+        dm_membership_b=receiver_membership,
+    )
+    message = ChatMessage.objects.create(
+        conversation=conversation,
+        author_membership=sender_membership,
+        body="",
+        client_message_id=uuid.uuid4(),
+    )
+    ChatMessage.objects.filter(id=message.id).update(
+        created_at=timezone.now() - timedelta(days=31)
+    )
+    storage_key = chat_upload_storage_key(
+        establishment_id=establishment.id,
+        conversation_id=conversation.id,
+        upload_id=uuid.uuid4(),
+        filename="old.png",
+    )
+    upload = ChatUpload.objects.create(
+        establishment=establishment,
+        conversation=conversation,
+        uploaded_by_membership=sender_membership,
+        original_filename="old.png",
+        declared_content_type="image/png",
+        declared_size_bytes=4,
+        storage_key=storage_key,
+        expires_at=timezone.now() + timedelta(hours=1),
+        status=ChatUpload.Status.LINKED,
+    )
+    from houston.chat.models import ChatMessageAttachment
+
+    ChatMessageAttachment.objects.create(
+        message=message,
+        upload=upload,
+        position=0,
+        kind="image",
+        content_type="image/png",
+        size_bytes=4,
+        original_filename="old.png",
+    )
+    deleted_keys: list[str] = []
+    monkeypatch.setattr(
+        "houston.chat.purge.delete_chat_storage_keys",
+        lambda keys: deleted_keys.extend(keys),
+    )
+
+    from django.db import transaction
+
+    with transaction.atomic():
+        result = purge_chat_messages(dry_run=False)
+    assert result.deleted_count >= 1
+    assert not ChatMessage.objects.filter(id=message.id).exists()
+    assert not ChatUpload.objects.filter(id=upload.id).exists()
+    assert storage_key in deleted_keys
+
+
+@pytest.mark.django_db(transaction=True)
+def test_account_deletion_deletes_chat_storage(settings, tmp_path, monkeypatch):
+    settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "filesystem"
+    settings.HOUSTON_CHAT_PRIVATE_MEDIA_ROOT = str(tmp_path)
+    establishment = create_establishment()
+    sender = create_user(username="chat_delete_attach_sender")
+    receiver = create_user(username="chat_delete_attach_receiver")
+    sender_membership = create_membership(user=sender, establishment=establishment)
+    receiver_membership = create_membership(user=receiver, establishment=establishment)
+    conversation = ChatConversation.objects.create(
+        establishment=establishment,
+        type=ChatConversation.Type.DM,
+        created_by_membership=sender_membership,
+        dm_membership_a=sender_membership,
+        dm_membership_b=receiver_membership,
+    )
+    message = ChatMessage.objects.create(
+        conversation=conversation,
+        author_membership=sender_membership,
+        body="bye",
+        client_message_id=uuid.uuid4(),
+    )
+    storage_key = chat_upload_storage_key(
+        establishment_id=establishment.id,
+        conversation_id=conversation.id,
+        upload_id=uuid.uuid4(),
+        filename="bye.png",
+    )
+    upload = ChatUpload.objects.create(
+        establishment=establishment,
+        conversation=conversation,
+        uploaded_by_membership=sender_membership,
+        original_filename="bye.png",
+        declared_content_type="image/png",
+        declared_size_bytes=4,
+        storage_key=storage_key,
+        expires_at=timezone.now() + timedelta(hours=1),
+        status=ChatUpload.Status.LINKED,
+    )
+    from houston.chat.models import ChatMessageAttachment
+
+    ChatMessageAttachment.objects.create(
+        message=message,
+        upload=upload,
+        position=0,
+        kind="image",
+        content_type="image/png",
+        size_bytes=4,
+        original_filename="bye.png",
+    )
+    deleted_keys: list[str] = []
+    monkeypatch.setattr(
+        "houston.chat.account_deletion.delete_chat_storage_keys",
+        lambda keys: deleted_keys.extend(keys),
+    )
+
+    from django.db import transaction
+
+    with transaction.atomic():
+        delete_messages_authored_by_memberships(membership_ids=[sender_membership.id])
+    assert not ChatMessage.objects.filter(id=message.id).exists()
+    assert not ChatUpload.objects.filter(id=upload.id).exists()
+    assert storage_key in deleted_keys
+
+
+def test_beat_schedule_includes_chat_purge_and_orphans():
+    from django.conf import settings as django_settings
+
+    tasks = {
+        entry["task"] for entry in django_settings.CELERY_BEAT_SCHEDULE.values()
+    }
+    assert "houston.chat.tasks.purge_chat_messages_task" in tasks
+    assert "houston.chat.tasks.cleanup_chat_upload_orphans_task" in tasks

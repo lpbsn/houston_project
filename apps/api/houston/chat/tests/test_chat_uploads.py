@@ -88,6 +88,7 @@ def test_complete_validates_and_enqueues_thumb_not_on_message(api_client, settin
         size_bytes=len(payload),
     )
     assert reserved.status_code == 201
+    assert reserved.json()["put_url"] == ""
     upload_id = reserved.json()["upload_id"]
 
     with patch("houston.chat.tasks.generate_chat_upload_thumbnail_task.delay") as mock_delay:
@@ -279,6 +280,21 @@ def test_gallery_and_isolation(api_client, settings, tmp_path):
     assert gallery.status_code == 200
     assert gallery.json()["has_more"] is False
     assert len(gallery.json()["items"]) == 1
+    item = gallery.json()["items"][0]
+    sent = ChatMessage.objects.get(conversation_id=conversation_id)
+    assert item["message_id"] == str(sent.id)
+    assert item["kind"] == "image"
+    assert item["author_display_name"]
+    media_only = api_client.get(
+        chat_url(establishment.id, f"conversations/{conversation_id}/shared-media/?kind=image"),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    documents_only = api_client.get(
+        chat_url(establishment.id, f"conversations/{conversation_id}/shared-media/?kind=document"),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert len(media_only.json()["items"]) == 1
+    assert documents_only.json()["items"] == []
 
     outsider = create_user(username="chat_gallery_out")
     create_membership(user=outsider, establishment=establishment)
@@ -322,3 +338,62 @@ def test_orphan_cleanup_deletes_expired_reserved(settings, tmp_path):
     assert deleted >= 1
     assert not ChatUpload.objects.filter(id=upload.id).exists()
     _ = create_dm_helper
+
+
+def test_refresh_presign_reuses_upload_id(api_client, settings, tmp_path):
+    settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "filesystem"
+    settings.HOUSTON_CHAT_PRIVATE_MEDIA_ROOT = str(tmp_path)
+    establishment, _s, _r, _sm, _rm, token, conversation_id = _setup(api_client)
+    reserved = _reserve(
+        api_client,
+        token=token,
+        establishment_id=establishment.id,
+        conversation_id=conversation_id,
+        filename="shot.png",
+        content_type="image/png",
+        size_bytes=12,
+    )
+    upload_id = reserved.json()["upload_id"]
+    refreshed = api_client.post(
+        chat_url(establishment.id, f"uploads/{upload_id}/presign/"),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert refreshed.status_code == 200
+    assert refreshed.json()["upload_id"] == upload_id
+    assert refreshed.json()["put_url"] == ""
+    assert ChatUpload.objects.filter(id=upload_id).count() == 1
+
+
+def test_send_accepts_missing_body_with_attachment(api_client, settings, tmp_path):
+    settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "filesystem"
+    settings.HOUSTON_CHAT_PRIVATE_MEDIA_ROOT = str(tmp_path)
+    establishment, _s, _r, _sm, _rm, token, conversation_id = _setup(api_client)
+    payload = _pdf_bytes()
+    reserved = _reserve(
+        api_client,
+        token=token,
+        establishment_id=establishment.id,
+        conversation_id=conversation_id,
+        filename="note.pdf",
+        content_type="application/pdf",
+        size_bytes=len(payload),
+    )
+    upload_id = reserved.json()["upload_id"]
+    _put_and_complete(
+        api_client,
+        token=token,
+        establishment_id=establishment.id,
+        upload_id=upload_id,
+        payload=payload,
+    )
+    response = api_client.post(
+        chat_url(establishment.id, f"conversations/{conversation_id}/messages/"),
+        {
+            "client_message_id": str(uuid.uuid4()),
+            "attachment_ids": [upload_id],
+        },
+        format="json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert response.status_code == 201
+    assert response.json()["message"]["body"] == ""

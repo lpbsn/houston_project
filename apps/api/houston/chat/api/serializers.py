@@ -55,6 +55,9 @@ class ChatAttachmentSerializer(serializers.Serializer):
     original_filename = serializers.CharField()
     preview_url = serializers.CharField()
     thumbnail_url = serializers.CharField(allow_null=True)
+    message_id = serializers.UUIDField()
+    created_at = serializers.DateTimeField()
+    author_display_name = serializers.CharField()
 
 
 class ChatReplyToSerializer(serializers.Serializer):
@@ -122,7 +125,12 @@ class ChatMessageSerializer(serializers.Serializer):
 
 class ChatSendMessageRequestSerializer(serializers.Serializer):
     client_message_id = serializers.UUIDField()
-    body = serializers.CharField(allow_blank=True, max_length=CHAT_MESSAGE_BODY_MAX_LENGTH)
+    body = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=CHAT_MESSAGE_BODY_MAX_LENGTH,
+        default="",
+    )
     reply_to_id = serializers.UUIDField(required=False, allow_null=True)
     mentions = ChatMessageMentionSerializer(many=True, required=False)
     attachment_ids = serializers.ListField(
@@ -276,34 +284,40 @@ def _serialize_mentions(message: ChatMessage) -> list[dict]:
     return items
 
 
+def serialize_attachment(attachment, *, message: ChatMessage | None = None) -> dict:
+    resolved_message = message or attachment.message
+    establishment_id = resolved_message.conversation.establishment_id
+    thumbnail_key = getattr(attachment.upload, "thumbnail_storage_key", "")
+    return {
+        "id": attachment.id,
+        "kind": attachment.kind,
+        "content_type": attachment.content_type,
+        "size_bytes": attachment.size_bytes,
+        "original_filename": attachment.original_filename,
+        "preview_url": (
+            f"/api/v1/establishments/{establishment_id}"
+            f"/chat/attachments/{attachment.id}/preview/"
+        ),
+        "thumbnail_url": (
+            f"/api/v1/establishments/{establishment_id}"
+            f"/chat/attachments/{attachment.id}/preview/?variant=thumbnail"
+            if thumbnail_key
+            else None
+        ),
+        "message_id": resolved_message.id,
+        "created_at": attachment.created_at,
+        "author_display_name": membership_display_name(resolved_message.author_membership),
+    }
+
+
 def _serialize_attachments(message: ChatMessage) -> list[dict]:
     attachments = getattr(message, "_prefetched_objects_cache", {}).get("attachments")
     if attachments is None:
         attachments = list(message.attachments.select_related("upload").all())
-    establishment_id = message.conversation.establishment_id
-    items = []
-    for attachment in sorted(attachments, key=lambda item: (item.position, item.id)):
-        thumbnail_key = getattr(attachment.upload, "thumbnail_storage_key", "")
-        items.append(
-            {
-                "id": attachment.id,
-                "kind": attachment.kind,
-                "content_type": attachment.content_type,
-                "size_bytes": attachment.size_bytes,
-                "original_filename": attachment.original_filename,
-                "preview_url": (
-                    f"/api/v1/establishments/{establishment_id}"
-                    f"/chat/attachments/{attachment.id}/preview/"
-                ),
-                "thumbnail_url": (
-                    f"/api/v1/establishments/{establishment_id}"
-                    f"/chat/attachments/{attachment.id}/preview/?variant=thumbnail"
-                    if thumbnail_key
-                    else None
-                ),
-            }
-        )
-    return items
+    return [
+        serialize_attachment(attachment, message=message)
+        for attachment in sorted(attachments, key=lambda item: (item.position, item.id))
+    ]
 
 
 def serialize_message(

@@ -2,6 +2,7 @@ from django.urls import path
 from houston.chat.api.upload_views import (
     ChatAttachmentPreviewView,
     ChatCompleteUploadView,
+    ChatRefreshUploadPresignView,
     ChatReserveUploadView,
     ChatSharedMediaView,
     ChatUploadContentView,
@@ -106,6 +107,11 @@ urlpatterns = [
         "establishments/<uuid:establishment_id>/chat/uploads/",
         ChatReserveUploadView.as_view(),
         name="chat-upload-reserve",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/chat/uploads/<uuid:upload_id>/presign/",
+        ChatRefreshUploadPresignView.as_view(),
+        name="chat-upload-refresh-presign",
     ),
     path(
         "establishments/<uuid:establishment_id>/chat/uploads/<uuid:upload_id>/content/",

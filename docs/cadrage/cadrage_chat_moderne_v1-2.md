@@ -186,7 +186,8 @@ TTL, succès, annulation, logout, switch d’établissement et `access.revoked` 
 Upload direct vers le stockage objet via URL présignée, finalisation Houston, puis association au message.
 
 - les octets ne transitent pas par le WebSocket ;
-- Django/Daphne n’est pas un proxy durable des fichiers ;
+- `put_url` n’est émis que pour un PUT S3 présigné (sans auth Houston) ; le fallback filesystem local utilise `PUT …/content/` authentifié, jamais une URL Houston présentée comme présignée ;
+- Django/Daphne n’est pas un proxy durable des fichiers en production ;
 - progression, annulation (`AbortController` / `xhr.abort`) et retry avant `POST` message ;
 - stockage privé.
 

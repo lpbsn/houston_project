@@ -5703,6 +5703,57 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/chat/uploads/{upload_id}/presign/:
+    post:
+      operationId: v1_establishments_chat_uploads_presign_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: upload_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - chat
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatReserveUploadResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/chat/ws-ticket/:
     post:
       operationId: v1_establishments_chat_ws_ticket_create
@@ -11456,10 +11507,21 @@ components:
         thumbnail_url:
           type: string
           nullable: true
+        message_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        author_display_name:
+          type: string
       required:
+      - author_display_name
       - content_type
+      - created_at
       - id
       - kind
+      - message_id
       - original_filename
       - preview_url
       - size_bytes
@@ -11808,6 +11870,7 @@ components:
           format: uuid
         body:
           type: string
+          default: ''
           maxLength: 2000
         reply_to_id:
           type: string
@@ -11823,7 +11886,6 @@ components:
             type: string
             format: uuid
       required:
-      - body
       - client_message_id
     ChatSendMessageResponse:
       type: object

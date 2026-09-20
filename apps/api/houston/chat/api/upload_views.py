@@ -8,11 +8,11 @@ from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_sche
 from houston.accounts.api.serializers import ApiErrorResponseSerializer
 from houston.accounts.authentication import BearerAccessTokenAuthentication
 from houston.chat.api.serializers import (
-    ChatAttachmentSerializer,
     ChatReserveUploadRequestSerializer,
     ChatReserveUploadResponseSerializer,
     ChatSharedMediaResponseSerializer,
     ChatUploadCompleteResponseSerializer,
+    serialize_attachment,
 )
 from houston.chat.api.views import (
     CanAccessChat,
@@ -29,6 +29,7 @@ from houston.chat.upload_services import (
     build_chat_upload_put_url,
     complete_chat_upload,
     generate_chat_attachment_presigned_get,
+    get_reserved_chat_upload,
     reserve_chat_upload,
     store_chat_upload_content,
 )
@@ -143,6 +144,47 @@ class ChatUploadContentView(EstablishmentScopedChatMixin, APIView):
         except ChatError as exc:
             return _chat_error_response(exc)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ChatRefreshUploadPresignView(EstablishmentScopedChatMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanAccessChat,
+    ]
+
+    @extend_schema(
+        tags=["chat"],
+        request=None,
+        responses={
+            200: ChatReserveUploadResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def post(self, request, establishment_id, upload_id):
+        membership = _resolve_membership(request, self.establishment_id)
+        if isinstance(membership, Response):
+            return membership
+        try:
+            upload = get_reserved_chat_upload(
+                actor_membership=membership,
+                upload_id=uuid.UUID(str(upload_id)),
+            )
+        except ChatError as exc:
+            return _chat_error_response(exc)
+        return Response(
+            ChatReserveUploadResponseSerializer(
+                {
+                    "upload_id": upload.id,
+                    "put_url": build_chat_upload_put_url(upload=upload, request=request),
+                    "expires_at": upload.expires_at,
+                }
+            ).data
+        )
 
 
 class ChatCompleteUploadView(EstablishmentScopedChatMixin, APIView):
@@ -290,7 +332,12 @@ class ChatSharedMediaView(EstablishmentScopedChatMixin, APIView):
             ChatMessageAttachment.objects.filter(
                 message__conversation_id=conversation.id,
             )
-            .select_related("upload", "message__conversation")
+            .select_related(
+                "upload",
+                "message__conversation",
+                "message__author_membership",
+                "message__author_membership__user",
+            )
             .order_by("-created_at", "-id")
         )
         kind = request.query_params.get("kind")
@@ -316,13 +363,7 @@ class ChatSharedMediaView(EstablishmentScopedChatMixin, APIView):
         page = list(queryset[: CHAT_GALLERY_PAGE_SIZE + 1])
         has_more = len(page) > CHAT_GALLERY_PAGE_SIZE
         page = page[:CHAT_GALLERY_PAGE_SIZE]
-        from houston.chat.api.serializers import _serialize_attachments
-
-        items = []
-        for attachment in page:
-            serialized = _serialize_attachments(attachment.message)
-            match = next(item for item in serialized if item["id"] == attachment.id)
-            items.append(match)
+        items = [serialize_attachment(attachment) for attachment in page]
         next_cursor = None
         if has_more and page:
             last = page[-1]

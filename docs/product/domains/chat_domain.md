@@ -28,8 +28,8 @@ Chat V1 is **not** a single establishment-wide general chat room.
 
 ### Messages
 
-- Text, optional reply-to, structured mentions by Unicode offsets. Attachments land in a later lot.
-- A valid message has a non-empty trimmed `body` **or** (later) at least one validated attachment. Lot 1 requires body.
+- Text, optional reply-to, structured mentions by Unicode code-point offsets, and attachments (`image` / `document`).
+- A valid message has a non-empty trimmed `body` **or** at least one validated attachment.
 - Max 2,000 characters after trim.
 - Ordering : `created_at` ascending, then `id`.
 - Idempotency via `client_message_id` per `(conversation, author_membership)`. Retry `POST` returns the existing message (`created=false`) without a second WS fan-out or `chat.message.received` notification.

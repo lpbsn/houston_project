@@ -124,7 +124,38 @@ def reserve_chat_upload(
     return upload
 
 
+def get_reserved_chat_upload(
+    *,
+    actor_membership: EstablishmentMembership,
+    upload_id: uuid.UUID,
+) -> ChatUpload:
+    if not can_access_chat(actor_membership):
+        raise ChatPermissionError()
+    upload = ChatUpload.objects.filter(
+        id=upload_id,
+        establishment_id=actor_membership.establishment_id,
+        uploaded_by_membership_id=actor_membership.id,
+    ).first()
+    if upload is None:
+        raise ChatNotFoundError()
+    if upload.status != ChatUpload.Status.RESERVED:
+        raise ChatValidationError("Upload can no longer accept content.")
+    if upload.expires_at <= timezone.now():
+        raise ChatValidationError("Upload reservation has expired.")
+    conversation = get_conversation_for_participant(
+        establishment_id=actor_membership.establishment_id,
+        conversation_id=upload.conversation_id,
+        membership_id=actor_membership.id,
+    )
+    if conversation is None:
+        raise ChatNotFoundError()
+    if not can_send_message(actor_membership, conversation):
+        raise ChatPermissionError()
+    return upload
+
+
 def build_chat_upload_put_url(*, upload: ChatUpload, request=None) -> str:
+    del request
     if _is_s3_backend():
         return generate_private_media_presigned_put_url(
             name=upload.storage_key,
@@ -132,11 +163,10 @@ def build_chat_upload_put_url(*, upload: ChatUpload, request=None) -> str:
             storage=get_chat_private_media_storage(),
             expires_in=_presign_ttl_seconds(),
         )
-    if request is None:
-        return ""
-    return request.build_absolute_uri(
-        f"/api/v1/establishments/{upload.establishment_id}/chat/uploads/{upload.id}/content/"
-    )
+    # Filesystem fallback is an authenticated Houston PUT to /content/, not a
+    # presigned URL. Never return a Houston URL here — the client would PUT
+    # without Authorization, matching the S3 contract and getting 401 locally.
+    return ""
 
 
 def store_chat_upload_content(*, upload: ChatUpload, payload: bytes) -> None:
