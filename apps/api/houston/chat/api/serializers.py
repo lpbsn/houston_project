@@ -4,6 +4,8 @@ import uuid
 
 from houston.chat.constants import (
     CHAT_GROUP_TITLE_MAX_LENGTH,
+    CHAT_MESSAGE_BODY_MAX_LENGTH,
+    CHAT_REPLY_EXCERPT_MAX_LENGTH,
 )
 from houston.chat.models import ChatConversation, ChatMessage, ChatParticipant
 from houston.establishments.models import EstablishmentMembership
@@ -38,12 +40,29 @@ class ChatParticipantSummarySerializer(serializers.Serializer):
     participant_role = serializers.CharField()
 
 
+class ChatMessageMentionSerializer(serializers.Serializer):
+    membership_id = serializers.UUIDField()
+    start = serializers.IntegerField(min_value=0)
+    end = serializers.IntegerField(min_value=1)
+    display_name = serializers.CharField(required=False)
+
+
+class ChatReplyToSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    unavailable = serializers.BooleanField()
+    author_display_name = serializers.CharField(required=False, allow_null=True)
+    excerpt = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+
+
 class ChatMessagePreviewSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     author_membership_id = serializers.UUIDField()
     author_display_name = serializers.CharField()
-    body = serializers.CharField()
+    body = serializers.CharField(allow_blank=True)
     created_at = serializers.DateTimeField()
+    is_reply = serializers.BooleanField(required=False)
+    reply_to = ChatReplyToSerializer(allow_null=True, required=False)
+    mentions = ChatMessageMentionSerializer(many=True, required=False)
 
 
 class ChatConversationListItemSerializer(serializers.Serializer):
@@ -81,9 +100,30 @@ class ChatMessageSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     author_membership_id = serializers.UUIDField()
     author_display_name = serializers.CharField()
-    body = serializers.CharField()
+    body = serializers.CharField(allow_blank=True)
     client_message_id = serializers.UUIDField()
     created_at = serializers.DateTimeField()
+    is_reply = serializers.BooleanField()
+    reply_to = ChatReplyToSerializer(allow_null=True)
+    mentions = ChatMessageMentionSerializer(many=True)
+
+
+class ChatSendMessageRequestSerializer(serializers.Serializer):
+    client_message_id = serializers.UUIDField()
+    body = serializers.CharField(allow_blank=True, max_length=CHAT_MESSAGE_BODY_MAX_LENGTH)
+    reply_to_id = serializers.UUIDField(required=False, allow_null=True)
+    mentions = ChatMessageMentionSerializer(many=True, required=False)
+
+    def validate_mentions(self, value):
+        for item in value:
+            if item["start"] >= item["end"]:
+                raise serializers.ValidationError("Mention start must be less than end.")
+        return value
+
+
+class ChatSendMessageResponseSerializer(serializers.Serializer):
+    message = ChatMessageSerializer()
+    created = serializers.BooleanField()
 
 
 class ChatMessageListResponseSerializer(serializers.Serializer):
@@ -159,7 +199,55 @@ def serialize_participant_summary(participant: ChatParticipant) -> dict:
     }
 
 
-def serialize_message(message: ChatMessage) -> dict:
+def _serialize_reply_to(message: ChatMessage, *, parent: ChatMessage | None) -> dict | None:
+    reply_to_id = getattr(message, "reply_to_id", None)
+    if reply_to_id is None:
+        return None
+    if parent is None:
+        return {"id": reply_to_id, "unavailable": True}
+    excerpt = parent.body[:CHAT_REPLY_EXCERPT_MAX_LENGTH]
+    return {
+        "id": parent.id,
+        "unavailable": False,
+        "author_display_name": membership_display_name(parent.author_membership),
+        "excerpt": excerpt,
+    }
+
+
+def _serialize_mentions(message: ChatMessage) -> list[dict]:
+    mentions = getattr(message, "_prefetched_objects_cache", {}).get("mentions")
+    if mentions is None:
+        mentions = list(message.mentions.select_related("membership__user").all())
+    items = []
+    for mention in mentions:
+        items.append(
+            {
+                "membership_id": mention.membership_id,
+                "start": mention.start,
+                "end": mention.end,
+                "display_name": membership_display_name(mention.membership),
+            }
+        )
+    items.sort(key=lambda item: item["start"])
+    return items
+
+
+def serialize_message(
+    message: ChatMessage,
+    *,
+    parent: ChatMessage | None = None,
+    parents_by_id: dict | None = None,
+) -> dict:
+    reply_to_id = getattr(message, "reply_to_id", None)
+    resolved_parent = parent
+    if resolved_parent is None and parents_by_id is not None and reply_to_id is not None:
+        resolved_parent = parents_by_id.get(reply_to_id)
+    elif resolved_parent is None and reply_to_id is not None:
+        resolved_parent = (
+            ChatMessage.objects.select_related("author_membership", "author_membership__user")
+            .filter(id=reply_to_id, conversation_id=message.conversation_id)
+            .first()
+        )
     return {
         "id": message.id,
         "author_membership_id": message.author_membership_id,
@@ -167,7 +255,24 @@ def serialize_message(message: ChatMessage) -> dict:
         "body": message.body,
         "client_message_id": message.client_message_id,
         "created_at": message.created_at,
+        "is_reply": reply_to_id is not None,
+        "reply_to": _serialize_reply_to(message, parent=resolved_parent),
+        "mentions": _serialize_mentions(message),
     }
+
+
+def serialize_messages(messages: list[ChatMessage]) -> list[dict]:
+    parent_ids = [message.reply_to_id for message in messages if getattr(message, "reply_to_id", None)]
+    parents_by_id = {}
+    if parent_ids:
+        parents_by_id = {
+            parent.id: parent
+            for parent in ChatMessage.objects.filter(id__in=parent_ids).select_related(
+                "author_membership",
+                "author_membership__user",
+            )
+        }
+    return [serialize_message(message, parents_by_id=parents_by_id) for message in messages]
 
 
 def conversation_title(

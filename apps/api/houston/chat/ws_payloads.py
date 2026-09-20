@@ -8,6 +8,12 @@ from houston.chat.models import ChatMessage
 
 def serialize_message_for_ws(message: ChatMessage) -> dict:
     payload = serialize_message(message)
+    reply_to = payload["reply_to"]
+    if reply_to is not None:
+        reply_to = {
+            **reply_to,
+            "id": str(reply_to["id"]),
+        }
     return {
         "id": str(payload["id"]),
         "author_membership_id": str(payload["author_membership_id"]),
@@ -15,6 +21,17 @@ def serialize_message_for_ws(message: ChatMessage) -> dict:
         "body": payload["body"],
         "client_message_id": str(payload["client_message_id"]),
         "created_at": payload["created_at"].isoformat(),
+        "is_reply": payload["is_reply"],
+        "reply_to": reply_to,
+        "mentions": [
+            {
+                "membership_id": str(item["membership_id"]),
+                "start": item["start"],
+                "end": item["end"],
+                "display_name": item["display_name"],
+            }
+            for item in payload["mentions"]
+        ],
     }
 
 

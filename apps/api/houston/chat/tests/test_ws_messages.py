@@ -15,20 +15,63 @@ from houston.chat.tests.conftest import (
     create_user,
     login,
 )
-from houston.chat.tests.helpers import create_dm
+from houston.chat.tests.helpers import create_dm, send_message
 from houston.chat.tests.ws_helpers import _connect_authenticated, get_ws_ticket
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
 
-def test_ws_message_send_broadcasts_to_dm_participants(api_client):
+def test_ws_rejects_message_send_without_persist(api_client):
     establishment = create_establishment()
-    sender = create_user(username="chat_ws_sender")
-    receiver = create_user(username="chat_ws_receiver")
+    sender = create_user(username="chat_ws_protocol_sender")
+    receiver = create_user(username="chat_ws_protocol_receiver")
     create_membership(user=sender, establishment=establishment)
     receiver_membership = create_membership(user=receiver, establishment=establishment)
     token = login(api_client, user=sender)
+    dm_response = create_dm(
+        api_client,
+        token=token,
+        establishment_id=establishment.id,
+        target_membership_id=receiver_membership.id,
+    )
+    conversation_id = dm_response.json()["conversation"]["id"]
+    sender_ticket = get_ws_ticket(api_client, user=sender, establishment=establishment)
 
+    async def run():
+        sender_comm = await _connect_authenticated(
+            ticket=sender_ticket,
+            establishment=establishment,
+        )
+        await sender_comm.send_json_to(
+            {
+                "type": "message.send",
+                "conversation_id": conversation_id,
+                "client_message_id": str(uuid.uuid4()),
+                "body": "should not persist",
+            }
+        )
+        error = await sender_comm.receive_json_from()
+        close_event = await sender_comm.receive_output()
+        await sender_comm.disconnect()
+        return error, close_event
+
+    error, close_event = async_to_sync(run)()
+    close_old_connections()
+
+    assert error["type"] == "error"
+    assert error["code"] == "protocol_error"
+    assert close_event["type"] == "websocket.close"
+    assert close_event["code"] == 4400
+    assert ChatMessage.objects.filter(conversation_id=conversation_id).count() == 0
+
+
+def test_http_send_broadcasts_message_created_to_ws(api_client):
+    establishment = create_establishment()
+    sender = create_user(username="chat_ws_http_sender")
+    receiver = create_user(username="chat_ws_http_receiver")
+    create_membership(user=sender, establishment=establishment)
+    receiver_membership = create_membership(user=receiver, establishment=establishment)
+    token = login(api_client, user=sender)
     dm_response = create_dm(
         api_client,
         token=token,
@@ -49,19 +92,16 @@ def test_ws_message_send_broadcasts_to_dm_participants(api_client):
             ticket=receiver_ticket,
             establishment=establishment,
         )
-
-        await sender_comm.send_json_to(
-            {
-                "type": "message.send",
-                "conversation_id": conversation_id,
-                "client_message_id": str(client_message_id),
-                "body": "  hello ws  ",
-            }
+        await database_sync_to_async(send_message)(
+            api_client,
+            token=token,
+            establishment_id=establishment.id,
+            conversation_id=conversation_id,
+            body="  hello ws  ",
+            client_message_id=client_message_id,
         )
-
         sender_event = await sender_comm.receive_json_from()
         receiver_event = await receiver_comm.receive_json_from()
-
         await sender_comm.disconnect()
         await receiver_comm.disconnect()
         return sender_event, receiver_event
@@ -78,7 +118,7 @@ def test_ws_message_send_broadcasts_to_dm_participants(api_client):
     assert ChatMessage.objects.filter(conversation_id=conversation_id).count() == 1
 
 
-def test_ws_delivers_first_message_for_new_dm_without_reconnect(api_client):
+def test_ws_delivers_first_http_message_for_new_dm_without_reconnect(api_client):
     establishment = create_establishment()
     connected_user = create_user(username="chat_ws_connected")
     peer = create_user(username="chat_ws_peer")
@@ -107,22 +147,16 @@ def test_ws_delivers_first_message_for_new_dm_without_reconnect(api_client):
             establishment=establishment,
         )
         peer_comm = await _connect_authenticated(ticket=peer_ticket, establishment=establishment)
-        await peer_comm.send_json_to(
-            {
-                "type": "message.send",
-                "conversation_id": conversation_id,
-                "client_message_id": str(client_message_id),
-                "body": "first message on new dm",
-            }
+        await database_sync_to_async(send_message)(
+            api_client,
+            token=peer_token,
+            establishment_id=establishment.id,
+            conversation_id=conversation_id,
+            body="first message on new dm",
+            client_message_id=client_message_id,
         )
-
         peer_event = await peer_comm.receive_json_from()
         connected_event = await connected_comm.receive_json_from()
-
-        assert peer_event["type"] == "message.created"
-        assert connected_event["type"] == "message.created"
-        assert connected_event["message"]["body"] == "first message on new dm"
-
         await connected_comm.disconnect()
         await peer_comm.disconnect()
         return peer_event, connected_event
@@ -135,156 +169,7 @@ def test_ws_delivers_first_message_for_new_dm_without_reconnect(api_client):
     assert connected_event["message"]["body"] == "first message on new dm"
 
 
-def test_ws_message_send_rejects_non_participant(api_client):
-    establishment = create_establishment()
-    first = create_user(username="chat_ws_participant_a")
-    second = create_user(username="chat_ws_participant_b")
-    outsider = create_user(username="chat_ws_outsider")
-    create_membership(user=first, establishment=establishment)
-    second_membership = create_membership(user=second, establishment=establishment)
-    create_membership(user=outsider, establishment=establishment)
-    token = login(api_client, user=first)
-
-    dm_response = create_dm(
-        api_client,
-        token=token,
-        establishment_id=establishment.id,
-        target_membership_id=second_membership.id,
-    )
-    conversation_id = dm_response.json()["conversation"]["id"]
-    client_message_id = uuid.uuid4()
-
-    outsider_ticket = get_ws_ticket(api_client, user=outsider, establishment=establishment)
-
-    async def run():
-        outsider_comm = await _connect_authenticated(
-            ticket=outsider_ticket,
-            establishment=establishment,
-        )
-        await outsider_comm.send_json_to(
-            {
-                "type": "message.send",
-                "conversation_id": conversation_id,
-                "client_message_id": str(client_message_id),
-                "body": "should fail",
-            }
-        )
-        response = await outsider_comm.receive_json_from()
-        await outsider_comm.disconnect()
-        return response
-
-    response = async_to_sync(run)()
-    close_old_connections()
-
-    assert response["type"] == "message.rejected"
-    assert response["code"] == "permission_denied"
-    assert ChatMessage.objects.filter(conversation_id=conversation_id).count() == 0
-
-
-def test_ws_message_send_rejects_empty_body(api_client):
-    establishment = create_establishment()
-    sender = create_user(username="chat_ws_empty_body")
-    receiver = create_user(username="chat_ws_empty_body_peer")
-    create_membership(user=sender, establishment=establishment)
-    receiver_membership = create_membership(user=receiver, establishment=establishment)
-    token = login(api_client, user=sender)
-
-    dm_response = create_dm(
-        api_client,
-        token=token,
-        establishment_id=establishment.id,
-        target_membership_id=receiver_membership.id,
-    )
-    conversation_id = dm_response.json()["conversation"]["id"]
-    client_message_id = uuid.uuid4()
-
-    sender_ticket = get_ws_ticket(api_client, user=sender, establishment=establishment)
-
-    async def run():
-        sender_comm = await _connect_authenticated(
-            ticket=sender_ticket,
-            establishment=establishment,
-        )
-        await sender_comm.send_json_to(
-            {
-                "type": "message.send",
-                "conversation_id": conversation_id,
-                "client_message_id": str(client_message_id),
-                "body": "   ",
-            }
-        )
-        response = await sender_comm.receive_json_from()
-        await sender_comm.disconnect()
-        return response
-
-    response = async_to_sync(run)()
-    close_old_connections()
-
-    assert response["type"] == "message.rejected"
-    assert response["code"] == "validation_error"
-    assert ChatMessage.objects.filter(conversation_id=conversation_id).count() == 0
-
-
-def test_ws_message_send_is_idempotent_for_client_message_id(api_client):
-    establishment = create_establishment()
-    sender = create_user(username="chat_ws_idempotent")
-    receiver = create_user(username="chat_ws_idempotent_peer")
-    create_membership(user=sender, establishment=establishment)
-    receiver_membership = create_membership(user=receiver, establishment=establishment)
-    token = login(api_client, user=sender)
-
-    dm_response = create_dm(
-        api_client,
-        token=token,
-        establishment_id=establishment.id,
-        target_membership_id=receiver_membership.id,
-    )
-    conversation_id = dm_response.json()["conversation"]["id"]
-    client_message_id = uuid.uuid4()
-
-    sender_ticket = get_ws_ticket(api_client, user=sender, establishment=establishment)
-    receiver_ticket = get_ws_ticket(api_client, user=receiver, establishment=establishment)
-
-    async def run():
-        sender_comm = await _connect_authenticated(
-            ticket=sender_ticket,
-            establishment=establishment,
-        )
-        receiver_comm = await _connect_authenticated(
-            ticket=receiver_ticket,
-            establishment=establishment,
-        )
-
-        payload = {
-            "type": "message.send",
-            "conversation_id": conversation_id,
-            "client_message_id": str(client_message_id),
-            "body": "once",
-        }
-        await sender_comm.send_json_to(payload)
-        first_sender_event = await sender_comm.receive_json_from()
-        first_receiver_event = await receiver_comm.receive_json_from()
-        assert first_sender_event["type"] == "message.created"
-        assert first_receiver_event["type"] == "message.created"
-
-        await sender_comm.send_json_to(payload)
-        retry_event = await sender_comm.receive_json_from()
-
-        await sender_comm.disconnect()
-        await receiver_comm.disconnect()
-        return first_sender_event, first_receiver_event, retry_event
-
-    first_sender_event, first_receiver_event, retry_event = async_to_sync(run)()
-    close_old_connections()
-
-    assert first_sender_event["type"] == "message.created"
-    assert first_receiver_event["type"] == "message.created"
-    assert retry_event["type"] == "message.created"
-    assert retry_event["message"]["id"] == first_sender_event["message"]["id"]
-    assert ChatMessage.objects.filter(conversation_id=conversation_id).count() == 1
-
-
-def test_ws_message_send_does_not_leak_across_conversations(api_client):
+def test_http_send_does_not_leak_across_conversations(api_client):
     establishment = create_establishment()
     hub = create_user(username="chat_ws_hub")
     peer_a = create_user(username="chat_ws_peer_a")
@@ -312,26 +197,26 @@ def test_ws_message_send_does_not_leak_across_conversations(api_client):
             ticket=peer_a_ticket,
             establishment=establishment,
         )
-
-        await hub_comm.send_json_to(
-            {
-                "type": "message.send",
-                "conversation_id": conversation_b,
-                "client_message_id": str(client_message_id),
-                "body": "for peer b only",
-            }
+        await database_sync_to_async(send_message)(
+            api_client,
+            token=hub_token,
+            establishment_id=establishment.id,
+            conversation_id=conversation_b,
+            body="for peer b only",
+            client_message_id=client_message_id,
         )
         await hub_comm.receive_json_from()
-
         leaked = False
         try:
             await peer_a_comm.receive_json_from(timeout=0.2)
             leaked = True
         except TimeoutError:
             leaked = False
-
             await hub_comm.disconnect()
             return leaked
+        await hub_comm.disconnect()
+        await peer_a_comm.disconnect()
+        return leaked
 
     leaked = async_to_sync(run)()
     assert leaked is False

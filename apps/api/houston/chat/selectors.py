@@ -201,6 +201,7 @@ def get_latest_messages_by_conversation_ids(
         latest_messages = (
             ChatMessage.objects.filter(conversation_id__in=conversation_ids)
             .select_related("author_membership", "author_membership__user")
+            .prefetch_related("mentions__membership__user")
             .order_by("conversation_id", "-created_at", "-id")
             .distinct("conversation_id")
         )
@@ -217,6 +218,7 @@ def get_latest_messages_by_conversation_ids(
     latest_messages = (
         ChatMessage.objects.filter(visibility_q)
         .select_related("author_membership", "author_membership__user")
+        .prefetch_related("mentions__membership__user")
         .order_by("conversation_id", "-created_at", "-id")
         .distinct("conversation_id")
     )
@@ -231,9 +233,13 @@ def list_messages_for_conversation(
     before_id: uuid.UUID | None = None,
     history_cutoff_at: datetime | None = None,
 ) -> list[ChatMessage]:
-    queryset = ChatMessage.objects.filter(conversation_id=conversation_id).select_related(
-        "author_membership",
-        "author_membership__user",
+    queryset = (
+        ChatMessage.objects.filter(conversation_id=conversation_id)
+        .select_related(
+            "author_membership",
+            "author_membership__user",
+        )
+        .prefetch_related("mentions__membership__user")
     )
     if history_cutoff_at is not None:
         queryset = queryset.filter(created_at__gt=history_cutoff_at)

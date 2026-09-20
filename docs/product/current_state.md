@@ -75,7 +75,7 @@ Lot 1 conversation actions (pin/unpin, hide DM with personal history cutoff, lea
 
 Lot 2 group member admin UI (add/remove/promote via detail « Gérer les membres »): live — see [`domains/chat_domain.md`](domains/chat_domain.md).
 
-Post-core gaps (non-blocking pilot): some bootstrap hints, no REST message write.
+Post-core gaps (non-blocking pilot): some bootstrap hints. Chat send is HTTP.
 
 ## Frontend
 

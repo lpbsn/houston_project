@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 
 from django.conf import settings
@@ -20,6 +21,8 @@ from houston.chat.api.serializers import (
     ChatCreateGroupRequestSerializer,
     ChatEligibleMembershipsResponseSerializer,
     ChatMessageListResponseSerializer,
+    ChatSendMessageRequestSerializer,
+    ChatSendMessageResponseSerializer,
     ChatRenameGroupRequestSerializer,
     ChatSettingsPatchRequestSerializer,
     ChatStatusSerializer,
@@ -28,6 +31,7 @@ from houston.chat.api.serializers import (
     serialize_conversation_detail,
     serialize_membership_summary,
     serialize_message,
+    serialize_messages,
     serialize_participant_summary,
 )
 from houston.chat.constants import CHAT_ELIGIBLE_MEMBERSHIPS_QUERY_MAX_LENGTH
@@ -49,10 +53,12 @@ from houston.chat.selectors import (
     list_conversations_for_membership,
     list_messages_for_conversation,
 )
+from houston.chat.rate_limits import ChatMessageRateLimitExceeded, check_message_send_rate_limit
 from houston.chat.services import (
     add_group_participant,
     build_chat_status,
     create_group_conversation,
+    create_message,
     create_or_get_dm_conversation,
     delete_group_conversation,
     hide_dm_conversation,
@@ -72,6 +78,8 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_MESSAGE_PAGE_SIZE = 50
 MAX_MESSAGE_PAGE_SIZE = 100
@@ -196,6 +204,7 @@ def _serialize_conversation_list_item(
     conversation: ChatConversation,
     viewer_membership_id: uuid.UUID,
     latest_message=None,
+    latest_message_preview=None,
     unread_count: int = 0,
 ) -> dict:
     active_participants = []
@@ -223,7 +232,11 @@ def _serialize_conversation_list_item(
         "unread": unread_count > 0,
         "unread_count": unread_count,
         "last_message_at": latest_message.created_at if latest_message else None,
-        "last_message_preview": serialize_message(latest_message) if latest_message else None,
+        "last_message_preview": (
+            latest_message_preview
+            if latest_message_preview is not None
+            else (serialize_message(latest_message) if latest_message else None)
+        ),
         "participants": [serialize_participant_summary(item) for item in active_participants],
         "pinned": pinned,
         "can_delete": can_delete,
@@ -333,11 +346,20 @@ class ChatConversationListView(EstablishmentScopedChatMixin, APIView):
             membership_id=membership.id,
             conversation_ids=[conversation.id for conversation in conversations],
         )
+        serialized_latest = {
+            message.conversation_id: serialized
+            for message, serialized in zip(
+                latest_messages_by_conversation_id.values(),
+                serialize_messages(list(latest_messages_by_conversation_id.values())),
+                strict=True,
+            )
+        }
         items = [
             _serialize_conversation_list_item(
                 conversation=conversation,
                 viewer_membership_id=membership.id,
                 latest_message=latest_messages_by_conversation_id.get(conversation.id),
+                latest_message_preview=serialized_latest.get(conversation.id),
                 unread_count=unread_counts_by_conversation_id.get(conversation.id, 0),
             )
             for conversation in conversations
@@ -653,10 +675,128 @@ class ChatConversationMessagesView(EstablishmentScopedChatMixin, APIView):
         return Response(
             ChatMessageListResponseSerializer(
                 {
-                    "items": [serialize_message(message) for message in page],
+                    "items": serialize_messages(page),
                     "has_more": has_more,
                 }
             ).data
+        )
+
+    @extend_schema(
+        tags=["chat"],
+        request=ChatSendMessageRequestSerializer,
+        responses={
+            200: ChatSendMessageResponseSerializer,
+            201: ChatSendMessageResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+            429: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def post(self, request, establishment_id, conversation_id):
+        membership = _resolve_membership(request, self.establishment_id)
+        if isinstance(membership, Response):
+            logger.warning(
+                "chat_message_send_denied",
+                extra={
+                    "event": "chat_message_send_denied",
+                    "establishment_id": str(self.establishment_id),
+                    "conversation_id": str(conversation_id),
+                    "status": 404,
+                },
+            )
+            return membership
+
+        body = ChatSendMessageRequestSerializer(data=request.data)
+        if not body.is_valid():
+            logger.warning(
+                "chat_message_send_failed",
+                extra={
+                    "event": "chat_message_send_failed",
+                    "establishment_id": str(self.establishment_id),
+                    "conversation_id": str(conversation_id),
+                    "membership_id": str(membership.id),
+                    "status": 400,
+                    "code": "validation_error",
+                },
+            )
+            return Response(body.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            check_message_send_rate_limit(
+                establishment_id=self.establishment_id,
+                membership_id=membership.id,
+            )
+            result = create_message(
+                author_membership=membership,
+                establishment_id=self.establishment_id,
+                conversation_id=uuid.UUID(str(conversation_id)),
+                client_message_id=body.validated_data["client_message_id"],
+                body=body.validated_data.get("body", ""),
+                reply_to_id=body.validated_data.get("reply_to_id"),
+                mentions=body.validated_data.get("mentions") or [],
+            )
+        except ChatMessageRateLimitExceeded:
+            logger.warning(
+                "chat_message_send_failed",
+                extra={
+                    "event": "chat_message_send_failed",
+                    "establishment_id": str(self.establishment_id),
+                    "conversation_id": str(conversation_id),
+                    "membership_id": str(membership.id),
+                    "status": 429,
+                    "code": "throttled",
+                },
+            )
+            return Response(
+                {"code": "throttled", "detail": "Message send rate limit exceeded."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        except ChatError as exc:
+            response = _chat_error_response(exc)
+            log_name = (
+                "chat_message_send_denied"
+                if isinstance(exc, ChatPermissionError)
+                else "chat_message_send_failed"
+            )
+            logger.warning(
+                log_name,
+                extra={
+                    "event": log_name,
+                    "establishment_id": str(self.establishment_id),
+                    "conversation_id": str(conversation_id),
+                    "membership_id": str(membership.id),
+                    "status": response.status_code,
+                    "code": exc.code,
+                },
+            )
+            return response
+
+        if result.created:
+            response_status = status.HTTP_201_CREATED
+        else:
+            response_status = status.HTTP_200_OK
+            logger.info(
+                "chat_message_send_deduped",
+                extra={
+                    "event": "chat_message_send_deduped",
+                    "establishment_id": str(self.establishment_id),
+                    "conversation_id": str(conversation_id),
+                    "membership_id": str(membership.id),
+                    "message_id": str(result.message.id),
+                    "message_created": False,
+                },
+            )
+
+        return Response(
+            ChatSendMessageResponseSerializer(
+                {
+                    "message": serialize_message(result.message),
+                    "created": result.created,
+                }
+            ).data,
+            status=response_status,
         )
 
 

@@ -294,7 +294,7 @@ def test_ws_auth_rejects_ticket_after_establishment_switch(api_client):
     async_to_sync(run)()
 
 
-def test_ws_unsupported_type_does_not_revalidate_access(api_client):
+def test_ws_unsupported_type_revalidates_then_errors(api_client):
     establishment = create_establishment()
     user = create_user(username="chat_ws_unknown_type")
     create_membership(user=user, establishment=establishment)
@@ -312,9 +312,10 @@ def test_ws_unsupported_type_does_not_revalidate_access(api_client):
         assert auth_response["type"] == "auth.ok"
 
         with patch("houston.chat.consumers.validate_ws_connection_access") as mock_validate:
+            mock_validate.return_value.ok = True
             await communicator.send_json_to({"type": "not.a.supported.type"})
             response = await communicator.receive_json_from()
-            mock_validate.assert_not_called()
+            mock_validate.assert_called()
 
         assert response["type"] == "error"
         assert response["code"] == "validation_error"

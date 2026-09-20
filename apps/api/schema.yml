@@ -4836,6 +4836,80 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+    post:
+      operationId: v1_establishments_chat_conversations_messages_create
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - chat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatSendMessageRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChatSendMessageRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChatSendMessageRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSendMessageResponse'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSendMessageResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/participants/:
     post:
       operationId: v1_establishments_chat_conversations_participants_create
@@ -11329,6 +11403,16 @@ components:
         created_at:
           type: string
           format: date-time
+        is_reply:
+          type: boolean
+        reply_to:
+          allOf:
+          - $ref: '#/components/schemas/ChatReplyTo'
+          nullable: true
+        mentions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMessageMention'
       required:
       - author_display_name
       - author_membership_id
@@ -11336,6 +11420,9 @@ components:
       - client_message_id
       - created_at
       - id
+      - is_reply
+      - mentions
+      - reply_to
     ChatMessageListResponse:
       type: object
       properties:
@@ -11348,6 +11435,24 @@ components:
       required:
       - has_more
       - items
+    ChatMessageMention:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        start:
+          type: integer
+          minimum: 0
+        end:
+          type: integer
+          minimum: 1
+        display_name:
+          type: string
+      required:
+      - end
+      - membership_id
+      - start
     ChatMessagePreview:
       type: object
       properties:
@@ -11364,6 +11469,16 @@ components:
         created_at:
           type: string
           format: date-time
+        is_reply:
+          type: boolean
+        reply_to:
+          allOf:
+          - $ref: '#/components/schemas/ChatReplyTo'
+          nullable: true
+        mentions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMessageMention'
       required:
       - author_display_name
       - author_membership_id
@@ -11391,6 +11506,53 @@ components:
       - participant_role
       - role
       - user_id
+    ChatReplyTo:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        unavailable:
+          type: boolean
+        author_display_name:
+          type: string
+          nullable: true
+        excerpt:
+          type: string
+          nullable: true
+      required:
+      - id
+      - unavailable
+    ChatSendMessageRequest:
+      type: object
+      properties:
+        client_message_id:
+          type: string
+          format: uuid
+        body:
+          type: string
+          maxLength: 2000
+        reply_to_id:
+          type: string
+          format: uuid
+          nullable: true
+        mentions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMessageMention'
+      required:
+      - body
+      - client_message_id
+    ChatSendMessageResponse:
+      type: object
+      properties:
+        message:
+          $ref: '#/components/schemas/ChatMessage'
+        created:
+          type: boolean
+      required:
+      - created
+      - message
     ChatStatus:
       type: object
       properties:

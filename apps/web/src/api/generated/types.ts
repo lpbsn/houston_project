@@ -1373,7 +1373,7 @@ export interface paths {
         };
         get: operations["v1_establishments_chat_conversations_messages_retrieve"];
         put?: never;
-        post?: never;
+        post: operations["v1_establishments_chat_conversations_messages_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3750,10 +3750,20 @@ export interface components {
             client_message_id: string;
             /** Format: date-time */
             created_at: string;
+            is_reply: boolean;
+            reply_to: components["schemas"]["ChatReplyTo"] | null;
+            mentions: components["schemas"]["ChatMessageMention"][];
         };
         ChatMessageListResponse: {
             items: components["schemas"]["ChatMessage"][];
             has_more: boolean;
+        };
+        ChatMessageMention: {
+            /** Format: uuid */
+            membership_id: string;
+            start: number;
+            end: number;
+            display_name?: string;
         };
         ChatMessagePreview: {
             /** Format: uuid */
@@ -3764,6 +3774,9 @@ export interface components {
             body: string;
             /** Format: date-time */
             created_at: string;
+            is_reply?: boolean;
+            reply_to?: components["schemas"]["ChatReplyTo"] | null;
+            mentions?: components["schemas"]["ChatMessageMention"][];
         };
         ChatParticipantSummary: {
             /** Format: uuid */
@@ -3773,6 +3786,25 @@ export interface components {
             display_name: string;
             role: string;
             participant_role: string;
+        };
+        ChatReplyTo: {
+            /** Format: uuid */
+            id: string;
+            unavailable: boolean;
+            author_display_name?: string | null;
+            excerpt?: string | null;
+        };
+        ChatSendMessageRequest: {
+            /** Format: uuid */
+            client_message_id: string;
+            body: string;
+            /** Format: uuid */
+            reply_to_id?: string | null;
+            mentions?: components["schemas"]["ChatMessageMention"][];
+        };
+        ChatSendMessageResponse: {
+            message: components["schemas"]["ChatMessage"];
+            created: boolean;
         };
         ChatStatus: {
             chat_enabled: boolean;
@@ -9915,6 +9947,82 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_chat_conversations_messages_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatSendMessageRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ChatSendMessageRequest"];
+                "multipart/form-data": components["schemas"]["ChatSendMessageRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSendMessageResponse"];
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSendMessageResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

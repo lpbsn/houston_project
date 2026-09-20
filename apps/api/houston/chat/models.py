@@ -113,17 +113,49 @@ class ChatMessage(BaseModel):
         on_delete=models.PROTECT,
         related_name="chat_messages_authored",
     )
-    body = models.TextField(max_length=CHAT_MESSAGE_BODY_MAX_LENGTH)
+    body = models.TextField(max_length=CHAT_MESSAGE_BODY_MAX_LENGTH, blank=True, default="")
     client_message_id = models.UUIDField()
+    reply_to_id = models.UUIDField(null=True, blank=True)
 
     class Meta:
         ordering = ["created_at", "id"]
         indexes = [
             models.Index(fields=["conversation", "created_at", "id"]),
+            models.Index(fields=["conversation", "reply_to_id"]),
         ]
         constraints = [
             models.UniqueConstraint(
                 fields=["conversation", "author_membership", "client_message_id"],
                 name="uniq_chat_message_client_id",
+            ),
+        ]
+
+
+class ChatMessageMention(BaseModel):
+    message = models.ForeignKey(
+        ChatMessage,
+        on_delete=models.CASCADE,
+        related_name="mentions",
+    )
+    membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.CASCADE,
+        related_name="chat_message_mentions",
+    )
+    start = models.PositiveIntegerField()
+    end = models.PositiveIntegerField()
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["message", "start"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["message", "start"],
+                name="uniq_chat_message_mention_start",
+            ),
+            models.CheckConstraint(
+                condition=Q(start__lt=models.F("end")),
+                name="chat_message_mention_start_lt_end",
             ),
         ]

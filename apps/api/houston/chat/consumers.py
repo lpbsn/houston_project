@@ -8,28 +8,14 @@ from uuid import UUID
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.conf import settings
-from houston.accounts.models import User
-from houston.chat.exceptions import (
-    ChatError,
-    ChatNotFoundError,
-    ChatPermissionError,
-    ChatValidationError,
-)
 from houston.chat.groups import membership_group_name, session_group_name
-from houston.chat.permissions import can_access_chat
-from houston.chat.rate_limits import ChatMessageRateLimitExceeded, check_message_send_rate_limit
 from houston.chat.selectors import get_active_participant
-from houston.chat.services import MessageSendResult, create_message
 from houston.chat.ws_access import WsAccessValidation, validate_ws_connection_access
 from houston.chat.ws_payloads import (
     build_membership_access_revoked_payload,
-    build_message_created_payload,
-    build_message_rejected_payload,
 )
 from houston.chat.ws_ticket import WsTicketError, consume_ws_ticket
 from houston.core.observability import build_ws_auth_failure_log_context
-from houston.establishments.models import Establishment, EstablishmentMembership
-from houston.organizations.models import Organization
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +23,8 @@ WS_CLOSE_AUTH_FAILED = 4001
 WS_CLOSE_FORBIDDEN = 4002
 WS_CLOSE_CHAT_DISABLED = 4003
 WS_CLOSE_TENANT_INVALID = 4004
+WS_CLOSE_PROTOCOL_ERROR = 4400
 WS_CLOSE_AUTH_TIMEOUT = 4408
-
-_CLIENT_APPLICATION_TYPES = frozenset({"message.send"})
 
 
 class ChatConsumer(AsyncWebsocketConsumer):
@@ -103,14 +88,26 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self._handle_auth(payload)
             return
 
-        if message_type not in _CLIENT_APPLICATION_TYPES:
-            await self._send_error(code="validation_error", detail="Unsupported message type.")
-            return
-
         if not await self._ensure_authorized():
             return
 
-        await self._handle_message_send(payload)
+        if message_type == "message.send":
+            logger.warning(
+                "chat_ws_message_send_rejected",
+                extra={
+                    "event": "chat_ws_message_send_rejected",
+                    "establishment_id": str(self.establishment_id),
+                    "membership_id": str(self.membership_id) if self.membership_id else None,
+                },
+            )
+            await self._send_error(
+                code="protocol_error",
+                detail="Message send is HTTP-only. WebSocket is events only.",
+            )
+            await self.close(code=WS_CLOSE_PROTOCOL_ERROR)
+            return
+
+        await self._send_error(code="validation_error", detail="Unsupported message type.")
 
     async def chat_message_created(self, event: dict) -> None:
         await self._deliver_conversation_payload_if_participant(event)
@@ -202,98 +199,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
             )
         )
 
-    async def _handle_message_send(self, payload: dict) -> None:
-        if self.membership_id is None or self.session_id is None:
-            await self.close(code=WS_CLOSE_FORBIDDEN)
-            return
-
-        raw_conversation_id = payload.get("conversation_id")
-        raw_client_message_id = payload.get("client_message_id")
-        body = payload.get("body")
-
-        conversation_id = self._parse_uuid(raw_conversation_id)
-        client_message_id = self._parse_uuid(raw_client_message_id)
-        if conversation_id is None or client_message_id is None:
-            await self._send_message_rejected(
-                client_message_id=client_message_id,
-                code="validation_error",
-                detail="Invalid message.send payload.",
-            )
-            return
-        if not isinstance(body, str):
-            await self._send_message_rejected(
-                client_message_id=client_message_id,
-                code="validation_error",
-                detail="Invalid message.send payload.",
-            )
-            return
-
-        try:
-            result = await self._persist_message(
-                conversation_id=conversation_id,
-                client_message_id=client_message_id,
-                body=body,
-            )
-        except ChatValidationError as exc:
-            code = "throttled" if "rate limit" in exc.message.lower() else exc.code
-            await self._send_message_rejected(
-                client_message_id=client_message_id,
-                code=code,
-                detail=exc.message,
-            )
-            return
-        except ChatPermissionError as exc:
-            await self._send_message_rejected(
-                client_message_id=client_message_id,
-                code=exc.code,
-                detail=exc.message,
-            )
-            return
-        except ChatNotFoundError:
-            await self._send_message_rejected(
-                client_message_id=client_message_id,
-                code="permission_denied",
-                detail="You do not have permission to send messages in this conversation.",
-            )
-            return
-        except ChatError as exc:
-            await self._send_message_rejected(
-                client_message_id=client_message_id,
-                code=exc.code,
-                detail=exc.message,
-            )
-            return
-
-        created_payload = build_message_created_payload(
-            conversation_id=conversation_id,
-            message=result.message,
-        )
-        if result.created:
-            await self._broadcast_message_created(
-                result=result,
-                payload=created_payload,
-            )
-        else:
-            await self.send(text_data=json.dumps(created_payload))
-
-    async def _broadcast_message_created(
-        self,
-        *,
-        result: MessageSendResult,
-        payload: dict,
-    ) -> None:
-        for recipient_membership_id in result.recipient_membership_ids:
-            await self.channel_layer.group_send(
-                membership_group_name(
-                    establishment_id=self.establishment_id,
-                    membership_id=recipient_membership_id,
-                ),
-                {
-                    "type": "chat.message.created",
-                    "payload": payload,
-                },
-            )
-
     async def _ensure_authorized(self) -> bool:
         access = await self._validate_ws_access()
         if access.ok:
@@ -353,49 +258,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
         self.authenticated = False
         await self.close(code=WS_CLOSE_FORBIDDEN)
 
-    @database_sync_to_async
-    def _persist_message(
-        self,
-        *,
-        conversation_id: UUID,
-        client_message_id: UUID,
-        body: str,
-    ) -> MessageSendResult:
-        membership = (
-            EstablishmentMembership.objects.select_related(
-                "user",
-                "establishment",
-                "establishment__organization",
-            )
-            .filter(
-                id=self.membership_id,
-                status=EstablishmentMembership.Status.ACTIVE,
-                user__status=User.Status.ACTIVE,
-                establishment_id=self.establishment_id,
-                establishment__status=Establishment.Status.ACTIVE,
-                establishment__organization__status=Organization.Status.ACTIVE,
-            )
-            .first()
-        )
-        if membership is None or not can_access_chat(membership):
-            raise ChatPermissionError()
-
-        try:
-            check_message_send_rate_limit(
-                establishment_id=self.establishment_id,
-                membership_id=membership.id,
-            )
-        except ChatMessageRateLimitExceeded as exc:
-            raise ChatValidationError("Message send rate limit exceeded.") from exc
-
-        return create_message(
-            author_membership=membership,
-            establishment_id=self.establishment_id,
-            conversation_id=conversation_id,
-            client_message_id=client_message_id,
-            body=body,
-        )
-
     @staticmethod
     def _parse_uuid(raw_value) -> UUID | None:
         if raw_value is None:
@@ -422,23 +284,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
         if reason == "establishment_switched":
             return "establishment_switched"
         return "forbidden"
-
-    async def _send_message_rejected(
-        self,
-        *,
-        client_message_id: UUID | None,
-        code: str,
-        detail: str,
-    ) -> None:
-        await self.send(
-            text_data=json.dumps(
-                build_message_rejected_payload(
-                    client_message_id=client_message_id,
-                    code=code,
-                    detail=detail,
-                )
-            )
-        )
 
     async def _send_error(self, *, code: str, detail: str) -> None:
         await self.send(text_data=json.dumps({"type": "error", "code": code, "detail": detail}))

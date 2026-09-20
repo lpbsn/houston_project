@@ -8,7 +8,7 @@ from django.db.models import Q
 from django.utils import timezone
 from houston.accounts.models import User
 from houston.chat.exceptions import ChatNotFoundError, ChatPermissionError, ChatValidationError
-from houston.chat.models import ChatConversation, ChatMessage, ChatParticipant
+from houston.chat.models import ChatConversation, ChatMessage, ChatMessageMention, ChatParticipant
 from houston.chat.permissions import (
     can_access_chat,
     can_create_dm,
@@ -37,6 +37,7 @@ from .ws_notify import (
     schedule_conversation_access_revoked_for_memberships,
     schedule_conversation_updated,
     schedule_membership_access_revoked,
+    schedule_message_created,
 )
 
 
@@ -813,15 +814,88 @@ def update_establishment_chat_enabled(
     return establishment
 
 
-def normalize_message_body(body: str) -> str:
+def normalize_message_body(body: str, *, required: bool = True) -> str:
     normalized = body.strip()
-    if not normalized:
+    if required and not normalized:
         raise ChatValidationError("Message body is required.")
     if len(normalized) > CHAT_MESSAGE_BODY_MAX_LENGTH:
         raise ChatValidationError(
             f"Message body must be at most {CHAT_MESSAGE_BODY_MAX_LENGTH} characters."
         )
     return normalized
+
+
+def _mention_expected_label(*, membership) -> str:
+    from houston.chat.api.serializers import membership_display_name
+
+    return f"@{membership_display_name(membership)}"
+
+
+def _validate_reply_to(
+    *,
+    conversation_id: uuid.UUID,
+    reply_to_id: uuid.UUID | None,
+) -> uuid.UUID | None:
+    if reply_to_id is None:
+        return None
+    parent = ChatMessage.objects.filter(
+        id=reply_to_id,
+        conversation_id=conversation_id,
+    ).first()
+    if parent is None:
+        raise ChatValidationError("Reply target must exist in the same conversation.")
+    return parent.id
+
+
+def _validate_mentions(
+    *,
+    conversation_id: uuid.UUID,
+    body: str,
+    mentions: list[dict],
+) -> list[dict]:
+    if not mentions:
+        return []
+
+    body_len = len(body)
+    sorted_mentions = sorted(mentions, key=lambda item: (item["start"], item["end"]))
+    previous_end = 0
+    seen_starts: set[int] = set()
+    validated: list[dict] = []
+
+    membership_ids = [item["membership_id"] for item in sorted_mentions]
+    participants = {
+        participant.membership_id: participant.membership
+        for participant in active_participant_queryset(conversation_id=conversation_id).filter(
+            membership_id__in=membership_ids
+        )
+    }
+
+    for item in sorted_mentions:
+        start = int(item["start"])
+        end = int(item["end"])
+        membership_id = item["membership_id"]
+        if start in seen_starts:
+            raise ChatValidationError("Mention offsets must be unique.")
+        if not (0 <= start < end <= body_len):
+            raise ChatValidationError("Mention offsets are out of range.")
+        if start < previous_end:
+            raise ChatValidationError("Mention offsets must not overlap.")
+        membership = participants.get(membership_id)
+        if membership is None:
+            raise ChatValidationError("Mentioned membership must be an active participant.")
+        expected = _mention_expected_label(membership=membership)
+        if body[start:end] != expected:
+            raise ChatValidationError("Mention text must match the participant display name.")
+        seen_starts.add(start)
+        previous_end = end
+        validated.append(
+            {
+                "membership_id": membership_id,
+                "start": start,
+                "end": end,
+            }
+        )
+    return validated
 
 
 def _active_recipient_membership_ids(*, conversation_id: uuid.UUID) -> tuple[uuid.UUID, ...]:
@@ -841,6 +915,8 @@ def create_message(
     conversation_id: uuid.UUID,
     client_message_id: uuid.UUID,
     body: str,
+    reply_to_id: uuid.UUID | None = None,
+    mentions: list[dict] | None = None,
 ) -> MessageSendResult:
     if not can_access_chat(author_membership):
         raise ChatPermissionError()
@@ -885,11 +961,21 @@ def create_message(
             except MembershipBlockedError:
                 raise ChatPermissionError(MEMBERSHIP_BLOCKED_DETAIL, code="membership_blocked")
 
-    normalized_body = normalize_message_body(body)
+    normalized_body = normalize_message_body(body, required=True)
+    validated_reply_to_id = _validate_reply_to(
+        conversation_id=conversation.id,
+        reply_to_id=reply_to_id,
+    )
+    validated_mentions = _validate_mentions(
+        conversation_id=conversation.id,
+        body=normalized_body,
+        mentions=list(mentions or []),
+    )
     recipient_membership_ids = _active_recipient_membership_ids(conversation_id=conversation.id)
 
     existing = (
         ChatMessage.objects.select_related("author_membership", "author_membership__user")
+        .prefetch_related("mentions__membership__user")
         .filter(
             conversation_id=conversation.id,
             author_membership_id=author_membership.id,
@@ -909,7 +995,20 @@ def create_message(
         author_membership=author_membership,
         body=normalized_body,
         client_message_id=client_message_id,
+        reply_to_id=validated_reply_to_id,
     )
+    if validated_mentions:
+        ChatMessageMention.objects.bulk_create(
+            [
+                ChatMessageMention(
+                    message=message,
+                    membership_id=item["membership_id"],
+                    start=item["start"],
+                    end=item["end"],
+                )
+                for item in validated_mentions
+            ]
+        )
     conversation.last_message_at = message.created_at
     conversation.save(update_fields=["last_message_at", "updated_at"])
     ChatParticipant.objects.filter(
@@ -923,6 +1022,12 @@ def create_message(
     schedule_chat_message_received_notification(
         message_id=message.id,
         actor_membership_id=author_membership.id,
+    )
+    schedule_message_created(
+        establishment_id=establishment_id,
+        conversation_id=conversation.id,
+        message_id=message.id,
+        recipient_membership_ids=list(recipient_membership_ids),
     )
     return MessageSendResult(
         message=message,

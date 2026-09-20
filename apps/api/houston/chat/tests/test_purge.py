@@ -41,7 +41,7 @@ def test_purge_deletes_messages_older_than_retention_window(api_client):
         body="recent",
         client_message_id=uuid.uuid4(),
     )
-    old_created_at = timezone.now() - timedelta(days=8)
+    old_created_at = timezone.now() - timedelta(days=31)
     recent_created_at = timezone.now() - timedelta(days=2)
     ChatMessage.objects.filter(id=old_message.id).update(created_at=old_created_at)
     ChatMessage.objects.filter(id=recent_message.id).update(created_at=recent_created_at)
@@ -104,7 +104,7 @@ def test_purge_can_be_scoped_to_establishment():
         body="b",
         client_message_id=uuid.uuid4(),
     )
-    old_created_at = timezone.now() - timedelta(days=8)
+    old_created_at = timezone.now() - timedelta(days=31)
     ChatMessage.objects.filter(id=message_a.id).update(created_at=old_created_at)
     ChatMessage.objects.filter(id=message_b.id).update(created_at=old_created_at)
 
@@ -134,9 +134,39 @@ def test_purge_chat_messages_task_deletes_old_messages():
         body="old",
         client_message_id=uuid.uuid4(),
     )
-    old_created_at = timezone.now() - timedelta(days=8)
+    old_created_at = timezone.now() - timedelta(days=31)
     ChatMessage.objects.filter(id=old_message.id).update(created_at=old_created_at)
 
     deleted_count = purge_chat_messages_task.run()
     assert deleted_count == 1
+    assert not ChatMessage.objects.filter(id=old_message.id).exists()
+
+
+@pytest.mark.django_db
+def test_purge_respects_retention_setting(settings):
+    settings.HOUSTON_CHAT_MESSAGE_RETENTION_DAYS = 7
+    establishment = create_establishment()
+    sender = create_user(username="chat_purge_setting_sender")
+    receiver = create_user(username="chat_purge_setting_receiver")
+    sender_membership = create_membership(user=sender, establishment=establishment)
+    receiver_membership = create_membership(user=receiver, establishment=establishment)
+    conversation = ChatConversation.objects.create(
+        establishment=establishment,
+        type=ChatConversation.Type.DM,
+        created_by_membership=sender_membership,
+        dm_membership_a=sender_membership,
+        dm_membership_b=receiver_membership,
+    )
+    old_message = ChatMessage.objects.create(
+        conversation=conversation,
+        author_membership=sender_membership,
+        body="old",
+        client_message_id=uuid.uuid4(),
+    )
+    ChatMessage.objects.filter(id=old_message.id).update(
+        created_at=timezone.now() - timedelta(days=8)
+    )
+
+    result = purge_chat_messages(dry_run=False)
+    assert result.deleted_count == 1
     assert not ChatMessage.objects.filter(id=old_message.id).exists()

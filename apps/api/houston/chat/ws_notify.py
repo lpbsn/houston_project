@@ -6,10 +6,12 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.db import transaction
 from houston.chat.groups import membership_group_name, session_group_name
+from houston.chat.models import ChatMessage
 from houston.chat.ws_payloads import (
     build_conversation_access_revoked_payload,
     build_conversation_updated_payload,
     build_membership_access_revoked_payload,
+    build_message_created_payload,
 )
 
 
@@ -204,6 +206,65 @@ def notify_conversation_updated_for_memberships(
             membership_id=membership_id,
             conversation_id=conversation_id,
         )
+
+
+def notify_message_created(
+    *,
+    establishment_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    message: ChatMessage,
+    recipient_membership_ids: list[uuid.UUID],
+) -> None:
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        return
+
+    payload = build_message_created_payload(
+        conversation_id=conversation_id,
+        message=message,
+    )
+    for membership_id in recipient_membership_ids:
+        async_to_sync(channel_layer.group_send)(
+            membership_group_name(
+                establishment_id=establishment_id,
+                membership_id=membership_id,
+            ),
+            {
+                "type": "chat.message.created",
+                "payload": payload,
+            },
+        )
+
+
+def schedule_message_created(
+    *,
+    establishment_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    message_id: uuid.UUID,
+    recipient_membership_ids: list[uuid.UUID],
+) -> None:
+    captured_membership_ids = list(recipient_membership_ids)
+
+    def _notify() -> None:
+        message = (
+            ChatMessage.objects.select_related(
+                "author_membership",
+                "author_membership__user",
+            )
+            .prefetch_related("mentions__membership__user")
+            .filter(id=message_id)
+            .first()
+        )
+        if message is None:
+            return
+        notify_message_created(
+            establishment_id=establishment_id,
+            conversation_id=conversation_id,
+            message=message,
+            recipient_membership_ids=captured_membership_ids,
+        )
+
+    transaction.on_commit(_notify)
 
 
 def schedule_conversation_updated(
