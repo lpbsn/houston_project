@@ -172,10 +172,22 @@ def test_start_platform_onboarding_blank_name_is_400():
             "onboarding_draft_invalid",
             400,
         ),
-        (InvalidDirectorInvitationInputError("A valid email is required."), "membership_invitation_invalid", 400),
-        (InvalidMembershipInvitationInputError("A valid email is required."), "membership_invitation_invalid", 400),
+        (
+            InvalidDirectorInvitationInputError("A valid email is required."),
+            "membership_invitation_invalid",
+            400,
+        ),
+        (
+            InvalidMembershipInvitationInputError("A valid email is required."),
+            "membership_invitation_invalid",
+            400,
+        ),
         (InvalidMembershipScopeAssignmentError(), "membership_invitation_invalid", 400),
-        (DomainValidationError("bad name", code="invalid_normalized_name"), "invalid_normalized_name", 400),
+        (
+            DomainValidationError("bad name", code="invalid_normalized_name"),
+            "invalid_normalized_name",
+            400,
+        ),
         (
             DomainValidationError("mismatch", code="catalog_subject_business_unit_mismatch"),
             "catalog_subject_business_unit_mismatch",
@@ -183,7 +195,11 @@ def test_start_platform_onboarding_blank_name_is_400():
         ),
         (DomainValidationError("fallback"), "validation_error", 400),
         (OnboardingDraftNotFoundError(), "draft_not_found", 404),
-        (DomainNotFoundError("gone", code="business_unit_not_found"), "business_unit_not_found", 404),
+        (
+            DomainNotFoundError("gone", code="business_unit_not_found"),
+            "business_unit_not_found",
+            404,
+        ),
         (
             DomainNotFoundError("gone catalog", code="catalog_business_unit_not_found"),
             "catalog_business_unit_not_found",
@@ -191,7 +207,13 @@ def test_start_platform_onboarding_blank_name_is_400():
         ),
         (OnboardingSessionTerminalError(), "invalid_onboarding_state", 409),
         (InvalidOnboardingActivationStateError("not draft"), "invalid_onboarding_state", 409),
-        (OnboardingReadinessError({"blockers": [{"code": "missing_active_owner_or_director"}]}), "activation_not_ready", 409),
+        (
+            OnboardingReadinessError(
+                {"blockers": [{"code": "missing_active_owner_or_director"}]}
+            ),
+            "activation_not_ready",
+            409,
+        ),
         (EstablishmentAlreadyActiveError(), "establishment_already_active", 409),
         (OnboardingRuntimeAlreadyMaterializedError(), "runtime_already_materialized", 409),
         (DirectorInvitationAlreadyExistsError(), "director_invitation_already_exists", 409),
@@ -199,20 +221,36 @@ def test_start_platform_onboarding_blank_name_is_400():
         (MembershipInvitationUserExistsError(), "membership_invitation_user_exists", 409),
         (DirectorInvitationOwnerNotAllowedError(), "director_invitation_owner_not_allowed", 409),
         (MembershipInvitationOwnerConflictError(), "membership_invitation_owner_conflict", 409),
-        (OrganizationalOwnerInvariantConflictError(), "organizational_owner_invariant_conflict", 409),
-        (DomainConflictError("inactive", code="catalog_business_unit_inactive"), "catalog_business_unit_inactive", 409),
+        (
+            OrganizationalOwnerInvariantConflictError(),
+            "organizational_owner_invariant_conflict",
+            409,
+        ),
+        (
+            DomainConflictError("inactive", code="catalog_business_unit_inactive"),
+            "catalog_business_unit_inactive",
+            409,
+        ),
         (
             DomainConflictError("inactive subject", code="catalog_activity_subject_inactive"),
             "catalog_activity_subject_inactive",
             409,
         ),
-        (DomainConflictError("dup", code="duplicate_specific_name"), "duplicate_specific_name", 409),
+        (
+            DomainConflictError("dup", code="duplicate_specific_name"),
+            "duplicate_specific_name",
+            409,
+        ),
         (
             DomainConflictError("dup t", code="duplicate_transversal_catalog_instance"),
             "duplicate_transversal_catalog_instance",
             409,
         ),
-        (DomainConflictError("id", code="business_unit_identity_conflict"), "business_unit_identity_conflict", 409),
+        (
+            DomainConflictError("id", code="business_unit_identity_conflict"),
+            "business_unit_identity_conflict",
+            409,
+        ),
         (
             DomainConflictError("n", code="duplicate_activity_subject_normalized_name"),
             "duplicate_activity_subject_normalized_name",
@@ -277,7 +315,11 @@ def test_http_complete_missing_draft_is_404(api_client):
     )
     assert response.status_code == 404
     assert response.json()["code"] == "draft_not_found"
-    _assert_denied_event(action="complete_onboarding", resource_id=session_id, code="draft_not_found")
+    _assert_denied_event(
+        action="complete_onboarding",
+        resource_id=session_id,
+        code="draft_not_found",
+    )
 
 
 def test_http_complete_establishment_already_active_is_409(api_client):
