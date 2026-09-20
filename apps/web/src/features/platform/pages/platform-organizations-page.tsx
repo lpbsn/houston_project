@@ -165,7 +165,9 @@ function PlatformOrganizationDetailPage({ organizationId }: { organizationId: st
           try {
             await deleteMutation.mutateAsync(justification)
           } catch (caught) {
-            throw new Error(getCompleteErrorMessage(caught, 'Suppression refusée.'))
+            throw new Error(getCompleteErrorMessage(caught, 'Suppression refusée.'), {
+              cause: caught,
+            })
           }
         }}
       />

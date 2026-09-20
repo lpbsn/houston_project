@@ -57,7 +57,7 @@ export function PlatformOnboardingsPage() {
           </Button>
         }
       />
-      <NewOnboardingDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      {createOpen ? <NewOnboardingDialog onClose={() => setCreateOpen(false)} /> : null}
       <PlatformListToolbar
         q={q}
         onQueryChange={(value) => replaceParams({ q: value })}
@@ -105,7 +105,7 @@ export function PlatformOnboardingsPage() {
   )
 }
 
-function NewOnboardingDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+function NewOnboardingDialog({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient()
   const { navigate } = usePlatformListSearch('/platform/onboardings')
   const [organizationName, setOrganizationName] = useState('')
@@ -123,17 +123,9 @@ function NewOnboardingDialog({ open, onClose }: { open: boolean; onClose: () => 
     },
   })
 
-  useEffect(() => {
-    if (open) {
-      setOrganizationName('')
-      setEstablishmentName('')
-      setFormError(null)
-    }
-  }, [open])
-
   return (
     <PlatformDialog
-      open={open}
+      open
       title="Nouvel onboarding"
       closeDisabled={startMutation.isPending}
       onClose={() => {
