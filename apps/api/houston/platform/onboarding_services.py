@@ -28,7 +28,7 @@ from houston.establishments.services import (
     create_establishment_for_organization,
     get_onboarding_draft,
     invite_director_during_onboarding_core,
-    invite_organizational_owner_core,
+    invite_organizational_owner_during_onboarding_core,
     serialize_onboarding_draft,
     start_onboarding_session,
     upsert_onboarding_draft_core,
@@ -180,8 +180,8 @@ def invite_platform_owner(
 ):
     def mutate():
         try:
-            return invite_organizational_owner_core(
-                establishment=session.establishment,
+            return invite_organizational_owner_during_onboarding_core(
+                session=session,
                 email=email,
                 first_name=first_name,
                 last_name=last_name,

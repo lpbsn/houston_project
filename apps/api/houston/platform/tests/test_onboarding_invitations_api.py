@@ -196,6 +196,69 @@ def test_http_director_invite_and_complete_from_draft(api_client):
     assert EstablishmentMembership.objects.filter(user=operator).count() == 0
 
 
+def test_http_owner_invite_after_activation_is_409(api_client):
+    sync_catalog_from_normalized_rows()
+    operator = create_user(username="plat_owner_after_activation_op")
+    grant_operator(operator)
+    token = login(api_client, user=operator)
+    body = _start_onboarding(api_client, token)
+    session_id = body["id"]
+    session = OnboardingSession.objects.get(pk=session_id)
+    director_email = f"director_{uuid.uuid4().hex[:8]}@example.com"
+
+    upsert_onboarding_draft_core(
+        session=session,
+        actor=operator,
+        payload=_valid_payload(
+            establishment_name=session.establishment.name,
+            director_email=director_email,
+        ),
+    )
+    initial_owner_invite = api_client.post(
+        f"/api/v1/platform/onboardings/{session_id}/owner-invitations/",
+        {
+            "email": f"owner_{uuid.uuid4().hex[:8]}@example.com",
+            "first_name": "Initial",
+            "last_name": "Owner",
+        },
+        format="json",
+        **auth_headers(token),
+    )
+    assert initial_owner_invite.status_code == 201
+    _activate_owner_membership(
+        EstablishmentMembership.objects.get(pk=initial_owner_invite.json()["membership_id"])
+    )
+
+    complete = api_client.post(
+        f"/api/v1/platform/onboardings/{session_id}/complete/",
+        **auth_headers(token),
+    )
+    assert complete.status_code == 200
+
+    owner_count = EstablishmentMembership.objects.filter(
+        establishment_id=session.establishment_id,
+        role=EstablishmentMembership.Role.OWNER,
+    ).count()
+    new_owner_email = f"owner_{uuid.uuid4().hex[:8]}@example.com"
+    invited = api_client.post(
+        f"/api/v1/platform/onboardings/{session_id}/owner-invitations/",
+        {"email": new_owner_email, "first_name": "New", "last_name": "Owner"},
+        format="json",
+        **auth_headers(token),
+    )
+
+    assert invited.status_code == 409
+    assert invited.json()["code"] == "invalid_onboarding_state"
+    assert not User.objects.filter(email__iexact=new_owner_email).exists()
+    assert (
+        EstablishmentMembership.objects.filter(
+            establishment_id=session.establishment_id,
+            role=EstablishmentMembership.Role.OWNER,
+        ).count()
+        == owner_count
+    )
+
+
 def test_complete_invites_director_from_draft(api_client):
     sync_catalog_from_normalized_rows()
     operator = create_user(username="plat_complete_dir_op")

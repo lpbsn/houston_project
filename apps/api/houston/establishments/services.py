@@ -2221,6 +2221,30 @@ def invite_organizational_owner_core(
     )
 
 
+@transaction.atomic
+def invite_organizational_owner_during_onboarding_core(
+    *,
+    session: OnboardingSession,
+    email: str,
+    first_name: str,
+    last_name: str,
+) -> DirectorInvitationResult:
+    session = _lock_onboarding_session(session)
+    _ensure_non_terminal_onboarding_session(session)
+
+    if session.establishment.status != Establishment.Status.DRAFT:
+        raise InvalidOnboardingActivationStateError(
+            "Owner invitations are only allowed for draft establishments."
+        )
+
+    return invite_organizational_owner_core(
+        establishment=session.establishment,
+        email=email,
+        first_name=first_name,
+        last_name=last_name,
+    )
+
+
 def _invite_organizational_owner(
     *,
     current_membership: EstablishmentMembership | None,
