@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 
 from asgiref.sync import async_to_sync
@@ -13,6 +14,8 @@ from houston.chat.ws_payloads import (
     build_membership_access_revoked_payload,
     build_message_created_payload,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _send_access_revoked_to_group(
@@ -246,24 +249,34 @@ def schedule_message_created(
     captured_membership_ids = list(recipient_membership_ids)
 
     def _notify() -> None:
-        message = (
-            ChatMessage.objects.select_related(
-                "author_membership",
-                "author_membership__user",
-                "conversation",
+        try:
+            message = (
+                ChatMessage.objects.select_related(
+                    "author_membership",
+                    "author_membership__user",
+                    "conversation",
+                )
+                .prefetch_related("mentions__membership__user", "attachments__upload")
+                .filter(id=message_id)
+                .first()
             )
-            .prefetch_related("mentions__membership__user", "attachments__upload")
-            .filter(id=message_id)
-            .first()
-        )
-        if message is None:
-            return
-        notify_message_created(
-            establishment_id=establishment_id,
-            conversation_id=conversation_id,
-            message=message,
-            recipient_membership_ids=captured_membership_ids,
-        )
+            if message is None:
+                return
+            notify_message_created(
+                establishment_id=establishment_id,
+                conversation_id=conversation_id,
+                message=message,
+                recipient_membership_ids=captured_membership_ids,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to fan out chat message.created after business commit",
+                extra={
+                    "event": "chat_message_created_notify_failed",
+                    "message_id": str(message_id),
+                    "conversation_id": str(conversation_id),
+                },
+            )
 
     transaction.on_commit(_notify)
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import uuid
 from datetime import timedelta
 from unittest.mock import patch
@@ -8,9 +9,11 @@ from unittest.mock import patch
 import pytest
 from django.utils import timezone
 from houston.chat.models import ChatMessage, ChatMessageAttachment, ChatUpload
+from houston.chat.services import create_message
 from houston.chat.tests.conftest import create_establishment, create_membership, create_user, login
 from houston.chat.tests.helpers import chat_url, create_dm, send_message
 from houston.chat.upload_services import generate_chat_upload_thumbnail
+from houston.chat.ws_payloads import build_message_created_payload
 from PIL import Image
 
 pytestmark = pytest.mark.django_db
@@ -406,3 +409,99 @@ def test_send_accepts_missing_body_with_attachment(api_client, settings, tmp_pat
     )
     assert response.status_code == 201
     assert response.json()["message"]["body"] == ""
+
+
+@pytest.mark.django_db(transaction=True)
+def test_attachment_send_is_json_safe_and_idempotent_on_retry(api_client, settings, tmp_path):
+    settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "filesystem"
+    settings.HOUSTON_CHAT_PRIVATE_MEDIA_ROOT = str(tmp_path)
+    establishment, _s, _r, sender_membership, _rm, token, conversation_id = _setup(api_client)
+    payload = _pdf_bytes()
+    reserved = _reserve(
+        api_client,
+        token=token,
+        establishment_id=establishment.id,
+        conversation_id=conversation_id,
+        filename="note.pdf",
+        content_type="application/pdf",
+        size_bytes=len(payload),
+    )
+    upload_id = reserved.json()["upload_id"]
+    _put_and_complete(
+        api_client,
+        token=token,
+        establishment_id=establishment.id,
+        upload_id=upload_id,
+        payload=payload,
+    )
+    client_message_id = uuid.uuid4()
+
+    first = api_client.post(
+        chat_url(establishment.id, f"conversations/{conversation_id}/messages/"),
+        {
+            "client_message_id": str(client_message_id),
+            "body": "",
+            "attachment_ids": [upload_id],
+        },
+        format="json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert first.status_code == 201
+    assert first.json()["created"] is True
+    message_id = first.json()["message"]["id"]
+
+    message = (
+        ChatMessage.objects.select_related(
+            "author_membership",
+            "author_membership__user",
+            "conversation",
+        )
+        .prefetch_related("attachments__upload")
+        .get(id=message_id)
+    )
+    json.dumps(build_message_created_payload(conversation_id=conversation_id, message=message))
+
+    retry = api_client.post(
+        chat_url(establishment.id, f"conversations/{conversation_id}/messages/"),
+        {
+            "client_message_id": str(client_message_id),
+            "body": "",
+            "attachment_ids": [upload_id],
+        },
+        format="json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert retry.status_code == 200
+    assert retry.json()["created"] is False
+    assert retry.json()["message"]["id"] == message_id
+    assert ChatMessage.objects.filter(conversation_id=conversation_id).count() == 1
+    assert ChatUpload.objects.get(id=upload_id).status == ChatUpload.Status.LINKED
+    assert ChatMessageAttachment.objects.filter(message_id=message_id).count() == 1
+
+    lookups = {"n": 0}
+
+    def miss_then_hit(**kwargs):
+        lookups["n"] += 1
+        if lookups["n"] == 1:
+            return None
+        return ChatMessage.objects.select_related(
+            "author_membership",
+            "author_membership__user",
+        ).get(
+            conversation_id=kwargs["conversation_id"],
+            author_membership_id=kwargs["author_membership_id"],
+            client_message_id=kwargs["client_message_id"],
+        )
+
+    with patch("houston.chat.services._existing_client_message", side_effect=miss_then_hit):
+        result = create_message(
+            author_membership=sender_membership,
+            establishment_id=establishment.id,
+            conversation_id=conversation_id,
+            client_message_id=client_message_id,
+            body="",
+            attachment_ids=[uuid.UUID(upload_id)],
+        )
+    assert result.created is False
+    assert str(result.message.id) == message_id
+    assert lookups["n"] == 2

@@ -4,7 +4,7 @@ import uuid
 from unittest.mock import patch
 
 import pytest
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from houston.chat.api.serializers import membership_display_name
 from houston.chat.exceptions import ChatValidationError
 from houston.chat.models import ChatMessage, ChatMessageMention
@@ -361,3 +361,80 @@ def test_message_created_fanout_is_on_commit_only():
         )
         mock_notify.assert_called_once()
         assert result.created is True
+
+
+@pytest.mark.django_db(transaction=True)
+def test_message_created_fanout_failure_does_not_fail_http_send(api_client):
+    establishment, sender, _receiver, _sender_membership, receiver_membership = _setup_dm()
+    token = login(api_client, user=sender)
+    dm = create_dm(
+        api_client,
+        token=token,
+        establishment_id=establishment.id,
+        target_membership_id=receiver_membership.id,
+    )
+    conversation_id = uuid.UUID(dm.json()["conversation"]["id"])
+    client_message_id = uuid.uuid4()
+
+    with patch(
+        "houston.chat.ws_notify.notify_message_created",
+        side_effect=TypeError("Object of type UUID is not JSON serializable"),
+    ):
+        response = send_message(
+            api_client,
+            token=token,
+            establishment_id=establishment.id,
+            conversation_id=conversation_id,
+            body="persisted despite fan-out",
+            client_message_id=client_message_id,
+        )
+
+    assert response.status_code == 201
+    assert response.json()["created"] is True
+    assert ChatMessage.objects.filter(
+        conversation_id=conversation_id,
+        client_message_id=client_message_id,
+    ).count() == 1
+
+
+def test_create_message_integrity_error_reloads_existing():
+    establishment, _sender, _receiver, sender_membership, receiver_membership = _setup_dm()
+    from houston.chat.services import create_or_get_dm_conversation
+
+    conversation, _created = create_or_get_dm_conversation(
+        actor_membership=sender_membership,
+        target_membership_id=receiver_membership.id,
+    )
+    client_message_id = uuid.uuid4()
+    first = create_message(
+        author_membership=sender_membership,
+        establishment_id=establishment.id,
+        conversation_id=conversation.id,
+        client_message_id=client_message_id,
+        body="once",
+    )
+
+    with (
+        patch(
+            "houston.chat.services._existing_client_message",
+            side_effect=[None, first.message],
+        ),
+        patch.object(
+            ChatMessage.objects,
+            "create",
+            side_effect=IntegrityError(
+                'duplicate key value violates unique constraint "uniq_chat_message_client_id"'
+            ),
+        ),
+    ):
+        result = create_message(
+            author_membership=sender_membership,
+            establishment_id=establishment.id,
+            conversation_id=conversation.id,
+            client_message_id=client_message_id,
+            body="once",
+        )
+
+    assert result.created is False
+    assert result.message.id == first.message.id
+    assert ChatMessage.objects.filter(conversation_id=conversation.id).count() == 1

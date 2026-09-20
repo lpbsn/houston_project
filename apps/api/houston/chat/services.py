@@ -3,12 +3,18 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
 from houston.accounts.models import User
 from houston.chat.exceptions import ChatNotFoundError, ChatPermissionError, ChatValidationError
-from houston.chat.models import ChatConversation, ChatMessage, ChatMessageMention, ChatParticipant
+from houston.chat.models import (
+    ChatConversation,
+    ChatMessage,
+    ChatMessageMention,
+    ChatParticipant,
+    ChatUpload,
+)
 from houston.chat.permissions import (
     can_access_chat,
     can_create_dm,
@@ -907,6 +913,24 @@ def _active_recipient_membership_ids(*, conversation_id: uuid.UUID) -> tuple[uui
     )
 
 
+def _existing_client_message(
+    *,
+    conversation_id: uuid.UUID,
+    author_membership_id: uuid.UUID,
+    client_message_id: uuid.UUID,
+) -> ChatMessage | None:
+    return (
+        ChatMessage.objects.select_related("author_membership", "author_membership__user")
+        .prefetch_related("mentions__membership__user", "attachments__upload")
+        .filter(
+            conversation_id=conversation_id,
+            author_membership_id=author_membership_id,
+            client_message_id=client_message_id,
+        )
+        .first()
+    )
+
+
 @transaction.atomic
 def create_message(
     *,
@@ -962,6 +986,20 @@ def create_message(
             except MembershipBlockedError:
                 raise ChatPermissionError(MEMBERSHIP_BLOCKED_DETAIL, code="membership_blocked")
 
+    existing = _existing_client_message(
+        conversation_id=conversation.id,
+        author_membership_id=author_membership.id,
+        client_message_id=client_message_id,
+    )
+    if existing is not None:
+        return MessageSendResult(
+            message=existing,
+            created=False,
+            recipient_membership_ids=_active_recipient_membership_ids(
+                conversation_id=conversation.id
+            ),
+        )
+
     uploads = []
     if attachment_ids:
         from houston.chat.upload_services import lock_validated_uploads_for_message
@@ -970,7 +1008,23 @@ def create_message(
             actor_membership=author_membership,
             conversation_id=conversation.id,
             attachment_ids=attachment_ids,
+            allow_linked=True,
         )
+        if any(upload.status == ChatUpload.Status.LINKED for upload in uploads):
+            existing = _existing_client_message(
+                conversation_id=conversation.id,
+                author_membership_id=author_membership.id,
+                client_message_id=client_message_id,
+            )
+            if existing is not None:
+                return MessageSendResult(
+                    message=existing,
+                    created=False,
+                    recipient_membership_ids=_active_recipient_membership_ids(
+                        conversation_id=conversation.id
+                    ),
+                )
+            raise ChatValidationError("Attachment has already been used.")
     normalized_body = normalize_message_body(body, required=not uploads)
     validated_reply_to_id = _validate_reply_to(
         conversation_id=conversation.id,
@@ -983,30 +1037,30 @@ def create_message(
     )
     recipient_membership_ids = _active_recipient_membership_ids(conversation_id=conversation.id)
 
-    existing = (
-        ChatMessage.objects.select_related("author_membership", "author_membership__user")
-        .prefetch_related("mentions__membership__user")
-        .filter(
+    try:
+        with transaction.atomic():
+            message = ChatMessage.objects.create(
+                conversation=conversation,
+                author_membership=author_membership,
+                body=normalized_body,
+                client_message_id=client_message_id,
+                reply_to_id=validated_reply_to_id,
+            )
+    except IntegrityError as exc:
+        if "uniq_chat_message_client_id" not in str(exc):
+            raise
+        existing = _existing_client_message(
             conversation_id=conversation.id,
             author_membership_id=author_membership.id,
             client_message_id=client_message_id,
         )
-        .first()
-    )
-    if existing is not None:
+        if existing is None:
+            raise
         return MessageSendResult(
             message=existing,
             created=False,
             recipient_membership_ids=recipient_membership_ids,
         )
-
-    message = ChatMessage.objects.create(
-        conversation=conversation,
-        author_membership=author_membership,
-        body=normalized_body,
-        client_message_id=client_message_id,
-        reply_to_id=validated_reply_to_id,
-    )
     if uploads:
         from houston.chat.upload_services import link_uploads_to_message
 

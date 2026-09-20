@@ -287,6 +287,7 @@ def lock_validated_uploads_for_message(
     actor_membership: EstablishmentMembership,
     conversation_id: uuid.UUID,
     attachment_ids: list[uuid.UUID],
+    allow_linked: bool = False,
 ) -> list[ChatUpload]:
     unique_ids = list(dict.fromkeys(attachment_ids))
     if len(unique_ids) > CHAT_ATTACHMENTS_MAX_PER_MESSAGE:
@@ -306,6 +307,8 @@ def lock_validated_uploads_for_message(
         if upload.conversation_id != conversation_id:
             raise ChatValidationError("Attachment does not belong to this conversation.")
         if upload.status == ChatUpload.Status.LINKED:
+            if allow_linked:
+                continue
             raise ChatValidationError("Attachment has already been used.")
         if upload.status != ChatUpload.Status.VALIDATED:
             raise ChatValidationError("Attachment is not ready.")
