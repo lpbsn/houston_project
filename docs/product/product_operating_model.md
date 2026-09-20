@@ -33,7 +33,7 @@ Detailed permission matrices belong to domain docs, not this document.
 
 ## 4. Supporting Flows
 
-- Onboarding and runtime configuration initialize an establishment with the minimum structure needed for operational use (`onboarding_proposal_v4` only).
+- Onboarding and runtime configuration initialize an establishment with the minimum structure needed for operational use (Platform draft/complete).
 - Media uploads provide optional operational context around Observations and follow backend-controlled access rules.
 - Comments support contextual discussion attached to Signals or Action Plan executions.
 - Notifications route attention when action or awareness is needed.

@@ -140,6 +140,8 @@ export function PlatformOnboardingWizardPage({
           putDraft={putPlatformOnboardingDraft}
           completeSession={completePlatformOnboarding}
           draftQueryKey={platformQueryKeys.draft(sessionId)}
+          detailQueryKey={platformQueryKeys.onboarding(sessionId)}
+          listQueryKey={['platform', 'onboardings']}
           afterCompletePath={listHref}
         />
       ) : (

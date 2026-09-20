@@ -8,7 +8,6 @@ from houston.accounts.authentication import AccessTokenAuthContext
 from houston.accounts.models import AccessToken, User, UserSession
 from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.establishments.permissions import (
-    CanInviteMemberships,
     CanManageRuntimeContext,
     HasActiveMembership,
     can_access_app,
@@ -290,18 +289,12 @@ def test_manage_runtime_context_permissions_follow_rbac_helpers(
     ],
 )
 def test_invite_membership_permissions_follow_rbac_helpers(
-    request_factory,
     role,
     expected_allowed,
 ):
     membership = build_membership(role=role)
-    request = build_permission_request(
-        request_factory,
-        user=membership.user,
-        selected_establishment=membership.establishment,
-    )
 
-    assert CanInviteMemberships().has_permission(request, None) is expected_allowed
+    assert can_invite_memberships(membership) is expected_allowed
 
 
 def test_manage_permissions_fail_closed_without_selected_membership(request_factory):
@@ -323,7 +316,7 @@ def test_manage_permissions_fail_closed_without_selected_membership(request_fact
     )
 
     assert CanManageRuntimeContext().has_permission(request, None) is False
-    assert CanInviteMemberships().has_permission(request, None) is False
+    assert can_invite_memberships(None) is False
 
 
 def test_resolve_establishment_admin_actor_owner_and_director():

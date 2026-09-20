@@ -326,19 +326,6 @@ def validate_created_password_pair(*, attrs: dict, user: User | None = None) -> 
     return attrs
 
 
-def _provisional_user_for_password_validation(
-    *,
-    email: str,
-    first_name: str,
-    last_name: str,
-) -> User:
-    return User(
-        email=User.normalize_email_value(email),
-        first_name=first_name.strip(),
-        last_name=last_name.strip(),
-    )
-
-
 def _user_for_invitation_password_validation(raw_token: str) -> User | None:
     from houston.accounts.tokens import digest_token
     from houston.establishments.models import EstablishmentInvitation
@@ -370,117 +357,6 @@ def _user_for_password_reset_validation(raw_token: str) -> User | None:
     if reset is None:
         return None
     return reset.user
-
-
-class RegistrationOwnerValidateRequestSerializer(serializers.Serializer):
-    invite_code = serializers.CharField(trim_whitespace=True)
-    first_name = serializers.CharField(trim_whitespace=True)
-    last_name = serializers.CharField(trim_whitespace=True)
-    email = serializers.EmailField()
-    password = serializers.CharField(trim_whitespace=False)
-    password_confirmation = serializers.CharField(trim_whitespace=False)
-
-    def validate_first_name(self, value: str) -> str:
-        if not value:
-            raise serializers.ValidationError("This field may not be blank.")
-        return value
-
-    def validate_last_name(self, value: str) -> str:
-        if not value:
-            raise serializers.ValidationError("This field may not be blank.")
-        return value
-
-    def validate_invite_code(self, value: str) -> str:
-        if not value:
-            raise serializers.ValidationError("This field may not be blank.")
-        return value
-
-    def validate_password(self, value: str) -> str:
-        if not value:
-            raise serializers.ValidationError("This field may not be blank.")
-        return value
-
-    def validate_password_confirmation(self, value: str) -> str:
-        if not value:
-            raise serializers.ValidationError("This field may not be blank.")
-        return value
-
-    def validate(self, attrs: dict) -> dict:
-        return validate_created_password_pair(
-            attrs=attrs,
-            user=_provisional_user_for_password_validation(
-                email=attrs["email"],
-                first_name=attrs["first_name"],
-                last_name=attrs["last_name"],
-            ),
-        )
-
-
-class RegistrationRequestSerializer(RefreshTokenTransportSerializerMixin):
-    invite_code = serializers.CharField(trim_whitespace=True)
-    first_name = serializers.CharField(trim_whitespace=True)
-    last_name = serializers.CharField(trim_whitespace=True)
-    email = serializers.EmailField()
-    password = serializers.CharField(trim_whitespace=False)
-    password_confirmation = serializers.CharField(trim_whitespace=False)
-    organization_name = serializers.CharField(trim_whitespace=True)
-    establishment_name = serializers.CharField(
-        trim_whitespace=True,
-        required=False,
-        allow_blank=True,
-        default="",
-    )
-    terms_version = serializers.CharField(required=False, allow_blank=False)
-
-    def validate_first_name(self, value: str) -> str:
-        if not value:
-            raise serializers.ValidationError("This field may not be blank.")
-        return value
-
-    def validate_last_name(self, value: str) -> str:
-        if not value:
-            raise serializers.ValidationError("This field may not be blank.")
-        return value
-
-    def validate_organization_name(self, value: str) -> str:
-        if not value:
-            raise serializers.ValidationError("This field may not be blank.")
-        return value
-
-    def validate_invite_code(self, value: str) -> str:
-        if not value:
-            raise serializers.ValidationError("This field may not be blank.")
-        return value
-
-    def validate_password(self, value: str) -> str:
-        if not value:
-            raise serializers.ValidationError("This field may not be blank.")
-        return value
-
-    def validate_password_confirmation(self, value: str) -> str:
-        if not value:
-            raise serializers.ValidationError("This field may not be blank.")
-        return value
-
-    def validate(self, attrs: dict) -> dict:
-        return validate_created_password_pair(
-            attrs=attrs,
-            user=_provisional_user_for_password_validation(
-                email=attrs["email"],
-                first_name=attrs["first_name"],
-                last_name=attrs["last_name"],
-            ),
-        )
-
-
-class RegistrationErrorResponseSerializer(serializers.Serializer):
-    detail = serializers.CharField()
-    code = serializers.CharField(required=False)
-
-
-class RegistrationResponseSerializer(AuthResponseSerializer):
-    establishment_id = serializers.UUIDField()
-    onboarding_session_id = serializers.UUIDField()
 
 
 class DirectorInvitationAcceptRequestSerializer(RefreshTokenTransportSerializerMixin):

@@ -16,7 +16,7 @@ Do **not** run `make up` (Docker web on 5173) and `make web-dev` at the same tim
 
 ```bash
 cp .env.example .env
-# Edit DJANGO_SECRET_KEY, HOUSTON_REGISTRATION_INVITE_CODES
+# Edit DJANGO_SECRET_KEY
 make build-backend
 make bootstrap-dev
 make web-install
@@ -151,7 +151,7 @@ Clean still resets `reliable_from` to `timezone.now()`; replay never writes it.
 
 ## E2E product path (manual)
 
-1. Login with an existing membership, **or** grant a local Platform operator (`grant_platform_operator`) and complete a draft on `/platform` (desktop Web)
+1. Login with an existing membership, **or** grant a local Platform operator (`docker compose exec api python manage.py grant_platform_operator <email>`) and complete a draft on `/platform` (desktop Web)
 2. Invited Owner/Director accept via `/invitations` then wait on `/pending-onboarding` until activation
 3. Establishment is active after Platform complete (blocked until at least one Owner or Director membership is `ACTIVE`)
 4. Submit observation (optional photo)

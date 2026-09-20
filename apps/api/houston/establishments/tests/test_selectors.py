@@ -11,8 +11,6 @@ from houston.establishments.models import (
     OperationalUnit,
 )
 from houston.establishments.selectors import (
-    get_active_onboarding_session_for_establishment,
-    get_onboarding_session_for_actor,
     get_runtime_config_for_session,
 )
 from houston.establishments.services import build_activation_summary
@@ -60,56 +58,6 @@ def create_session_with_membership(
         status=EstablishmentMembership.Status.ACTIVE,
     )
     return session
-
-
-def test_actor_can_retrieve_own_accessible_onboarding_session(organization, actor):
-    session = create_session_with_membership(organization=organization, actor=actor)
-
-    result = get_onboarding_session_for_actor(actor=actor, session_id=session.id)
-
-    assert result == session
-    assert result.establishment == session.establishment
-    assert result.organization == organization
-
-
-def test_actor_cannot_retrieve_foreign_onboarding_session(organization, actor):
-    foreign_user = User.objects.create_user(
-        username="foreign_owner",
-        password="secret",
-        status=User.Status.ACTIVE,
-    )
-    foreign_session = create_session_with_membership(
-        organization=organization,
-        actor=foreign_user,
-    )
-
-    result = get_onboarding_session_for_actor(actor=actor, session_id=foreign_session.id)
-
-    assert result is None
-
-
-def test_active_session_selector_returns_non_terminal_same_establishment_only(
-    organization,
-    actor,
-):
-    session = create_session_with_membership(organization=organization, actor=actor)
-    foreign_establishment = Establishment.objects.create(
-        name="Foreign",
-        organization=organization,
-        status=Establishment.Status.DRAFT,
-    )
-
-    result = get_active_onboarding_session_for_establishment(
-        actor=actor,
-        establishment_id=session.establishment_id,
-    )
-    foreign_result = get_active_onboarding_session_for_establishment(
-        actor=actor,
-        establishment_id=foreign_establishment.id,
-    )
-
-    assert result == session
-    assert foreign_result is None
 
 
 def test_runtime_config_selector_returns_only_same_establishment_data(

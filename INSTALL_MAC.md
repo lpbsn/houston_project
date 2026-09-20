@@ -63,7 +63,6 @@ cp .env.example .env
 Ouvrez `.env` dans un éditeur et modifiez au minimum :
 
 - `DJANGO_SECRET_KEY=` → une longue chaîne aléatoire (pas la valeur `replace-me-for-local-dev`)
-- `HOUSTON_REGISTRATION_INVITE_CODES=` → un code pour s’inscrire, ex. `dev-invite-2026` (sinon `/onboarding` ne marchera pas)
 
 Ne mettez **jamais** de clé OpenAI ou de code d’invitation dans une variable qui commence par `VITE_`.
 
@@ -173,10 +172,10 @@ Laissez ce terminal ouvert. Le serveur affiche une URL du type `http://localhost
 | Quoi ouvrir | Adresse |
 |-------------|---------|
 | Application | http://localhost:5173 |
-| Créer un compte (onboarding) | http://localhost:5173/onboarding |
+| Platform (desktop Web, opérateur) | http://localhost:5173/platform |
 | Documentation API (Swagger) | http://localhost:8000/api/docs/ |
 
-Sur `/onboarding`, utilisez le **même code** que dans `HOUSTON_REGISTRATION_INVITE_CODES` de votre `.env`.
+L’onboarding produit se fait sur `/platform` par un opérateur déjà actif (`docker compose exec api python manage.py grant_platform_operator <email>`). `/onboarding` redirige vers login.
 
 ---
 
@@ -234,7 +233,7 @@ make web-dev
 | `make migrate` ou `make bootstrap-dev` échoue | `make up-backend` puis réessayer `make bootstrap-dev` |
 | Catalogue vide / autocomplete vide | `make import-catalog` puis `make catalog-check` |
 | Repartir de zéro (DB locale) | `make reset-dev-db` puis `make web-install` si besoin |
-| Inscription refusée | Vérifier `HOUSTON_REGISTRATION_INVITE_CODES` dans `.env`, puis `make recreate-backend` |
+| Accès Platform refusé | Compte `ACTIVE` puis `docker compose exec api python manage.py grant_platform_operator <email>` |
 
 Détails et dépannage : sections 2 à 14 ci-dessous.
 
@@ -381,9 +380,13 @@ Ces valeurs sont déjà correctes dans `.env.example` pour Compose (hôtes `post
 
 #### Fortement recommandées pour utiliser l’UI produit
 
-| Variable | Rôle |
-|----------|------|
-| `HOUSTON_REGISTRATION_INVITE_CODES` | Codes d’invitation séparés par des virgules pour l’inscription publique (`/onboarding`). **Vide = inscription désactivée** ([`README.md`](README.md)). Exemple : `HOUSTON_REGISTRATION_INVITE_CODES=dev-invite-2026` |
+Créer un utilisateur `ACTIVE` (dataset KONOHA ou invitation) puis accorder l’opérateur Platform :
+
+```bash
+docker compose exec api python manage.py grant_platform_operator <email>
+```
+
+Ouvrir `/platform` en desktop Web.
 
 #### Optionnelles (fonctionnalités avancées / IA)
 
@@ -404,7 +407,6 @@ Ces valeurs sont déjà correctes dans `.env.example` pour Compose (hôtes `post
 ```bash
 # Après cp .env.example .env, éditez au minimum :
 # DJANGO_SECRET_KEY=<chaîne-aléatoire-longue>
-# HOUSTON_REGISTRATION_INVITE_CODES=mon-code-dev
 ```
 
 ---
@@ -506,7 +508,7 @@ make reset-dev-db
 
 Affiche un warning : suppression DB locale, volumes Docker (dont `web_node_modules`), perte de toutes les données locales. Ne modifie pas le `.env`. Puis `make web-install` si le conteneur `web` était utilisé.
 
-**Premier utilisateur** : pas de `createsuperuser` ni d’admin Django (module admin non installé). Créez un compte via **http://localhost:5173/onboarding** avec un code défini dans `HOUSTON_REGISTRATION_INVITE_CODES`.
+**Premier utilisateur** : pas de `createsuperuser` ni d’admin Django (module admin non installé). Compte actif + `grant_platform_operator`, puis wizard sur **http://localhost:5173/platform** (desktop Web).
 
 ---
 
@@ -719,10 +721,11 @@ Hors Docker ou dépannage : `mkdir -p apps/api/private_media` puis `chmod u+rwx 
 
 Les notes Linux `user: "${UID}:${GID}"` du README concernent surtout **Linux** ; rarement nécessaire sur Docker Desktop Mac ou OrbStack.
 
-### Inscription `/onboarding` impossible
+### Accès `/platform` impossible
 
-- Vérifiez `HOUSTON_REGISTRATION_INVITE_CODES` non vide dans `.env`.
-- Recréez api/celery après changement `.env` : `make recreate-backend`.
+- Le compte doit être `ACTIVE`.
+- Accordez l’opérateur : `docker compose exec api python manage.py grant_platform_operator <email>`.
+- Utilisez le desktop Web (`isDesktopWeb`).
 
 ### Observations bloquées en `queued`
 
@@ -745,7 +748,7 @@ Les notes Linux `user: "${UID}:${GID}"` du README concernent surtout **Linux** ;
 
 - [ ] `git clone` réussi, branche à jour
 - [ ] `.env` créé depuis `.env.example`, `DJANGO_SECRET_KEY` personnalisé
-- [ ] `HOUSTON_REGISTRATION_INVITE_CODES` défini si besoin de `/onboarding`
+- [ ] Opérateur Platform accordé si besoin de `/platform` (`grant_platform_operator`)
 - [ ] Médias privés OK (volume Docker `private_media` en usage Docker ; dossier local `apps/api/private_media` seulement hors Docker / dépannage)
 - [ ] `docker compose ps` : `postgres`, `redis`, `api`, `celery` **Up**
 - [ ] `make bootstrap-dev` terminé sans erreur (ou `make migrate` + `make import-catalog` + `make catalog-check`)

@@ -59,6 +59,7 @@ describe('useOnboardingDraftAutosave', () => {
       () =>
         useOnboardingDraftAutosave({
           sessionId: 's1',
+          draftQueryKey: ['platform', 'onboardings', 's1', 'draft'],
           debounceMs: 20,
           putDraft,
         }),
@@ -114,6 +115,7 @@ describe('useOnboardingDraftAutosave', () => {
       () =>
         useOnboardingDraftAutosave({
           sessionId: 's1',
+          draftQueryKey: ['platform', 'onboardings', 's1', 'draft'],
           debounceMs: 50,
           putDraft,
         }),

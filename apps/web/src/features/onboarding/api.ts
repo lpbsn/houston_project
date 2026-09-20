@@ -7,11 +7,6 @@ import type {
 } from './types'
 
 export const onboardingQueryKeys = {
-  all: ['onboarding'] as const,
-  sessions: () => ['onboarding', 'sessions'] as const,
-  session: (sessionId: string) => ['onboarding', 'sessions', sessionId] as const,
-  draft: (sessionId: string) =>
-    ['onboarding', 'sessions', sessionId, 'draft'] as const,
   catalogBusinessUnits: (query: string) =>
     ['onboarding', 'catalog', 'business-units', query] as const,
   catalogActivitySubjects: (businessUnitKey: string, query: string) =>

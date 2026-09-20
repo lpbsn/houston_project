@@ -21,7 +21,6 @@ from houston.establishments.models import (
     CatalogActivitySubject,
     CatalogBusinessUnit,
     Establishment,
-    OnboardingProposal,
 )
 
 
@@ -158,7 +157,6 @@ def _create_business_unit_core(
     specific_name: str,
     instance_description: str = "",
     source: str = BusinessUnit.Source.CATALOG_SUGGESTION,
-    managed_by_onboarding_proposal: OnboardingProposal | None = None,
 ) -> BusinessUnit:
     locked_establishment = _lock_establishment(establishment_id=establishment.id)
     locked_catalog = _lock_catalog_business_unit(
@@ -211,7 +209,6 @@ def _create_business_unit_core(
         instance_description=normalized_description,
         source=source,
         active=True,
-        managed_by_onboarding_proposal=managed_by_onboarding_proposal,
     )
     try:
         with transaction.atomic():
@@ -264,7 +261,6 @@ def create_onboarding_business_unit(
     generic_activity_subject_keys: Iterable[str] = (),
     free_activity_subjects: Iterable[dict[str, str]] = (),
     source: str = BusinessUnit.Source.CATALOG_SUGGESTION,
-    managed_by_onboarding_proposal: OnboardingProposal | None = None,
 ) -> BusinessUnit:
     generic_keys = list(generic_activity_subject_keys)
     business_unit = _create_business_unit_core(
@@ -273,7 +269,6 @@ def create_onboarding_business_unit(
         specific_name=specific_name,
         instance_description=instance_description,
         source=source,
-        managed_by_onboarding_proposal=managed_by_onboarding_proposal,
     )
     locked_catalog_subjects = _lock_catalog_activity_subjects(
         catalog_business_unit=business_unit.catalog_business_unit,
@@ -300,7 +295,6 @@ def create_onboarding_business_unit(
         business_unit=business_unit,
         catalog_activity_subjects=selected_catalog_subjects,
         free_activity_subjects=free_activity_subjects,
-        managed_by_onboarding_proposal=managed_by_onboarding_proposal,
     )
     _bulk_create_activity_subjects(business_unit=business_unit, rows=rows)
     return business_unit

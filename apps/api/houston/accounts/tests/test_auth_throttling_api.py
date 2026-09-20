@@ -39,8 +39,6 @@ def active_user():
 THROTTLE_TEST_RATES = {
     "auth_login": "2/minute",
     "auth_refresh": "3/minute",
-    "auth_register": "2/hour",
-    "auth_register_validate": "2/hour",
     "auth_invitation_accept": "2/hour",
     "auth_email_change": "2/minute",
     "auth_email_change_confirm": "2/hour",

@@ -9,7 +9,3 @@ export type CatalogBusinessUnitSuggestion = components['schemas']['CatalogBusine
 export type CatalogActivitySubjectSuggestion =
   components['schemas']['CatalogActivitySubjectSuggestion']
 export type OnboardingDraftResponse = components['schemas']['OnboardingDraftResponse']
-export type OnboardingDraftUpdateRequest = components['schemas']['OnboardingDraftUpdateRequest']
-export type OnboardingDraftValidation = components['schemas']['OnboardingDraftValidation']
-export type OnboardingDraftValidationErrorItem =
-  components['schemas']['OnboardingDraftValidationErrorItem']

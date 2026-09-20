@@ -94,7 +94,6 @@ Forbidden placeholders: `replace-me-for-local-dev`, empty values.
 | `HOUSTON_PRIVATE_MEDIA_BACKEND` | yes — `s3` | yes — `s3` | no |
 | `HOUSTON_S3_ENDPOINT_URL`, `HOUSTON_S3_BUCKET`, `HOUSTON_S3_ACCESS_KEY_ID`, `HOUSTON_S3_SECRET_ACCESS_KEY`, `HOUSTON_S3_REGION`, `HOUSTON_S3_ADDRESSING_STYLE` | yes — same values | yes — same values | no |
 | `HOUSTON_PRIVATE_MEDIA_ROOT` | not media truth when backend=s3 | not media truth when backend=s3 | no |
-| `HOUSTON_REGISTRATION_INVITE_CODES` | yes | no | no |
 | `PORT` | injected by Railway | n/a | n/a |
 | `HOUSTON_ENABLE_API_DOCS` | optional (`0` default prod-test) | optional | optional |
 | `HOUSTON_LOG_LEVEL` | optional (`INFO`) | optional | optional |
@@ -146,11 +145,10 @@ nginx on `api-web` allows `12m` request bodies ([`infra/docker/railway/nginx.con
 
 ---
 
-## Registration and onboarding
+## Invitation TTL
 
 | Variable | Service | Notes |
 |---|---|---|
-| `HOUSTON_REGISTRATION_INVITE_CODES` | `api-web` only | Comma-separated codes per onboarding policy |
 | `HOUSTON_DIRECTOR_INVITATION_TTL_DAYS` | `api-web` | Default `7` |
 
 ---
@@ -177,7 +175,7 @@ Transactional invitation emails for Staff, Manager, and Director roles. Disabled
 | `HOUSTON_AUTH_THROTTLE_ENABLED` | `true` |
 | `HOUSTON_THROTTLE_AUTH_LOGIN` | `10/minute` |
 | `HOUSTON_THROTTLE_AUTH_REFRESH` | `30/minute` |
-| `HOUSTON_THROTTLE_AUTH_REGISTER` | `5/hour` |
+| `HOUSTON_THROTTLE_AUTH_INVITATION_ACCEPT` | `10/hour` |
 
 ---
 

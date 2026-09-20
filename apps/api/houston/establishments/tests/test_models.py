@@ -10,7 +10,6 @@ from houston.establishments.models import (
     EstablishmentActivityDescription,
     EstablishmentMembership,
     MembershipScope,
-    OnboardingProposal,
     OnboardingSession,
 )
 from houston.establishments.services import (
@@ -288,42 +287,6 @@ def test_onboarding_session_allows_historical_terminal_sessions(
         status=OnboardingSession.Status.CANCELED,
     )
     assert first.establishment == second.establishment
-
-
-def test_onboarding_proposal_defaults(organization, establishment, user):
-    session = OnboardingSession.objects.create(
-        organization=organization,
-        establishment=establishment,
-        started_by=user,
-    )
-    proposal = OnboardingProposal.objects.create(
-        onboarding_session=session,
-        establishment=establishment,
-        created_by=user,
-    )
-    assert proposal.source == OnboardingProposal.Source.MANUAL
-    assert proposal.status == OnboardingProposal.Status.DRAFT
-    assert proposal.payload == {}
-    assert proposal.section_validation == {}
-    assert proposal.validation_errors == []
-
-
-def test_onboarding_proposal_validates_establishment_matches_session(
-    organization,
-    establishment,
-):
-    other_establishment = Establishment.objects.create(name="Cannes", organization=organization)
-    session = OnboardingSession.objects.create(
-        organization=organization,
-        establishment=establishment,
-    )
-    proposal = OnboardingProposal(
-        onboarding_session=session,
-        establishment=other_establishment,
-    )
-    with pytest.raises(ValidationError) as exc_info:
-        proposal.full_clean()
-    assert "establishment" in exc_info.value.message_dict
 
 
 def test_onboarding_session_validates_organization_matches_establishment(establishment):

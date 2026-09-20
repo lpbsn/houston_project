@@ -72,7 +72,6 @@ All backend services (`api-web`, `celery-worker`, `celery-beat`) share the same 
 | Auth salts / peppers | yes | yes | yes |
 | `HOUSTON_PRIVATE_MEDIA_BACKEND` + `HOUSTON_S3_*` | yes (S3) | yes (same S3 settings) | no (beat does not touch media files) |
 | `HOUSTON_PRIVATE_MEDIA_ROOT` | not media truth when backend=s3 | not media truth when backend=s3 | no |
-| `HOUSTON_REGISTRATION_INVITE_CODES` | yes | no | no |
 | `PORT` (Railway) | yes (Railway injects) | no public port | no public port |
 
 Full reference: [`railway_variables.md`](railway_variables.md). Template: [`.env.prod-test.example`](../../.env.prod-test.example).
@@ -85,7 +84,7 @@ Full reference: [`railway_variables.md`](railway_variables.md). Template: [`.env
 | **Backend-only** | `HOUSTON_PRIVATE_MEDIA_BACKEND`, `HOUSTON_S3_*`, `HOUSTON_PRIVATE_MEDIA_ROOT` (not media truth when backend=s3), `HOUSTON_LOG_LEVEL`, beat schedule tuning vars | Set on relevant backend services |
 | **Secrets (manual)** | `DJANGO_SECRET_KEY`, `OPENAI_API_KEY`, `HOUSTON_AUTH_TOKEN_PEPPER`, `HOUSTON_AUTH_TOKEN_SALT`, `HOUSTON_CHAT_WS_TICKET_SALT`, `HOUSTON_REALTIME_WS_TICKET_SALT` | Generate strong random values before first deploy; store in Railway service variables |
 | **Railway-generated** | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `REDIS_URL` (from plugins) | Copy from Railway Postgres/Redis plugin reference vars into Houston names |
-| **Manual (operator)** | `DJANGO_ALLOWED_HOSTS`, `HOUSTON_CLIENT_ORIGINS`, `HOUSTON_REGISTRATION_INVITE_CODES` | Public Railway domain + `healthcheck.railway.app` in allowed hosts; HTTPS SPA origin plus Native WebView origins (`capacitor://localhost`, `https://localhost`) |
+| **Manual (operator)** | `DJANGO_ALLOWED_HOSTS`, `HOUSTON_CLIENT_ORIGINS` | Public Railway domain + `healthcheck.railway.app` in allowed hosts; HTTPS SPA origin plus Native WebView origins (`capacitor://localhost`, `https://localhost`) |
 
 ### Derived / mapped Redis URLs
 

@@ -25,7 +25,7 @@ Domain boundaries:
 |-----|--------|
 | **Lot 1** | `OnboardingDraft`, Platform `GET/PUT …/draft/`, `POST …/complete/` |
 | **Lot 2** | Frontend wizard on Platform draft/complete only |
-| **Lot 3** | Tenant proposal HTTP / apply wrappers removed (model may still exist unused) |
+| **Lot 3** | Tenant proposal HTTP / apply wrappers removed; `OnboardingProposal` dropped by a later forward migration (`establishments.0036`) after historical `0004`/`0024` still run on empty databases. |
 
 Live path: persist incomplete wizard state in `OnboardingDraft`; materialize + invite + activate only in Platform `POST …/complete/`. `complete` refuses if any `BusinessUnit` already exists so a session cannot double-materialize.
 
@@ -55,15 +55,14 @@ Live path: persist incomplete wizard state in `OnboardingDraft`; materialize + i
 ## 4. Core Invariants
 
 - Establishment runtime config must be human-validated before activation.
-- Proposals are human-driven; backend validates and activates.
+- Platform operators persist draft structure; backend validates the draft on complete and activates when ready.
 - Backend activates only validated runtime state.
 - Runtime config is establishment-scoped and must not leak across establishments.
 - Business units are required for activation minimum.
-- **Activity subjects** are required at activation minimum: at least one active subject linked to active business units in the applied proposal.
-- Activity description is **required** at activation (length 10–5000); `compute_activation_readiness` includes blocker `missing_or_invalid_activity_description` for both legacy mark-ready/activate and `complete`.
-- Legacy runtime vocabulary, runtime tags, and routing hints were removed from implementation (migration `0016_drop_legacy_taxonomy`); proposals/drafts are BusinessUnit / ActivitySubject only.
-- **`complete_onboarding_session`**: single transaction; validates final draft; materializes BU/AS; maps `client_key → BusinessUnit.id`; creates director + optional manager/staff invites/scopes; checks shared readiness; activates establishment; deletes draft. Idempotent when already activated. Refuses if any BusinessUnit exists.
-- **`apply_onboarding_proposal_v4`** (legacy until Lot 3): single `transaction.atomic()` for the whole proposal; materializes **exactly** the subjects in the payload via `create_onboarding_business_unit` (no catalog completion); **never** implicitly reactivates inactive instances. Failure rolls back all BU/AS created by that apply.- Frontend cannot activate or mutate authoritative runtime state by itself.
+- **Activity subjects** are required at activation minimum: at least one active subject linked to active business units materialized from the draft.
+- Activity description is **required** at activation (length 10–5000); `compute_activation_readiness` includes blocker `missing_or_invalid_activity_description` for `complete`.
+- Legacy runtime vocabulary, runtime tags, and routing hints were removed from implementation (migration `0016_drop_legacy_taxonomy`); drafts are BusinessUnit / ActivitySubject only.
+- **`complete_onboarding_session_core`**: single transaction; validates final draft; materializes BU/AS; maps `client_key → BusinessUnit.id`; creates director + optional manager/staff invites/scopes; checks shared readiness; activates establishment; deletes draft. Idempotent when already activated. Refuses if any BusinessUnit exists.
 - Post-activation destructive runtime changes must be explicit and authorized.
 - Post-activation create uses `create_runtime_business_unit` (core + seed all active catalog subjects). Reactivation is a separate `POST …/business-units/{id}/reactivate/` path (`reactivate_business_unit` — no seed, no scope recreation). See [`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md).
 
@@ -71,7 +70,7 @@ Activation minimum:
 - organization created
 - establishment created
 - at least 1 business unit validated
-- at least 1 activity subject validated in applied proposal
+- at least 1 activity subject validated from the completed draft
 - at least 1 active Owner or Director
 - exactly one active or invited Director membership on a user distinct from the initial Owner for **draft activation** (at most one invited/active non-owner Director per establishment during onboarding; deactivated Directors do not satisfy the gate)
 - Director invitation during draft onboarding via `POST /api/v1/platform/onboardings/{session_id}/director-invitations/` (or from draft complete); schedules a transactional invitation email when enabled
@@ -100,7 +99,7 @@ Proposal parent/child coherence follows BU/AS hierarchy rules in [`business_unit
 
 - `ActivitySubject`
   - Finest operational classification under a business unit.
-  - Required in onboarding proposal activation minimum (v3 or v4).
+  - Required at activation minimum.
 
 - `OperationalUnit`
   - Physical or contextual **location** used to localize activity.
@@ -109,15 +108,11 @@ Proposal parent/child coherence follows BU/AS hierarchy rules in [`business_unit
 
 - `RuntimeVocabulary`, `RuntimeTag`, `RoutingHint` (removed)
   - Legacy product concepts dropped in migration `0016_drop_legacy_taxonomy`.
-  - Not part of onboarding proposal v3/v4 or activation minimum.
+  - Not part of draft onboarding or activation minimum.
 
-- `OnboardingProposal`
-  - Candidate runtime structure proposed manually before activation.
-  - Preferred payload: `schema_version: onboarding_proposal_v4` with BusinessUnit sections (`catalog_key`, `specific_name`, `instance_description?`) and retained activity subjects per BU.
-  - Only `onboarding_proposal_v4` is accepted at validation/apply. Historical terminal v3 applied/rejected rows may remain in DB; non-terminal v3 was converted or `REJECTED` by migration `establishments.0024`.
-
-- `OnboardingProposalItemMutation` (implemented API)
-  - Proposal create/update/apply via `/api/v1/onboarding-sessions/{session_id}/proposals/` — add/remove BusinessUnit and ActivitySubject entries with parent/child coherence per [`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md).
+- `OnboardingDraft`
+  - Incomplete wizard state persisted for a Platform onboarding session.
+  - Materialized into BusinessUnit / ActivitySubject rows only on Platform `POST …/complete/`.
 
 - `OnboardingValidation`
   - Human approval step for sections of proposed runtime context before backend activation.
@@ -134,9 +129,8 @@ Proposal parent/child coherence follows BU/AS hierarchy rules in [`business_unit
   - Onboarding must not treat the establishment as operationally active before backend activation.
 
 - `OnboardingSession` statuses (implemented on `OnboardingSession` model)
-  - `started`, `description_submitted`, `configuring_runtime`, `proposal_ready`, `validating_sections`, `ready_for_activation`, `activated`, `failed`, `canceled`
-- `OnboardingProposal` statuses (implemented)
-  - Includes `draft`, `ready`, `partially_validated`, `validated`, `applied`, `rejected`, `superseded`
+  - Includes live Platform fields (`current_step`, `source_mode`, `last_error_code`, `session_status`) still exposed by the HTTP contract.
+- Django still creates `OnboardingProposal` in historical migrations (`0004`, processed by `0024`) then drops it in `establishments.0036`, the same pattern as other retired tables (taxonomy v1). It is not part of the live schema.
 
 - Runtime context sections
   - Validation is expected to happen by section where useful.

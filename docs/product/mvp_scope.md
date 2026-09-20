@@ -18,7 +18,7 @@ Observation → Signal → Action Plan → Execution → Validation → Feed upd
 ## In scope (pilot)
 
 - Identity, memberships, establishment isolation, RBAC
-- Manual onboarding v2 (BusinessUnit / ActivitySubject)
+- Manual onboarding via Spore Platform (desktop Web `/platform`)
 - Observation submission (text, optional photo, audio transcription)
 - Observation process-alive compose (Capacitor Lot 10 — in-memory draft, upload at send)
 - AI pipeline → Signal feed and detail

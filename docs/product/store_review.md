@@ -11,8 +11,7 @@ Related: [`store_listing.md`](store_listing.md) · [`store_compliance.md`](store
 
 The store binary talks to `https://app.spore-os.com`.
 
-- Owner registration needs a valid `HOUSTON_REGISTRATION_INVITE_CODES` value on Railway. Empty list → registration rejected.
-- After register, the owner must finish draft onboarding and invite a **director** (distinct person) before the establishment can activate.
+- Reviewers sign in with an already **activated** staff account. There is no public owner registration.
 - Operational data is establishment-scoped. A reviewer with no active membership on an active establishment cannot exercise the core loop.
 - Publishing observations / comments / chat requires CGU `cgu-v1`. Transcription and the AI observation pipeline require in-app consent `openai-v1`.
 - The observation → signal path needs a running Celery worker and the production AI configuration. An empty signal feed is a review risk, not a store-metadata problem.
@@ -30,23 +29,21 @@ Optional second login (manager or director) only if you want them to see a highe
 
 Do this once on production. Store credentials in your private notes, not in this repo.
 
-1. Confirm Railway: invite codes set, Celery worker running, OpenAI configured if you want transcription/AI reviewed.
-2. Register an owner with the invite code. Use fictional identity and a mailbox you control.
-3. Complete the onboarding wizard (activity description, units, subjects, team).
-4. Invite a director at a second mailbox you control; accept the invite; activate the establishment.
-5. Create one or two staff/manager seats (fictional workplace names). Accept CGU and OpenAI consent on **every** account you will hand to stores.
-6. As staff, submit a few observations and leave at least one signal and one action plan visible so the feed is not empty. Use workplace wording, not KONOHA / anime names.
-7. Sign out, sign in on a clean session with the **staff** credentials you will paste in the consoles. Walk observation → signal → plan without help.
-8. Confirm account deletion remains reachable from Profil (reviewers must not need it, but stores ask).
+1. Confirm Railway: Celery worker running, OpenAI configured if you want transcription/AI reviewed.
+2. Use an existing **activated** establishment (Platform-created). Do not ask reviewers to register or run the onboarding wizard.
+3. Create one or two staff/manager seats (fictional workplace names). Accept CGU and OpenAI consent on **every** account you will hand to stores.
+4. As staff, submit a few observations and leave at least one signal and one action plan visible so the feed is not empty. Use workplace wording, not KONOHA / anime names.
+5. Sign out, sign in on a clean session with the **staff** credentials you will paste in the consoles. Walk observation → signal → plan without help.
+6. Confirm account deletion remains reachable from Profil (reviewers must not need it, but stores ask).
 
-If step 7 fails, do not submit. Fix production or the sandbox, then retry.
+If step 5 fails, do not submit. Fix production or the sandbox, then retry.
 
 ## App Review Information (Apple) — paste
 
 ```
 Spore is a workplace operations app for a single establishment, not a public social network.
 
-Sign in with the demo staff account below. Do not create a new account (owner signup is invite-gated and requires completing onboarding plus a director invite).
+Sign in with the demo staff account below. Do not create a new account. Onboarding is operator-only on desktop Platform.
 
 Username / email: [REDACTED — operator]
 Password: [REDACTED — operator]
