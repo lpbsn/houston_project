@@ -87,6 +87,7 @@ export function ChatComposer({
   const [files, setFiles] = useState<File[]>([])
   const [cursor, setCursor] = useState(0)
   const hydratedRef = useRef<string | null>(null)
+  const latestScopeRef = useRef<string | null>(null)
   const fileRecordsRef = useRef<ChatOutboxAttachmentRecord[]>([])
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -126,34 +127,54 @@ export function ChatComposer({
     if (hydratedRef.current === scopeKey) {
       return
     }
-    hydratedRef.current = scopeKey
+    latestScopeRef.current = scopeKey
+    hydratedRef.current = null
+    setDraft('')
+    setMentions([])
+    setFiles([])
+    fileRecordsRef.current = []
     void loadComposerDraft({ userId, establishmentId, conversationId }).then(async (saved) => {
-      if (!saved) {
+      if (latestScopeRef.current !== scopeKey) {
         return
       }
-      setDraft(saved.body)
-      setMentions(saved.mentions)
-      fileRecordsRef.current = saved.attachments
+      if (!saved) {
+        hydratedRef.current = scopeKey
+        return
+      }
       const restoredFiles: File[] = []
       for (const attachment of saved.attachments) {
+        if (latestScopeRef.current !== scopeKey) {
+          return
+        }
         const blob = await readChatOutboxAttachmentBytes(attachment)
         if (blob) {
           restoredFiles.push(new File([blob], attachment.filename, { type: attachment.contentType }))
         }
       }
+      if (latestScopeRef.current !== scopeKey) {
+        return
+      }
+      setDraft(saved.body)
+      setMentions(saved.mentions)
+      fileRecordsRef.current = saved.attachments
       setFiles(restoredFiles)
       if (saved.replyTo) {
         onRestoreReply?.(saved.replyTo)
       }
+      hydratedRef.current = scopeKey
     })
   }, [conversationId, establishmentId, onRestoreReply, userId])
 
   useEffect(() => {
-    if (!userId || !establishmentId || !conversationId || hydratedRef.current == null) {
+    if (!userId || !establishmentId || !conversationId) {
+      return
+    }
+    const scopeKey = composerDraftId(userId, establishmentId, conversationId)
+    if (hydratedRef.current !== scopeKey) {
       return
     }
     void saveComposerDraft({
-      id: composerDraftId(userId, establishmentId, conversationId),
+      id: scopeKey,
       userId,
       establishmentId,
       conversationId,
