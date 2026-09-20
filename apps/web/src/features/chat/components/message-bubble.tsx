@@ -4,7 +4,11 @@ import { Reply } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 import { formatChatAttachmentSize, formatChatRelativeTime } from '../lib/chat-display'
-import { fetchAuthenticatedChatMedia } from '../lib/chat-media'
+import {
+  fetchAuthenticatedChatMedia,
+  toChatAttachmentPreviewItem,
+  type ChatAttachmentPreviewItem,
+} from '../lib/chat-media'
 import { splitBodyByMentions } from '../lib/chat-mentions'
 import type { ChatMessage, ChatReplyTo, LocalChatMessage } from '../types'
 
@@ -15,6 +19,7 @@ type MessageBubbleProps = {
   onCancel?: () => void
   onReply?: (payload: { id: string; authorDisplayName: string; excerpt: string }) => void
   onJumpToMessage?: (messageId: string) => void
+  onSelectAttachment?: (item: ChatAttachmentPreviewItem) => void
 }
 
 function isLocalMessage(message: ChatMessage | LocalChatMessage): message is LocalChatMessage {
@@ -76,6 +81,7 @@ function readMessage(message: ChatMessage | LocalChatMessage) {
         id: attachment.localAttachmentId,
         kind: attachment.contentType === 'application/pdf' ? 'document' : 'image',
         previewUrl: attachment.previewUrl,
+        originalSrc: attachment.previewUrl,
         filename: attachment.filename,
         contentType: attachment.contentType,
         sizeBytes: attachment.sizeBytes,
@@ -96,10 +102,10 @@ function readMessage(message: ChatMessage | LocalChatMessage) {
       id: attachment.id,
       kind: attachment.kind,
       previewUrl: attachment.thumbnail_url ?? attachment.preview_url,
+      originalSrc: attachment.preview_url,
       filename: attachment.original_filename,
       contentType: attachment.content_type,
       sizeBytes: attachment.size_bytes,
-      href: attachment.preview_url,
     })),
   }
 }
@@ -111,6 +117,7 @@ export function MessageBubble({
   onCancel,
   onReply,
   onJumpToMessage,
+  onSelectAttachment,
 }: MessageBubbleProps) {
   const parsed = readMessage(message)
   const isFailed = parsed.status === 'failed'
@@ -204,25 +211,46 @@ export function MessageBubble({
               return (
                 <li key={attachment.id}>
                   {attachment.kind === 'image' && attachment.previewUrl ? (
-                    'href' in attachment && attachment.href ? (
-                      <a href={attachment.href} target="_blank" rel="noreferrer">
-                        <ChatMediaImage src={attachment.previewUrl} alt={attachment.filename} />
-                      </a>
-                    ) : (
+                    <button
+                      type="button"
+                      className="block max-w-full text-left"
+                      onClick={() => {
+                        const item = toChatAttachmentPreviewItem({
+                          id: attachment.id,
+                          filename: attachment.filename,
+                          contentType: attachment.contentType,
+                          kind: attachment.kind,
+                          src: attachment.originalSrc ?? attachment.previewUrl,
+                        })
+                        if (item) {
+                          onSelectAttachment?.(item)
+                        }
+                      }}
+                    >
                       <ChatMediaImage src={attachment.previewUrl} alt={attachment.filename} />
-                    )
-                  ) : 'href' in attachment && attachment.href ? (
-                    <a
-                      href={attachment.href}
-                      target="_blank"
-                      rel="noreferrer"
+                    </button>
+                  ) : attachment.originalSrc ? (
+                    <button
+                      type="button"
                       className="text-[13px] underline"
+                      onClick={() => {
+                        const item = toChatAttachmentPreviewItem({
+                          id: attachment.id,
+                          filename: attachment.filename,
+                          contentType: attachment.contentType,
+                          kind: attachment.kind,
+                          src: attachment.originalSrc,
+                        })
+                        if (item) {
+                          onSelectAttachment?.(item)
+                        }
+                      }}
                     >
                       {attachment.filename}
                       {'sizeBytes' in attachment && attachment.sizeBytes
                         ? ` · ${formatChatAttachmentSize(attachment.sizeBytes)}`
                         : ''}
-                    </a>
+                    </button>
                   ) : (
                     <span className="text-[13px]">
                       {attachment.filename}

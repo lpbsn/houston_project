@@ -6,6 +6,7 @@ import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 
 import { ChatApiError } from '../api'
+import { ChatAttachmentPreviewDialog } from '../components/chat-attachment-preview-dialog'
 import { ChatComposer } from '../components/chat-composer'
 import { ChatConversationInfoSheet } from '../components/chat-conversation-info-sheet'
 import { ChatManageMembersSheet } from '../components/chat-manage-members-sheet'
@@ -18,7 +19,13 @@ import {
   isSameChatDay,
 } from '../lib/chat-display'
 import { formatChatRetentionNotice } from '../lib/chat-limits'
+import {
+  isChatImageAttachment,
+  isChatPdfAttachment,
+  type ChatAttachmentPreviewItem,
+} from '../lib/chat-media'
 import { flattenChatMessagePages, mergeServerAndLocalMessages } from '../lib/chat-messages'
+import { chatPdfAlertMessage, openChatPdfAttachment } from '../lib/chat-pdf'
 import {
   useChatConversationDetailQuery,
   useChatMessagesInfiniteQuery,
@@ -37,6 +44,8 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
   const viewerDisplayName = auth.bootstrap?.user.username ?? 'Vous'
   const [manageMembersOpen, setManageMembersOpen] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
+  const [previewItem, setPreviewItem] = useState<ChatAttachmentPreviewItem | null>(null)
+  const [pdfAlert, setPdfAlert] = useState<string | null>(null)
   const [replyTo, setReplyTo] = useState<{
     id: string
     authorDisplayName: string
@@ -75,6 +84,23 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
     () => mergeServerAndLocalMessages(serverMessages, localMessages, conversationId),
     [conversationId, localMessages, serverMessages],
   )
+
+  async function handleSelectAttachment(item: ChatAttachmentPreviewItem) {
+    if (isChatImageAttachment(item)) {
+      setPreviewItem(item)
+      return
+    }
+    if (!isChatPdfAttachment(item)) {
+      return
+    }
+    setPdfAlert(null)
+    const result = await openChatPdfAttachment({
+      src: item.src,
+      filename: item.filename,
+      id: item.id,
+    })
+    setPdfAlert(chatPdfAlertMessage(result.reason))
+  }
 
   useEffect(() => {
     if (!establishmentId || !conversationId || !detailQuery.isSuccess) {
@@ -186,6 +212,12 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
           </div>
         ) : null}
 
+        {pdfAlert ? (
+          <p className="mb-3 text-sm text-[#E24B4A]" role="alert">
+            {pdfAlert}
+          </p>
+        ) : null}
+
         {mergedMessages.length === 0 ? (
           <TerrainEmptyState
             className="mt-8"
@@ -229,6 +261,9 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
                       message={message}
                       isOwn={isOwn}
                       onReply={setReplyTo}
+                      onSelectAttachment={(item) => {
+                        void handleSelectAttachment(item)
+                      }}
                       onJumpToMessage={(messageId) => {
                         document.getElementById(`chat-msg-${messageId}`)?.scrollIntoView({
                           block: 'center',
@@ -286,12 +321,15 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
         open={infoOpen}
         onClose={() => setInfoOpen(false)}
         knownMessageIds={new Set(serverMessages.map((message) => message.id))}
-        onJumpToMessage={(messageId) => {
-          document.getElementById(`chat-msg-${messageId}`)?.scrollIntoView({
-            block: 'center',
-          })
+        pdfAlert={pdfAlert}
+        onSelectAttachment={(item) => {
+          void handleSelectAttachment(item)
         }}
       />
+
+      {previewItem ? (
+        <ChatAttachmentPreviewDialog item={previewItem} onClose={() => setPreviewItem(null)} />
+      ) : null}
 
       {canManageMembers ? (
         <ChatManageMembersSheet

@@ -5,8 +5,9 @@ import { TerrainBottomSheet } from '@/components/ui/terrain'
 
 import { chatQueryKeys, fetchChatSharedMedia } from '../api'
 import { formatChatAttachmentSize, formatChatRelativeTime } from '../lib/chat-display'
+import { toChatAttachmentPreviewItem, type ChatAttachmentPreviewItem } from '../lib/chat-media'
 import { ChatMediaImage } from './message-bubble'
-import type { ChatAttachment, ChatConversationDetail } from '../types'
+import type { ChatConversationDetail } from '../types'
 
 type ChatConversationInfoSheetProps = {
   establishmentId: string
@@ -15,6 +16,8 @@ type ChatConversationInfoSheetProps = {
   onClose: () => void
   knownMessageIds?: Set<string>
   onJumpToMessage?: (messageId: string) => void
+  onSelectAttachment?: (item: ChatAttachmentPreviewItem) => void
+  pdfAlert?: string | null
 }
 
 export function ChatConversationInfoSheet({
@@ -23,7 +26,8 @@ export function ChatConversationInfoSheet({
   open,
   onClose,
   knownMessageIds,
-  onJumpToMessage,
+  onSelectAttachment,
+  pdfAlert,
 }: ChatConversationInfoSheetProps) {
   const [tab, setTab] = useState<'participants' | 'media' | 'documents'>('participants')
   const kind = tab === 'media' ? 'image' : tab === 'documents' ? 'document' : null
@@ -40,16 +44,24 @@ export function ChatConversationInfoSheet({
   })
   const mediaItems = mediaQuery.data?.pages.flatMap((page) => page.items) ?? []
 
-  function jump(item: ChatAttachment) {
-    const messageId = item.message_id
-    if (!messageId) {
+  function selectSharedItem(item: {
+    id: string
+    original_filename: string
+    content_type: string
+    kind: string
+    preview_url: string
+  }) {
+    const previewItem = toChatAttachmentPreviewItem({
+      id: item.id,
+      filename: item.original_filename,
+      contentType: item.content_type,
+      kind: item.kind,
+      src: item.preview_url,
+    })
+    if (!previewItem) {
       return
     }
-    if (knownMessageIds && !knownMessageIds.has(messageId)) {
-      return
-    }
-    onJumpToMessage?.(messageId)
-    onClose()
+    onSelectAttachment?.(previewItem)
   }
 
   return (
@@ -84,6 +96,12 @@ export function ChatConversationInfoSheet({
         </button>
       </div>
 
+      {pdfAlert ? (
+        <p className="mb-3 text-sm text-[#E24B4A]" role="alert">
+          {pdfAlert}
+        </p>
+      ) : null}
+
       {tab === 'participants' ? (
         <ul className="space-y-2">
           {conversation.participants.map((participant) => (
@@ -106,7 +124,7 @@ export function ChatConversationInfoSheet({
                 <button
                   type="button"
                   className="block w-full overflow-hidden rounded-lg"
-                  onClick={() => jump(item)}
+                  onClick={() => selectSharedItem(item)}
                 >
                   <ChatMediaImage
                     src={item.thumbnail_url ?? item.preview_url}
@@ -126,7 +144,7 @@ export function ChatConversationInfoSheet({
             const available = !knownMessageIds || knownMessageIds.has(item.message_id)
             return (
               <li key={item.id} className="rounded-xl bg-[#F5F4F0] px-3 py-2">
-                <button type="button" className="w-full text-left" onClick={() => jump(item)}>
+                <button type="button" className="w-full text-left" onClick={() => selectSharedItem(item)}>
                   <p className="text-sm font-medium text-[#1a1a1a]">{item.original_filename}</p>
                   <p className="text-[11px] text-[#7D7B75]">
                     {item.content_type} · {formatChatAttachmentSize(item.size_bytes)} ·{' '}
