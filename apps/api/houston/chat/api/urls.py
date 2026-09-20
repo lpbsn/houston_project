@@ -1,4 +1,11 @@
 from django.urls import path
+from houston.chat.api.upload_views import (
+    ChatAttachmentPreviewView,
+    ChatCompleteUploadView,
+    ChatReserveUploadView,
+    ChatSharedMediaView,
+    ChatUploadContentView,
+)
 from houston.chat.api.views import (
     ChatAddParticipantView,
     ChatConversationDetailView,
@@ -94,6 +101,31 @@ urlpatterns = [
         "establishments/<uuid:establishment_id>/chat/conversations/<uuid:conversation_id>/hide/",
         ChatHideConversationView.as_view(),
         name="chat-conversation-hide",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/chat/uploads/",
+        ChatReserveUploadView.as_view(),
+        name="chat-upload-reserve",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/chat/uploads/<uuid:upload_id>/content/",
+        ChatUploadContentView.as_view(),
+        name="chat-upload-content",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/chat/uploads/<uuid:upload_id>/complete/",
+        ChatCompleteUploadView.as_view(),
+        name="chat-upload-complete",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/chat/attachments/<uuid:attachment_id>/preview/",
+        ChatAttachmentPreviewView.as_view(),
+        name="chat-attachment-preview",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/chat/conversations/<uuid:conversation_id>/shared-media/",
+        ChatSharedMediaView.as_view(),
+        name="chat-conversation-shared-media",
     ),
     path(
         "establishments/<uuid:establishment_id>/chat/eligible-memberships/",

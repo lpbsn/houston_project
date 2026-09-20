@@ -1300,6 +1300,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/chat/attachments/{attachment_id}/preview/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_chat_attachments_preview_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/chat/conversations/": {
         parameters: {
             query?: never;
@@ -1476,6 +1492,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/shared-media/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_chat_conversations_shared_media_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/chat/conversations/dm/": {
         parameters: {
             query?: never;
@@ -1549,6 +1581,54 @@ export interface paths {
         };
         get: operations["v1_establishments_chat_status_retrieve"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/chat/uploads/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_chat_uploads_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/chat/uploads/{upload_id}/complete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_chat_uploads_complete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/chat/uploads/{upload_id}/content/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["v1_establishments_chat_uploads_content_update"];
         post?: never;
         delete?: never;
         options?: never;
@@ -3682,6 +3762,16 @@ export interface components {
             /** Format: uuid */
             membership_id: string;
         };
+        ChatAttachment: {
+            /** Format: uuid */
+            id: string;
+            kind: string;
+            content_type: string;
+            size_bytes: number;
+            original_filename: string;
+            preview_url: string;
+            thumbnail_url: string | null;
+        };
         ChatConversationDetail: {
             /** Format: uuid */
             id: string;
@@ -3753,6 +3843,7 @@ export interface components {
             is_reply: boolean;
             reply_to: components["schemas"]["ChatReplyTo"] | null;
             mentions: components["schemas"]["ChatMessageMention"][];
+            attachments: components["schemas"]["ChatAttachment"][];
         };
         ChatMessageListResponse: {
             items: components["schemas"]["ChatMessage"][];
@@ -3777,6 +3868,7 @@ export interface components {
             is_reply?: boolean;
             reply_to?: components["schemas"]["ChatReplyTo"] | null;
             mentions?: components["schemas"]["ChatMessageMention"][];
+            attachments?: components["schemas"]["ChatAttachment"][];
         };
         ChatParticipantSummary: {
             /** Format: uuid */
@@ -3794,6 +3886,20 @@ export interface components {
             author_display_name?: string | null;
             excerpt?: string | null;
         };
+        ChatReserveUploadRequest: {
+            /** Format: uuid */
+            conversation_id: string;
+            filename: string;
+            content_type: string;
+            size_bytes: number;
+        };
+        ChatReserveUploadResponse: {
+            /** Format: uuid */
+            upload_id: string;
+            put_url: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
         ChatSendMessageRequest: {
             /** Format: uuid */
             client_message_id: string;
@@ -3801,6 +3907,7 @@ export interface components {
             /** Format: uuid */
             reply_to_id?: string | null;
             mentions?: components["schemas"]["ChatMessageMention"][];
+            attachment_ids?: string[];
         };
         ChatSendMessageResponse: {
             message: components["schemas"]["ChatMessage"];
@@ -3812,6 +3919,14 @@ export interface components {
             can_create_dm: boolean;
             can_create_group: boolean;
             can_manage_settings: boolean;
+        };
+        ChatUploadCompleteResponse: {
+            /** Format: uuid */
+            upload_id: string;
+            status: string;
+            kind: string;
+            content_type: string;
+            size_bytes: number | null;
         };
         ChatWsTicketResponse: {
             ticket: string;
@@ -9597,6 +9712,43 @@ export interface operations {
             };
         };
     };
+    v1_establishments_chat_attachments_preview_retrieve: {
+        parameters: {
+            query?: {
+                variant?: "full" | "thumbnail";
+            };
+            header?: never;
+            path: {
+                attachment_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Binary attachment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Redirect to presigned GET. */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     chat_conversations_list: {
         parameters: {
             query?: never;
@@ -10371,6 +10523,38 @@ export interface operations {
             };
         };
     };
+    v1_establishments_chat_conversations_shared_media_retrieve: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                kind?: string;
+            };
+            header?: never;
+            path: {
+                conversation_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Shared media page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     v1_establishments_chat_conversations_dm_create: {
         parameters: {
             query?: never;
@@ -10633,6 +10817,140 @@ export interface operations {
                 };
             };
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_chat_uploads_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatReserveUploadRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ChatReserveUploadRequest"];
+                "multipart/form-data": components["schemas"]["ChatReserveUploadRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatReserveUploadResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_chat_uploads_complete_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatUploadCompleteResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_chat_uploads_content_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Content stored. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

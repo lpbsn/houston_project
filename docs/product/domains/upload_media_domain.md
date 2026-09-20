@@ -25,13 +25,13 @@ It does not own Observation submission validity, AI transcription behavior, priv
 
 ## 3. Out of Scope
 
-- Media attachments in Chat V1.
+- Public media galleries, public sharing links, or publicly reachable media URLs (chat media stays establishment- and conversation-scoped).
 - Public media galleries, public sharing links, or publicly reachable media URLs.
 - Arbitrary file manager behavior.
 - Document, PDF, or video upload unless later validated.
 - Long-lived audio storage.
 - OCR, image understanding, or image-to-AI workflow.
-- Direct browser-to-storage upload as implemented MVP behavior.
+- Direct browser-to-storage upload for Observation photos (multipart remains). Chat attachments use a dedicated private bucket and presigned PUT.
 - Media editing, cropping, or library management workflow.
 - Cross-resource media reuse outside validated parent-resource rules.
 
@@ -56,6 +56,10 @@ It does not own Observation submission validity, AI transcription behavior, priv
 - Accepted **input** image formats are `jpeg`, `jpg`, `png`, `webp`, and `heic`/`heif` when backend validation can decode them. Durable Observation photos are stored as normalized JPEG or PNG.
 
 ## 5. Main Objects
+
+- `ChatUpload` / `ChatMessageAttachment`
+  - Chat attachments live in the dedicated `chat-attachement` bucket (`HOUSTON_CHAT_S3_*` / `HOUSTON_CHAT_PRIVATE_MEDIA_ROOT`).
+  - Reserve + presigned PUT + Houston `complete` (validation + Celery thumbnail for images). Not `TemporaryUpload`.
 
 - `TemporaryUpload`
   - Unlinked file captured before the final Observation submit flow completes.

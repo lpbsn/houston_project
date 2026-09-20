@@ -736,6 +736,7 @@ class ChatConversationMessagesView(EstablishmentScopedChatMixin, APIView):
                 body=body.validated_data.get("body", ""),
                 reply_to_id=body.validated_data.get("reply_to_id"),
                 mentions=body.validated_data.get("mentions") or [],
+                attachment_ids=body.validated_data.get("attachment_ids") or [],
             )
         except ChatMessageRateLimitExceeded:
             logger.warning(

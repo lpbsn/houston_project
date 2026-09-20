@@ -917,6 +917,7 @@ def create_message(
     body: str,
     reply_to_id: uuid.UUID | None = None,
     mentions: list[dict] | None = None,
+    attachment_ids: list[uuid.UUID] | None = None,
 ) -> MessageSendResult:
     if not can_access_chat(author_membership):
         raise ChatPermissionError()
@@ -961,7 +962,16 @@ def create_message(
             except MembershipBlockedError:
                 raise ChatPermissionError(MEMBERSHIP_BLOCKED_DETAIL, code="membership_blocked")
 
-    normalized_body = normalize_message_body(body, required=True)
+    uploads = []
+    if attachment_ids:
+        from houston.chat.upload_services import lock_validated_uploads_for_message
+
+        uploads = lock_validated_uploads_for_message(
+            actor_membership=author_membership,
+            conversation_id=conversation.id,
+            attachment_ids=attachment_ids,
+        )
+    normalized_body = normalize_message_body(body, required=not uploads)
     validated_reply_to_id = _validate_reply_to(
         conversation_id=conversation.id,
         reply_to_id=reply_to_id,
@@ -997,6 +1007,10 @@ def create_message(
         client_message_id=client_message_id,
         reply_to_id=validated_reply_to_id,
     )
+    if uploads:
+        from houston.chat.upload_services import link_uploads_to_message
+
+        link_uploads_to_message(message=message, uploads=uploads)
     if validated_mentions:
         ChatMessageMention.objects.bulk_create(
             [

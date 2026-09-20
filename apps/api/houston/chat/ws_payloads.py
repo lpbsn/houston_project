@@ -32,6 +32,13 @@ def serialize_message_for_ws(message: ChatMessage) -> dict:
             }
             for item in payload["mentions"]
         ],
+        "attachments": [
+            {
+                **item,
+                "id": str(item["id"]),
+            }
+            for item in payload["attachments"]
+        ],
     }
 
 

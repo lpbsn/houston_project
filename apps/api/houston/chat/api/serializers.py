@@ -47,6 +47,16 @@ class ChatMessageMentionSerializer(serializers.Serializer):
     display_name = serializers.CharField(required=False)
 
 
+class ChatAttachmentSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    kind = serializers.CharField()
+    content_type = serializers.CharField()
+    size_bytes = serializers.IntegerField()
+    original_filename = serializers.CharField()
+    preview_url = serializers.CharField()
+    thumbnail_url = serializers.CharField(allow_null=True)
+
+
 class ChatReplyToSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     unavailable = serializers.BooleanField()
@@ -63,6 +73,7 @@ class ChatMessagePreviewSerializer(serializers.Serializer):
     is_reply = serializers.BooleanField(required=False)
     reply_to = ChatReplyToSerializer(allow_null=True, required=False)
     mentions = ChatMessageMentionSerializer(many=True, required=False)
+    attachments = ChatAttachmentSerializer(many=True, required=False)
 
 
 class ChatConversationListItemSerializer(serializers.Serializer):
@@ -106,6 +117,7 @@ class ChatMessageSerializer(serializers.Serializer):
     is_reply = serializers.BooleanField()
     reply_to = ChatReplyToSerializer(allow_null=True)
     mentions = ChatMessageMentionSerializer(many=True)
+    attachments = ChatAttachmentSerializer(many=True)
 
 
 class ChatSendMessageRequestSerializer(serializers.Serializer):
@@ -113,12 +125,44 @@ class ChatSendMessageRequestSerializer(serializers.Serializer):
     body = serializers.CharField(allow_blank=True, max_length=CHAT_MESSAGE_BODY_MAX_LENGTH)
     reply_to_id = serializers.UUIDField(required=False, allow_null=True)
     mentions = ChatMessageMentionSerializer(many=True, required=False)
+    attachment_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        allow_empty=True,
+    )
 
     def validate_mentions(self, value):
         for item in value:
             if item["start"] >= item["end"]:
                 raise serializers.ValidationError("Mention start must be less than end.")
         return value
+
+
+class ChatReserveUploadRequestSerializer(serializers.Serializer):
+    conversation_id = serializers.UUIDField()
+    filename = serializers.CharField(max_length=255)
+    content_type = serializers.CharField(max_length=120)
+    size_bytes = serializers.IntegerField(min_value=1)
+
+
+class ChatReserveUploadResponseSerializer(serializers.Serializer):
+    upload_id = serializers.UUIDField()
+    put_url = serializers.CharField(allow_blank=True)
+    expires_at = serializers.DateTimeField()
+
+
+class ChatUploadCompleteResponseSerializer(serializers.Serializer):
+    upload_id = serializers.UUIDField()
+    status = serializers.CharField()
+    kind = serializers.CharField()
+    content_type = serializers.CharField()
+    size_bytes = serializers.IntegerField(allow_null=True)
+
+
+class ChatSharedMediaResponseSerializer(serializers.Serializer):
+    items = ChatAttachmentSerializer(many=True)
+    has_more = serializers.BooleanField()
+    cursor = serializers.CharField(allow_null=True)
 
 
 class ChatSendMessageResponseSerializer(serializers.Serializer):
@@ -232,6 +276,36 @@ def _serialize_mentions(message: ChatMessage) -> list[dict]:
     return items
 
 
+def _serialize_attachments(message: ChatMessage) -> list[dict]:
+    attachments = getattr(message, "_prefetched_objects_cache", {}).get("attachments")
+    if attachments is None:
+        attachments = list(message.attachments.select_related("upload").all())
+    establishment_id = message.conversation.establishment_id
+    items = []
+    for attachment in sorted(attachments, key=lambda item: (item.position, item.id)):
+        thumbnail_key = getattr(attachment.upload, "thumbnail_storage_key", "")
+        items.append(
+            {
+                "id": attachment.id,
+                "kind": attachment.kind,
+                "content_type": attachment.content_type,
+                "size_bytes": attachment.size_bytes,
+                "original_filename": attachment.original_filename,
+                "preview_url": (
+                    f"/api/v1/establishments/{establishment_id}"
+                    f"/chat/attachments/{attachment.id}/preview/"
+                ),
+                "thumbnail_url": (
+                    f"/api/v1/establishments/{establishment_id}"
+                    f"/chat/attachments/{attachment.id}/preview/?variant=thumbnail"
+                    if thumbnail_key
+                    else None
+                ),
+            }
+        )
+    return items
+
+
 def serialize_message(
     message: ChatMessage,
     *,
@@ -258,6 +332,7 @@ def serialize_message(
         "is_reply": reply_to_id is not None,
         "reply_to": _serialize_reply_to(message, parent=resolved_parent),
         "mentions": _serialize_mentions(message),
+        "attachments": _serialize_attachments(message),
     }
 
 

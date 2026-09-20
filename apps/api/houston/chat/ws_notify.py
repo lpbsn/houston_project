@@ -250,8 +250,9 @@ def schedule_message_created(
             ChatMessage.objects.select_related(
                 "author_membership",
                 "author_membership__user",
+                "conversation",
             )
-            .prefetch_related("mentions__membership__user")
+            .prefetch_related("mentions__membership__user", "attachments__upload")
             .filter(id=message_id)
             .first()
         )

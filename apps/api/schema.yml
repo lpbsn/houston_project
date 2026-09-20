@@ -4498,6 +4498,40 @@ paths:
               schema:
                 $ref: '#/components/schemas/RuntimeConfigErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/chat/attachments/{attachment_id}/preview/:
+    get:
+      operationId: v1_establishments_chat_attachments_preview_retrieve
+      parameters:
+      - in: path
+        name: attachment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: variant
+        schema:
+          type: string
+          enum:
+          - full
+          - thumbnail
+      tags:
+      - chat
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          description: Binary attachment.
+        '302':
+          description: Redirect to presigned GET.
+        '404':
+          description: Not found.
   /api/v1/establishments/{establishment_id}/chat/conversations/:
     get:
       operationId: chat_conversations_list
@@ -5232,6 +5266,43 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/shared-media/:
+    get:
+      operationId: v1_establishments_chat_conversations_shared_media_retrieve
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: kind
+        schema:
+          type: string
+      tags:
+      - chat
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          description: Shared media page.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/chat/conversations/dm/:
     post:
       operationId: v1_establishments_chat_conversations_dm_create
@@ -5486,6 +5557,137 @@ paths:
                 $ref: '#/components/schemas/ChatStatus'
           description: ''
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/chat/uploads/:
+    post:
+      operationId: v1_establishments_chat_uploads_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - chat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatReserveUploadRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChatReserveUploadRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChatReserveUploadRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatReserveUploadResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/chat/uploads/{upload_id}/complete/:
+    post:
+      operationId: v1_establishments_chat_uploads_complete_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: upload_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - chat
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatUploadCompleteResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/chat/uploads/{upload_id}/content/:
+    put:
+      operationId: v1_establishments_chat_uploads_content_update
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: upload_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - chat
+      security:
+      - BearerAccessToken: []
+      responses:
+        '204':
+          description: Content stored.
+        '400':
           content:
             application/json:
               schema:
@@ -11231,6 +11433,33 @@ components:
           format: uuid
       required:
       - membership_id
+    ChatAttachment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+        content_type:
+          type: string
+        size_bytes:
+          type: integer
+        original_filename:
+          type: string
+        preview_url:
+          type: string
+        thumbnail_url:
+          type: string
+          nullable: true
+      required:
+      - content_type
+      - id
+      - kind
+      - original_filename
+      - preview_url
+      - size_bytes
+      - thumbnail_url
     ChatConversationDetail:
       type: object
       properties:
@@ -11413,7 +11642,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ChatMessageMention'
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatAttachment'
       required:
+      - attachments
       - author_display_name
       - author_membership_id
       - body
@@ -11479,6 +11713,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ChatMessageMention'
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatAttachment'
       required:
       - author_display_name
       - author_membership_id
@@ -11523,6 +11761,41 @@ components:
       required:
       - id
       - unavailable
+    ChatReserveUploadRequest:
+      type: object
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+        filename:
+          type: string
+          maxLength: 255
+        content_type:
+          type: string
+          maxLength: 120
+        size_bytes:
+          type: integer
+          minimum: 1
+      required:
+      - content_type
+      - conversation_id
+      - filename
+      - size_bytes
+    ChatReserveUploadResponse:
+      type: object
+      properties:
+        upload_id:
+          type: string
+          format: uuid
+        put_url:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - expires_at
+      - put_url
+      - upload_id
     ChatSendMessageRequest:
       type: object
       properties:
@@ -11540,6 +11813,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ChatMessageMention'
+        attachment_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
       required:
       - body
       - client_message_id
@@ -11572,6 +11850,27 @@ components:
       - can_create_group
       - can_manage_settings
       - chat_enabled
+    ChatUploadCompleteResponse:
+      type: object
+      properties:
+        upload_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        kind:
+          type: string
+        content_type:
+          type: string
+        size_bytes:
+          type: integer
+          nullable: true
+      required:
+      - content_type
+      - kind
+      - size_bytes
+      - status
+      - upload_id
     ChatWsTicketResponse:
       type: object
       properties:
