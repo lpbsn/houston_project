@@ -6,6 +6,7 @@ import type { paths } from "./generated/types"
 
 export const apiClient = createClient<paths>({
   baseUrl: getApiBaseUrl(),
+  fetch: (request) => globalThis.fetch(request),
 })
 
 type AuthRuntime = {

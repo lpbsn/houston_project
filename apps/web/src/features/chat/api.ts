@@ -3,6 +3,7 @@ import { apiClient, fetchWithAuthRetry, withAuthRetry } from '@/api/client'
 import { parseStandardApiError } from '@/lib/api-errors'
 import { resolveApiUrl } from '@/lib/runtime'
 
+import { isExternalPresignedPutUrl } from './lib/chat-upload-put'
 import type {
   ChatConversationDetail,
   ChatConversationListResponse,
@@ -561,7 +562,10 @@ export async function putChatUploadBytes(options: {
   signal?: AbortSignal
   onProgress?: (ratio: number) => void
 }): Promise<void> {
-  if (options.putUrl) {
+  const houstonContentUrl = resolveApiUrl(
+    `/api/v1/establishments/${options.establishmentId}/chat/uploads/${options.uploadId}/content/`,
+  )
+  if (isExternalPresignedPutUrl(options.putUrl, houstonContentUrl)) {
     await new Promise<void>((resolve, reject) => {
       const request = new XMLHttpRequest()
       request.open('PUT', options.putUrl)
@@ -595,19 +599,14 @@ export async function putChatUploadBytes(options: {
     return
   }
 
-  const response = await fetchWithAuthRetry(
-    resolveApiUrl(
-      `/api/v1/establishments/${options.establishmentId}/chat/uploads/${options.uploadId}/content/`,
-    ),
-    {
-      method: 'PUT',
-      headers: {
-        'Content-Type': options.contentType,
-      },
-      body: options.blob,
-      signal: options.signal,
+  const response = await fetchWithAuthRetry(houstonContentUrl, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': options.contentType,
     },
-  )
+    body: options.blob,
+    signal: options.signal,
+  })
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}))
     throw parseError(response, payload)
