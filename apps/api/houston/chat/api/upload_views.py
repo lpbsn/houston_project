@@ -11,6 +11,7 @@ from houston.chat.api.serializers import (
     ChatAttachmentSerializer,
     ChatReserveUploadRequestSerializer,
     ChatReserveUploadResponseSerializer,
+    ChatSharedMediaResponseSerializer,
     ChatUploadCompleteResponseSerializer,
 )
 from houston.chat.api.views import (
@@ -270,7 +271,7 @@ class ChatSharedMediaView(EstablishmentScopedChatMixin, APIView):
             OpenApiParameter(name="cursor", required=False, type=str),
         ],
         responses={
-            200: OpenApiResponse(description="Shared media page."),
+            200: ChatSharedMediaResponseSerializer,
             404: OpenApiResponse(response=ApiErrorResponseSerializer),
         },
     )

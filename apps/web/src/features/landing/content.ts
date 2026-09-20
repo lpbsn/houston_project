@@ -349,7 +349,7 @@ export const privacyPolicyContent = {
     {
       title: 'Durées',
       paragraphs: [
-        'Messages de chat : suppression automatique des lignes de message après 7 jours.',
+        'Messages de chat : suppression automatique des lignes de message après 30 jours.',
         'Fichiers temporaires orphelins : 24 heures. Audio de transcription : fin de requête.',
         'Médias d’observation : retirés lorsque le dernier signal actif créé à partir de l’observation disparaît.',
         'La conservation des journaux d’infrastructure Railway n’est pas spécifiée dans le dépôt.',

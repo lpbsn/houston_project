@@ -1,6 +1,7 @@
-import { apiClient, withAuthRetry } from '@/api/client'
+import { apiClient, fetchWithAuthRetry, withAuthRetry } from '@/api/client'
 
 import { parseStandardApiError } from '@/lib/api-errors'
+import { resolveApiUrl } from '@/lib/runtime'
 
 import type {
   ChatConversationDetail,
@@ -8,7 +9,11 @@ import type {
   ChatCreateConversationResponse,
   ChatEligibleMembershipsResponse,
   ChatMessageListResponse,
+  ChatReserveUploadResponse,
+  ChatSendMessageResponse,
+  ChatSharedMediaResponse,
   ChatStatus,
+  ChatUploadCompleteResponse,
   ChatWsTicketResponse,
 } from './types'
 
@@ -27,6 +32,8 @@ export const chatQueryKeys = {
   ) => ['chat', 'eligible-memberships', establishmentId, conversationId, query] as const,
   eligibleMembershipsForConversation: (establishmentId: string, conversationId: string) =>
     ['chat', 'eligible-memberships', establishmentId, conversationId] as const,
+  sharedMedia: (establishmentId: string, conversationId: string, kind: string | null = null) =>
+    ['chat', 'shared-media', establishmentId, conversationId, kind] as const,
 }
 
 export class ChatApiError extends Error {
@@ -441,6 +448,164 @@ export async function postChatConversationPresence(
   if (!result.response.ok) {
     throw parseError(result.response, result.error)
   }
+}
+
+export async function sendChatMessage(
+  establishmentId: string,
+  conversationId: string,
+  payload: {
+    clientMessageId: string
+    body: string
+    replyToId?: string | null
+    mentions?: Array<{ membership_id: string; start: number; end: number }>
+    attachmentIds?: string[]
+  },
+): Promise<ChatSendMessageResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/messages/',
+        {
+          params: conversationPathParams(establishmentId, conversationId),
+          headers: getAuthHeaders(accessToken),
+          body: {
+            client_message_id: payload.clientMessageId,
+            body: payload.body,
+            ...(payload.replyToId ? { reply_to_id: payload.replyToId } : {}),
+            ...(payload.mentions?.length ? { mentions: payload.mentions } : {}),
+            ...(payload.attachmentIds?.length ? { attachment_ids: payload.attachmentIds } : {}),
+          },
+        },
+      ),
+    { refreshable: true },
+  )
+
+  return assertChatData<ChatSendMessageResponse>(result)
+}
+
+export async function reserveChatUpload(
+  establishmentId: string,
+  payload: {
+    conversationId: string
+    filename: string
+    contentType: string
+    sizeBytes: number
+  },
+): Promise<ChatReserveUploadResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/establishments/{establishment_id}/chat/uploads/', {
+        params: chatPathParams(establishmentId),
+        headers: getAuthHeaders(accessToken),
+        body: {
+          conversation_id: payload.conversationId,
+          filename: payload.filename,
+          content_type: payload.contentType,
+          size_bytes: payload.sizeBytes,
+        },
+      }),
+    { refreshable: true },
+  )
+
+  return assertChatData<ChatReserveUploadResponse>(result)
+}
+
+export async function completeChatUpload(
+  establishmentId: string,
+  uploadId: string,
+): Promise<ChatUploadCompleteResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/establishments/{establishment_id}/chat/uploads/{upload_id}/complete/', {
+        params: {
+          path: {
+            establishment_id: establishmentId,
+            upload_id: uploadId,
+          },
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  return assertChatData<ChatUploadCompleteResponse>(result)
+}
+
+export async function putChatUploadBytes(options: {
+  establishmentId: string
+  uploadId: string
+  putUrl: string
+  blob: Blob
+  contentType: string
+  onProgress?: (ratio: number) => void
+}): Promise<void> {
+  if (options.putUrl) {
+    await new Promise<void>((resolve, reject) => {
+      const request = new XMLHttpRequest()
+      request.open('PUT', options.putUrl)
+      request.setRequestHeader('Content-Type', options.contentType)
+      request.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          options.onProgress?.(event.loaded / event.total)
+        }
+      }
+      request.onload = () => {
+        if (request.status >= 200 && request.status < 300) {
+          options.onProgress?.(1)
+          resolve()
+          return
+        }
+        reject(new ChatApiError({ status: request.status, detail: 'Upload failed.' }))
+      }
+      request.onerror = () => reject(new ChatApiError({ status: 0, detail: 'Upload failed.' }))
+      request.send(options.blob)
+    })
+    return
+  }
+
+  const response = await fetchWithAuthRetry(
+    resolveApiUrl(
+      `/api/v1/establishments/${options.establishmentId}/chat/uploads/${options.uploadId}/content/`,
+    ),
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': options.contentType,
+      },
+      body: options.blob,
+    },
+  )
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}))
+    throw parseError(response, payload)
+  }
+  options.onProgress?.(1)
+}
+
+export async function fetchChatSharedMedia(
+  establishmentId: string,
+  conversationId: string,
+  options: { cursor?: string; kind?: string } = {},
+): Promise<ChatSharedMediaResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET(
+        '/api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/shared-media/',
+        {
+          params: {
+            ...conversationPathParams(establishmentId, conversationId),
+            query: {
+              ...(options.cursor ? { cursor: options.cursor } : {}),
+              ...(options.kind ? { kind: options.kind } : {}),
+            },
+          },
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  return assertChatData<ChatSharedMediaResponse>(result)
 }
 
 export async function issueChatWsTicket(establishmentId: string): Promise<ChatWsTicketResponse> {

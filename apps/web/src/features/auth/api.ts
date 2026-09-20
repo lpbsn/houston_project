@@ -2,6 +2,7 @@ import type { QueryClient } from '@tanstack/react-query'
 
 import { apiClient, withAuthRetry } from '@/api/client'
 import { clearAllPlanningSubmissionIntents } from '@/features/action-plans/lib/action-plan-planning-submission-intent'
+import { clearChatOutbox } from '@/features/chat/lib/chat-outbox'
 import { clearObservationComposeDrafts } from '@/features/observations/lib/observation-compose-draft-store'
 import { clearObservationProcessingTrackerOnLogout } from '@/features/observations/lib/observation-processing-tracker-store'
 import { runNativePushBeforeLogout } from '@/lib/native-push-session'
@@ -248,6 +249,7 @@ function clearVolatileAuthState(options?: { bumpInvalidation?: boolean }) {
   clearAccessToken()
   clearAllPlanningSubmissionIntents()
   clearObservationProcessingTrackerOnLogout()
+  void clearChatOutbox()
   clearSuccessToasts()
   clearAuthenticatedQueryCache(queryClient)
 }
@@ -267,6 +269,7 @@ function clearPersistedRefreshTokenBestEffort() {
 export function clearAuthState() {
   clearVolatileAuthState()
   clearObservationComposeDrafts()
+  void clearChatOutbox()
   clearPersistedRefreshTokenBestEffort()
 }
 
@@ -423,6 +426,7 @@ async function commitCurrentAuthEnvelope(
     purgeNonAuthQueries(queryClient)
     clearAllPlanningSubmissionIntents()
     clearObservationComposeDrafts()
+    void clearChatOutbox()
     clearSuccessToasts()
   }
   setAccessToken(payload.access_token)
@@ -816,6 +820,7 @@ export async function switchEstablishment(input: SwitchEstablishmentRequest) {
   purgeNonAuthQueries(queryClient)
   clearAllPlanningSubmissionIntents()
   clearObservationComposeDrafts()
+  void clearChatOutbox()
   clearSuccessToasts()
   queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, result.data)
   return result.data

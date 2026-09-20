@@ -43,7 +43,7 @@ API contract: [`apps/api/schema.yml`](../../apps/api/schema.yml).
 | Native push (FCM) | Live | Capacitor Lot 7; membership `push_enabled`; Web Push removed |
 | Native HTTPS deep links | Live | Capacitor Lot 8 handler (`getLaunchUrl` / `appUrlOpen`); lot QA = Android `adb` VIEW intent. Store-readiness P1.10 **socle** closed (nginx `.well-known` 404, Vite `public/.well-known`). **Play** `assetlinks.json` and **App Store** AASA wait on store identities |
 | Operational realtime (invalidation) | Live | WS ticket + `OperationalRealtimeProvider` on terrain routes |
-| Chat V1 core | Live | DM + groups, WS messages, Terrain UI `/chat` |
+| Chat V1 core | Live | DM + groups, HTTP send, WS fan-out, attachments, Terrain UI `/chat` |
 | Upload / private media | Live | Authorized reads only |
 | Security / RGPD baseline | Live | See domain doc |
 

@@ -14,6 +14,10 @@ const serverMessage = (overrides: Partial<ChatMessage> = {}): ChatMessage => ({
   body: 'Hello',
   client_message_id: 'client-1',
   created_at: '2026-06-09T10:00:00.000Z',
+  is_reply: false,
+  reply_to: null,
+  mentions: [],
+  attachments: [],
   ...overrides,
 })
 
@@ -21,6 +25,9 @@ const localMessage = (overrides: Partial<LocalChatMessage> = {}): LocalChatMessa
   clientMessageId: 'client-2',
   conversationId: 'conv-1',
   body: 'Pending',
+  mentions: [],
+  replyToId: null,
+  attachments: [],
   status: 'pending',
   createdAt: '2026-06-09T10:01:00.000Z',
   authorMembershipId: 'mbr-1',

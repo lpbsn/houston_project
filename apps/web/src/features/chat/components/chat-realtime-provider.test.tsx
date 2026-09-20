@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { chatQueryKeys } from '../api'
+import { __resetChatOutboxTestStores, __setChatOutboxTestStores } from '../lib/chat-outbox'
 import type {
   ChatConversationListItem,
   ChatWsConversationUpdatedEvent,
@@ -23,7 +24,31 @@ let capturedOnMessageCreated: ((event: ChatWsMessageCreatedEvent) => void) | und
 let capturedOnMessageRejected: ((event: ChatWsMessageRejectedEvent) => void) | undefined
 let capturedOnConversationUpdated: ((event: ChatWsConversationUpdatedEvent) => void) | undefined
 let capturedOnReconnect: (() => void) | undefined
-const sendMessageMock = vi.fn(() => true)
+const { sendChatMessageHttp } = vi.hoisted(() => ({
+  sendChatMessageHttp: vi.fn(async () => ({
+    created: true,
+    message: {
+      id: 'msg-sent',
+      author_membership_id: 'mbr-viewer',
+      author_display_name: 'Viewer',
+      body: 'Hello',
+      client_message_id: 'ignored',
+      created_at: '2026-06-09T16:00:00.000Z',
+      is_reply: false,
+      reply_to: null,
+      mentions: [],
+      attachments: [],
+    },
+  })),
+}))
+
+vi.mock('../api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../api')>()
+  return {
+    ...actual,
+    sendChatMessage: sendChatMessageHttp as typeof actual.sendChatMessage,
+  }
+})
 
 vi.mock('../hooks/use-chat-websocket', () => ({
   useChatWebSocket: (options: {
@@ -38,7 +63,6 @@ vi.mock('../hooks/use-chat-websocket', () => ({
     capturedOnReconnect = options.onReconnect
     return {
       connectionStatus: 'connected',
-      sendMessage: sendMessageMock,
       reconnect: vi.fn(),
     }
   },
@@ -55,6 +79,7 @@ vi.mock('@/features/auth/api', () => ({
 vi.mock('@/app/auth-provider', () => ({
   useAuth: () => ({
     bootstrap: {
+      user: { id: 'user-1', username: 'viewer' },
       active_membership: {
         id: VIEWER_MEMBERSHIP_ID,
         establishment_id: ESTABLISHMENT_ID,
@@ -143,12 +168,28 @@ describe('ChatRealtimeProvider', () => {
     capturedOnMessageRejected = undefined
     capturedOnConversationUpdated = undefined
     capturedOnReconnect = undefined
-    sendMessageMock.mockReset()
-    sendMessageMock.mockReturnValue(true)
+    sendChatMessageHttp.mockReset()
+    sendChatMessageHttp.mockResolvedValue({
+      created: true,
+      message: {
+        id: 'msg-sent',
+        author_membership_id: VIEWER_MEMBERSHIP_ID,
+        author_display_name: 'Viewer',
+        body: 'Hello',
+        client_message_id: 'ignored',
+        created_at: '2026-06-09T16:00:00.000Z',
+        is_reply: false,
+        reply_to: null,
+        mentions: [],
+        attachments: [],
+      },
+    })
+    __setChatOutboxTestStores({})
   })
 
   afterEach(() => {
     cleanup()
+    __resetChatOutboxTestStores()
   })
 
   it('patches conversations cache on message.created', () => {
@@ -182,6 +223,10 @@ describe('ChatRealtimeProvider', () => {
         body: 'Ping',
         client_message_id: 'client-1',
         created_at: '2026-06-09T16:00:00.000Z',
+        is_reply: false,
+        reply_to: null,
+        mentions: [],
+        attachments: [],
       },
     })
 
@@ -226,6 +271,10 @@ describe('ChatRealtimeProvider', () => {
         body: 'Ping',
         client_message_id: 'client-1',
         created_at: '2026-06-09T16:00:00.000Z',
+        is_reply: false,
+        reply_to: null,
+        mentions: [],
+        attachments: [],
       },
     }
 
@@ -353,6 +402,7 @@ describe('ChatRealtimeProvider', () => {
   })
 
   it('resyncs bootstrap on terms_acceptance_required without a local consent sheet', () => {
+    sendChatMessageHttp.mockImplementation(() => new Promise(() => {}))
     renderProviderWithProbe()
     fireEvent.click(screen.getByText('send'))
     fireEvent.click(screen.getByText('send'))
@@ -360,8 +410,6 @@ describe('ChatRealtimeProvider', () => {
     const [termsMessage, validationMessage] = readLocalMessages()
     expect(termsMessage).toBeDefined()
     expect(validationMessage).toBeDefined()
-
-    sendMessageMock.mockClear()
 
     act(() => {
       capturedOnMessageRejected?.({
@@ -394,15 +442,14 @@ describe('ChatRealtimeProvider', () => {
     expect(resyncBootstrapAfterLegalError).toHaveBeenCalledWith({
       code: 'terms_acceptance_required',
     })
-    expect(sendMessageMock).not.toHaveBeenCalled()
   })
 
   it('does not open terms consent for permission_denied', () => {
+    sendChatMessageHttp.mockImplementation(() => new Promise(() => {}))
     renderProviderWithProbe()
     fireEvent.click(screen.getByText('send'))
 
     const [message] = readLocalMessages()
-    sendMessageMock.mockClear()
 
     act(() => {
       capturedOnMessageRejected?.({
@@ -420,10 +467,10 @@ describe('ChatRealtimeProvider', () => {
       }),
     )
     expect(screen.queryByTestId('legal-consent-sheet')).toBeNull()
-    expect(sendMessageMock).not.toHaveBeenCalled()
   })
 
   it('keeps terms-failed messages after bootstrap resync', () => {
+    sendChatMessageHttp.mockImplementation(() => new Promise(() => {}))
     renderProviderWithProbe()
     fireEvent.click(screen.getByText('send'))
 

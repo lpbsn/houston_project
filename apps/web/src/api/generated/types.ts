@@ -3913,6 +3913,11 @@ export interface components {
             message: components["schemas"]["ChatMessage"];
             created: boolean;
         };
+        ChatSharedMediaResponse: {
+            items: components["schemas"]["ChatAttachment"][];
+            has_more: boolean;
+            cursor: string | null;
+        };
         ChatStatus: {
             chat_enabled: boolean;
             can_access: boolean;
@@ -10538,12 +10543,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Shared media page. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ChatSharedMediaResponse"];
+                };
             };
             404: {
                 headers: {

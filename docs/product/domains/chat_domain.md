@@ -261,7 +261,7 @@ All under `/api/v1/establishments/{establishment_id}/chat/` :
 - WebSocket : live receive + banner. Composer send is HTTP and remains usable if WS is down.
 - On `conversation.updated` : invalidate conversations list + that conversation detail.
 - Reconnect : new ws-ticket ; refetch conversations and open conversation messages.
-- No localStorage/sessionStorage for tokens or chat payloads.
+- No localStorage/sessionStorage for tokens or chat payloads. Chat send drafts and attachment bytes may persist in a dedicated outbox (IndexedDB / Capacitor Data), purged on success, cancel, TTL, logout, switch, and access revocation.
 - No read-receipt UI ; minimal unread badge only.
 - Show retention notice : messages older than 30 days are automatically deleted.
 - Hide chat nav when `chat_enabled=false` or user cannot access.
@@ -269,7 +269,7 @@ All under `/api/v1/establishments/{establishment_id}/chat/` :
 ## 11. AI Agent Notes
 
 - Inspect `apps/api/schema.yml` for the current Chat REST surface (implemented).
-- Inspect §1–§10 of this doc for remaining post-core gaps (attachments/gallery are a later lot).
+- Inspect §1–§10 of this doc for remaining post-core gaps.
 - Inspect [`realtime_domain.md`](realtime_domain.md) for Chat vs global realtime boundary.
 - Inspect [`authentication_charter.md`](../../architecture/authentication_charter.md) before WebSocket auth work.
 - Inspect [`rbac_permissions_domain.md`](rbac_permissions_domain.md) and [`identity_membership_domain.md`](identity_membership_domain.md) for eligibility.

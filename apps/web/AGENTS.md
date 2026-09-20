@@ -50,13 +50,13 @@ TanStack Query for reads, mutations, cache, invalidation, and server-derived loa
 
 `auth` is the only query root that may survive login, registration, or establishment switch. Never store operational or tenant-scoped data under `auth`. Logout clears the full query cache; login, registration, and establishment switch purge non-auth queries before hydrating bootstrap. Implementation: `@/lib/query-invalidation`.
 
-Do not casually cache authenticated operational data in durable client storage. No durable offline mutation queue unless explicitly implemented. Access tokens stay in memory; do not put refresh credentials in `localStorage` / `sessionStorage`.
+Do not casually cache authenticated operational data in durable client storage. No durable offline mutation queue unless explicitly implemented. Chat is the bounded exception: a durable outbox of send drafts and attachment bytes (IndexedDB on web, Capacitor `Directory.Data` on native), purged on success, cancel, TTL, logout, establishment switch, and `access.revoked`. Access tokens stay in memory; do not put refresh credentials in `localStorage` / `sessionStorage`.
 
 ## Components and realtime
 
 Components may render UI, handle interactions, call focused hooks, and display loading/empty/error/unauthorized/offline states when relevant. They must not fetch directly, compute real permissions, encode lifecycle transitions, or duplicate backend state.
 
-Generic realtime is invalidation or a safe Query patch. Backend remains source of truth. Chat is the exception: dedicated WebSocket for messages; REST remains source for history, structure, and permissions; the ws-ticket is REST-issued and not persisted.
+Generic realtime is invalidation or a safe Query patch. Backend remains source of truth. Chat is the exception: HTTP is the only send path; a dedicated WebSocket fans out live events; REST remains source for history, structure, and permissions; the ws-ticket is REST-issued and not persisted.
 
 Use existing shadcn/ui and domain components first. Prefer readable Tailwind. Use Framer Motion sparingly.
 

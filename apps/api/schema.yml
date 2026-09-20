@@ -5296,7 +5296,11 @@ paths:
       - BearerAccessToken: []
       responses:
         '200':
-          description: Shared media page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSharedMediaResponse'
+          description: ''
         '404':
           content:
             application/json:
@@ -11831,6 +11835,22 @@ components:
       required:
       - created
       - message
+    ChatSharedMediaResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatAttachment'
+        has_more:
+          type: boolean
+        cursor:
+          type: string
+          nullable: true
+      required:
+      - cursor
+      - has_more
+      - items
     ChatStatus:
       type: object
       properties:
