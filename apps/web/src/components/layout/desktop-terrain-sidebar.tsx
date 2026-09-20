@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 
-import { CreateEstablishmentAction } from '@/features/organization/components/create-establishment-action'
 import {
   isScopedNavItemActive,
   resolveScopedDesktopNavigation,
@@ -125,12 +124,6 @@ export function DesktopTerrainSidebar({
           <p className="truncate text-sm font-semibold">Spore Analytics</p>
         </div>
       </div>
-
-      <CreateEstablishmentAction
-        bootstrap={bootstrap}
-        navigate={navigate}
-        triggerVariant="sidebar"
-      />
 
       <nav className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-4" aria-label="Sections">
         {sections.map((section) => {

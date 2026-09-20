@@ -96,7 +96,7 @@ function bootstrap(memberships: Membership[], active: Membership | null): Bootst
       can_manage_runtime_config: true,
       can_view_team: false,
       can_manage_organization: false,
-      can_create_establishment: false,
+      platform_operator_active: false,
     },
   }
 }

@@ -13,8 +13,8 @@ from rest_framework.test import APIClient
 from houston.accounts.models import User
 from houston.accounts.services import tokens as auth_tokens
 from houston.establishments.models import EstablishmentInvitation, EstablishmentMembership
-from houston.establishments.services import invite_director_during_onboarding
-from houston.testing.auth import auth_headers, ensure_csrf, login
+from houston.establishments.services import invite_director_during_onboarding_core
+from houston.testing.auth import ensure_csrf
 from houston.testing.factories import create_user
 from houston.testing.onboarding import create_onboarding_session
 
@@ -40,42 +40,12 @@ def post_accept(api_client: APIClient, csrf_token: str, token: str, payload: dic
 
 
 def invite_director_for_session(*, session, owner):
-    return invite_director_during_onboarding(
+    return invite_director_during_onboarding_core(
         session=session,
-        actor=owner,
         email="director-accept@example.com",
         first_name="Casey",
         last_name="Director",
     )
-
-
-def test_director_invitation_response_includes_token(api_client):
-    owner = create_user(username="director_token_owner")
-    session = create_onboarding_session(actor=owner)
-    access_token = login(api_client, user=owner)
-
-    response = api_client.post(
-        f"/api/v1/onboarding-sessions/{session.id}/director-invitations/",
-        {
-            "email": "director-token@example.com",
-            "first_name": "Casey",
-            "last_name": "Director",
-        },
-        format="json",
-        **auth_headers(access_token),
-    )
-
-    assert response.status_code == 201
-    body = response.json()
-    assert body["invitation_token"]
-    assert body["invitation_expires_at"]
-    assert body["invitation_accept_path"] == f"/invitations#{body['invitation_token']}"
-
-    invitation = EstablishmentInvitation.objects.get(
-        token_digest=auth_tokens.digest_token(body["invitation_token"]),
-    )
-    assert invitation.accepted_at is None
-    assert invitation.revoked_at is None
 
 
 def test_accept_valid_token_activates_user_and_membership(api_client):
@@ -103,7 +73,6 @@ def test_accept_valid_token_activates_user_and_membership(api_client):
     assert len(response.data["pending_onboarding_memberships"]) == 1
     pending = response.data["pending_onboarding_memberships"][0]
     assert pending["role"] == EstablishmentMembership.Role.DIRECTOR
-    assert pending["can_continue_onboarding"] is False
     assert pending["onboarding_session_id"] == str(session.id)
 
     membership = invitation_result.membership

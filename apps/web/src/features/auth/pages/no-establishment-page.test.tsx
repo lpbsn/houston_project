@@ -2,21 +2,11 @@
 
 import { createElement } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { NoEstablishmentPage } from './no-establishment-page'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
-
-const createEstablishment = vi.fn()
-
-vi.mock('@/features/auth/api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/features/auth/api')>()
-  return {
-    ...actual,
-    createEstablishment: (...args: unknown[]) => createEstablishment(...args),
-  }
-})
 
 function membership(overrides: Partial<Membership> = {}): Membership {
   return {
@@ -68,7 +58,7 @@ function bootstrap(
       can_manage_runtime_config: false,
       can_view_team: false,
       can_manage_organization: true,
-      can_create_establishment: true,
+      platform_operator_active: false,
       ...hints,
     },
   }
@@ -76,18 +66,17 @@ function bootstrap(
 
 afterEach(() => {
   cleanup()
-  createEstablishment.mockReset()
 })
 
 describe('NoEstablishmentPage', () => {
-  it('hides create when the bootstrap hint is false', () => {
+  it('does not offer client establishment creation', () => {
     render(
       createElement(
         QueryClientProvider,
         { client: new QueryClient({ defaultOptions: { queries: { retry: false } } }) },
         createElement(NoEstablishmentPage, {
-          bootstrap: bootstrap({ can_create_establishment: false }),
-          navigate: vi.fn(),
+          bootstrap: bootstrap(),
+          navigate: () => undefined,
         }),
       ),
     )
@@ -95,36 +84,18 @@ describe('NoEstablishmentPage', () => {
     expect(screen.queryByRole('button', { name: /Ajouter un établissement/i })).toBeNull()
   })
 
-  it('creates an establishment and navigates to onboarding', async () => {
-    const navigate = vi.fn()
-    createEstablishment.mockResolvedValueOnce({
-      establishment_id: 'est-new',
-      organization_id: 'org-1',
-      name: null,
-      status: 'draft',
-      onboarding_session_id: 'session-1',
-    })
-
+  it('asks a platform operator to use desktop web', () => {
     render(
       createElement(
         QueryClientProvider,
         { client: new QueryClient({ defaultOptions: { queries: { retry: false } } }) },
         createElement(NoEstablishmentPage, {
-          bootstrap: bootstrap(),
-          navigate,
+          bootstrap: bootstrap({ platform_operator_active: true }),
+          navigate: () => undefined,
         }),
       ),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /Ajouter un établissement/i }))
-
-    await waitFor(() => {
-      expect(createEstablishment).toHaveBeenCalledWith({})
-    })
-    await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith(
-        '/onboarding?establishmentId=est-new&sessionId=session-1',
-      )
-    })
+    expect(screen.getByText(/ordinateur/i)).toBeTruthy()
   })
 })

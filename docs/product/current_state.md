@@ -1,7 +1,7 @@
 # Houston — Current product state
 
 Status: authoritative  
-Last reviewed: 2026-09-03
+Last reviewed: 2026-09-19
 
 ## Branding
 
@@ -16,9 +16,9 @@ Observation → Signal → Action Plan → Execution → Validation → Feed upd
 
 Legacy **Action** and **Checklist** domains were removed (Lot 10). The execution surface is **Action Plan** only.
 
-## Backend apps (13 installed)
+## Backend apps (14 installed)
 
-`core`, `accounts`, `organizations`, `establishments`, `observations`, `signals`, `action_plans`, `comments`, `notifications`, `realtime`, `chat`, `ai`, `uploads`
+`core`, `accounts`, `organizations`, `establishments`, `platform`, `observations`, `signals`, `action_plans`, `comments`, `notifications`, `realtime`, `chat`, `ai`, `uploads`
 
 API contract: [`apps/api/schema.yml`](../../apps/api/schema.yml).
 
@@ -32,7 +32,7 @@ API contract: [`apps/api/schema.yml`](../../apps/api/schema.yml).
 | Public support | Live | `https://spore-os.com/support/` |
 | Store listing / review pack | Prepared | [`store_listing.md`](store_listing.md) · [`store_review.md`](store_review.md) · [`store_assets/`](store_assets/). Console paste is Phase 2. Screenshots of the app in use are still an operator capture. |
 | Store Readiness Phase 1 gate | GO | [`store_phase1_gate.md`](store_phase1_gate.md) (2026-09-03). Remaining work is consoles / identities, not a product chantier. |
-| Runtime config / onboarding | Live | Lot 1: `OnboardingDraft` + `…/draft/` + `…/complete/` additive; legacy `onboarding_proposal_v4` until Lot 3; description 10–5000 in readiness |
+| Runtime config / onboarding | Live | Wizard **Platform** only (`/api/v1/platform/onboardings/`, desktop Web). Tenant self-onboarding HTTP/UI removed. Invited Owner/Director: accept invitation then waiting. |
 | BusinessUnit / ActivitySubject taxonomy | Live | Identity: `specific_name` + internal `routing_key`; catalog FK required (`PROTECT`); public API Lot 5 (no `routing_key`); legacy instance columns removed |
 | Observations + media + transcription | Live | Celery pipeline |
 | AI observation → Signal | Live | Pipeline **v6** (schema `ai_observation_pipeline_v6`, prompt `ai_observation_pipeline_v6_2`); Fake (CI) / OpenAI (opt-in smoke) |
@@ -81,7 +81,8 @@ Post-core gaps (non-blocking pilot): some bootstrap hints, no REST message write
 
 - Terrain mobile shell (`TerrainShell`, bottom nav, `--app-safe-*` insets).
 - Native UX (Capacitor Lot 9): Android system back aligned on `backPath`; iOS keyboard resize native; Observation mic OS declarations.
-- Management shell (`AppShell`) for non-terrain routes: onboarding, pending onboarding, select-establishment, no-establishment, invitations.
+- Management shell (`AppShell`) for non-terrain routes: pending onboarding, select-establishment, no-establishment, invitations.
+- Platform shell (`/platform`, desktop Web only) for operator onboarding and control-plane lists.
 - Organization owner invite: `/team/invite` (Owner option when bootstrap shows an owner membership on the current establishment’s organization) via `POST /api/v1/organizations/{id}/owner-invitations/`. Membership invites stay on the same page via establishment membership invitations.
 - Operational config lives at `/e/{id}/operational-config` (desktop sidebar). Team and membership admin: `/team*`.
 - Client router: `apps/web/src/app/app-routes.ts` (not React Router).
@@ -127,4 +128,4 @@ Preserved names (do not rename without explicit decision):
 3. [`decisions/action_plan.md`](decisions/action_plan.md) — action plan RBAC and schedules  
 4. [`../engineering/local_development.md`](../engineering/local_development.md) — daily workflow
 
-**Planned, not live:** Spore Platform V1 (internal control plane). Functional target [`../cadrage/edb_plateforme_interne_spore_v1-3.md`](../cadrage/edb_plateforme_interne_spore_v1-3.md). Current product onboarding remains owner-led (`/onboarding`, invite codes). This file does not describe Platform as implemented.
+Functional target for Platform capabilities remains [`../cadrage/edb_plateforme_interne_spore_v1-3.md`](../cadrage/edb_plateforme_interne_spore_v1-3.md). Implementation lives in `houston.platform` and the desktop `/platform` shell.

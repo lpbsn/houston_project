@@ -1,5 +1,5 @@
 import { type ComponentType, useEffect, useState } from 'react'
-import { ArrowLeftRight, BarChart3, Building2, ChevronRight, Library, Users } from 'lucide-react'
+import { ArrowLeftRight, BarChart3, Building2, ChevronRight, LayoutGrid, Library, Users } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import {
@@ -8,6 +8,7 @@ import {
   TerrainSectionLabel,
   TerrainSwitch,
 } from '@/components/ui/terrain'
+import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import {
   canAccessManagementSpace,
   canCreateCatalogActionPlanFromBootstrapHints,
@@ -43,6 +44,8 @@ import {
 import { getAppRuntime } from '@/lib/runtime'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
+import { useLgViewport } from '@/lib/lg-viewport'
+import { isPlatformOperatorActive } from '@/features/platform/lib/access'
 
 const ROLE_DISPLAY_LABELS: Record<RoleEnum, string> = {
   owner: 'Propriétaire',
@@ -190,6 +193,9 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   const showSwitchEstablishment = canSwitchEstablishment(memberships, establishmentId)
   const pendingResumePath = resolvePendingLandingPath(pendingOnboardingMemberships)
   const isNativeRuntime = getAppRuntime() === 'native'
+  const isLgViewport = useLgViewport()
+  const showPlatformEntry =
+    isPlatformOperatorActive(bootstrap) && isDesktopWebLanding(isLgViewport)
   const notificationPreferencesQuery = useNotificationPreferencesQuery(establishmentId, {
     enabled: isNativeRuntime,
   })
@@ -355,6 +361,19 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
           />
         </TerrainCard>
       </div>
+
+      {showPlatformEntry ? (
+        <div className="space-y-2">
+          <TerrainSectionLabel>Platform</TerrainSectionLabel>
+          <ProfileManagementNavCard
+            icon={LayoutGrid}
+            iconClassName="bg-[#111827] text-white"
+            title="Spore Platform"
+            subtitle="Onboardings et administration interne"
+            onClick={() => onNavigate?.('/platform/onboardings')}
+          />
+        </div>
+      ) : null}
 
       {canShowAnalyticsNav ? (
         <div className="space-y-2">

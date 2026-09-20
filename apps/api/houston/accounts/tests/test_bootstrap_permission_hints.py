@@ -12,7 +12,6 @@ from houston.action_plans.permissions import (
 from houston.chat.permissions import can_access_chat
 from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.establishments.permissions import (
-    can_create_establishment,
     can_invite_memberships,
     can_manage_organization,
     can_manage_runtime_context,
@@ -91,7 +90,6 @@ def test_bootstrap_permission_hints_match_rbac_helpers_for_active_membership(
     assert hints["can_manage_runtime_config"] is can_manage_runtime_context(membership)
     assert hints["can_view_team"] is can_view_team_memberships(membership)
     assert hints["can_manage_organization"] is can_manage_organization(active_user)
-    assert hints["can_create_establishment"] is can_create_establishment(active_user)
     assert hints["chat_available"] is can_access_chat(membership)
 
 
@@ -136,7 +134,6 @@ def test_bootstrap_permission_hints_are_false_without_active_membership(
     expected = build_bootstrap_permission_hints(None, user=active_user)
     assert hints == expected
     assert hints["can_manage_organization"] is True
-    assert hints["can_create_establishment"] is True
     assert hints["can_view_team"] is False
     assert hints["can_invite"] is False
 
@@ -155,7 +152,6 @@ def test_bootstrap_owner_draft_only_has_org_hints_without_active_membership(
 
     assert hints == build_bootstrap_permission_hints(None, user=active_user)
     assert hints["can_manage_organization"] is True
-    assert hints["can_create_establishment"] is True
     assert hints["can_view_team"] is False
     assert hints["can_manage_runtime_config"] is False
 
@@ -207,4 +203,3 @@ def test_bootstrap_permission_hints_fail_closed_for_inactive_organization(
 
     assert hints == build_bootstrap_permission_hints(None, user=active_user)
     assert hints["can_manage_organization"] is False
-    assert hints["can_create_establishment"] is False

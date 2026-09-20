@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from houston.accounts.models import User
 from houston.establishments.models import EstablishmentMembership
+from houston.platform.selectors import is_active_platform_operator
 
 
 def build_bootstrap_permission_hints(
@@ -19,7 +20,6 @@ def build_bootstrap_permission_hints(
         can_create_action as establishment_can_create_action,
     )
     from houston.establishments.permissions import (
-        can_create_establishment,
         can_invite_memberships,
         can_manage_organization,
         can_manage_runtime_context,
@@ -51,5 +51,5 @@ def build_bootstrap_permission_hints(
         "can_manage_runtime_config": can_manage_runtime_context(active_membership),
         "can_view_team": can_view_team_memberships(active_membership),
         "can_manage_organization": can_manage_organization(hint_user),
-        "can_create_establishment": can_create_establishment(hint_user),
+        "platform_operator_active": is_active_platform_operator(hint_user),
     }

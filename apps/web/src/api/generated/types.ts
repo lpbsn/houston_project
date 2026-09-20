@@ -523,40 +523,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/register/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Registers a new owner and provisions an organization, draft establishment, and onboarding session using a valid registration invite code. Cookie transport requires Django CSRF; body transport does not use cookies. */
-        post: operations["v1_auth_register_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/register/validate-owner/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Validates owner registration fields without provisioning any records. */
-        post: operations["v1_auth_register_validate_owner_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/auth/switch_establishment/": {
         parameters: {
             query?: never;
@@ -699,23 +665,6 @@ export interface paths {
         get: operations["v1_cross_signal_retrieve"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/establishments/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Creates a DRAFT establishment in a manageable organization (Owner on ACTIVE or DRAFT). Uses the session-selected establishment's organization when present and authorized; otherwise the actor's unique manageable organization. Seeds organizational owners and starts onboarding atomically. Body accepts an optional establishment name. Omit or send null to provision an unnamed DRAFT; blank strings are rejected. Seeds organizational owners and starts onboarding atomically. */
-        post: operations["v1_establishments_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2290,263 +2239,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/onboarding-sessions/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Starts or returns an existing non-terminal onboarding session for an establishment. Supports manual and template source modes only. */
-        post: operations["v1_onboarding_sessions_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/onboarding-sessions/{session_id}/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Returns one onboarding session visible to the authenticated actor. */
-        get: operations["v1_onboarding_sessions_retrieve"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/onboarding-sessions/{session_id}/activate/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Activates a marked-ready onboarding session and its draft establishment. Activation is explicit and backend-controlled. */
-        post: operations["v1_onboarding_sessions_activate_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/onboarding-sessions/{session_id}/activation-summary/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Returns backend activation readiness and blockers for onboarding. */
-        get: operations["v1_onboarding_sessions_activation_summary_retrieve"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/onboarding-sessions/{session_id}/complete/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Validates the onboarding draft, materializes runtime structure and team, activates the establishment, and deletes the draft. Idempotent when already activated. */
-        post: operations["v1_onboarding_sessions_complete_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/onboarding-sessions/{session_id}/description/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** @description Submits the canonical establishment activity description for onboarding. */
-        patch: operations["v1_onboarding_sessions_description_partial_update"];
-        trace?: never;
-    };
-    "/api/v1/onboarding-sessions/{session_id}/director-invitations/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Invites a Director to the draft establishment for an onboarding session. Creates or reuses a pending user and an invited director membership. An invitation email is sent asynchronously when enabled. */
-        post: operations["v1_onboarding_sessions_director_invitations_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/onboarding-sessions/{session_id}/draft/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Returns the onboarding draft for a session. Read-only: does not create a draft. */
-        get: operations["v1_onboarding_sessions_draft_retrieve"];
-        /** @description Full-replace autosave for the onboarding draft. Incomplete payloads are accepted after soft validation. */
-        put: operations["v1_onboarding_sessions_draft_update"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/onboarding-sessions/{session_id}/mark-ready/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Marks an onboarding session ready for activation when backend readiness passes. This does not activate the establishment. */
-        post: operations["v1_onboarding_sessions_mark_ready_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/onboarding-sessions/{session_id}/proposals/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Lists onboarding proposals for a path-scoped onboarding session. */
-        get: operations["v1_onboarding_sessions_proposals_list"];
-        put?: never;
-        /** @description Creates a manual onboarding proposal for Onboarding manuel (schema onboarding_proposal_v4). */
-        post: operations["v1_onboarding_sessions_proposals_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** @description Updates a draft onboarding proposal payload (onboarding_proposal_v4). */
-        patch: operations["v1_onboarding_sessions_proposals_partial_update"];
-        trace?: never;
-    };
-    "/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/apply/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Applies a validated onboarding proposal into runtime configuration. This does not activate the establishment. */
-        post: operations["v1_onboarding_sessions_proposals_apply_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/reject/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Rejects an onboarding proposal without applying runtime changes. */
-        post: operations["v1_onboarding_sessions_proposals_reject_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/submit/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Validates and accepts all sections of an onboarding_proposal_v4 manual proposal. */
-        post: operations["v1_onboarding_sessions_proposals_submit_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/onboarding-sessions/{session_id}/runtime-config/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Returns active runtime configuration for an onboarding session. */
-        get: operations["v1_onboarding_sessions_runtime_config_retrieve"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/organizations/{organization_id}/": {
         parameters: {
             query?: never;
@@ -2641,6 +2333,278 @@ export interface paths {
         };
         /** @description Lists organizational Owners (active and invited), deduplicated by user. */
         get: operations["v1_organizations_owners_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/establishments/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["platform_establishments_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/establishments/{establishment_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_platform_establishments_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/establishments/{establishment_id}/delete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["platform_establishment_delete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/memberships/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["platform_memberships_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/onboardings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["platform_onboardings_list"];
+        put?: never;
+        post: operations["platform_onboardings_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/onboardings/{session_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["platform_onboarding_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/onboardings/{session_id}/complete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["platform_onboarding_complete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/onboardings/{session_id}/director-invitations/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["platform_onboarding_invite_director"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/onboardings/{session_id}/draft/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_platform_onboardings_draft_retrieve"];
+        put: operations["v1_platform_onboardings_draft_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/onboardings/{session_id}/owner-invitations/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["platform_onboarding_invite_owner"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/onboardings/{session_id}/summary/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["platform_onboarding_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/organizations/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["platform_organizations_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/organizations/{organization_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_platform_organizations_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/organizations/{organization_id}/delete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["platform_organization_delete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/session/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_platform_session_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/users/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["platform_users_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/users/{user_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_platform_users_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3199,55 +3163,6 @@ export interface components {
             activity_subject_label: string | null;
             location_text: string;
         };
-        ActivationBlocker: {
-            code: string;
-            message: string;
-        };
-        ActivationReadinessResponse: {
-            is_ready: boolean;
-            blockers: components["schemas"]["ActivationBlocker"][];
-            counts: {
-                [key: string]: number;
-            };
-            sections: {
-                [key: string]: {
-                    [key: string]: unknown;
-                };
-            };
-            establishment_status: string;
-            session_status: string;
-        };
-        ActivationResponse: {
-            session: components["schemas"]["OnboardingSessionResponse"];
-            activation_summary: components["schemas"]["ActivationSummaryResponse"];
-        };
-        ActivationSummaryResponse: {
-            organization: components["schemas"]["OnboardingOrganizationSummary"];
-            establishment: components["schemas"]["OnboardingEstablishmentSummary"];
-            activity_description: components["schemas"]["ActivityDescriptionResponse"] | null;
-            active_business_units?: components["schemas"]["BusinessUnitTreeItem"][];
-            optional_units: components["schemas"]["KeyedRuntimeItem"][];
-            initial_owner_director_count: number;
-            initial_director_count: number;
-            readiness: components["schemas"]["ActivationReadinessResponse"];
-            blockers: components["schemas"]["ActivationBlocker"][];
-            access: components["schemas"]["OnboardingAccessResponse"];
-            effective_can_activate: boolean;
-        };
-        ActivityDescriptionResponse: {
-            /** Format: uuid */
-            id: string;
-            description: string;
-            source: string;
-            /** Format: uuid */
-            submitted_by_id: string | null;
-            /** Format: date-time */
-            validated_at: string | null;
-        };
-        ActivityDescriptionUpdateResponse: {
-            session: components["schemas"]["OnboardingSessionResponse"];
-            activity_description: components["schemas"]["ActivityDescriptionResponse"];
-        };
         ActivitySubjectTreeItem: {
             /** Format: uuid */
             id: string;
@@ -3715,7 +3630,7 @@ export interface components {
             can_manage_runtime_config: boolean;
             can_view_team: boolean;
             can_manage_organization: boolean;
-            can_create_establishment: boolean;
+            platform_operator_active: boolean;
         };
         BootstrapResponse: {
             authenticated: boolean;
@@ -3972,12 +3887,6 @@ export interface components {
             code: string;
             detail: string;
         };
-        DirectorInvitationRequest: {
-            /** Format: email */
-            email: string;
-            first_name: string;
-            last_name: string;
-        };
         DirectorInvitationResponse: {
             membership: components["schemas"]["EstablishmentMembershipResponse"];
             invitation_token: string;
@@ -4092,19 +4001,6 @@ export interface components {
             business_unit_count: number;
             metrics: components["schemas"]["EstablishmentAdminMetrics"];
             operational_config: components["schemas"]["EstablishmentAdminOperationalConfig"];
-        };
-        EstablishmentCreateRequest: {
-            name?: string | null;
-        };
-        EstablishmentCreateResponse: {
-            /** Format: uuid */
-            establishment_id: string;
-            /** Format: uuid */
-            organization_id: string;
-            name: string | null;
-            status: string;
-            /** Format: uuid */
-            onboarding_session_id: string;
         };
         EstablishmentMembershipDetailResponse: {
             /** Format: uuid */
@@ -4321,14 +4217,6 @@ export interface components {
         HealthResponse: {
             status: string;
         };
-        KeyedRuntimeItem: {
-            /** Format: uuid */
-            id: string;
-            key: string;
-            label: string;
-            source: string;
-            active: boolean;
-        };
         LegalVersionRequest: {
             version: string;
         };
@@ -4343,10 +4231,6 @@ export interface components {
         };
         MarkAllNotificationsReadResponse: {
             updated_count: number;
-        };
-        MarkReadyResponse: {
-            session: components["schemas"]["OnboardingSessionResponse"];
-            activation_summary: components["schemas"]["ActivationSummaryResponse"];
         };
         Membership: {
             /** Format: uuid */
@@ -4500,22 +4384,6 @@ export interface components {
             media_count: number;
             processing_status: string;
         };
-        OnboardingAccessResponse: {
-            can_activate: boolean;
-        };
-        OnboardingCompleteResponse: {
-            session: components["schemas"]["OnboardingSessionResponse"];
-            activation_summary: {
-                [key: string]: unknown;
-            };
-            activated: boolean;
-            idempotent: boolean;
-        };
-        OnboardingDraftErrorResponse: {
-            code: string;
-            detail: string;
-            errors?: components["schemas"]["OnboardingDraftValidationErrorItem"][];
-        };
         OnboardingDraftResponse: {
             /** Format: uuid */
             id: string;
@@ -4540,106 +4408,6 @@ export interface components {
             field?: string | null;
             key?: string | null;
         };
-        OnboardingErrorResponse: {
-            code: string;
-            detail: string;
-            blockers?: components["schemas"]["ActivationBlocker"][];
-        };
-        OnboardingEstablishmentSummary: {
-            /** Format: uuid */
-            id: string;
-            name: string;
-            status: string;
-        };
-        OnboardingOrganizationSummary: {
-            /** Format: uuid */
-            id: string;
-            name: string;
-            status: string;
-        };
-        OnboardingProposalCreateRequest: {
-            payload: components["schemas"]["OnboardingProposalPayload"];
-        };
-        OnboardingProposalErrorResponse: {
-            code: string;
-            detail: string;
-            errors?: components["schemas"]["ProposalValidationErrorItem"][];
-        };
-        OnboardingProposalPayload: components["schemas"]["OnboardingProposalPayloadV4"];
-        OnboardingProposalPayloadV4: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            schema_version: "onboarding_proposal_v4";
-            business_units?: components["schemas"]["ProposalBusinessUnitItemV4"][];
-            activity_subjects?: components["schemas"]["ProposalActivitySubjectItemV4"][];
-        };
-        OnboardingProposalResponse: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            onboarding_session_id: string;
-            /** Format: uuid */
-            establishment_id: string;
-            source: string;
-            status: string;
-            payload: components["schemas"]["OnboardingProposalPayload"];
-            section_validation: {
-                [key: string]: string;
-            };
-            validation_errors: components["schemas"]["ProposalValidationErrorItem"][];
-            /** Format: uuid */
-            created_by_id: string | null;
-            /** Format: uuid */
-            validated_by_id: string | null;
-            /** Format: uuid */
-            applied_by_id: string | null;
-            /** Format: date-time */
-            validated_at: string | null;
-            /** Format: date-time */
-            applied_at: string | null;
-            last_error_code: string;
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            updated_at: string;
-        };
-        OnboardingSessionCreateRequest: {
-            /** Format: uuid */
-            establishment_id: string;
-            /** @default manual */
-            source_mode: string;
-        };
-        OnboardingSessionCreateResponse: {
-            created: boolean;
-            session: components["schemas"]["OnboardingSessionResponse"];
-        };
-        OnboardingSessionResponse: {
-            /** Format: uuid */
-            id: string;
-            organization: components["schemas"]["OnboardingOrganizationSummary"];
-            establishment: components["schemas"]["OnboardingEstablishmentSummary"];
-            /** Format: uuid */
-            started_by_id: string | null;
-            status: string;
-            source_mode: string;
-            current_step: string;
-            ai_attempts: number;
-            last_error_code: string;
-            /** Format: date-time */
-            started_at: string;
-            /** Format: date-time */
-            ready_for_activation_at: string | null;
-            /** Format: date-time */
-            activated_at: string | null;
-            /** Format: date-time */
-            canceled_at: string | null;
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            updated_at: string;
-        };
         OrganizationAdminDirector: {
             /** Format: uuid */
             membership_id: string;
@@ -4659,7 +4427,6 @@ export interface components {
             /** Format: uuid */
             onboarding_session_id: string | null;
             onboarding_current_step: string;
-            can_continue_onboarding: boolean;
         };
         OrganizationAdminEstablishmentList: {
             results: components["schemas"]["OrganizationAdminEstablishment"][];
@@ -4798,9 +4565,6 @@ export interface components {
             requires_validation?: boolean;
             tasks?: components["schemas"]["ActionPlanTaskInput"][];
         };
-        PatchedActivityDescriptionRequest: {
-            description?: string;
-        };
         PatchedChatRenameGroupRequest: {
             title?: string;
         };
@@ -4817,9 +4581,6 @@ export interface components {
         };
         PatchedNotificationPreferencesUpdate: {
             push_enabled?: boolean;
-        };
-        PatchedOnboardingProposalUpdateRequest: {
-            payload?: components["schemas"]["OnboardingProposalPayload"];
         };
         PatchedRuntimeBusinessUnitUpdateRequest: {
             specific_name?: string;
@@ -4842,7 +4603,6 @@ export interface components {
             role: string;
             /** Format: uuid */
             onboarding_session_id: string | null;
-            can_continue_onboarding: boolean;
         };
         PermissionHints: {
             can_pin: boolean;
@@ -4856,12 +4616,191 @@ export interface components {
             can_reject_resolution_request: boolean;
             can_cancel_resolution_request: boolean;
         };
+        PlatformDeleteRequest: {
+            justification: string;
+        };
         /**
          * @description * `ios` - ios
          *     * `android` - android
          * @enum {string}
          */
         PlatformEnum: "ios" | "android";
+        PlatformEstablishmentDetail: {
+            /** Format: uuid */
+            id: string;
+            name: string | null;
+            status: string;
+            /** Format: uuid */
+            organization_id: string;
+            organization_name: string;
+            /** Format: date-time */
+            created_at: string;
+            onboarding: components["schemas"]["PlatformOnboardingSummary"];
+            timezone: string;
+            /** Format: date-time */
+            updated_at: string;
+            can_delete: boolean;
+            blocking_reasons: string[];
+        };
+        PlatformEstablishmentListItem: {
+            /** Format: uuid */
+            id: string;
+            name: string | null;
+            status: string;
+            /** Format: uuid */
+            organization_id: string;
+            organization_name: string;
+            /** Format: date-time */
+            created_at: string;
+            onboarding: components["schemas"]["PlatformOnboardingSummary"];
+        };
+        PlatformEstablishmentListResponse: {
+            next_cursor: string | null;
+            results: components["schemas"]["PlatformEstablishmentListItem"][];
+        };
+        PlatformEstablishmentSummary: {
+            /** Format: uuid */
+            id: string;
+            name: string | null;
+            status: string;
+        };
+        PlatformInviteRequest: {
+            /** Format: email */
+            email: string;
+            first_name: string;
+            last_name: string;
+        };
+        PlatformInviteResponse: {
+            /** Format: uuid */
+            membership_id: string;
+        };
+        PlatformMembership: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            user_id: string;
+            user_display_name: string;
+            /** Format: email */
+            user_email: string | null;
+            /** Format: uuid */
+            establishment_id: string;
+            establishment_name: string | null;
+            /** Format: uuid */
+            organization_id: string;
+            organization_name: string;
+            role: string;
+            status: string;
+            scopes: components["schemas"]["PlatformScope"][];
+        };
+        PlatformMembershipListResponse: {
+            next_cursor: string | null;
+            results: components["schemas"]["PlatformMembership"][];
+        };
+        PlatformOnboardingCompleteResponse: {
+            /** Format: uuid */
+            session_id: string;
+            activated: boolean;
+            idempotent: boolean;
+            readiness: {
+                [key: string]: unknown;
+            };
+        };
+        PlatformOnboardingListItem: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            establishment_id: string;
+            establishment_name: string | null;
+            /** Format: uuid */
+            organization_id: string;
+            organization_name: string;
+            functional_status: string | null;
+            session_status: string;
+            current_step: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        PlatformOnboardingListResponse: {
+            next_cursor: string | null;
+            results: components["schemas"]["PlatformOnboardingListItem"][];
+        };
+        PlatformOnboardingStartRequest: {
+            organization_name: string;
+            establishment_name?: string | null;
+        };
+        PlatformOnboardingSummary: {
+            functional_status: string | null;
+            /** Format: uuid */
+            session_id: string | null;
+            current_step: string;
+            source_mode: string;
+            last_error_code: string;
+        };
+        PlatformOrganizationDetail: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            status: string;
+            /** Format: date-time */
+            created_at: string;
+            has_been_operational: boolean;
+            /** Format: date-time */
+            updated_at: string;
+            can_delete: boolean;
+            blocking_reasons: string[];
+            establishments: components["schemas"]["PlatformEstablishmentSummary"][];
+        };
+        PlatformOrganizationListItem: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            status: string;
+            /** Format: date-time */
+            created_at: string;
+            has_been_operational: boolean;
+        };
+        PlatformOrganizationListResponse: {
+            next_cursor: string | null;
+            results: components["schemas"]["PlatformOrganizationListItem"][];
+        };
+        PlatformScope: {
+            scope_type: string;
+            scope_id: string;
+            scope_label: string;
+        };
+        PlatformSession: {
+            platform_operator_active: boolean;
+            /** Format: uuid */
+            operator_id: string;
+        };
+        PlatformUserDetail: {
+            /** Format: uuid */
+            id: string;
+            display_name: string;
+            /** Format: email */
+            email: string | null;
+            status: string;
+            /** Format: date-time */
+            created_at: string;
+            first_name: string;
+            last_name: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PlatformUserListItem: {
+            /** Format: uuid */
+            id: string;
+            display_name: string;
+            /** Format: email */
+            email: string | null;
+            status: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        PlatformUserListResponse: {
+            next_cursor: string | null;
+            results: components["schemas"]["PlatformUserListItem"][];
+        };
         /**
          * @description * `info` - Info
          *     * `action_required` - Action required
@@ -4870,31 +4809,6 @@ export interface components {
          * @enum {string}
          */
         PriorityEnum: "info" | "action_required" | "urgent" | "system";
-        ProposalActivitySubjectItemV4: {
-            client_key: string;
-            business_unit_client_key: string;
-            catalog_key?: string | null;
-            label?: string | null;
-            /** @default  */
-            description: string;
-        };
-        ProposalBusinessUnitItemV4: {
-            client_key: string;
-            catalog_key: string;
-            specific_name: string;
-            /** @default  */
-            instance_description: string;
-        };
-        ProposalCommandResponse: {
-            session: components["schemas"]["OnboardingSessionResponse"];
-            proposal: components["schemas"]["OnboardingProposalResponse"];
-        };
-        ProposalValidationErrorItem: {
-            code: string;
-            section?: string;
-            field?: string;
-            key?: string;
-        };
         PushDeviceResponse: {
             /** Format: uuid */
             id: string;
@@ -4930,47 +4844,6 @@ export interface components {
          * @enum {string}
          */
         RefreshTokenTransportEnum: "cookie" | "body";
-        RegistrationOwnerValidateRequest: {
-            invite_code: string;
-            first_name: string;
-            last_name: string;
-            /** Format: email */
-            email: string;
-            password: string;
-            password_confirmation: string;
-        };
-        RegistrationRequest: {
-            refresh_token_transport: components["schemas"]["RefreshTokenTransportEnum"];
-            invite_code: string;
-            first_name: string;
-            last_name: string;
-            /** Format: email */
-            email: string;
-            password: string;
-            password_confirmation: string;
-            organization_name: string;
-            /** @default  */
-            establishment_name: string;
-            terms_version?: string;
-        };
-        RegistrationResponse: {
-            authenticated: boolean;
-            user: components["schemas"]["UserPublic"];
-            memberships: components["schemas"]["Membership"][];
-            active_membership: components["schemas"]["Membership"] | null;
-            pending_onboarding_memberships: components["schemas"]["PendingOnboardingMembership"][];
-            permission_hints: components["schemas"]["BootstrapPermissionHints"];
-            access_token: string;
-            /** Format: date-time */
-            access_token_expires_at: string;
-            refresh_token?: string;
-            /** Format: date-time */
-            refresh_token_expires_at?: string;
-            /** Format: uuid */
-            establishment_id: string;
-            /** Format: uuid */
-            onboarding_session_id: string;
-        };
         /**
          * @description * `manual` - manual
          *     * `resolution_request` - resolution_request
@@ -4999,11 +4872,6 @@ export interface components {
         RuntimeConfigErrorResponse: {
             code: string;
             detail: string;
-        };
-        RuntimeConfigResponse: {
-            activity_description: components["schemas"]["ActivityDescriptionResponse"] | null;
-            active_business_units?: components["schemas"]["BusinessUnitTreeItem"][];
-            optional_units: components["schemas"]["KeyedRuntimeItem"][];
         };
         /**
          * @description * `business_unit` - business_unit
@@ -6846,103 +6714,6 @@ export interface operations {
             };
         };
     };
-    v1_auth_register_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegistrationRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["RegistrationRequest"];
-                "multipart/form-data": components["schemas"]["RegistrationRequest"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RegistrationResponse"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    v1_auth_register_validate_owner_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegistrationOwnerValidateRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["RegistrationOwnerValidateRequest"];
-                "multipart/form-data": components["schemas"]["RegistrationOwnerValidateRequest"];
-            };
-        };
-        responses: {
-            /** @description Owner registration fields are valid. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
     v1_auth_switch_establishment_create: {
         parameters: {
             query?: never;
@@ -6996,6 +6767,7 @@ export interface operations {
         parameters: {
             query?: {
                 business_unit_key?: string;
+                limit?: number;
                 q?: string;
             };
             header?: never;
@@ -7017,6 +6789,7 @@ export interface operations {
     v1_catalog_business_units_suggest_list: {
         parameters: {
             query?: {
+                limit?: number;
                 q?: string;
             };
             header?: never;
@@ -7286,63 +7059,6 @@ export interface operations {
                 };
             };
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    v1_establishments_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["EstablishmentCreateRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["EstablishmentCreateRequest"];
-                "multipart/form-data": components["schemas"]["EstablishmentCreateRequest"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EstablishmentCreateResponse"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13025,977 +12741,6 @@ export interface operations {
             };
         };
     };
-    v1_onboarding_sessions_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OnboardingSessionCreateRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["OnboardingSessionCreateRequest"];
-                "multipart/form-data": components["schemas"]["OnboardingSessionCreateRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingSessionCreateResponse"];
-                };
-            };
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingSessionCreateResponse"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingErrorResponse"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-        };
-    };
-    v1_onboarding_sessions_retrieve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingSessionResponse"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-        };
-    };
-    v1_onboarding_sessions_activate_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ActivationResponse"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingErrorResponse"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingErrorResponse"];
-                };
-            };
-        };
-    };
-    v1_onboarding_sessions_activation_summary_retrieve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ActivationSummaryResponse"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-        };
-    };
-    v1_onboarding_sessions_complete_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingCompleteResponse"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingDraftErrorResponse"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingErrorResponse"];
-                };
-            };
-        };
-    };
-    v1_onboarding_sessions_description_partial_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["PatchedActivityDescriptionRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["PatchedActivityDescriptionRequest"];
-                "multipart/form-data": components["schemas"]["PatchedActivityDescriptionRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ActivityDescriptionUpdateResponse"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingErrorResponse"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingErrorResponse"];
-                };
-            };
-        };
-    };
-    v1_onboarding_sessions_director_invitations_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DirectorInvitationRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["DirectorInvitationRequest"];
-                "multipart/form-data": components["schemas"]["DirectorInvitationRequest"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DirectorInvitationResponse"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DirectorInvitationErrorResponse"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingErrorResponse"];
-                };
-            };
-        };
-    };
-    v1_onboarding_sessions_draft_retrieve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingDraftResponse"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingErrorResponse"];
-                };
-            };
-        };
-    };
-    v1_onboarding_sessions_draft_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OnboardingDraftUpdateRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["OnboardingDraftUpdateRequest"];
-                "multipart/form-data": components["schemas"]["OnboardingDraftUpdateRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingDraftResponse"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingDraftErrorResponse"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingErrorResponse"];
-                };
-            };
-        };
-    };
-    v1_onboarding_sessions_mark_ready_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MarkReadyResponse"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingErrorResponse"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingErrorResponse"];
-                };
-            };
-        };
-    };
-    v1_onboarding_sessions_proposals_list: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingProposalResponse"][];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-        };
-    };
-    v1_onboarding_sessions_proposals_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OnboardingProposalCreateRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["OnboardingProposalCreateRequest"];
-                "multipart/form-data": components["schemas"]["OnboardingProposalCreateRequest"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProposalCommandResponse"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingProposalErrorResponse"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingProposalErrorResponse"];
-                };
-            };
-        };
-    };
-    v1_onboarding_sessions_proposals_partial_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                proposal_id: string;
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["PatchedOnboardingProposalUpdateRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["PatchedOnboardingProposalUpdateRequest"];
-                "multipart/form-data": components["schemas"]["PatchedOnboardingProposalUpdateRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProposalCommandResponse"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingProposalErrorResponse"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingProposalErrorResponse"];
-                };
-            };
-        };
-    };
-    v1_onboarding_sessions_proposals_apply_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                proposal_id: string;
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProposalCommandResponse"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingProposalErrorResponse"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingProposalErrorResponse"];
-                };
-            };
-        };
-    };
-    v1_onboarding_sessions_proposals_reject_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                proposal_id: string;
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProposalCommandResponse"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingProposalErrorResponse"];
-                };
-            };
-        };
-    };
-    v1_onboarding_sessions_proposals_submit_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                proposal_id: string;
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProposalCommandResponse"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingProposalErrorResponse"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OnboardingProposalErrorResponse"];
-                };
-            };
-        };
-    };
-    v1_onboarding_sessions_runtime_config_retrieve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RuntimeConfigResponse"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetailResponse"];
-                };
-            };
-        };
-    };
     v1_organizations_retrieve: {
         parameters: {
             query?: never;
@@ -14258,6 +13003,469 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    platform_establishments_list: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: string;
+                organization_id?: string;
+                q?: string;
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformEstablishmentListResponse"];
+                };
+            };
+        };
+    };
+    v1_platform_establishments_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformEstablishmentDetail"];
+                };
+            };
+        };
+    };
+    platform_establishment_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformDeleteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PlatformDeleteRequest"];
+                "multipart/form-data": components["schemas"]["PlatformDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    platform_memberships_list: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                establishment_id?: string;
+                limit?: string;
+                organization_id?: string;
+                role?: string;
+                status?: string;
+                user_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformMembershipListResponse"];
+                };
+            };
+        };
+    };
+    platform_onboardings_list: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: string;
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformOnboardingListResponse"];
+                };
+            };
+        };
+    };
+    platform_onboardings_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformOnboardingStartRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PlatformOnboardingStartRequest"];
+                "multipart/form-data": components["schemas"]["PlatformOnboardingStartRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformOnboardingListItem"];
+                };
+            };
+        };
+    };
+    platform_onboarding_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformOnboardingListItem"];
+                };
+            };
+        };
+    };
+    platform_onboarding_complete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformOnboardingCompleteResponse"];
+                };
+            };
+        };
+    };
+    platform_onboarding_invite_director: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformInviteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PlatformInviteRequest"];
+                "multipart/form-data": components["schemas"]["PlatformInviteRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformInviteResponse"];
+                };
+            };
+        };
+    };
+    v1_platform_onboardings_draft_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingDraftResponse"];
+                };
+            };
+        };
+    };
+    v1_platform_onboardings_draft_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingDraftUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OnboardingDraftUpdateRequest"];
+                "multipart/form-data": components["schemas"]["OnboardingDraftUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingDraftResponse"];
+                };
+            };
+        };
+    };
+    platform_onboarding_invite_owner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformInviteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PlatformInviteRequest"];
+                "multipart/form-data": components["schemas"]["PlatformInviteRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformInviteResponse"];
+                };
+            };
+        };
+    };
+    platform_onboarding_summary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformOnboardingCompleteResponse"];
+                };
+            };
+        };
+    };
+    platform_organizations_list: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: string;
+                q?: string;
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformOrganizationListResponse"];
+                };
+            };
+        };
+    };
+    v1_platform_organizations_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformOrganizationDetail"];
+                };
+            };
+        };
+    };
+    platform_organization_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformDeleteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PlatformDeleteRequest"];
+                "multipart/form-data": components["schemas"]["PlatformDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_platform_session_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformSession"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    platform_users_list: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: string;
+                q?: string;
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformUserListResponse"];
+                };
+            };
+        };
+    };
+    v1_platform_users_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformUserDetail"];
                 };
             };
         };

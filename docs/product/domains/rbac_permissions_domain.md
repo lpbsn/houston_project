@@ -2,7 +2,7 @@
 
 Status: authoritative
 Last reviewed: 2026-09-19
-Implementation status: implemented (Action Plan RBAC in [`action_plans/permissions.py`](../../../apps/api/houston/action_plans/permissions.py); legacy Action/Checklist domains removed Lot 10). **Spore Platform V1 authorization is planned, not implemented.**
+Implementation status: implemented (Action Plan RBAC in [`action_plans/permissions.py`](../../../apps/api/houston/action_plans/permissions.py); legacy Action/Checklist domains removed Lot 10). **Spore Platform V1 authorization is live** (`IsActivePlatformOperator` on `/api/v1/platform/*` only), outside `HasActiveMembership`.
 
 ## 1. Purpose
 
@@ -37,7 +37,7 @@ Identity, organization, establishment, membership lifecycle, and membership sele
   - **Domain services** own business matrices (active BusinessUnit, Owner/Director without scope rows, invite/manage rules). A database constraint does not replace those checks.
   - **DRF default** is deny-by-omission (`DenyByDefault`). Omitting `permission_classes` refuses access, including for an authenticated bearer. Intentionally unauthenticated routes opt in with `AllowAny`; the closed public allowlist is enforced by the urlconf inventory test, not a second permission registry.
   - **Surface permissions** decide HTTP entry for a given context. Path-scoped establishment/organization admin is decided **once** per request (`decide_active_establishment_admin_access` / `decide_organization_admin_access`); the view reads the attached actor or organization. `HasActiveMembership` remains a coarse session gate, not a substitute for object rules.
-- Platform operator access (**not implemented**) is **not** an `EstablishmentMembership` role. When implemented, it **must not** add an implicit tenant bypass on `HasActiveMembership` or `CanAccessEstablishmentAdmin`. Tenant domain code must not import Platform permissions. Authenticated non-operators calling `/api/v1/platform/*` must receive **403** from the Platform permission class, not a missing-route 404. An operator with separate tenant memberships keeps those memberships for client APIs only.
+- Platform operator access is **not** an `EstablishmentMembership` role. It **must not** add an implicit tenant bypass on `HasActiveMembership` or `CanAccessEstablishmentAdmin`. Tenant domain code must not import Platform permissions. Authenticated non-operators calling `/api/v1/platform/*` receive **403** from the Platform permission class, not a missing-route 404. An operator with separate tenant memberships keeps those memberships for client APIs only.
 - Every establishment-scoped operation requires an active membership plus an active user, active establishment, and active organization.
 - Backend validates authorization on every request. Frontend visibility never grants access.
 - Object-level authorization is mandatory for both reads and writes.

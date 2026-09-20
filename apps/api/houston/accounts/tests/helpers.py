@@ -10,8 +10,6 @@ from houston.establishments.models import (
 from houston.establishments.tests.taxonomy_helpers import create_business_unit
 from houston.organizations.models import Organization
 
-REGISTRATION_PASSWORD = "SecurePass123!"
-
 
 def create_membership(
     *,
@@ -82,53 +80,6 @@ def login(
         format="json",
         **auth_headers(csrf_token),
         **extra_headers,
-    )
-
-
-def registration_payload(**overrides):
-    payload = {
-        "invite_code": "valid-code",
-        "first_name": "Alex",
-        "last_name": "Owner",
-        "email": "alex.owner@example.com",
-        "password": REGISTRATION_PASSWORD,
-        "password_confirmation": REGISTRATION_PASSWORD,
-        "organization_name": "Northwind Group",
-        "establishment_name": "Northwind Hotel",
-        "refresh_token_transport": "cookie",
-    }
-    payload.update(overrides)
-    return payload
-
-
-def post_register(api_client: APIClient, csrf_token: str, payload: dict):
-    return api_client.post(
-        "/api/v1/auth/register/",
-        payload,
-        format="json",
-        HTTP_X_CSRFTOKEN=csrf_token,
-    )
-
-
-def owner_validate_payload(**overrides):
-    payload = {
-        "invite_code": "valid-code",
-        "first_name": "Alex",
-        "last_name": "Owner",
-        "email": "alex.owner@example.com",
-        "password": REGISTRATION_PASSWORD,
-        "password_confirmation": REGISTRATION_PASSWORD,
-    }
-    payload.update(overrides)
-    return payload
-
-
-def post_validate_owner(api_client: APIClient, csrf_token: str, payload: dict):
-    return api_client.post(
-        "/api/v1/auth/register/validate-owner/",
-        payload,
-        format="json",
-        HTTP_X_CSRFTOKEN=csrf_token,
     )
 
 

@@ -5,7 +5,7 @@
 **Date :** 19 septembre 2026  
 **Périmètre :** V1 minimale et évolutive  
 
-Ce document décrit la **cible fonctionnelle** de Spore Platform V1. Il ne décrit pas le produit actuellement en production (onboarding Owner depuis `/onboarding`, inscription par code). L’architecture d’implémentation cible appartient aux documents de domaine (identité, RBAC, onboarding), pas à cette EDB.
+Ce document décrit la **cible fonctionnelle** de Spore Platform V1. Ce n’est pas la spec d’implémentation ni un runbook produit. L’implémentation live appartient au code et aux documents de domaine (identité, RBAC, onboarding).
 
 ---
 

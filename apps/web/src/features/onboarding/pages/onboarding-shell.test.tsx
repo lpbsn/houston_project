@@ -1,13 +1,12 @@
 // @vitest-environment jsdom
 
 import { createElement } from 'react'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AppRoute } from '@/app/app-routes'
 
 const navigate = vi.fn()
-const appShellRenderCount = vi.hoisted(() => ({ value: 0 }))
 const routeState = vi.hoisted(() => ({
   route: { kind: 'static', path: '/onboarding' } as AppRoute,
 }))
@@ -51,17 +50,6 @@ vi.mock('@/app/terrain-routes', () => ({
   usesTerrainShell: () => false,
 }))
 
-vi.mock('@/components/app-shell', () => ({
-  AppShell: ({ children }: { children: React.ReactNode }) => {
-    appShellRenderCount.value += 1
-    return createElement('div', { 'data-testid': 'app-shell' }, children)
-  },
-}))
-
-vi.mock('@/features/onboarding/pages/onboarding-page', () => ({
-  OnboardingPage: () => createElement('div', { 'data-testid': 'onboarding-page-stub' }),
-}))
-
 vi.mock('@/features/chat/hooks', () => ({
   useChatAvailability: () => ({
     isNavVisible: false,
@@ -84,7 +72,6 @@ import App from '@/App'
 afterEach(() => {
   cleanup()
   navigate.mockReset()
-  appShellRenderCount.value = 0
   routeState.route = { kind: 'static', path: '/onboarding' }
   authState.isReady = true
   authState.isAuthenticated = false
@@ -94,12 +81,8 @@ afterEach(() => {
 })
 
 describe('App /onboarding routing', () => {
-  it('renders onboarding outside AppShell', () => {
+  it('redirects former wizard links to login', () => {
     render(createElement(App))
-
-    expect(screen.getByTestId('onboarding-shell')).toBeTruthy()
-    expect(screen.getByTestId('onboarding-page-stub')).toBeTruthy()
-    expect(screen.queryByTestId('app-shell')).toBeNull()
-    expect(appShellRenderCount.value).toBe(0)
+    expect(navigate).toHaveBeenCalledWith('/login', { replace: true })
   })
 })

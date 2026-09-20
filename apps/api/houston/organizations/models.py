@@ -17,6 +17,7 @@ class Organization(BaseModel):
         choices=Status.choices,
         default=Status.ACTIVE,
     )
+    has_been_operational = models.BooleanField(default=False)
 
     def __str__(self) -> str:
         return self.name

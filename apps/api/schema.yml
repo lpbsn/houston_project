@@ -1637,94 +1637,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
-  /api/v1/auth/register/:
-    post:
-      operationId: v1_auth_register_create
-      description: Registers a new owner and provisions an organization, draft establishment,
-        and onboarding session using a valid registration invite code. Cookie transport
-        requires Django CSRF; body transport does not use cookies.
-      tags:
-      - auth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RegistrationRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/RegistrationRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/RegistrationRequest'
-        required: true
-      security:
-      - {}
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RegistrationResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '429':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-  /api/v1/auth/register/validate-owner/:
-    post:
-      operationId: v1_auth_register_validate_owner_create
-      description: Validates owner registration fields without provisioning any records.
-      tags:
-      - auth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RegistrationOwnerValidateRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/RegistrationOwnerValidateRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/RegistrationOwnerValidateRequest'
-        required: true
-      security:
-      - {}
-      responses:
-        '204':
-          description: Owner registration fields are valid.
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '429':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
   /api/v1/auth/switch_establishment/:
     post:
       operationId: v1_auth_switch_establishment_create
@@ -1782,6 +1694,10 @@ paths:
         schema:
           type: string
       - in: query
+        name: limit
+        schema:
+          type: integer
+      - in: query
         name: q
         schema:
           type: string
@@ -1803,6 +1719,10 @@ paths:
       operationId: v1_catalog_business_units_suggest_list
       description: Autocomplete suggestions for BusinessUnit labels (catalog only).
       parameters:
+      - in: query
+        name: limit
+        schema:
+          type: integer
       - in: query
         name: q
         schema:
@@ -2080,62 +2000,6 @@ paths:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-  /api/v1/establishments/:
-    post:
-      operationId: v1_establishments_create
-      description: Creates a DRAFT establishment in a manageable organization (Owner
-        on ACTIVE or DRAFT). Uses the session-selected establishment's organization
-        when present and authorized; otherwise the actor's unique manageable organization.
-        Seeds organizational owners and starts onboarding atomically. Body accepts
-        an optional establishment name. Omit or send null to provision an unnamed
-        DRAFT; blank strings are rejected. Seeds organizational owners and starts
-        onboarding atomically.
-      tags:
-      - establishments
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/EstablishmentCreateRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/EstablishmentCreateRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/EstablishmentCreateRequest'
-      security:
-      - BearerAccessToken: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/EstablishmentCreateResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '409':
           content:
             application/json:
               schema:
@@ -7775,911 +7639,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
           description: ''
-  /api/v1/onboarding-sessions/:
-    post:
-      operationId: v1_onboarding_sessions_create
-      description: Starts or returns an existing non-terminal onboarding session for
-        an establishment. Supports manual and template source modes only.
-      tags:
-      - onboarding
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OnboardingSessionCreateRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/OnboardingSessionCreateRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/OnboardingSessionCreateRequest'
-        required: true
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingSessionCreateResponse'
-          description: ''
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingSessionCreateResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingErrorResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-  /api/v1/onboarding-sessions/{session_id}/:
-    get:
-      operationId: v1_onboarding_sessions_retrieve
-      description: Returns one onboarding session visible to the authenticated actor.
-      parameters:
-      - in: path
-        name: session_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - onboarding
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingSessionResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-  /api/v1/onboarding-sessions/{session_id}/activate/:
-    post:
-      operationId: v1_onboarding_sessions_activate_create
-      description: Activates a marked-ready onboarding session and its draft establishment.
-        Activation is explicit and backend-controlled.
-      parameters:
-      - in: path
-        name: session_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - onboarding
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ActivationResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingErrorResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingErrorResponse'
-          description: ''
-  /api/v1/onboarding-sessions/{session_id}/activation-summary/:
-    get:
-      operationId: v1_onboarding_sessions_activation_summary_retrieve
-      description: Returns backend activation readiness and blockers for onboarding.
-      parameters:
-      - in: path
-        name: session_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - onboarding
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ActivationSummaryResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-  /api/v1/onboarding-sessions/{session_id}/complete/:
-    post:
-      operationId: v1_onboarding_sessions_complete_create
-      description: Validates the onboarding draft, materializes runtime structure
-        and team, activates the establishment, and deletes the draft. Idempotent when
-        already activated.
-      parameters:
-      - in: path
-        name: session_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - onboarding
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingCompleteResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingDraftErrorResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingErrorResponse'
-          description: ''
-  /api/v1/onboarding-sessions/{session_id}/description/:
-    patch:
-      operationId: v1_onboarding_sessions_description_partial_update
-      description: Submits the canonical establishment activity description for onboarding.
-      parameters:
-      - in: path
-        name: session_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - onboarding
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedActivityDescriptionRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedActivityDescriptionRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedActivityDescriptionRequest'
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ActivityDescriptionUpdateResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingErrorResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingErrorResponse'
-          description: ''
-  /api/v1/onboarding-sessions/{session_id}/director-invitations/:
-    post:
-      operationId: v1_onboarding_sessions_director_invitations_create
-      description: Invites a Director to the draft establishment for an onboarding
-        session. Creates or reuses a pending user and an invited director membership.
-        An invitation email is sent asynchronously when enabled.
-      parameters:
-      - in: path
-        name: session_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - onboarding
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DirectorInvitationRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/DirectorInvitationRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/DirectorInvitationRequest'
-        required: true
-      security:
-      - BearerAccessToken: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DirectorInvitationResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DirectorInvitationErrorResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingErrorResponse'
-          description: ''
-  /api/v1/onboarding-sessions/{session_id}/draft/:
-    get:
-      operationId: v1_onboarding_sessions_draft_retrieve
-      description: 'Returns the onboarding draft for a session. Read-only: does not
-        create a draft.'
-      parameters:
-      - in: path
-        name: session_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - onboarding
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingDraftResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingErrorResponse'
-          description: ''
-    put:
-      operationId: v1_onboarding_sessions_draft_update
-      description: Full-replace autosave for the onboarding draft. Incomplete payloads
-        are accepted after soft validation.
-      parameters:
-      - in: path
-        name: session_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - onboarding
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OnboardingDraftUpdateRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/OnboardingDraftUpdateRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/OnboardingDraftUpdateRequest'
-        required: true
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingDraftResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingDraftErrorResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingErrorResponse'
-          description: ''
-  /api/v1/onboarding-sessions/{session_id}/mark-ready/:
-    post:
-      operationId: v1_onboarding_sessions_mark_ready_create
-      description: Marks an onboarding session ready for activation when backend readiness
-        passes. This does not activate the establishment.
-      parameters:
-      - in: path
-        name: session_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - onboarding
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MarkReadyResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingErrorResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingErrorResponse'
-          description: ''
-  /api/v1/onboarding-sessions/{session_id}/proposals/:
-    get:
-      operationId: v1_onboarding_sessions_proposals_list
-      description: Lists onboarding proposals for a path-scoped onboarding session.
-      parameters:
-      - in: path
-        name: session_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - onboarding
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/OnboardingProposalResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-    post:
-      operationId: v1_onboarding_sessions_proposals_create
-      description: Creates a manual onboarding proposal for Onboarding manuel (schema
-        onboarding_proposal_v4).
-      parameters:
-      - in: path
-        name: session_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - onboarding
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OnboardingProposalCreateRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/OnboardingProposalCreateRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/OnboardingProposalCreateRequest'
-        required: true
-      security:
-      - BearerAccessToken: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProposalCommandResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
-          description: ''
-  /api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/:
-    patch:
-      operationId: v1_onboarding_sessions_proposals_partial_update
-      description: Updates a draft onboarding proposal payload (onboarding_proposal_v4).
-      parameters:
-      - in: path
-        name: proposal_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      - in: path
-        name: session_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - onboarding
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedOnboardingProposalUpdateRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedOnboardingProposalUpdateRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedOnboardingProposalUpdateRequest'
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProposalCommandResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
-          description: ''
-  /api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/apply/:
-    post:
-      operationId: v1_onboarding_sessions_proposals_apply_create
-      description: Applies a validated onboarding proposal into runtime configuration.
-        This does not activate the establishment.
-      parameters:
-      - in: path
-        name: proposal_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      - in: path
-        name: session_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - onboarding
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProposalCommandResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
-          description: ''
-  /api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/reject/:
-    post:
-      operationId: v1_onboarding_sessions_proposals_reject_create
-      description: Rejects an onboarding proposal without applying runtime changes.
-      parameters:
-      - in: path
-        name: proposal_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      - in: path
-        name: session_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - onboarding
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProposalCommandResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
-          description: ''
-  /api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/submit/:
-    post:
-      operationId: v1_onboarding_sessions_proposals_submit_create
-      description: Validates and accepts all sections of an onboarding_proposal_v4
-        manual proposal.
-      parameters:
-      - in: path
-        name: proposal_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      - in: path
-        name: session_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - onboarding
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProposalCommandResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
-          description: ''
-  /api/v1/onboarding-sessions/{session_id}/runtime-config/:
-    get:
-      operationId: v1_onboarding_sessions_runtime_config_retrieve
-      description: Returns active runtime configuration for an onboarding session.
-      parameters:
-      - in: path
-        name: session_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - onboarding
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RuntimeConfigResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
   /api/v1/organizations/{organization_id}/:
     get:
       operationId: v1_organizations_retrieve
@@ -8945,6 +7904,527 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/platform/establishments/:
+    get:
+      operationId: platform_establishments_list
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          type: string
+      - in: query
+        name: organization_id
+        schema:
+          type: string
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - platform
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformEstablishmentListResponse'
+          description: ''
+  /api/v1/platform/establishments/{establishment_id}/:
+    get:
+      operationId: v1_platform_establishments_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformEstablishmentDetail'
+          description: ''
+  /api/v1/platform/establishments/{establishment_id}/delete/:
+    post:
+      operationId: platform_establishment_delete
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformDeleteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PlatformDeleteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PlatformDeleteRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/platform/memberships/:
+    get:
+      operationId: platform_memberships_list
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: establishment_id
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          type: string
+      - in: query
+        name: organization_id
+        schema:
+          type: string
+      - in: query
+        name: role
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      - in: query
+        name: user_id
+        schema:
+          type: string
+      tags:
+      - platform
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformMembershipListResponse'
+          description: ''
+  /api/v1/platform/onboardings/:
+    get:
+      operationId: platform_onboardings_list
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          type: string
+      - in: query
+        name: q
+        schema:
+          type: string
+      tags:
+      - platform
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformOnboardingListResponse'
+          description: ''
+    post:
+      operationId: platform_onboardings_create
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformOnboardingStartRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PlatformOnboardingStartRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PlatformOnboardingStartRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformOnboardingListItem'
+          description: ''
+  /api/v1/platform/onboardings/{session_id}/:
+    get:
+      operationId: platform_onboarding_retrieve
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformOnboardingListItem'
+          description: ''
+  /api/v1/platform/onboardings/{session_id}/complete/:
+    post:
+      operationId: platform_onboarding_complete
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformOnboardingCompleteResponse'
+          description: ''
+  /api/v1/platform/onboardings/{session_id}/director-invitations/:
+    post:
+      operationId: platform_onboarding_invite_director
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformInviteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PlatformInviteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PlatformInviteRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformInviteResponse'
+          description: ''
+  /api/v1/platform/onboardings/{session_id}/draft/:
+    get:
+      operationId: v1_platform_onboardings_draft_retrieve
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingDraftResponse'
+          description: ''
+    put:
+      operationId: v1_platform_onboardings_draft_update
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingDraftUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OnboardingDraftUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OnboardingDraftUpdateRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingDraftResponse'
+          description: ''
+  /api/v1/platform/onboardings/{session_id}/owner-invitations/:
+    post:
+      operationId: platform_onboarding_invite_owner
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformInviteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PlatformInviteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PlatformInviteRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformInviteResponse'
+          description: ''
+  /api/v1/platform/onboardings/{session_id}/summary/:
+    get:
+      operationId: platform_onboarding_summary
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformOnboardingCompleteResponse'
+          description: ''
+  /api/v1/platform/organizations/:
+    get:
+      operationId: platform_organizations_list
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          type: string
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - platform
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformOrganizationListResponse'
+          description: ''
+  /api/v1/platform/organizations/{organization_id}/:
+    get:
+      operationId: v1_platform_organizations_retrieve
+      parameters:
+      - in: path
+        name: organization_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformOrganizationDetail'
+          description: ''
+  /api/v1/platform/organizations/{organization_id}/delete/:
+    post:
+      operationId: platform_organization_delete
+      parameters:
+      - in: path
+        name: organization_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformDeleteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PlatformDeleteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PlatformDeleteRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/platform/session/:
+    get:
+      operationId: v1_platform_session_retrieve
+      tags:
+      - platform
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformSession'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/platform/users/:
+    get:
+      operationId: platform_users_list
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          type: string
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - platform
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformUserListResponse'
+          description: ''
+  /api/v1/platform/users/{user_id}/:
+    get:
+      operationId: v1_platform_users_retrieve
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformUserDetail'
           description: ''
 components:
   schemas:
@@ -10338,133 +9818,6 @@ components:
       - responsible_business_unit_label
       - status
       - title
-    ActivationBlocker:
-      type: object
-      properties:
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - message
-    ActivationReadinessResponse:
-      type: object
-      properties:
-        is_ready:
-          type: boolean
-        blockers:
-          type: array
-          items:
-            $ref: '#/components/schemas/ActivationBlocker'
-        counts:
-          type: object
-          additionalProperties:
-            type: integer
-        sections:
-          type: object
-          additionalProperties:
-            type: object
-            additionalProperties: {}
-        establishment_status:
-          type: string
-        session_status:
-          type: string
-      required:
-      - blockers
-      - counts
-      - establishment_status
-      - is_ready
-      - sections
-      - session_status
-    ActivationResponse:
-      type: object
-      properties:
-        session:
-          $ref: '#/components/schemas/OnboardingSessionResponse'
-        activation_summary:
-          $ref: '#/components/schemas/ActivationSummaryResponse'
-      required:
-      - activation_summary
-      - session
-    ActivationSummaryResponse:
-      type: object
-      properties:
-        organization:
-          $ref: '#/components/schemas/OnboardingOrganizationSummary'
-        establishment:
-          $ref: '#/components/schemas/OnboardingEstablishmentSummary'
-        activity_description:
-          allOf:
-          - $ref: '#/components/schemas/ActivityDescriptionResponse'
-          nullable: true
-        active_business_units:
-          type: array
-          items:
-            $ref: '#/components/schemas/BusinessUnitTreeItem'
-        optional_units:
-          type: array
-          items:
-            $ref: '#/components/schemas/KeyedRuntimeItem'
-        initial_owner_director_count:
-          type: integer
-        initial_director_count:
-          type: integer
-        readiness:
-          $ref: '#/components/schemas/ActivationReadinessResponse'
-        blockers:
-          type: array
-          items:
-            $ref: '#/components/schemas/ActivationBlocker'
-        access:
-          $ref: '#/components/schemas/OnboardingAccessResponse'
-        effective_can_activate:
-          type: boolean
-      required:
-      - access
-      - activity_description
-      - blockers
-      - effective_can_activate
-      - establishment
-      - initial_director_count
-      - initial_owner_director_count
-      - optional_units
-      - organization
-      - readiness
-    ActivityDescriptionResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        description:
-          type: string
-        source:
-          type: string
-        submitted_by_id:
-          type: string
-          format: uuid
-          nullable: true
-        validated_at:
-          type: string
-          format: date-time
-          nullable: true
-      required:
-      - description
-      - id
-      - source
-      - submitted_by_id
-      - validated_at
-    ActivityDescriptionUpdateResponse:
-      type: object
-      properties:
-        session:
-          $ref: '#/components/schemas/OnboardingSessionResponse'
-        activity_description:
-          $ref: '#/components/schemas/ActivityDescriptionResponse'
-      required:
-      - activity_description
-      - session
     ActivitySubjectTreeItem:
       type: object
       properties:
@@ -11662,18 +11015,18 @@ components:
           type: boolean
         can_manage_organization:
           type: boolean
-        can_create_establishment:
+        platform_operator_active:
           type: boolean
       required:
       - can_create_action_plan
       - can_create_catalog_action_plan
-      - can_create_establishment
       - can_invite
       - can_manage_organization
       - can_manage_runtime_config
       - can_view_action_plan_catalog
       - can_view_team
       - chat_available
+      - platform_operator_active
     BootstrapResponse:
       type: object
       properties:
@@ -12304,20 +11657,6 @@ components:
       required:
       - code
       - detail
-    DirectorInvitationRequest:
-      type: object
-      properties:
-        email:
-          type: string
-          format: email
-        first_name:
-          type: string
-        last_name:
-          type: string
-      required:
-      - email
-      - first_name
-      - last_name
     DirectorInvitationResponse:
       type: object
       properties:
@@ -12601,36 +11940,6 @@ components:
       - operational_config
       - organization_id
       - organization_name
-      - status
-    EstablishmentCreateRequest:
-      type: object
-      properties:
-        name:
-          type: string
-          nullable: true
-          maxLength: 255
-    EstablishmentCreateResponse:
-      type: object
-      properties:
-        establishment_id:
-          type: string
-          format: uuid
-        organization_id:
-          type: string
-          format: uuid
-        name:
-          type: string
-          nullable: true
-        status:
-          type: string
-        onboarding_session_id:
-          type: string
-          format: uuid
-      required:
-      - establishment_id
-      - name
-      - onboarding_session_id
-      - organization_id
       - status
     EstablishmentMembershipDetailResponse:
       type: object
@@ -13174,26 +12483,6 @@ components:
           type: string
       required:
       - status
-    KeyedRuntimeItem:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        key:
-          type: string
-        label:
-          type: string
-        source:
-          type: string
-        active:
-          type: boolean
-      required:
-      - active
-      - id
-      - key
-      - label
-      - source
     LegalVersionRequest:
       type: object
       properties:
@@ -13230,16 +12519,6 @@ components:
           type: integer
       required:
       - updated_count
-    MarkReadyResponse:
-      type: object
-      properties:
-        session:
-          $ref: '#/components/schemas/OnboardingSessionResponse'
-        activation_summary:
-          $ref: '#/components/schemas/ActivationSummaryResponse'
-      required:
-      - activation_summary
-      - session
     Membership:
       type: object
       properties:
@@ -13617,44 +12896,6 @@ components:
       - media_count
       - processing_status
       - submitted_at
-    OnboardingAccessResponse:
-      type: object
-      properties:
-        can_activate:
-          type: boolean
-      required:
-      - can_activate
-    OnboardingCompleteResponse:
-      type: object
-      properties:
-        session:
-          $ref: '#/components/schemas/OnboardingSessionResponse'
-        activation_summary:
-          type: object
-          additionalProperties: {}
-        activated:
-          type: boolean
-        idempotent:
-          type: boolean
-      required:
-      - activated
-      - activation_summary
-      - idempotent
-      - session
-    OnboardingDraftErrorResponse:
-      type: object
-      properties:
-        code:
-          type: string
-        detail:
-          type: string
-        errors:
-          type: array
-          items:
-            $ref: '#/components/schemas/OnboardingDraftValidationErrorItem'
-      required:
-      - code
-      - detail
     OnboardingDraftResponse:
       type: object
       properties:
@@ -13712,244 +12953,6 @@ components:
           nullable: true
       required:
       - code
-    OnboardingErrorResponse:
-      type: object
-      properties:
-        code:
-          type: string
-        detail:
-          type: string
-        blockers:
-          type: array
-          items:
-            $ref: '#/components/schemas/ActivationBlocker'
-      required:
-      - code
-      - detail
-    OnboardingEstablishmentSummary:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-        status:
-          type: string
-      required:
-      - id
-      - name
-      - status
-    OnboardingOrganizationSummary:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-        status:
-          type: string
-      required:
-      - id
-      - name
-      - status
-    OnboardingProposalCreateRequest:
-      type: object
-      properties:
-        payload:
-          $ref: '#/components/schemas/OnboardingProposalPayload'
-      required:
-      - payload
-    OnboardingProposalErrorResponse:
-      type: object
-      properties:
-        code:
-          type: string
-        detail:
-          type: string
-        errors:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProposalValidationErrorItem'
-      required:
-      - code
-      - detail
-    OnboardingProposalPayload:
-      oneOf:
-      - $ref: '#/components/schemas/OnboardingProposalPayloadV4'
-      discriminator:
-        propertyName: schema_version
-        mapping:
-          onboarding_proposal_v4: '#/components/schemas/OnboardingProposalPayloadV4'
-    OnboardingProposalPayloadV4:
-      type: object
-      properties:
-        schema_version:
-          type: string
-        business_units:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProposalBusinessUnitItemV4'
-        activity_subjects:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProposalActivitySubjectItemV4'
-      required:
-      - schema_version
-    OnboardingProposalResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        onboarding_session_id:
-          type: string
-          format: uuid
-        establishment_id:
-          type: string
-          format: uuid
-        source:
-          type: string
-        status:
-          type: string
-        payload:
-          $ref: '#/components/schemas/OnboardingProposalPayload'
-        section_validation:
-          type: object
-          additionalProperties:
-            type: string
-        validation_errors:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProposalValidationErrorItem'
-        created_by_id:
-          type: string
-          format: uuid
-          nullable: true
-        validated_by_id:
-          type: string
-          format: uuid
-          nullable: true
-        applied_by_id:
-          type: string
-          format: uuid
-          nullable: true
-        validated_at:
-          type: string
-          format: date-time
-          nullable: true
-        applied_at:
-          type: string
-          format: date-time
-          nullable: true
-        last_error_code:
-          type: string
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-      required:
-      - applied_at
-      - applied_by_id
-      - created_at
-      - created_by_id
-      - establishment_id
-      - id
-      - last_error_code
-      - onboarding_session_id
-      - payload
-      - section_validation
-      - source
-      - status
-      - updated_at
-      - validated_at
-      - validated_by_id
-      - validation_errors
-    OnboardingSessionCreateRequest:
-      type: object
-      properties:
-        establishment_id:
-          type: string
-          format: uuid
-        source_mode:
-          type: string
-          default: manual
-      required:
-      - establishment_id
-    OnboardingSessionCreateResponse:
-      type: object
-      properties:
-        created:
-          type: boolean
-        session:
-          $ref: '#/components/schemas/OnboardingSessionResponse'
-      required:
-      - created
-      - session
-    OnboardingSessionResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        organization:
-          $ref: '#/components/schemas/OnboardingOrganizationSummary'
-        establishment:
-          $ref: '#/components/schemas/OnboardingEstablishmentSummary'
-        started_by_id:
-          type: string
-          format: uuid
-          nullable: true
-        status:
-          type: string
-        source_mode:
-          type: string
-        current_step:
-          type: string
-        ai_attempts:
-          type: integer
-        last_error_code:
-          type: string
-        started_at:
-          type: string
-          format: date-time
-        ready_for_activation_at:
-          type: string
-          format: date-time
-          nullable: true
-        activated_at:
-          type: string
-          format: date-time
-          nullable: true
-        canceled_at:
-          type: string
-          format: date-time
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-      required:
-      - activated_at
-      - ai_attempts
-      - canceled_at
-      - created_at
-      - current_step
-      - establishment
-      - id
-      - last_error_code
-      - organization
-      - ready_for_activation_at
-      - source_mode
-      - started_at
-      - started_by_id
-      - status
-      - updated_at
     OrganizationAdminDirector:
       type: object
       properties:
@@ -13992,12 +12995,9 @@ components:
           nullable: true
         onboarding_current_step:
           type: string
-        can_continue_onboarding:
-          type: boolean
       required:
       - active_member_count
       - business_unit_count
-      - can_continue_onboarding
       - directors
       - id
       - name
@@ -14336,13 +13336,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ActionPlanTaskInput'
-    PatchedActivityDescriptionRequest:
-      type: object
-      properties:
-        description:
-          type: string
-          maxLength: 5000
-          minLength: 10
     PatchedChatRenameGroupRequest:
       type: object
       properties:
@@ -14377,11 +13370,6 @@ components:
       properties:
         push_enabled:
           type: boolean
-    PatchedOnboardingProposalUpdateRequest:
-      type: object
-      properties:
-        payload:
-          $ref: '#/components/schemas/OnboardingProposalPayload'
     PatchedRuntimeBusinessUnitUpdateRequest:
       type: object
       properties:
@@ -14421,10 +13409,7 @@ components:
           type: string
           format: uuid
           nullable: true
-        can_continue_onboarding:
-          type: boolean
       required:
-      - can_continue_onboarding
       - establishment_id
       - establishment_name
       - establishment_status
@@ -14467,6 +13452,14 @@ components:
       - can_reject_resolution_request
       - can_request_resolution
       - can_resolve
+    PlatformDeleteRequest:
+      type: object
+      properties:
+        justification:
+          type: string
+          maxLength: 2000
+      required:
+      - justification
     PlatformEnum:
       enum:
       - ios
@@ -14475,6 +13468,457 @@ components:
       description: |-
         * `ios` - ios
         * `android` - android
+    PlatformEstablishmentDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          nullable: true
+        status:
+          type: string
+        organization_id:
+          type: string
+          format: uuid
+        organization_name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        onboarding:
+          $ref: '#/components/schemas/PlatformOnboardingSummary'
+        timezone:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+        can_delete:
+          type: boolean
+        blocking_reasons:
+          type: array
+          items:
+            type: string
+      required:
+      - blocking_reasons
+      - can_delete
+      - created_at
+      - id
+      - name
+      - onboarding
+      - organization_id
+      - organization_name
+      - status
+      - timezone
+      - updated_at
+    PlatformEstablishmentListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          nullable: true
+        status:
+          type: string
+        organization_id:
+          type: string
+          format: uuid
+        organization_name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        onboarding:
+          $ref: '#/components/schemas/PlatformOnboardingSummary'
+      required:
+      - created_at
+      - id
+      - name
+      - onboarding
+      - organization_id
+      - organization_name
+      - status
+    PlatformEstablishmentListResponse:
+      type: object
+      properties:
+        next_cursor:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformEstablishmentListItem'
+      required:
+      - next_cursor
+      - results
+    PlatformEstablishmentSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          nullable: true
+        status:
+          type: string
+      required:
+      - id
+      - name
+      - status
+    PlatformInviteRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+      required:
+      - email
+      - first_name
+      - last_name
+    PlatformInviteResponse:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+      required:
+      - membership_id
+    PlatformMembership:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        user_display_name:
+          type: string
+        user_email:
+          type: string
+          format: email
+          nullable: true
+        establishment_id:
+          type: string
+          format: uuid
+        establishment_name:
+          type: string
+          nullable: true
+        organization_id:
+          type: string
+          format: uuid
+        organization_name:
+          type: string
+        role:
+          type: string
+        status:
+          type: string
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformScope'
+      required:
+      - establishment_id
+      - establishment_name
+      - id
+      - organization_id
+      - organization_name
+      - role
+      - scopes
+      - status
+      - user_display_name
+      - user_email
+      - user_id
+    PlatformMembershipListResponse:
+      type: object
+      properties:
+        next_cursor:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformMembership'
+      required:
+      - next_cursor
+      - results
+    PlatformOnboardingCompleteResponse:
+      type: object
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        activated:
+          type: boolean
+        idempotent:
+          type: boolean
+        readiness:
+          type: object
+          additionalProperties: {}
+      required:
+      - activated
+      - idempotent
+      - readiness
+      - session_id
+    PlatformOnboardingListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        establishment_id:
+          type: string
+          format: uuid
+        establishment_name:
+          type: string
+          nullable: true
+        organization_id:
+          type: string
+          format: uuid
+        organization_name:
+          type: string
+        functional_status:
+          type: string
+          nullable: true
+        session_status:
+          type: string
+        current_step:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - created_at
+      - current_step
+      - establishment_id
+      - establishment_name
+      - functional_status
+      - id
+      - organization_id
+      - organization_name
+      - session_status
+    PlatformOnboardingListResponse:
+      type: object
+      properties:
+        next_cursor:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformOnboardingListItem'
+      required:
+      - next_cursor
+      - results
+    PlatformOnboardingStartRequest:
+      type: object
+      properties:
+        organization_name:
+          type: string
+          maxLength: 255
+        establishment_name:
+          type: string
+          nullable: true
+          maxLength: 255
+      required:
+      - organization_name
+    PlatformOnboardingSummary:
+      type: object
+      properties:
+        functional_status:
+          type: string
+          nullable: true
+        session_id:
+          type: string
+          format: uuid
+          nullable: true
+        current_step:
+          type: string
+        source_mode:
+          type: string
+        last_error_code:
+          type: string
+      required:
+      - current_step
+      - functional_status
+      - last_error_code
+      - session_id
+      - source_mode
+    PlatformOrganizationDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        has_been_operational:
+          type: boolean
+        updated_at:
+          type: string
+          format: date-time
+        can_delete:
+          type: boolean
+        blocking_reasons:
+          type: array
+          items:
+            type: string
+        establishments:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformEstablishmentSummary'
+      required:
+      - blocking_reasons
+      - can_delete
+      - created_at
+      - establishments
+      - has_been_operational
+      - id
+      - name
+      - status
+      - updated_at
+    PlatformOrganizationListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        has_been_operational:
+          type: boolean
+      required:
+      - created_at
+      - has_been_operational
+      - id
+      - name
+      - status
+    PlatformOrganizationListResponse:
+      type: object
+      properties:
+        next_cursor:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformOrganizationListItem'
+      required:
+      - next_cursor
+      - results
+    PlatformScope:
+      type: object
+      properties:
+        scope_type:
+          type: string
+        scope_id:
+          type: string
+        scope_label:
+          type: string
+      required:
+      - scope_id
+      - scope_label
+      - scope_type
+    PlatformSession:
+      type: object
+      properties:
+        platform_operator_active:
+          type: boolean
+        operator_id:
+          type: string
+          format: uuid
+      required:
+      - operator_id
+      - platform_operator_active
+    PlatformUserDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        first_name:
+          type: string
+        last_name:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - created_at
+      - display_name
+      - email
+      - first_name
+      - id
+      - last_name
+      - status
+      - updated_at
+    PlatformUserListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - created_at
+      - display_name
+      - email
+      - id
+      - status
+    PlatformUserListResponse:
+      type: object
+      properties:
+        next_cursor:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformUserListItem'
+      required:
+      - next_cursor
+      - results
     PriorityEnum:
       enum:
       - info
@@ -14487,64 +13931,6 @@ components:
         * `action_required` - Action required
         * `urgent` - Urgent
         * `system` - System
-    ProposalActivitySubjectItemV4:
-      type: object
-      properties:
-        client_key:
-          type: string
-        business_unit_client_key:
-          type: string
-        catalog_key:
-          type: string
-          nullable: true
-        label:
-          type: string
-          nullable: true
-        description:
-          type: string
-          default: ''
-      required:
-      - business_unit_client_key
-      - client_key
-    ProposalBusinessUnitItemV4:
-      type: object
-      properties:
-        client_key:
-          type: string
-        catalog_key:
-          type: string
-        specific_name:
-          type: string
-        instance_description:
-          type: string
-          default: ''
-      required:
-      - catalog_key
-      - client_key
-      - specific_name
-    ProposalCommandResponse:
-      type: object
-      properties:
-        session:
-          $ref: '#/components/schemas/OnboardingSessionResponse'
-        proposal:
-          $ref: '#/components/schemas/OnboardingProposalResponse'
-      required:
-      - proposal
-      - session
-    ProposalValidationErrorItem:
-      type: object
-      properties:
-        code:
-          type: string
-        section:
-          type: string
-        field:
-          type: string
-        key:
-          type: string
-      required:
-      - code
     PushDeviceResponse:
       type: object
       properties:
@@ -14615,111 +14001,6 @@ components:
       description: |-
         * `cookie` - Cookie
         * `body` - Body
-    RegistrationOwnerValidateRequest:
-      type: object
-      properties:
-        invite_code:
-          type: string
-        first_name:
-          type: string
-        last_name:
-          type: string
-        email:
-          type: string
-          format: email
-        password:
-          type: string
-        password_confirmation:
-          type: string
-      required:
-      - email
-      - first_name
-      - invite_code
-      - last_name
-      - password
-      - password_confirmation
-    RegistrationRequest:
-      type: object
-      properties:
-        refresh_token_transport:
-          $ref: '#/components/schemas/RefreshTokenTransportEnum'
-        invite_code:
-          type: string
-        first_name:
-          type: string
-        last_name:
-          type: string
-        email:
-          type: string
-          format: email
-        password:
-          type: string
-        password_confirmation:
-          type: string
-        organization_name:
-          type: string
-        establishment_name:
-          type: string
-          default: ''
-        terms_version:
-          type: string
-      required:
-      - email
-      - first_name
-      - invite_code
-      - last_name
-      - organization_name
-      - password
-      - password_confirmation
-      - refresh_token_transport
-    RegistrationResponse:
-      type: object
-      properties:
-        authenticated:
-          type: boolean
-        user:
-          $ref: '#/components/schemas/UserPublic'
-        memberships:
-          type: array
-          items:
-            $ref: '#/components/schemas/Membership'
-        active_membership:
-          allOf:
-          - $ref: '#/components/schemas/Membership'
-          nullable: true
-        pending_onboarding_memberships:
-          type: array
-          items:
-            $ref: '#/components/schemas/PendingOnboardingMembership'
-        permission_hints:
-          $ref: '#/components/schemas/BootstrapPermissionHints'
-        access_token:
-          type: string
-        access_token_expires_at:
-          type: string
-          format: date-time
-        refresh_token:
-          type: string
-        refresh_token_expires_at:
-          type: string
-          format: date-time
-        establishment_id:
-          type: string
-          format: uuid
-        onboarding_session_id:
-          type: string
-          format: uuid
-      required:
-      - access_token
-      - access_token_expires_at
-      - active_membership
-      - authenticated
-      - establishment_id
-      - memberships
-      - onboarding_session_id
-      - pending_onboarding_memberships
-      - permission_hints
-      - user
     ResolutionOriginEnum:
       enum:
       - manual
@@ -14776,24 +14057,6 @@ components:
       required:
       - code
       - detail
-    RuntimeConfigResponse:
-      type: object
-      properties:
-        activity_description:
-          allOf:
-          - $ref: '#/components/schemas/ActivityDescriptionResponse'
-          nullable: true
-        active_business_units:
-          type: array
-          items:
-            $ref: '#/components/schemas/BusinessUnitTreeItem'
-        optional_units:
-          type: array
-          items:
-            $ref: '#/components/schemas/KeyedRuntimeItem'
-      required:
-      - activity_description
-      - optional_units
     ScopeTypeEnum:
       enum:
       - business_unit

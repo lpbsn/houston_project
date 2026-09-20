@@ -64,7 +64,6 @@ import {
 } from '@/features/auth/lib/authenticated-landing'
 import { NoEstablishmentPage } from '@/features/auth/pages/no-establishment-page'
 import { SelectEstablishmentPage } from '@/features/auth/pages/select-establishment-page'
-import { resolvePendingLanding } from '@/features/auth/lib/pending-onboarding'
 import type { BootstrapResponse } from '@/features/auth/types'
 import { queryClient } from '@/lib/query-client'
 import { useChatAvailability, useChatConversationsQuery } from '@/features/chat/hooks'
@@ -83,7 +82,8 @@ import { EmailChangeConfirmPage } from '@/features/auth/pages/email-change-confi
 import { ForgotPasswordPage } from '@/features/auth/pages/forgot-password-page'
 import { PasswordResetConfirmPage } from '@/features/auth/pages/password-reset-confirm-page'
 import { OperationalConfigPage } from '@/features/establishment-config/pages/operational-config-page'
-import { OnboardingPage } from '@/features/onboarding/pages/onboarding-page'
+import { PlatformApp } from '@/features/platform/pages/platform-app'
+import { isPlatformOperatorActive } from '@/features/platform/lib/access'
 import { NotificationCenter } from '@/features/notifications/components/notification-center'
 import { ActionPlanExecutionDetailTopbarTrailing } from '@/features/action-plans/components/action-plan-execution-detail-topbar-trailing'
 import { ActionPlanTemplateDetailTopbarTrailing } from '@/features/action-plans/components/action-plan-template-detail-topbar-trailing'
@@ -186,6 +186,15 @@ function App() {
       })
       return
     }
+
+    if (route.kind === 'platform') {
+      if (!isDesktopWeb || !isPlatformOperatorActive(auth.bootstrap)) {
+        if (landingPath) {
+          navigate(landingPath, { replace: true })
+        }
+      }
+      return
+    }
     const openSession = {
       getActiveEstablishmentId: () =>
         auth.bootstrap?.active_membership?.establishment_id ?? null,
@@ -242,16 +251,9 @@ function App() {
       return
     }
 
-    if (
-      route.kind === 'static' &&
-      route.path === '/onboarding' &&
-      !auth.hasOperationalAccess
-    ) {
-      const pendingLanding = resolvePendingLanding(auth.pendingOnboardingMemberships)
-      if (pendingLanding.kind === 'waiting' || pendingLanding.kind === 'selection') {
-        navigate('/pending-onboarding', { replace: true })
-        return
-      }
+    if (route.kind === 'static' && route.path === '/onboarding') {
+      navigate(landingPath ?? '/login', { replace: true })
+      return
     }
 
     if (
@@ -880,10 +882,6 @@ function App() {
       return <LazyActionPlanHubPage onNavigate={navigate} />
     }
 
-    if (route.path === '/onboarding') {
-      return <OnboardingPage onNavigate={navigate} />
-    }
-
     if (route.path === '/pending-onboarding') {
       return (
         <PendingOnboardingPage
@@ -972,18 +970,6 @@ function App() {
     return <ForgotPasswordPage onNavigate={navigate} />
   }
 
-  if (route.kind === 'static' && route.path === '/onboarding') {
-    const onboardingPage = (
-      <div
-        className="min-h-dvh bg-spore-cream pt-[var(--app-safe-top)] pb-[var(--app-safe-bottom)] text-spore-forest"
-        data-testid="onboarding-shell"
-      >
-        <OnboardingPage onNavigate={navigate} />
-      </div>
-    )
-    return auth.isAuthenticated ? <LegalEntryGates>{onboardingPage}</LegalEntryGates> : onboardingPage
-  }
-
   const signOutAction = (
     <Button
       type="button"
@@ -1033,17 +1019,6 @@ function App() {
                 'Définissez un nouveau mot de passe depuis le lien reçu, puis reconnectez-vous.',
               actions: auth.isAuthenticated ? signOutAction : signInAction,
             }
-      : route.kind === 'static' && route.path === '/onboarding'
-            ? {
-                headingBadge: 'Onboarding',
-                title: auth.isAuthenticated
-                  ? 'Prepare this establishment for operations.'
-                  : 'Set up your organization.',
-                description: auth.isAuthenticated
-                  ? 'Review activity details, runtime setup, and readiness before marking the session ready.'
-                  : 'Enter your invitation code to create your organization and start onboarding.',
-                actions: auth.isAuthenticated ? signOutAction : signInAction,
-              }
             : route.kind === 'static' && route.path === '/pending-onboarding'
               ? {
                   headingBadge: 'Onboarding',
@@ -1080,18 +1055,7 @@ function App() {
                       headingBadge: 'Sign in',
                       title: 'Welcome back',
                       description: 'Sign in to access your Houston workspace.',
-                      actions: (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="h-10 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
-                          onClick={() => {
-                            navigate('/onboarding')
-                          }}
-                        >
-                          Onboarding
-                        </Button>
-                      ),
+                      actions: signInAction,
                     }
 
   const activeChatConversationId =
@@ -1159,6 +1123,23 @@ function App() {
 
   const wrapAuthenticated = (node: ReactNode) =>
     auth.isAuthenticated ? <LegalEntryGates>{node}</LegalEntryGates> : node
+
+  if (route.kind === 'platform') {
+    if (!isDesktopWeb || !isPlatformOperatorActive(auth.bootstrap)) {
+      return (
+        <div className="flex min-h-[16rem] items-center justify-center text-sm text-muted-foreground">
+          Redirection…
+        </div>
+      )
+    }
+    return wrapAuthenticated(
+      <PlatformApp
+        section={route.section}
+        resourceId={route.resourceId}
+        onNavigate={navigate}
+      />,
+    )
+  }
 
   if (route.kind === 'unknown' && auth.hasOperationalAccess) {
     return wrapAuthenticated(wrapTerrainWithOperationalRealtime(

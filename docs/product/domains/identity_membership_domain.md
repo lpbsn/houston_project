@@ -2,7 +2,7 @@
 
 Status: authoritative
 Last reviewed: 2026-09-19
-Implementation status: implemented for Phase 1. **Spore Platform V1 is planned, not implemented.** Current product APIs remain membership-scoped. Target: [`edb_plateforme_interne_spore_v1-3.md`](../../cadrage/edb_plateforme_interne_spore_v1-3.md).
+Implementation status: implemented for Phase 1. **Spore Platform V1 is live** (`/api/v1/platform/*`, `IsActivePlatformOperator`). Tenant product APIs remain membership-scoped. Functional target: [`edb_plateforme_interne_spore_v1-3.md`](../../cadrage/edb_plateforme_interne_spore_v1-3.md).
 
 ## 1. Purpose
 
@@ -36,7 +36,7 @@ This domain owns global user identity, organization and establishment membership
 - Fine-grained RBAC matrices.
 - Arbitrary admin browsing across tenants **in the current product APIs**.
 - Cross-tenant access **via `EstablishmentMembership` or a global `User`**.
-- Public signup (current: invite-code owner registration; Platform V1 target removes that entry — see below).
+- Public signup (removed: invite-code owner registration and `POST /api/v1/establishments/`). New organizations start from Platform.
 - Old-stack implementation assumptions or terminology.
 
 ## 4. Core Invariants
@@ -51,19 +51,16 @@ This domain owns global user identity, organization and establishment membership
 - Establishment switching must not bypass backend authorization.
 - A selected establishment context must always be backed by a valid active membership.
 
-## 4.1 Target — Spore Platform V1 (not implemented)
+## 4.1 Spore Platform V1 (live)
 
-Functional need: [`edb_plateforme_interne_spore_v1-3.md`](../../cadrage/edb_plateforme_interne_spore_v1-3.md). Architecture constraints (do not treat as live):
+Functional need: [`edb_plateforme_interne_spore_v1-3.md`](../../cadrage/edb_plateforme_interne_spore_v1-3.md).
 
-- Platform authorization is **not** an `EstablishmentMembership` and is **not** `User.is_staff`. It is an independent operator grant, checked on every Platform request.
+- Platform authorization is **not** an `EstablishmentMembership` and is **not** `User.is_staff`. It is an independent operator grant (`IsActivePlatformOperator`), checked on every `/api/v1/platform/*` request. Authenticated non-operators receive **403**.
 - Platform metadata reads (orgs, establishments, users, memberships) are a **separate HTTP surface**. They must not be implemented by weakening tenant selectors or `HasActiveMembership`.
-- Starting onboarding from Platform creates organization + draft establishment **without** creating a membership for the operator. The operator may already have unrelated tenant memberships; those must not authorize Platform and Platform must not extend them.
-- Owner/Director invitations during onboarding remain identity/membership writes (invited memberships, accept path). They are **not** Platform user administration. After incomplete-onboarding cleanup, invitations and establishment memberships of that establishment go away; `User` rows remain.
-- « Organization never operational » cannot be inferred from `Organization.status` (today default `active`). Target: a sticky persistent flag set when an establishment first becomes `active`, never cleared.
-- Cutover target: Platform is the **only** onboarding entry. Current `POST /api/v1/auth/register/` invite-code provisioning and `POST /api/v1/establishments/` owner provision are to be **removed**, not left as permanent 403 stubs.
-
-Until that cutover ships, the current register / owner-led provision behavior in §9 remains the implementation truth.
-
+- Starting onboarding from Platform creates organization + draft establishment **without** creating a membership for the operator. Unrelated tenant memberships must not authorize Platform and Platform must not extend them.
+- Owner/Director invitations during onboarding remain identity/membership writes (invited memberships, accept path `POST /api/v1/invitations/accept/`). They are **not** Platform user administration. After incomplete-onboarding cleanup, invitations and establishment memberships of that establishment go away; `User` rows remain.
+- `Organization.has_been_operational` is a sticky flag set **only** at live activation (`mark_organization_has_been_operational`). Schema default is `False`. There is no historical backfill.
+- Platform is the **only** onboarding entry. `POST /api/v1/auth/register/` invite-code provisioning, `POST /api/v1/establishments/`, and tenant `onboarding-sessions` writes are **removed**. `/onboarding` in the Web app redirects to login/landing (no wizard). Invited users wait on `/pending-onboarding`.
 ## 5. Main Objects
 
 - `User`
@@ -165,7 +162,7 @@ Implemented response truths:
 - Scoped user search returns active users with active memberships in the same active establishment only.
 - Scoped user search response fields are limited to `id`, `display_name`, `username`, `email`, `role`, and `membership_id`.
 - Establishment invitation acceptance: `POST /api/v1/invitations/accept/` (bearer in JSON body; password setup, session creation; CSRF required for cookie transport). The public app path is `/invitations`; the secret is never placed in an HTTP path or query.
-- Onboarding Director invite with token: `POST /api/v1/onboarding-sessions/{session_id}/director-invitations/` returns `invitation_token` and schedules a transactional invitation email when enabled (draft onboarding; exactly one non-owner director gate).
+- Onboarding Owner/Director invites: `POST /api/v1/platform/onboardings/{session_id}/owner-invitations/` and `…/director-invitations/` (and Director from draft complete). Accept remains `POST /api/v1/invitations/accept/`.
 - Workspace membership invitations: `POST /api/v1/establishments/{establishment_id}/membership-invitations/` may invite `staff`, `manager`, or `director` (active establishment; director invites require an active path). Organizational `owner` invitations use organization-admin endpoints (`POST /api/v1/organizations/{organization_id}/owner-invitations/`), not this Team path. Staff/manager invites are also allowed on a **draft** path via the actor’s active membership on that draft when session selection is on a different active establishment. Returns `invitation_token` and schedules a transactional invitation email when enabled.
 
 Candidate endpoints only: none currently listed for identity/password.
@@ -191,5 +188,5 @@ Candidate endpoints only: none currently listed for identity/password.
 - Do not claim invitations, password reset, membership management, or switch endpoints are implemented without schema proof.
 - Do not document Django `request.session["current_establishment_id"]` as public auth-session authority.
 - Do not introduce old-stack terminology.
-- Do not implement Platform by adding a tenant-permission bypass. Do not claim Platform APIs exist until they are in `apps/api/schema.yml`.
+- Do not implement Platform by adding a tenant-permission bypass. Platform APIs live under `/api/v1/platform/` in `apps/api/schema.yml`.
 - For auth and session mechanics, read `docs/architecture/authentication_charter.md`.

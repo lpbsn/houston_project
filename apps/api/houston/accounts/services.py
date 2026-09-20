@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -16,20 +15,13 @@ from houston.accounts import tokens
 from houston.accounts.models import AccessToken, SessionRefreshToken, User, UserSession
 from houston.accounts.selectors import build_bootstrap_payload
 from houston.core.observability import build_refresh_token_reuse_log_context
-from houston.establishments.models import (
-    Establishment,
-    EstablishmentMembership,
-    OnboardingSession,
-)
-from houston.establishments.services import start_onboarding_session
+from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.organizations.models import Organization
 
 logger = logging.getLogger(__name__)
 
 INVALID_CREDENTIALS_DETAIL = "Invalid credentials."
 AUTHENTICATION_FAILED_DETAIL = "Authentication failed."
-INVALID_REGISTRATION_INVITE_CODE_DETAIL = "Invalid invitation code."
-REGISTRATION_DUPLICATE_EMAIL_DETAIL = "An account with this email already exists."
 
 
 class InvalidCredentialsError(Exception):
@@ -48,32 +40,8 @@ class InvalidSelectedEstablishmentError(Exception):
     pass
 
 
-class InvalidRegistrationInviteCodeError(Exception):
-    pass
-
-
-class RegistrationDuplicateEmailError(Exception):
-    pass
-
-
 class PendingInviteUserAlreadyExistsError(Exception):
     """Email already claimed during pending-user create (race or pre-existing)."""
-
-
-@dataclass(frozen=True)
-class RegistrationResult:
-    organization: Organization
-    establishment: Establishment
-    user: User
-    membership: EstablishmentMembership
-    onboarding_session: OnboardingSession
-
-
-@dataclass(frozen=True)
-class RegistrationBundle:
-    registration: RegistrationResult
-    auth: AuthSessionBundle
-    payload: dict
 
 
 @dataclass(frozen=True)
@@ -94,156 +62,6 @@ class AuthSessionBundle:
     access_token: IssuedAccessToken
     refresh_token: IssuedRefreshToken
     payload: dict
-
-
-def is_valid_registration_invite_code(invite_code: str) -> bool:
-    normalized_code = invite_code.strip()
-
-    if not normalized_code:
-        return False
-
-    allowed_codes = settings.HOUSTON_REGISTRATION_INVITE_CODES
-
-    if not allowed_codes:
-        return False
-
-    for candidate in allowed_codes:
-        if secrets.compare_digest(normalized_code, candidate.strip()):
-            return True
-
-    return False
-
-
-def validate_registration_invite_code(invite_code: str) -> None:
-    if not is_valid_registration_invite_code(invite_code):
-        raise InvalidRegistrationInviteCodeError
-
-
-def validate_registration_email_available(email: str) -> None:
-    normalized_email = User.normalize_email_value(email)
-
-    if normalized_email is None:
-        raise RegistrationDuplicateEmailError
-
-    if User.objects.filter(email__iexact=normalized_email).exists():
-        raise RegistrationDuplicateEmailError
-
-
-def validate_onboarding_owner_registration(*, invite_code: str, email: str) -> None:
-    validate_registration_invite_code(invite_code)
-    validate_registration_email_available(email)
-
-
-def resolve_registration_establishment_name(establishment_name: str | None) -> str:
-    """Return a client-provided name, or an opaque technical name if omitted/blank.
-
-    Uses a full UUID so collision under org-scoped uniqueness is negligible.
-    Do not retry after IntegrityError in a broken outer transaction — if a retry
-    loop is ever required, wrap only the establishment insert in a nested atomic
-    / savepoint.
-    """
-    cleaned = (establishment_name or "").strip()
-    if cleaned:
-        return cleaned
-    return f"draft-{uuid.uuid4()}"
-
-
-@transaction.atomic
-def provision_onboarding_registration(
-    *,
-    invite_code: str,
-    first_name: str,
-    last_name: str,
-    email: str,
-    password: str,
-    organization_name: str,
-    establishment_name: str | None = None,
-) -> RegistrationResult:
-    validate_registration_invite_code(invite_code)
-    validate_registration_email_available(email)
-    normalized_email = User.normalize_email_value(email)
-    assert normalized_email is not None
-
-    organization = Organization.objects.create(
-        name=organization_name.strip(),
-        status=Organization.Status.ACTIVE,
-    )
-    establishment = Establishment.objects.create(
-        name=resolve_registration_establishment_name(establishment_name),
-        organization=organization,
-        status=Establishment.Status.DRAFT,
-    )
-
-    user = User(
-        username=_build_registration_username(normalized_email),
-        email=normalized_email,
-        first_name=first_name.strip(),
-        last_name=last_name.strip(),
-        identity_type=User.IdentityType.EMAIL,
-        status=User.Status.ACTIVE,
-    )
-    user.set_password(password)
-
-    try:
-        user.save()
-    except IntegrityError as exc:
-        raise RegistrationDuplicateEmailError from exc
-
-    membership = EstablishmentMembership.objects.create(
-        user=user,
-        establishment=establishment,
-        role=EstablishmentMembership.Role.OWNER,
-        status=EstablishmentMembership.Status.ACTIVE,
-    )
-    onboarding_session = start_onboarding_session(
-        organization=organization,
-        establishment=establishment,
-        started_by=user,
-    )
-
-    return RegistrationResult(
-        organization=organization,
-        establishment=establishment,
-        user=user,
-        membership=membership,
-        onboarding_session=onboarding_session,
-    )
-
-
-def register_onboarding_owner(
-    *,
-    request: HttpRequest,
-    invite_code: str,
-    first_name: str,
-    last_name: str,
-    email: str,
-    password: str,
-    organization_name: str,
-    establishment_name: str | None = None,
-) -> RegistrationBundle:
-    registration = provision_onboarding_registration(
-        invite_code=invite_code,
-        first_name=first_name,
-        last_name=last_name,
-        email=email,
-        password=password,
-        organization_name=organization_name,
-        establishment_name=establishment_name,
-    )
-    auth_bundle = create_login_session(request=request, user=registration.user)
-    payload = auth_bundle.payload.copy()
-    payload.update(
-        {
-            "establishment_id": registration.establishment.id,
-            "onboarding_session_id": registration.onboarding_session.id,
-        }
-    )
-
-    return RegistrationBundle(
-        registration=registration,
-        auth=auth_bundle,
-        payload=payload,
-    )
 
 
 def authenticate_user(*, request: HttpRequest | None, identifier: str, password: str) -> User:

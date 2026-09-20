@@ -28,8 +28,8 @@ Lazy pages: [`lazy-terrain-pages.tsx`](../../apps/web/src/app/lazy-terrain-pages
 ## Layout
 
 - **Terrain shell** — `TerrainShell` (`fixed inset-x-0 top-0`, `h-dvh`, topbar, scrollable main, optional bottom nav). Safe-area token `--app-safe-top/bottom` = `var(--safe-area-inset-*, env(safe-area-inset-*, 0px))` (Capacitor Android polyfill + iOS `env()`).
-- **App shell** — desktop/management shell for non-terrain routes **as implemented today** (onboarding, pending onboarding, select-establishment, no-establishment, invitations, auth pages). Configuration opérationnelle lives at `/e/{establishmentId}/operational-config` (TerrainShell, desktop web `lg` only; mobile/native redirect to `/e/{id}/reporting`).
-- **Spore Platform V1 (planned, not implemented):** a distinct desktop-Web-only shell (`isDesktopWeb`), not TerrainShell and not the current `/onboarding` cream shell. Native and non-desktop Web must not expose it. See [`edb_plateforme_interne_spore_v1-3.md`](../cadrage/edb_plateforme_interne_spore_v1-3.md).
+- **App shell** — desktop/management shell for non-terrain routes **as implemented today** (pending onboarding, select-establishment, no-establishment, invitations, auth pages). Configuration opérationnelle lives at `/e/{establishmentId}/operational-config` (TerrainShell, desktop web `lg` only; mobile/native redirect to `/e/{id}/reporting`).
+- **Spore Platform V1 (live):** desktop-Web-only shell at `/platform` (`isDesktopWeb`). Not TerrainShell. `/onboarding` redirects to login/landing (no client wizard). Native and non-desktop Web do not expose Platform. Functional target: [`edb_plateforme_interne_spore_v1-3.md`](../cadrage/edb_plateforme_interne_spore_v1-3.md).
 
 ## Server state
 

@@ -127,7 +127,7 @@ function bootstrap(options: {
       can_manage_runtime_config: false,
       can_view_team: true,
       can_manage_organization: false,
-      can_create_establishment: false,
+      platform_operator_active: false,
       ...options.permissionHints,
     },
   }
@@ -226,7 +226,7 @@ describe('TeamPage', () => {
       permissionHints: {
         can_invite: false,
         can_manage_organization: true,
-        can_create_establishment: true,
+        platform_operator_active: false,
       },
       activeMembership: authMembership({ role: 'owner' }),
     })
@@ -251,7 +251,7 @@ describe('TeamPage', () => {
       permissionHints: {
         can_invite: false,
         can_manage_organization: true,
-        can_create_establishment: true,
+        platform_operator_active: false,
       },
       memberships: [ownerOtherOrg, staffHere],
       activeMembership: staffHere,

@@ -120,26 +120,8 @@ def can_invite_memberships(membership: EstablishmentMembership | None) -> bool:
 
 
 def can_manage_runtime_context(membership: EstablishmentMembership | None) -> bool:
-    """Owner/Director on an active establishment in workspace (session-selected) context.
-
-    Intended for post-activation runtime administration APIs. Onboarding-session routes use
-    ``get_onboarding_access_context`` instead (path-scoped session, draft/active establishment).
-    """
+    """Owner/Director on an active establishment in workspace (session-selected) context."""
     return _has_role(membership, ADMIN_ROLES)
-
-
-def can_create_establishment(
-    user: User | None,
-    *,
-    preferred_organization_id=None,
-) -> bool:
-    """Owner org capability (ACTIVE|DRAFT) — independent of session selection for the hint."""
-    if preferred_organization_id is not None:
-        return resolve_manageable_organization(
-            user,
-            preferred_organization_id=preferred_organization_id,
-        ) is not None
-    return can_manage_organization(user)
 
 
 def resolve_establishment_admin_actor(
@@ -312,13 +294,6 @@ class CanManageRuntimeContext(BasePermission):
     def has_permission(self, request, view) -> bool:
         access_context = get_api_access_context(request)
         return can_manage_runtime_context(access_context.active_membership)
-
-
-class CanCreateEstablishment(BasePermission):
-    message = "You do not have permission to create an establishment."
-
-    def has_permission(self, request, view) -> bool:
-        return can_create_establishment(getattr(request, "user", None))
 
 
 class OrganizationManagementForbidden(PermissionDenied):

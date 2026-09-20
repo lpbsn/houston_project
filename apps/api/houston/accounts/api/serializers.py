@@ -281,7 +281,6 @@ class PendingOnboardingMembershipSerializer(serializers.Serializer):
     organization_name = serializers.CharField()
     role = serializers.CharField()
     onboarding_session_id = serializers.UUIDField(allow_null=True)
-    can_continue_onboarding = serializers.BooleanField()
 
 
 class BootstrapPermissionHintsSerializer(serializers.Serializer):
@@ -293,7 +292,7 @@ class BootstrapPermissionHintsSerializer(serializers.Serializer):
     can_manage_runtime_config = serializers.BooleanField()
     can_view_team = serializers.BooleanField()
     can_manage_organization = serializers.BooleanField()
-    can_create_establishment = serializers.BooleanField()
+    platform_operator_active = serializers.BooleanField()
 
 
 class BootstrapResponseSerializer(serializers.Serializer):

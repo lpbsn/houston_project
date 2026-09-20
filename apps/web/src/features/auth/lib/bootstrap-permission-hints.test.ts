@@ -4,7 +4,6 @@ import {
   canAccessManagementSpace,
   canCreateActionPlanFromBootstrapHints,
   canCreateCatalogActionPlanFromBootstrapHints,
-  canCreateEstablishmentFromBootstrapHints,
   canInviteFromBootstrapHints,
   canManageOrganizationFromBootstrapHints,
   canManageRuntimeConfigFromBootstrapHints,
@@ -26,7 +25,7 @@ function hints(
     can_manage_runtime_config: false,
     can_view_team: false,
     can_manage_organization: false,
-    can_create_establishment: false,
+    platform_operator_active: false,
     ...overrides,
   }
 }
@@ -102,13 +101,6 @@ describe('bootstrap-permission-hints', () => {
     expect(canCreateCatalogActionPlanFromBootstrapHints(getBootstrapPermissionHints(null))).toBe(
       false,
     )
-  })
-
-  it('drives create-establishment CTA from can_create_establishment', () => {
-    expect(canCreateEstablishmentFromBootstrapHints(hints({ can_create_establishment: true }))).toBe(
-      true,
-    )
-    expect(canCreateEstablishmentFromBootstrapHints(getBootstrapPermissionHints(null))).toBe(false)
   })
 
   it('drives organization management from can_manage_organization', () => {

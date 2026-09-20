@@ -249,7 +249,7 @@ function bootstrapWithoutActiveMembership(
       can_manage_runtime_config: false,
       can_view_team: false,
       can_manage_organization: false,
-      can_create_establishment: false,
+      platform_operator_active: false,
     },
     ...overrides,
   }
@@ -371,7 +371,7 @@ describe('App terrain active membership routing', () => {
         can_manage_runtime_config: false,
         can_view_team: false,
         can_manage_organization: true,
-        can_create_establishment: true,
+        platform_operator_active: false,
       },
     })
     authState.bootstrap = bootstrap
@@ -913,7 +913,7 @@ describe('App terrain active membership routing', () => {
         can_manage_runtime_config: false,
         can_view_team: false,
         can_manage_organization: true,
-        can_create_establishment: true,
+        platform_operator_active: false,
       },
     })
     authState.bootstrap = bootstrap
@@ -1104,5 +1104,62 @@ describe('App terrain active membership routing', () => {
     })
     expect(screen.queryByTestId('operational-config')).toBeNull()
     expect(switchEstablishment).not.toHaveBeenCalled()
+  })
+
+  it('redirects web mobile /platform without mounting PlatformShell', async () => {
+    stubLgViewport(false)
+    const bootstrap = bootstrapWithoutActiveMembership({
+      memberships: [],
+      permission_hints: {
+        chat_available: false,
+        can_create_action_plan: false,
+        can_create_catalog_action_plan: false,
+        can_view_action_plan_catalog: false,
+        can_invite: false,
+        can_manage_runtime_config: false,
+        can_view_team: false,
+        can_manage_organization: false,
+        platform_operator_active: true,
+      },
+    })
+    authState.bootstrap = bootstrap
+    authState.memberships = []
+    authState.hasOperationalAccess = false
+    routeState.route = { kind: 'platform', section: 'onboardings' }
+
+    render(wrapApp())
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith('/no-establishment', { replace: true })
+    })
+    expect(screen.queryByTestId('platform-shell')).toBeNull()
+  })
+
+  it('mounts PlatformShell on desktop web for an operator without membership', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    stubLgViewport(true)
+    const bootstrap = bootstrapWithoutActiveMembership({
+      memberships: [],
+      permission_hints: {
+        chat_available: false,
+        can_create_action_plan: false,
+        can_create_catalog_action_plan: false,
+        can_view_action_plan_catalog: false,
+        can_invite: false,
+        can_manage_runtime_config: false,
+        can_view_team: false,
+        can_manage_organization: false,
+        platform_operator_active: true,
+      },
+    })
+    authState.bootstrap = bootstrap
+    authState.memberships = []
+    authState.hasOperationalAccess = false
+    routeState.route = { kind: 'platform', section: 'onboardings' }
+
+    render(wrapApp())
+
+    expect(await screen.findByTestId('platform-shell')).toBeTruthy()
+    expect(navigate).not.toHaveBeenCalled()
   })
 })

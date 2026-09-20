@@ -23,7 +23,6 @@ from houston.establishments.tests.taxonomy_helpers import (
 )
 from houston.testing.auth import auth_headers, login
 from houston.testing.factories import create_user
-from houston.testing.onboarding import create_onboarding_session
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -99,22 +98,6 @@ def _post_membership_invitation(
     )
 
 
-def _post_director_invitation(api_client: APIClient, *, session_id, actor: User):
-    access_token = login(api_client, user=actor)
-    csrf_token = _ensure_csrf(api_client)
-    return api_client.post(
-        f"/api/v1/onboarding-sessions/{session_id}/director-invitations/",
-        {
-            "email": "director@example.com",
-            "first_name": "Casey",
-            "last_name": "Director",
-        },
-        format="json",
-        HTTP_X_CSRFTOKEN=csrf_token,
-        **auth_headers(access_token),
-    )
-
-
 def _patch_apply_async():
     return patch(
         "houston.establishments.tasks.send_establishment_invitation_email_task.apply_async"
@@ -157,22 +140,6 @@ def test_manager_invite_schedules_exactly_one_task(api_client):
             establishment_id=establishment.id,
             actor=owner,
             payload=payload,
-        )
-
-    assert response.status_code == 201
-    apply_async.assert_called_once()
-
-
-@override_settings(HOUSTON_INVITATION_EMAIL_ENABLED=True)
-def test_director_invite_schedules_exactly_one_task(api_client):
-    owner = create_user(username="director_schedule_owner")
-    session = create_onboarding_session(actor=owner)
-
-    with _patch_apply_async() as apply_async:
-        response = _post_director_invitation(
-            api_client,
-            session_id=session.id,
-            actor=owner,
         )
 
     assert response.status_code == 201

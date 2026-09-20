@@ -151,9 +151,9 @@ Clean still resets `reliable_from` to `timezone.now()`; replay never writes it.
 
 ## E2E product path (manual)
 
-1. Register/login (`/onboarding` with invite code)
-2. Create org + establishment, complete onboarding (`onboarding_proposal_v4`)
-3. Activate establishment
+1. Login with an existing membership, **or** grant a local Platform operator (`grant_platform_operator`) and complete a draft on `/platform` (desktop Web)
+2. Invited Owner/Director accept via `/invitations` then wait on `/pending-onboarding` until activation
+3. Establishment is active after Platform complete (blocked until at least one Owner or Director membership is `ACTIVE`)
 4. Submit observation (optional photo)
 5. Signal appears in feed (celery required)
 6. Create action plan from signal

@@ -41,7 +41,7 @@ function bootstrap(
       can_manage_runtime_config: false,
       can_view_team: false,
       can_manage_organization: false,
-      can_create_establishment: false,
+      platform_operator_active: false,
     },
     ...overrides,
   }
@@ -72,7 +72,7 @@ const ownerOrgHints = {
   can_manage_runtime_config: false,
   can_view_team: false,
   can_manage_organization: true,
-  can_create_establishment: true,
+  platform_operator_active: false,
 } as const
 
 describe('isDesktopWebLanding', () => {
@@ -145,7 +145,7 @@ describe('resolveAuthenticatedLanding', () => {
     ).toEqual({ kind: 'cross', path: '/cross/signals' })
   })
 
-  it('returns onboarding for owner DRAFT-only', () => {
+  it('returns waiting for invited DRAFT-only membership', () => {
     const pending: PendingOnboardingMembership = {
       id: '55555555-5555-5555-5555-555555555555',
       establishment_id: '66666666-6666-6666-6666-666666666666',
@@ -155,7 +155,6 @@ describe('resolveAuthenticatedLanding', () => {
       organization_name: 'Draft Org',
       role: 'owner',
       onboarding_session_id: '77777777-7777-7777-7777-777777777777',
-      can_continue_onboarding: true,
     }
 
     expect(
@@ -167,7 +166,7 @@ describe('resolveAuthenticatedLanding', () => {
       ),
     ).toEqual({
       kind: 'pending',
-      path: '/onboarding?establishmentId=66666666-6666-6666-6666-666666666666&sessionId=77777777-7777-7777-7777-777777777777',
+      path: '/pending-onboarding',
     })
   })
 
@@ -182,7 +181,6 @@ describe('resolveAuthenticatedLanding', () => {
       organization_name: 'Draft Org',
       role: 'owner',
       onboarding_session_id: '77777777-7777-7777-7777-777777777777',
-      can_continue_onboarding: true,
     }
 
     expect(
@@ -301,7 +299,6 @@ describe('resolveAuthenticatedLanding', () => {
               organization_name: 'Draft Org',
               role: 'director',
               onboarding_session_id: '77777777-7777-7777-7777-777777777777',
-              can_continue_onboarding: false,
             },
           ],
         }),
@@ -314,6 +311,45 @@ describe('resolveAuthenticatedLanding', () => {
       kind: 'empty',
       path: '/no-establishment',
     })
+  })
+
+  it('returns platform for operator-only on desktop web', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    expect(
+      resolveAuthenticatedLanding(
+        bootstrap({
+          permission_hints: { ...ownerOrgHints, platform_operator_active: true },
+        }),
+        { isDesktop: true },
+      ),
+    ).toEqual({ kind: 'platform', path: '/platform/onboardings' })
+  })
+
+  it('returns empty for operator-only outside desktop web', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    expect(
+      resolveAuthenticatedLanding(
+        bootstrap({
+          permission_hints: { ...ownerOrgHints, platform_operator_active: true },
+        }),
+        { isDesktop: false },
+      ),
+    ).toEqual({ kind: 'empty', path: '/no-establishment' })
+  })
+
+  it('keeps client landing for dual-context operator on desktop', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    const active = membership('Nice')
+    expect(
+      resolveAuthenticatedLanding(
+        bootstrap({
+          active_membership: active,
+          memberships: [active],
+          permission_hints: { ...ownerOrgHints, platform_operator_active: true },
+        }),
+        { isDesktop: true },
+      ),
+    ).toEqual({ kind: 'operational', path: '/reporting' })
   })
 })
 
@@ -340,8 +376,11 @@ describe('shouldRedirectAuthenticatedPublicRoute', () => {
 })
 
 describe('shouldRedirectUnauthenticatedPublicRoute', () => {
-  it('returns true for root only', () => {
+  it('returns true for root and former onboarding wizard links', () => {
     expect(shouldRedirectUnauthenticatedPublicRoute({ kind: 'static', path: '/' })).toBe(true)
+    expect(
+      shouldRedirectUnauthenticatedPublicRoute({ kind: 'static', path: '/onboarding' }),
+    ).toBe(true)
     expect(shouldRedirectUnauthenticatedPublicRoute({ kind: 'unknown', pathname: '/foo' })).toBe(
       false,
     )
@@ -366,7 +405,7 @@ describe('isPublicAuthRoute', () => {
 describe('routeAllowsMissingActiveMembership', () => {
   it('returns true for onboarding and account routes without a session', () => {
     expect(routeAllowsMissingActiveMembership('/pending-onboarding')).toBe(true)
-    expect(routeAllowsMissingActiveMembership('/onboarding')).toBe(true)
+    expect(routeAllowsMissingActiveMembership('/onboarding')).toBe(false)
     expect(routeAllowsMissingActiveMembership('/no-establishment')).toBe(true)
     expect(routeAllowsMissingActiveMembership('/organization')).toBe(false)
     expect(routeAllowsMissingActiveMembership('/organization/establishments/est-1')).toBe(false)
@@ -380,9 +419,9 @@ describe('routeAllowsMissingActiveMembership', () => {
 })
 
 describe('allowsUnauthenticatedAccess', () => {
-  it('returns true for login, onboarding, and forgot-password', () => {
+  it('returns true for login and forgot-password', () => {
     expect(allowsUnauthenticatedAccess({ kind: 'static', path: '/login' })).toBe(true)
-    expect(allowsUnauthenticatedAccess({ kind: 'static', path: '/onboarding' })).toBe(true)
+    expect(allowsUnauthenticatedAccess({ kind: 'static', path: '/onboarding' })).toBe(false)
     expect(allowsUnauthenticatedAccess({ kind: 'static', path: '/forgot-password' })).toBe(true)
   })
 
@@ -394,13 +433,13 @@ describe('allowsUnauthenticatedAccess', () => {
     expect(allowsUnauthenticatedAccess({ kind: 'unknown', pathname: '/onboarding' })).toBe(false)
   })
 
-  it('does not redirect unauthenticated onboarding to login', () => {
+  it('redirects unauthenticated onboarding to login', () => {
     const route = { kind: 'static' as const, path: '/onboarding' as const }
     const isAuthenticated = false
 
     expect(
       isProtectedRoute(route) && !isAuthenticated && !allowsUnauthenticatedAccess(route),
-    ).toBe(false)
+    ).toBe(true)
   })
 })
 
@@ -434,10 +473,10 @@ describe('shouldShowAuthRoutingLoading', () => {
     )
   })
 
-  it('does not show loading for onboarding when unauthenticated and ready', () => {
+  it('shows loading for onboarding when unauthenticated and ready (redirect pending)', () => {
     expect(
       shouldShowAuthRoutingLoading(onboardingRoute, { isReady: true, isAuthenticated: false }),
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('shows loading for root when unauthenticated and ready', () => {

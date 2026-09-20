@@ -127,15 +127,6 @@ def list_organization_admin_establishments(
 
     sessions_by_establishment = _latest_non_terminal_onboarding_sessions(establishment_ids)
 
-    actor_owner_establishment_ids = set(
-        EstablishmentMembership.objects.filter(
-            user_id=actor.id,
-            establishment_id__in=establishment_ids,
-            role=EstablishmentMembership.Role.OWNER,
-            status=EstablishmentMembership.Status.ACTIVE,
-        ).values_list("establishment_id", flat=True)
-    )
-
     results: list[dict[str, Any]] = []
     for establishment in establishments:
         item: dict[str, Any] = {
@@ -150,16 +141,12 @@ def list_organization_admin_establishments(
             "business_unit_count": bu_counts.get(establishment.id, 0),
             "onboarding_session_id": None,
             "onboarding_current_step": "",
-            "can_continue_onboarding": False,
         }
         if establishment.status == Establishment.Status.DRAFT:
             session = sessions_by_establishment.get(establishment.id)
             item["onboarding_session_id"] = None if session is None else session.id
             item["onboarding_current_step"] = (
                 "" if session is None else (session.current_step or "")
-            )
-            item["can_continue_onboarding"] = (
-                establishment.id in actor_owner_establishment_ids
             )
         results.append(item)
     return results

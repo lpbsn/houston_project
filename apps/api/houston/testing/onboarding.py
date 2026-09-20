@@ -11,60 +11,10 @@ from houston.establishments.models import (
     EstablishmentMembership,
     OnboardingSession,
 )
-from houston.establishments.services import (
-    apply_onboarding_proposal,
-    create_manual_onboarding_proposal,
-    ensure_onboarding_draft_for_session,
-    submit_manual_onboarding_proposal,
-)
+from houston.establishments.services import ensure_onboarding_draft_for_session
 from houston.organizations.models import Organization
 from houston.testing.factories import create_user
 from houston.testing.taxonomy import create_activity_subject, create_business_unit
-
-MANUAL_V2_PROPOSAL_SCHEMA_VERSION = "onboarding_proposal_v4"
-
-
-def valid_manual_v2_payload(**overrides) -> dict:
-    business_unit_client_key = str(uuid.uuid4())
-    activity_subject_client_key = str(uuid.uuid4())
-    base = {
-        "schema_version": MANUAL_V2_PROPOSAL_SCHEMA_VERSION,
-        "business_units": [
-            {
-                "client_key": business_unit_client_key,
-                "catalog_key": "coworking",
-                "specific_name": "Coworking",
-                "instance_description": "",
-            }
-        ],
-        "activity_subjects": [
-            {
-                "client_key": activity_subject_client_key,
-                "business_unit_client_key": business_unit_client_key,
-                "catalog_key": "coworking__proprete",
-            }
-        ],
-    }
-    base.update(overrides)
-    return base
-
-
-def draft_manual_v2_payload_bu_only(**overrides) -> dict:
-    business_unit_client_key = str(uuid.uuid4())
-    base = {
-        "schema_version": MANUAL_V2_PROPOSAL_SCHEMA_VERSION,
-        "business_units": [
-            {
-                "client_key": business_unit_client_key,
-                "catalog_key": "coworking",
-                "specific_name": "Coworking",
-                "instance_description": "",
-            }
-        ],
-        "activity_subjects": [],
-    }
-    base.update(overrides)
-    return base
 
 
 def create_onboarding_session(
@@ -99,24 +49,6 @@ def create_onboarding_session(
     )
     ensure_onboarding_draft_for_session(session=session, actor=actor)
     return session
-
-
-def create_validated_manual_v2_proposal(session, owner, payload=None):
-    proposal = create_manual_onboarding_proposal(
-        session=session,
-        actor=owner,
-        payload=payload or valid_manual_v2_payload(),
-    )
-    return submit_manual_onboarding_proposal(proposal=proposal, actor=owner)
-
-
-def apply_validated_manual_v2_proposal(session, owner, payload=None):
-    proposal = create_validated_manual_v2_proposal(
-        session=session,
-        owner=owner,
-        payload=payload,
-    )
-    return apply_onboarding_proposal(proposal=proposal, actor=owner)
 
 
 def create_ready_runtime(session, owner):

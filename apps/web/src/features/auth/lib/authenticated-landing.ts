@@ -2,13 +2,13 @@ import type { AppRoute } from '@/app/app-routes'
 import type { BootstrapResponse } from '@/features/auth/types'
 
 import {
-  buildOnboardingUrl,
   resolvePendingLanding,
 } from '@/features/auth/lib/pending-onboarding'
 import {
   canShowAnalyticsNavigation,
   hasTrueCrossEstablishmentScope,
 } from '@/features/navigation/lib/shared-navigation'
+import { isPlatformOperatorActive } from '@/features/platform/lib/access'
 import { getAppRuntime } from '@/lib/runtime'
 
 export const CROSS_DASHBOARD_LANDING_PATH = '/cross/signals'
@@ -19,6 +19,7 @@ export type AuthenticatedLanding =
   | { kind: 'cross'; path: typeof CROSS_DASHBOARD_LANDING_PATH }
   | { kind: 'analytics'; path: '/analytics' }
   | { kind: 'pending'; path: string }
+  | { kind: 'platform'; path: '/platform/onboardings' }
   | { kind: 'empty'; path: '/no-establishment' }
 
 export type AuthenticatedLandingContext = {
@@ -57,12 +58,12 @@ export function resolveAuthenticatedLanding(
 
   const pendingLanding = resolvePendingLanding(bootstrap.pending_onboarding_memberships)
 
-  if (pendingLanding.kind === 'onboarding') {
-    return { kind: 'pending', path: buildOnboardingUrl(pendingLanding.pending) }
-  }
-
   if (pendingLanding.kind === 'waiting' || pendingLanding.kind === 'selection') {
     return { kind: 'pending', path: '/pending-onboarding' }
+  }
+
+  if (isPlatformOperatorActive(bootstrap) && isDesktopWebLanding(Boolean(context.isDesktop))) {
+    return { kind: 'platform', path: '/platform/onboardings' }
   }
 
   return { kind: 'empty', path: '/no-establishment' }
@@ -86,13 +87,12 @@ export const AUTHENTICATED_LANDING_PATHS = new Set<string>([
   '/cross/signals',
   '/analytics',
   '/pending-onboarding',
-  '/onboarding',
   '/no-establishment',
+  '/platform/onboardings',
 ])
 
 export function routeAllowsMissingActiveMembership(path: string): boolean {
   return (
-    path === '/onboarding' ||
     path === '/pending-onboarding' ||
     path === '/select-establishment' ||
     path === '/no-establishment'
@@ -107,7 +107,10 @@ export function shouldRedirectAuthenticatedPublicRoute(route: AppRoute): boolean
 }
 
 export function shouldRedirectUnauthenticatedPublicRoute(route: AppRoute): boolean {
-  return route.kind === 'static' && route.path === '/'
+  return (
+    route.kind === 'static' &&
+    (route.path === '/' || route.path === '/onboarding')
+  )
 }
 
 export function isPublicAuthRoute(route: AppRoute): boolean {
@@ -127,7 +130,7 @@ export function allowsUnauthenticatedAccess(route: AppRoute): boolean {
     return false
   }
 
-  return route.path === '/login' || route.path === '/onboarding' || route.path === '/forgot-password'
+  return route.path === '/login' || route.path === '/forgot-password'
 }
 
 export function shouldShowAuthRoutingLoading(
@@ -151,14 +154,6 @@ export function shouldShowAuthRoutingLoading(
   }
 
   if (!auth.isAuthenticated && isPublicAuthRoute(route)) {
-    return false
-  }
-
-  if (
-    !auth.isAuthenticated &&
-    route.kind === 'static' &&
-    route.path === '/onboarding'
-  ) {
     return false
   }
 

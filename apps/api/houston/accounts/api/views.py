@@ -36,9 +36,6 @@ from houston.accounts.api.serializers import (
     PasswordResetRequestResponseSerializer,
     PasswordResetRequestSerializer,
     RefreshRequestSerializer,
-    RegistrationOwnerValidateRequestSerializer,
-    RegistrationRequestSerializer,
-    RegistrationResponseSerializer,
     SwitchEstablishmentRequestSerializer,
     UserProfileUpdateRequestSerializer,
     ValidationErrorResponseSerializer,
@@ -84,25 +81,19 @@ from houston.accounts.selectors import _serialize_user, build_bootstrap_payload
 from houston.accounts.services import (
     AUTHENTICATION_FAILED_DETAIL,
     INVALID_CREDENTIALS_DETAIL,
-    INVALID_REGISTRATION_INVITE_CODE_DETAIL,
-    REGISTRATION_DUPLICATE_EMAIL_DETAIL,
     InvalidCredentialsError,
     InvalidRefreshTokenError,
-    InvalidRegistrationInviteCodeError,
     InvalidSelectedEstablishmentError,
     RefreshTokenReuseError,
-    RegistrationDuplicateEmailError,
     authenticate_user,
     clear_refresh_cookie,
     create_password_authenticated_session,
     refresh_session,
-    register_onboarding_owner,
     resolve_session_for_logout,
     revoke_session,
     set_refresh_cookie,
     switch_selected_establishment,
     update_user_profile,
-    validate_onboarding_owner_registration,
 )
 from houston.establishments.services import (
     EstablishmentInvitationAlreadyAcceptedError,
@@ -202,112 +193,6 @@ class LoginView(AuthRateLimitedMixin, APIView):
             transport=transport,
         )
 
-
-class RegisterView(AuthRateLimitedMixin, APIView):
-    authentication_classes = []
-    permission_classes = [permissions.AllowAny]
-    throttle_scope = settings.AUTH_THROTTLE_SCOPE_REGISTER
-
-    @extend_schema(
-        tags=["auth"],
-        request=RegistrationRequestSerializer,
-        responses={
-            201: RegistrationResponseSerializer,
-            400: OpenApiResponse(response=ApiErrorResponseSerializer),
-            403: OpenApiResponse(response=ApiErrorResponseSerializer),
-            429: _THROTTLED_OPENAPI_RESPONSE,
-        },
-        description=(
-            "Registers a new owner and provisions an organization, draft establishment, "
-            "and onboarding session using a valid registration invite code. Cookie "
-            "transport requires Django CSRF; body transport does not use cookies."
-        ),
-    )
-    def post(self, request):
-        serializer = RegistrationRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        transport = serializer.validated_data.pop("refresh_token_transport")
-        terms_version = serializer.validated_data.pop("terms_version", None)
-        version_error = _reject_invalid_terms_version(terms_version)
-        if version_error is not None:
-            return version_error
-
-        csrf_failure = _enforce_csrf_for_transport(request, transport=transport)
-        if csrf_failure is not None:
-            return csrf_failure
-
-        try:
-            bundle = register_onboarding_owner(
-                request=request,
-                **serializer.validated_data,
-            )
-        except InvalidRegistrationInviteCodeError:
-            return Response(
-                {
-                    "detail": INVALID_REGISTRATION_INVITE_CODE_DETAIL,
-                    "code": "invalid_invite_code",
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        except RegistrationDuplicateEmailError:
-            return _registration_duplicate_email_response()
-
-        terms_error = _apply_optional_terms(
-            user=bundle.registration.user,
-            payload=bundle.payload,
-            terms_version=terms_version,
-        )
-        if terms_error is not None:
-            return terms_error
-
-        return _build_auth_response(
-            payload=bundle.payload,
-            raw_refresh_token=bundle.auth.refresh_token.raw_token,
-            refresh_expires_at=bundle.auth.refresh_token.record.expires_at,
-            transport=transport,
-            response_status=status.HTTP_201_CREATED,
-        )
-
-
-class ValidateOwnerRegistrationView(AuthRateLimitedMixin, APIView):
-    authentication_classes = []
-    permission_classes = [permissions.AllowAny]
-    throttle_scope = settings.AUTH_THROTTLE_SCOPE_REGISTER_VALIDATE
-
-    @extend_schema(
-        tags=["auth"],
-        request=RegistrationOwnerValidateRequestSerializer,
-        responses={
-            204: OpenApiResponse(description="Owner registration fields are valid."),
-            400: OpenApiResponse(response=ApiErrorResponseSerializer),
-            403: OpenApiResponse(response=ApiErrorResponseSerializer),
-            429: _THROTTLED_OPENAPI_RESPONSE,
-        },
-        description=(
-            "Validates owner registration fields without provisioning any records."
-        ),
-    )
-    def post(self, request):
-        serializer = RegistrationOwnerValidateRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        try:
-            validate_onboarding_owner_registration(
-                invite_code=serializer.validated_data["invite_code"],
-                email=serializer.validated_data["email"],
-            )
-        except InvalidRegistrationInviteCodeError:
-            return Response(
-                {
-                    "detail": INVALID_REGISTRATION_INVITE_CODE_DETAIL,
-                    "code": "invalid_invite_code",
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        except RegistrationDuplicateEmailError:
-            return _registration_duplicate_email_response()
-
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class DirectorInvitationAcceptView(AuthRateLimitedMixin, APIView):
@@ -1008,16 +893,6 @@ class SwitchEstablishmentView(APIView):
             )
 
         return Response(payload)
-
-
-def _registration_duplicate_email_response() -> Response:
-    return Response(
-        {
-            "detail": REGISTRATION_DUPLICATE_EMAIL_DETAIL,
-            "code": "duplicate_email",
-        },
-        status=status.HTTP_400_BAD_REQUEST,
-    )
 
 
 def _api_error_response(*, code: str, detail: str, status: int) -> Response:

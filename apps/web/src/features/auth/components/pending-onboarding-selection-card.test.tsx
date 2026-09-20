@@ -24,10 +24,8 @@ describe('PendingOnboardingSelectionCard', () => {
             organization_name: 'Northwind Group',
             role: 'owner',
             onboarding_session_id: 'sess-1',
-            can_continue_onboarding: true,
           },
         ],
-        onContinueOnboarding: vi.fn(),
         onShowWaiting: vi.fn(),
       }),
     )

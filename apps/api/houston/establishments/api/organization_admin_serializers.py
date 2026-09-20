@@ -36,7 +36,6 @@ class OrganizationAdminEstablishmentSerializer(EmptyStringForNullMixin, serializ
     business_unit_count = serializers.IntegerField()
     onboarding_session_id = serializers.UUIDField(allow_null=True)
     onboarding_current_step = serializers.CharField(allow_blank=True)
-    can_continue_onboarding = serializers.BooleanField()
 
 
 class OrganizationAdminEstablishmentListSerializer(serializers.Serializer):

@@ -49,7 +49,7 @@ const { authState } = vi.hoisted(() => ({
           can_manage_runtime_config: false,
           can_view_team: false,
           can_manage_organization: false,
-          can_create_establishment: false,
+          platform_operator_active: false,
         },
       },
       isBootstrapping: false,
@@ -98,7 +98,6 @@ const { authState } = vi.hoisted(() => ({
         organization_name: string
         role: string
         onboarding_session_id: string | null
-        can_continue_onboarding: boolean
       }>,
     },
   },
@@ -118,7 +117,6 @@ afterEach(() => {
   onNavigate.mockReset()
   switchEstablishment.mockReset()
   authState.current.pendingOnboardingMemberships = []
-  authState.current.bootstrap.permission_hints.can_create_establishment = false
   authState.current.memberships = [
     {
       id: 'member-1',
@@ -176,10 +174,8 @@ describe('ProfileSwitchEstablishmentPage', () => {
         organization_name: 'Org',
         role: 'owner',
         onboarding_session_id: 'session-1',
-        can_continue_onboarding: true,
       },
     ]
-    authState.current.bootstrap.permission_hints.can_create_establishment = true
 
     renderPage()
 

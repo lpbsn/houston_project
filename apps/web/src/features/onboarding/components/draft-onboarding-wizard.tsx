@@ -60,10 +60,19 @@ import {
   OnboardingLoadingState,
 } from '@/features/onboarding/components/onboarding-state'
 import { OnboardingStepper } from '@/features/onboarding/components/onboarding-stepper'
+import type { OnboardingDraftResponse } from '@/features/onboarding/types'
 
 type DraftOnboardingWizardProps = {
   sessionId: string
   onNavigate?: (path: string) => void
+  getDraft: (sessionId: string) => Promise<OnboardingDraftResponse>
+  putDraft: (
+    sessionId: string,
+    payload: OnboardingDraftPayload,
+  ) => Promise<OnboardingDraftResponse>
+  completeSession: (sessionId: string) => Promise<unknown>
+  draftQueryKey?: readonly unknown[]
+  afterCompletePath?: string
 }
 
 function SaveStatus({ status }: { status: string }) {
@@ -803,12 +812,25 @@ function TeamStepView({
   )
 }
 
-export function DraftOnboardingWizard({ sessionId, onNavigate }: DraftOnboardingWizardProps) {
+export function DraftOnboardingWizard({
+  sessionId,
+  onNavigate,
+  getDraft,
+  putDraft,
+  completeSession,
+  draftQueryKey,
+  afterCompletePath,
+}: DraftOnboardingWizardProps) {
   const queryClient = useQueryClient()
   const isLgViewport = useLgViewport()
-  const draftQuery = useOnboardingDraft(sessionId)
+  const draftQuery = useOnboardingDraft(sessionId, {
+    queryKey: draftQueryKey,
+    queryFn: getDraft,
+  })
   const catalogQuery = useCatalogBusinessUnitChips()
-  const completeMutation = useCompleteOnboardingSession(sessionId)
+  const completeMutation = useCompleteOnboardingSession(sessionId, {
+    completeFn: completeSession,
+  })
 
   const [draft, setDraft] = useState<OnboardingDraftPayload | null>(null)
   const [hydrateError, setHydrateError] = useState<Error | null>(null)
@@ -818,7 +840,10 @@ export function DraftOnboardingWizard({ sessionId, onNavigate }: DraftOnboarding
   const [navError, setNavError] = useState<string | null>(null)
   const [isNavigating, setIsNavigating] = useState(false)
 
-  const autosave = useOnboardingDraftAutosave({ sessionId })
+  const autosave = useOnboardingDraftAutosave({
+    sessionId,
+    putDraft: (payload) => putDraft(sessionId, payload),
+  })
   const { enqueue, flush, stop, resume, status: saveStatus } = autosave
 
   if (!hydrated && draftQuery.data) {
@@ -940,9 +965,11 @@ export function DraftOnboardingWizard({ sessionId, onNavigate }: DraftOnboarding
         queryFn: fetchBootstrap,
       })
       const landing =
+        afterCompletePath ??
         getAuthenticatedLandingPath(bootstrap, {
           isDesktop: isDesktopWebLanding(isLgViewport),
-        }) ?? '/reporting'
+        }) ??
+        '/reporting'
       onNavigate?.(landing)
     } catch (error) {
       setNavError(getCompleteErrorMessage(error, 'Impossible de terminer l’onboarding.'))

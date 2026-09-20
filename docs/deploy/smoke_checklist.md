@@ -1,13 +1,13 @@
 # Smoke checklist
 
 Status: authoritative  
-Last reviewed: 2026-09-02
+Last reviewed: 2026-09-19
 
 Unified smoke validation for local pilot and Railway prod-test.
 
 ## Local pilot — stack
 
-- [ ] `.env` configured (`DJANGO_SECRET_KEY`, `HOUSTON_REGISTRATION_INVITE_CODES`)
+- [ ] `.env` configured (`DJANGO_SECRET_KEY`)
 - [ ] `make bootstrap-dev` OK (`catalog-check`: 14 BU, 134 subjects)
 - [ ] `docker compose ps`: postgres, redis, api, celery **Up**
 - [ ] Health: `curl` → `200` on http://localhost:8000/api/v1/health/
@@ -25,9 +25,9 @@ Optional. Not CI. Local `make web-cap-sync` already exists. Store AAB procedure:
 
 ## Local pilot — product journey
 
-- [ ] Register `/onboarding` with invite code (or login)
-- [ ] Organisation + establishment created/selected
-- [ ] Onboarding manual v2 completed, establishment activated
+- [ ] Login with an existing membership, **or** grant a local Platform operator and open desktop `/platform`
+- [ ] Organisation + establishment created/selected (Platform wizard, or existing membership)
+- [ ] Establishment activated (Platform complete; invited Owner/Director only accept + wait)
 - [ ] Observation submitted (photo optional)
 - [ ] Processing completes → signal in `/signals` feed
 - [ ] Action plan created from signal
@@ -42,7 +42,7 @@ Optional. Not CI. Local `make web-cap-sync` already exists. Store AAB procedure:
 ## Railway prod-test — preparation
 
 - [ ] Variables per [`railway_variables.md`](railway_variables.md) and [`.env.prod-test.example`](../../.env.prod-test.example)
-- [ ] `HOUSTON_REGISTRATION_INVITE_CODES` set
+- [ ] Local operator grant available if testing Platform (`grant_platform_operator`)
 - [ ] `celery-worker` and `celery-beat` running (Railway logs)
 - [ ] Automated: `BASE_URL=https://<domain> ./scripts/smoke/readonly.sh` exits 0
 
@@ -55,7 +55,7 @@ Same steps as local, URLs:
 | Resource | URL |
 |----------|-----|
 | App | `https://<railway-domain>/` |
-| Onboarding | `https://<railway-domain>/onboarding` |
+| Platform (desktop) | `https://<railway-domain>/platform` |
 | Health | `https://<railway-domain>/api/v1/health/` |
 
 ## Railway — technical manual checks
