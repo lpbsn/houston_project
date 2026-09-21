@@ -1,5 +1,6 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
+import { ArrowLeft } from 'lucide-react'
 
 import { isHashTokenPublicRoute, parseAppRoute, serializeAppRoute, useAppRoute, type AppRoute } from '@/app/app-routes'
 import {
@@ -47,6 +48,7 @@ import { AppShell } from '@/components/app-shell'
 import { TerrainShell } from '@/components/layout/terrain-shell'
 import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import { Button } from '@/components/ui/button'
+import { terrainBackButtonClassName } from '@/lib/terrain-styles'
 import { bootstrapQueryKey, clearAuthState, switchEstablishment } from '@/features/auth/api'
 import { AuthRoutingLoading } from '@/features/auth/components/auth-routing-loading'
 import { LegalEntryGates } from '@/features/auth/components/legal-entry-gates'
@@ -997,12 +999,13 @@ function App() {
   const backToGeneralAction = (
     <Button
       type="button"
-      variant="outline"
-      className="h-10 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
+      variant="ghost"
+      className={terrainBackButtonClassName()}
       onClick={() => {
         navigate('/general')
       }}
     >
+      <ArrowLeft className="mr-1 h-4 w-4" />
       Retour
     </Button>
   )
@@ -1054,10 +1057,8 @@ function App() {
                 }
               : route.kind === 'static' && route.path === '/select-establishment'
                 ? {
-                    headingBadge: 'Etablissement',
-                    title: 'Choisissez votre établissement',
-                    description:
-                      'Sélectionnez l’établissement actif avec lequel vous souhaitez commencer.',
+                    title: 'Choisir un établissement',
+                    description: '',
                     actions: (
                       <>
                         {auth.hasOperationalAccess ? backToGeneralAction : null}

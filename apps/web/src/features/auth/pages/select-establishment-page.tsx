@@ -4,7 +4,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
 import { switchEstablishment } from '@/features/auth/api'
-import { EstablishmentSelectorCard } from '@/features/auth/components/establishment-selector-card'
+import { EstablishmentSelectorList } from '@/features/auth/components/establishment-selector-list'
 import {
   parsePendingAppOpenFromSearch,
   resolveSelectEstablishmentResumeHref,
@@ -50,7 +50,7 @@ export function SelectEstablishmentPage({ onNavigate }: SelectEstablishmentPageP
   }
 
   return (
-    <EstablishmentSelectorCard
+    <EstablishmentSelectorList
       activeEstablishmentId={activeEstablishmentId}
       errorMessage={selectorError}
       memberships={memberships}
