@@ -266,6 +266,31 @@ def _serialize_reply_to(message: ChatMessage, *, parent: ChatMessage | None) -> 
     }
 
 
+def _visible_reply_parent(
+    parent: ChatMessage | None,
+    *,
+    history_cutoff_at,
+) -> ChatMessage | None:
+    if parent is None:
+        return None
+    if history_cutoff_at is not None and parent.created_at <= history_cutoff_at:
+        return None
+    return parent
+
+
+def _history_cutoff_for_message(
+    message: ChatMessage,
+    *,
+    history_cutoff_at=None,
+    history_cutoffs_by_conversation_id: dict | None = None,
+):
+    if history_cutoff_at is not None:
+        return history_cutoff_at
+    if history_cutoffs_by_conversation_id is None:
+        return None
+    return history_cutoffs_by_conversation_id.get(message.conversation_id)
+
+
 def _serialize_mentions(message: ChatMessage) -> list[dict]:
     mentions = getattr(message, "_prefetched_objects_cache", {}).get("mentions")
     if mentions is None:
@@ -325,6 +350,7 @@ def serialize_message(
     *,
     parent: ChatMessage | None = None,
     parents_by_id: dict | None = None,
+    history_cutoff_at=None,
 ) -> dict:
     reply_to_id = getattr(message, "reply_to_id", None)
     resolved_parent = parent
@@ -336,6 +362,10 @@ def serialize_message(
             .filter(id=reply_to_id, conversation_id=message.conversation_id)
             .first()
         )
+    resolved_parent = _visible_reply_parent(
+        resolved_parent,
+        history_cutoff_at=history_cutoff_at,
+    )
     return {
         "id": message.id,
         "author_membership_id": message.author_membership_id,
@@ -350,7 +380,12 @@ def serialize_message(
     }
 
 
-def serialize_messages(messages: list[ChatMessage]) -> list[dict]:
+def serialize_messages(
+    messages: list[ChatMessage],
+    *,
+    history_cutoff_at=None,
+    history_cutoffs_by_conversation_id: dict | None = None,
+) -> list[dict]:
     parent_ids = [
         message.reply_to_id for message in messages if getattr(message, "reply_to_id", None)
     ]
@@ -363,7 +398,18 @@ def serialize_messages(messages: list[ChatMessage]) -> list[dict]:
                 "author_membership__user",
             )
         }
-    return [serialize_message(message, parents_by_id=parents_by_id) for message in messages]
+    return [
+        serialize_message(
+            message,
+            parents_by_id=parents_by_id,
+            history_cutoff_at=_history_cutoff_for_message(
+                message,
+                history_cutoff_at=history_cutoff_at,
+                history_cutoffs_by_conversation_id=history_cutoffs_by_conversation_id,
+            ),
+        )
+        for message in messages
+    ]
 
 
 def conversation_title(

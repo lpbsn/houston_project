@@ -319,6 +319,198 @@ def test_gallery_and_isolation(api_client, settings, tmp_path):
     _ = receiver
 
 
+def test_gallery_and_preview_respect_history_cutoff(api_client, settings, tmp_path):
+    settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "filesystem"
+    settings.HOUSTON_CHAT_PRIVATE_MEDIA_ROOT = str(tmp_path)
+    (
+        establishment,
+        sender,
+        receiver,
+        sender_membership,
+        receiver_membership,
+        token,
+        conversation_id,
+    ) = _setup(api_client)
+    payload = _png_bytes()
+    reserved = _reserve(
+        api_client,
+        token=token,
+        establishment_id=establishment.id,
+        conversation_id=conversation_id,
+        filename="old.png",
+        content_type="image/png",
+        size_bytes=len(payload),
+    )
+    upload_id = reserved.json()["upload_id"]
+    _put_and_complete(
+        api_client,
+        token=token,
+        establishment_id=establishment.id,
+        upload_id=upload_id,
+        payload=payload,
+    )
+    sent = api_client.post(
+        chat_url(establishment.id, f"conversations/{conversation_id}/messages/"),
+        {
+            "client_message_id": str(uuid.uuid4()),
+            "body": "",
+            "attachment_ids": [upload_id],
+        },
+        format="json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert sent.status_code == 201
+    attachment_id = sent.json()["message"]["attachments"][0]["id"]
+    receiver_token = login(api_client, user=receiver)
+    hide = api_client.post(
+        chat_url(establishment.id, f"conversations/{conversation_id}/hide/"),
+        HTTP_AUTHORIZATION=f"Bearer {receiver_token}",
+    )
+    assert hide.status_code == 204
+
+    hidden_gallery = api_client.get(
+        chat_url(establishment.id, f"conversations/{conversation_id}/shared-media/"),
+        HTTP_AUTHORIZATION=f"Bearer {receiver_token}",
+    )
+    assert hidden_gallery.status_code == 200
+    assert hidden_gallery.json()["items"] == []
+    hidden_preview = api_client.get(
+        chat_url(establishment.id, f"attachments/{attachment_id}/preview/"),
+        HTTP_AUTHORIZATION=f"Bearer {receiver_token}",
+    )
+    assert hidden_preview.status_code == 404
+
+    peer_gallery = api_client.get(
+        chat_url(establishment.id, f"conversations/{conversation_id}/shared-media/"),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert len(peer_gallery.json()["items"]) == 1
+    peer_preview = api_client.get(
+        chat_url(establishment.id, f"attachments/{attachment_id}/preview/"),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert peer_preview.status_code == 200
+
+    later = _reserve(
+        api_client,
+        token=token,
+        establishment_id=establishment.id,
+        conversation_id=conversation_id,
+        filename="new.png",
+        content_type="image/png",
+        size_bytes=len(payload),
+    )
+    later_id = later.json()["upload_id"]
+    _put_and_complete(
+        api_client,
+        token=token,
+        establishment_id=establishment.id,
+        upload_id=later_id,
+        payload=payload,
+    )
+    later_sent = api_client.post(
+        chat_url(establishment.id, f"conversations/{conversation_id}/messages/"),
+        {
+            "client_message_id": str(uuid.uuid4()),
+            "body": "",
+            "attachment_ids": [later_id],
+        },
+        format="json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert later_sent.status_code == 201
+    visible_gallery = api_client.get(
+        chat_url(establishment.id, f"conversations/{conversation_id}/shared-media/"),
+        HTTP_AUTHORIZATION=f"Bearer {receiver_token}",
+    )
+    assert len(visible_gallery.json()["items"]) == 1
+    later_attachment_id = later_sent.json()["message"]["attachments"][0]["id"]
+    assert visible_gallery.json()["items"][0]["id"] == later_attachment_id
+    _ = sender
+    _ = sender_membership
+    _ = receiver_membership
+
+
+def test_notify_message_created_applies_cutoff_per_recipient(api_client, monkeypatch):
+    (
+        establishment,
+        sender,
+        receiver,
+        sender_membership,
+        receiver_membership,
+        _token,
+        conversation_id,
+    ) = _setup(api_client)
+    parent = create_message(
+        author_membership=sender_membership,
+        establishment_id=establishment.id,
+        conversation_id=conversation_id,
+        client_message_id=uuid.uuid4(),
+        body="hidden parent",
+    ).message
+    cutoff = timezone.now()
+    from houston.chat.models import ChatParticipant
+
+    ChatParticipant.objects.filter(
+        conversation_id=conversation_id,
+        membership=receiver_membership,
+    ).update(history_cutoff_at=cutoff)
+    ChatMessage.objects.filter(id=parent.id).update(created_at=cutoff - timedelta(minutes=1))
+    child = create_message(
+        author_membership=sender_membership,
+        establishment_id=establishment.id,
+        conversation_id=conversation_id,
+        client_message_id=uuid.uuid4(),
+        body="visible reply",
+        reply_to_id=parent.id,
+    ).message
+    captured: list[tuple[str, dict]] = []
+
+    class DummyLayer:
+        def group_send(self, group, event):
+            captured.append((group, event["payload"]))
+
+    monkeypatch.setattr("houston.chat.ws_notify.get_channel_layer", lambda: DummyLayer())
+    monkeypatch.setattr("houston.chat.ws_notify.async_to_sync", lambda fn: fn)
+    from houston.chat.groups import membership_group_name
+    from houston.chat.ws_notify import notify_message_created
+
+    message = (
+        ChatMessage.objects.select_related(
+            "author_membership",
+            "author_membership__user",
+            "conversation",
+        )
+        .prefetch_related("mentions__membership__user", "attachments__upload")
+        .get(id=child.id)
+    )
+    notify_message_created(
+        establishment_id=establishment.id,
+        conversation_id=conversation_id,
+        message=message,
+        recipient_membership_ids=[sender_membership.id, receiver_membership.id],
+    )
+    payloads = {group: payload for group, payload in captured}
+    hider_payload = payloads[
+        membership_group_name(
+            establishment_id=establishment.id,
+            membership_id=receiver_membership.id,
+        )
+    ]
+    peer_payload = payloads[
+        membership_group_name(
+            establishment_id=establishment.id,
+            membership_id=sender_membership.id,
+        )
+    ]
+    assert hider_payload["message"]["reply_to"]["unavailable"] is True
+    assert "excerpt" not in hider_payload["message"]["reply_to"]
+    assert peer_payload["message"]["reply_to"]["unavailable"] is False
+    assert peer_payload["message"]["reply_to"]["excerpt"] == "hidden parent"
+    _ = sender
+    _ = receiver
+
+
 def test_orphan_cleanup_deletes_expired_reserved(settings, tmp_path):
     settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "filesystem"
     settings.HOUSTON_CHAT_PRIVATE_MEDIA_ROOT = str(tmp_path)

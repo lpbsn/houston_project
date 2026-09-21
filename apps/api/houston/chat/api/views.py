@@ -46,6 +46,7 @@ from houston.chat.permissions import can_delete_group, can_manage_group
 from houston.chat.rate_limits import ChatMessageRateLimitExceeded, check_message_send_rate_limit
 from houston.chat.selectors import (
     count_unread_messages_for_participant,
+    get_active_participant,
     get_conversation_for_participant,
     get_eligible_chat_memberships_queryset,
     get_latest_messages_by_conversation_ids,
@@ -235,7 +236,14 @@ def _serialize_conversation_list_item(
         "last_message_preview": (
             latest_message_preview
             if latest_message_preview is not None
-            else (serialize_message(latest_message) if latest_message else None)
+            else (
+                serialize_message(
+                    latest_message,
+                    history_cutoff_at=viewer.history_cutoff_at if viewer is not None else None,
+                )
+                if latest_message
+                else None
+            )
         ),
         "participants": [serialize_participant_summary(item) for item in active_participants],
         "pinned": pinned,
@@ -350,7 +358,10 @@ class ChatConversationListView(EstablishmentScopedChatMixin, APIView):
             message.conversation_id: serialized
             for message, serialized in zip(
                 latest_messages_by_conversation_id.values(),
-                serialize_messages(list(latest_messages_by_conversation_id.values())),
+                serialize_messages(
+                    list(latest_messages_by_conversation_id.values()),
+                    history_cutoffs_by_conversation_id=history_cutoffs_by_conversation_id,
+                ),
                 strict=True,
             )
         }
@@ -675,7 +686,12 @@ class ChatConversationMessagesView(EstablishmentScopedChatMixin, APIView):
         return Response(
             ChatMessageListResponseSerializer(
                 {
-                    "items": serialize_messages(page),
+                    "items": serialize_messages(
+                        page,
+                        history_cutoff_at=(
+                            participant.history_cutoff_at if participant is not None else None
+                        ),
+                    ),
                     "has_more": has_more,
                 }
             ).data
@@ -790,10 +806,21 @@ class ChatConversationMessagesView(EstablishmentScopedChatMixin, APIView):
                 },
             )
 
+        actor_participant = get_active_participant(
+            conversation_id=result.message.conversation_id,
+            membership_id=membership.id,
+        )
         return Response(
             ChatSendMessageResponseSerializer(
                 {
-                    "message": serialize_message(result.message),
+                    "message": serialize_message(
+                        result.message,
+                        history_cutoff_at=(
+                            actor_participant.history_cutoff_at
+                            if actor_participant is not None
+                            else None
+                        ),
+                    ),
                     "created": result.created,
                 }
             ).data,

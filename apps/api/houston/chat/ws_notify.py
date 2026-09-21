@@ -7,7 +7,7 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.db import transaction
 from houston.chat.groups import membership_group_name, session_group_name
-from houston.chat.models import ChatMessage
+from houston.chat.models import ChatMessage, ChatParticipant
 from houston.chat.ws_payloads import (
     build_conversation_access_revoked_payload,
     build_conversation_updated_payload,
@@ -222,11 +222,20 @@ def notify_message_created(
     if channel_layer is None:
         return
 
-    payload = build_message_created_payload(
-        conversation_id=conversation_id,
-        message=message,
-    )
+    history_cutoffs_by_membership_id = {
+        participant.membership_id: participant.history_cutoff_at
+        for participant in ChatParticipant.objects.filter(
+            conversation_id=conversation_id,
+            membership_id__in=recipient_membership_ids,
+            left_at__isnull=True,
+        ).only("membership_id", "history_cutoff_at")
+    }
     for membership_id in recipient_membership_ids:
+        payload = build_message_created_payload(
+            conversation_id=conversation_id,
+            message=message,
+            history_cutoff_at=history_cutoffs_by_membership_id.get(membership_id),
+        )
         async_to_sync(channel_layer.group_send)(
             membership_group_name(
                 establishment_id=establishment_id,

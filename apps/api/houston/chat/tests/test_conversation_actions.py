@@ -187,6 +187,84 @@ def test_hide_dm_is_personal_and_cutoff_applies(api_client):
     assert bodies == ["after hide"]
 
 
+def test_hide_dm_reply_cutoff_is_personal_on_list_and_preview(api_client):
+    establishment = create_establishment()
+    alice = create_user(username="hide_reply_alice")
+    bob = create_user(username="hide_reply_bob")
+    create_membership(user=alice, establishment=establishment)
+    bob_membership = create_membership(user=bob, establishment=establishment)
+    alice_client = APIClient()
+    bob_client = APIClient()
+    alice_token = login(alice_client, user=alice)
+    bob_token = login(bob_client, user=bob)
+    dm = create_dm(
+        alice_client,
+        token=alice_token,
+        establishment_id=establishment.id,
+        target_membership_id=bob_membership.id,
+    )
+    conversation_id = uuid.UUID(dm.json()["conversation"]["id"])
+    parent = create_message(
+        author_membership=bob_membership,
+        establishment_id=establishment.id,
+        conversation_id=conversation_id,
+        client_message_id=uuid.uuid4(),
+        body="hidden parent",
+    ).message
+    hide_response = alice_client.post(
+        chat_url(establishment.id, f"conversations/{conversation_id}/hide/"),
+        HTTP_AUTHORIZATION=f"Bearer {alice_token}",
+    )
+    assert hide_response.status_code == 204
+    create_message(
+        author_membership=bob_membership,
+        establishment_id=establishment.id,
+        conversation_id=conversation_id,
+        client_message_id=uuid.uuid4(),
+        body="visible reply",
+        reply_to_id=parent.id,
+    )
+
+    alice_messages = alice_client.get(
+        chat_url(establishment.id, f"conversations/{conversation_id}/messages/"),
+        HTTP_AUTHORIZATION=f"Bearer {alice_token}",
+    )
+    assert alice_messages.status_code == 200
+    alice_items = alice_messages.json()["items"]
+    assert [item["body"] for item in alice_items] == ["visible reply"]
+    assert alice_items[0]["reply_to"]["unavailable"] is True
+    assert not alice_items[0]["reply_to"].get("excerpt")
+    assert not alice_items[0]["reply_to"].get("author_display_name")
+
+    bob_messages = bob_client.get(
+        chat_url(establishment.id, f"conversations/{conversation_id}/messages/"),
+        HTTP_AUTHORIZATION=f"Bearer {bob_token}",
+    )
+    bob_reply = next(
+        item for item in bob_messages.json()["items"] if item["body"] == "visible reply"
+    )
+    assert bob_reply["reply_to"]["unavailable"] is False
+    assert bob_reply["reply_to"]["excerpt"] == "hidden parent"
+
+    alice_list = alice_client.get(
+        chat_url(establishment.id, "conversations/"),
+        HTTP_AUTHORIZATION=f"Bearer {alice_token}",
+    )
+    alice_preview = alice_list.json()["items"][0]["last_message_preview"]
+    assert alice_preview["body"] == "visible reply"
+    assert alice_preview["reply_to"]["unavailable"] is True
+    assert not alice_preview["reply_to"].get("excerpt")
+
+    bob_list = bob_client.get(
+        chat_url(establishment.id, "conversations/"),
+        HTTP_AUTHORIZATION=f"Bearer {bob_token}",
+    )
+    bob_preview = bob_list.json()["items"][0]["last_message_preview"]
+    assert bob_preview["body"] == "visible reply"
+    assert bob_preview["reply_to"]["unavailable"] is False
+    assert bob_preview["reply_to"]["excerpt"] == "hidden parent"
+
+
 def test_hide_dm_race_keeps_list_hidden_when_message_is_not_after_hide():
     establishment = create_establishment()
     alice = create_user(username="race_alice")

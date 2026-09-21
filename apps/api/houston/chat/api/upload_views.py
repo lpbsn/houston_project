@@ -20,6 +20,7 @@ from houston.chat.api.views import (
     EstablishmentScopedChatMixin,
     _chat_error_response,
     _resolve_membership,
+    _viewer_participant,
 )
 from houston.chat.constants import CHAT_GALLERY_PAGE_SIZE
 from houston.chat.exceptions import ChatError, ChatValidationError
@@ -273,6 +274,13 @@ class ChatAttachmentPreviewView(EstablishmentScopedChatMixin, APIView):
         )
         if conversation is None:
             raise Http404
+        viewer = _viewer_participant(conversation, membership.id)
+        history_cutoff_at = viewer.history_cutoff_at if viewer is not None else None
+        if (
+            history_cutoff_at is not None
+            and attachment.message.created_at <= history_cutoff_at
+        ):
+            raise Http404
         variant = request.query_params.get("variant") or "full"
         if variant == "thumbnail":
             storage_key = attachment.upload.thumbnail_storage_key
@@ -328,6 +336,8 @@ class ChatSharedMediaView(EstablishmentScopedChatMixin, APIView):
         )
         if conversation is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
+        viewer = _viewer_participant(conversation, membership.id)
+        history_cutoff_at = viewer.history_cutoff_at if viewer is not None else None
         queryset = (
             ChatMessageAttachment.objects.filter(
                 message__conversation_id=conversation.id,
@@ -340,6 +350,8 @@ class ChatSharedMediaView(EstablishmentScopedChatMixin, APIView):
             )
             .order_by("-created_at", "-id")
         )
+        if history_cutoff_at is not None:
+            queryset = queryset.filter(message__created_at__gt=history_cutoff_at)
         kind = request.query_params.get("kind")
         if kind:
             queryset = queryset.filter(kind=kind)
