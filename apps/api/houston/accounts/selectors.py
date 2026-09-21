@@ -209,6 +209,8 @@ def _serialize_user(user: User) -> dict:
 
 
 def _serialize_membership(membership: EstablishmentMembership) -> dict:
+    from houston.chat.permissions import can_access_chat
+
     return {
         "id": str(membership.id),
         "establishment_id": str(membership.establishment_id),
@@ -217,6 +219,7 @@ def _serialize_membership(membership: EstablishmentMembership) -> dict:
         "organization_name": membership.establishment.organization.name,
         "role": membership.role,
         "status": membership.status,
+        "chat_available": can_access_chat(membership),
         **dict(
             zip(
                 ("scopes", "scope_summary"),

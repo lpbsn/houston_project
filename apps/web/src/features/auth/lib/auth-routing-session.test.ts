@@ -12,6 +12,7 @@ function membership(id: string, establishmentId: string): Membership {
     organization_name: 'Org',
     role: 'staff',
     status: 'active',
+    chat_available: true,
     scopes: [],
     scope_summary: { business_unit_count: 0 },
   }

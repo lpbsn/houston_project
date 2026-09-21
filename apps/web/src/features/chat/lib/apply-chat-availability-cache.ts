@@ -24,6 +24,16 @@ export function purgeEstablishmentChatOperationalQueries(
   })
 }
 
+function membershipChatAvailable(
+  membership: BootstrapResponse['active_membership'] | BootstrapResponse['memberships'][number],
+  nextAvailable: boolean,
+) {
+  if (!membership || membership.chat_available === nextAvailable) {
+    return membership
+  }
+  return { ...membership, chat_available: nextAvailable }
+}
+
 export function applyChatAvailabilityFromStatus(
   queryClient: QueryClient,
   establishmentId: string,
@@ -36,14 +46,27 @@ export function applyChatAvailabilityFromStatus(
     if (current.active_membership?.establishment_id !== establishmentId) {
       return current
     }
-    if (current.permission_hints.chat_available === status.can_access) {
+    const nextAvailable = status.can_access
+    const nextActiveMembership = membershipChatAvailable(current.active_membership, nextAvailable)
+    const nextMemberships = current.memberships.map((membership) =>
+      membership.establishment_id === establishmentId
+        ? membershipChatAvailable(membership, nextAvailable)
+        : membership,
+    )
+    const sessionAligned = current.permission_hints.chat_available === nextAvailable
+    const membershipsUnchanged = nextMemberships.every(
+      (membership, index) => membership === current.memberships[index],
+    )
+    if (sessionAligned && nextActiveMembership === current.active_membership && membershipsUnchanged) {
       return current
     }
     return {
       ...current,
+      active_membership: nextActiveMembership,
+      memberships: nextMemberships,
       permission_hints: {
         ...current.permission_hints,
-        chat_available: status.can_access,
+        chat_available: nextAvailable,
       },
     }
   })

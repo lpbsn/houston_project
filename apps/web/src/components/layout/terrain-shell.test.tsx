@@ -49,6 +49,7 @@ function membership(overrides: Partial<Membership>): Membership {
     organization_name: overrides.organization_name ?? 'Spore',
     role: overrides.role ?? 'staff',
     status: overrides.status ?? 'active',
+    chat_available: overrides.chat_available ?? true,
     scopes: [],
     scope_summary: { business_unit_count: 0 },
   }
@@ -177,7 +178,7 @@ describe('TerrainShell', () => {
     expect(within(sidebar).queryByText('Cross-établissement')).toBeNull()
     expect(within(sidebar).getByRole('link', { name: 'Nouvelle observation' })).toBeTruthy()
     expect(within(sidebar).getByRole('link', { name: 'Dashboard' })).toBeTruthy()
-    expect(within(sidebar).queryByRole('link', { name: 'Chat' })).toBeNull()
+    expect(within(sidebar).getByRole('link', { name: 'Chat' })).toBeTruthy()
     expect(within(sidebar).getByText('Marie Renaud')).toBeTruthy()
     expect(within(sidebar).getByText('Manager · Spore Paris')).toBeTruthy()
   })

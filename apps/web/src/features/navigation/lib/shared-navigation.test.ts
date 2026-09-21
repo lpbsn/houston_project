@@ -18,6 +18,7 @@ function membership(overrides: Partial<Membership>): Membership {
     organization_name: overrides.organization_name ?? 'Spore',
     role: overrides.role ?? 'staff',
     status: overrides.status ?? 'active',
+    chat_available: overrides.chat_available ?? true,
     scopes: [],
     scope_summary: { business_unit_count: 0 },
   }

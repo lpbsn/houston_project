@@ -24,7 +24,24 @@ const disabledStatus: ChatStatus = {
   can_manage_settings: true,
 }
 
+function membership(establishmentId: string, options: { chatAvailable?: boolean } = {}) {
+  return {
+    id: `mbr-${establishmentId}`,
+    establishment_id: establishmentId,
+    establishment_name: `Test ${establishmentId}`,
+    organization_id: 'org-1',
+    organization_name: 'Org',
+    role: 'owner' as const,
+    status: 'active' as const,
+    chat_available: options.chatAvailable ?? true,
+    scopes: [],
+    scope_summary: { business_unit_count: 0 },
+  }
+}
+
 function bootstrapForEstablishment(establishmentId: string): BootstrapResponse {
+  const active = membership(establishmentId)
+  const other = membership(OTHER_ESTABLISHMENT_ID, { chatAvailable: true })
   return {
     authenticated: true,
     user: {
@@ -33,14 +50,8 @@ function bootstrapForEstablishment(establishmentId: string): BootstrapResponse {
       email: 'owner@example.com',
       identity_type: 'owner',
     },
-    memberships: [],
-    active_membership: {
-      id: 'mbr-1',
-      establishment_id: establishmentId,
-      establishment_name: 'Test',
-      role: 'owner',
-      status: 'active',
-    },
+    memberships: [active, other],
+    active_membership: active,
     pending_onboarding_memberships: [],
     permission_hints: {
       chat_available: true,
@@ -63,17 +74,16 @@ describe('apply-chat-availability-cache', () => {
 
     applyChatAvailabilityFromStatus(queryClient, ESTABLISHMENT_ID, disabledStatus)
 
-    expect(queryClient.getQueryData<BootstrapResponse>(bootstrapQueryKey)?.permission_hints).toEqual({
-      chat_available: false,
-      can_create_action_plan: false,
-      can_create_catalog_action_plan: false,
-      can_view_action_plan_catalog: false,
-      can_invite: false,
-      can_manage_runtime_config: false,
-      can_view_team: false,
-      can_manage_organization: false,
-      platform_operator_active: false,
-    })
+    const next = queryClient.getQueryData<BootstrapResponse>(bootstrapQueryKey)
+    expect(next?.permission_hints.chat_available).toBe(false)
+    expect(next?.active_membership?.chat_available).toBe(false)
+    expect(
+      next?.memberships.find((item) => item.establishment_id === ESTABLISHMENT_ID)?.chat_available,
+    ).toBe(false)
+    expect(
+      next?.memberships.find((item) => item.establishment_id === OTHER_ESTABLISHMENT_ID)
+        ?.chat_available,
+    ).toBe(true)
   })
 
   it('skips bootstrap patch when active establishment differs', () => {

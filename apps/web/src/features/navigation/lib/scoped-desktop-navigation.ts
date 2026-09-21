@@ -65,9 +65,9 @@ function uniqueEstablishments(memberships: Membership[]): Membership[] {
   )
 }
 
-function crossItems(showChat: boolean): ScopedDesktopNavItem[] {
+function crossItems(): ScopedDesktopNavItem[] {
   const scope: TerrainScope = { type: 'cross' }
-  const items: ScopedDesktopNavItem[] = [
+  return [
     {
       id: 'dashboard',
       label: 'Dashboard Cross',
@@ -94,22 +94,13 @@ function crossItems(showChat: boolean): ScopedDesktopNavItem[] {
       placeholder: false,
       readOnly: true,
     },
-  ]
-  if (showChat) {
-    items.push({
-      id: 'chat',
-      label: 'Chat',
-      href: serializeScopedTerrainPath(scope, 'chat'),
+    {
+      id: 'settings',
+      label: 'Paramètres',
+      href: serializeScopedTerrainPath(scope, 'settings'),
       placeholder: true,
-    })
-  }
-  items.push({
-    id: 'settings',
-    label: 'Paramètres',
-    href: serializeScopedTerrainPath(scope, 'settings'),
-    placeholder: true,
-  })
-  return items
+    },
+  ]
 }
 
 function establishmentItems(
@@ -185,7 +176,6 @@ function establishmentItems(
 
 export function resolveScopedDesktopNavigation(options: {
   bootstrap?: BootstrapResponse | null
-  showChat: boolean
 }): ScopedDesktopNavSection[] {
   const memberships = options.bootstrap?.memberships ?? []
   const establishments = uniqueEstablishments(memberships)
@@ -204,7 +194,7 @@ export function resolveScopedDesktopNavigation(options: {
           : 'Lecture seule',
       scope: { type: 'cross' },
       defaultExpanded: true,
-      items: crossItems(options.showChat),
+      items: crossItems(),
     })
   }
 
@@ -220,7 +210,7 @@ export function resolveScopedDesktopNavigation(options: {
         (establishments.length === 1 || membership.establishment_id === activeEstablishmentId),
       items: establishmentItems(membership.establishment_id, {
         showDashboard,
-        showChat: options.showChat,
+        showChat: membership.chat_available,
         canManageOperationalConfig: canManageOperationalConfig(membership),
       }),
     })

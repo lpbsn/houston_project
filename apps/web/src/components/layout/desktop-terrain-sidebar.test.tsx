@@ -17,6 +17,7 @@ function membership(overrides: Partial<Membership>): Membership {
     organization_name: overrides.organization_name ?? 'Spore',
     role: overrides.role ?? 'staff',
     status: overrides.status ?? 'active',
+    chat_available: overrides.chat_available ?? true,
     scopes: [],
     scope_summary: { business_unit_count: 0 },
   }
@@ -25,6 +26,7 @@ function membership(overrides: Partial<Membership>): Membership {
 function bootstrap(
   memberships: Membership[],
   hints: Partial<BootstrapResponse['permission_hints']> = {},
+  activeMembership: Membership | null = memberships[0] ?? null,
 ): BootstrapResponse {
   return {
     authenticated: true,
@@ -48,7 +50,7 @@ function bootstrap(
       ai_consent_status: 'granted',
     },
     memberships,
-    active_membership: memberships[0] ?? null,
+    active_membership: activeMembership,
     pending_onboarding_memberships: [],
     permission_hints: {
       chat_available: false,
@@ -83,7 +85,6 @@ describe('DesktopTerrainSidebar', () => {
         activePath="/analytics"
         bootstrap={bootstrap([membership({ role: 'manager' })])}
         navigate={vi.fn()}
-        showChat={true}
       />,
     )
 
@@ -103,7 +104,6 @@ describe('DesktopTerrainSidebar', () => {
         activePath="/analytics"
         bootstrap={bootstrap([membership({ role: 'manager' })])}
         navigate={navigate}
-        showChat={false}
       />,
     )
 
@@ -129,7 +129,6 @@ describe('DesktopTerrainSidebar', () => {
           }),
         ])}
         navigate={navigate}
-        showChat={false}
       />,
     )
 
@@ -145,7 +144,6 @@ describe('DesktopTerrainSidebar', () => {
         activePath="/e/est-1/signals"
         bootstrap={bootstrap([membership({ role: 'staff' })])}
         navigate={vi.fn()}
-        showChat={true}
       />,
     )
 
@@ -161,7 +159,6 @@ describe('DesktopTerrainSidebar', () => {
         activePath="/cross"
         bootstrap={bootstrap([membership({ role: 'owner' })])}
         navigate={vi.fn()}
-        showChat={false}
       />,
     )
 
@@ -179,10 +176,41 @@ describe('DesktopTerrainSidebar', () => {
           platform_operator_active: false,
         })}
         navigate={vi.fn()}
-        showChat={false}
       />,
     )
 
     expect(screen.queryByRole('button', { name: /Ajouter un établissement/i })).toBeNull()
+  })
+
+  it('opens establishment Chat from Cross context without a session', () => {
+    const navigate = vi.fn()
+    const paris = membership({
+      role: 'manager',
+      establishment_id: 'est-1',
+      establishment_name: 'Spore Paris',
+      chat_available: true,
+    })
+    const lyon = membership({
+      role: 'manager',
+      establishment_id: 'est-2',
+      establishment_name: 'Spore Lyon',
+      chat_available: false,
+    })
+    renderSidebar(
+      <DesktopTerrainSidebar
+        activePath="/cross/signals"
+        bootstrap={bootstrap([paris, lyon], { chat_available: false }, null)}
+        navigate={navigate}
+      />,
+    )
+
+    const sidebar = screen.getByLabelText('Navigation principale')
+    expect(within(sidebar).queryByRole('link', { name: 'Chat' })).toBeNull()
+    fireEvent.click(within(sidebar).getByText('Spore Paris'))
+    fireEvent.click(within(sidebar).getByRole('link', { name: 'Chat' }))
+    expect(navigate).toHaveBeenCalledWith('/e/est-1/chat')
+
+    fireEvent.click(within(sidebar).getByText('Spore Lyon'))
+    expect(within(sidebar).getAllByRole('link', { name: 'Chat' })).toHaveLength(1)
   })
 })

@@ -13082,6 +13082,8 @@ components:
           type: string
         status:
           type: string
+        chat_available:
+          type: boolean
         scopes:
           type: array
           items:
@@ -13089,6 +13091,7 @@ components:
         scope_summary:
           $ref: '#/components/schemas/AuthMembershipScopeSummary'
       required:
+      - chat_available
       - establishment_id
       - establishment_name
       - id
