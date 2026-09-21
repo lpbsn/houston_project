@@ -2,7 +2,10 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const fetchMock = vi.hoisted(() => vi.fn())
+const fetchMock = vi.hoisted(() => {
+  vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:8000')
+  return vi.fn()
+})
 
 vi.stubGlobal('fetch', fetchMock)
 
@@ -63,6 +66,7 @@ describe('chat first attachment send (reserve → pipeline → transport)', () =
   const xhrHeaders: Array<Record<string, string>> = []
 
   beforeEach(() => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:8000')
     xhrOpens.length = 0
     xhrHeaders.length = 0
     __setChatOutboxTestStores({})
@@ -110,6 +114,7 @@ describe('chat first attachment send (reserve → pipeline → transport)', () =
     clearApiClientAuth()
     __resetChatOutboxTestStores()
     fetchMock.mockReset()
+    vi.unstubAllEnvs()
   })
 
   async function dispatchFirstSend(putUrl: string) {
