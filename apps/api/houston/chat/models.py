@@ -223,7 +223,7 @@ class ChatMessageAttachment(BaseModel):
     )
     upload = models.OneToOneField(
         ChatUpload,
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
         related_name="attachment",
     )
     position = models.PositiveSmallIntegerField()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
 
@@ -46,6 +47,7 @@ from .ws_notify import (
     schedule_message_created,
 )
 
+logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class MessageSendResult:
@@ -150,6 +152,35 @@ def _require_locked_group_for_actor(
     return conversation
 
 
+def hard_delete_conversations(*, conversations: list[ChatConversation]) -> None:
+    if not conversations:
+        return
+    from houston.chat.upload_services import chat_object_keys_for_uploads, delete_chat_storage_keys
+
+    conversation_ids = [conversation.id for conversation in conversations]
+    uploads = list(ChatUpload.objects.filter(conversation_id__in=conversation_ids))
+    storage_keys = chat_object_keys_for_uploads(uploads)
+    ChatConversation.objects.filter(id__in=conversation_ids).delete()
+    if not storage_keys:
+        return
+    captured_keys = list(storage_keys)
+
+    def _cleanup_storage() -> None:
+        try:
+            delete_chat_storage_keys(captured_keys)
+        except Exception as exc:
+            logger.warning(
+                "chat_conversation_storage_cleanup_failed",
+                extra={
+                    "event": "chat_conversation_storage_cleanup_failed",
+                    "exception_class": type(exc).__name__,
+                    "key_count": len(captured_keys),
+                },
+            )
+
+    transaction.on_commit(_cleanup_storage)
+
+
 @transaction.atomic
 def handle_membership_chat_deactivation(*, membership: EstablishmentMembership) -> None:
     establishment_id = membership.establishment_id
@@ -171,7 +202,7 @@ def handle_membership_chat_deactivation(*, membership: EstablishmentMembership) 
             membership_ids=participant_membership_ids,
             reason="membership_deactivated",
         )
-        conversation.delete()
+    hard_delete_conversations(conversations=dm_conversations)
 
     group_conversation_ids = list(
         ChatParticipant.objects.filter(
