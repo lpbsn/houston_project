@@ -4,7 +4,7 @@ Status: authoritative
 Last reviewed: 2026-09-21
 Implementation status: live (tenant RBAC; Platform is a separate context)
 
-Tenant authorization after identity and membership are resolved. Root: active `EstablishmentMembership`. Identity/lifecycle: [`identity_membership_domain.md`](identity_membership_domain.md). Action Plan matrices: [`action_plans/permissions.py`](../../../apps/api/houston/action_plans/permissions.py) and [`decisions/action_plan.md`](../decisions/action_plan.md). HTTP: [`apps/api/schema.yml`](../../../apps/api/schema.yml).
+Tenant authorization after identity and membership are resolved. Root: active `EstablishmentMembership`. Identity/lifecycle: [`identity_membership_domain.md`](identity_membership_domain.md). Action Plan matrices: [`action_plans/permissions.py`](../../../apps/api/houston/action_plans/permissions.py) and [`action_plan_domain.md`](action_plan_domain.md). HTTP: [`apps/api/schema.yml`](../../../apps/api/schema.yml).
 
 **Platform is a separate authorization context** (`IsActivePlatformOperator` on `/api/v1/platform/*` only). Do not weaken tenant selectors or `HasActiveMembership` for it. Tenant domain code must not import Platform permissions.
 

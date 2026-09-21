@@ -30,15 +30,14 @@ The execution surface is **Action Plan** only.
 | Account deletion | Live | Profil `/general` + public `https://spore-os.com/supprimer-compte/`; last-owner org closure; [`data_inventory.md`](data_inventory.md) |
 | Privacy Policy / CGU | Live | `https://spore-os.com/politique-de-confidentialite/` · `https://spore-os.com/conditions-d-utilisation/`; UGC gate + OpenAI consent in-app |
 | Public support | Live | `https://spore-os.com/support/` |
-| Store listing / review pack | Prepared | [`store_listing.md`](store_listing.md) · [`store_review.md`](store_review.md) · [`store_assets/`](store_assets/). Console paste is operator work. Screenshots of the app in use are still an operator capture |
-| Store Readiness Phase 1 gate | GO | [`store_phase1_gate.md`](store_phase1_gate.md). Remaining work is consoles / identities |
+| Store listing / review pack | Prepared | [`store_listing.md`](store_listing.md) · [`store_review.md`](store_review.md) · [`store_assets/`](store_assets/). Console paste, screenshots of the app in use, Play/App Store identities, and Closed Testing remain operator work |
 | Runtime config / onboarding | Live | Wizard **Platform** only (`/api/v1/platform/onboardings/`, desktop Web). Invited Owner/Director: accept invitation then waiting |
 | Platform control plane | Live | `houston.platform`, desktop `/platform`. Independent operator grant |
 | BusinessUnit / ActivitySubject taxonomy | Live | Identity: `specific_name` + internal `routing_key`; catalog FK required (`PROTECT`); public API omits `routing_key` |
 | Observations + media + transcription | Live | Celery pipeline |
 | AI observation → Signal | Live | Pipeline **v6** (schema `ai_observation_pipeline_v6`, prompt `ai_observation_pipeline_v6_2`); Fake (CI) / OpenAI (opt-in smoke) |
 | Signal feed + lifecycle | Live | Pin, mark interesting, cancel (open and interesting), resolve (open), qualify merge absorb+delete |
-| Action Plan catalog + executions + feed | Live | [`decisions/action_plan.md`](decisions/action_plan.md) |
+| Action Plan catalog + executions + feed | Live | [`domains/action_plan_domain.md`](domains/action_plan_domain.md) |
 | Comments (signal + execution threads) | Live | REST + mention picker |
 | Notifications in-app | Live | List, preferences, mark read |
 | Native push (FCM) | Live | Membership `push_enabled`; Web Push removed |
@@ -69,7 +68,7 @@ Post-core chat gaps (non-blocking pilot): some bootstrap hints. Chat send is HTT
 
 Details: [`../engineering/frontend_architecture.md`](../engineering/frontend_architecture.md).
 
-CI `cap sync` / publication pipeline is **deferred**. Local Play AAB: [`../deploy/native_release.md`](../deploy/native_release.md). Store Phase 1 gate: [`store_phase1_gate.md`](store_phase1_gate.md).
+CI `cap sync` / publication pipeline is **deferred**. Local Play AAB: [`../deploy/native_release.md`](../deploy/native_release.md). Remaining store console and identity work: [`store_review.md`](store_review.md), [`../deploy/native_release.md`](../deploy/native_release.md).
 
 Do not rename without an explicit decision: `can_create_action()` (establishment permission alias for action plan creation hints); realtime events `comment.execution.*` for action plan execution comment threads.
 

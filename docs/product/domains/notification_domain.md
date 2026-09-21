@@ -1,7 +1,6 @@
 # Notification Domain
 
 Status: authoritative
-Last reviewed: 2026-09-21
 Implementation status: in-app notifications + native FCM push
 
 ## 1. Purpose
@@ -19,7 +18,7 @@ Notification does not own:
 - realtime transport or invalidation
 - feed projection or feed sorting
 - authorization or access grants
-- Signal, Action, Checklist, Comment, or Chat lifecycle
+- Signal, Action Plan, Comment, or Chat lifecycle
 
 ## 2. MVP Scope
 
@@ -141,16 +140,13 @@ Current code:
 
 ## 8. Triggers
 
-Source triggers (implemented in `scheduling.py`; keys in `LOT1_EVENT_KEYS`):
+Allowlisted event keys: `LOT1_EVENT_KEYS` in `houston/notifications/constants.py`. Producers: `houston/notifications/scheduling.py`. Do not copy the frozenset here.
 
-- Action Plan execution: `action_plan.execution.created`, `action_plan.execution.pending_validation`, `action_plan.execution.canceled`, `action_plan.execution.reopened`
-- Chat: `chat.message.received` (in-app and native FCM when guards pass; generic copy with actor display name; `subject_type=chat_conversation`, `subject_id=conversation_id`; in-app dedupe per conversation + recipient + actor within 5 minutes; backend push suppressed when recipient presence is active in conversation or within 2-minute push throttle window).
-- Comment: `comment.mention.created`
-- Signal: `signal.created`, `signal.pinned`, `signal.resolved`, `signal.canceled`
+Chat `chat.message.received`: generic copy; `subject_type=chat_conversation`; in-app dedupe 5 min; push suppressed when conversation presence is active or within the 2-minute throttle.
 
-No notification for: `accept_action`, `validate_action`, direct-done without validation, signal aggregation.
+No notification for signal aggregation or Action Plan validate / direct-done without validation.
 
-Membership-scoped WS invalidation: `notification.created`, `notification.updated`, `notification.bulk_updated` (via `notifications/services.py`).
+Membership-scoped WS invalidation: `notification.created`, `notification.updated`, `notification.bulk_updated` (`notifications/services.py`).
 
 ## 9. HTTP
 

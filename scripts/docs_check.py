@@ -43,7 +43,7 @@ FORBIDDEN_PATH_FRAGMENTS = [
 LEGACY_ACTIVE_PATTERNS = [
     re.compile(r"houston/actions"),
     re.compile(r"houston/checklists"),
-    re.compile(r"execution-feed/"),
+    re.compile(r"(?<!action-plan-)execution-feed/"),
     re.compile(r"\bChecklist domain\b"),
     re.compile(r"\bAction domain\b"),
 ]
@@ -145,7 +145,7 @@ def check_legacy_terms(files: list[Path], errors: list[str]) -> None:
         for pattern in LEGACY_ACTIVE_PATTERNS:
             if pattern.search(text):
                 # Allow explicit historical context in decisions doc
-                if file.name == "action_plan.md" and "legacy" in text.lower():
+                if file.name == "action_plan_domain.md" and "legacy" in text.lower():
                     continue
                 if "removed" in text.lower() or "historical" in text.lower():
                     continue

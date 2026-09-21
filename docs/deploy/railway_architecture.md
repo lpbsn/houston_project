@@ -1,12 +1,12 @@
 # Railway Architecture — Prod-test V1
 
-Architecture overview for prod-test V1. **Operational contract (PR5):** [`railway_deploy_contract.md`](railway_deploy_contract.md). **Variables:** [`railway_variables.md`](railway_variables.md). **Config wiring:** [`infra/railway/README.md`](../../infra/railway/README.md).
+Architecture overview for prod-test V1. **Operational contract:** [`railway_deploy_contract.md`](railway_deploy_contract.md). **Variables:** [`railway_variables.md`](railway_variables.md). **Config wiring:** [`infra/railway/README.md`](../../infra/railway/README.md).
 
 Decisions are documented in this file and [`railway_deploy_contract.md`](railway_deploy_contract.md). Environment template: [`.env.prod-test.example`](../../.env.prod-test.example).
 
 ## Architecture (Option A only)
 
-One Railway Project. One public service. No separate frontend service. No Cloudflare in the critical path (PR2–PR9).
+One Railway Project. One public service. No separate frontend service. Public landing on Cloudflare Pages is a **separate** host (`spore-os.com`); it is not on the Railway request path for `app.spore-os.com`.
 
 ```txt
 Railway Project (prod-test V1)
@@ -21,7 +21,7 @@ Railway Project (prod-test V1)
 Local analogues:
 
 * Dev: [`docker-compose.yml`](../../docker-compose.yml) (`api`, `celery`, `celery-beat`, `postgres`, `redis`, `private_media` volume).
-* Prod-test static + gateway (local only): [`docker-compose.prod-test.yml`](../../docker-compose.prod-test.yml) — nginx serves SPA + API same-origin on port 8080 (validates PR3 routing before Railway).
+* Prod-test static + gateway (local only): [`docker-compose.prod-test.yml`](../../docker-compose.prod-test.yml) — nginx serves SPA + API same-origin on port 8080 (validates routing before Railway).
 
 ## Public routing (same-origin)
 
@@ -31,7 +31,7 @@ All traffic hits `https://<railway-domain>`:
 |---|---|---|
 | `/api/*` | Django / DRF / Daphne | Implemented |
 | `/ws/*` | Django Channels / Daphne (WSS) | Implemented |
-| `/*` | Frontend static SPA | Integrated in `api-web` on Railway ([`infra/docker/railway/Dockerfile.api-web`](../../infra/docker/railway/Dockerfile.api-web)); validated locally in PR3 |
+| `/*` | Frontend static SPA | Integrated in `api-web` on Railway ([`infra/docker/railway/Dockerfile.api-web`](../../infra/docker/railway/Dockerfile.api-web)); validated locally with `make up-prod-test` |
 
 The frontend API client uses `baseUrl: getApiBaseUrl()` ([`apps/web/src/api/client.ts`](../../apps/web/src/api/client.ts)). An empty `VITE_API_BASE_URL` keeps relative same-origin paths, so prod-test does not need a `VITE_*` API URL.
 
@@ -170,11 +170,9 @@ Operational detail, secret generation, Railway-required variables, local HTTP ex
 * **Postgres/Redis:** managed plugins; restart via Railway dashboard if needed. App services reconnect.
 * **No bind-mount:** unlike local Docker dev, prod-test does not mount the repo into containers.
 
-## Cloudflare
+## Landing host
 
-**Out of scope for V1 and PR2–PR9.**
-
-Future PR10+ may add Cloudflare for DNS, edge cache, or WAF **after** Railway prod-test is validated. No Workers, D1, or Durable Objects in prod-test V1.
+Public marketing pages (`spore-os.com`) are Cloudflare Pages — [`landing_cloudflare_pages.md`](landing_cloudflare_pages.md). They are not in the Railway HTTPS path for the app.
 
 ## Explicit prohibitions
 
@@ -186,11 +184,11 @@ Future PR10+ may add Cloudflare for DNS, edge cache, or WAF **after** Railway pr
 | `HOUSTON_AI_*_PROVIDER=fake` | Use `openai` with valid `OPENAI_API_KEY` |
 | Public `/media` | Authorized API endpoints only |
 | Separate Railway frontend service | Option A: SPA on `api-web` |
-| Cloudflare critical path (PR2–PR9) | Railway Public Networking for HTTPS |
+| Cloudflare on the app origin | Railway Public Networking for `app.spore-os.com` HTTPS. Landing is a separate Pages project. |
 
 ## Related documents
 
-* [`railway_deploy_contract.md`](railway_deploy_contract.md) — operational deploy playbook (PR5)
+* [`railway_deploy_contract.md`](railway_deploy_contract.md) — operational deploy playbook
 * [`railway_variables.md`](railway_variables.md) — variable mapping and per-service matrix
 * [`infra/railway/README.md`](../../infra/railway/README.md) — Railway config file wiring
 * [`smoke_checklist.md`](smoke_checklist.md) — unified smoke

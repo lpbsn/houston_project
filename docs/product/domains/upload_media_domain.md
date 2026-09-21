@@ -1,8 +1,7 @@
 # Upload / Media Domain
 
 Status: authoritative
-Last reviewed: 2026-09-15
-Implementation status: implemented (Phase 3 MVP — temporary photos + private storage; audio via transcription endpoint only)
+Implementation status: implemented (temporary photos + private storage; audio via transcription endpoint only)
 
 ## 1. Purpose
 

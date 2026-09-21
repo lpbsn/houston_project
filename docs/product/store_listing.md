@@ -1,10 +1,10 @@
-# Store listing — Spore (P1.12)
+# Store listing — Spore
 
 Status: pack to paste into App Store Connect / Play Console  
 Last reviewed: 2026-09-03  
 Locale: **French** (product UI)
 
-Do not upload from this file. Console operations stay Phase 2.
+Do not upload from this file. Console operations stay operator work.
 
 Related: [`store_review.md`](store_review.md) · [`store_compliance.md`](store_compliance.md) · [`store_privacy_declarations.md`](store_privacy_declarations.md) · assets in [`store_assets/`](store_assets/)
 
@@ -19,7 +19,7 @@ Related: [`store_review.md`](store_review.md) · [`store_compliance.md`](store_c
 | Account deletion (Play) | https://spore-os.com/supprimer-compte/ |
 | App login | https://app.spore-os.com/login |
 
-Support URL was live at this address as of the Phase 1 gate (2026-09-03).
+Support URL: `https://spore-os.com/support/`.
 
 ## Google Play
 
@@ -78,6 +78,6 @@ iOS `TARGETED_DEVICE_FAMILY = 1` (iPhone). iPad installs as iPhone compatibility
 ## What this pack does not include
 
 - Console upload
-- Age / Kids / Data Safety / App Privacy questionnaires (PR2 worksheets)
+- Age / Kids / Data Safety / App Privacy questionnaires ([`store_compliance.md`](store_compliance.md), [`store_privacy_declarations.md`](store_privacy_declarations.md))
 - Preview video
 - English localization

@@ -1,7 +1,6 @@
 # Realtime Domain
 
 Status: authoritative
-Last reviewed: 2026-09-21
 Implementation status: operational WebSocket invalidation live for Signal, Action Plan, Comment, Notification, and observation-pipeline downstream invalidation. Chat V1 is a separate WS contract under `houston/chat/`.
 
 ## 1. Purpose
@@ -89,9 +88,9 @@ Implemented `invalidate` reasons (verify in domain `services.py` before extendin
 
 `notification.bulk_updated` is a membership-level bulk event: `entity_id` is the recipient membership id, not an individual notification id. Delivery uses the membership Channels group (`realtime_est_{establishment_id}_mbr_{membership_id}`), not the establishment-wide invalidation group.
 
-Action plan notifications (Lot 7): in-app events `action_plan.execution.created`, `.pending_validation`, `.canceled`, `.reopened`. No `action_plan.execution.reassigned` in V1 — runtime assignee reassignment API does not exist; schedule assignee changes surface via `action_plan_execution.created` / `.canceled`.
+In-app Action Plan notification keys (not WS `reason` values): `action_plan.execution.created`, `.pending_validation`, `.canceled`, `.reopened` — see `LOT1_EVENT_KEYS` in `houston/notifications/constants.py`. No `action_plan.execution.reassigned` — runtime assignee reassignment API does not exist; schedule assignee changes surface via `action_plan_execution.created` / `.canceled`.
 
-Legacy `action` / `checklist` / `execution` invalidation handlers removed in Lot 10. Action plan events invalidate `action-plan-execution-feed` and execution-detail queries.
+Action plan invalidation refreshes `action-plan-execution-feed` and execution-detail queries.
 
 ## 3. Out of Scope
 
@@ -242,7 +241,7 @@ Current code truth:
 - Inspect `apps/api/schema.yml` for the operational ws-ticket route before claiming HTTP surface.
 - Inspect Feed documentation before changing feed invalidation behavior.
 - Inspect Notification documentation before changing notification refresh behavior.
-- Inspect Signal, Action, and Checklist documentation before changing detail invalidation triggers.
+- Inspect Signal and Action Plan documentation before changing detail invalidation triggers.
 - Inspect Comments documentation before changing comment refresh behavior.
 - Read [`chat_domain.md`](chat_domain.md) before Chat WebSocket work ; do not implement Chat in `houston/realtime` as a generic platform.
 - Inspect RBAC documentation before changing subscription authorization.

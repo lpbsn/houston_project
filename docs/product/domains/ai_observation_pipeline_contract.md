@@ -1,7 +1,6 @@
 # AI Observation Pipeline Contract
 
-Status: authoritative (contract)  
-Last reviewed: 2026-07-27
+Status: authoritative (contract)
 Implementation status: **pipeline v6** — schema `ai_observation_pipeline_v6` ; prompt `ai_observation_pipeline_v6_2` ; dual context (`establishment_context` + `routing_taxonomy`) ; nullable routing keys ; `signal_kind` actionable|informational ; author scope is server-only (not sent to the LLM) ; backend aggregation on normalized `issue_focus` (no LLM aggregate hint)
 
 ## Purpose
@@ -107,9 +106,9 @@ Inactive BU/AS or sibling-BU subjects are rejected or corrected per resolver rul
 
 ## Acceptance corpus
 
-Functional expectations: [`apps/api/houston/testing/pipeline_v6_acceptance_corpus.json`](../../../apps/api/houston/testing/pipeline_v6_acceptance_corpus.json) (S15-01…S15-23 + S15-D1).
+Functional expectations: [`apps/api/houston/testing/pipeline_v6_acceptance_corpus.json`](../../../apps/api/houston/testing/pipeline_v6_acceptance_corpus.json) (S15-01…S15-23 + S15-D1). Informational / prompt cases include S15-07, S15-13, S15-21…S15-23.
 
-Informational / prompt cases include S15-07, S15-13, S15-21…S15-23. Lot4b owns the prompt correctif + targeted live smoke. Lot 10 cutover: S15 eval command `evaluate_observation_pipeline_v6` (fake fixtures ≠ `expected_v6`). Optional local metrics A–J / smoke archives may be written under `.artifacts/pipeline-v6-eval/` and `.artifacts/pipeline-v6-smoke/` (gitignored — not source of truth; re-run the command/smokes to regenerate).
+Eval command: `evaluate_observation_pipeline_v6` (fake fixtures ≠ `expected_v6`). Optional local metrics / smoke archives under `.artifacts/pipeline-v6-eval/` and `.artifacts/pipeline-v6-smoke/` are gitignored — not source of truth; re-run the command or smokes to regenerate.
 
 Apply-side golden (non-LLM): [`apps/api/houston/testing/pipeline_golden_v4_corpus.json`](../../../apps/api/houston/testing/pipeline_golden_v4_corpus.json) (G01–G11).
 

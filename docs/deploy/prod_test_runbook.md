@@ -1,6 +1,6 @@
 # Prod-test operator runbook — Railway V1
 
-Short **operator hub** for day-0 deploy through recurring ops. Technical detail lives in PR5 docs — linked below, not duplicated here.
+Short **operator hub** for day-0 deploy through recurring ops. Technical detail lives in the Railway docs linked below, not duplicated here.
 
 | Document | Role |
 |---|---|
@@ -9,7 +9,7 @@ Short **operator hub** for day-0 deploy through recurring ops. Technical detail 
 | [`infra/railway/README.md`](../../infra/railway/README.md) | Config-as-code wiring (Root Directory, Config File paths) |
 | [`smoke_checklist.md`](smoke_checklist.md) | Unified smoke (technical + product, local + Railway) |
 
-**Merge PR6** validates docs + `readonly.sh` locally. **Railway sign-off** (real deploy, OpenAI, backups) is human, post-merge, before external pilot.
+**Railway sign-off** (real deploy, OpenAI, backups) is human, after merge, before external pilot. Local docs + `readonly.sh` can be validated without a Railway deploy.
 
 ---
 
@@ -164,6 +164,6 @@ Local equivalent of a full wipe: `make reset-dev-db` — see [`../engineering/lo
 
 ---
 
-## Sign-off (post-merge, not PR6 merge criteria)
+## Sign-off (before external testers)
 
 Before inviting external testers, complete Railway sign-off in [`smoke_checklist.md`](smoke_checklist.md) plus backups and rollback readiness per contract.

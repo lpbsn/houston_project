@@ -10,7 +10,7 @@ Define how Houston list endpoints paginate (or intentionally do not), and how th
 This document applies to:
 
 - new list endpoints
-- pagination fixes on existing endpoints (see derived tickets in §11 below)
+- pagination fixes on existing endpoints (see open gaps in §11; inspect the code before treating them as a backlog)
 
 ## 2. Authority order
 
@@ -194,6 +194,8 @@ Houston does not set `DEFAULT_PAGINATION_CLASS` in DRF settings. Each domain imp
 - Feed domain: [`docs/product/domains/feed_domain.md`](../product/domains/feed_domain.md)
 
 ## 11. Open pagination gaps
+
+Inspect current list endpoints before treating this as a roadmap:
 
 - Chat messages envelope vs Tier A
 - Chat conversations cursor + N+1

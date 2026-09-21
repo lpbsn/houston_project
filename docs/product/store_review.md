@@ -1,4 +1,4 @@
-# Store review — Spore (P1.11)
+# Store review — Spore
 
 Status: operator runbook + console templates  
 Last reviewed: 2026-09-03
@@ -80,3 +80,13 @@ Support: https://spore-os.com/support/
 - Hand reviewers a raw invite code and expect them to finish onboarding unaided.
 - Point reviewers at KONOHA or `@konoha` accounts.
 - Claim 24/7 human moderation (see [`store_compliance.md`](store_compliance.md)).
+
+## Console identities (operator)
+
+Play and App Store association files wait on store identities. Procedure and file paths: [`../deploy/native_release.md`](../deploy/native_release.md).
+
+- After Play lists **App Signing** certificates: commit real `apps/web/public/.well-known/assetlinks.json` (Play SHA-256 fingerprints, not the upload key alone) and redeploy web. nginx 404 until then is correct.
+- After the Apple Developer Program: publish AASA with the **App Store** Team ID, not Personal Team `PBJM37TNDU`. nginx 404 until then is correct.
+- Closed Testing tester count / duration for a personal Play account is a console rule. Recheck Play Help at upload time (historically: opted-in testers for consecutive days before production access).
+- Operator sandbox on production (staff login, fictional workplace data) before first review — this file, section above.
+

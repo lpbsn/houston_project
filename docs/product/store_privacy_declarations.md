@@ -1,6 +1,6 @@
 # Store privacy declarations — Spore
 
-Status: authoritative worksheet for App Store Connect / Play Console (PR2)
+Status: authoritative worksheet for App Store Connect / Play Console
 Last reviewed: 2026-09-02
 
 Source of truth for **what is collected**: [`data_inventory.md`](data_inventory.md). This file maps that inventory to current Apple / Google questionnaire language. It is **not** a prefilled console dump and **not** a legal opinion.

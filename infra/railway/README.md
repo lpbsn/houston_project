@@ -46,7 +46,7 @@ Values in these TOML files override dashboard build/deploy settings for each dep
 
 ## Wait for CI (operator checklist)
 
-Enable only after PR2 merge. Full procedure: [`docs/deploy/railway_deploy_contract.md#wait-for-ci-post-merge-pr2`](../../docs/deploy/railway_deploy_contract.md#wait-for-ci-post-merge-pr2).
+Enable only after validating on a Railway **test** project / non-prod branch. Full procedure: [`docs/deploy/railway_deploy_contract.md#wait-for-ci`](../../docs/deploy/railway_deploy_contract.md#wait-for-ci).
 
 1. Confirm **Config File path** per service (table above) on deployment details (config-file icon).
 2. **Test first, prod second:** enable Wait for CI on a Railway test project / non-prod branch before production.
