@@ -47,7 +47,7 @@ Identity / Membership defines who the user is and which establishment they belon
 - AI never writes business truth directly.
 - Technical logs must not contain raw Observation text, full comments, chat message body, audio, photos, tokens, secrets, or full AI prompt/content.
 - Chat message body may be transmitted over Chat V1 WebSocket only to authorized active participants ; not in logs, notifications, or generic realtime invalidation payloads.
-- Retention is limited by purpose; exact durations are candidate unless separately validated.
+- Retention is limited by purpose; exact durations belong in code and [`data_inventory.md`](../data_inventory.md) when implemented.
 - Chat V1 messages : hard purge after 30 days (`created_at < now - 30 days`) ; conversations may remain without messages.
 
 ## 5. Main Objects
@@ -83,7 +83,7 @@ Identity / Membership defines who the user is and which establishment they belon
 
 Not applicable as a business lifecycle in MVP. Security/RGPD applies continuously across authentication, authorization, data handling, media, AI, notifications, realtime, logging, and support.
 
-Incident assessment, containment, export, deletion, and anonymization workflows are candidate unless validated in code or schema.
+Incident assessment, containment, and export workflows are not product APIs today. Self-service account deletion is implemented ([`data_inventory.md`](../data_inventory.md)).
 
 ## 7. Permissions
 
@@ -95,52 +95,11 @@ Incident assessment, containment, export, deletion, and anonymization workflows 
 - Support/admin access is not validated as a public product API. Any future access must be least-privilege, limited, and logged.
 - Logs and audit traces must not expose sensitive business content.
 
-## 8. Events
+## 8. HTTP
 
-No Security / RGPD-specific event contract is validated in current code or in `apps/api/schema.yml`. `EventEnvelope` scaffolding was removed; do not treat a generic envelope as a security event catalog.
+Auth session and account-deletion paths: [`apps/api/schema.yml`](../../../apps/api/schema.yml) and [`authentication_charter.md`](../../architecture/authentication_charter.md). Account deletion is identity anonymization plus submitted-content tombstones ([`data_inventory.md`](../data_inventory.md)). Media privacy: [`upload_media_domain.md`](upload_media_domain.md). There is no data-export or incident-reporting product API.
 
-Candidate events only:
-
-- `SecurityEventRecorded` candidate
-- `SupportAccessGranted` candidate
-- `SupportAccessRevoked` candidate
-- `PersonalDataBreachSuspected` candidate
-- `PersonalDataBreachAssessed` candidate
-- `DataExportRequested` candidate
-- `DataDeletionRequested` candidate
-- `MediaDeleted` candidate
-- `AudioDeletedAfterTranscription` candidate
-- `AIRequestLogged` candidate, metadata only
-
-## 9. API Surface
-
-Current API truth is `apps/api/schema.yml`.
-
-Implemented endpoints confirmed in `apps/api/schema.yml`:
-
-- `GET /api/v1/auth/csrf/`
-- `POST /api/v1/auth/login/`
-- `POST /api/v1/auth/refresh/`
-- `POST /api/v1/auth/logout/`
-- `GET /api/v1/auth/bootstrap/`
-- `GET /api/v1/auth/me/deletion-preview/`
-- `POST /api/v1/auth/me/delete/`
-
-Implemented security truths confirmed today:
-
-- Login, refresh, and logout require CSRF for cookie transport and omit CSRF for body transport.
-- Bootstrap is bearer-authenticated.
-- Auth responses expose backend-approved membership context.
-- Account deletion is implemented as identity anonymization plus submitted-content tombstones; see [`data_inventory.md`](../data_inventory.md). Media privacy endpoints (temporary photos + transcription audio) are covered by [`upload_media_domain.md`](upload_media_domain.md).
-
-Candidate endpoints only:
-
-- Data export request endpoint
-- Incident reporting endpoint
-- Support or audit access endpoint
-- Retention or privacy admin endpoint
-
-## 10. Frontend Expectations
+## 9. Frontend Expectations
 
 - Frontend must not persist access tokens or sensitive operational content to durable browser storage.
 - TanStack Query owns server state. Auth bootstrap data must clear on logout or session loss.
@@ -151,7 +110,7 @@ Candidate endpoints only:
 - Frontend should keep any raw Observation draft behavior minimal and short-lived.
 - Frontend must handle `401`, `403`, and `404` without turning UI hints into security authority.
 
-## 11. AI Agent Notes
+## 10. Agent notes
 
 - Inspect current code before claiming a security control is implemented.
 - Inspect `apps/api/schema.yml` before listing privacy/security endpoints.
@@ -160,7 +119,7 @@ Candidate endpoints only:
 - Do not expose raw Observation text in feed, notification, realtime, or persistent frontend state.
 - Do not send images to AI in MVP.
 - Do not analyze Chat with AI in MVP.
-- Do not describe Houston as GDPR-compliant by default; describe implemented or candidate controls only.
+- Do not describe Houston as GDPR-compliant by default; describe implemented controls only.
 - Do not invent GDPR compliance guarantees.
 - Do not invent support/admin raw-data browsing.
 - When adding sensitive endpoints later, update backend authorization, OpenAPI, generated clients, tests, and this document together.

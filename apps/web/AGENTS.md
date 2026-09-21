@@ -38,7 +38,7 @@ Current operational patterns (not a closed taxonomy — inspect routing and shel
 
 - Terrain operational (`TerrainShell`, bottom-nav hubs): mobile-primary, desktop-supported
 - Analytics (`TerrainShell`, not in mobile bottom nav): desktop-primary, remain coherent on small screens
-- Organization / admin / config / onboarding / auth (`AppShell`): desktop-primary, existing shell conventions
+- Organization / admin / config / pending-onboarding / select-establishment / auth (`AppShell`): desktop-primary, existing shell conventions. Platform wizard is `/platform` (`Platform` shell), not AppShell.
 
 Public landing is a separate marketing tree and must not inherit Terrain phone-shell rules.
 

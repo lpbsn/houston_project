@@ -1,7 +1,9 @@
 # Houston — Current product state
 
 Status: authoritative  
-Last reviewed: 2026-09-19
+Last reviewed: 2026-09-21
+
+Snapshot of what is live, plus remaining **pilot** exclusions. HTTP: [`apps/api/schema.yml`](../../apps/api/schema.yml). Identity map: [`domains/identity_membership_domain.md`](domains/identity_membership_domain.md).
 
 ## Branding
 
@@ -14,118 +16,97 @@ Last reviewed: 2026-09-19
 Observation → Signal → Action Plan → Execution → Validation → Feed update
 ```
 
-Legacy **Action** and **Checklist** domains were removed (Lot 10). The execution surface is **Action Plan** only.
+The execution surface is **Action Plan** only.
 
-## Backend apps (14 installed)
+## Backend apps (16 installed)
 
-`core`, `accounts`, `organizations`, `establishments`, `platform`, `observations`, `signals`, `action_plans`, `comments`, `notifications`, `realtime`, `chat`, `ai`, `uploads`
+`core`, `accounts`, `organizations`, `platform`, `establishments`, `observations`, `signals`, `analytics`, `action_plans`, `comments`, `notifications`, `realtime`, `chat`, `ai`, `uploads`, `gamification`
 
-API contract: [`apps/api/schema.yml`](../../apps/api/schema.yml).
+`analytics` is a live product surface (table below). `gamification` is backend/API (`…/gamification/me/`) plus the profile widget (`GamificationScoreCard` on [`profile-page.tsx`](../../apps/web/src/features/auth/pages/profile-page.tsx)); there is no dedicated hub. `ComingSoonPage` is not Gamification.
 
 ## Implemented surfaces (pilot)
 
 | Area | Status | Notes |
 |------|--------|-------|
-| Identity / memberships / RBAC | Live | Bootstrap, establishment scoping |
-| Account deletion | Live | Profil `/general` + public `https://spore-os.com/supprimer-compte/`; last-owner org closure; see [`data_inventory.md`](data_inventory.md) |
+| Identity / memberships / RBAC | Live | Bootstrap, establishment scoping. Tenant ≠ Platform — see identity domain |
+| Account deletion | Live | Profil `/general` + public `https://spore-os.com/supprimer-compte/`; last-owner org closure; [`data_inventory.md`](data_inventory.md) |
 | Privacy Policy / CGU | Live | `https://spore-os.com/politique-de-confidentialite/` · `https://spore-os.com/conditions-d-utilisation/`; UGC gate + OpenAI consent in-app |
 | Public support | Live | `https://spore-os.com/support/` |
-| Store listing / review pack | Prepared | [`store_listing.md`](store_listing.md) · [`store_review.md`](store_review.md) · [`store_assets/`](store_assets/). Console paste is Phase 2. Screenshots of the app in use are still an operator capture. |
-| Store Readiness Phase 1 gate | GO | [`store_phase1_gate.md`](store_phase1_gate.md) (2026-09-03). Remaining work is consoles / identities, not a product chantier. |
-| Runtime config / onboarding | Live | Wizard **Platform** only (`/api/v1/platform/onboardings/`, desktop Web). Tenant self-onboarding HTTP/UI removed. Invited Owner/Director: accept invitation then waiting. |
-| BusinessUnit / ActivitySubject taxonomy | Live | Identity: `specific_name` + internal `routing_key`; catalog FK required (`PROTECT`); public API Lot 5 (no `routing_key`); legacy instance columns removed |
+| Store listing / review pack | Prepared | [`store_listing.md`](store_listing.md) · [`store_review.md`](store_review.md) · [`store_assets/`](store_assets/). Console paste, screenshots of the app in use, Play/App Store identities, and Closed Testing remain operator work |
+| Runtime config / onboarding | Live | Wizard **Platform** only (`/api/v1/platform/onboardings/`, desktop Web). Invited Owner/Director: accept invitation then waiting |
+| Platform control plane | Live | `houston.platform`, desktop `/platform`. Independent operator grant |
+| BusinessUnit / ActivitySubject taxonomy | Live | Identity: `specific_name` + internal `routing_key`; catalog FK required (`PROTECT`); public API omits `routing_key` |
 | Observations + media + transcription | Live | Celery pipeline |
 | AI observation → Signal | Live | Pipeline **v6** (schema `ai_observation_pipeline_v6`, prompt `ai_observation_pipeline_v6_2`); Fake (CI) / OpenAI (opt-in smoke) |
 | Signal feed + lifecycle | Live | Pin, mark interesting, cancel (open and interesting), resolve (open), qualify merge absorb+delete |
-| Action Plan catalog + executions + feed | Live | See [`decisions/action_plan.md`](decisions/action_plan.md) |
+| Action Plan catalog + executions + feed | Live | [`domains/action_plan_domain.md`](domains/action_plan_domain.md) |
+| Analytics dashboard + pattern detail | Live | `/analytics`, `/analytics/patterns/{id}`, `LazyAnalyticsPage`; API `api/v1/analytics/…` (`houston.analytics`). No domain doc. |
 | Comments (signal + execution threads) | Live | REST + mention picker |
 | Notifications in-app | Live | List, preferences, mark read |
-| Native push (FCM) | Live | Capacitor Lot 7; membership `push_enabled`; Web Push removed |
-| Native HTTPS deep links | Live | Capacitor Lot 8 handler (`getLaunchUrl` / `appUrlOpen`); lot QA = Android `adb` VIEW intent. Store-readiness P1.10 **socle** closed (nginx `.well-known` 404, Vite `public/.well-known`). **Play** `assetlinks.json` and **App Store** AASA wait on store identities |
+| Native push (FCM) | Live | Membership `push_enabled`; Web Push removed |
+| Native HTTPS deep links | Live | Handler (`getLaunchUrl` / `appUrlOpen`). **Play** `assetlinks.json` and **App Store** AASA wait on store identities |
 | Operational realtime (invalidation) | Live | WS ticket + `OperationalRealtimeProvider` on terrain routes |
-| Chat V1 core | Live | DM + groups, HTTP send, WS fan-out, attachments, Terrain UI `/chat` |
+| Chat V1 core | Live | DM + groups, HTTP send, WS fan-out, attachments, Terrain UI `/chat`; conversation pin/hide/leave and group member admin live |
 | Upload / private media | Live | Authorized reads only |
 | Security / RGPD baseline | Live | See domain doc |
 
-## Notifications
+## Notifications / realtime / chat
 
-REST (establishment-scoped):
+REST and WebSocket paths: `schema.yml`. Native push: `POST/DELETE …/me/push-devices/` (FCM, user-scoped). Membership `push_enabled` remains establishment-scoped.
 
-- `GET …/notifications/`
-- `GET` / `PATCH …/notifications/preferences/`
-- `POST …/notifications/mark-all-read/`
-- `POST …/notifications/{id}/mark-read/`
+- Operational invalidation: `POST …/realtime/ws-ticket/`, WebSocket `ws/v1/establishments/{id}/realtime/`. Frontend: `OperationalRealtimeProvider` (terrain shell, not chat). Contract: [`contracts/operational-realtime-invalidation.json`](../../contracts/operational-realtime-invalidation.json).
+- Chat uses a separate WebSocket protocol — [`domains/chat_domain.md`](domains/chat_domain.md).
 
-Native push API: `POST/DELETE …/me/push-devices/` (FCM token, user-scoped). Membership `push_enabled` remains establishment-scoped. Web Push / VAPID removed. Web Push desktop is out (Lot 7).
-
-Domain: [`domains/notification_domain.md`](domains/notification_domain.md).
-
-## Realtime
-
-- **Operational invalidation** (signals, action plans, notifications): `POST …/realtime/ws-ticket/`, WebSocket `ws/v1/establishments/{id}/realtime/`. Frontend: `OperationalRealtimeProvider` in `App.tsx` (terrain shell, not chat).
-- **Chat** uses a separate WebSocket protocol — see [`domains/chat_domain.md`](domains/chat_domain.md).
-
-Contract: [`contracts/operational-realtime-invalidation.json`](../../contracts/operational-realtime-invalidation.json).
-
-## Chat V1 (core)
-
-Implemented: REST structure/history/seen/presence, WS message send, Terrain pages, 7-day purge, membership hooks.
-
-Lot 1 conversation actions (pin/unpin, hide DM with personal history cutoff, leave/delete group UI): live — see [`domains/chat_domain.md`](domains/chat_domain.md).
-
-Lot 2 group member admin UI (add/remove/promote via detail « Gérer les membres »): live — see [`domains/chat_domain.md`](domains/chat_domain.md).
-
-Post-core gaps (non-blocking pilot): some bootstrap hints. Chat send is HTTP.
+Post-core chat gaps (non-blocking pilot): some bootstrap hints. Chat send is HTTP.
 
 ## Frontend
 
-- Terrain mobile shell (`TerrainShell`, bottom nav, `--app-safe-*` insets).
-- Native UX (Capacitor Lot 9): Android system back aligned on `backPath`; iOS keyboard resize native; Observation mic OS declarations.
-- Management shell (`AppShell`) for non-terrain routes: pending onboarding, select-establishment, no-establishment, invitations.
+- Terrain mobile shell (`TerrainShell`, bottom nav, `--app-safe-*` insets). Native UX: Android system back aligned on `backPath`; iOS keyboard resize native; Observation mic OS declarations.
+- Management shell (`AppShell`) for pending onboarding, select-establishment, no-establishment, invitations, auth pages. Not the Platform wizard.
 - Platform shell (`/platform`, desktop Web only) for operator onboarding and control-plane lists.
-- Organization owner invite: `/team/invite` (Owner option when bootstrap shows an owner membership on the current establishment’s organization) via `POST /api/v1/organizations/{id}/owner-invitations/`. Membership invites stay on the same page via establishment membership invitations.
-- Operational config lives at `/e/{id}/operational-config` (desktop sidebar). Team and membership admin: `/team*`.
-- Client router: `apps/web/src/app/app-routes.ts` (not React Router).
-- Server state: TanStack Query only (no client global store library).
+- Organization owner invite: `/team/invite` (Owner option when bootstrap shows an owner membership on the current establishment’s organization) via `POST /api/v1/organizations/{id}/owner-invitations/`. Membership invites stay on the same page.
+- Operational config: `/e/{id}/operational-config` (desktop sidebar). Team: `/team*`.
+- Client router: `apps/web/src/app/app-routes.ts` (not React Router). Server state: TanStack Query only.
 - Builds: Web `dist/` (`base: '/'`) and Native `dist-native/` (`base: './'`); Capacitor shells in `apps/web/ios` and `apps/web/android`; no service worker.
 
 Details: [`../engineering/frontend_architecture.md`](../engineering/frontend_architecture.md).
 
-**Capacitor Lots 1–10 are closed.** Resume product work. Capacitor Lot 11 (CI `cap sync` / publication pipeline) is deferred — see [`../cadrage/mobile-capacitor-roadmap.md`](../cadrage/mobile-capacitor-roadmap.md). Local Play AAB: [`../deploy/native_release.md`](../deploy/native_release.md). Store Phase 1 gate: [`store_phase1_gate.md`](store_phase1_gate.md).
+CI `cap sync` / publication pipeline is **deferred**. Local Play AAB: [`../deploy/native_release.md`](../deploy/native_release.md). Remaining store console and identity work: [`store_review.md`](store_review.md), [`../deploy/native_release.md`](../deploy/native_release.md).
 
-## Product Lot 11 stabilization (preserved contracts)
+Do not rename without an explicit decision: `can_create_action()` (establishment permission alias for action plan creation hints); realtime events `comment.execution.*` for action plan execution comment threads.
 
-Completed 2026-07-05 — test hygiene + doc alignment, **no API contract change**. Distinct from Capacitor Lot 11.
+## Pilot exclusions (still true)
 
-Preserved names (do not rename without explicit decision):
-
-- `can_create_action()` — establishment permission alias for action plan creation hints.
-- Realtime events `comment.execution.*` for action plan execution comment threads.
+- Billing, SSO, MFA.
+- Durable offline mutation queue (universal mutation outbox / sync). Observation compose is process-memory only while the JS/WebView process is alive; photos upload at Envoyer; Envoyer is disabled while offline. Survival after process kill / cold start is out.
+- Offline capture of chat, comments, audio, signal/task/plan lifecycle commands, or feed reads.
+- Feed subscriptions (deferred — [`domains/feed_subscription_domain.md`](domains/feed_subscription_domain.md)).
+- Chat: read receipts, typing, AI on chat, chat-to-signal. Chat send is HTTP (in scope).
+- Arbitrary admin console browsing raw tables.
+- Native CI `cap sync` (deferred — [`../deploy/native_release.md`](../deploy/native_release.md)).
 
 ## Pilot gaps (known)
 
 - Production-grade polish on all terrain screens.
-- Chat post-core UI (group admin, settings).
-- Push notifications: native FCM live (Capacitor Lot 7 closed). Physical iOS APNs QA waits on the Apple Developer Program. Web Push desktop is out.
-- Native HTTPS deep links: handler live (Capacitor Lot 8 closed). Lot QA bar is Android `adb` VIEW intent → app → navigation. P1.10 socle closed. Play-verified App Links wait on Play App Signing SHA-256 list in `assetlinks.json`. iOS Universal Links wait on the App Store Team ID (not Personal Team AASA).
-- Observation compose is process-memory (`/reporting` text + local `File` photos; task-observation text). Photos upload only at Envoyer. Envoyer is disabled while offline. Draft clears on 201, session end, new identity, and establishment switch — not on refresh network/401. Capacitor Lot 10 (régime A) is closed. Device leftovers that do not reopen the lot: iOS Simulator avion → reconnect not tested; iPhone physical offline → reconnect still open. Survival after process kill is not in that lot. Android emulator nav / background / avion → reconnect / picker: PASS.
-- Native refresh: body-transport `performRefresh` can clear a still-valid Keychain refresh token on network error — [issue #181](https://github.com/lpbsn/houston_project/issues/181), not Offline capture and not Lot 10. See [`../architecture/authentication_charter.md`](../architecture/authentication_charter.md).
+- Push: native FCM live. Physical iOS APNs QA waits on the Apple Developer Program. Web Push desktop is out.
+- Native HTTPS deep links: handler live. Play-verified App Links wait on Play App Signing SHA-256 in `assetlinks.json`. iOS Universal Links wait on the App Store Team ID (not Personal Team AASA).
+- Observation compose leftovers that do not reopen a capture lot: iOS Simulator avion → reconnect not tested; iPhone physical offline → reconnect still open.
+- Native refresh: body-transport `performRefresh` can clear a still-valid Keychain refresh token on network error — [issue #181](https://github.com/lpbsn/houston_project/issues/181). See [`../architecture/authentication_charter.md`](../architecture/authentication_charter.md).
 - Full device QA matrix not automated in CI.
 
 ## BusinessUnit / ActivitySubject (summary)
 
 - Catalogue generics + concrete instances (`specific_name`, immutable internal `routing_key`).
 - Public API exposes UUID + `specific_name` + nested `generic` — never `routing_key`.
-- Legacy instance columns removed; Signal summary `*_key` / `*_label` kept as display compatibility only (`normalized_specific_name` / `specific_name`).
+- Signal summary `*_key` / `*_label` kept as display compatibility only (`normalized_specific_name` / `specific_name`).
 - Import policy and seed: [`../catalogue/README.md`](../catalogue/README.md).
-- Domain detail: [`domains/business_unit_taxonomy_domain.md`](domains/business_unit_taxonomy_domain.md).
+- Domain: [`domains/business_unit_taxonomy_domain.md`](domains/business_unit_taxonomy_domain.md).
 - Local reset / deploy contraction order: [`../engineering/local_development.md`](../engineering/local_development.md), [`../deploy/prod_test_runbook.md`](../deploy/prod_test_runbook.md).
 
 ## Reading order
 
-1. [`mvp_scope.md`](mvp_scope.md) — pilot boundaries  
-2. Domain docs under [`domains/`](domains/) — start with [`domains/business_unit_taxonomy_domain.md`](domains/business_unit_taxonomy_domain.md) for BU/AS
-3. [`decisions/action_plan.md`](decisions/action_plan.md) — action plan RBAC and schedules  
-4. [`../engineering/local_development.md`](../engineering/local_development.md) — daily workflow
-
-Functional target for Platform capabilities remains [`../cadrage/edb_plateforme_interne_spore_v1-3.md`](../cadrage/edb_plateforme_interne_spore_v1-3.md). Implementation lives in `houston.platform` and the desktop `/platform` shell.
+1. This file — live surfaces and remaining exclusions
+2. [`domains/identity_membership_domain.md`](domains/identity_membership_domain.md) — Authentication vs Tenant vs Platform
+3. The domain you are changing
+4. [`apps/api/schema.yml`](../../apps/api/schema.yml)
+5. [`../engineering/local_development.md`](../engineering/local_development.md) — daily workflow

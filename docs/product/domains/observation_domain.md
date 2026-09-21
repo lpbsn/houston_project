@@ -1,8 +1,8 @@
 # Observation Domain
 
 Status: authoritative
-Last reviewed: 2026-06-09
-Implementation status: implemented (Phase 3 MVP — submit + processing queued; pipeline Phase 4)
+Last reviewed: 2026-09-21
+Implementation status: implemented (submit + processing queued; pipeline produces Signals)
 
 ## 1. Purpose
 
@@ -97,35 +97,10 @@ The processing pipeline may use AI, but Observation does not own AI contracts or
 
 ## 6. Lifecycle / Statuses
 
-- User-facing lifecycle in MVP:
-  - `draft` local only
-  - `submitted` or persisted
-  - simplified analysis pending, complete, or temporary problem messaging
-
-- Candidate technical processing statuses:
-  - `queued`
-  - `processing`
-  - `processed`
-  - `retrying`
-  - `failed`
-
-- Candidate processing outcomes:
-  - `signal_created`
-  - `signals_created`
-  - `signal_aggregated`
-  - `no_signal_created`
-
-- **MVP:** empty pipeline (`candidates: []`), validation rejection, or no applied candidate → outcome **`no_signal_created`** only. Informational candidates are first-class and create Signals; `not_actionable` is **not** a distinct product outcome.
-
-See [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md) for CandidateSignal shape and segmentation rules.
-
-- Processing statuses and outcomes are candidate until implemented in code and exposed through OpenAPI where applicable.
-
-- Candidate lifecycle notes:
-  - no post-submit edit in MVP
-  - no backend draft in MVP
-  - no Signal created is a valid normal outcome
-  - up to 5 generated Signals per Observation is a candidate limit
+- User-facing: process-memory draft → persisted submit → simplified analysis pending / complete / temporary problem.
+- Technical processing statuses live in code (`queued`, `processing`, `processed`, `retrying`, `failed`). Outcomes include `signal_created`, `signals_created`, `signal_aggregated`, `no_signal_created`.
+- Empty pipeline (`candidates: []`), validation rejection, or no applied candidate → **`no_signal_created` only**. Informational candidates create Signals; `not_actionable` is not a distinct product outcome.
+- No post-submit edit. No backend draft. No Signal created is a valid outcome. Pipeline contract: [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md).
 
 ## 7. Permissions
 
@@ -138,45 +113,13 @@ See [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md)
 - Action plan task-origin Observation requires authorized access to the originating task execution.
 - `GET .../observations/{id}/processing-status/` is visible to the submitter and establishment admins (owner/director) only; other submit-capable peers receive 404.
 
-| Path | Endpoint | Who may submit | Backend check |
-|------|----------|----------------|---------------|
-| Direct report | `POST .../observations/` | Any active establishment member | `CanSubmitObservation` → `can_create_observation` |
-| Action plan task | `POST .../action-plan-execution-tasks/{task_execution_id}/create-observation/` | Execution assignee with task access | action plan execution permissions + task pending |
+Direct report: `POST .../observations/` (`CanSubmitObservation` → `can_create_observation`). Task-origin: `POST .../action-plan-execution-tasks/{task_execution_id}/create-observation/` (assignee with task access). Paths: `schema.yml`.
 
-## 8. Events
+## 8. HTTP
 
-No Observation event contract is validated in current code or in `apps/api/schema.yml`.
+[`apps/api/schema.yml`](../../../apps/api/schema.yml). Submit responses omit raw text. Upload/transcription: [`upload_media_domain.md`](upload_media_domain.md).
 
-Candidate events only:
-- `ObservationCreated`
-- `ObservationMediaLinked`
-- `ObservationQueuedForAI`
-- `ObservationProcessingStarted`
-- `ObservationProcessingSucceeded`
-- `ObservationProcessingFailed`
-- `ObservationProcessingRetried`
-- `ObservationLinkedToSignal`
-- `ObservationMarkedNotActionable`
-- `ObservationOutcomeRecorded`
-- `ObservationDraftDiscarded` frontend-only candidate
-
-## 9. API Surface
-
-Current API truth is `apps/api/schema.yml`.
-
-Implemented endpoints confirmed in `apps/api/schema.yml`:
-- `POST /api/v1/establishments/{establishment_id}/observations/` — submit with `text` (maps to internal `raw_text`) and optional `temporary_upload_ids`; response includes `id`, `submitted_at`, `media_count`, `processing_status` only (no raw text).
-- `GET /api/v1/establishments/{establishment_id}/observations/{observation_id}/processing-status/` — pipeline status projection for submitter or establishment admin (owner/director); no raw text.
-
-Implemented action-plan-task-origin endpoint (see `schema.yml`):
-- `POST /api/v1/establishments/{establishment_id}/action-plan-execution-tasks/{task_execution_id}/create-observation/` — task command only; do not extend public `POST observations/`
-
-Candidate API capabilities only:
-- internal or admin retry processing command (future)
-
-Upload, transcription, and media endpoints are documented in [`upload_media_domain.md`](upload_media_domain.md).
-
-## 10. Frontend Expectations
+## 9. Frontend Expectations
 
 - The reporting flow should support typed text, editable transcription text, and optional photos.
 - Frontend should block obvious invalid states such as photo-only submit, but backend validation remains authoritative.
@@ -188,10 +131,10 @@ Upload, transcription, and media endpoints are documented in [`upload_media_doma
 - TanStack Query owns server state for implemented APIs.
 - Frontend must use generated OpenAPI clients only for endpoints present in `apps/api/schema.yml`.
 
-## 11. AI Agent Notes
+## 10. Agent notes
 
-- Inspect current code before claiming Observation models, services, events, or endpoints exist.
-- Inspect `apps/api/schema.yml` before listing any Observation API as implemented.
+- Inspect `schema.yml` before listing Observation APIs.
+- Inspect Upload / Media, AI pipeline contract, Signal, action plan, Security / RGPD, and RBAC before changing related rules.
 - Inspect Upload / Media before changing photo or audio rules.
 - Inspect AI documentation and [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md) before changing transcription or processing contracts.
 - Inspect Signal documentation before changing create, aggregate, or outcome behavior.
@@ -202,4 +145,4 @@ Upload, transcription, and media endpoints are documented in [`upload_media_doma
 - Do not make Observation a ticket, a Signal, or a visible operational feed object.
 - Do not invent backend drafts, urgency input, anonymous reporting, image-to-AI behavior, or persistent audio media.
 - Do not expose raw Observation text in normal product UI, feeds, notifications, realtime payloads, or persistent frontend storage.
-- When Observation APIs are added later, update backend authorization, OpenAPI, generated clients, tests, and this document together.
+- When Observation APIs change, update backend authorization, OpenAPI, generated clients, tests, and this document together.

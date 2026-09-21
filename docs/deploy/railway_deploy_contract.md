@@ -2,20 +2,11 @@
 
 Operational playbook for deploying Houston on Railway. Architecture context: [`railway_architecture.md`](railway_architecture.md). Variables: [`railway_variables.md`](railway_variables.md). Config wiring: [`infra/railway/README.md`](../../infra/railway/README.md).
 
-**PR5 delivers the concrete contract.** `celery-worker` and `celery-beat` are **mandatory** in prod-test — not optional.
+`celery-worker` and `celery-beat` are **mandatory** in prod-test — not optional.
 
 ## Project topology
 
-```txt
-Railway Project (prod-test V1)
-├── api-web          [PUBLIC HTTPS]   nginx + SPA + Daphne + Channels
-├── celery-worker    [PRIVATE]       Celery worker (mandatory)
-├── celery-beat      [PRIVATE]       Celery Beat scheduler (mandatory)
-├── postgres         [PRIVATE]       Railway PostgreSQL plugin
-└── redis            [PRIVATE]       Railway Redis plugin
-```
-
-Same-origin public routing on `https://<railway-domain>`:
+Same-origin public routing on `https://<railway-domain>`. Service tree (api-web public + private worker/beat/postgres/redis + S3 media): [`railway_architecture.md`](railway_architecture.md#architecture-option-a-only).
 
 | Path | Handler |
 |---|---|
@@ -43,56 +34,9 @@ See [`infra/railway/README.md`](../../infra/railway/README.md) for step-by-step 
 
 ## Build triggers (Watch Paths)
 
-Before `watchPatterns`, every push to the connected branch triggered a Docker rebuild on **all three** application services.
+Each service's `railway.toml` defines `watchPatterns` under `[build]`. Do not paste the arrays here: [`infra/railway/README.md`](../../infra/railway/README.md) and `infra/railway/*/railway.toml`.
 
-Each service's [`railway.toml`](../../infra/railway/api-web/railway.toml) now defines `watchPatterns` under `[build]`. Railway evaluates patterns from the repository root (`/`), regardless of Root Directory.
-
-Watch Paths express **functional build dependencies** — what should trigger a redeploy. Dockerfiles use selective `COPY` (not `COPY . /app`), aligned with this matrix. Changes under paths such as `/docs/**` or `/.cursor/**` do **not** match any pattern and skip deployment.
-
-### `watchPatterns` per service
-
-**`api-web`** ([`infra/railway/api-web/railway.toml`](../../infra/railway/api-web/railway.toml)):
-
-```toml
-watchPatterns = [
-  "/apps/web/**",
-  "/contracts/operational-realtime-invalidation.json",
-  "/apps/api/**",
-  "/infra/docker/railway/**",
-  "/infra/railway/api-web/**",
-  "/pyproject.toml",
-  "/uv.lock",
-  "/.dockerignore",
-]
-```
-
-**`celery-worker`** ([`infra/railway/celery-worker/railway.toml`](../../infra/railway/celery-worker/railway.toml)):
-
-```toml
-watchPatterns = [
-  "/apps/api/**",
-  "/contracts/operational-realtime-invalidation.json",
-  "/infra/docker/api/**",
-  "/infra/railway/celery-worker/**",
-  "/pyproject.toml",
-  "/uv.lock",
-  "/.dockerignore",
-]
-```
-
-**`celery-beat`** ([`infra/railway/celery-beat/railway.toml`](../../infra/railway/celery-beat/railway.toml)):
-
-```toml
-watchPatterns = [
-  "/apps/api/**",
-  "/contracts/operational-realtime-invalidation.json",
-  "/infra/docker/api/**",
-  "/infra/railway/celery-beat/**",
-  "/pyproject.toml",
-  "/uv.lock",
-  "/.dockerignore",
-]
-```
+Railway evaluates patterns from the repository root (`/`). Changes under `/docs/**` or `/.cursor/**` skip deployment.
 
 ### Trigger matrix
 
@@ -110,7 +54,7 @@ watchPatterns = [
 | `/.dockerignore` | Yes | Yes | Yes |
 | `/docs/**`, `/.cursor/**`, `/README.md` | No | No | No |
 
-`api-web` does **not** watch `/infra/docker/api/**` (worker/beat Dockerfile). Worker and beat do **not** watch frontend or Railway edge paths.
+`api-web` does **not** watch `/infra/docker/api/**`. Worker and beat do **not** watch frontend or Railway edge paths.
 
 ### Validation (post-merge)
 
@@ -346,7 +290,7 @@ Map one Railway Redis URL to Houston logical DBs 0–3 (see [`railway_variables.
 
 ## Known limitations V1 — private media
 
-This section describes the **historical filesystem** layout (PR5): Railway **cannot attach the same volume to multiple services**. It is **not** the current prod-test mode (`HOUSTON_PRIVATE_MEDIA_BACKEND=s3`, same bucket on `api-web` and `celery-worker`).
+This section describes the **historical filesystem** layout: Railway **cannot attach the same volume to multiple services**. It is **not** the current prod-test mode (`HOUSTON_PRIVATE_MEDIA_BACKEND=s3`, same bucket on `api-web` and `celery-worker`).
 
 | Service | Historical filesystem storage |
 |---|---|
@@ -453,7 +397,7 @@ CI also runs `manage.py check --deploy` in [`.github/workflows/ci.yml`](../../.g
 
 ---
 
-## Wait for CI (post-merge PR2)
+## Wait for CI
 
 Railway **waits for GitHub workflows triggered on the commit** before starting a build. No manual list of GitHub job names is configured on the Railway side — Railway waits for whichever workflows GitHub runs for that commit.
 
@@ -481,7 +425,7 @@ Consequences:
 
 1. Note the deploy baseline before changing settings.
 2. Check current Wait for CI state on `api-web`, `celery-worker`, and `celery-beat` prod services.
-3. **Enable** Wait for CI on all three prod services after PR2 merge and Phase A validation.
+3. **Enable** Wait for CI on all three prod services after Phase A validation.
 4. Observe the first real prod push: green CI → deploy; note the additional wait time (GitHub workflow completion, not a Docker build regression).
 
 ### Branch protection vs Railway
@@ -507,7 +451,7 @@ Rollback: disable Wait for CI (test then prod); revert workflow changes if neede
 | `DJANGO_DEBUG=1` | Use `0` |
 | Nixpacks / Procfile | Dockerfile only |
 | Cloudflare in critical path | Railway HTTPS for V1 |
-| S3 / R2 / MinIO in PR5 | Out of scope for PR5; current prod-test uses S3 (see variables) |
+| Invented object storage for this playbook | Current prod-test uses S3 (see [`railway_variables.md`](railway_variables.md)) |
 | Migrations in worker/beat start | pre-deploy `api-web` only |
 | `import_business_unit_catalog` in pre-deploy | Manual post-migrate |
 

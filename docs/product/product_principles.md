@@ -14,8 +14,10 @@ Houston is a structured operational workflow system for field teams. It turns fi
 Houston follows this operational loop:
 
 ```txt
-Observation → AI Pipeline → Signal → Action Plan → Execution → Validation → Feed/Notification update
+Observation → Signal → Action Plan → Execution → Validation → Feed update
 ```
+
+AI proposes inside Observation → Signal; it is not a separate loop step. Notifications and realtime refresh attention; they are not the loop.
 
 The product is built to make this loop reliable, visible, and usable in real field conditions.
 

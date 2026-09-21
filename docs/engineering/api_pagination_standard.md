@@ -1,8 +1,7 @@
 # API Pagination Standard
 
 Status: authoritative  
-Last reviewed: 2026-06-13  
-Ticket: HOU-BACKLOG-018
+Last reviewed: 2026-09-21
 
 ## 1. Purpose
 
@@ -11,7 +10,7 @@ Define how Houston list endpoints paginate (or intentionally do not), and how th
 This document applies to:
 
 - new list endpoints
-- pagination fixes on existing endpoints (see derived tickets in §11 below)
+- pagination fixes on existing endpoints (see open gaps in §11; inspect the code before treating them as a backlog)
 
 ## 2. Authority order
 
@@ -19,13 +18,10 @@ This document applies to:
 2. [`apps/api/schema.yml`](../../apps/api/schema.yml)
 3. [`AGENTS.md`](../../AGENTS.md) files
 4. This document
-5. Archived docs (historical only)
 
 If code and this document conflict, code wins until this document is updated in the same change set.
 
 ## 3. Context
-
-**Environment:** local dev only. No staging/prod deployment. Test data only.
 
 **Change policy:**
 
@@ -76,6 +72,8 @@ Optional endpoint-specific fields (e.g. `applied_filters` on Signal Feed) are do
 | `GET .../signal-feed/` | **Reference** — full cursor round-trip |
 | `GET .../action-plan-execution-feed/` | **Complete** — single-type cursor (`action_plan_execution` items) |
 
+The historical `/execution-feed/` path is gone.
+
 Action Plan Execution Feed cursor specifics:
 
 - Opaque server cursor tied to sort keys: `as_of`, pin (`is_feed_pinned`, `feed_pinned_at`), `status_rank`, `deadline_bucket`, effective `feed_sort_end_at` (encoded as `end_at`; empty when terminal), `last_activity_at desc`, `created_at desc`, `id desc`.
@@ -96,7 +94,7 @@ Use for message-like lists ordered by time.
 
 **Target envelope:** same as Tier A (`items`, `next_cursor`, `has_more`).
 
-**Exception today:** chat messages return `{ items, has_more }` only; the frontend builds the next cursor from the oldest item (`created_at|uuid`). Align to Tier A in HOU-PAG-003 or document as a permanent exception.
+**Exception today:** chat messages return `{ items, has_more }` only; the frontend builds the next cursor from the oldest item (`created_at|uuid`). Align to Tier A or document as a permanent exception.
 
 ### Tier C — Configuration / management lists
 
@@ -104,13 +102,13 @@ Use for admin or catalogue lists with slower growth.
 
 | Rule | Value |
 |------|-------|
-| Default | No pagination if typical volume **< ~50 rows** per establishment (guidance from Phase L audit) |
+| Default | No pagination if typical volume **< ~50 rows** per establishment |
 | When needed | `page`/`limit` acceptable for stable admin lists; cursor only if list is dynamically sorted like a feed |
 | Response target | `{ items: [...] }` |
 
 **Raw array migration:** endpoints that today return `Item[]` directly should migrate to `{ items }` **directly**, one endpoint per PR, with no temporary compatibility layer. Same PR must update schema, regenerated types, frontend hooks, and tests.
 
-**Endpoints today (non-paginated):** action plan catalog (filtered list), membership roster, onboarding proposals (session-scoped).
+**Endpoints today (non-paginated):** action plan catalog (filtered list), membership roster.
 
 ### Tier D — Search / typeahead / hard-capped lists
 
@@ -124,7 +122,7 @@ Use for autocomplete and scoped search.
 
 **Reference:** catalog suggest endpoints — default `limit` 20, max 200.
 
-**Endpoints today:** `GET /api/v1/catalog/*/suggest/`, `GET .../users/search/` (no limit yet — HOU-PAG-005), `GET .../chat/eligible-memberships/` (hard slice `[:100]`).
+**Endpoints today:** `GET /api/v1/catalog/*/suggest/`, `GET .../users/search/` (no limit yet), `GET .../chat/eligible-memberships/` (hard slice `[:100]`).
 
 ## 5. Reference implementation — Signal Feed
 
@@ -159,7 +157,7 @@ Signal Feed is the **existing reference** for Tier A (backend + frontend).
 | `{ items, next_cursor, has_more }` | Signal feed (complete), Action Plan execution feed (complete) |
 | `{ items, has_more }` | Chat messages |
 | `{ items }` | Chat conversations, chat eligible memberships |
-| Raw `Item[]` | Action plan catalog list, users search, memberships, catalog suggest, onboarding proposals |
+| Raw `Item[]` | Action plan catalog list, users search, memberships, catalog suggest |
 | Nested object | Bootstrap, business-unit tree, action plan / execution detail |
 
 Target over time: paginated lists use Tier A/B envelope; non-paginated lists use `{ items }` (Tier C).
@@ -189,24 +187,19 @@ One PR = one endpoint (or one coherent group) fully aligned. No dual-format tran
 
 ## 9. No global DRF pagination
 
-Houston does not set `DEFAULT_PAGINATION_CLASS` in DRF settings. Each domain implements explicit helpers in views/selectors. Shared extraction (`parse_page_size`, `paginate_limit_plus_one`) is optional future work (HOU-PAG-010).
+Houston does not set `DEFAULT_PAGINATION_CLASS` in DRF settings. Each domain implements explicit helpers in views/selectors.
 
 ## 10. Related documents
 
 - Feed domain: [`docs/product/domains/feed_domain.md`](../product/domains/feed_domain.md)
-- Historical pagination/scalability audit markdown is not archived in this repo; use §11 derived tickets below.
 
-## 11. Derived implementation tickets
+## 11. Open pagination gaps
 
-| ID | Priority | Summary |
-|----|----------|---------|
-| HOU-PAG-001 | P0 | Execution Feed — cursor backend (**delivered** HOU-BACKLOG-019) |
-| HOU-PAG-002 | P0 | Execution Feed — frontend `useInfiniteQuery` (**delivered** HOU-BACKLOG-019) |
-| HOU-PAG-003 | P1 | Chat messages — align envelope or document exception |
-| HOU-PAG-004 | P1 | Chat conversations — cursor pagination + N+1 fix |
-| HOU-PAG-005 | P1 | Users search — `limit` cap |
-| HOU-PAG-008 | P2 | Membership roster — `page`/`limit` |
-| HOU-PAG-009 | P2 | Raw array → `{ items }` harmonization |
-| HOU-PAG-010 | P2 | Shared backend pagination helpers |
+Inspect current list endpoints before treating this as a roadmap:
 
-Details and acceptance criteria: see §11 derived tickets (historical pagination audit not archived in this repo).
+- Chat messages envelope vs Tier A
+- Chat conversations cursor + N+1
+- Users search `limit` cap
+- Membership roster `page`/`limit`
+- Raw array → `{ items }` where lists grow
+- Optional shared backend pagination helpers

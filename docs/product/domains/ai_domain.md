@@ -1,197 +1,42 @@
 # AI Domain
 
 Status: authoritative
-Last reviewed: 2026-07-25
-Implementation status: partial (transcription + observation pipeline **v6** implemented — schema `ai_observation_pipeline_v6`, prompt `ai_observation_pipeline_v6_2`, dual context + nullable routing keys, `signal_kind` actionable|informational, aggregation on `issue_focus`, acceptance corpus S15 + golden G01–G11; AI onboarding permanently removed from product). Authoritative pipeline contract: [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md).
+Implementation status: implemented (transcription + observation pipeline **v6**; AI onboarding permanently removed). Pipeline contract: [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md).
 
 ## 1. Purpose
 
-This domain defines Houston's AI boundary as a proposal, transcription, structuring, classification, and routing-support layer.
+AI is a proposal, transcription, structuring, and routing-support layer. Backend validates; humans keep structural and operational authority.
 
-It owns:
-- product-level AI provider abstraction requirements
-- the high-level transcription boundary
-- the high-level Observation pipeline proposal boundary
-- structured AI output requirements for business-affecting responses
-- backend validation requirements for every AI proposal
-- retry, failure, fallback, and usage-logging principles
-- AI privacy, safety, and authority constraints
+Owns: provider abstraction requirements, transcription boundary, Observation pipeline proposal boundary, structured-output + backend-validation rules, retry/failure/usage-logging principles, privacy and authority constraints.
 
-It does not own:
-- final business authority
-- direct database mutation
-- permissions or RBAC decisions
-- Observation submission validity
-- Signal lifecycle or Action Plan lifecycle
-- Upload / Media lifecycle
-- Chat behavior
-- full provider implementation details
-- full prompt text libraries
-- detailed contract JSON schemas
+Does not own: business writes, RBAC, Observation submit validity, Signal or Action Plan lifecycle, Upload lifecycle, Chat, full prompt libraries, or detailed JSON schemas (those live in the pipeline contract).
 
-## 2. MVP Scope
+## 2. Scope
 
-- Audio-to-editable-text transcription support before Observation submit.
-- AI Observation pipeline proposals from validated Observation text only (contract: [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md)).
-- Onboarding runtime setup is **Manual V2 only** — AI onboarding is **permanently removed** from Houston (see [`runtime_config_onboarding_domain.md`](runtime_config_onboarding_domain.md)).
-- Structured outputs for business-affecting AI responses, with strict backend-side validation before any business persistence.
-- Product-level expectation that provider/model choices remain abstracted and replaceable, even though current code does not validate a concrete implementation yet.
-- Metadata-oriented AI usage tracking and safe failure handling principles.
-- Fallback expectations: manual text entry for transcription and safe retry or failure handling for the Observation pipeline.
-- Observation pipeline may propose zero, one, or multiple **CandidateSignals**, each with **one** BusinessUnit / ActivitySubject classification; a multi-problem Observation yields multiple candidates (see [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md)).
-- AI must not receive image input in MVP.
-- AI does not analyze Chat in MVP.
+In: audio → editable text before Observation submit; Observation pipeline from **validated text only** (0..N CandidateSignals, one BU/AS classification each); structured outputs with backend validation; Fake provider in CI / OpenAI opt-in smoke; fail-closed pipeline errors.
 
-## 3. Out of Scope
+Named versions in use: schema `ai_observation_pipeline_v6`, prompt `ai_observation_pipeline_v6_2` (also on `AIUsageLog`).
 
-- AI-assisted onboarding (removed permanently from Houston).
-- AI direct writes to business tables.
-- AI-created Actions.
-- AI-decided permissions.
-- AI-decided urgency in MVP.
-- AI analysis of Chat.
-- AI image analysis.
-- Autonomous agents taking business actions without backend validation.
-- BYOK or per-establishment AI keys in MVP unless later validated.
-- Prompt-management UI or provider-routing UI.
-- User-visible confidence-score authority in MVP.
-- Fine-tuning on customer business content.
-- Long-term storage of raw prompts or raw model content.
-- AI-generated notifications without backend validation.
-- AI access to arbitrary database context.
+Out: AI onboarding; direct DB mutation; AI-created Actions; AI permissions or urgency; Chat or image analysis; BYOK; prompt-routing UI; user-visible confidence as authority; fine-tuning on customer content; long-term raw prompt/output storage.
 
-## 4. Core Invariants
+## 3. Invariants
 
-- AI proposes; backend validates; humans control structural and operational authority.
-- AI output is never trusted as business truth without backend validation.
-- AI never mutates the database directly.
-- AI does not decide permissions.
-- AI does not create Actions in MVP.
-- AI must not decide urgency in MVP.
-- AI does not analyze Chat in MVP.
-- AI must not receive image input in MVP.
-- Audio is temporary and exists only to produce editable transcription text before validated text handoff.
-- The Observation pipeline receives validated text only.
-- The Observation pipeline must not receive audio files, images, temporary upload objects, or Chat content in MVP.
-- Every structuring call must use an explicit schema or equivalently strict output contract.
-- Every structured output must be checked against backend business rules before persistence.
-- AI output may be consumed by backend services, but only after schema validation, business validation, and authorization checks where relevant.
-- Standard technical logs must not contain clear-text prompts or raw model content.
-- AI usage tracking stores technical metadata only and must avoid sensitive business payloads.
-- AI failures must fail closed and must not corrupt business state.
-- Provider and model choices must remain replaceable unless current code later validates a fixed implementation.
+AI proposes; backend validates. No images, audio files, or Chat content in the Observation pipeline. Every business-affecting call uses a strict schema; schema-valid ≠ business-valid. Logs must not contain clear-text prompts or raw model content. Failures must not corrupt business state. Providers remain replaceable (`FakeObservationPipelineProvider` vs OpenAI).
 
-## 5. Main Objects
+## 4. Objects (product concepts)
 
-- `AIProvider`
-  - Product concept for the backend-controlled provider target used for transcription or structuring calls.
-  - A concrete provider interface is not validated as implemented yet.
+`AIProvider`, `AIRequest`, `AIUsageLog` (technical metadata), `AITranscript` (editable, not a standalone business object), `AIObservationPipelineResult`, `PromptVersion`, `AIError`. These names are not required ORM models.
 
-- `AIRequest`
-  - One AI operation in a domain such as `transcription` or `observation_pipeline`.
-  - Exact persisted request models are not validated yet.
+Pipeline statuses live on `ObservationProcessing` (`queued`, `processing`, `processed`, `retrying`, `failed`).
 
-- `AIUsageLog`
-  - Technical metadata about an AI call.
-  - Candidate fields include provider, model, prompt version, latency, token count, status, and cost estimate.
+## 5. Permissions / HTTP
 
-- `AITranscript`
-  - Temporary transcription result returned as editable text before Observation submit.
-  - It is not validated as a persisted standalone business object.
+RBAC and establishment scope before any AI call. Minimum context only. Users see simplified progress, not raw provider errors.
 
-- `AIObservationPipelineResult`
-  - Structured output with 0..N **CandidateSignals**, each one BU/AS classification.
-  - Contract: [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md).
+[`apps/api/schema.yml`](../../../apps/api/schema.yml): `POST …/transcriptions/`. Observation pipeline: submit Observation → Celery → Signals. Side effects: `houston/realtime/broadcast.py`, `houston/notifications/scheduling.py`.
 
-- `PromptVersion`
-  - Version identifier for control text used by an AI flow.
-  - Full prompt text storage does not belong in this domain reference.
-  - Observation pipeline: `schema_version` = `ai_observation_pipeline_v6`, `prompt_version` = `ai_observation_pipeline_v6_2`; recorded on `AIUsageLog`. Structured output uses nullable `*_routing_key` fields, `signal_kind`, and requires `issue_focus` / `canonical_object` per candidate. Details: [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md).
+## 6. Frontend / agent notes
 
-- `AIError`
-  - Safe technical failure state with normalized error metadata.
-  - Raw provider error payloads must not become normal-user product output.
+Transcription must remain editable; failure → retry or type. Do not present confidence as authority. Do not reintroduce AI onboarding.
 
-`AIRequest`, `AIUsageLog`, `AITranscript`, `AIObservationPipelineResult`, `PromptVersion`, and `AIError` are product concepts, not required database model names until implemented.
-
-## 6. Lifecycle / Statuses
-
-Not validated as implemented yet. Candidate lifecycles only:
-
-- General AI request: `requested`, `processing`, `succeeded`, `failed`, `retried`, `abandoned` or `canceled` if later needed.
-- Transcription UI states: `recording`, `uploading`, `transcribing`, `transcription_ready`, `transcription_failed`.
-- Observation pipeline states: `queued`, `processing`, `retrying`, `processed`, `failed`.
-- Candidate timeout targets only: transcription 10s, Observation pipeline 20s, until enforced by code/tests.
-
-## 7. Permissions
-
-- Backend RBAC and establishment scoping are mandatory before any AI call starts.
-- AI receives only the minimum authorized context needed for the current operation.
-- AI never grants access, roles, or permissions.
-- Normal users should see simplified progress or failure states rather than raw technical AI diagnostics.
-- Metadata-oriented failure visibility for admin or support is candidate only and must still avoid sensitive content by default.
-- AI input excludes Chat content in MVP.
-- Image input is excluded from AI input in MVP.
-- AI usage records should remain establishment-scoped when such records are implemented.
-
-## 8. Events
-
-No AI event contract is validated as implemented today. `EventEnvelope` scaffolding was removed; runtime side effects use post-commit hubs in `houston/realtime/broadcast.py` and `houston/notifications/scheduling.py`.
-
-Candidate events only (**not implemented** — no emitters in `ai/` or `signals/` today):
-- `AIRequestStarted`
-- `AIRequestSucceeded`
-- `AIRequestFailed`
-- `AIRequestRetried`
-- `TranscriptionStarted`
-- `TranscriptionSucceeded`
-- `TranscriptionFailed`
-- `TranscriptionAudioDeleted`
-- `ObservationPipelineStarted`
-- `ObservationPipelineSucceeded`
-- `ObservationPipelineFailed`
-- `ObservationPipelineRetried`
-
-## 9. API Surface
-
-Current API truth is `apps/api/schema.yml`.
-
-Confirmed in `apps/api/schema.yml`:
-
-- Transcription: `POST /api/v1/establishments/{establishment_id}/transcriptions/` — multipart audio, `AIUsageLog` domain `transcription`, model configurable (`HOUSTON_AI_TRANSCRIPTION_MODEL`, default `gpt-4o-transcribe`).
-- Observation pipeline: submit Observation → Celery processing → Signals (see [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md)); processing status via observation processing-status endpoint.
-
-Candidate capabilities only:
-
-- metadata-only admin or support failure detail beyond current surfaces
-
-## 10. Frontend Expectations
-
-- Frontend must present AI as assistance and progress feedback, not as business authority.
-- Transcription text must be editable before Observation submit.
-- If transcription fails, the user must be able to retry or type text manually.
-- UI must not present confidence as operational authority in MVP.
-- UI must not expose raw technical AI errors to normal users.
-- UI should simplify AI pipeline technical states when business-safe summary states are enough.
-- Frontend must not route AI input from Chat content in MVP.
-- Frontend must not send image input to AI in MVP.
-- TanStack Query owns server state for any future AI APIs.
-- Frontend must use generated OpenAPI clients only for routes confirmed in `apps/api/schema.yml`.
-
-## 11. AI Agent Notes
-
-- Inspect current code before claiming provider abstractions, logs, jobs, prompts, events, or AI endpoints exist.
-- Inspect `apps/api/schema.yml` before claiming any AI API is available.
-- Inspect `security_rgpd_domain.md` before changing logging, minimization, retention, or prompt/content handling.
-- Inspect `upload_media_domain.md` before changing audio or image boundaries.
-- Inspect `observation_domain.md` before changing pipeline input or submit-time validation assumptions.
-- Inspect the Signal domain source of truth before changing Signal creation or aggregation assumptions.
-- Inspect [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md) before changing Observation pipeline outputs or segmentation.
-- Inspect [`runtime_config_onboarding_domain.md`](runtime_config_onboarding_domain.md) for onboarding boundaries (Manual V2 only — no AI onboarding).
-- Do not reintroduce AI onboarding APIs or product flows.
-- Do not invent provider privacy guarantees, zero-retention claims, or training guarantees without validated evidence.
-- Do not treat schema-valid AI output as business-valid output.
-- Do not let AI write business tables directly.
-- Do not let AI decide permissions, create Actions, or decide urgency.
-- Do not add BYOK or multi-provider routing UI to MVP scope unless explicitly requested and separately validated.
-- When AI APIs are added later, update backend authorization, OpenAPI, generated clients, tests, and this document together.
+Inspect [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md) before changing I/O or segmentation. Eval command still used: `evaluate_observation_pipeline_v6`.

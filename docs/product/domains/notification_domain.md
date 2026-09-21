@@ -1,8 +1,7 @@
 # Notification Domain
 
 Status: authoritative
-Last reviewed: 2026-09-15
-Implementation status: lot7_native_push
+Implementation status: in-app notifications + native FCM push
 
 ## 1. Purpose
 
@@ -19,7 +18,7 @@ Notification does not own:
 - realtime transport or invalidation
 - feed projection or feed sorting
 - authorization or access grants
-- Signal, Action, Checklist, Comment, or Chat lifecycle
+- Signal, Action Plan, Comment, or Chat lifecycle
 
 ## 2. MVP Scope
 
@@ -30,18 +29,16 @@ Notification does not own:
 - Backend-owned recipient resolution, priority selection, and channel selection from domain events.
 - Minimal, non-sensitive notification payloads that point to an authenticated subject fetch.
 - Per-recipient read and archive state.
-- Native FCM push delivery for selected high-attention cases (Lot 7).
+- Native FCM push delivery for selected high-attention cases.
 - Targeted mention notifications without operational permission grants. Mention on an execution comment grants read/thread access in the comments and action-plan domains; the notification itself does not grant access.
 
-Current truth (Lot 1 in-app + Lot 7 native push):
+Current truth:
 - `apps/api/houston/notifications/` implements persisted in-app notifications, recipient resolution, dedupe, and scheduling producers (`scheduling.py`).
-- `apps/api/schema.yml` lists notification endpoints: list, mark-read, archive, mark-all-read, preferences.
-- Frontend Notification Center uses TanStack Query (`features/notifications/`).
-- Membership-scoped realtime invalidation (`notification.created` / `notification.updated` / `notification.bulk_updated`) refreshes the notification list and unread badge; transport is owned by `houston/realtime/` (see [`realtime_domain.md`](realtime_domain.md)).
-- Lot 1 event keys are defined in `houston/notifications/constants.py` (`LOT1_EVENT_KEYS`).
-- In-app notifications are created for eligible recipients without a global membership opt-out.
-- Native FCM push (Capacitor Lot 7): `PushDevice` user-scoped; send gated by membership `push_enabled` and `PUSH_V1_EVENT_KEYS`. Frontend Native: OS permission + token upsert + profile toggle. Web has no push toggle and no service worker. Web Push / VAPID removed.
-- Chat push (`chat.message.received`) is allowlisted on the backend with anti-spam guards: Redis conversation presence (`chat:presence:{membership_id}:{conversation_id}`, TTL 45s, heartbeat via `POST .../chat/conversations/{id}/presence/`) and push throttle (`push:chat:{conversation_id}:{recipient_membership_id}`, TTL 120s). In-app chat notification rules (dedupe 5 min) are unchanged.
+- HTTP: [`apps/api/schema.yml`](../../../apps/api/schema.yml). Frontend: `features/notifications/` (TanStack Query).
+- Membership-scoped realtime invalidation (`notification.created` / `notification.updated` / `notification.bulk_updated`) refreshes the list and unread badge; transport is `houston/realtime/` (see [`realtime_domain.md`](realtime_domain.md)).
+- Event keys: `houston/notifications/constants.py`.
+- Native FCM: `PushDevice` user-scoped; send gated by membership `push_enabled` and `PUSH_V1_EVENT_KEYS`. Web has no push toggle and no service worker. Web Push / VAPID removed.
+- Chat push (`chat.message.received`) anti-spam: Redis conversation presence (`chat:presence:{membership_id}:{conversation_id}`, TTL 45s, heartbeat via `POST .../chat/conversations/{id}/presence/`) and push throttle (`push:chat:{conversation_id}:{recipient_membership_id}`, TTL 120s). In-app chat notification rules (dedupe 5 min) are unchanged.
 
 ## 3. Out of Scope
 
@@ -88,15 +85,15 @@ Current truth (Lot 1 in-app + Lot 7 native push):
 
 - `NotificationChannel`
   - `in_app` is the validated MVP direction.
-  - `push` is native FCM (Lot 7); Web Push is out.
-  - `email` remains selective or post-MVP unless separately validated.
+  - `push` is native FCM; Web Push is out.
+  - `email` remains selective unless separately validated.
 
 - `NotificationDelivery`
   - Native FCM: `PushDelivery` per notification + device (`queued`, `processing`, `sent`, `failed`, `skipped`).
-  - Exact provider metadata remains candidate. Email delivery tracking is not implemented.
+  - Email delivery tracking is not implemented.
 
 - `NotificationPreference`
-  - Minimal recipient/channel preference such as `push_enabled` or candidate `email_enabled`.
+  - Minimal recipient/channel preference such as `push_enabled`.
   - Preferences suppress delivery channels, not resource access.
 
 - `NotificationRule`
@@ -127,7 +124,7 @@ Target transition direction:
 - recipient archives -> `archived`
 - delivery attempt created -> `queued` then `sent`, `delivered`, `failed`, or `skipped`
 
-Current code (Lot 1 in-app + Lot 7 native push):
+Current code:
 - `Notification` model with statuses `unread`, `read`, `archived`.
 - In-app notifications plus native FCM `PushDelivery` tracking; email delivery tracking not implemented.
 
@@ -141,44 +138,19 @@ Current code (Lot 1 in-app + Lot 7 native push):
 - Role-specific recipient rules depend on adjacent domain rules and notification rules, not on frontend logic.
 - Support or admin access to product notifications is not validated as default MVP behavior.
 
-## 8. Events
+## 8. Triggers
 
-Lot 1 source triggers (implemented in `scheduling.py`; keys in `LOT1_EVENT_KEYS`):
+Allowlisted event keys: `LOT1_EVENT_KEYS` in `houston/notifications/constants.py`. Producers: `houston/notifications/scheduling.py`. Do not copy the frozenset here.
 
-- Action Plan execution: `action_plan.execution.created`, `action_plan.execution.pending_validation`, `action_plan.execution.canceled`, `action_plan.execution.reopened`
-- Chat: `chat.message.received` (in-app and native FCM when guards pass; generic copy with actor display name; `subject_type=chat_conversation`, `subject_id=conversation_id`; in-app dedupe per conversation + recipient + actor within 5 minutes; backend push suppressed when recipient presence is active in conversation or within 2-minute push throttle window).
-- Comment: `comment.mention.created`
-- Signal: `signal.created`, `signal.pinned`, `signal.resolved`, `signal.canceled`
+Chat `chat.message.received`: generic copy; `subject_type=chat_conversation`; in-app dedupe 5 min; push suppressed when conversation presence is active or within the 2-minute throttle.
 
-Legacy `action.*` and `checklist.execution.*` keys removed in Lot 10A (migration `0004_remove_legacy_notification_enums`).
+No notification for signal aggregation or Action Plan validate / direct-done without validation.
 
-Intentionally no Lot 1 notification for: `accept_action`, `validate_action`, direct-done without validation, signal aggregation.
+Membership-scoped WS invalidation: `notification.created`, `notification.updated`, `notification.bulk_updated` (`notifications/services.py`).
 
-Candidate notification-domain transport events (membership-scoped WS invalidation via `notifications/services.py`):
+## 9. HTTP
 
-- `notification.created`, `notification.updated`, `notification.bulk_updated`
-
-Candidate Lot 2+ source triggers (not implemented): extend `LOT1_EVENT_KEYS` / notification producers in code when product signs off.
-
-## 9. API Surface
-
-Current API truth is `apps/api/schema.yml`.
-
-Implemented notification endpoints in `apps/api/schema.yml`:
-
-- `GET /api/v1/establishments/{establishment_id}/notifications/` — list for authenticated recipient (cursor pagination); `NotificationItem` may include nullable `navigation` (`parent_subject_type`, `parent_subject_id`) for `subject_type=comment` when the comment row still exists
-- `POST .../notifications/{notification_id}/mark-read/`
-- `POST .../notifications/{notification_id}/archive/`
-- `POST .../notifications/mark-all-read/`
-- `GET` / `PATCH .../notifications/preferences/` — `push_enabled`
-- `POST /api/v1/me/push-devices/` (upsert FCM token), `DELETE .../me/push-devices/{device_id}/` (revoke)
-- `POST .../chat/conversations/{conversation_id}/presence/` — chat push presence heartbeat (204)
-
-Push delivery is native FCM only. Token sync is user-scoped (session + OS permission granted). `push_enabled` remains membership-scoped at send time. Web Push / VAPID / `touch/` are gone.
-
-Not implemented:
-
-- general-purpose email notification workflows
+[`apps/api/schema.yml`](../../../apps/api/schema.yml). Push delivery is native FCM only. Token sync is user-scoped. `push_enabled` remains membership-scoped at send time. General-purpose email notification workflows are not implemented.
 
 ## 10. Frontend Expectations
 
@@ -189,7 +161,7 @@ Not implemented:
 - Comment mention notifications (`comment.mention.created`): when `navigation` is present, open the parent detail (`signal` or `action_plan_execution`) with the Commentaires tab and scroll/highlight the mentioned comment (`?tab=comments&commentId={subject_id}`). When `navigation` is `null` (comment hard-deleted; V1 without denormalized parent on `Notification`), mark read only — no navigation. When the parent loads but the comment is absent from the authorized list, show an inline unavailable message in the Commentaires tab.
 - `navigation` is a non-sensitive routing hint (parent type + UUID only); authorization remains on the parent and comment list fetches.
 - Native profile exposes `push_enabled` (fail-closed opt-in: OS permission → FCM token → upsert → then PATCH). Web has no push toggle.
-- Tap of an OS notification uses payload `url` + `establishment_id` (not the in-app list `url`). Native HTTPS deep-link **handler** is Lot 8 (`getLaunchUrl` / `appUrlOpen` → `AppRoute`). Verified Play App Links / iOS Universal Links remain store-identity work (Play App Signing certs / App Store Team ID), not a second handler.
+- Tap of an OS notification uses payload `url` + `establishment_id` (not the in-app list `url`). Native HTTPS deep-link **handler** is live (`getLaunchUrl` / `appUrlOpen` → `AppRoute`). Verified Play App Links / iOS Universal Links remain store-identity work.
 - Frontend must not display sensitive raw content from notification, push, or realtime payloads.
 - Frontend must handle `unread`, `read`, and `archived` states when APIs exist.
 - Frontend may optimistically update read state only if backend confirmation or reconciliation remains the authority.
@@ -203,11 +175,11 @@ Not implemented:
 - Inspect `apps/api/schema.yml` before listing any notification API as implemented.
 - Inspect `rbac_permissions_domain.md` before changing recipient resolution or visibility assumptions.
 - Inspect `security_rgpd_domain.md` before changing payload contents, retention assumptions, or logging boundaries.
-- Inspect Signal, Action, Checklist, Feed, and adjacent product docs before changing notification trigger assumptions.
+- Inspect Signal, Action Plan, Feed, and adjacent product docs before changing notification trigger assumptions.
 - Do not make Notification a source of truth.
 - Do not grant access through notifications.
 - Do not include raw Observation text, complete comment bodies, chat message bodies, media binaries, credentials, auth artifacts, or AI request content in notifications.
 - Do not add general-purpose email workflows in MVP unless separately validated.
 - Do not notify the actor for their own normal action by default.
 - Do not add grouping, digests, quiet hours, or provider-specific push setup to this domain doc unless separately validated.
-- When notification APIs are added later, update backend authorization, OpenAPI, generated clients, tests, and this document together.
+- When notification APIs change, update backend authorization, OpenAPI, generated clients, tests, and this document together.

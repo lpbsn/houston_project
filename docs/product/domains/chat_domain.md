@@ -1,10 +1,10 @@
 # Chat Domain (V1)
 
 Status: authoritative
-Last reviewed: 2026-06-09
-Implementation status: **implemented_core** (Lots 2–6 done — REST, WS messages, Terrain UI, purge, hardening ; Lot 7 doc alignment)
+Last reviewed: 2026-09-21
+Implementation status: implemented (REST, WS messages, Terrain UI, purge, conversation/member admin)
 
-**Dettes techniques actives** : post-MVP product gaps documented in this domain doc (P0/Lot 6 closed ; Lot 1–2 conversation/member admin UI live ; bootstrap flag and related items remain open).
+Open product gaps: some bootstrap hints; see current_state.
 
 ## 1. Purpose
 
@@ -115,8 +115,8 @@ Supported `access.revoked` `reason` values :
 - Chat push, sounds, presence-aware notification suppression.
 - Read receipts, delivered status, typing indicators, presence.
 - `ChatMessageRead` or per-message read APIs.
-- REST endpoint to send messages (WS only).
-- Attachments, audio, reactions, threads, message search, message edit/delete by users.
+- Message send over WebSocket (`message.send` is a protocol error). HTTP `POST …/messages/` is the only send command.
+- Audio, reactions, threads, message search, message edit/delete by users.
 - Link to Signal, Action, Observation, Checklist, Comments, Feed, AI pipeline.
 - Cross-establishment chat.
 - Owner/Director reading conversations they do not participate in.
@@ -200,60 +200,13 @@ Supported `access.revoked` `reason` values :
 
 **Support/admin delete outside participation** : management command only ; not product API V1.
 
-## 8. Events
+## 8. HTTP / WebSocket
 
-Internal domain events (payloads without message body; not an `EventEnvelope` bus — side effects via realtime / notifications hubs):
+HTTP: [`apps/api/schema.yml`](../../../apps/api/schema.yml) under `/api/v1/establishments/{establishment_id}/chat/`. WebSocket path `/ws/v1/establishments/{establishment_id}/chat/`. Ticket auth: [`authentication_charter.md`](../../architecture/authentication_charter.md). Client application frames do not persist messages.
 
-- `ChatConversationCreated`
-- `ChatConversationDeleted`
-- `ChatGroupRenamed`
-- `ChatParticipantAdded`
-- `ChatParticipantRemoved`
-- `ChatParticipantPromoted`
-- `ChatMessageCreated` (ids only)
-- `ChatMessagePurged`
-- `ChatConversationSeen` (local participant ; no WS broadcast to others)
-- `ChatEnabledForEstablishment` / `ChatDisabledForEstablishment`
+Channel groups: personal `chat_est_{establishment_id}_mbr_{membership_id}`; session `chat_session_{session_id}`; optional conversation group.
 
-**Forbidden** : `ChatMessageRead`, `ChatReadReceiptCreated`, `ChatMessageDelivered`, typing events.
-
-## 9. API / Channel Surface
-
-**HTTP API truth** : [`apps/api/schema.yml`](../../../apps/api/schema.yml) — Chat endpoints under `/api/v1/establishments/{establishment_id}/chat/` are **implemented** (Lots 3–4). Do not assume parity with this doc without checking schema + debt register.
-
-### REST (establishment-scoped, implemented)
-
-All under `/api/v1/establishments/{establishment_id}/chat/` :
-
-- `POST ws-ticket/`
-- `GET status/`
-- `GET conversations/` (pin-first sort ; excludes `list_hidden_at` rows ; list items expose `pinned`, `can_delete`)
-- `POST conversations/dm/` (reopening a hidden DM clears `list_hidden_at` for the actor)
-- `POST conversations/groups/`
-- `GET/PATCH/DELETE conversations/{id}/` (delete : admin participant only)
-- `GET/POST conversations/{id}/messages/` (GET history ; POST send ; applies viewer `history_cutoff_at` on read)
-- `POST conversations/{id}/seen/`
-- `POST conversations/{id}/pin/` / `DELETE conversations/{id}/pin/`
-- `POST conversations/{id}/hide/` (DM only)
-- `GET eligible-memberships/` (optional `conversation_id` excludes active group participants before the 100-item limit)
-- Participant management endpoints (add, remove, promote, leave) — group admin only ; mutations lock the conversation row to keep ≥1 admin
-- `PATCH settings/` (`chat_enabled` toggle)
-
-### WebSocket
-
-- Path : `/ws/v1/establishments/{establishment_id}/chat/`
-- Auth : first message `{ "type": "auth", "ticket": "..." }`
-- Client application frames do not persist messages. `message.send` → protocol error + close.
-- ASGI : `OriginValidator(HOUSTON_CLIENT_ORIGINS)` + `URLRouter` ; **no** `AuthMiddlewareStack`
-- Server : Daphne
-
-### Channel groups
-
-- Personal (mandatory) : `chat_est_{establishment_id}_mbr_{membership_id}`
-- Session (mandatory for live revocation) : `chat_session_{session_id}`
-- Conversation (optional supplement) : `chat_est_{establishment_id}_conv_{conversation_id}`
-
-## 10. Frontend Expectations
+## 9. Frontend Expectations
 
 - Route `/chat` ; mobile-first Terrain UI (WhatsApp-inspired), not a parallel design system.
 - TanStack Query : conversations, messages, eligible-memberships, seen mutations.
@@ -266,7 +219,7 @@ All under `/api/v1/establishments/{establishment_id}/chat/` :
 - Show retention notice : messages older than 30 days are automatically deleted.
 - Hide chat nav when `chat_enabled=false` or user cannot access.
 
-## 11. AI Agent Notes
+## 10. Agent notes
 
 - Inspect `apps/api/schema.yml` for the current Chat REST surface (implemented).
 - Inspect §1–§10 of this doc for remaining post-core gaps.
@@ -277,21 +230,3 @@ All under `/api/v1/establishments/{establishment_id}/chat/` :
 - Do not use `AuthMiddlewareStack` for Chat WebSocket.
 - Do not rely only on conversation groups joined at auth for message delivery.
 - When implementing Chat, update OpenAPI, generated clients, tests, and this document together.
-
-## 12. V1 acceptance criteria (documentation)
-
-Checklist aligned with Chat V1 implementation plan §3.5 — verified **2026-06-09** after Lots 2–6:
-
-- [x] Single active Chat V1 definition (this document + carve-out in [`realtime_domain.md`](realtime_domain.md))
-- [x] WebSocket auth = REST one-time ticket ; no `AuthMiddlewareStack` ; Origin validated (`OriginValidator` on `HOUSTON_CLIENT_ORIGINS`)
-- [x] Chat realtime separated from deferred global Signal/Action/Notification invalidation
-- [x] Chat push/sounds/presence-aware notification suppression out of scope (§3); in-app `chat.message.received` handled by Notification domain
-- [x] Minimal unread only ; no read receipts ; unread survives purge (`last_seen_message_id` UUID non-FK + `last_seen_message_created_at`)
-- [x] Hard purge after 30 days documented and implemented (Celery + management command) ; purge does not break participant seen state
-- [x] Message send HTTP-only ; WebSocket is events only
-- [x] Membership-centric model (`ChatParticipant.membership`, `ChatMessage.author_membership`)
-- [x] Participant eligibility and permissions documented (§7) and enforced in backend tests
-- [x] REST + WS endpoints present in [`apps/api/schema.yml`](../../../apps/api/schema.yml) and backend `houston/chat/`
-- [x] Terrain UI at `/chat` and `/chat/:conversationId` (Lots 5)
-- [x] Membership deactivation hook, `conversation.access_revoked`, rate limits (Lot 6)
-- [ ] Post-core product gaps tracked in debt register only (group management UI, `chat_enabled` toggle UI)

@@ -1,6 +1,6 @@
 # Store compliance hors privacy — Spore
 
-Status: worksheet for P1.13 (PR2)
+Status: worksheet for store consoles
 Last reviewed: 2026-09-02
 
 Privacy questionnaires live in [`store_privacy_declarations.md`](store_privacy_declarations.md). This file covers the other store questions that can be prepared from the current product without inventing a moderation platform.
@@ -15,7 +15,7 @@ Apple’s current export-compliance FAQ treats HTTPS / standard encryption as ex
 
 ## User-generated content
 
-**fait repo + décision produit (PR2, store-minimum):**
+**fait repo + décision produit (store-minimum):**
 
 - Published UGC: observation submit, comments, chat **messages**.
 - Not UGC / not CGU-gated: transcription audio (AI consent only).
@@ -27,7 +27,7 @@ Apple / Google UGC questions: the app **contains** UGC, users can **report**, us
 
 ## Account deletion
 
-Already implemented (PR1): Profil + `https://spore-os.com/supprimer-compte/` (**fait repo**). Use that URL in Play’s deletion-URL field.
+Already implemented: Profil + `https://spore-os.com/supprimer-compte/` (**fait repo**). Use that URL in Play’s deletion-URL field.
 
 ## Age / Kids / Made for Kids
 

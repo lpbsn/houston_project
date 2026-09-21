@@ -92,7 +92,7 @@ Two dedicated instances of catalog `restaurant` in the same establishment:
 
 Establishment lock: `Establishment.select_for_update()` on create / reactivate / rename paths.
 
-## Public API (Lot 5)
+## Public API
 
 Authoritative HTTP shapes: [`apps/api/schema.yml`](../../../apps/api/schema.yml).
 

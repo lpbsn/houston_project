@@ -1,7 +1,7 @@
 # Frontend architecture
 
 Status: authoritative  
-Last reviewed: 2026-09-19
+Last reviewed: 2026-09-21
 
 ## Stack
 
@@ -28,8 +28,8 @@ Lazy pages: [`lazy-terrain-pages.tsx`](../../apps/web/src/app/lazy-terrain-pages
 ## Layout
 
 - **Terrain shell** — `TerrainShell` (`fixed inset-x-0 top-0`, `h-dvh`, topbar, scrollable main, optional bottom nav). Safe-area token `--app-safe-top/bottom` = `var(--safe-area-inset-*, env(safe-area-inset-*, 0px))` (Capacitor Android polyfill + iOS `env()`).
-- **App shell** — desktop/management shell for non-terrain routes **as implemented today** (pending onboarding, select-establishment, no-establishment, invitations, auth pages). Configuration opérationnelle lives at `/e/{establishmentId}/operational-config` (TerrainShell, desktop web `lg` only; mobile/native redirect to `/e/{id}/reporting`).
-- **Spore Platform V1 (live):** desktop-Web-only shell at `/platform` (`isDesktopWeb`). Not TerrainShell. `/onboarding` redirects to login/landing (no client wizard). Native and non-desktop Web do not expose Platform. Functional target: [`edb_plateforme_interne_spore_v1-3.md`](../cadrage/edb_plateforme_interne_spore_v1-3.md).
+- **App shell** — desktop/management shell for pending onboarding, select-establishment, no-establishment, invitations, and auth pages. Not the Platform wizard. Configuration opérationnelle lives at `/e/{establishmentId}/operational-config` (TerrainShell, desktop web `lg` only; mobile/native redirect to `/e/{id}/reporting`).
+- **Platform shell** — desktop-Web-only at `/platform` (`isDesktopWeb`). Native and non-desktop Web do not expose it. `/onboarding` redirects to login/landing; it is not a wizard.
 
 ## Server state
 
@@ -64,7 +64,7 @@ Network banner (`navigator.onLine` on Web; `@capacitor/network` on Native) and W
 
 One React tree, two Vite pipelines in [`vite.config.ts`](../../apps/web/vite.config.ts):
 
-- **Web** (`npm run build`): `VITE_APP_RUNTIME=web`, `base: '/'`, `dist/`. Classic hashed assets; `index.html` revalidated by nginx/CDN. No service worker, no web app manifest. Boot unregisters leftover service-worker registrations from pre–Capacitor Lot 4 installs.
+- **Web** (`npm run build`): `VITE_APP_RUNTIME=web`, `base: '/'`, `dist/`. Classic hashed assets; `index.html` revalidated by nginx/CDN. No service worker, no web app manifest. Boot unregisters leftover service-worker registrations.
 - **Native** (`npm run build:native`): `VITE_APP_RUNTIME=native`, `base: './'`, `dist-native/`. Capacitor `webDir` is `dist-native`. `VITE_API_BASE_URL` and `VITE_PUBLIC_APP_URL` (absolute http(s) origin) are required at Vite startup (dev and build).
 
 `tsc -b` stays in `build` and `build:native`. The runtime pin is on the Vite process only (`tsc -b && VITE_APP_RUNTIME=… vite build`). Native projects live in [`apps/web/ios`](../../apps/web/ios) and [`apps/web/android`](../../apps/web/android); sync with `npm run cap:sync`. Store builds use `make web-cap-sync-release` (pinned `https://app.spore-os.com`) and `make android-bundle-release` — [`docs/deploy/native_release.md`](../deploy/native_release.md). Committed `capacitor.config.ts` keeps `allowMixedContent: false` and no `server.cleartext`; Android debug Gradle overlays local HTTP mixed content for the emulator.

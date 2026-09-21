@@ -44,29 +44,9 @@ Forbidden placeholders:
 
 ## Required Railway variables (prod-test)
 
-Set on `api-web`, `celery-worker`, and `celery-beat` unless noted otherwise.
+Set secrets and hosts on `api-web`, `celery-worker`, and `celery-beat` unless the matrix says otherwise. **Do not duplicate the table here** — [`railway_variables.md`](railway_variables.md) is the matrix. Template: [`.env.prod-test.example`](../../.env.prod-test.example).
 
-| Variable | Required | Notes |
-|---|---|---|
-| `DJANGO_DEBUG` | yes | Must be `0` |
-| `DJANGO_SECRET_KEY` | yes | Strong random secret |
-| `DJANGO_ALLOWED_HOSTS` | yes | Public Railway domain(s) |
-| `HOUSTON_CLIENT_ORIGINS` | yes | `https://<railway-domain>,capacitor://localhost,https://localhost` |
-| `HOUSTON_AUTH_TOKEN_PEPPER` | yes | Explicit, distinct from secret key |
-| `HOUSTON_AUTH_TOKEN_SALT` | yes | Not the dev default |
-| `HOUSTON_CHAT_WS_TICKET_SALT` | yes | Not the dev default |
-| `HOUSTON_REALTIME_WS_TICKET_SALT` | yes | Not the dev default |
-| `OPENAI_API_KEY` | yes | Required when AI providers are `openai` |
-| `HOUSTON_PRIVATE_MEDIA_BACKEND` | yes (`api-web`, `celery-worker`) | `s3` in prod-test |
-| `HOUSTON_S3_*` | yes (`api-web`, `celery-worker`) | Same endpoint, bucket, keys, region, addressing style on both services |
-| `HOUSTON_PRIVATE_MEDIA_ROOT` | no when backend=s3 | Not media truth on S3; required writable path only for filesystem backend |
-| `POSTGRES_*` | yes | From Railway Postgres plugin |
-| `REDIS_URL`, `CELERY_*`, `HOUSTON_CACHE_REDIS_URL` | yes | Private Redis only |
-| `HOUSTON_ENABLE_API_DOCS` | no | Default off in prod-test |
-| `HOUSTON_ALLOW_INSECURE_LOCAL_CSRF_ORIGINS` | no | **Local only — never on Railway** |
-| `HOUSTON_ALLOW_LOCAL_ALLOWED_HOSTS` | no | **Local only — never on Railway** |
-
-Full service matrix: [`railway_architecture.md`](railway_architecture.md).
+`HOUSTON_ALLOW_INSECURE_LOCAL_CSRF_ORIGINS` and `HOUSTON_ALLOW_LOCAL_ALLOWED_HOSTS` are **local only — never on Railway**.
 
 ## HTTPS and proxy behavior
 
@@ -119,7 +99,7 @@ make backend-schema
 
 When `DJANGO_DEBUG=0`, [`infra/docker/api/entrypoint.sh`](../../infra/docker/api/entrypoint.sh) runs `python manage.py check --deploy` before Daphne starts.
 
-Celery worker and beat do not use this entrypoint today. Strict startup coverage for all backend services will be validated in **PR5**.
+Celery worker and beat do not use this entrypoint today. Treat worker/beat env as the same contract as `api-web` and monitor process health separately.
 
 ## What the gate checks
 

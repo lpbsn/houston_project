@@ -1,192 +1,108 @@
 # Identity / Membership Domain
 
 Status: authoritative
-Last reviewed: 2026-09-19
-Implementation status: implemented for Phase 1. **Spore Platform V1 is live** (`/api/v1/platform/*`, `IsActivePlatformOperator`). Tenant product APIs remain membership-scoped. Functional target: [`edb_plateforme_interne_spore_v1-3.md`](../../cadrage/edb_plateforme_interne_spore_v1-3.md).
+Last reviewed: 2026-09-21
+Implementation status: live (identity, memberships, Platform grant)
 
-## 1. Purpose
+Owner of global identity, organization/establishment lifecycle, and membership. Session/token mechanics: [`authentication_charter.md`](../../architecture/authentication_charter.md). Tenant RBAC matrices: [`rbac_permissions_domain.md`](rbac_permissions_domain.md). Onboarding activation: [`runtime_config_onboarding_domain.md`](runtime_config_onboarding_domain.md). Platform grant + HTTP: `houston.platform`. HTTP: [`apps/api/schema.yml`](../../../apps/api/schema.yml).
 
-This domain defines global user identity and how Houston derives establishment access from active establishment memberships.
+## Authentication vs Tenant vs Platform
 
-It covers the MVP relationship between `User`, `Organization`, `Establishment`, and `EstablishmentMembership`. Authentication mechanics stay high-level here; detailed session and token rules belong to `docs/architecture/authentication_charter.md`. Detailed RBAC rules belong to `docs/product/domains/rbac_permissions_domain.md`.
-This domain owns global user identity, organization and establishment membership, membership status, and establishment context selection. It does not own detailed RBAC matrices, token or session internals, or domain-specific business permissions.
+Houston is not three equivalent authorization plans. Authentication establishes who is speaking. Tenant and Platform are **independent** authorization contexts. Deny-by-default DRF applies to both (`DenyByDefault`; public routes opt in with `AllowAny` and are inventory-tested).
 
-## 2. MVP Scope
+```mermaid
+flowchart TB
+  subgraph authn [Authentication]
+    PublicEP[Public entrypoints]
+    User[User]
+    UserSession[UserSession]
+  end
+  subgraph tenantCtx [Tenant authorization]
+    Membership[EstablishmentMembership]
+    Scope[MembershipScope]
+    HasMem[HasActiveMembership]
+    OrgAdmin[decide_organization_admin_access]
+    EstAdmin[decide_active_establishment_admin_access]
+  end
+  subgraph platformCtx [Platform authorization]
+    Grant[PlatformOperatorAccess]
+    IsOp[IsActivePlatformOperator]
+    PlatAPI["/api/v1/platform/*"]
+  end
+  PublicEP --> User
+  PublicEP --> UserSession
+  User --> Membership
+  User --> Grant
+  Membership --> Scope
+  UserSession --> HasMem
+  Membership --> OrgAdmin
+  Membership --> EstAdmin
+  Grant --> IsOp
+  IsOp --> PlatAPI
+```
 
-- Global `User` identity. `User.email` is the login identifier. Changing it requires a password-authenticated pending request plus confirmation of a token sent to the new address. The live email does not change on `PATCH /api/v1/auth/me/`.
-- `Organization` as the parent business container.
-- `Establishment` as the operational tenant context.
-- `EstablishmentMembership` as the access link between a user and an establishment.
-- Membership-scoped role and membership status.
-- Membership-scoped operational RBAC through `MembershipScope` rows (`business_unit` only — active BusinessUnit UUID).
-- Backend-enforced establishment access based on active membership, active user, active establishment, and active organization.
-- Bootstrap-facing identity and membership context through the current auth API.
-- Mono-establishment default UX.
-- Multi-establishment selection through backend-owned auth-session state.
-- Establishment-scoped membership management for the current active establishment context.
-- Establishment-scoped active-user search for the current active establishment context.
+- **Authentication** — global identity + session (`User`, `UserSession`, tokens). Public entrypoints (login, refresh, invitation accept, password reset, CSRF, email-change confirm) **establish** identity and/or session; they are not consumers of an existing `UserSession` grant. This is not business authorization. Owner: `houston.accounts` + authentication charter.
+- **Tenant** — independent context rooted in an **active** `EstablishmentMembership` plus active user, establishment, and organization. Two HTTP modes (below): workspace/session-scoped (`HasActiveMembership`) and path-scoped org/est admin. Operational périmètre is `MembershipScope` (BusinessUnit UUID only). Owner matrices: RBAC domain. Code: `houston.organizations`, `houston.establishments`.
+- **Platform** — independent operator grant `PlatformOperatorAccess` / `IsActivePlatformOperator` on `/api/v1/platform/*` only. Not a membership, not `User.is_staff`, not a tenant-selector bypass. An operator who also has tenant memberships keeps those memberships for client APIs only. Code: `houston.platform`.
 
-## 3. Out of Scope
+Nothing below grants tenant or Platform access by itself: a `User` row, `User.is_staff`, frontend hints, or a Platform grant used against tenant APIs.
 
-- SSO.
-- MFA, unless current code explicitly proves otherwise.
-- Billing ownership details.
-- Advanced organization hierarchy.
-- Complex multi-establishment workspace UX.
-- Fine-grained RBAC matrices.
-- Arbitrary admin browsing across tenants **in the current product APIs**.
-- Cross-tenant access **via `EstablishmentMembership` or a global `User`**.
-- Public signup (removed: invite-code owner registration and `POST /api/v1/establishments/`). New organizations start from Platform.
-- Old-stack implementation assumptions or terminology.
+## Two tenant HTTP modes
 
-## 4. Core Invariants
+Tenant HTTP uses two existing gates. They are not interchangeable.
 
-- A `User` alone never grants establishment access.
-- Access requires an active `EstablishmentMembership`.
-- Membership access also depends on an active `User`, active `Establishment`, and active `Organization`.
-- Backend enforces establishment scoping and all access checks.
-- Frontend state cannot grant permissions.
-- Role and operational périmètre (`MembershipScope`) are membership-scoped, not global user attributes.
-- No **current** product API may expose data outside establishments visible through valid memberships.
-- Establishment switching must not bypass backend authorization.
-- A selected establishment context must always be backed by a valid active membership.
+- **Workspace / session-scoped** — product and team APIs (`HasActiveMembership`). They operate in `UserSession.selected_establishment` via `ApiAccessContext.active_membership`. A path `establishment_id` must match that selection (fail-closed). Switching establishment is an explicit auth mutation, not implied by another path. Drafts are never session-selectable.
+- **Path-scoped tenant administration** — `/api/v1/organizations/{organization_id}/` (`decide_organization_admin_access`) and `/api/v1/establishments/{establishment_id}/admin/` (`decide_active_establishment_admin_access`). They target the path resource from the actor’s Owner/Director memberships. They do not read or mutate `selected_establishment`. Establishment admin HTTP is ACTIVE-only (draft → 404). Organization admin can list draft and active establishments without switching workspace.
 
-## 4.1 Spore Platform V1 (live)
+Do not use session-scoped team endpoints (`…/establishments/{id}/memberships/`) for org/est admin, or path-scoped admin as a tenant selector for product APIs.
 
-Functional need: [`edb_plateforme_interne_spore_v1-3.md`](../../cadrage/edb_plateforme_interne_spore_v1-3.md).
+## Objects
 
-- Platform authorization is **not** an `EstablishmentMembership` and is **not** `User.is_staff`. It is an independent operator grant (`IsActivePlatformOperator`), checked on every `/api/v1/platform/*` request. Authenticated non-operators receive **403**.
-- Platform metadata reads (orgs, establishments, users, memberships) are a **separate HTTP surface**. They must not be implemented by weakening tenant selectors or `HasActiveMembership`.
-- Starting onboarding from Platform creates organization + draft establishment **without** creating a membership for the operator. Unrelated tenant memberships must not authorize Platform and Platform must not extend them.
-- Owner/Director invitations during onboarding remain identity/membership writes (invited memberships, accept path `POST /api/v1/invitations/accept/`). They are **not** Platform user administration. After incomplete-onboarding cleanup, invitations and establishment memberships of that establishment go away; `User` rows remain.
-- `Organization.has_been_operational` is a sticky flag set **only** at live activation (`mark_organization_has_been_operational`). Schema default is `False`. There is no historical backfill.
-- Platform is the **only** onboarding entry. `POST /api/v1/auth/register/` invite-code provisioning, `POST /api/v1/establishments/`, and tenant `onboarding-sessions` writes are **removed**. `/onboarding` in the Web app redirects to login/landing (no wizard). Invited users wait on `/pending-onboarding`.
-## 5. Main Objects
+- `User` — global identity (`email` is the login identifier). Status: `pending`, `active`, `suspended`, `anonymized`. Does not carry establishment role or domain authority. Live email does not change on `PATCH /api/v1/auth/me/`; email change is a password-authenticated pending request plus token confirm.
+- `Organization` — parent business container. Status: `active`, `suspended`, `archived`. `has_been_operational` is sticky, set only at live activation (`mark_organization_has_been_operational`); default `False`, no historical backfill.
+- `Establishment` — operational tenant. Status: `draft`, `active`, `deactivated`. Belongs to one organization. Drafts are not session-selectable.
+- `EstablishmentMembership` — access link. Role + status (`invited`, `active`, `deactivated`). Operational périmètre via `MembershipScope` rows, not on `User`. There is no `OrganizationMembership` model.
 
-- `User`
-  - Global identity for authentication.
-  - Supports `identity_type` values `email` and `username`.
-  - Has validated status values in code and does not carry establishment role or domain authority.
-- `Organization`
-  - Parent business container.
-  - Owns one or more establishments.
-- `Establishment`
-  - Operational tenant context for Houston workflows.
-  - Belongs to one organization.
-- `EstablishmentMembership`
-  - Joins a user to an establishment.
-  - Carries membership role and membership status.
-  - Operational périmètre is attached through `MembershipScope` rows (explicit taxonomy UUIDs), not on `User`.
+## Access resolution
 
-## 6. Lifecycle / Statuses
+- Only **active** user + **active** membership + **active** establishment + **active** organization count.
+- `invited` and deactivated memberships do not grant access and are excluded from bootstrap.
+- Frontend state cannot grant permissions. Establishment switching must not bypass backend authorization. Selected context on `UserSession` is cleared if stale, inactive, or outside active memberships.
+- Login/refresh auto-select the sole active establishment when exactly one active membership exists.
 
-- `User`: `pending`, `active`, `suspended`, `anonymized`
-- `Organization`: `active`, `suspended`, `archived`
-- `Establishment`: `draft`, `active`, `deactivated`
-- `EstablishmentMembership`: `invited`, `active`, `deactivated`
+## Isolation and membership management
 
-Validated MVP access implications:
+- Tenant product APIs must not expose data outside establishments visible through valid memberships.
+- Team / workspace membership APIs: path `establishment_id` must match the current `UserSession` selected establishment for **active** establishments. Membership invitations additionally allow a **draft** path when the actor has an active membership on that draft (drafts are never session-selectable; never fall back to another active establishment). Org/est admin membership surfaces (`…/admin/…`, `…/organizations/{id}/`) are path-scoped; see [Two tenant HTTP modes](#two-tenant-http-modes).
+- Organizational owners (`role=owner`) stay coherent across all draft/active establishments of an organization (fan-out invite / deactivate / reactivate).
+- Invite vs reactivate: email invitation only for new emails or controlled `User.pending` resume. An already-active user who should regain owner access uses reactivation, never invite/email.
+- Invitation accept (`POST /api/v1/invitations/accept/`, bearer in JSON body): password setup and session creation. CSRF required for cookie transport. Secret is never in path or query. Owner accept requires `User.status == pending` and activates owner/invited memberships on draft/active establishments of that organization.
+- Last-active-owner: deactivation is blocked unless another user is `owner`/`active` with **full coverage** of every draft/active establishment (not a per-establishment count). `PATCH` cannot demote or assign destination `owner`. Directors cannot patch, deactivate, or reassign owner memberships.
+- Last sole owner account deletion must confirm organization closure (`close_organizations`): organization `archived`, draft/active establishments `deactivated`. Last director who is not last owner may delete their account; team management still cannot remove the last director (`DirectorCoverageInvariantError`).
+- Self-service account deletion anonymizes `User` (no hard delete) and deactivates that user’s memberships. Submitted UGC is tombstoned; see [`data_inventory.md`](../data_inventory.md).
+- Directors may manage manager and staff; owners may manage director, manager, staff, and organizational owners subject to invariants. Managers may manage in-scope staff/manager targets (service-enforced BU perimeter). Staff cannot manage memberships.
 
-- Access resolution uses only active user + active membership + active establishment + active organization.
-- `invited` memberships do not count as active access.
-- Deactivated memberships are excluded from access resolution and bootstrap results.
-- Self-service account deletion anonymizes the `User` (no hard delete) and deactivates that user’s memberships. Submitted UGC is tombstoned; see [`data_inventory.md`](../data_inventory.md).
-- Last sole owner must confirm organization closure (`close_organizations`) so the organization is `archived` and its draft/active establishments are `deactivated`.
-- Last director who is not last owner may delete their account. Team membership management still cannot remove the last director (`DirectorCoverageInvariantError`).
-- Current code validates access state, but this document does not define additional lifecycle workflows or transition APIs beyond what is implemented.
+## Platform and onboarding (identity boundary)
 
-## 7. Permissions
+- Starting onboarding from Platform creates organization + draft establishment **without** a membership for the operator.
+- Owner/Director invitations during onboarding are identity/membership writes, not Platform user administration. After incomplete-onboarding cleanup, invitations and establishment memberships of that establishment go away; `User` rows remain.
+- Platform is the only onboarding entry. Public signup, invite-code owner registration, `POST /api/v1/establishments/`, and tenant `onboarding-sessions` writes are gone. `/onboarding` in the Web app redirects; it is not a wizard. Invited users wait on `/pending-onboarding`.
 
-- Active members may access establishment context only through backend validation.
-- Membership management is restricted to authorized establishment leadership roles. Current backend helpers must be checked before changing this rule.
-- Current public membership-management API is restricted to the current active establishment context selected on `UserSession`.
-- Membership role and operational domain data inform backend authorization, but detailed action matrices do not belong here.
-- Detailed RBAC rules belong to `docs/product/domains/rbac_permissions_domain.md`.
+## Out of scope here
 
-## 8. Events
+SSO, MFA (unless code proves otherwise), billing, advanced org hierarchy, fine-grained RBAC matrices, token internals, Platform HTTP details beyond the grant boundary above.
 
-No identity or membership domain events are validated in current code or in `apps/api/schema.yml`.
+## Frontend
 
-Candidate events only:
+- Read bootstrap from the backend. TanStack Query owns auth/bootstrap server state. Do not persist selected establishment outside the backend session.
+- Handle unauthenticated, inactive user, no active memberships, single membership, and multiple memberships with no selected context.
+- Do not derive authorization from role or scope payloads.
 
-- `UserCreated` candidate
-- `EstablishmentMembershipCreated` candidate
-- `EstablishmentMembershipUpdated` candidate
-- `EstablishmentMembershipDeactivated` candidate
-- `EstablishmentSwitched` candidate
+## Agent notes
 
-## 9. API Surface
-
-Current API truth is `apps/api/schema.yml`.
-
-Implemented endpoints confirmed in `apps/api/schema.yml`:
-
-- `GET /api/v1/auth/csrf/`
-- `POST /api/v1/auth/login/`
-- `POST /api/v1/auth/refresh/`
-- `POST /api/v1/auth/logout/`
-- `GET /api/v1/auth/bootstrap/`
-- `PATCH /api/v1/auth/me/` (first name / last name only; email is not writable here)
-- `POST /api/v1/auth/email-change/`
-- `POST /api/v1/auth/email-change/confirm/` (token in JSON body; public; does not create a session)
-- `POST /api/v1/auth/password-change/` (authenticated; current password required; other sessions revoked)
-- `POST /api/v1/auth/password-reset/` (public; HTTP response does not reveal whether the email exists)
-- `POST /api/v1/auth/password-reset/confirm/` (token in JSON body; public; does not create a session; new password must differ from the current secret; all sessions revoked)
-- `GET /api/v1/auth/me/deletion-preview/`
-- `POST /api/v1/auth/me/delete/`
-- `POST /api/v1/auth/switch_establishment/`
-- `GET /api/v1/establishments/{establishment_id}/memberships/`
-- `GET /api/v1/establishments/{establishment_id}/memberships/{membership_id}/`
-- `PATCH /api/v1/establishments/{establishment_id}/memberships/{membership_id}/`
-- `POST /api/v1/establishments/{establishment_id}/memberships/{membership_id}/deactivate/`
-- `GET /api/v1/establishments/{establishment_id}/users/search/?q=`
-
-Implemented response truths:
-
-- Login and bootstrap responses include `memberships`.
-- Login and refresh currently auto-select the sole active establishment on `UserSession` when exactly one active membership exists.
-- Current bootstrap behavior: `active_membership` resolves from `UserSession.selected_establishment` when valid.
-- If `selected_establishment` is stale, inactive, or outside active memberships, it is cleared safely and `active_membership` becomes `null`.
-- Membership-management endpoints are establishment-scoped and require the path `establishment_id` to match the current active auth-session context for **active** establishments. `POST .../membership-invitations/` additionally allows a **draft** path when the actor has an active membership on that draft, even if another active establishment is selected (drafts are not session-selectable; never falls back to another active establishment).
-- Membership-management list and detail responses are tenant-filtered before serialization.
-- Role updates and operational-domain assignment updates use `PATCH`; activation and deactivation are separate command endpoints.
-- Organizational owners: memberships with `role=owner` are kept coherent across all `draft` and `active` establishments of an organization (fan-out invite / deactivate / reactivate). There is no `OrganizationMembership` model.
-- Invite vs reactivate: email invitation is only for new emails or controlled `User.pending` resume. An already-active Houston user (`User.active`) who should regain owner access uses organizational **reactivation** (`POST .../memberships/{id}/activate/`), never invite/email.
-- Owner invitation accept (`POST /api/v1/invitations/accept/` with the bearer in the JSON body): requires `User.status == pending`; activates all `owner`/`invited` memberships for that user on draft/active establishments of the same organization.
-- Last-active-owner invariant: deactivation is blocked unless another user is `owner`/`active` with **full coverage** of every draft/active establishment in the organization (not a simple per-establishment count).
-- Owner memberships cannot be changed via `PATCH` (no demotion / no destination `owner`). Directors cannot patch, deactivate, or reassign owner memberships.
-- Directors may manage manager and staff memberships; owners may manage director, manager, staff, and organizational owners subject to invariants. Managers may manage in-scope staff/manager targets (service-enforced BU perimeter). Staff cannot manage memberships.
-- Preflight / repair: `preflight_organizational_owners` inventories owner coherence conflicts; `repair_organizational_owners` only creates missing owner memberships when existing owner statuses for that user are homogeneous. Status mixes and non-owner conflicts require manual fix (no auto status alignment).
-- Scoped user search is establishment-scoped and requires the path `establishment_id` to match the current active auth-session context.
-- Scoped user search requires `q` with a minimum length of 2, except `context=assignee` with `business_unit_id`, which may omit `q` to list operational members covering that BusinessUnit (Manager/Staff via scope; Owner/Director are excluded from this browse list).
-- Scoped user search returns active users with active memberships in the same active establishment only.
-- Scoped user search response fields are limited to `id`, `display_name`, `username`, `email`, `role`, and `membership_id`.
-- Establishment invitation acceptance: `POST /api/v1/invitations/accept/` (bearer in JSON body; password setup, session creation; CSRF required for cookie transport). The public app path is `/invitations`; the secret is never placed in an HTTP path or query.
-- Onboarding Owner/Director invites: `POST /api/v1/platform/onboardings/{session_id}/owner-invitations/` and `…/director-invitations/` (and Director from draft complete). Accept remains `POST /api/v1/invitations/accept/`.
-- Workspace membership invitations: `POST /api/v1/establishments/{establishment_id}/membership-invitations/` may invite `staff`, `manager`, or `director` (active establishment; director invites require an active path). Organizational `owner` invitations use organization-admin endpoints (`POST /api/v1/organizations/{organization_id}/owner-invitations/`), not this Team path. Staff/manager invites are also allowed on a **draft** path via the actor’s active membership on that draft when session selection is on a different active establishment. Returns `invitation_token` and schedules a transactional invitation email when enabled.
-
-Candidate endpoints only: none currently listed for identity/password.
-
-## 10. Frontend Expectations
-
-- Frontend reads auth/bootstrap state from backend APIs.
-- TanStack Query owns auth/bootstrap server state.
-- Frontend auth and session mechanics follow `docs/architecture/authentication_charter.md`.
-- Frontend must not derive authorization from role or operational domain data.
-- Mono-establishment users should not see unnecessary establishment switch UI.
-- Multi-membership users may require simple selection UI through the validated `switch_establishment` auth endpoint.
-- Frontend must handle unauthenticated, inactive user, no active memberships, single active membership, and multiple active memberships with no selected context yet.
-- Frontend must not persist selected establishment outside the backend auth session design.
-
-## 11. AI Agent Notes
-
-- Inspect current models before changing this domain or related code.
-- Inspect `apps/api/schema.yml` before listing or changing endpoints.
-- Do not move role or operational domain scope onto `User`.
-- Do not add detailed RBAC matrices here.
-- Do not place detailed authorization rules in this document; use `rbac_permissions_domain.md` for permission behavior.
-- Do not claim invitations, password reset, membership management, or switch endpoints are implemented without schema proof.
+- Inspect models, tests, and `schema.yml` before changing this domain.
+- Do not move role or operational scope onto `User`.
+- Do not implement Platform as a tenant-permission bypass or `is_staff` check.
 - Do not document Django `request.session["current_establishment_id"]` as public auth-session authority.
-- Do not introduce old-stack terminology.
-- Do not implement Platform by adding a tenant-permission bypass. Platform APIs live under `/api/v1/platform/` in `apps/api/schema.yml`.
-- For auth and session mechanics, read `docs/architecture/authentication_charter.md`.
+- Do not gate org/est admin on `HasActiveMembership` or `ApiAccessContext.active_membership`. Do not treat a path-scoped admin request as an establishment switch.
+- Session/CSRF/tokens: authentication charter. Matrices: RBAC. Wizard/activation: runtime domain.

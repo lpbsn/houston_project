@@ -103,7 +103,7 @@ Calls `manage.py clean_operational_test_data` (local/dev only). Requires `--dry-
 - **Preserves:** users, establishments, memberships, business units, catalog infra (`Catalog*`), chat, `ai_usage_logs`, `GamificationSeason`.
 - **Cutover:** overwrites `AnalyticsHistoryCoverage.reliable_from` to the cleanup instant (lifecycle journals only). Does not insert history baselines.
 
-Lot 5 sequence: `--dry-run` then `--confirm`, then recreate the operational loop (observations → signals → plans). Dashboard **pôle** = current `responsible_business_unit`; **localisation** = `location_text` (not `OperationalUnit`). Journal / cycle coverage can stay `partial` while the selected period starts before `history_reliable_from`. Contributors stay empty until new point awards.
+Sequence: `--dry-run` then `--confirm`, then recreate the operational loop (observations → signals → plans). Dashboard **pôle** = current `responsible_business_unit`; **localisation** = `location_text` (not `OperationalUnit`). Journal / cycle coverage can stay `partial` while the selected period starts before `history_reliable_from`. Contributors stay empty until new point awards.
 
 ### Provision KONOHA dataset actors (not operational data)
 

@@ -1,9 +1,9 @@
 # Data inventory — Spore
 
-Status: authoritative for store privacy work (P1.1 / PR2)
+Status: authoritative for store privacy work
 Last reviewed: 2026-09-02
 
-This document describes **what the product actually collects and retains**, what account deletion does, and remaining uncertainties. It is the source of truth for Privacy Policy and store declarations (PR2). It is not a legal opinion.
+This document describes **what the product actually collects and retains**, what account deletion does, and remaining uncertainties. It is the source of truth for Privacy Policy and store declarations. It is not a legal opinion.
 
 ## Roles
 
@@ -41,13 +41,13 @@ This document describes **what the product actually collects and retains**, what
 ### Third parties
 
 - **OpenAI** (verified production paths in this repo): observation pipeline (`HOUSTON_AI_OBSERVATION_PROVIDER`), transcription (`HOUSTON_AI_TRANSCRIPTION_PROVIDER`), analytics pattern classifier (`HOUSTON_AI_ANALYTICS_PATTERN_PROVIDER`). Usage metadata in `AIUsageLog` (no prompt/raw output stored locally). Provider retention is **not** controlled in this repo.
-- **openai-v1 user consent** (product, PR2): gates observation text pipeline, request-scoped transcription audio, and the analytics pattern classifier (structured signal title / summary / issue_focus, plus duplicate-guard follow-up). Photos and chat are not sent. OpenAI pattern classification is skipped when any source-observation author lacks current consent.
+- **openai-v1 user consent** (product): gates observation text pipeline, request-scoped transcription audio, and the analytics pattern classifier (structured signal title / summary / issue_focus, plus duplicate-guard follow-up). Photos and chat are not sent. OpenAI pattern classification is skipped when any source-observation author lacks current consent.
 - **Resend**: invitation emails when enabled; content-report operator mail uses the same client and sends **identifiers only** (no UGC body).
 - **Firebase Cloud Messaging / APNs**: push delivery. Not Analytics in the current native link set.
 - **PostgreSQL, Redis, Railway**: hosting. Railway legal entity US; execution region currently EU West (Amsterdam) as stated on mentions légales.
 - No Sentry, no marketing analytics.
 
-### Legal records (PR2)
+### Legal records
 
 - `User.terms_version` / `terms_accepted_at` (`cgu-v1`).
 - `User.ai_consent_version` / `ai_processing_consented_at` (`openai-v1`).
