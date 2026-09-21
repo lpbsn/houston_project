@@ -21,8 +21,8 @@ flowchart TB
     Membership[EstablishmentMembership]
     Scope[MembershipScope]
     HasMem[HasActiveMembership]
-    OrgAdmin[org admin]
-    EstAdmin[est admin]
+    OrgAdmin[decide_organization_admin_access]
+    EstAdmin[decide_active_establishment_admin_access]
   end
   subgraph platformCtx [Platform authorization]
     Grant[PlatformOperatorAccess]
@@ -35,17 +35,26 @@ flowchart TB
   User --> Grant
   Membership --> Scope
   UserSession --> HasMem
-  HasMem --> OrgAdmin
-  HasMem --> EstAdmin
+  Membership --> OrgAdmin
+  Membership --> EstAdmin
   Grant --> IsOp
   IsOp --> PlatAPI
 ```
 
 - **Authentication** — global identity + session (`User`, `UserSession`, tokens). Public entrypoints (login, refresh, invitation accept, password reset, CSRF, email-change confirm) **establish** identity and/or session; they are not consumers of an existing `UserSession` grant. This is not business authorization. Owner: `houston.accounts` + authentication charter.
-- **Tenant** — independent context rooted in an **active** `EstablishmentMembership` plus active user, establishment, and organization. `HasActiveMembership` is a coarse session gate. Org/est admin is path-scoped. Operational périmètre is `MembershipScope` (BusinessUnit UUID only). Owner matrices: RBAC domain. Code: `houston.organizations`, `houston.establishments`.
+- **Tenant** — independent context rooted in an **active** `EstablishmentMembership` plus active user, establishment, and organization. Two HTTP modes (below): workspace/session-scoped (`HasActiveMembership`) and path-scoped org/est admin. Operational périmètre is `MembershipScope` (BusinessUnit UUID only). Owner matrices: RBAC domain. Code: `houston.organizations`, `houston.establishments`.
 - **Platform** — independent operator grant `PlatformOperatorAccess` / `IsActivePlatformOperator` on `/api/v1/platform/*` only. Not a membership, not `User.is_staff`, not a tenant-selector bypass. An operator who also has tenant memberships keeps those memberships for client APIs only. Code: `houston.platform`.
 
 Nothing below grants tenant or Platform access by itself: a `User` row, `User.is_staff`, frontend hints, or a Platform grant used against tenant APIs.
+
+## Two tenant HTTP modes
+
+Tenant HTTP uses two existing gates. They are not interchangeable.
+
+- **Workspace / session-scoped** — product and team APIs (`HasActiveMembership`). They operate in `UserSession.selected_establishment` via `ApiAccessContext.active_membership`. A path `establishment_id` must match that selection (fail-closed). Switching establishment is an explicit auth mutation, not implied by another path. Drafts are never session-selectable.
+- **Path-scoped tenant administration** — `/api/v1/organizations/{organization_id}/` (`decide_organization_admin_access`) and `/api/v1/establishments/{establishment_id}/admin/` (`decide_active_establishment_admin_access`). They target the path resource from the actor’s Owner/Director memberships. They do not read or mutate `selected_establishment`. Establishment admin HTTP is ACTIVE-only (draft → 404). Organization admin can list draft and active establishments without switching workspace.
+
+Do not use session-scoped team endpoints (`…/establishments/{id}/memberships/`) for org/est admin, or path-scoped admin as a tenant selector for product APIs.
 
 ## Objects
 
@@ -64,7 +73,7 @@ Nothing below grants tenant or Platform access by itself: a `User` row, `User.is
 ## Isolation and membership management
 
 - Tenant product APIs must not expose data outside establishments visible through valid memberships.
-- Membership management is establishment-scoped: path `establishment_id` must match the current `UserSession` selected establishment for **active** establishments. Membership invitations additionally allow a **draft** path when the actor has an active membership on that draft (drafts are never session-selectable; never fall back to another active establishment).
+- Team / workspace membership APIs: path `establishment_id` must match the current `UserSession` selected establishment for **active** establishments. Membership invitations additionally allow a **draft** path when the actor has an active membership on that draft (drafts are never session-selectable; never fall back to another active establishment). Org/est admin membership surfaces (`…/admin/…`, `…/organizations/{id}/`) are path-scoped; see [Two tenant HTTP modes](#two-tenant-http-modes).
 - Organizational owners (`role=owner`) stay coherent across all draft/active establishments of an organization (fan-out invite / deactivate / reactivate).
 - Invite vs reactivate: email invitation only for new emails or controlled `User.pending` resume. An already-active user who should regain owner access uses reactivation, never invite/email.
 - Invitation accept (`POST /api/v1/invitations/accept/`, bearer in JSON body): password setup and session creation. CSRF required for cookie transport. Secret is never in path or query. Owner accept requires `User.status == pending` and activates owner/invited memberships on draft/active establishments of that organization.
@@ -95,4 +104,5 @@ SSO, MFA (unless code proves otherwise), billing, advanced org hierarchy, fine-g
 - Do not move role or operational scope onto `User`.
 - Do not implement Platform as a tenant-permission bypass or `is_staff` check.
 - Do not document Django `request.session["current_establishment_id"]` as public auth-session authority.
+- Do not gate org/est admin on `HasActiveMembership` or `ApiAccessContext.active_membership`. Do not treat a path-scoped admin request as an establishment switch.
 - Session/CSRF/tokens: authentication charter. Matrices: RBAC. Wizard/activation: runtime domain.

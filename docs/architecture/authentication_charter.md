@@ -125,7 +125,7 @@ Logout must:
 - for `body`: fall back only to an explicit JSON refresh token and never read, set, or clear cookies
 - remain safe and idempotent
 
-Bootstrap is authenticated-only (`401` if not). It returns public user fields plus membership payloads the backend already authorized. `active_membership` comes from `UserSession.selected_establishment` when that selection is still valid.
+Bootstrap is authenticated-only (`401` if not). It returns public user fields plus membership payloads the backend already authorized. `active_membership` comes from `UserSession.selected_establishment` when that selection is still valid. That selection is the workspace for session-scoped tenant APIs; organization/establishment admin APIs do not use it and do not change it ([`identity_membership_domain.md`](../product/domains/identity_membership_domain.md)).
 
 Switch establishment requires bearer auth, stores selected establishment on `UserSession`, and fails closed for invalid, foreign, or inactive establishments.
 
