@@ -193,6 +193,7 @@ vi.mock('framer-motion', () => ({
 }))
 
 import App from './App'
+import { bootstrapQueryKey } from '@/features/auth/api'
 
 function membership(
   id: string,
@@ -308,6 +309,7 @@ afterEach(() => {
     authState.pendingOnboardingMemberships = []
     switchEstablishment.mockReset()
     switchEstablishment.mockResolvedValue(undefined)
+    queryClient.clear()
     window.history.replaceState(null, '', '/')
     Reflect.deleteProperty(window, 'matchMedia')
     vi.unstubAllEnvs()
@@ -331,6 +333,45 @@ describe('App terrain active membership routing', () => {
     await waitFor(() => {
       expect(navigate).toHaveBeenCalledWith('/select-establishment', { replace: true })
     })
+  })
+
+  it('keeps reporting after a switch when the Query cache is ahead of AuthProvider', async () => {
+    stubLgViewport(false)
+    const staleBootstrap = bootstrapWithoutActiveMembership()
+    const switchedBootstrap = bootstrapWithSelectedEstablishment('est-2')
+    authState.bootstrap = staleBootstrap
+    authState.memberships = staleBootstrap.memberships
+    authState.hasOperationalAccess = false
+    queryClient.setQueryData(bootstrapQueryKey, switchedBootstrap)
+    routeState.route = { kind: 'static', path: '/reporting' }
+
+    render(wrapApp())
+
+    expect(navigate).not.toHaveBeenCalled()
+    expect(await screen.findByText('reporting')).toBeTruthy()
+  })
+
+  it('does not bounce a scoped destination when the cache already matches the route establishment', async () => {
+    stubLgViewport(false)
+    const staleBootstrap = bootstrapWithSelectedEstablishment('est-1')
+    const switchedBootstrap = bootstrapWithSelectedEstablishment('est-2')
+    authState.bootstrap = staleBootstrap
+    authState.memberships = staleBootstrap.memberships
+    authState.hasOperationalAccess = true
+    queryClient.setQueryData(bootstrapQueryKey, switchedBootstrap)
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: 'est-2' },
+      page: 'chat',
+    }
+
+    render(wrapApp())
+
+    expect(navigate).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^\/select-establishment/),
+      expect.anything(),
+    )
+    expect(switchEstablishment).not.toHaveBeenCalled()
   })
 
   it('keeps analytics as a hub without a back control when operational access is available', async () => {
