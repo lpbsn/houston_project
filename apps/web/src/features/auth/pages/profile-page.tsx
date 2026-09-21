@@ -190,10 +190,12 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
     activeMembership?.establishment_name,
   )
   const establishmentId = activeMembership?.establishment_id ?? null
-  const showSwitchEstablishment = canSwitchEstablishment(memberships, establishmentId)
   const pendingResumePath = resolvePendingLandingPath(pendingOnboardingMemberships)
   const isNativeRuntime = getAppRuntime() === 'native'
   const isLgViewport = useLgViewport()
+  const showSwitchEstablishment =
+    canSwitchEstablishment(memberships, establishmentId) &&
+    !isDesktopWebLanding(isLgViewport)
   const showPlatformEntry =
     isPlatformOperatorActive(bootstrap) && isDesktopWebLanding(isLgViewport)
   const notificationPreferencesQuery = useNotificationPreferencesQuery(establishmentId, {
@@ -278,7 +280,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
                 ? `Actuellement : ${activeMembership.establishment_name}`
                 : 'Basculer entre vos sites actifs'
             }
-            onClick={() => onNavigate?.('/general/switch-establishment')}
+            onClick={() => onNavigate?.('/select-establishment')}
           />
         ) : null}
         <TerrainCard className="divide-y divide-[#E8E6DF] p-0">

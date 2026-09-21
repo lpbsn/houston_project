@@ -28,6 +28,25 @@ function renderPage() {
   })
 }
 
+const { authState } = vi.hoisted(() => ({
+  authState: {
+    current: {
+      memberships: [] as Array<{
+        id: string
+        establishment_id: string
+        establishment_name: string
+        organization_id: string
+        organization_name: string
+        role: string
+        status: string
+        scopes: unknown[]
+        scope_summary: { business_unit_count: number }
+      }>,
+      activeMembership: null as { establishment_id: string } | null,
+    },
+  },
+}))
+
 const memberships = [
   {
     id: 'member-1',
@@ -64,10 +83,10 @@ const memberships = [
   },
 ]
 
+authState.current.memberships = memberships
+
 vi.mock('@/app/auth-provider', () => ({
-  useAuth: () => ({
-    memberships,
-  }),
+  useAuth: () => authState.current,
 }))
 
 vi.mock('@/app/app-routes', async (importOriginal) => {
@@ -89,6 +108,8 @@ afterEach(() => {
   onNavigate.mockReset()
   switchEstablishment.mockReset()
   mockSearch = ''
+  authState.current.memberships = memberships
+  authState.current.activeMembership = null
 })
 
 describe('SelectEstablishmentPage', () => {
@@ -109,7 +130,7 @@ describe('SelectEstablishmentPage', () => {
     expect(onNavigate).toHaveBeenCalledWith('/reporting')
   })
 
-  it('disables all establishments and ignores concurrent clicks while switching', async () => {
+  it('disables remaining interactive choices and ignores concurrent clicks while switching', async () => {
     let resolveSwitch: (value: unknown) => void = () => {}
     switchEstablishment.mockImplementation(
       () =>
@@ -130,6 +151,7 @@ describe('SelectEstablishmentPage', () => {
       expect((metzButton as HTMLButtonElement).disabled).toBe(true)
       expect((strasbourgButton as HTMLButtonElement).disabled).toBe(true)
       expect((nancyButton as HTMLButtonElement).disabled).toBe(true)
+      expect(metzButton.getAttribute('aria-busy')).toBe('true')
     })
 
     fireEvent.click(strasbourgButton)
@@ -139,6 +161,41 @@ describe('SelectEstablishmentPage', () => {
       { establishment_id: 'est-2' },
       expect.anything(),
     )
+
+    resolveSwitch({})
+    await waitFor(() => {
+      expect(onNavigate).toHaveBeenCalledWith('/reporting')
+    })
+  })
+
+  it('disables only selectable establishments while switching when one is already active', async () => {
+    authState.current.activeMembership = { establishment_id: 'est-1' }
+    let resolveSwitch: (value: unknown) => void = () => {}
+    switchEstablishment.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSwitch = resolve
+        }),
+    )
+
+    renderPage()
+
+    const metzButton = screen.getByRole('button', { name: /Brasserie Metz/i })
+    const strasbourgButton = screen.getByRole('button', { name: /Café Strasbourg/i })
+
+    fireEvent.click(metzButton)
+
+    await waitFor(() => {
+      expect((metzButton as HTMLButtonElement).disabled).toBe(true)
+      expect((strasbourgButton as HTMLButtonElement).disabled).toBe(true)
+      expect(metzButton.getAttribute('aria-busy')).toBe('true')
+    })
+
+    expect(screen.queryByRole('button', { name: /Le Palais Nancy/i })).toBeNull()
+    expect(screen.getByText('Le Palais Nancy').closest('[aria-current="true"]')).toBeTruthy()
+
+    fireEvent.click(strasbourgButton)
+    expect(switchEstablishment).toHaveBeenCalledTimes(1)
 
     resolveSwitch({})
     await waitFor(() => {
@@ -185,6 +242,52 @@ describe('SelectEstablishmentPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /Le Palais Nancy/i }))
 
     await waitFor(() => {
+      expect(onNavigate).toHaveBeenCalledWith('/reporting')
+    })
+  })
+
+  it('renders the active establishment as non-interactive context and keeps others selectable', () => {
+    authState.current.activeMembership = { establishment_id: 'est-1' }
+
+    renderPage()
+
+    expect(screen.queryByRole('button', { name: /Le Palais Nancy/i })).toBeNull()
+    expect(screen.getByText('Le Palais Nancy').closest('[aria-current="true"]')).toBeTruthy()
+    expect(screen.getAllByRole('region')).toHaveLength(2)
+    expect(screen.getByRole('button', { name: /Brasserie Metz/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Café Strasbourg/i })).toBeTruthy()
+    expect(switchEstablishment).not.toHaveBeenCalled()
+    expect(onNavigate).not.toHaveBeenCalled()
+  })
+
+  it('does not show a current-establishment region when none is active', () => {
+    renderPage()
+
+    expect(screen.queryByRole('region')).toBeNull()
+    expect(document.querySelector('[aria-current="true"]')).toBeNull()
+    expect(screen.getByRole('button', { name: /Le Palais Nancy/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Brasserie Metz/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Café Strasbourg/i })).toBeTruthy()
+  })
+
+  it('keeps the list visible and re-enables choices after a failed switch', async () => {
+    switchEstablishment.mockRejectedValueOnce(new Error('switch failed'))
+
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: /Brasserie Metz/i }))
+
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Brasserie Metz/i })).toBeTruthy()
+    expect((screen.getByRole('button', { name: /Café Strasbourg/i }) as HTMLButtonElement).disabled).toBe(
+      false,
+    )
+
+    switchEstablishment.mockResolvedValueOnce({})
+    fireEvent.click(screen.getByRole('button', { name: /Café Strasbourg/i }))
+
+    await waitFor(() => {
+      expect(switchEstablishment).toHaveBeenCalledTimes(2)
       expect(onNavigate).toHaveBeenCalledWith('/reporting')
     })
   })

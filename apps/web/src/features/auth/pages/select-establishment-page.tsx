@@ -4,7 +4,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
 import { switchEstablishment } from '@/features/auth/api'
-import { EstablishmentSelectorCard } from '@/features/auth/components/establishment-selector-card'
+import { EstablishmentSelectorList } from '@/features/auth/components/establishment-selector-list'
 import {
   parsePendingAppOpenFromSearch,
   resolveSelectEstablishmentResumeHref,
@@ -15,8 +15,9 @@ type SelectEstablishmentPageProps = {
 }
 
 export function SelectEstablishmentPage({ onNavigate }: SelectEstablishmentPageProps) {
-  const { memberships } = useAuth()
+  const { activeMembership, memberships } = useAuth()
   const { search } = useAppRoute()
+  const activeEstablishmentId = activeMembership?.establishment_id ?? null
   const [pendingEstablishmentId, setPendingEstablishmentId] = useState<string | null>(null)
   const [selectorError, setSelectorError] = useState<string | null>(null)
   const isSwitchingRef = useRef(false)
@@ -26,7 +27,7 @@ export function SelectEstablishmentPage({ onNavigate }: SelectEstablishmentPageP
   })
 
   async function handleSelectEstablishment(establishmentId: string) {
-    if (isSwitchingRef.current) {
+    if (establishmentId === activeEstablishmentId || isSwitchingRef.current) {
       return
     }
 
@@ -49,7 +50,8 @@ export function SelectEstablishmentPage({ onNavigate }: SelectEstablishmentPageP
   }
 
   return (
-    <EstablishmentSelectorCard
+    <EstablishmentSelectorList
+      activeEstablishmentId={activeEstablishmentId}
       errorMessage={selectorError}
       memberships={memberships}
       pendingEstablishmentId={pendingEstablishmentId}

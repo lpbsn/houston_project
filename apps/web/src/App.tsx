@@ -1,5 +1,6 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
+import { ArrowLeft } from 'lucide-react'
 
 import { isHashTokenPublicRoute, parseAppRoute, serializeAppRoute, useAppRoute, type AppRoute } from '@/app/app-routes'
 import {
@@ -23,7 +24,6 @@ import {
   LazyExecutionFeedPage,
   LazyExecutionUpcomingPage,
   LazyProfilePage,
-  LazyProfileSwitchEstablishmentPage,
   LazyNotificationsCenterPage,
   LazyTeamPage,
   LazyTeamMemberDetailPage,
@@ -48,6 +48,7 @@ import { AppShell } from '@/components/app-shell'
 import { TerrainShell } from '@/components/layout/terrain-shell'
 import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import { Button } from '@/components/ui/button'
+import { terrainBackButtonClassName } from '@/lib/terrain-styles'
 import { bootstrapQueryKey, clearAuthState, switchEstablishment } from '@/features/auth/api'
 import { AuthRoutingLoading } from '@/features/auth/components/auth-routing-loading'
 import { LegalEntryGates } from '@/features/auth/components/legal-entry-gates'
@@ -62,6 +63,7 @@ import {
   shouldRedirectUnauthenticatedPublicRoute,
   shouldShowAuthRoutingLoading,
 } from '@/features/auth/lib/authenticated-landing'
+import { resolveAuthRoutingSession } from '@/features/auth/lib/auth-routing-session'
 import { NoEstablishmentPage } from '@/features/auth/pages/no-establishment-page'
 import { SelectEstablishmentPage } from '@/features/auth/pages/select-establishment-page'
 import type { BootstrapResponse } from '@/features/auth/types'
@@ -137,6 +139,10 @@ function App() {
   const isLgViewport = useLgViewport()
   const isDesktopWeb = getAppRuntime() === 'web' && isLgViewport
   const applyingOpenRef = useRef(false)
+  const authRoutingSession = resolveAuthRoutingSession(
+    queryClient.getQueryData<BootstrapResponse>(bootstrapQueryKey),
+    auth.bootstrap,
+  )
 
   const motionProps = shouldReduceMotion
     ? {}
@@ -173,22 +179,22 @@ function App() {
       return
     }
 
-    if (!auth.bootstrap) {
+    if (!authRoutingSession.bootstrap) {
       return
     }
 
-    const landingPath = getAuthenticatedLandingPath(auth.bootstrap, {
+    const landingPath = getAuthenticatedLandingPath(authRoutingSession.bootstrap, {
       isDesktop: isDesktopWeb,
     })
     if (route.kind === 'static' && route.path === '/forgot-password') {
-      navigate(auth.hasOperationalAccess ? '/general' : (landingPath ?? '/login'), {
+      navigate(authRoutingSession.hasOperationalAccess ? '/general' : (landingPath ?? '/login'), {
         replace: true,
       })
       return
     }
 
     if (route.kind === 'platform') {
-      if (!isDesktopWeb || !isPlatformOperatorActive(auth.bootstrap)) {
+      if (!isDesktopWeb || !isPlatformOperatorActive(authRoutingSession.bootstrap)) {
         if (landingPath) {
           navigate(landingPath, { replace: true })
         }
@@ -196,8 +202,7 @@ function App() {
       return
     }
     const openSession = {
-      getActiveEstablishmentId: () =>
-        auth.bootstrap?.active_membership?.establishment_id ?? null,
+      getActiveEstablishmentId: () => authRoutingSession.sessionEstablishmentId,
       switchEstablishment: async (establishmentId: string) => {
         await switchEstablishment({ establishment_id: establishmentId })
       },
@@ -212,7 +217,7 @@ function App() {
           pending.establishmentId ?? establishmentIdRequiringSwitch(pendingRoute) ?? undefined
         const canOpenNow =
           Boolean(destEstablishmentId) ||
-          auth.hasOperationalAccess ||
+          authRoutingSession.hasOperationalAccess ||
           !requiresActiveMembership(pendingRoute)
 
         if (canOpenNow) {
@@ -267,13 +272,12 @@ function App() {
     }
 
     const routeEstablishmentId = establishmentIdRequiringSwitch(route)
-    const sessionEstablishmentId =
-      auth.bootstrap.active_membership?.establishment_id ?? null
+    const sessionEstablishmentId = authRoutingSession.sessionEstablishmentId
     if (
-      auth.hasOperationalAccess &&
+      authRoutingSession.hasOperationalAccess &&
       routeEstablishmentId &&
       sessionEstablishmentId !== routeEstablishmentId &&
-      hasActiveMembershipForEstablishment(auth.memberships, routeEstablishmentId)
+      hasActiveMembershipForEstablishment(authRoutingSession.memberships, routeEstablishmentId)
     ) {
       const target = {
         href: `${serializeAppRoute(route)}${locationSearch}`,
@@ -302,7 +306,10 @@ function App() {
     }
 
     if (isDesktopWeb && route.kind === 'static' && route.path === '/select-establishment') {
-      const hinted = resolveSelectEstablishmentHintTarget(locationSearch, auth.memberships)
+      const hinted = resolveSelectEstablishmentHintTarget(
+        locationSearch,
+        authRoutingSession.memberships,
+      )
       if (hinted) {
         if (applyingOpenRef.current) {
           return
@@ -325,12 +332,15 @@ function App() {
       return
     }
 
-    if (auth.hasOperationalAccess) {
+    if (authRoutingSession.hasOperationalAccess) {
       return
     }
 
     if (route.kind === 'static' && route.path === '/select-establishment') {
-      const hinted = resolveSelectEstablishmentHintTarget(locationSearch, auth.memberships)
+      const hinted = resolveSelectEstablishmentHintTarget(
+        locationSearch,
+        authRoutingSession.memberships,
+      )
       if (hinted) {
         if (applyingOpenRef.current) {
           return
@@ -350,7 +360,7 @@ function App() {
     const switchEstablishmentId = establishmentIdRequiringSwitch(route)
     if (
       switchEstablishmentId &&
-      auth.memberships.some(
+      authRoutingSession.memberships.some(
         (membership) =>
           membership.status === 'active' && membership.establishment_id === switchEstablishmentId,
       )
@@ -386,12 +396,12 @@ function App() {
       navigate(landingPath, { replace: true })
     }
   }, [
-    auth.bootstrap,
-    auth.hasOperationalAccess,
     auth.isAuthenticated,
     auth.isReady,
-    auth.memberships,
-    auth.pendingOnboardingMemberships,
+    authRoutingSession.bootstrap,
+    authRoutingSession.hasOperationalAccess,
+    authRoutingSession.memberships,
+    authRoutingSession.sessionEstablishmentId,
     isDesktopWeb,
     isLgViewport,
     locationSearch,
@@ -434,6 +444,12 @@ function App() {
       establishmentId &&
       routeEstablishmentId !== establishmentId &&
       hasActiveMembershipForEstablishment(auth.memberships, routeEstablishmentId),
+  )
+  const authRoutingSessionMismatch = Boolean(
+    routeEstablishmentId &&
+      authRoutingSession.sessionEstablishmentId &&
+      routeEstablishmentId !== authRoutingSession.sessionEstablishmentId &&
+      hasActiveMembershipForEstablishment(authRoutingSession.memberships, routeEstablishmentId),
   )
   const permissionHints = getBootstrapPermissionHints(auth.bootstrap)
   const isChatRoute =
@@ -574,7 +590,7 @@ function App() {
       auth.isAuthenticated &&
       (isDesktopEstablishmentSelector ||
         (requiresActiveMembership(route) &&
-          (establishmentRouteSessionMismatch || !auth.hasOperationalAccess)))
+          (authRoutingSessionMismatch || !authRoutingSession.hasOperationalAccess)))
     ) {
       return (
         <div className="flex min-h-[16rem] items-center justify-center text-sm text-muted-foreground">
@@ -850,10 +866,6 @@ function App() {
       return <LazyAnalyticsPage />
     }
 
-    if (route.path === '/general/switch-establishment') {
-      return <LazyProfileSwitchEstablishmentPage onNavigate={navigate} />
-    }
-
     if (route.path === '/general') {
       return (
         <LazyProfilePage
@@ -909,8 +921,9 @@ function App() {
     auth.isLoggingOut,
     auth.memberships,
     auth.pendingOnboardingMemberships,
+    authRoutingSession.hasOperationalAccess,
+    authRoutingSessionMismatch,
     establishmentId,
-    establishmentRouteSessionMismatch,
     handleSignOut,
     analyticsPatternDetailState,
     analyticsSignalReturnContext,
@@ -982,6 +995,20 @@ function App() {
     </Button>
   )
 
+  const backToGeneralAction = (
+    <Button
+      type="button"
+      variant="ghost"
+      className={terrainBackButtonClassName()}
+      onClick={() => {
+        navigate('/general')
+      }}
+    >
+      <ArrowLeft className="mr-1 h-4 w-4" />
+      Retour
+    </Button>
+  )
+
   const signInAction = (
     <Button
       type="button"
@@ -1029,11 +1056,13 @@ function App() {
                 }
               : route.kind === 'static' && route.path === '/select-establishment'
                 ? {
-                    headingBadge: 'Etablissement',
-                    title: 'Choisissez votre établissement',
-                    description:
-                      'Sélectionnez l’établissement actif avec lequel vous souhaitez commencer.',
-                    actions: signOutAction,
+                    title: 'Choisir un établissement',
+                    actions: (
+                      <>
+                        {auth.hasOperationalAccess ? backToGeneralAction : null}
+                        {signOutAction}
+                      </>
+                    ),
                   }
                 : route.kind === 'static' && route.path === '/no-establishment'
                   ? {

@@ -7,8 +7,8 @@ import { cn } from '@/lib/utils'
 type AppShellProps = PropsWithChildren<{
   headingBadge?: string
   title: string
-  description: string
-  actions?: ReactNode
+  description?: string
+  actions?: ReactNode,
 }>
 
 export function AppShell({
@@ -49,9 +49,11 @@ export function AppShell({
                 <h1 className="text-[2rem] font-black tracking-[-0.06em] text-foreground sm:text-[2.35rem]">
                   {title}
                 </h1>
-                <p className="max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-                  {description}
-                </p>
+                {description ? (
+                  <p className="max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
+                    {description}
+                  </p>
+                ) : null}
               </div>
             </div>
 

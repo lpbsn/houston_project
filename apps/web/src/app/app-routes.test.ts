@@ -95,14 +95,14 @@ describe('parseAppRoute', () => {
     })
   })
 
-  it('parses general switch establishment before general', () => {
-    expect(parseAppRoute('/general/switch-establishment')).toEqual({
-      kind: 'static',
-      path: '/general/switch-establishment',
-    })
+  it('parses general and treats the removed switch-establishment path as unknown', () => {
     expect(parseAppRoute('/general')).toEqual({
       kind: 'static',
       path: '/general',
+    })
+    expect(parseAppRoute('/general/switch-establishment')).toEqual({
+      kind: 'unknown',
+      pathname: '/general/switch-establishment',
     })
   })
 

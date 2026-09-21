@@ -55,7 +55,6 @@ describe('usesTerrainShell', () => {
   it('returns true for team and action plan hub routes', () => {
     expect(usesTerrainShell({ kind: 'static', path: '/team' })).toBe(true)
     expect(usesTerrainShell({ kind: 'static', path: '/team/invite' })).toBe(true)
-    expect(usesTerrainShell({ kind: 'static', path: '/general/switch-establishment' })).toBe(true)
     expect(usesTerrainShell({ kind: 'static', path: '/action-plans' })).toBe(true)
     expect(usesTerrainShell({ kind: 'static', path: '/notifications-center' })).toBe(true)
     expect(usesTerrainShell({ kind: 'static', path: '/execution/upcoming' })).toBe(true)
@@ -185,19 +184,6 @@ describe('getTerrainRouteConfig', () => {
       topbarVariant: 'detail',
       title: 'Inviter un membre',
       backPath: '/team',
-      showBottomNav: false,
-      desktopActivePath: '/general',
-      mainScroll: 'auto',
-    })
-  })
-
-  it('configures profile switch establishment route as detail shell without bottom nav', () => {
-    expect(
-      getTerrainRouteConfig({ kind: 'static', path: '/general/switch-establishment' }),
-    ).toEqual({
-      topbarVariant: 'detail',
-      title: "Changer d'établissement",
-      backPath: '/general',
       showBottomNav: false,
       desktopActivePath: '/general',
       mainScroll: 'auto',
@@ -504,9 +490,6 @@ describe('getTerrainContentKey', () => {
     expect(getTerrainContentKey({ kind: 'static', path: '/chat' })).toBe('chat')
     expect(getTerrainContentKey({ kind: 'static', path: '/general' })).toBe('general')
     expect(getTerrainContentKey({ kind: 'static', path: '/analytics' })).toBe('analytics')
-    expect(getTerrainContentKey({ kind: 'static', path: '/general/switch-establishment' })).toBe(
-      'general-switch-establishment',
-    )
     expect(getTerrainContentKey({ kind: 'static', path: '/action-plans' })).toBe('action-plans-hub')
     expect(getTerrainContentKey({ kind: 'static', path: '/team' })).toBe('team')
     expect(getTerrainContentKey({ kind: 'static', path: '/notifications-center' })).toBe(
@@ -615,7 +598,6 @@ describe('requiresActiveMembership', () => {
       '/execution/upcoming',
       '/chat',
       '/general',
-      '/general/switch-establishment',
       '/team',
       '/team/invite',
       '/action-plans',

@@ -30,6 +30,10 @@ const { optInNativePush, acceptCurrentAiConsent, withdrawAiConsent } = vi.hoiste
   withdrawAiConsent: vi.fn(async () => undefined),
 }))
 
+const { lgViewportState } = vi.hoisted(() => ({
+  lgViewportState: { current: false },
+}))
+
 const { authState } = vi.hoisted(() => ({
   authState: {
     current: {
@@ -147,6 +151,10 @@ vi.mock('@/app/auth-provider', () => ({
   useAuth: () => authState.current,
 }))
 
+vi.mock('@/lib/lg-viewport', () => ({
+  useLgViewport: () => lgViewportState.current,
+}))
+
 vi.mock('@/features/notifications/hooks', () => ({
   useNotificationPreferencesQuery: () => ({
     data: { push_enabled: false },
@@ -211,6 +219,7 @@ vi.mock('@/features/gamification/hooks', () => ({
 
 afterEach(() => {
   cleanup()
+  lgViewportState.current = false
   vi.unstubAllEnvs()
   onNavigate.mockReset()
   onSignOut.mockReset()
@@ -999,6 +1008,37 @@ describe('ProfilePage', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: /Changer d'établissement/i }))
-    expect(onNavigate).toHaveBeenCalledWith('/general/switch-establishment')
+    expect(onNavigate).toHaveBeenCalledWith('/select-establishment')
+  })
+
+  it('hides switch establishment on desktop web lg', () => {
+    lgViewportState.current = true
+    authState.current = {
+      ...authState.current,
+      memberships: [
+        ...authState.current.memberships,
+        {
+          id: 'member-2',
+          establishment_id: 'est-2',
+          establishment_name: 'Brasserie Metz',
+          organization_id: 'org-1',
+          organization_name: 'Org',
+          role: 'manager',
+          status: 'active',
+          scopes: [],
+          scope_summary: { business_unit_count: 0 },
+        },
+      ],
+      pendingOnboardingMemberships: [],
+    }
+
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    expect(screen.queryByRole('button', { name: /Changer d'établissement/i })).toBeNull()
   })
 })
