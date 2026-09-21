@@ -137,7 +137,7 @@ Map Railway bucket credentials with **variable references**, not copied secrets.
 | `HOUSTON_CHAT_S3_ACCESS_KEY_ID` | `${{chat-attachement.ACCESS_KEY_ID}}` |
 | `HOUSTON_CHAT_S3_SECRET_ACCESS_KEY` | `${{chat-attachement.SECRET_ACCESS_KEY}}` |
 | `HOUSTON_CHAT_S3_REGION` | `${{chat-attachement.REGION}}` |
-| `HOUSTON_CHAT_S3_ADDRESSING_STYLE` | `path` (literal, same as Signal) |
+| `HOUSTON_CHAT_S3_ADDRESSING_STYLE` | `virtual` (literal, Railway utilise des URLs virtual-hosted) |
 
 Bucket CORS (S3 `PutBucketCors`, not Houston CORS) must allow browser/WebView **presigned** access:
 
