@@ -95,7 +95,6 @@ vi.mock('@/app/lazy-terrain-pages', () => {
     LazyExecutionUpcomingPage: () => createElement(Page, { name: 'execution-upcoming' }),
     LazyNotificationsCenterPage: () => createElement(Page, { name: 'notifications' }),
     LazyProfilePage: () => createElement(Page, { name: 'profile' }),
-    LazyProfileSwitchEstablishmentPage: () => createElement(Page, { name: 'switch-establishment' }),
     LazyReportPage: () => createElement(Page, { name: 'reporting' }),
     LazySignalDetailPage: ({
       signalId,

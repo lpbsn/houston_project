@@ -28,6 +28,25 @@ function renderPage() {
   })
 }
 
+const { authState } = vi.hoisted(() => ({
+  authState: {
+    current: {
+      memberships: [] as Array<{
+        id: string
+        establishment_id: string
+        establishment_name: string
+        organization_id: string
+        organization_name: string
+        role: string
+        status: string
+        scopes: unknown[]
+        scope_summary: { business_unit_count: number }
+      }>,
+      activeMembership: null as { establishment_id: string } | null,
+    },
+  },
+}))
+
 const memberships = [
   {
     id: 'member-1',
@@ -64,10 +83,10 @@ const memberships = [
   },
 ]
 
+authState.current.memberships = memberships
+
 vi.mock('@/app/auth-provider', () => ({
-  useAuth: () => ({
-    memberships,
-  }),
+  useAuth: () => authState.current,
 }))
 
 vi.mock('@/app/app-routes', async (importOriginal) => {
@@ -89,6 +108,8 @@ afterEach(() => {
   onNavigate.mockReset()
   switchEstablishment.mockReset()
   mockSearch = ''
+  authState.current.memberships = memberships
+  authState.current.activeMembership = null
 })
 
 describe('SelectEstablishmentPage', () => {
@@ -187,5 +208,16 @@ describe('SelectEstablishmentPage', () => {
     await waitFor(() => {
       expect(onNavigate).toHaveBeenCalledWith('/reporting')
     })
+  })
+
+  it('does not switch the already active establishment', () => {
+    authState.current.activeMembership = { establishment_id: 'est-1' }
+
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: /Le Palais Nancy/i }))
+
+    expect(switchEstablishment).not.toHaveBeenCalled()
+    expect(onNavigate).not.toHaveBeenCalled()
   })
 })

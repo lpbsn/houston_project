@@ -42,7 +42,6 @@ const OPERATIONAL_STATIC_PATHS = new Set<string>([
   '/execution/upcoming',
   '/chat',
   '/general',
-  '/general/switch-establishment',
   '/team',
   '/team/invite',
   '/action-plans',
@@ -74,8 +73,6 @@ const OPERATIONAL_ROUTE_KINDS = new Set<AppRoute['kind']>([
 const ACTION_PLAN_TERRAIN_PATHS = new Set<string>(['/action-plans'])
 
 const TEAM_TERRAIN_PATHS = new Set<string>(['/team', '/team/invite'])
-
-const PROFILE_TERRAIN_PATHS = new Set<string>(['/general/switch-establishment'])
 
 const NOTIFICATIONS_TERRAIN_PATHS = new Set<string>(['/notifications-center'])
 
@@ -168,9 +165,6 @@ export function usesTerrainShell(route: AppRoute): boolean {
     return true
   }
   if (route.kind === 'static' && TEAM_TERRAIN_PATHS.has(route.path)) {
-    return true
-  }
-  if (route.kind === 'static' && PROFILE_TERRAIN_PATHS.has(route.path)) {
     return true
   }
   if (route.kind === 'static' && NOTIFICATIONS_TERRAIN_PATHS.has(route.path)) {
@@ -415,17 +409,6 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
     }
   }
 
-  if (route.kind === 'static' && route.path === '/general/switch-establishment') {
-    return {
-      topbarVariant: 'detail',
-      title: "Changer d'établissement",
-      backPath: '/general',
-      showBottomNav: false,
-      desktopActivePath: '/general',
-      mainScroll: 'auto',
-    }
-  }
-
   if (route.kind === 'static' && route.path === '/action-plans') {
     return {
       topbarVariant: 'detail',
@@ -593,8 +576,6 @@ export function getTerrainContentKey(route: AppRoute): string {
         return 'notifications-center'
       case '/team/invite':
         return 'team-invite'
-      case '/general/switch-establishment':
-        return 'general-switch-establishment'
       default:
         break
     }

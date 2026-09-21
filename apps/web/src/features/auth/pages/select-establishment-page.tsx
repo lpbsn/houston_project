@@ -15,8 +15,9 @@ type SelectEstablishmentPageProps = {
 }
 
 export function SelectEstablishmentPage({ onNavigate }: SelectEstablishmentPageProps) {
-  const { memberships } = useAuth()
+  const { activeMembership, memberships } = useAuth()
   const { search } = useAppRoute()
+  const activeEstablishmentId = activeMembership?.establishment_id ?? null
   const [pendingEstablishmentId, setPendingEstablishmentId] = useState<string | null>(null)
   const [selectorError, setSelectorError] = useState<string | null>(null)
   const isSwitchingRef = useRef(false)
@@ -26,7 +27,7 @@ export function SelectEstablishmentPage({ onNavigate }: SelectEstablishmentPageP
   })
 
   async function handleSelectEstablishment(establishmentId: string) {
-    if (isSwitchingRef.current) {
+    if (establishmentId === activeEstablishmentId || isSwitchingRef.current) {
       return
     }
 
@@ -50,6 +51,7 @@ export function SelectEstablishmentPage({ onNavigate }: SelectEstablishmentPageP
 
   return (
     <EstablishmentSelectorCard
+      activeEstablishmentId={activeEstablishmentId}
       errorMessage={selectorError}
       memberships={memberships}
       pendingEstablishmentId={pendingEstablishmentId}

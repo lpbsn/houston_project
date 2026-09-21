@@ -39,7 +39,7 @@ Shared helpers live in `houston/testing/` or domain `tests/helpers.py` — **nev
 | Pages / components | Wiring at product risk: auth purge, establishment switch cache, navigation guards, blocked submission | Exact Tailwind classes, French copy, shadcn primitive styling |
 | Auth provider | `purgeNonAuthQueries` / `clearAuthenticatedQueryCache` on logout, login, registration, establishment switch | Re-testing query-invalidation lib rules already covered in `query-invalidation.test.ts` |
 
-Reference implementations: `query-invalidation.test.ts`, `profile-switch-establishment-cache.test.tsx`, `auth-provider.test.tsx`.
+Reference implementations: `query-invalidation.test.ts`, `auth-provider.test.tsx`.
 
 ## Backend (pytest)
 
@@ -146,7 +146,7 @@ make web-typecheck
 make web-build
 
 cd apps/web && npm test
-cd apps/web && npm test -- src/features/auth/pages/profile-switch-establishment-cache.test.tsx
+cd apps/web && npm test -- src/features/auth/pages/select-establishment-page.test.tsx
 cd apps/web && npm run lint
 cd apps/web && npm run typecheck
 ```

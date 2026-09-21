@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import type { Membership } from '@/features/auth/types'
 
 type EstablishmentSelectorCardProps = {
+  activeEstablishmentId?: string | null
   errorMessage: string | null
   memberships: Membership[]
   pendingEstablishmentId: string | null
@@ -12,6 +13,7 @@ type EstablishmentSelectorCardProps = {
 }
 
 export function EstablishmentSelectorCard({
+  activeEstablishmentId = null,
   errorMessage,
   memberships,
   pendingEstablishmentId,
@@ -39,13 +41,14 @@ export function EstablishmentSelectorCard({
       <CardContent className="space-y-3">
         {memberships.map((membership) => {
           const isPending = pendingEstablishmentId === membership.establishment_id
+          const isActive = membership.establishment_id === activeEstablishmentId
 
           return (
             <button
               key={membership.id}
               type="button"
               onClick={() => onSelect(membership.establishment_id)}
-              disabled={isSwitching}
+              disabled={isActive || isSwitching}
               className="flex w-full items-center justify-between rounded-[1.4rem] border border-[#ece5da] bg-white px-4 py-4 text-left shadow-[0_16px_36px_-30px_rgba(46,72,173,0.22)] transition hover:border-[color:var(--primary)]/35 hover:shadow-[0_22px_40px_-30px_rgba(46,72,173,0.28)] disabled:opacity-70"
             >
               <div className="min-w-0 space-y-2">
@@ -71,7 +74,15 @@ export function EstablishmentSelectorCard({
               </div>
 
               <div className="ml-4 flex items-center gap-2 text-[color:var(--primary)]">
-                {isPending ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowRight className="size-4" />}
+                {isPending ? (
+                  <LoaderCircle className="size-4 animate-spin" />
+                ) : isActive ? (
+                  <Badge variant="outline" className="border-[#ebe2d5] bg-[#fbf7f0]">
+                    Actif
+                  </Badge>
+                ) : (
+                  <ArrowRight className="size-4" />
+                )}
               </div>
             </button>
           )

@@ -14,7 +14,6 @@ const LAZY_EXPORTS = [
   'LazyAnalyticsPatternDetailPage',
   'LazyChatConversationPage',
   'LazyProfilePage',
-  'LazyProfileSwitchEstablishmentPage',
   'LazyTeamPage',
   'LazyTeamMemberDetailPage',
   'LazyActionPlanHubPage',

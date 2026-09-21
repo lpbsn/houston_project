@@ -23,7 +23,6 @@ import {
   LazyExecutionFeedPage,
   LazyExecutionUpcomingPage,
   LazyProfilePage,
-  LazyProfileSwitchEstablishmentPage,
   LazyNotificationsCenterPage,
   LazyTeamPage,
   LazyTeamMemberDetailPage,
@@ -865,10 +864,6 @@ function App() {
       return <LazyAnalyticsPage />
     }
 
-    if (route.path === '/general/switch-establishment') {
-      return <LazyProfileSwitchEstablishmentPage onNavigate={navigate} />
-    }
-
     if (route.path === '/general') {
       return (
         <LazyProfilePage
@@ -999,6 +994,19 @@ function App() {
     </Button>
   )
 
+  const backToGeneralAction = (
+    <Button
+      type="button"
+      variant="outline"
+      className="h-10 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
+      onClick={() => {
+        navigate('/general')
+      }}
+    >
+      Retour
+    </Button>
+  )
+
   const signInAction = (
     <Button
       type="button"
@@ -1050,7 +1058,12 @@ function App() {
                     title: 'Choisissez votre établissement',
                     description:
                       'Sélectionnez l’établissement actif avec lequel vous souhaitez commencer.',
-                    actions: signOutAction,
+                    actions: (
+                      <>
+                        {auth.hasOperationalAccess ? backToGeneralAction : null}
+                        {signOutAction}
+                      </>
+                    ),
                   }
                 : route.kind === 'static' && route.path === '/no-establishment'
                   ? {
