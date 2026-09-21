@@ -297,7 +297,7 @@ def lock_validated_uploads_for_message(
     uploads = list(
         ChatUpload.objects.select_for_update()
         .filter(id__in=unique_ids)
-        .order_by("created_at", "id")
+        .order_by("id")
     )
     if len(uploads) != len(unique_ids):
         raise ChatValidationError("One or more attachments are invalid.")
@@ -314,7 +314,8 @@ def lock_validated_uploads_for_message(
             raise ChatValidationError("Attachment is not ready.")
         if upload.expires_at <= timezone.now():
             raise ChatValidationError("Attachment reservation has expired.")
-    return uploads
+    uploads_by_id = {upload.id: upload for upload in uploads}
+    return [uploads_by_id[upload_id] for upload_id in unique_ids]
 
 
 def link_uploads_to_message(*, message, uploads: list[ChatUpload]) -> None:

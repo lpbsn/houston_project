@@ -697,3 +697,64 @@ def test_attachment_send_is_json_safe_and_idempotent_on_retry(api_client, settin
     assert result.created is False
     assert str(result.message.id) == message_id
     assert lookups["n"] == 2
+
+
+def test_attachment_position_follows_client_attachment_ids(api_client, settings, tmp_path):
+    settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "filesystem"
+    settings.HOUSTON_CHAT_PRIVATE_MEDIA_ROOT = str(tmp_path)
+    establishment, _s, _r, _sm, _rm, token, conversation_id = _setup(api_client)
+    payload = _pdf_bytes()
+    first = _reserve(
+        api_client,
+        token=token,
+        establishment_id=establishment.id,
+        conversation_id=conversation_id,
+        filename="first.pdf",
+        content_type="application/pdf",
+        size_bytes=len(payload),
+    )
+    first_id = first.json()["upload_id"]
+    _put_and_complete(
+        api_client,
+        token=token,
+        establishment_id=establishment.id,
+        upload_id=first_id,
+        payload=payload,
+    )
+    second = _reserve(
+        api_client,
+        token=token,
+        establishment_id=establishment.id,
+        conversation_id=conversation_id,
+        filename="second.pdf",
+        content_type="application/pdf",
+        size_bytes=len(payload),
+    )
+    second_id = second.json()["upload_id"]
+    _put_and_complete(
+        api_client,
+        token=token,
+        establishment_id=establishment.id,
+        upload_id=second_id,
+        payload=payload,
+    )
+    older = timezone.now() - timedelta(minutes=5)
+    ChatUpload.objects.filter(id=second_id).update(created_at=older)
+    sent = api_client.post(
+        chat_url(establishment.id, f"conversations/{conversation_id}/messages/"),
+        {
+            "client_message_id": str(uuid.uuid4()),
+            "body": "",
+            "attachment_ids": [first_id, second_id],
+        },
+        format="json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert sent.status_code == 201
+    stored = list(
+        ChatMessageAttachment.objects.filter(message_id=sent.json()["message"]["id"]).order_by(
+            "position"
+        )
+    )
+    assert [str(item.upload_id) for item in stored] == [first_id, second_id]
+    assert [item.position for item in stored] == [0, 1]
