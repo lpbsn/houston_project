@@ -1,14 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import { Reply } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
+import { useChatMediaObjectUrl } from '../hooks/use-chat-media-object-url'
 import { formatChatAttachmentSize, formatChatRelativeTime } from '../lib/chat-display'
-import {
-  fetchAuthenticatedChatMedia,
-  toChatAttachmentPreviewItem,
-  type ChatAttachmentPreviewItem,
-} from '../lib/chat-media'
+import { toChatAttachmentPreviewItem, type ChatAttachmentPreviewItem } from '../lib/chat-media'
 import { splitBodyByMentions } from '../lib/chat-mentions'
 import type { ChatMessage, ChatReplyTo, LocalChatMessage } from '../types'
 
@@ -27,37 +24,11 @@ function isLocalMessage(message: ChatMessage | LocalChatMessage): message is Loc
 }
 
 export function ChatMediaImage({ src, alt }: { src: string; alt: string }) {
-  const [resolved, setResolved] = useState(src.startsWith('blob:') || src.startsWith('data:') ? src : null)
-
-  useEffect(() => {
-    if (src.startsWith('blob:') || src.startsWith('data:')) {
-      setResolved(src)
-      return
-    }
-    let objectUrl: string | null = null
-    let cancelled = false
-    void fetchAuthenticatedChatMedia(src).then((url) => {
-      if (cancelled) {
-        if (url?.startsWith('blob:')) {
-          URL.revokeObjectURL(url)
-        }
-        return
-      }
-      objectUrl = url
-      setResolved(url)
-    })
-    return () => {
-      cancelled = true
-      if (objectUrl?.startsWith('blob:')) {
-        URL.revokeObjectURL(objectUrl)
-      }
-    }
-  }, [src])
-
-  if (!resolved) {
+  const { objectUrl } = useChatMediaObjectUrl(src)
+  if (!objectUrl) {
     return <span className="text-[13px]">{alt}</span>
   }
-  return <img src={resolved} alt={alt} className="max-h-48 max-w-full rounded-lg object-cover" />
+  return <img src={objectUrl} alt={alt} className="max-h-48 max-w-full rounded-lg object-cover" />
 }
 
 function readMessage(message: ChatMessage | LocalChatMessage) {

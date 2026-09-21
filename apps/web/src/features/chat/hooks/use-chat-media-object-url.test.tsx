@@ -50,6 +50,34 @@ describe('useChatMediaObjectUrl', () => {
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:created-viewer')
   })
 
+  it('revokes a created object URL returned after unmount or src change', async () => {
+    let resolveFirst: ((value: string | null) => void) | undefined
+    fetchAuthenticatedChatMedia.mockImplementationOnce(
+      () =>
+        new Promise<string | null>((resolve) => {
+          resolveFirst = resolve
+        }),
+    )
+    fetchAuthenticatedChatMedia.mockResolvedValueOnce('blob:second-viewer')
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', { ...URL, revokeObjectURL })
+
+    const { unmount, rerender, container } = render(<Probe src="/api/v1/chat/preview/first" />)
+    rerender(<Probe src="/api/v1/chat/preview/second" />)
+    resolveFirst?.('blob:late-first-viewer')
+
+    await waitFor(() => {
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:late-first-viewer')
+    })
+    await waitFor(() => {
+      expect(container.firstElementChild?.getAttribute('data-url')).toBe('blob:second-viewer')
+    })
+    expect(container.firstElementChild?.getAttribute('data-url')).not.toBe('blob:late-first-viewer')
+
+    unmount()
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:second-viewer')
+  })
+
   it('does not fetch or revoke an outbox blob src', async () => {
     const revokeObjectURL = vi.fn()
     vi.stubGlobal('URL', { ...URL, revokeObjectURL })

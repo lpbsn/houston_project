@@ -6,63 +6,59 @@ import {
   resolveChatMediaHref,
 } from '../lib/chat-media'
 
+type FetchedChatMedia = {
+  src: string
+  url: string
+  createdByViewer: boolean
+}
+
+function revokeCreatedViewerUrl(url: string | null | undefined, href: string | null) {
+  if (url && url.startsWith('blob:') && url !== href) {
+    URL.revokeObjectURL(url)
+  }
+}
+
 export function useChatMediaObjectUrl(src: string | null | undefined) {
-  const [objectUrl, setObjectUrl] = useState<string | null>(null)
-  const [createdByViewer, setCreatedByViewer] = useState(false)
-  const [error, setError] = useState(false)
-  const [loading, setLoading] = useState(Boolean(src))
+  const href = resolveChatMediaHref(src)
+  const inline = href != null && isInlineChatMediaHref(href)
+  const invalid = !href
+
+  const [fetched, setFetched] = useState<FetchedChatMedia | null>(null)
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
 
   useEffect(() => {
-    const href = resolveChatMediaHref(src)
-    if (!href) {
-      setObjectUrl(null)
-      setCreatedByViewer(false)
-      setError(true)
-      setLoading(false)
-      return
-    }
-
-    if (isInlineChatMediaHref(href)) {
-      setObjectUrl(href)
-      setCreatedByViewer(false)
-      setError(false)
-      setLoading(false)
+    if (!src || !href || inline) {
       return
     }
 
     let cancelled = false
     let createdUrl: string | null = null
-    setLoading(true)
-    setError(false)
-    setObjectUrl(null)
-    setCreatedByViewer(false)
 
-    void fetchAuthenticatedChatMedia(src!).then((url) => {
+    void fetchAuthenticatedChatMedia(src).then((url) => {
       if (cancelled) {
-        if (url && url.startsWith('blob:') && url !== href) {
-          URL.revokeObjectURL(url)
-        }
+        revokeCreatedViewerUrl(url, href)
         return
       }
       if (!url) {
-        setError(true)
-        setLoading(false)
+        setFailedSrc(src)
         return
       }
       const created = url.startsWith('blob:') && url !== href
       createdUrl = created ? url : null
-      setObjectUrl(url)
-      setCreatedByViewer(created)
-      setLoading(false)
+      setFetched({ src, url, createdByViewer: created })
     })
 
     return () => {
       cancelled = true
-      if (createdUrl) {
-        URL.revokeObjectURL(createdUrl)
-      }
+      revokeCreatedViewerUrl(createdUrl, href)
     }
-  }, [src])
+  }, [src, href, inline])
+
+  const fetchedForSrc = fetched?.src === src ? fetched : null
+  const objectUrl = invalid ? null : inline ? href : (fetchedForSrc?.url ?? null)
+  const createdByViewer = fetchedForSrc?.createdByViewer ?? false
+  const error = invalid || failedSrc === src
+  const loading = Boolean(src) && !invalid && !inline && fetchedForSrc == null && failedSrc !== src
 
   return { objectUrl, createdByViewer, error, loading }
 }

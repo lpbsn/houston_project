@@ -16,12 +16,9 @@ type ChatAttachmentPreviewDialogProps = {
 export function ChatAttachmentPreviewDialog({ item, onClose }: ChatAttachmentPreviewDialogProps) {
   const titleId = useId()
   const { objectUrl, error: fetchError, loading } = useChatMediaObjectUrl(item.src)
-  const [imageError, setImageError] = useState(false)
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
+  const imageError = failedSrc === item.src
   const showError = fetchError || imageError || (!loading && !objectUrl)
-
-  useEffect(() => {
-    setImageError(false)
-  }, [item.src])
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
@@ -64,7 +61,7 @@ export function ChatAttachmentPreviewDialog({ item, onClose }: ChatAttachmentPre
             src={objectUrl}
             alt={item.filename}
             className="max-h-[85vh] max-w-full object-contain"
-            onError={() => setImageError(true)}
+            onError={() => setFailedSrc(item.src)}
           />
         ) : null}
       </div>
