@@ -7,13 +7,18 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
+from django.core.files.base import ContentFile
 from django.utils import timezone
 from houston.chat.models import ChatMessage, ChatMessageAttachment, ChatUpload
 from houston.chat.services import create_message
 from houston.chat.tests.conftest import create_establishment, create_membership, create_user, login
 from houston.chat.tests.helpers import chat_url, create_dm, send_message
-from houston.chat.upload_services import generate_chat_upload_thumbnail
+from houston.chat.upload_services import (
+    cleanup_expired_chat_uploads,
+    generate_chat_upload_thumbnail,
+)
 from houston.chat.ws_payloads import build_message_created_payload
+from houston.uploads.private_storage import get_chat_private_media_storage
 from PIL import Image
 
 pytestmark = pytest.mark.django_db
@@ -82,6 +87,53 @@ def _put_and_complete(api_client, *, token, establishment_id, upload_id, payload
         HTTP_AUTHORIZATION=f"Bearer {token}",
     )
     return put, complete
+
+
+def _create_upload_with_file(
+    *,
+    status=ChatUpload.Status.RESERVED,
+    expired=True,
+    kind="",
+    content_type="",
+    size_bytes=None,
+    filename="gone.png",
+    payload=b"orphan",
+):
+    from houston.chat.services import create_or_get_dm_conversation
+
+    establishment = create_establishment()
+    sender = create_user(username=f"chat_orphan_{uuid.uuid4().hex[:8]}")
+    peer = create_user(username=f"chat_orphan_peer_{uuid.uuid4().hex[:8]}")
+    sender_membership = create_membership(user=sender, establishment=establishment)
+    peer_membership = create_membership(user=peer, establishment=establishment)
+    conversation, _ = create_or_get_dm_conversation(
+        actor_membership=sender_membership,
+        target_membership_id=peer_membership.id,
+    )
+    storage_key = (
+        f"establishments/{establishment.id}/chat/{conversation.id}/"
+        f"{uuid.uuid4()}/original.png"
+    )
+    expires_at = timezone.now() - timedelta(hours=1)
+    if not expired:
+        expires_at = timezone.now() + timedelta(hours=1)
+    upload = ChatUpload.objects.create(
+        establishment=establishment,
+        conversation=conversation,
+        uploaded_by_membership=sender_membership,
+        original_filename=filename,
+        declared_content_type="image/png",
+        declared_size_bytes=len(payload),
+        storage_key=storage_key,
+        expires_at=expires_at,
+        status=status,
+        kind=kind,
+        content_type=content_type,
+        size_bytes=size_bytes,
+    )
+    storage = get_chat_private_media_storage()
+    storage.save(storage_key, ContentFile(payload))
+    return upload, sender_membership, conversation, storage
 
 
 @pytest.mark.django_db(transaction=True)
@@ -515,33 +567,210 @@ def test_orphan_cleanup_deletes_expired_reserved(settings, tmp_path):
     settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "filesystem"
     settings.HOUSTON_CHAT_PRIVATE_MEDIA_ROOT = str(tmp_path)
     from houston.chat.tasks import cleanup_chat_upload_orphans_task
-    from houston.chat.tests.helpers import create_dm as create_dm_helper
 
-    establishment = create_establishment()
-    sender = create_user(username="chat_orphan_sender")
-    peer = create_user(username="chat_orphan_peer")
-    sender_membership = create_membership(user=sender, establishment=establishment)
-    peer_membership = create_membership(user=peer, establishment=establishment)
-    from houston.chat.services import create_or_get_dm_conversation
+    upload, _membership, _conversation, storage = _create_upload_with_file()
+    storage_key = upload.storage_key
+    result = cleanup_chat_upload_orphans_task.apply()
+    assert result.successful()
+    assert result.result >= 1
+    assert not ChatUpload.objects.filter(id=upload.id).exists()
+    assert not storage.exists(storage_key)
 
-    conversation, _ = create_or_get_dm_conversation(
-        actor_membership=sender_membership,
-        target_membership_id=peer_membership.id,
+
+def test_put_rejects_expired_reservation(api_client, settings, tmp_path):
+    settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "filesystem"
+    settings.HOUSTON_CHAT_PRIVATE_MEDIA_ROOT = str(tmp_path)
+    establishment, _s, _r, _sm, _rm, token, conversation_id = _setup(api_client)
+    reserved = _reserve(
+        api_client,
+        token=token,
+        establishment_id=establishment.id,
+        conversation_id=conversation_id,
+        filename="shot.png",
+        content_type="image/png",
+        size_bytes=12,
     )
-    upload = ChatUpload.objects.create(
-        establishment=establishment,
-        conversation=conversation,
-        uploaded_by_membership=sender_membership,
-        original_filename="gone.png",
-        declared_content_type="image/png",
-        declared_size_bytes=10,
-        storage_key="establishments/x/chat/y/z/original.png",
-        expires_at=timezone.now() - timedelta(hours=1),
+    upload_id = reserved.json()["upload_id"]
+    ChatUpload.objects.filter(id=upload_id).update(
+        expires_at=timezone.now() - timedelta(hours=1)
     )
-    deleted = cleanup_chat_upload_orphans_task.run()
+    put = api_client.put(
+        chat_url(establishment.id, f"uploads/{upload_id}/content/"),
+        data=b"not-stored",
+        content_type="application/octet-stream",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert put.status_code == 400
+    upload = ChatUpload.objects.get(id=upload_id)
+    assert upload.status == ChatUpload.Status.RESERVED
+    storage = get_chat_private_media_storage()
+    assert not storage.exists(upload.storage_key)
+
+
+def test_orphan_cleanup_deletes_expired_status_and_file(settings, tmp_path):
+    settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "filesystem"
+    settings.HOUSTON_CHAT_PRIVATE_MEDIA_ROOT = str(tmp_path)
+    upload, _membership, _conversation, storage = _create_upload_with_file(
+        status=ChatUpload.Status.EXPIRED,
+    )
+    storage_key = upload.storage_key
+    deleted = cleanup_expired_chat_uploads()
     assert deleted >= 1
     assert not ChatUpload.objects.filter(id=upload.id).exists()
-    _ = create_dm_helper
+    assert not storage.exists(storage_key)
+
+
+def test_orphan_cleanup_deletes_expired_validated(settings, tmp_path):
+    settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "filesystem"
+    settings.HOUSTON_CHAT_PRIVATE_MEDIA_ROOT = str(tmp_path)
+    upload, _membership, _conversation, storage = _create_upload_with_file(
+        status=ChatUpload.Status.VALIDATED,
+        kind=ChatUpload.Kind.IMAGE,
+        content_type="image/png",
+        size_bytes=6,
+    )
+    storage_key = upload.storage_key
+    deleted = cleanup_expired_chat_uploads()
+    assert deleted >= 1
+    assert not ChatUpload.objects.filter(id=upload.id).exists()
+    assert not storage.exists(storage_key)
+
+
+def test_orphan_cleanup_keeps_row_on_storage_failure_then_retries(settings, tmp_path):
+    settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "filesystem"
+    settings.HOUSTON_CHAT_PRIVATE_MEDIA_ROOT = str(tmp_path)
+    upload, _membership, _conversation, storage = _create_upload_with_file()
+    storage_key = upload.storage_key
+    with patch(
+        "houston.chat.upload_services.delete_chat_storage_keys_or_raise",
+        side_effect=RuntimeError("storage unavailable"),
+    ):
+        with pytest.raises(RuntimeError, match="storage unavailable"):
+            cleanup_expired_chat_uploads()
+    leftover = ChatUpload.objects.get(id=upload.id)
+    assert leftover.status == ChatUpload.Status.EXPIRED
+    assert storage.exists(storage_key)
+    deleted = cleanup_expired_chat_uploads()
+    assert deleted >= 1
+    assert not ChatUpload.objects.filter(id=upload.id).exists()
+    assert not storage.exists(storage_key)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_storage_failure_is_best_effort_after_committed_delete(settings, tmp_path, monkeypatch):
+    settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "filesystem"
+    settings.HOUSTON_CHAT_PRIVATE_MEDIA_ROOT = str(tmp_path)
+    from django.db import transaction
+    from houston.chat.account_deletion import delete_messages_authored_by_memberships
+    from houston.uploads.private_storage import PrivateMediaStorage
+
+    linked, sender_membership, conversation, _storage = _create_upload_with_file(
+        status=ChatUpload.Status.LINKED,
+        expired=False,
+        kind=ChatUpload.Kind.DOCUMENT,
+        content_type="application/pdf",
+        size_bytes=6,
+        filename="note.pdf",
+    )
+    message = ChatMessage.objects.create(
+        conversation=conversation,
+        author_membership=sender_membership,
+        body="with file",
+        client_message_id=uuid.uuid4(),
+    )
+    ChatMessageAttachment.objects.create(
+        message=message,
+        upload=linked,
+        position=0,
+        kind=ChatUpload.Kind.DOCUMENT,
+        content_type="application/pdf",
+        size_bytes=6,
+        original_filename="note.pdf",
+    )
+    orphan, _membership, _conversation, _orphan_storage = _create_upload_with_file()
+
+    def _boom(_self, _name):
+        raise RuntimeError("storage unavailable")
+
+    monkeypatch.setattr(PrivateMediaStorage, "delete", _boom)
+
+    with transaction.atomic():
+        delete_messages_authored_by_memberships(membership_ids=[sender_membership.id])
+    assert not ChatUpload.objects.filter(id=linked.id).exists()
+    assert not ChatMessage.objects.filter(id=message.id).exists()
+
+    with pytest.raises(RuntimeError, match="storage unavailable"):
+        cleanup_expired_chat_uploads()
+    leftover = ChatUpload.objects.get(id=orphan.id)
+    assert leftover.status == ChatUpload.Status.EXPIRED
+
+
+def test_orphan_cleanup_skips_linked_past_ttl(settings, tmp_path):
+    settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "filesystem"
+    settings.HOUSTON_CHAT_PRIVATE_MEDIA_ROOT = str(tmp_path)
+    upload, sender_membership, conversation, storage = _create_upload_with_file(
+        status=ChatUpload.Status.LINKED,
+        kind=ChatUpload.Kind.DOCUMENT,
+        content_type="application/pdf",
+        size_bytes=6,
+        filename="note.pdf",
+    )
+    message = ChatMessage.objects.create(
+        conversation=conversation,
+        author_membership=sender_membership,
+        body="with file",
+        client_message_id=uuid.uuid4(),
+    )
+    ChatMessageAttachment.objects.create(
+        message=message,
+        upload=upload,
+        position=0,
+        kind=ChatUpload.Kind.DOCUMENT,
+        content_type="application/pdf",
+        size_bytes=6,
+        original_filename="note.pdf",
+    )
+    storage_key = upload.storage_key
+    deleted = cleanup_expired_chat_uploads()
+    assert deleted == 0
+    assert ChatUpload.objects.filter(id=upload.id, status=ChatUpload.Status.LINKED).exists()
+    assert ChatMessageAttachment.objects.filter(upload_id=upload.id).exists()
+    assert storage.exists(storage_key)
+
+
+def test_orphan_cleanup_skips_validated_not_expired(settings, tmp_path):
+    settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "filesystem"
+    settings.HOUSTON_CHAT_PRIVATE_MEDIA_ROOT = str(tmp_path)
+    upload, _membership, _conversation, storage = _create_upload_with_file(
+        status=ChatUpload.Status.VALIDATED,
+        expired=False,
+        kind=ChatUpload.Kind.IMAGE,
+        content_type="image/png",
+        size_bytes=6,
+    )
+    storage_key = upload.storage_key
+    deleted = cleanup_expired_chat_uploads()
+    assert deleted == 0
+    leftover = ChatUpload.objects.get(id=upload.id)
+    assert leftover.status == ChatUpload.Status.VALIDATED
+    assert storage.exists(storage_key)
+
+
+def test_orphan_cleanup_task_retries_on_storage_error():
+    from houston.chat.tasks import cleanup_chat_upload_orphans_task
+
+    with patch(
+        "houston.chat.tasks.cleanup_expired_chat_uploads",
+        side_effect=RuntimeError("storage unavailable"),
+    ):
+        with patch.object(
+            cleanup_chat_upload_orphans_task,
+            "retry",
+            side_effect=RuntimeError("retry-called"),
+        ) as mock_retry:
+            with pytest.raises(RuntimeError, match="retry-called"):
+                cleanup_chat_upload_orphans_task.run()
+    mock_retry.assert_called_once()
 
 
 def test_refresh_presign_reuses_upload_id(api_client, settings, tmp_path):

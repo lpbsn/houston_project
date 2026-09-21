@@ -12,6 +12,7 @@ from django.utils import timezone
 from houston.chat.constants import (
     CHAT_ATTACHMENT_MAX_BYTES,
     CHAT_ATTACHMENTS_MAX_PER_MESSAGE,
+    CHAT_PURGE_BATCH_SIZE,
     CHAT_UPLOAD_TTL_HOURS,
 )
 from houston.chat.exceptions import ChatNotFoundError, ChatPermissionError, ChatValidationError
@@ -23,7 +24,7 @@ from houston.uploads.photo_keys import observation_photo_thumbnail_storage_key
 from houston.uploads.photo_normalization import _encode_thumbnail
 from houston.uploads.private_storage import (
     PRIVATE_MEDIA_BACKEND_S3,
-    delete_private_media_object_idempotent,
+    _is_missing_storage_object_error,
     generate_private_media_presigned_get_url,
     generate_private_media_presigned_put_url,
     get_chat_private_media_storage,
@@ -175,6 +176,8 @@ def build_chat_upload_put_url(*, upload: ChatUpload, request=None) -> str:
 def store_chat_upload_content(*, upload: ChatUpload, payload: bytes) -> None:
     if upload.status != ChatUpload.Status.RESERVED:
         raise ChatValidationError("Upload can no longer accept content.")
+    if upload.expires_at <= timezone.now():
+        raise ChatValidationError("Upload reservation has expired.")
     if len(payload) > CHAT_ATTACHMENT_MAX_BYTES:
         raise ChatValidationError("Attachment exceeds the maximum size.")
     storage = get_chat_private_media_storage()
@@ -350,12 +353,16 @@ def chat_object_keys_for_uploads(uploads: list[ChatUpload]) -> list[str]:
     return keys
 
 
-def delete_chat_storage_keys(keys: list[str]) -> None:
+def _delete_chat_storage_keys(*, keys: list[str], raise_on_error: bool) -> None:
     storage = get_chat_private_media_storage()
     for key in keys:
+        if not key:
+            continue
         try:
-            delete_private_media_object_idempotent(storage_key=key, storage=storage)
+            storage.delete(key)
         except Exception as exc:
+            if _is_missing_storage_object_error(exc):
+                continue
             logger.warning(
                 "chat_storage_delete_failed",
                 extra={
@@ -363,7 +370,98 @@ def delete_chat_storage_keys(keys: list[str]) -> None:
                     "exception_class": type(exc).__name__,
                 },
             )
-            raise
+            if raise_on_error:
+                raise
+
+
+def delete_chat_storage_keys(keys: list[str]) -> None:
+    _delete_chat_storage_keys(keys=keys, raise_on_error=False)
+
+
+def delete_chat_storage_keys_or_raise(keys: list[str]) -> None:
+    _delete_chat_storage_keys(keys=keys, raise_on_error=True)
+
+
+def _claim_expired_chat_upload_for_cleanup(*, upload_id: uuid.UUID) -> ChatUpload | None:
+    with transaction.atomic():
+        upload = (
+            ChatUpload.objects.select_for_update(skip_locked=True)
+            .filter(id=upload_id)
+            .first()
+        )
+        if upload is None:
+            return None
+        if upload.status == ChatUpload.Status.LINKED:
+            return None
+        if ChatMessageAttachment.objects.filter(upload_id=upload.id).exists():
+            return None
+        if upload.status not in {
+            ChatUpload.Status.RESERVED,
+            ChatUpload.Status.VALIDATED,
+            ChatUpload.Status.EXPIRED,
+        }:
+            return None
+        if upload.expires_at >= timezone.now():
+            return None
+        if upload.status != ChatUpload.Status.EXPIRED:
+            upload.status = ChatUpload.Status.EXPIRED
+            upload.save(update_fields=["status", "updated_at"])
+        return upload
+
+
+def cleanup_expired_chat_uploads(*, now=None, batch_size: int | None = None) -> int:
+    current_time = now or timezone.now()
+    effective_batch_size = batch_size or getattr(
+        settings,
+        "HOUSTON_CHAT_PURGE_BATCH_SIZE",
+        CHAT_PURGE_BATCH_SIZE,
+    )
+    deleted_count = 0
+    last_id = None
+    first_storage_error: Exception | None = None
+
+    while True:
+        queryset = (
+            ChatUpload.objects.filter(
+                status__in=[
+                    ChatUpload.Status.RESERVED,
+                    ChatUpload.Status.VALIDATED,
+                    ChatUpload.Status.EXPIRED,
+                ],
+                expires_at__lt=current_time,
+            )
+            .order_by("id")
+        )
+        if last_id is not None:
+            queryset = queryset.filter(id__gt=last_id)
+        candidate_ids = list(queryset.values_list("id", flat=True)[:effective_batch_size])
+        if not candidate_ids:
+            break
+        for upload_id in candidate_ids:
+            last_id = upload_id
+            claimed = _claim_expired_chat_upload_for_cleanup(upload_id=upload_id)
+            if claimed is None:
+                continue
+            keys = chat_object_keys_for_uploads([claimed])
+            try:
+                delete_chat_storage_keys_or_raise(keys)
+            except Exception as exc:
+                if first_storage_error is None:
+                    first_storage_error = exc
+                continue
+            removed, _ = (
+                ChatUpload.objects.filter(
+                    id=claimed.id,
+                    status=ChatUpload.Status.EXPIRED,
+                    attachment__isnull=True,
+                ).delete()
+            )
+            if removed:
+                deleted_count += 1
+
+    if first_storage_error is not None:
+        raise first_storage_error
+    return deleted_count
 
 
 def generate_chat_attachment_presigned_get(*, storage_key: str) -> str:

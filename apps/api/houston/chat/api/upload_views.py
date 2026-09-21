@@ -24,7 +24,7 @@ from houston.chat.api.views import (
 )
 from houston.chat.constants import CHAT_GALLERY_PAGE_SIZE
 from houston.chat.exceptions import ChatError, ChatValidationError
-from houston.chat.models import ChatMessageAttachment, ChatUpload
+from houston.chat.models import ChatMessageAttachment
 from houston.chat.selectors import get_conversation_for_participant
 from houston.chat.upload_services import (
     build_chat_upload_put_url,
@@ -132,15 +132,12 @@ class ChatUploadContentView(EstablishmentScopedChatMixin, APIView):
         membership = _resolve_membership(request, self.establishment_id)
         if isinstance(membership, Response):
             return membership
-        upload = ChatUpload.objects.filter(
-            id=upload_id,
-            establishment_id=self.establishment_id,
-            uploaded_by_membership_id=membership.id,
-        ).first()
-        if upload is None:
-            return Response(status=status.HTTP_404_NOT_FOUND)
         payload = request.data if isinstance(request.data, (bytes, bytearray)) else request.body
         try:
+            upload = get_reserved_chat_upload(
+                actor_membership=membership,
+                upload_id=uuid.UUID(str(upload_id)),
+            )
             store_chat_upload_content(upload=upload, payload=bytes(payload))
         except ChatError as exc:
             return _chat_error_response(exc)
