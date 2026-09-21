@@ -600,7 +600,7 @@ Sans service **celery**, les observations restent en état `queued` ([`README.md
 
 Ouvrez http://localhost:5173 — page d’accueil / shell auth.
 
-Test onboarding (si codes configurés) : http://localhost:5173/onboarding
+Onboarding opérateur : http://localhost:5173/platform (desktop Web, après `grant_platform_operator`). `/onboarding` redirige ; ce n’est pas un wizard.
 
 ### 10.4 Suite de vérification « projet » (optionnelle, plus longue)
 
@@ -626,6 +626,8 @@ make docker-verify-security
 ---
 
 ## 11. Commandes quotidiennes
+
+Le quotidien (après install) : [`docs/engineering/local_development.md`](docs/engineering/local_development.md). Tableau ci-dessous = rappel.
 
 | Action | Commande (racine du repo) |
 |--------|---------------------------|
@@ -771,7 +773,7 @@ Les notes Linux `user: "${UID}:${GID}"` du README concernent surtout **Linux** ;
 | Health | http://localhost:8000/api/v1/health/ |
 | Swagger | http://localhost:8000/api/docs/ |
 | OpenAPI JSON/YAML | http://localhost:8000/api/schema/ |
-| Onboarding UI | http://localhost:5173/onboarding |
+| Platform (desktop Web) | http://localhost:5173/platform |
 | Admin Django | **Non disponible** (non installé dans le projet) |
 
 ## Documentation métier (références)

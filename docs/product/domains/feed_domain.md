@@ -1,8 +1,8 @@
 # Feed Domain
 
-Status: authoritative  
-Last reviewed: 2026-09-01  
-Implementation status: implemented (Signal Feed Phase 4 + Action Plan Execution Feed Lot 5/10). Legacy polymorphic Action/Checklist execution feed removed in Lot 10.
+Status: authoritative
+Last reviewed: 2026-09-21
+Implementation status: Signal Feed + Action Plan Execution Feed live.
 
 ## 1. Purpose
 
@@ -35,8 +35,8 @@ Feed is a read/projection domain. It is not business truth.
 - Target Signal Feed behavior keeps feed-visible statuses (`open`, `in_progress`, `interesting`, `resolved`, `canceled`; see [`signal_domain.md`](signal_domain.md) §7).
 
 Current truth:
-- `GET signal-feed/` implemented (Phase 4) with required `view_mode=personal|general`.
-- **`GET action-plan-execution-feed/`** (Lot 5 Plan d'action, seul feed exécution post-Lot 10) with required `view_mode=personal|general`. Response envelope: `items`, `next_cursor`, `has_more`; each item has `item_type: "action_plan_execution"` and payload `action_plan_execution`.
+- `GET signal-feed/` with required `view_mode=personal|general`.
+- `GET action-plan-execution-feed/` with required `view_mode=personal|general`. Envelope: `items`, `next_cursor`, `has_more`; each item `item_type: "action_plan_execution"` and payload `action_plan_execution`. The old `/execution-feed/` path was removed.
 - Lazy action plan schedule materialization runs on feed read (`ensure_visible_action_plan_executions_materialized`) before querying items on **`action-plan-execution-feed/`** (horizon 3 days, stale guard 30 min).
 - **Feed Exécution `+`:** menu **Plan ponctuel** / **Catalogue** — see [`decisions/action_plan.md`](../decisions/action_plan.md).
 
@@ -83,7 +83,7 @@ Current truth:
 
 - `ExecutionFeed`
   - Structured execution summary view for operational follow-up.
-  - **Implemented today:** Action Plan execution items only (`item_type: "action_plan_execution"`). Legacy polymorphic Action/Checklist feed removed in Lot 10.
+  - **Implemented today:** Action Plan execution items only (`item_type: "action_plan_execution"`).
 
 - `FeedItem`
   - Safe summary of a visible domain object.
@@ -103,12 +103,8 @@ Current truth:
   - **Implemented** for Signal Feed and Action Plan Execution Feed (`cursor` query param, `next_cursor` response). See [`api_pagination_standard.md`](../../engineering/api_pagination_standard.md).
 
 - `PermissionHint`
-  - Candidate backend-provided UI hint such as visible actions or disabled actions.
+  - Backend-provided UI hint such as visible actions or disabled actions.
   - Never grants access by itself.
-
-- `FeedCount`
-  - Candidate summary count block returned with feed results.
-  - Not implemented API truth today.
 
 ## 6. Lifecycle / Statuses
 
@@ -153,39 +149,11 @@ Frontend display states may include:
 
 **Future** feed subscriptions may personalize Signal Feed Ma vue (not implemented). They would not be permissions and would not filter Execution Feed. **Today:** Signal Feed Ma vue uses `MembershipScope` (BusinessUnit) only.
 
-## 8. Events
-
-No implemented Feed business event contract is confirmed in current code or `apps/api/schema.yml`.
-
-Candidate events only:
-- `FeedViewed` for analytics.
-- `FeedFilterChanged` for frontend analytics.
-- `FeedInvalidated` for internal or realtime coordination.
-
 Realtime invalidation for execution feed uses `action_plan_execution.*` events (see [`realtime_domain.md`](realtime_domain.md)).
 
-## 9. API Surface
+## 9. HTTP
 
-Current API truth is `apps/api/schema.yml`.
-
-Implemented endpoints (establishment-scoped):
-
-- `GET /api/v1/establishments/{establishment_id}/signal-feed/?view_mode=personal|general` — required `view_mode`; optional `cursor`, `page_size`, `statuses`, `business_unit_ids` (UUID), `activity_subject_ids`. Legacy `business_unit_keys` is rejected. **Cursor pagination implemented** (reference).
-- `GET /api/v1/establishments/{establishment_id}/action-plan-execution-feed/?view_mode=personal|general` — required `view_mode`; optional `cursor`, `page_size` (default 25, max 50). **Cursor pagination implemented** (single-type feed; opaque cursor).
-- `POST /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/pin/` — personal feed pin (membership-scoped).
-- `POST /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/unpin/` — remove personal feed pin.
-
-Response envelope: `{ items, next_cursor, has_more }` (Signal Feed may include `applied_filters`).
-
-Each execution feed item: `{ item_type: "action_plan_execution", action_plan_execution: { ... } }`.
-
-Pagination standard: [`api_pagination_standard.md`](../../engineering/api_pagination_standard.md).
-
-Candidate / not implemented: advanced search, feed counts, saved views.
-
-**Execution Feed `+` menu (implemented):** mobile-first bottom sheet with **Plan d'action** only when `can_create_action_plan` bootstrap hint is true. Routes to action plan create (ponctuel or catalogue). See [`decisions/action_plan.md`](../decisions/action_plan.md).
-
-Detail routes belong to owning domains (`/action-plans/executions/{id}`), not Feed.
+[`apps/api/schema.yml`](../../../apps/api/schema.yml). Envelope `{ items, next_cursor, has_more }` (Signal Feed may include `applied_filters`). Pagination: [`api_pagination_standard.md`](../../engineering/api_pagination_standard.md). Personal pin: `POST .../action-plan-executions/{id}/pin/` and `.../unpin/`. Execution Feed `+` menu when `can_create_action_plan` — [`decisions/action_plan.md`](../decisions/action_plan.md). Detail routes belong to owning domains.
 
 ## 10. Frontend Expectations
 
@@ -221,8 +189,7 @@ Detail routes belong to owning domains (`/action-plans/executions/{id}`), not Fe
 - Do not expose raw Observation text.
 - Do not perform frontend-only authorization.
 - Do not include signed media URLs directly in feed items unless separately validated.
-- Do not claim candidate APIs are implemented beyond what exists in `schema.yml`.
-- Do not reference legacy `/execution-feed/`, `execution-checklist-card.tsx`, or `execution-action-card.tsx` — removed in Lot 10.
+- Do not claim APIs are implemented beyond what exists in `schema.yml`.
 - When feed APIs change, update backend authorization, OpenAPI, generated clients, tests, and this document together.
 
 ## 12. Acceptance test matrix (implemented feeds)

@@ -1,13 +1,9 @@
 # Comments Domain — Signal & Action Plan Execution Comments
 
 Status: authoritative
-Last reviewed: 2026-07-27
+Last reviewed: 2026-09-21
 
 Implementation status: implemented (REST threads, mentions, realtime invalidation)
-Scope: MVP / V1
-Related backlog:
-- HOU-BACKLOG-005 — Ajouter les commentaires sur les Signaux
-- HOU-BACKLOG-006 — Ajouter les commentaires sur les exécutions Action Plan
 
 ## 1. Purpose
 
@@ -194,90 +190,13 @@ The comment body is user-generated operational content and must be treated as se
 
 Comment content must not be logged, sent to AI, exposed in technical events, or stored in frontend persistent storage.
 
-## 7. API behavior
+## 7. HTTP
 
-Expected endpoints:
+[`apps/api/schema.yml`](../../../apps/api/schema.yml). Signal and action-plan-execution comment list/create; execution comments also have resolve/unresolve. POST body: `body`, `mentioned_membership_ids`. Comment body is sensitive — never in logs, AI, generic realtime, or durable frontend storage.
 
-```
-GET  /api/v1/establishments/{establishment_id}/signals/{signal_id}/comments/
-POST /api/v1/establishments/{establishment_id}/signals/{signal_id}/comments/
+## 8. Frontend
 
-GET  /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comments/
-POST /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comments/
-POST /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comments/{comment_id}/resolve/
-POST /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comments/{comment_id}/unresolve/
-```
-
-POST request:
-
-```
-{
-  "body": "Peux-tu regarder ce point ?",
-  "mentioned_membership_ids": ["uuid"]
-}
-```
-
-Comment response item:
-
-```
-{
-  "id": "uuid",
-  "origin": "signal",
-  "body": "Peux-tu regarder ce point ?",
-  "author": {
-    "membership_id": "uuid",
-    "display_name": "Alice Martin"
-  },
-  "mentions": [
-    {
-      "membership_id": "uuid",
-      "display_name": "Karim Dupont"
-    }
-  ],
-  "created_at": "2026-06-15T10:30:00Z"
-}
-```
-
-For Signal comments, `origin` is always `signal`.
-
-For Action Plan execution comment lists:
-
-- inherited Signal comments return `origin = signal`,
-- direct execution comments return `origin = action_plan_execution`.
-
-## 8. UX contract
-
-The comments section appears in:
-
-- Signal detail page,
-- Action Plan execution detail page.
-
-Default empty state:
-
-```
-Aucun commentaire pour l’instant.
-```
-
-Composer placeholder:
-
-```
-Ajouter un commentaire...
-```
-
-Submit behavior:
-
-- submit button is disabled while pending,
-- empty body cannot be submitted,
-- failed submission displays an explicit error,
-- successful submission refreshes the comment list.
-
-The UI must be mobile-first:
-
-- comfortable tap targets,
-- no hover-only interaction,
-- no horizontal scroll,
-- composer usable on phone keyboard,
-- loading, empty, error, and unauthorized states explicit.
+List items carry `origin`: `signal` for Signal comments (including inherited rows on execution detail); `action_plan_execution` for direct execution comments. UI: Signal detail and Action Plan execution detail; mobile-first; empty/error/unauthorized explicit. Composer: required trimmed body, max 2,000 characters; disable submit while pending.
 
 ## 9. Non-goals V1
 
@@ -292,71 +211,4 @@ The following are explicitly out of scope:
 - chat integration,
 - AI analysis.
 
-**Operational realtime (in scope — not a non-goal):** comment list refresh via establishment-scoped WebSocket **invalidation** is implemented. Backend emits `comment.*` reasons from `comments/services.py` after sync writes; the frontend refetches authorized comment queries — no comment body over the socket. Authoritative transport contract: [`realtime_domain.md`](realtime_domain.md). Event keys: `houston/notifications/constants.py` and [`contracts/operational-realtime-invalidation.json`](../../../contracts/operational-realtime-invalidation.json).
-
-## 10. Acceptance criteria
-
-### Signal comments
-
-- A user who can view a Signal detail can list its comments.
-- A user who can view a Signal detail can create a comment.
-- A user who cannot view the Signal cannot access its comments.
-- Signal comments are visible inside linked Action Plan executions.
-- Signal comments are stored once and not duplicated per execution.
-- Signal comments do not modify Signal classification or lifecycle.
-- Mentions are limited to active memberships of the same establishment.
-- Invalid mentions are rejected.
-- Comment lists refresh via operational realtime invalidation (see §9).
-
-### Action Plan execution comments
-
-- A user who can view an Action Plan execution detail can list its comments.
-- A user who can view an Action Plan execution detail can create a comment.
-- A user who cannot view the execution cannot access its comments.
-- Execution comments remain linked only to that execution.
-- Execution comments are not visible on the parent Signal.
-- Execution detail displays inherited Signal comments and direct execution comments in one chronological timeline.
-- Execution comments do not modify Action Plan execution lifecycle or assignment.
-- Mentions are limited to active memberships of the same establishment.
-- Invalid mentions are rejected.
-- Comment lists refresh via operational realtime invalidation (see §9).
-
-## 11. Implementation guidance
-
-Implementation must follow Houston conventions:
-
-- Backend owns permissions, validation, visibility, and business rules.
-- Frontend uses backend API contracts and generated types.
-- Frontend must not duplicate authorization logic.
-- TanStack Query owns frontend server state.
-- No direct fetch calls from React components.
-- No manual edits to generated API files.
-- No sensitive comment body in logs, events, broker messages, WebSocket payloads, or persistent frontend storage.
-
-Recommended backend structure:
-
-```
-houston.comments
-  models.py
-  permissions.py
-  selectors.py
-  services.py
-  api/serializers.py
-  api/views.py
-  api/urls.py
-  tests/
-```
-
-Recommended frontend structure:
-
-```
-apps/web/src/features/comments/
-  api.ts
-  hooks.ts
-  types.ts
-  components/comment-section.tsx
-  components/comment-composer.tsx
-  components/comment-list.tsx
-```
-
-These structures are recommendations. The implementation may adapt them if the repository already contains a stronger convention.
+**Operational realtime (in scope):** comment list refresh via establishment-scoped WebSocket **invalidation**. Backend emits `comment.*` from `comments/services.py` after sync writes; frontend refetches authorized queries — no comment body on the socket. [`realtime_domain.md`](realtime_domain.md).

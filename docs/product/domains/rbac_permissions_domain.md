@@ -1,233 +1,62 @@
 # RBAC / Permissions Domain
 
 Status: authoritative
-Last reviewed: 2026-09-19
-Implementation status: implemented (Action Plan RBAC in [`action_plans/permissions.py`](../../../apps/api/houston/action_plans/permissions.py); legacy Action/Checklist domains removed Lot 10). **Spore Platform V1 authorization is live** (`IsActivePlatformOperator` on `/api/v1/platform/*` only), outside `HasActiveMembership`.
+Last reviewed: 2026-09-21
+Implementation status: live (tenant RBAC; Platform is a separate context)
 
-## 1. Purpose
+Tenant authorization after identity and membership are resolved. Root: active `EstablishmentMembership`. Identity/lifecycle: [`identity_membership_domain.md`](identity_membership_domain.md). Action Plan matrices: [`action_plans/permissions.py`](../../../apps/api/houston/action_plans/permissions.py) and [`decisions/action_plan.md`](../decisions/action_plan.md). HTTP: [`apps/api/schema.yml`](../../../apps/api/schema.yml).
 
-This domain defines what an authenticated user can see and do inside an establishment after identity and membership have already been resolved.
+**Platform is a separate authorization context** (`IsActivePlatformOperator` on `/api/v1/platform/*` only). Do not weaken tenant selectors or `HasActiveMembership` for it. Tenant domain code must not import Platform permissions.
 
-Identity, organization, establishment, membership lifecycle, and membership selection rules belong to [`identity_membership_domain.md`](identity_membership_domain.md). RBAC builds on that model and uses active `EstablishmentMembership` as the authorization root.
+## Invariants
 
-## 2. MVP Scope
-
-- Backend-enforced authorization for establishment-scoped product access.
-- Membership-backed roles: `owner`, `director`, `manager`, `staff`.
-- Membership-backed BusinessUnit scope through `MembershipScope` rows.
-- Establishment visibility checks, action permission checks, and BusinessUnit scope access checks.
-- Backend permission enforcement for API reads, writes, command endpoints, feeds, realtime subscriptions, signed media access, notifications, comments, and chat access.
-- Frontend permission hints as convenience only, never as security authority (implemented on Action Plan and Signal API responses).
-
-## 3. Out of Scope
-
-- External policy engines.
-- User-defined custom roles or permission builder UI.
-- Cross-establishment access granted from a global `User` alone.
-- UI-only authorization as a security boundary.
-- Organization-wide super-admin product UX unless later validated.
-- Exhaustive endpoint-by-endpoint permission matrix unless separately validated.
-- Chat moderation workflows or advanced delegated admin hierarchy unless later validated.
-
-## 4. Core Invariants
-
-- Default deny. If membership, role, BusinessUnit scope, or resource visibility is not valid, access is denied.
+- Default deny. Invalid membership, role, BusinessUnit scope, or resource visibility → denied.
 - Authorization is layered and must not be collapsed:
-  - **PostgreSQL** enforces that a `MembershipScope` row cannot link a membership to a BusinessUnit of another establishment (`establishment_id` stamped from the membership, composite foreign keys).
-  - **Domain services** own business matrices (active BusinessUnit, Owner/Director without scope rows, invite/manage rules). A database constraint does not replace those checks.
-  - **DRF default** is deny-by-omission (`DenyByDefault`). Omitting `permission_classes` refuses access, including for an authenticated bearer. Intentionally unauthenticated routes opt in with `AllowAny`; the closed public allowlist is enforced by the urlconf inventory test, not a second permission registry.
-  - **Surface permissions** decide HTTP entry for a given context. Path-scoped establishment/organization admin is decided **once** per request (`decide_active_establishment_admin_access` / `decide_organization_admin_access`); the view reads the attached actor or organization. `HasActiveMembership` remains a coarse session gate, not a substitute for object rules.
-- Platform operator access is **not** an `EstablishmentMembership` role. It **must not** add an implicit tenant bypass on `HasActiveMembership` or `CanAccessEstablishmentAdmin`. Tenant domain code must not import Platform permissions. Authenticated non-operators calling `/api/v1/platform/*` receive **403** from the Platform permission class, not a missing-route 404. An operator with separate tenant memberships keeps those memberships for client APIs only.
-- Every establishment-scoped operation requires an active membership plus an active user, active establishment, and active organization.
-- Backend validates authorization on every request. Frontend visibility never grants access.
-- Object-level authorization is mandatory for both reads and writes.
-- Establishment isolation is mandatory. Product APIs must not expose data outside authorized establishments.
-- Role and BusinessUnit scope data in responses are UI hints, not security authority.
-- `owner` and `director` still require valid active membership; broad authority is never global.
-- **`MembershipScope`** is the source of truth for manager/staff operational RBAC (`scope_type`: `business_unit` only; `scope_id`: active `BusinessUnit` UUID). ActivitySubject is never an RBAC scope. No label-based inference.
-- **`MembershipDomain`** and `operational_domains` are **legacy v1** (removed with taxonomy v2, Lot 6). They are not RBAC authority and must not be referenced in new authorization logic. Authorization root for manager/staff is `MembershipScope` rows on **BusinessUnit** only.
-- **`MembershipFeedSubscription` is deferred** (not implemented). When implemented, it will personalize Signal Feed **Ma vue** only (BU-only first, then ActivitySubject subscribe/unsubscribe — see [`feed_subscription_domain.md`](feed_subscription_domain.md)). **Today:** Ma vue uses `MembershipScope`. Never a security boundary.
-- Notifications and realtime events do not grant access.
-- Signed media URLs require backend authorization before generation.
-- Raw Observation text must not leak through feeds, notifications, realtime payloads, signed media flows, or unauthorized detail views.
+  - **PostgreSQL** — a `MembershipScope` row cannot link a membership to a BusinessUnit of another establishment (`establishment_id` stamped from the membership, composite FKs).
+  - **Domain services** — business matrices (active BusinessUnit, Owner/Director without scope rows, invite/manage rules). A DB constraint does not replace those checks.
+  - **DRF** — omit `permission_classes` and `DenyByDefault` refuses access, including for an authenticated bearer. Intentionally unauthenticated routes opt in with `AllowAny`; the closed public allowlist is the urlconf inventory test, not a second permission registry.
+  - **Surface permissions** — HTTP entry for a given context. Path-scoped establishment/organization admin is decided **once** per request (`decide_active_establishment_admin_access` / `decide_organization_admin_access`). `HasActiveMembership` is a coarse session gate, not object rules.
+- Every establishment-scoped operation requires an active membership plus active user, establishment, and organization. A `User` alone never grants product access.
+- Backend validates on every request. Frontend visibility never grants access. Role and BusinessUnit payloads are UI hints.
+- **`MembershipScope`** is the source of truth for manager/staff operational RBAC (`scope_type`: `business_unit` only; `scope_id`: active BusinessUnit UUID). ActivitySubject is never an RBAC scope. No label-based inference.
+- **`MembershipFeedSubscription` is deferred.** Today Ma vue uses `MembershipScope`. Subscriptions are never a security boundary. See [`feed_subscription_domain.md`](feed_subscription_domain.md).
+- Notifications and realtime events do not grant access. Signed media URLs require backend authorization before generation. Raw Observation text must not leak through feeds, notifications, realtime, signed media, or unauthorized detail.
 
-## 5. Main Objects
+## Roles
 
-- Role
-  - Product role attached to `EstablishmentMembership`.
-  - Current validated roles are `owner`, `director`, `manager`, and `staff`.
+Helpers live in `apps/api/houston/establishments/permissions.py` unless a domain owns its matrix.
 
-- Permission / Capability
-  - Backend decision about whether a member may view a resource or perform a command.
-  - Current helper truth lives in `apps/api/houston/establishments/permissions.py`.
+- **Non-member / inactive** — no product access for the establishment.
+- **Active member** — app access, signal feed, observation create (when helpers allow).
+- **Owner** — organization-level authority: settings, memberships, runtime, action create/validate. May invite `owner`, `director`, `manager`, `staff`. Owner invite fans out across draft/active establishments. `PATCH` cannot assign destination `owner`/`director` and cannot modify an existing owner. Director may be demoted to manager/staff with required scopes.
+- **Director** — establishment-level operational authority. Invite `director`, `manager`, `staff` on an **active** establishment (multi-director allowed post-activation). Cannot invite `owner`. May manage manager and staff only; not owner or peer director memberships.
+- **Manager** — authority mainly inside assigned BusinessUnit scopes. Action create/validate; invite **staff** within BU coverage. Not establishment settings. Scope coverage required (or owner/director broad access).
+- **Staff** — reporting and execution. Cannot invite. Action plan create follows `can_create_action_plan` / `can_create_action`. Cannot create **signal-linked** plans when role denies it. Cannot validate executions when `can_validate_action` excludes them. Scope coverage required for visibility and free-action create (or owner/director broad access).
 
-- EstablishmentMembership
-  - Authorization root for establishment access.
-  - Carries role and membership status; access fails closed if membership is missing or inactive.
+## Signal Feed — list vs detail
 
-- MembershipScope assignment
-  - Explicit BusinessUnit scope rows for manager/staff visibility and actionability inside an establishment.
-  - Owner/director retain broad access without scope rows.
+Validated product decision (keep unless explicitly reopened):
 
-- Resource visibility
-  - Backend decision about whether a resource is visible at all inside the authorized establishment scope.
-  - Visibility and actionability are related but not identical.
+- **Ma vue** (`view_mode=personal`): Manager/Staff see Signals where affected **or** responsible BusinessUnit is in `MembershipScope`. Owner/Director see all feed-visible establishment Signals.
+- **Vue générale** (`view_mode=general`): all feed-visible establishment Signals for every role — no BU filter on the list.
+- **Detail**: any member passing `can_view_signal_feed` may read feed-visible Signal detail by ID, including deep-links outside Ma vue BU scope (`get_signal_for_detail` / `_can_view_signal_detail`).
+- Command authorization (pin, urgency, cancel, resolve, create linked action) remains scope-aware for Manager/Staff.
 
-- Command authorization
-  - Separate backend check for state-changing actions such as creating or validating work.
-  - A visible resource does not automatically imply action permission.
+Seeing a resource does not imply acting on it.
 
-## 6. Lifecycle / Statuses
+## Other surfaces
 
-Not applicable in MVP. RBAC evaluates current `User`, `EstablishmentMembership`, role, membership status, `MembershipScope` rows, establishment status, organization status, and resource state.
+- Comments inherit parent-resource visibility.
+- Chat V1 is establishment-scoped and independent of `MembershipScope`. Participant-only: Owner/Director have no read access outside participation. Group delete on the product API requires an active **admin participant**. Staff may create DMs, not groups; Manager/Director/Owner may create groups.
+- Feed visibility: [`feed_domain.md`](feed_domain.md). Signal: [`signal_domain.md`](signal_domain.md).
 
-Permission outcomes are:
-- allowed
-- denied
-- not visible / outside scope
+## Frontend
 
-## 7. Permissions
+Use bootstrap role/scope to hide or show affordances. Submit commands to the backend. Treat `401` as unauthenticated; expect `403` (action denied on a visible resource) and `404` (not visible / outside scope). Do not persist permission-sensitive data outside the auth/session design.
 
-- Non-member or inactive member
-  - No product access for the establishment.
-  - A global `User` alone never grants product access.
+## Agent notes
 
-- Active member
-  - Base establishment access comes from active membership only.
-  - Current implemented helpers allow active members to access the app, view the signal feed, and create observations.
-
-- Owner
-  - Broad Organization-level authority.
-  - Current implemented helpers allow managing establishment settings, memberships, runtime context, action creation, and action validation.
-  - Invite matrix (workspace): may invite `owner`, `director`, `manager`, `staff`. Owner invite fans out across draft/active establishments of the organization.
-  - Manage matrix: may deactivate/reactivate organizational owners and manage directors; `PATCH` cannot assign destination `owner`/`director` and cannot modify an existing owner. Director may be demoted to manager/staff with required scopes.
-
-- Director
-  - Broad establishment-level operational authority in MVP.
-  - Current implemented helpers match owner authority for most validated helper sets.
-  - Invite matrix (workspace): may invite `director`, `manager`, `staff` on an **active** establishment (multi-director allowed post-activation). Cannot invite `owner`.
-  - Membership management is narrower than owner: directors may manage manager and staff only; they cannot manage owner or peer director memberships.
-
-- Manager
-  - Management and action authority, mainly inside assigned BusinessUnit scopes.
-  - Current implemented helpers allow action creation and validation, and inviting **staff** within the manager’s BusinessUnit scope coverage. Not establishment settings management.
-  - BusinessUnit scope coverage required for BusinessUnit-scoped visibility/action (or owner/director broad access).
-
-- Staff
-  - Reporting and execution role, not management authority.
-  - Cannot invite members.
-  - Current implemented helpers allow app access, signal-feed access, and observation creation.
-  - **Action Plans (implemented):** Staff may create action plans when permitted by `can_create_action_plan` (establishment helper `can_create_action`). Staff **cannot** create **signal-linked** action plans from a Signal when denied by role rules. Staff execution permissions follow `action_plans/permissions.py`. Staff **cannot validate** action plan executions when validation is required and role excludes validator (`can_validate_action` establishment helper).
-  - BusinessUnit scope coverage required for visibility and free-action creation (or owner/director broad access).
-
-- Signal Feed — list scope vs detail access (validated 2026-06-11, audit BE-RBAC02)
-  - **Ma vue** (`view_mode=personal`): Manager/Staff see Signals where affected **or** responsible BusinessUnit is in `MembershipScope`. Owner/Director see all feed-visible establishment Signals.
-  - **Vue générale** (`view_mode=general`): all feed-visible establishment Signals for every role — no BU filter on the list.
-  - **Detail** (`GET .../signals/{id}/`): any member passing `can_view_signal_feed` may read feed-visible Signal detail by ID, including deep-links outside Ma vue BU scope. Implemented in `get_signal_for_detail` / `_can_view_signal_detail` (`signals/selectors.py`).
-  - **Intentional divergence:** Ma vue list filtering is narrower than detail read access. Command authorization (pin, urgency, cancel, resolve, create linked action) remains scope-aware for Manager/Staff.
-  - Product decision: **keep** this divergence short term. Do not align detail reads to Ma vue BU scope without explicit product sign-off.
-
-- Visibility vs actionability
-  - Seeing a resource does not automatically allow acting on it.
-  - Adjacent product docs validate that visibility may be broader than action rights across BusinessUnit scope boundaries. Treat exact per-resource behavior as candidate unless confirmed by current code and `apps/api/schema.yml`.
-  - When adjacent product rules allow a manager outside their assigned BusinessUnit scope to see or comment on a visible resource, action rights remain denied unless scope-compatible or explicitly authorized.
-
-- Boundary rules
-  - Feed visibility is backend-owned.
-  - Comments inherit parent-resource visibility and must not bypass RBAC.
-  - Chat V1 is establishment-scoped and independent ; it does not bypass structured workflow permissions and does not use BusinessUnit / `MembershipScope` gates.
-  - Chat access is participant-only : Owner/Director have no read access to conversations they do not participate in.
-  - Chat group delete (product API) requires the caller to be an active **admin participant** ; not available to Owner/Director outside participation.
-  - Staff may create DMs ; Staff cannot create groups ; Manager/Director/Owner may create groups.
-  - Notifications may target authorized recipients, but they never create access.
-  - Generic realtime may invalidate or trigger refetch only (deferred post Chat V1).
-  - Chat V1 WebSocket may deliver message text to authorized participants only ; see [`chat_domain.md`](chat_domain.md).
-
-## 8. Events
-
-No implemented RBAC-specific event contract is validated in current code or `apps/api/schema.yml`.
-
-Candidate events only:
-- `PermissionDenied` candidate
-- `MembershipRoleChanged` candidate
-- `MembershipScopeChanged` candidate
-- `ResourceAccessDenied` candidate
-
-## 9. API Surface
-
-Current API truth is `apps/api/schema.yml`.
-
-Implemented RBAC-relevant endpoints confirmed in `apps/api/schema.yml`:
-
-- `GET /api/v1/auth/csrf/`
-- `POST /api/v1/auth/login/`
-- `POST /api/v1/auth/refresh/`
-- `POST /api/v1/auth/logout/`
-- `GET /api/v1/auth/bootstrap/`
-- `POST /api/v1/auth/switch_establishment/`
-- `GET /api/v1/establishments/{establishment_id}/memberships/`
-- `GET /api/v1/establishments/{establishment_id}/memberships/{membership_id}/`
-- `PATCH /api/v1/establishments/{establishment_id}/memberships/{membership_id}/`
-- `POST /api/v1/establishments/{establishment_id}/memberships/{membership_id}/deactivate/`
-- `GET /api/v1/establishments/{establishment_id}/users/search/?q=`
-
-Implemented response truths:
-
-- Auth responses and bootstrap expose backend-approved `memberships`.
-- `active_membership` is present when `UserSession.selected_establishment` resolves to a valid active membership.
-- Login and refresh currently auto-select the sole active establishment on `UserSession` when exactly one active membership exists.
-- Membership payloads include `role`, `scopes`, and `scope_summary` (`business_unit_count` only) for UI context (not authoritative for security).
-- Membership-management endpoints reuse bearer-session access context and DRF permission classes backed by `UserSession.selected_establishment`.
-- Membership-management list endpoints are tenant-filtered at selector/queryset level before serialization.
-- Membership-management HTTP endpoints use session-selected establishment context plus service-layer matrices: owners and directors manage per the invite/manage matrices above; managers may manage in-scope `staff`/`manager` targets (perimeter enforced in services). Staff cannot manage memberships. There is no separate DRF `CanManageMemberships` gate — authority is enforced in services.
-- The current active establishment context must match the path `establishment_id`.
-- Scoped user search reuses bearer-session access context and requires a valid active membership in the current selected establishment.
-- Scoped user search is tenant-filtered at selector/queryset level before serialization and does not expose cross-establishment users.
-- Scoped user search response fields are intentionally minimal and do not expose broader user profile or tenant metadata.
-
-Additional implemented establishment-scoped endpoints with backend RBAC (confirm paths in `apps/api/schema.yml` before use):
-
-- Signal feed: `GET .../signal-feed/`
-- Action Plan execution feed: `GET .../action-plan-execution-feed/`
-- Action Plan catalog, executions, schedules, and task commands under `.../action-plans/`, `.../action-plan-executions/`, `.../action-plan-execution-tasks/`
-- Observations submit and processing status under `.../observations/`
-
-Domain RBAC matrices: [`signal_domain.md`](signal_domain.md), [`feed_domain.md`](feed_domain.md) §7, [`decisions/action_plan.md`](../decisions/action_plan.md). Legacy Action/Checklist domains were removed in Lot 10.
-
-Candidate endpoints only:
-
-- Role assignment or BusinessUnit scope assignment endpoints.
-- Permission introspection endpoints.
-- Comment, notification, chat, and signed-media endpoints whose RBAC behavior is described in product docs but not present in `apps/api/schema.yml`.
-
-Target API convention from active product docs, not yet confirmed by current public resource endpoints:
-
-- `401` for unauthenticated access.
-- `403` for action not allowed on a visible resource.
-- `404` for not visible / outside-scope resources.
-
-## 10. Frontend Expectations
-
-- Frontend receives membership, role, and scope context (`scopes`, `scope_summary`) from backend auth/bootstrap responses.
-- Frontend may use backend-provided role or permission context to hide or show UI affordances, but must still submit commands to the backend for validation.
-- TanStack Query owns server state and refetch behavior.
-- Frontend must handle `401` as unauthenticated and should be prepared for `403` and `404` according to the target API convention above.
-- Frontend must not infer real authorization from raw role or scope data alone.
-- Frontend must not rely on generic websocket invalidation payloads as business truth; global realtime should trigger REST refetch (deferred).
-- Chat V1 WebSocket messages are a scoped exception : reconcile with REST after reconnect ; see [`chat_domain.md`](chat_domain.md).
-- Frontend must not persist permission-sensitive business data outside the validated auth/session design.
-
-## 11. AI Agent Notes
-
-- Inspect current permission helpers before changing RBAC behavior.
-- Inspect `apps/api/schema.yml` before listing endpoints or claiming a permission-bearing API is implemented.
-- Inspect [identity_membership_domain.md](/Users/leobsn/Desktop/houston_project/docs/product/domains/identity_membership_domain.md) before changing membership assumptions.
+- Inspect current permission helpers and `schema.yml` before changing RBAC.
 - Do not move role or BusinessUnit scope onto `User`.
-- Do not treat the UI as the authorization authority.
-- Do not expose cross-establishment resources **on tenant APIs**.
 - Do not implement Platform as a super-membership or `is_staff` check on tenant views.
-- Do not add a giant permission matrix unless explicitly requested and separately validated.
-- Do not introduce an external policy engine in MVP.
-- Do not claim candidate endpoints or events are implemented.
-- Do not use old-stack terminology.
-- When adding new permission-bearing endpoints later, update backend authorization, OpenAPI, generated clients, and tests together.
+- Do not add an endpoint-by-endpoint matrix here.

@@ -7,7 +7,7 @@ Last reviewed: 2026-09-03
 
 The internal Phase 1 gate is met. Remaining work is Store / console / identity operations (Phase 2). Those items are listed below; they do **not** reopen this gate.
 
-Related: [`../deploy/native_release.md`](../deploy/native_release.md) · [`store_listing.md`](store_listing.md) · [`store_review.md`](store_review.md) · [`../roadmap_spore/spore-store-readiness-phase-1-v3.md`](../roadmap_spore/spore-store-readiness-phase-1-v3.md)
+Related: [`../deploy/native_release.md`](../deploy/native_release.md) · [`store_listing.md`](store_listing.md) · [`store_review.md`](store_review.md)
 
 Re-audit date: 2026-09-03 on `main` at `0421708` (PR #195–#200 merged). P1.15 / P1.16 live in this file.
 

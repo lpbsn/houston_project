@@ -76,7 +76,7 @@ Do not run `cd apps/api && uv run pytest` on the host — use Make targets or `d
   - `taxonomy.py` — business units, activity subjects, restaurant v3 taxonomy
   - `onboarding.py` — manual V2 payloads and onboarding session helpers
   - `pipeline.py` — observation/golden pipeline helpers
-- Domain-specific shared helpers (Lot 4): `tests/helpers.py`, `tests/ws_helpers.py`, `tests/pipeline_helpers.py`, etc. — import these, not `test_*.py`.
+- Domain-specific shared helpers: `tests/helpers.py`, `tests/ws_helpers.py`, `tests/pipeline_helpers.py`, etc. — import these, not `test_*.py`.
 - Catalog fixtures in `establishments/tests/conftest.py`:
   - `imported_catalog` — function-scoped sync via `sync_catalog_from_normalized_rows()` (**do not change** scope or seed strategy for taxonomy contraction work)
   - `requires_empty_catalog` — assert no catalog rows (tests that expect an empty DB)
@@ -99,9 +99,9 @@ Do not run `cd apps/api && uv run pytest` on the host — use Make targets or `d
 | Category | Provider | CI PR |
 |----------|----------|-------|
 | **Standard suite** (~1 600+ tests) | `FakeObservationPipelineProvider` via autouse `force_fake_observation_pipeline_provider` | Yes |
-| **Provider guard tests** | Fake + mocked OpenAI client (`test_observation_pipeline_provider.py`) | Yes (Lot 6: no longer `slow`) |
-| **Pipeline validation / legacy / golden split** | Fake provider, DB-heavy | Yes (Lot 6: reintegrated into PR) |
-| **Live OpenAI smoke** | Real OpenAI (`test_openai_observation_pipeline_v6_contract_smoke.py` Lot 4 technical; `test_openai_observation_pipeline_v6_business_smoke.py` Lot 10 métier; legacy v4/generic smokes) | No — manual / pre-release only; optional local archives under `.artifacts/pipeline-v6-smoke/` (gitignored, not source of truth) |
+| **Provider guard tests** | Fake + mocked OpenAI client (`test_observation_pipeline_provider.py`) | Yes |
+| **Pipeline validation / golden** | Fake provider, DB-heavy | Yes (in PR) |
+| **Live OpenAI smoke** | Real OpenAI (`test_openai_observation_pipeline_v6_contract_smoke.py`, `test_openai_observation_pipeline_v6_business_smoke.py`) | No — manual / pre-release only; optional local archives under `.artifacts/pipeline-v6-smoke/` (gitignored, not source of truth) |
 
 PR filter (Makefile + CI): `-m "not openai_observation_smoke and not openai_smoke and not slow"`.
 
@@ -133,7 +133,7 @@ Dedicated throttle tests (`test_auth_throttling_api.py`, invitation accept over-
 - `provisioning` — no tests until product risk is defined
 - `organizations` — minimal model coverage only
 - Non-critical UI pages — no page tests unless wiring is product-critical
-- Playwright E2E — proposal only: [`playwright_lot7_proposal.md`](playwright_lot7_proposal.md) (not in PR CI)
+- Playwright is not in this repository and is not a PR CI gate.
 
 ## Frontend (Vitest)
 
@@ -198,31 +198,9 @@ GitHub Actions (`.github/workflows/ci.yml`):
 
 Run `make verify && make web-lint` before merging when the Docker stack is up and you need full confidence. For day-to-day backend work, `make backend-test` or `make backend-lint` is enough.
 
-## Baseline (Lot 1 — diagnostic, historical)
+Profiling: `--durations=50` and optional local Vitest JSON under `.artifacts/` — **no arbitrary duration quotas**; optimize only measured bottlenecks.
 
-Lot 1 timing/inventory snapshots were local diagnostic outputs under `.artifacts/lot1-baseline/` (gitignored). They are **not** source of truth — re-measure with `--durations=50` / Vitest JSON reporter when profiling. Illustrative 2026-07-15 figures (local Docker vs CI run `29397589248`):
-
-| Measure | Local PR suite | CI |
-|---------|----------------|-----|
-| Backend tests passed | 1614 | — |
-| Backend pytest duration | ~361 s | ~639 s (step) |
-| Vitest files / tests | 164 / 1060 | ~61 s (step) |
-| Cross-imports `test_*.py` | 0 (after Lot 4 helpers extraction) | — |
-| `imported_catalog` marginal cost | ~16 s / 65 tests vs ~64 s / 311 tests | not dominant |
-
-Use `--durations=50` and optional local Vitest JSON under `.artifacts/` for ongoing profiling — **no arbitrary duration quotas**; optimize only measured bottlenecks.
-
-## Audit decisions (Lots 2–7)
-
-| Lot | Decision |
-|-----|----------|
-| **2** | Remove trivial `_meta` / Django declarative tests; drop shadcn `input`/`textarea` class tests; **EventEnvelope scaffolding removed** (`houston/core/events.py`, `houston.events` app, related tests); v3 golden mapped to v4 — prefer v4 corpus |
-| **3** | CI concurrency, path filters, push-on-`main` only, single `tsc -b` in frontend job |
-| **4** | Extract shared test helpers to `tests/helpers.py`; zero cross-imports from `test_*.py`; parametrize redundant feed/RBAC API cases where matrix proves duplication |
-| **6** | Replace TTL `sleep(1.1)` with deterministic time control; reintegrate former `slow` modules into PR; keep live OpenAI smoke manual-only; preserve reserved `openai_smoke` / `openai_transcription_smoke` markers |
-| **7** | Backend observation→signal feed journey; auth-provider cache purge tests; Playwright limited to 3 scenarios — infra proposal only, not PR gate |
-
-Protected areas (do not weaken): auth/CSRF/throttle, tenant isolation, pipeline v4 golden (apply-side G01–G11 vs current V6 runtime — not an alternate AI pipeline), legacy issue-focus aggregation, fake OpenAI guards, notification producers, query invalidation parity.
+Protected areas (do not weaken): auth/CSRF/throttle, tenant isolation, pipeline golden (apply-side G01–G11 vs current V6 runtime — not an alternate AI pipeline), issue-focus aggregation, fake OpenAI guards, notification producers, query invalidation parity.
 
 ## Issue focus aggregation eval
 
@@ -235,7 +213,7 @@ docker compose exec api uv run python manage.py evaluate_observation_pipeline --
 # Plumbing check without OpenAI
 docker compose exec api uv run python manage.py evaluate_observation_pipeline --provider fake --case-id G01
 
-# Lot 10 — S15 acceptance vs V6 runtime (fake fixtures independent of expected_v6)
+# S15 acceptance vs V6 runtime (fake fixtures independent of expected_v6)
 docker compose exec api uv run python manage.py evaluate_observation_pipeline_v6 --fail-on-diff
 docker compose exec api uv run python manage.py evaluate_observation_pipeline_v6 --json --case-id S15-12
 

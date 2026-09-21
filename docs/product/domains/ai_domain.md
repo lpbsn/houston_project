@@ -116,12 +116,7 @@ It does not own:
 
 ## 6. Lifecycle / Statuses
 
-Not validated as implemented yet. Candidate lifecycles only:
-
-- General AI request: `requested`, `processing`, `succeeded`, `failed`, `retried`, `abandoned` or `canceled` if later needed.
-- Transcription UI states: `recording`, `uploading`, `transcribing`, `transcription_ready`, `transcription_failed`.
-- Observation pipeline states: `queued`, `processing`, `retrying`, `processed`, `failed`.
-- Candidate timeout targets only: transcription 10s, Observation pipeline 20s, until enforced by code/tests.
+Observation pipeline statuses live on `ObservationProcessing` (`queued`, `processing`, `processed`, `retrying`, `failed`). Transcription UI states are frontend progress around `POST …/transcriptions/`.
 
 ## 7. Permissions
 
@@ -129,43 +124,16 @@ Not validated as implemented yet. Candidate lifecycles only:
 - AI receives only the minimum authorized context needed for the current operation.
 - AI never grants access, roles, or permissions.
 - Normal users should see simplified progress or failure states rather than raw technical AI diagnostics.
-- Metadata-oriented failure visibility for admin or support is candidate only and must still avoid sensitive content by default.
+- Metadata-oriented failure visibility for admin or support must still avoid sensitive content by default.
 - AI input excludes Chat content in MVP.
 - Image input is excluded from AI input in MVP.
 - AI usage records should remain establishment-scoped when such records are implemented.
 
-## 8. Events
+## 8. HTTP
 
-No AI event contract is validated as implemented today. `EventEnvelope` scaffolding was removed; runtime side effects use post-commit hubs in `houston/realtime/broadcast.py` and `houston/notifications/scheduling.py`.
+[`apps/api/schema.yml`](../../../apps/api/schema.yml). Transcription: `POST …/transcriptions/`. Observation pipeline: submit Observation → Celery → Signals ([`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md)); processing status via the observation processing-status endpoint. Runtime side effects: `houston/realtime/broadcast.py` and `houston/notifications/scheduling.py`.
 
-Candidate events only (**not implemented** — no emitters in `ai/` or `signals/` today):
-- `AIRequestStarted`
-- `AIRequestSucceeded`
-- `AIRequestFailed`
-- `AIRequestRetried`
-- `TranscriptionStarted`
-- `TranscriptionSucceeded`
-- `TranscriptionFailed`
-- `TranscriptionAudioDeleted`
-- `ObservationPipelineStarted`
-- `ObservationPipelineSucceeded`
-- `ObservationPipelineFailed`
-- `ObservationPipelineRetried`
-
-## 9. API Surface
-
-Current API truth is `apps/api/schema.yml`.
-
-Confirmed in `apps/api/schema.yml`:
-
-- Transcription: `POST /api/v1/establishments/{establishment_id}/transcriptions/` — multipart audio, `AIUsageLog` domain `transcription`, model configurable (`HOUSTON_AI_TRANSCRIPTION_MODEL`, default `gpt-4o-transcribe`).
-- Observation pipeline: submit Observation → Celery processing → Signals (see [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md)); processing status via observation processing-status endpoint.
-
-Candidate capabilities only:
-
-- metadata-only admin or support failure detail beyond current surfaces
-
-## 10. Frontend Expectations
+## 9. Frontend Expectations
 
 - Frontend must present AI as assistance and progress feedback, not as business authority.
 - Transcription text must be editable before Observation submit.
@@ -178,7 +146,7 @@ Candidate capabilities only:
 - TanStack Query owns server state for any future AI APIs.
 - Frontend must use generated OpenAPI clients only for routes confirmed in `apps/api/schema.yml`.
 
-## 11. AI Agent Notes
+## 10. Agent notes
 
 - Inspect current code before claiming provider abstractions, logs, jobs, prompts, events, or AI endpoints exist.
 - Inspect `apps/api/schema.yml` before claiming any AI API is available.

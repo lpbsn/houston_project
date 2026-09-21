@@ -56,4 +56,4 @@ After API changes: `make schema` then `make web-api-generate`. Do not edit gener
 
 ## Documentation policy
 
-Git is the only history — legacy archive and audit doc trees are not kept in the repo. See [`docs/00_ai_documentation_policy.md`](docs/00_ai_documentation_policy.md).
+Git is the only history. How to keep docs: [`docs/README.md`](docs/README.md).

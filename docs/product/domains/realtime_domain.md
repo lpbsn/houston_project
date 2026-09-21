@@ -1,8 +1,8 @@
 # Realtime Domain
 
 Status: authoritative
-Last reviewed: 2026-07-05
-Implementation status: operational WebSocket invalidation implemented for Signal, Action Plan (catalog / executions / tasks / assignees), Comment, Notification (membership-scoped), and async observation-pipeline downstream invalidation ; access/session handlers implemented ; Chat V1 remains a separate WS contract under `houston/chat/`. Legacy Action/Checklist invalidation removed in Lot 10.
+Last reviewed: 2026-09-21
+Implementation status: operational WebSocket invalidation live for Signal, Action Plan, Comment, Notification, and observation-pipeline downstream invalidation. Chat V1 is a separate WS contract under `houston/chat/`.
 
 ## 1. Purpose
 
@@ -135,11 +135,6 @@ Safe payload fields (operational `invalidate` — implemented allowlist):
 - `entity_id`
 - `occurred_at`
 
-Candidate fields not used in operational V1 payloads:
-
-- `correlation_id`
-- `affected_query_keys`
-
 Unsafe payload examples:
 
 - Observation text/body
@@ -184,21 +179,6 @@ Frontend operational connection status (implemented in `apps/web/src/features/re
 - `reconnecting`
 - `disconnected`
 
-Candidate subscription lifecycle (not exposed as a separate product model):
-
-- `requested`
-- `authorized`
-- `rejected`
-- `active`
-- `removed`
-
-Candidate message handling flow:
-
-- message received
-- ignored if unauthorized, stale, or irrelevant
-- matching query invalidated
-- authorized API data refetched
-
 ## 7. Permissions
 
 - A user may open a realtime connection only when authenticated.
@@ -228,63 +208,11 @@ Source domains with invalidation emission today:
 
 When an Action Plan execution lifecycle write also mutates a linked Signal, transport depends on the mutation. Signal-linked plan create schedules `signal.updated` when the Signal becomes `in_progress` (and optional unpin). Canceling all linked executions reopens the Signal to `open` and schedules `signal.updated`. When all linked executions are terminal with at least one `done`, mark-done or validate auto-resolves the active linked Signal via `resolve_signal_from_execution_sync` and schedules `signal.updated`. Manual `resolve_signal` (from `open` only) cancels active linked executions and schedules `signal.updated`. See `action_plans/services.py` and `signals/services.py`.
 
-See **Operational WebSocket invalidation** under section 2 for the reason matrix.
+See **Operational WebSocket invalidation** under section 2 for the reason matrix. Chat message transport belongs to [`chat_domain.md`](chat_domain.md).
 
-Candidate transport-level events (internal / not product WS types):
+## 9. HTTP / Channel
 
-- `RealtimeSubscriptionAccepted`
-- `RealtimeSubscriptionRejected`
-- `RealtimeMessageQueued`
-- `RealtimeMessageDelivered`
-- `RealtimeMessageFailed`
-
-Chat message transport is implemented in `houston/chat/` and belongs to Chat scope only — not this generic invalidation contract.
-
-## 9. API / Channel Surface
-
-Current HTTP API truth is `apps/api/schema.yml`.
-Current WebSocket/channel truth is current backend code.
-
-**Chat V1 WebSocket** (implemented — see [`chat_domain.md`](chat_domain.md)):
-
-- Path : `/ws/v1/establishments/{establishment_id}/chat/`
-- App : `houston/chat/` (consumer, routing, ws-ticket REST)
-- Not part of generic invalidation channels below
-
-**Operational WebSocket** (implemented — invalidation/refetch only):
-
-- Path : `/ws/v1/establishments/{establishment_id}/realtime/`
-- REST ticket : `POST /api/v1/establishments/{establishment_id}/realtime/ws-ticket/`
-- App : `houston/realtime/` (consumer, routing, ws-ticket, broadcast)
-- Channel group (invalidation) : `realtime_est_{establishment_id}`
-
-Implemented HTTP routes (operational realtime):
-
-- `POST /api/v1/establishments/{establishment_id}/realtime/ws-ticket/`
-
-Implemented WebSocket routes (operational realtime):
-
-- `/ws/v1/establishments/{establishment_id}/realtime/`
-
-Not implemented (operational):
-
-- Notification-scoped invalidation channels
-- Per-resource detail channels (detail refresh uses establishment-scoped invalidation + TanStack Query prefixes)
-
-Candidate channels (not implemented — historical naming):
-
-- `EstablishmentFeedChannel`
-- `UserExecutionChannel`
-- `UserNotificationChannel`
-- `SignalDetailChannel`
-- `ActionDetailChannel`
-- candidate `ChecklistExecutionChannel`
-- candidate `CommentContextChannel`
-
-Current implementation note (operational realtime):
-
-- `apps/api/config/asgi.py` merges Chat V1 and operational realtime WebSocket routing (`OriginValidator` on `HOUSTON_CLIENT_ORIGINS` + `URLRouter`).
-- Invalidation is establishment-broadcast; access events may target session or membership groups.
+HTTP: [`apps/api/schema.yml`](../../../apps/api/schema.yml) (`POST …/realtime/ws-ticket/`). Operational WS: `/ws/v1/establishments/{establishment_id}/realtime/`. Chat WS: [`chat_domain.md`](chat_domain.md). Ticket auth: [`authentication_charter.md`](../../architecture/authentication_charter.md). ASGI in `apps/api/config/asgi.py` (`OriginValidator` + `URLRouter`, no `AuthMiddlewareStack`). Invalidation is establishment-broadcast; access events may target session or membership groups. Machine contract: [`contracts/operational-realtime-invalidation.json`](../../../contracts/operational-realtime-invalidation.json).
 
 ## 10. Frontend Expectations
 
@@ -324,6 +252,5 @@ Current code truth:
 - Do not send Observation text/body, comment bodies, media links, signed media links, credentials, or AI request/model-input content in **generic** realtime payloads.
 - Do not send chat message bodies outside the Chat V1 WebSocket protocol defined in [`chat_domain.md`](chat_domain.md).
 - Do not implement client-side lifecycle mutation based only on realtime payloads.
-- Do not claim candidate channel names (section 9) are implemented without code proof.
-- Do not claim notification invalidation is live unless domain emitters exist.
+- Do not claim extra channel names are implemented without code proof.
 - When adding new operational invalidation, update domain services, frontend invalidation helpers, tests, and this document together.

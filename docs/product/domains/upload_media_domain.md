@@ -115,41 +115,11 @@ For transcription audio, the MVP lifecycle is:
 - Cross-tenant media access is forbidden.
 - Broad support or admin media access is not a default product behavior and must not be assumed.
 
-## 8. Events
+## 8. HTTP
 
-No upload/media event contract is currently validated in current code or `apps/api/schema.yml`.
+[`apps/api/schema.yml`](../../../apps/api/schema.yml) — temporary uploads, transcription, observation-media preview. Chat attachments are a dedicated bucket, not `TemporaryUpload`.
 
-Candidate events only:
-
-- `TemporaryUploadCreated`
-- `TemporaryUploadValidated`
-- `TemporaryUploadRejected`
-- `ObservationMediaLinked`
-- `OrphanUploadDeleted`
-- `MediaAccessGranted`
-- `MediaDeleted`
-- `AudioDeleted`
-- `AudioTranscriptionStarted` cross-domain candidate
-- `AudioTranscriptionSucceeded` cross-domain candidate
-- `AudioTranscriptionFailed` cross-domain candidate
-
-## 9. API Surface
-
-Current API truth is `apps/api/schema.yml`.
-
-Implemented endpoints confirmed in `apps/api/schema.yml`:
-
-- `POST /api/v1/establishments/{establishment_id}/temporary-uploads/` — multipart photo (`jpeg`/`jpg`, `png`, `webp`, `heic`/`heif` with server validation and normalization); private storage, no public URL in response.
-- `DELETE /api/v1/establishments/{establishment_id}/temporary-uploads/{upload_id}/`
-- `POST /api/v1/establishments/{establishment_id}/transcriptions/` — multipart audio only; backend OpenAI transcription; temp file deleted after each request; **not** stored as `TemporaryUpload`.
-
-- `GET /api/v1/establishments/{establishment_id}/observation-media/{media_id}/preview/` — signed query `token`; optional `variant=full|thumbnail`. After authorization: 302 to a short-lived private S3 GET in production, or `FileResponse` on filesystem. Houston response is `private, max-age=60, must-revalidate` with `Referrer-Policy: no-referrer`.
-
-Candidate API capabilities only:
-
-- direct browser-to-storage upload
-
-## 10. Frontend Expectations
+## 9. Frontend Expectations
 
 - Frontend may collect text, photos, and audio for the Observation flow, but backend validation is authoritative.
 - Observation photos stay local `File` objects in process memory until Envoyer. `POST …/temporary-uploads/` runs at send, not during compose. Task-origin Observation is text-only compose.
@@ -163,7 +133,7 @@ Candidate API capabilities only:
 - Frontend must use generated API clients only for endpoints present in `apps/api/schema.yml`.
 - Frontend must not guess media URLs or rely on direct public access patterns. Tiles use `thumbnail_url`; the lightbox uses `preview_url`. Both stay on the Houston host.
 
-## 11. AI Agent Notes
+## 10. Agent notes
 
 - Inspect current upload/media code before claiming models, jobs, or endpoints exist.
 - Inspect `apps/api/schema.yml` before listing any upload/media endpoint as implemented.
@@ -172,6 +142,6 @@ Candidate API capabilities only:
 - Do not log media content, signed access URLs, tokens, `Location` headers, or sensitive filenames.
 - Do not send images to AI in MVP.
 - Do not persist transcription audio as Observation media in MVP.
-- Do not add media to Chat V1.
+- Do not add media to Chat V1 except through the dedicated chat attachment flow.
 - Do not increase the photo limit without updating product docs, backend validation, frontend validation, and tests.
-- When upload/media APIs are added later, update backend authorization, OpenAPI, generated clients, tests, and this document together.
+- When upload/media APIs change, update backend authorization, OpenAPI, generated clients, tests, and this document together.
