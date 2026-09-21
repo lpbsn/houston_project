@@ -92,6 +92,7 @@ function multiMembershipBootstrapWithoutActive() {
     organization_name: 'Org',
     role: 'director' as const,
     status: 'active' as const,
+    chat_available: true,
     scopes: [],
     scope_summary: { business_unit_count: 0 },
   })

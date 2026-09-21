@@ -15,7 +15,6 @@ type DesktopTerrainSidebarProps = {
   bootstrap?: BootstrapResponse | null
   className?: string
   navigate: (pathname: string, options?: { replace?: boolean }) => void
-  showChat: boolean
 }
 
 function buildUserInitials(user: BootstrapResponse['user'] | null | undefined): string {
@@ -75,11 +74,10 @@ export function DesktopTerrainSidebar({
   bootstrap,
   className,
   navigate,
-  showChat,
 }: DesktopTerrainSidebarProps) {
   const sections = useMemo(
-    () => resolveScopedDesktopNavigation({ bootstrap, showChat }),
-    [bootstrap, showChat],
+    () => resolveScopedDesktopNavigation({ bootstrap }),
+    [bootstrap],
   )
   const [expandedIds, setExpandedIds] = useState(() =>
     mergeExpandedSectionIds(new Set(), sections, activePath),

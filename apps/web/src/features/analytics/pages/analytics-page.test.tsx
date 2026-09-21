@@ -54,6 +54,7 @@ function managerBootstrap() {
         organization_name: 'Spore',
         role: 'manager',
         status: 'active',
+        chat_available: true,
         scopes: [],
         scope_summary: { business_unit_count: 0 },
       },

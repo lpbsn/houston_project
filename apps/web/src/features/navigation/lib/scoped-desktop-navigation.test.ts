@@ -12,6 +12,7 @@ function membership(overrides: Partial<Membership>): Membership {
     organization_name: overrides.organization_name ?? 'Spore',
     role: overrides.role ?? 'staff',
     status: overrides.status ?? 'active',
+    chat_available: overrides.chat_available ?? true,
     scopes: [],
     scope_summary: { business_unit_count: 0 },
   }
@@ -63,7 +64,6 @@ describe('scoped desktop navigation', () => {
           establishment_name: 'Brasserie Huit',
         }),
       ]),
-      showChat: true,
     })
 
     expect(sections.map((section) => section.id)).toEqual([
@@ -75,13 +75,13 @@ describe('scoped desktop navigation', () => {
     expect(sections[1]?.defaultExpanded).toBe(false)
     expect(sections[2]?.defaultExpanded).toBe(false)
     expect(sections[0]?.items.map((item) => item.id)).toContain('dashboard')
+    expect(sections[0]?.items.map((item) => item.id)).not.toContain('chat')
     expect(sections[0]?.items.find((item) => item.id === 'signals')?.readOnly).toBe(true)
   })
 
   it('expands the only establishment section when Cross is hidden', () => {
     const sections = resolveScopedDesktopNavigation({
       bootstrap: bootstrap([membership({ role: 'manager' })]),
-      showChat: false,
     })
 
     expect(sections.map((section) => section.id)).toEqual(['establishment:est-1'])
@@ -101,7 +101,6 @@ describe('scoped desktop navigation', () => {
     })
     const sections = resolveScopedDesktopNavigation({
       bootstrap: bootstrap([paris, lyon], paris),
-      showChat: false,
     })
 
     expect(sections.map((section) => section.id)).toEqual([
@@ -129,7 +128,6 @@ describe('scoped desktop navigation', () => {
     })
     const sections = resolveScopedDesktopNavigation({
       bootstrap: bootstrap([paris, lyon], lyon),
-      showChat: false,
     })
 
     expect(sections.find((section) => section.id === 'establishment:est-2')?.defaultExpanded).toBe(
@@ -143,7 +141,6 @@ describe('scoped desktop navigation', () => {
   it('hides Cross and Dashboard for staff-only users', () => {
     const sections = resolveScopedDesktopNavigation({
       bootstrap: bootstrap([membership({ role: 'staff' })]),
-      showChat: true,
     })
 
     expect(sections.map((section) => section.id)).toEqual(['establishment:est-1'])
@@ -171,7 +168,6 @@ describe('scoped desktop navigation', () => {
     })
     const sections = resolveScopedDesktopNavigation({
       bootstrap: bootstrap([owner, director, manager], owner),
-      showChat: false,
     })
 
     const ownerItems =
@@ -194,5 +190,33 @@ describe('scoped desktop navigation', () => {
         .find((section) => section.id === 'establishment:est-owner')
         ?.items.find((item) => item.id === 'operational-config')?.href,
     ).toBe('/e/est-owner/operational-config')
+  })
+
+  it('shows establishment Chat from membership chat_available without a session', () => {
+    const enabled = membership({
+      role: 'manager',
+      establishment_id: 'est-a',
+      establishment_name: 'Brasserie Huit',
+      chat_available: true,
+    })
+    const disabled = membership({
+      role: 'manager',
+      establishment_id: 'est-b',
+      establishment_name: 'Villa Mareva',
+      chat_available: false,
+    })
+    const sections = resolveScopedDesktopNavigation({
+      bootstrap: bootstrap([enabled, disabled], null),
+    })
+
+    const crossItems = sections.find((section) => section.id === 'cross')?.items ?? []
+    const enabledItems =
+      sections.find((section) => section.id === 'establishment:est-a')?.items ?? []
+    const disabledItems =
+      sections.find((section) => section.id === 'establishment:est-b')?.items ?? []
+
+    expect(crossItems.map((item) => item.id)).not.toContain('chat')
+    expect(enabledItems.find((item) => item.id === 'chat')?.href).toBe('/e/est-a/chat')
+    expect(disabledItems.map((item) => item.id)).not.toContain('chat')
   })
 })

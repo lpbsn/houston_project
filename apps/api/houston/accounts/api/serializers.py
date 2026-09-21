@@ -268,6 +268,7 @@ class MembershipSerializer(serializers.Serializer):
     organization_name = serializers.CharField()
     role = serializers.CharField()
     status = serializers.CharField()
+    chat_available = serializers.BooleanField()
     scopes = MembershipScopeItemSerializer(many=True)
     scope_summary = MembershipScopeSummarySerializer()
 

@@ -4417,6 +4417,7 @@ export interface components {
             organization_name: string;
             role: string;
             status: string;
+            chat_available: boolean;
             scopes: components["schemas"]["AuthMembershipScopeItem"][];
             scope_summary: components["schemas"]["AuthMembershipScopeSummary"];
         };

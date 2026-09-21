@@ -136,6 +136,76 @@ def test_bootstrap_permission_hints_are_false_without_active_membership(
     assert hints["can_manage_organization"] is True
     assert hints["can_view_team"] is False
     assert hints["can_invite"] is False
+    assert hints["chat_available"] is False
+
+
+def test_bootstrap_memberships_expose_chat_available_from_can_access_chat(
+    api_client,
+    active_user,
+):
+    enabled_membership = create_membership(user=active_user, name="Nice")
+    enabled_membership.establishment.chat_enabled = True
+    enabled_membership.establishment.save(update_fields=["chat_enabled"])
+
+    csrf_token = ensure_csrf(api_client)
+    login_response = login(
+        api_client,
+        csrf_token,
+        identifier=active_user.email,
+        password="secret",
+    )
+    access_token = login_response.json()["access_token"]
+    login_membership = login_response.json()["memberships"][0]
+    assert login_membership["chat_available"] is can_access_chat(enabled_membership)
+    assert login_membership["chat_available"] is True
+
+    response = api_client.get(
+        "/api/v1/auth/bootstrap/",
+        HTTP_AUTHORIZATION=f"Bearer {access_token}",
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["memberships"][0]["chat_available"] is True
+    assert body["active_membership"]["chat_available"] is True
+    assert body["permission_hints"]["chat_available"] is True
+
+
+def test_bootstrap_membership_chat_available_is_per_establishment_without_session(
+    api_client,
+    active_user,
+):
+    enabled_membership = create_membership(user=active_user, name="Nice")
+    enabled_membership.establishment.chat_enabled = True
+    enabled_membership.establishment.save(update_fields=["chat_enabled"])
+    disabled_membership = create_membership(user=active_user, name="Cannes")
+    disabled_membership.establishment.chat_enabled = False
+    disabled_membership.establishment.save(update_fields=["chat_enabled"])
+
+    csrf_token = ensure_csrf(api_client)
+    login_response = login(
+        api_client,
+        csrf_token,
+        identifier=active_user.email,
+        password="secret",
+    )
+    access_token = login_response.json()["access_token"]
+
+    response = api_client.get(
+        "/api/v1/auth/bootstrap/",
+        HTTP_AUTHORIZATION=f"Bearer {access_token}",
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["active_membership"] is None
+    assert body["permission_hints"]["chat_available"] is False
+
+    chat_by_name = {
+        item["establishment_name"]: item["chat_available"] for item in body["memberships"]
+    }
+    assert chat_by_name["Nice"] is can_access_chat(enabled_membership)
+    assert chat_by_name["Cannes"] is can_access_chat(disabled_membership)
+    assert chat_by_name["Nice"] is True
+    assert chat_by_name["Cannes"] is False
 
 
 def test_bootstrap_owner_draft_only_has_org_hints_without_active_membership(

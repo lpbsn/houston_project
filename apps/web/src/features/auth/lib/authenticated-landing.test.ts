@@ -56,6 +56,7 @@ function membership(establishmentName: string, establishmentId = '33333333-3333-
     organization_name: 'Org',
     role: 'owner' as const,
     status: 'active' as const,
+    chat_available: true,
     scopes: [],
     scope_summary: {
       business_unit_count: 0,
