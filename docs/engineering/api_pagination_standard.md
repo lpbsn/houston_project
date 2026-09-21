@@ -51,7 +51,7 @@ Use for operational feeds that change frequently (realtime invalidation, sort bu
 | Max `page_size` | 50 |
 | `has_more` | `limit + 1` pattern — **not** full `queryset.count()` |
 | Cursor encoding | Opaque, server-side, tied to stable feed sort keys |
-| Frontend | `useInfiniteQuery`; manual « Charger plus » button (no implicit infinite scroll) |
+| Frontend | Manual « Charger plus » (no implicit infinite scroll). Signal Feed: `useQuery` + per-section continuation. Execution Feed: `useInfiniteQuery`. |
 
 **Response envelope:**
 
@@ -63,13 +63,13 @@ Use for operational feeds that change frequently (realtime invalidation, sort bu
 }
 ```
 
-Optional endpoint-specific fields (e.g. `applied_filters` on Signal Feed) are documented per endpoint, not part of the shared envelope.
+Signal Feed is the sectioned exception to that envelope (see §5): `{ sections: [{ status, items, next_cursor, has_more }], applied_filters }`. Other Tier A feeds keep the flat envelope.
 
 **Endpoints today:**
 
 | Endpoint | Status |
 |----------|--------|
-| `GET .../signal-feed/` | **Reference** — full cursor round-trip |
+| `GET .../signal-feed/` | **Reference** — per-status cursor pages in one first GET |
 | `GET .../action-plan-execution-feed/` | **Complete** — single-type cursor (`action_plan_execution` items) |
 
 The historical `/execution-feed/` path is gone.
@@ -132,8 +132,9 @@ Signal Feed is the **existing reference** for Tier A (backend + frontend).
 
 | File | Role |
 |------|------|
-| [`apps/api/houston/signals/api/views.py`](../../apps/api/houston/signals/api/views.py) | `SignalFeedView` — parses `cursor`, `page_size`, `limit+1`, returns `next_cursor` |
+| [`apps/api/houston/signals/api/views.py`](../../apps/api/houston/signals/api/views.py) | `SignalFeedView` — sectioned `limit+1` per status, `cursor` only with one matching `statuses=` |
 | [`apps/api/houston/signals/feed_cursor.py`](../../apps/api/houston/signals/feed_cursor.py) | Encode/decode opaque cursor from stable sort keys |
+| [`apps/api/houston/signals/feed_pagination.py`](../../apps/api/houston/signals/feed_pagination.py) | Independent per-status pages from an already-authorized queryset |
 | [`apps/api/houston/signals/selectors.py`](../../apps/api/houston/signals/selectors.py) | `signal_feed_queryset`, `apply_feed_sorting` |
 | [`apps/api/houston/signals/api/serializers.py`](../../apps/api/houston/signals/api/serializers.py) | `SignalFeedResponseSerializer` |
 
@@ -141,20 +142,23 @@ Signal Feed is the **existing reference** for Tier A (backend + frontend).
 
 | File | Role |
 |------|------|
-| [`apps/web/src/features/signals/hooks.ts`](../../apps/web/src/features/signals/hooks.ts) | `useSignalFeedQuery` — `useInfiniteQuery`, `getNextPageParam` from `next_cursor` |
-| [`apps/web/src/features/signals/api.ts`](../../apps/web/src/features/signals/api.ts) | `fetchSignalFeed` — passes `cursor` query param |
-| [`apps/web/src/features/signals/pages/signal-feed-page.tsx`](../../apps/web/src/features/signals/pages/signal-feed-page.tsx) | Merges `data.pages`, « Charger plus » via `fetchNextPage()` |
+| [`apps/web/src/features/signals/hooks.ts`](../../apps/web/src/features/signals/hooks.ts) | `useSignalFeedQuery` — one `useQuery` for the first sectioned page; `useLoadMoreSignalFeedSection` appends one status |
+| [`apps/web/src/features/signals/api.ts`](../../apps/web/src/features/signals/api.ts) | `fetchSignalFeed` — passes `cursor` with a single `statuses` value on continuation |
+| [`apps/web/src/features/signals/pages/signal-feed-page.tsx`](../../apps/web/src/features/signals/pages/signal-feed-page.tsx) | Renders `sections[]`; « Charger plus » from `sections[].has_more` |
 
 ### OpenAPI
 
 - `GET .../signal-feed/` exposes `cursor` and `page_size` query params.
-- `SignalFeedResponse`: `items`, `next_cursor`, `has_more`, `applied_filters`.
+- `cursor` requires exactly one `statuses=` value matching the status encoded in the cursor.
+- `SignalFeedResponse`: `sections` (`status`, `items`, `next_cursor`, `has_more`), `applied_filters`.
+- `page_size` applies **per section** (default 25, max 50).
 
 ## 6. Response envelope matrix (current state)
 
 | Envelope | Endpoints |
 |----------|-----------|
-| `{ items, next_cursor, has_more }` | Signal feed (complete), Action Plan execution feed (complete) |
+| `{ sections: [{ status, items, next_cursor, has_more }], applied_filters }` | Signal feed (establishment + cross) |
+| `{ items, next_cursor, has_more }` | Action Plan execution feed (complete) |
 | `{ items, has_more }` | Chat messages |
 | `{ items }` | Chat conversations, chat eligible memberships |
 | Raw `Item[]` | Action plan catalog list, users search, memberships, catalog suggest |

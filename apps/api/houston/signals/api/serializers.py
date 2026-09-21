@@ -123,10 +123,15 @@ class SignalFeedItemSerializer(serializers.Serializer):
     establishment_name = serializers.CharField(required=False)
 
 
-class SignalFeedResponseSerializer(serializers.Serializer):
+class SignalFeedSectionSerializer(serializers.Serializer):
+    status = serializers.CharField()
     items = SignalFeedItemSerializer(many=True)
     next_cursor = serializers.CharField(allow_null=True)
     has_more = serializers.BooleanField()
+
+
+class SignalFeedResponseSerializer(serializers.Serializer):
+    sections = SignalFeedSectionSerializer(many=True)
     applied_filters = serializers.DictField()
 
 

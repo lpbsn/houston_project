@@ -35,6 +35,7 @@ from houston.signals.tests.conftest import (
 )
 from houston.signals.tests.pipeline_helpers import setup_hotel_taxonomy
 from houston.testing.factories import build_membership
+from houston.testing.signal_feed import flatten_signal_feed_items
 
 pytestmark = pytest.mark.django_db
 
@@ -199,7 +200,7 @@ def test_interesting_included_in_default_feed_and_filter(api_client):
             **auth_headers(token),
         )
         assert default_feed.status_code == 200
-        default_ids = {item["id"] for item in default_feed.json()["items"]}
+        default_ids = {item["id"] for item in flatten_signal_feed_items(default_feed.json())}
         assert str(interesting.id) in default_ids
 
     filtered = api_client.get(
@@ -208,7 +209,7 @@ def test_interesting_included_in_default_feed_and_filter(api_client):
         **auth_headers(token),
     )
     assert filtered.status_code == 200
-    items = filtered.json()["items"]
+    items = flatten_signal_feed_items(filtered.json())
     assert len(items) == 1
     assert items[0]["id"] == str(interesting.id)
     assert items[0]["status"] == Signal.Status.INTERESTING
@@ -233,7 +234,7 @@ def test_interesting_before_resolved_in_feed_order(api_client):
         **auth_headers(token),
     )
     assert response.status_code == 200
-    ids = [item["id"] for item in response.json()["items"]]
+    ids = [item["id"] for item in flatten_signal_feed_items(response.json())]
     assert ids.index(str(interesting.id)) < ids.index(str(resolved.id))
 
 

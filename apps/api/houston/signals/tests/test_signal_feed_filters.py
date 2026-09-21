@@ -18,6 +18,7 @@ from houston.signals.tests.conftest import (
     login,
     signal_feed_url,
 )
+from houston.testing.signal_feed import flatten_signal_feed_items, signal_feed_section
 
 pytestmark = pytest.mark.django_db
 
@@ -67,8 +68,9 @@ def test_feed_without_filters_unchanged(api_client):
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body["items"]) == 1
-    assert body["items"][0]["id"] == str(signal.id)
+    items = flatten_signal_feed_items(body)
+    assert len(items) == 1
+    assert items[0]["id"] == str(signal.id)
     assert body["applied_filters"]["view_mode"] == "general"
     assert body["applied_filters"]["statuses"] == []
     assert body["applied_filters"]["business_unit_ids"] == []
@@ -84,8 +86,9 @@ def test_feed_filters_by_single_status(api_client):
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body["items"]) == 1
-    assert body["items"][0]["id"] == str(resolved.id)
+    items = flatten_signal_feed_items(body)
+    assert len(items) == 1
+    assert items[0]["id"] == str(resolved.id)
     assert body["applied_filters"]["statuses"] == ["resolved"]
 
 
@@ -102,8 +105,9 @@ def test_feed_filters_by_multiple_statuses(api_client):
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body["items"]) == 1
-    assert body["items"][0]["id"] == str(open_signal.id)
+    items = flatten_signal_feed_items(body)
+    assert len(items) == 1
+    assert items[0]["id"] == str(open_signal.id)
     assert body["applied_filters"]["statuses"] == ["in_progress", "open"]
 
 
@@ -129,8 +133,9 @@ def test_feed_filters_by_canceled_status(api_client):
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body["items"]) == 1
-    assert body["items"][0]["id"] == str(canceled.id)
+    items = flatten_signal_feed_items(body)
+    assert len(items) == 1
+    assert items[0]["id"] == str(canceled.id)
     assert body["applied_filters"]["statuses"] == ["canceled"]
 
 
@@ -176,8 +181,9 @@ def test_feed_filters_v3_by_responsible_business_unit(api_client):
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body["items"]) == 1
-    assert body["items"][0]["id"] == str(signal.id)
+    items = flatten_signal_feed_items(body)
+    assert len(items) == 1
+    assert items[0]["id"] == str(signal.id)
     assert body["applied_filters"]["business_unit_ids"] == [str(taxonomy.maintenance.id)]
 
 
@@ -209,8 +215,9 @@ def test_feed_filters_v3_by_affected_business_unit(api_client):
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body["items"]) == 1
-    assert body["items"][0]["id"] == str(signal.id)
+    items = flatten_signal_feed_items(body)
+    assert len(items) == 1
+    assert items[0]["id"] == str(signal.id)
 
 
 def test_feed_filters_v3_by_activity_subject_id(api_client):
@@ -242,8 +249,9 @@ def test_feed_filters_v3_by_activity_subject_id(api_client):
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body["items"]) == 1
-    assert body["items"][0]["id"] == str(lighting.id)
+    items = flatten_signal_feed_items(body)
+    assert len(items) == 1
+    assert items[0]["id"] == str(lighting.id)
     assert body["applied_filters"]["activity_subject_ids"] == [str(taxonomy.lighting_subject.id)]
 
 
@@ -278,8 +286,9 @@ def test_feed_combines_bu_and_activity_subject(api_client):
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body["items"]) == 1
-    assert body["items"][0]["id"] == str(match.id)
+    items = flatten_signal_feed_items(body)
+    assert len(items) == 1
+    assert items[0]["id"] == str(match.id)
 
 
 def test_personal_feed_bu_filter_within_scope(api_client):
@@ -314,7 +323,7 @@ def test_personal_feed_bu_filter_within_scope(api_client):
     )
 
     assert response.status_code == 200
-    assert response.json()["items"] == []
+    assert flatten_signal_feed_items(response.json()) == []
 
 
 def test_owner_sees_filtered_v3_signals(api_client):
@@ -346,8 +355,9 @@ def test_owner_sees_filtered_v3_signals(api_client):
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body["items"]) == 1
-    assert body["items"][0]["id"] == str(lighting.id)
+    items = flatten_signal_feed_items(body)
+    assert len(items) == 1
+    assert items[0]["id"] == str(lighting.id)
 
 
 def test_applied_filters_echoes_bu_as(api_client):
@@ -394,27 +404,30 @@ def test_pagination_with_bu_filter_returns_next_cursor(api_client):
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body["items"]) == 2
-    assert body["has_more"] is True
-    assert body["next_cursor"] is not None
+    open_section = signal_feed_section(body, Signal.Status.OPEN)
+    assert open_section is not None
+    assert len(open_section["items"]) == 2
+    assert open_section["has_more"] is True
+    assert open_section["next_cursor"] is not None
 
     page_two = _feed_get(
         api_client,
         membership,
         (
             f"?view_mode=general&business_unit_ids={taxonomy.maintenance.id}"
-            f"&page_size=2&cursor={body['next_cursor']}"
+            f"&page_size=2&statuses=open&cursor={open_section['next_cursor']}"
         ),
     )
 
     assert page_two.status_code == 200
     page_two_body = page_two.json()
-    assert len(page_two_body["items"]) == 1
-    assert page_two_body["has_more"] is False
-    assert page_two_body["next_cursor"] is None
+    page_two_items = flatten_signal_feed_items(page_two_body)
+    assert len(page_two_items) == 1
+    assert page_two_body["sections"][0]["has_more"] is False
+    assert page_two_body["sections"][0]["next_cursor"] is None
 
-    first_page_ids = {item["id"] for item in body["items"]}
-    second_page_ids = {item["id"] for item in page_two_body["items"]}
+    first_page_ids = {item["id"] for item in open_section["items"]}
+    second_page_ids = {item["id"] for item in page_two_items}
     assert first_page_ids.isdisjoint(second_page_ids)
 
 
@@ -426,33 +439,40 @@ def test_cursor_round_trip_without_duplicates(api_client):
     first = _feed_get(api_client, membership, "?view_mode=general&page_size=2")
     assert first.status_code == 200
     first_body = first.json()
-    assert len(first_body["items"]) == 2
-    assert first_body["has_more"] is True
-    assert first_body["next_cursor"] is not None
+    open_section = signal_feed_section(first_body, Signal.Status.OPEN)
+    assert open_section is not None
+    assert len(open_section["items"]) == 2
+    assert open_section["has_more"] is True
+    assert open_section["next_cursor"] is not None
 
     second = _feed_get(
         api_client,
         membership,
-        f"?view_mode=general&page_size=2&cursor={first_body['next_cursor']}",
+        f"?view_mode=general&page_size=2&statuses=open&cursor={open_section['next_cursor']}",
     )
     assert second.status_code == 200
     second_body = second.json()
-    assert len(second_body["items"]) == 2
-    assert second_body["has_more"] is True
+    second_section = second_body["sections"][0]
+    assert len(second_section["items"]) == 2
+    assert second_section["has_more"] is True
+    assert second_section["next_cursor"] is not None
 
     third = _feed_get(
         api_client,
         membership,
-        f"?view_mode=general&page_size=2&cursor={second_body['next_cursor']}",
+        f"?view_mode=general&page_size=2&statuses=open&cursor={second_section['next_cursor']}",
     )
     assert third.status_code == 200
     third_body = third.json()
-    assert len(third_body["items"]) == 1
-    assert third_body["has_more"] is False
-    assert third_body["next_cursor"] is None
+    third_section = third_body["sections"][0]
+    assert len(third_section["items"]) == 1
+    assert third_section["has_more"] is False
+    assert third_section["next_cursor"] is None
 
     all_ids = [
-        item["id"] for page in (first_body, second_body, third_body) for item in page["items"]
+        item["id"]
+        for page in (open_section, second_section, third_section)
+        for item in page["items"]
     ]
     assert len(all_ids) == len(set(all_ids)) == 5
 

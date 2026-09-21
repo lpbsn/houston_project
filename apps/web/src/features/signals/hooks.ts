@@ -1,5 +1,4 @@
 import {
-  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -30,12 +29,15 @@ import {
   unpinSignal,
 } from './api'
 import {
+  appendSignalFeedSectionPage,
   applySignalQuickActionSuccess,
   type SignalQuickActionCacheContext,
 } from './lib/signal-feed-cache'
+import type { SignalFeedStatusFilter } from './lib/signal-feed-filters'
 import type {
   SignalDetail,
   SignalFeedFilters,
+  SignalFeedResponse,
   SignalQualifyRoutingRequest,
   SignalQualifyRoutingResponse,
   SignalViewMode,
@@ -51,32 +53,67 @@ export function useSignalFeedQuery(
 ) {
   const source = options?.source ?? 'establishment'
   const enabled = source === 'cross' || Boolean(establishmentId)
-  return useInfiniteQuery({
+  return useQuery({
     queryKey:
       source === 'cross'
         ? signalsQueryKeys.crossFeed(filters)
         : establishmentId
           ? signalsQueryKeys.feed(establishmentId, viewMode, filters)
           : ['signals', 'feed', 'none'],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) => {
+    queryFn: () => {
       if (source === 'cross') {
-        return fetchCrossSignalFeed(filters, { cursor: pageParam })
+        return fetchCrossSignalFeed(filters)
       }
       if (!establishmentId) {
         throw new Error('Établissement non sélectionné.')
       }
-      return fetchSignalFeed(establishmentId, viewMode, filters, {
-        cursor: pageParam,
-      })
-    },
-    getNextPageParam: (lastPage) => {
-      if (!lastPage.has_more || !lastPage.next_cursor) {
-        return undefined
-      }
-      return lastPage.next_cursor
+      return fetchSignalFeed(establishmentId, viewMode, filters)
     },
     enabled,
+  })
+}
+
+export function useLoadMoreSignalFeedSection(
+  establishmentId: string | null,
+  viewMode: SignalViewMode,
+  filters: SignalFeedFilters,
+  options?: { source?: 'establishment' | 'cross' },
+) {
+  const source = options?.source ?? 'establishment'
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (status: SignalFeedStatusFilter) => {
+      const queryKey =
+        source === 'cross'
+          ? signalsQueryKeys.crossFeed(filters)
+          : establishmentId
+            ? signalsQueryKeys.feed(establishmentId, viewMode, filters)
+            : null
+      if (queryKey == null) {
+        throw new Error('Établissement non sélectionné.')
+      }
+      const current = queryClient.getQueryData<SignalFeedResponse>(queryKey)
+      const section = current?.sections.find((entry) => entry.status === status)
+      if (!section?.has_more || !section.next_cursor) {
+        return current
+      }
+      const sectionFilters = { ...filters, statuses: [status] }
+      const page =
+        source === 'cross'
+          ? await fetchCrossSignalFeed(sectionFilters, { cursor: section.next_cursor })
+          : await fetchSignalFeed(establishmentId as string, viewMode, sectionFilters, {
+              cursor: section.next_cursor,
+            })
+      appendSignalFeedSectionPage(queryClient, {
+        establishmentId,
+        viewMode,
+        filters,
+        source,
+        status,
+        page,
+      })
+      return page
+    },
   })
 }
 

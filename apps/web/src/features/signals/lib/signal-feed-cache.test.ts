@@ -130,27 +130,27 @@ describe('feedItemPatchFromDetail', () => {
 })
 
 describe('patchSignalInActiveFeedCache', () => {
-  it('patches the matching item across infinite query pages', () => {
+  it('patches the matching item across feed sections', () => {
     const queryClient = createTestQueryClient()
     const queryKey = signalsQueryKeys.feed(EST, 'personal', EMPTY_SIGNAL_FEED_FILTERS)
     const otherItem = buildFeedItem({ id: 'signal-2', title: 'Autre' })
 
     queryClient.setQueryData(queryKey, {
-      pages: [
+      sections: [
         {
+          status: 'open',
           items: [buildFeedItem(), otherItem],
           next_cursor: 'cursor-1',
           has_more: true,
-          applied_filters: { statuses: [], business_unit_ids: [], activity_subject_ids: [] },
         },
         {
-          items: [buildFeedItem({ id: 'signal-3', title: 'Page 2' })],
+          status: 'resolved',
+          items: [buildFeedItem({ id: 'signal-3', title: 'Page 2', status: 'resolved' })],
           next_cursor: null,
           has_more: false,
-          applied_filters: { statuses: [], business_unit_ids: [], activity_subject_ids: [] },
         },
       ],
-      pageParams: [undefined, 'cursor-1'],
+      applied_filters: { statuses: [], business_unit_ids: [], activity_subject_ids: [] },
     })
 
     patchSignalInActiveFeedCache(queryClient, {
@@ -161,13 +161,11 @@ describe('patchSignalInActiveFeedCache', () => {
       patch: { is_pinned: true },
     })
 
-    const data = queryClient.getQueryData<{
-      pages: SignalFeedResponse[]
-    }>(queryKey)
+    const data = queryClient.getQueryData<SignalFeedResponse>(queryKey)
 
-    expect(data?.pages[0]?.items[0]?.is_pinned).toBe(true)
-    expect(data?.pages[0]?.items[1]?.is_pinned).toBe(false)
-    expect(data?.pages[1]?.items[0]?.is_pinned).toBe(false)
+    expect(data?.sections[0]?.items[0]?.is_pinned).toBe(true)
+    expect(data?.sections[0]?.items[1]?.is_pinned).toBe(false)
+    expect(data?.sections[1]?.items[0]?.is_pinned).toBe(false)
   })
 })
 

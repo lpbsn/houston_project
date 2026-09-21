@@ -117,6 +117,79 @@ export function partitionFeedPinnedItems(items: SignalFeedItem[]): {
   return { pinnedItems, unpinnedItems }
 }
 
+export type SignalFeedSectionInput = {
+  status: SignalFeedStatusGroup['status'] | string
+  items: SignalFeedItem[]
+  next_cursor: string | null
+  has_more: boolean
+}
+
+export type SignalFeedSectionPresentation = SignalFeedStatusGroup & {
+  hasMore: boolean
+  nextCursor: string | null
+}
+
+export function composeSignalFeedPresentation(sections: SignalFeedSectionInput[]): {
+  pinnedItems: SignalFeedItem[]
+  groups: SignalFeedSectionPresentation[] | null
+  flatUnpinnedItems: SignalFeedItem[]
+  flatHasMore: boolean
+  flatStatus: SignalFeedStatusGroup['status'] | null
+  flatNextCursor: string | null
+  hasContent: boolean
+} {
+  const pinnedItems: SignalFeedItem[] = []
+  const presented: SignalFeedSectionPresentation[] = []
+
+  for (const section of sections) {
+    const status = section.status as SignalFeedStatusGroup['status']
+    const meta = STATUS_GROUP_META[status]
+    if (!meta) {
+      continue
+    }
+    let items = section.items
+    if (status === 'open') {
+      const partitioned = partitionFeedPinnedItems(items)
+      pinnedItems.push(...partitioned.pinnedItems)
+      items = partitioned.unpinnedItems
+    }
+    presented.push({
+      status,
+      ...meta,
+      items,
+      hasMore: section.has_more,
+      nextCursor: section.next_cursor,
+    })
+  }
+
+  const hasContent =
+    pinnedItems.length > 0 ||
+    presented.some((section) => section.items.length > 0 || section.hasMore)
+
+  if (presented.length <= 1) {
+    const only = presented[0] ?? null
+    return {
+      pinnedItems,
+      groups: null,
+      flatUnpinnedItems: only?.items ?? [],
+      flatHasMore: only?.hasMore ?? false,
+      flatStatus: only?.status ?? null,
+      flatNextCursor: only?.nextCursor ?? null,
+      hasContent,
+    }
+  }
+
+  return {
+    pinnedItems,
+    groups: presented,
+    flatUnpinnedItems: [],
+    flatHasMore: false,
+    flatStatus: null,
+    flatNextCursor: null,
+    hasContent,
+  }
+}
+
 /** Left border accent classes for feed cards (terrain palette). */
 export const SIGNAL_CARD_LEFT_ACCENT = {
   pinned: 'border-l-[#1a1a1a]',

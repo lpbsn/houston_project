@@ -7,6 +7,7 @@ import {
   getSignalCardLeftAccentClass,
   getSignalCardLeftAccentColor,
   getSignalStatusBadgeVariant,
+  composeSignalFeedPresentation,
   groupFeedItemsByStatus,
   partitionFeedPinnedItems,
   PINNED_SIGNAL_CARD_CLASS,
@@ -155,6 +156,48 @@ describe('partitionFeedPinnedItems', () => {
     expect(groups).toHaveLength(2)
     expect(groups?.[0].items.map((entry) => entry.id)).toEqual(['plain-open'])
     expect(groups?.[1].items.map((entry) => entry.id)).toEqual(['progress'])
+  })
+})
+
+describe('composeSignalFeedPresentation', () => {
+  it('keeps open has_more after extracting every loaded pinned item', () => {
+    const presentation = composeSignalFeedPresentation([
+      {
+        status: 'open',
+        items: [item({ id: 'pinned-open', is_pinned: true, status: 'open' })],
+        next_cursor: 'open-cursor',
+        has_more: true,
+      },
+      {
+        status: 'resolved',
+        items: [item({ id: 'done', status: 'resolved' })],
+        next_cursor: null,
+        has_more: false,
+      },
+    ])
+
+    expect(presentation.pinnedItems.map((entry) => entry.id)).toEqual(['pinned-open'])
+    expect(presentation.groups).toHaveLength(2)
+    expect(presentation.groups?.[0].status).toBe('open')
+    expect(presentation.groups?.[0].items).toEqual([])
+    expect(presentation.groups?.[0].hasMore).toBe(true)
+    expect(presentation.groups?.[0].nextCursor).toBe('open-cursor')
+  })
+
+  it('uses a flat list when the API returns a single section', () => {
+    const presentation = composeSignalFeedPresentation([
+      {
+        status: 'open',
+        items: [item({ id: '1', status: 'open' })],
+        next_cursor: 'cursor',
+        has_more: true,
+      },
+    ])
+
+    expect(presentation.groups).toBeNull()
+    expect(presentation.flatUnpinnedItems.map((entry) => entry.id)).toEqual(['1'])
+    expect(presentation.flatHasMore).toBe(true)
+    expect(presentation.flatStatus).toBe('open')
   })
 })
 

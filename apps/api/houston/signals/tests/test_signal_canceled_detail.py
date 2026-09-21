@@ -19,6 +19,7 @@ from houston.testing.auth import (
 )
 from houston.testing.auth import build_api_membership as build_other_establishment_membership
 from houston.testing.query_baseline import capture_queries
+from houston.testing.signal_feed import flatten_signal_feed_items
 from houston.testing.taxonomy import create_signal_v3_for_membership
 
 pytestmark = pytest.mark.django_db
@@ -221,7 +222,7 @@ def test_feed_includes_scoped_canceled_after_detail_access(api_client):
 
     assert detail.status_code == 200
     assert feed.status_code == 200
-    feed_ids = {item["id"] for item in feed.json()["items"]}
+    feed_ids = {item["id"] for item in flatten_signal_feed_items(feed.json())}
     assert str(signal.id) in feed_ids
 
 
@@ -245,7 +246,7 @@ def test_feed_general_view_excludes_canceled_out_of_pole_scope(api_client):
     )
 
     assert response.status_code == 200
-    feed_ids = {item["id"] for item in response.json()["items"]}
+    feed_ids = {item["id"] for item in flatten_signal_feed_items(response.json())}
     assert str(in_scope.id) in feed_ids
     assert str(out_of_scope.id) not in feed_ids
 

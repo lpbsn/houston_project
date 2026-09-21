@@ -45,6 +45,7 @@ from houston.testing.auth import (
     assign_business_unit_scope,
     build_api_membership_on_establishment,
 )
+from houston.testing.signal_feed import flatten_signal_feed_items
 from houston.testing.taxonomy import create_membership_with_business_unit_scope
 
 pytestmark = pytest.mark.django_db
@@ -112,7 +113,7 @@ def _feed_ids(api_client, membership, *, view_mode: str) -> set[str]:
         **auth_headers(token),
     )
     assert response.status_code == 200
-    return {item["id"] for item in response.json()["items"]}
+    return {item["id"] for item in flatten_signal_feed_items(response.json())}
 
 
 def _detail_status(api_client, membership, signal_id) -> int:
@@ -338,7 +339,7 @@ def test_needs_qualification_filter_for_manager(api_client):
     )
     assert response.status_code == 200
     body = response.json()
-    ids = {item["id"] for item in body["items"]}
+    ids = {item["id"] for item in flatten_signal_feed_items(body)}
     assert str(unassigned.id) in ids
     assert str(partial_affected.id) in ids
     assert str(with_subject_no_responsible.id) in ids
@@ -366,7 +367,7 @@ def test_needs_qualification_excludes_resolved_and_canceled(api_client):
         **auth_headers(token),
     )
     assert response.status_code == 200
-    ids = {item["id"] for item in response.json()["items"]}
+    ids = {item["id"] for item in flatten_signal_feed_items(response.json())}
     assert str(active.id) in ids
     assert str(lifecycle_resolved.id) not in ids
     assert str(lifecycle_canceled.id) not in ids

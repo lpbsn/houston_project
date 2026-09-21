@@ -13,7 +13,7 @@ It does not own Signal or Action Plan lifecycle, Notification Center, realtime t
 
 In: authorized list reads; safe items (no raw Observation text, no signed media URLs); `needs_qualification` on Signal Feed; cursor pagination; realtime invalidation/refetch only.
 
-Current HTTP: `GET signal-feed/` and `GET action-plan-execution-feed/` with required `view_mode=personal|general`. Envelope `{ items, next_cursor, has_more }` (Signal Feed may include `applied_filters`). Execution items: `item_type: "action_plan_execution"`. Lazy materialization on Execution Feed read: [`action_plan_domain.md`](action_plan_domain.md) (3-day horizon, 30 min stale guard). Execution Feed `+` (Plan ponctuel / Catalogue) when `can_create_action_plan` — same domain.
+Current HTTP: `GET signal-feed/` and `GET action-plan-execution-feed/` with required `view_mode=personal|general`. Signal Feed envelope `{ sections: [{ status, items, next_cursor, has_more }], applied_filters }`. Execution Feed envelope `{ items, next_cursor, has_more }` (items: `item_type: "action_plan_execution"`). Lazy materialization on Execution Feed read: [`action_plan_domain.md`](action_plan_domain.md) (3-day horizon, 30 min stale guard). Execution Feed `+` (Plan ponctuel / Catalogue) when `can_create_action_plan` — same domain.
 
 Out: feed as truth; lifecycle from feed state; frontend-only auth; saved views; drag-and-drop mutation; AI ranking; public/cross-tenant feeds.
 

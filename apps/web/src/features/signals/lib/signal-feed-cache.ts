@@ -1,4 +1,4 @@
-import type { InfiniteData, QueryClient } from '@tanstack/react-query'
+import type { QueryClient } from '@tanstack/react-query'
 
 import { signalsQueryKeys } from '../api'
 import type {
@@ -60,28 +60,75 @@ export function patchSignalInActiveFeedCache(
     options.filters,
   )
 
-  queryClient.setQueryData<InfiniteData<SignalFeedResponse>>(queryKey, (current) => {
+  queryClient.setQueryData<SignalFeedResponse>(queryKey, (current) => {
     if (!current) {
       return current
     }
 
     let updated = false
-    const pages = current.pages.map((page) => {
-      const items = page.items.map((item) => {
+    const sections = current.sections.map((section) => {
+      const items = section.items.map((item) => {
         if (item.id !== options.signalId) {
           return item
         }
         updated = true
         return { ...item, ...options.patch }
       })
-      return items === page.items ? page : { ...page, items }
+      return items === section.items ? section : { ...section, items }
     })
 
     if (!updated) {
       return current
     }
 
-    return { ...current, pages }
+    return { ...current, sections }
+  })
+}
+
+export function appendSignalFeedSectionPage(
+  queryClient: QueryClient,
+  options: {
+    establishmentId: string | null
+    viewMode: SignalViewMode
+    filters: SignalFeedFilters
+    source?: 'establishment' | 'cross'
+    status: string
+    page: SignalFeedResponse
+  },
+): void {
+  const queryKey =
+    options.source === 'cross'
+      ? signalsQueryKeys.crossFeed(options.filters)
+      : options.establishmentId
+        ? signalsQueryKeys.feed(options.establishmentId, options.viewMode, options.filters)
+        : null
+  if (queryKey == null) {
+    return
+  }
+
+  const incoming = options.page.sections.find((section) => section.status === options.status)
+  if (!incoming) {
+    return
+  }
+
+  queryClient.setQueryData<SignalFeedResponse>(queryKey, (current) => {
+    if (!current) {
+      return current
+    }
+    return {
+      ...current,
+      sections: current.sections.map((section) => {
+        if (section.status !== options.status) {
+          return section
+        }
+        return {
+          ...section,
+          items: [...section.items, ...incoming.items],
+          next_cursor: incoming.next_cursor,
+          has_more: incoming.has_more,
+        }
+      }),
+    }
   })
 }
 
