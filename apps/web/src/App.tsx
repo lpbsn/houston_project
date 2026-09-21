@@ -924,7 +924,6 @@ function App() {
     authRoutingSession.hasOperationalAccess,
     authRoutingSessionMismatch,
     establishmentId,
-    establishmentRouteSessionMismatch,
     handleSignOut,
     analyticsPatternDetailState,
     analyticsSignalReturnContext,
@@ -1058,7 +1057,6 @@ function App() {
               : route.kind === 'static' && route.path === '/select-establishment'
                 ? {
                     title: 'Choisir un établissement',
-                    description: '',
                     actions: (
                       <>
                         {auth.hasOperationalAccess ? backToGeneralAction : null}

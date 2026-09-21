@@ -7,8 +7,8 @@ import { cn } from '@/lib/utils'
 type AppShellProps = PropsWithChildren<{
   headingBadge?: string
   title: string
-  description: string
-  actions?: ReactNode
+  description?: string
+  actions?: ReactNode,
 }>
 
 export function AppShell({
