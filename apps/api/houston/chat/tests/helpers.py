@@ -22,6 +22,35 @@ def create_dm(api_client, *, token: str, establishment_id, target_membership_id)
     )
 
 
+def send_message(
+    api_client,
+    *,
+    token: str,
+    establishment_id,
+    conversation_id,
+    body: str,
+    client_message_id=None,
+    reply_to_id=None,
+    mentions=None,
+):
+    import uuid
+
+    payload = {
+        "client_message_id": str(client_message_id or uuid.uuid4()),
+        "body": body,
+    }
+    if reply_to_id is not None:
+        payload["reply_to_id"] = str(reply_to_id)
+    if mentions is not None:
+        payload["mentions"] = mentions
+    return api_client.post(
+        chat_url(establishment_id, f"conversations/{conversation_id}/messages/"),
+        payload,
+        format="json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+
 def create_group(
     api_client,
     *,

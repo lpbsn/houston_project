@@ -113,17 +113,130 @@ class ChatMessage(BaseModel):
         on_delete=models.PROTECT,
         related_name="chat_messages_authored",
     )
-    body = models.TextField(max_length=CHAT_MESSAGE_BODY_MAX_LENGTH)
+    body = models.TextField(max_length=CHAT_MESSAGE_BODY_MAX_LENGTH, blank=True, default="")
     client_message_id = models.UUIDField()
+    reply_to_id = models.UUIDField(null=True, blank=True)
 
     class Meta:
         ordering = ["created_at", "id"]
         indexes = [
             models.Index(fields=["conversation", "created_at", "id"]),
+            models.Index(
+                fields=["conversation", "reply_to_id"],
+                name="chat_chatme_convers_a91c4d_idx",
+            ),
         ]
         constraints = [
             models.UniqueConstraint(
                 fields=["conversation", "author_membership", "client_message_id"],
                 name="uniq_chat_message_client_id",
+            ),
+        ]
+
+
+class ChatMessageMention(BaseModel):
+    message = models.ForeignKey(
+        ChatMessage,
+        on_delete=models.CASCADE,
+        related_name="mentions",
+    )
+    membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.CASCADE,
+        related_name="chat_message_mentions",
+    )
+    start = models.PositiveIntegerField()
+    end = models.PositiveIntegerField()
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["message", "start"], name="chat_chatme_message_b2e1f0_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["message", "start"],
+                name="uniq_chat_message_mention_start",
+            ),
+            models.CheckConstraint(
+                condition=Q(start__lt=models.F("end")),
+                name="chat_message_mention_start_lt_end",
+            ),
+        ]
+
+
+class ChatUpload(BaseModel):
+    class Status(models.TextChoices):
+        RESERVED = "reserved", "Reserved"
+        VALIDATED = "validated", "Validated"
+        LINKED = "linked", "Linked"
+        EXPIRED = "expired", "Expired"
+
+    class Kind(models.TextChoices):
+        IMAGE = "image", "Image"
+        DOCUMENT = "document", "Document"
+
+    establishment = models.ForeignKey(
+        "establishments.Establishment",
+        on_delete=models.CASCADE,
+        related_name="chat_uploads",
+    )
+    conversation = models.ForeignKey(
+        ChatConversation,
+        on_delete=models.CASCADE,
+        related_name="uploads",
+    )
+    uploaded_by_membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.CASCADE,
+        related_name="chat_uploads",
+    )
+    original_filename = models.CharField(max_length=255)
+    declared_content_type = models.CharField(max_length=120)
+    declared_size_bytes = models.PositiveIntegerField()
+    content_type = models.CharField(max_length=120, blank=True, default="")
+    size_bytes = models.PositiveIntegerField(null=True, blank=True)
+    kind = models.CharField(max_length=16, blank=True, default="")
+    storage_key = models.CharField(max_length=512)
+    thumbnail_storage_key = models.CharField(max_length=512, blank=True, default="")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.RESERVED)
+    expires_at = models.DateTimeField()
+    linked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["conversation", "status", "expires_at"],
+                name="chat_chatu_convers_8f1a2c_idx",
+            ),
+            models.Index(
+                fields=["uploaded_by_membership", "status"],
+                name="chat_chatu_uploade_3c91ab_idx",
+            ),
+        ]
+
+
+class ChatMessageAttachment(BaseModel):
+    message = models.ForeignKey(
+        ChatMessage,
+        on_delete=models.CASCADE,
+        related_name="attachments",
+    )
+    upload = models.OneToOneField(
+        ChatUpload,
+        on_delete=models.CASCADE,
+        related_name="attachment",
+    )
+    position = models.PositiveSmallIntegerField()
+    kind = models.CharField(max_length=16)
+    content_type = models.CharField(max_length=120)
+    size_bytes = models.PositiveIntegerField()
+    original_filename = models.CharField(max_length=255)
+
+    class Meta:
+        ordering = ["position", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["message", "position"],
+                name="uniq_chat_message_attachment_position",
             ),
         ]

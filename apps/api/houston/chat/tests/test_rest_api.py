@@ -273,7 +273,7 @@ def test_director_can_patch_chat_settings(api_client):
     assert response.json()["chat_enabled"] is False
 
 
-def test_get_conversation_messages_is_read_only(api_client):
+def test_get_conversation_messages_returns_stored_items(api_client):
     establishment = create_establishment()
     sender = create_user(username="chat_messages_sender")
     receiver = create_user(username="chat_messages_receiver")
@@ -305,14 +305,9 @@ def test_get_conversation_messages_is_read_only(api_client):
     assert len(items) == 1
     assert items[0]["id"] == str(message.id)
     assert items[0]["body"] == "stored via db for read test"
-
-    post_response = api_client.post(
-        chat_url(establishment.id, f"conversations/{conversation_id}/messages/"),
-        {"body": "must not be accepted"},
-        format="json",
-        HTTP_AUTHORIZATION=f"Bearer {token_sender}",
-    )
-    assert post_response.status_code == 405
+    assert items[0]["is_reply"] is False
+    assert items[0]["reply_to"] is None
+    assert items[0]["mentions"] == []
 
 
 def test_owner_outside_participation_cannot_delete_group(api_client):

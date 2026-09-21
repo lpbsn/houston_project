@@ -69,7 +69,7 @@ This document describes **what the product actually collects and retains**, what
 
 ## Retention already automated (not account deletion)
 
-- Chat messages older than 7 days.
+- Chat messages older than 30 days.
 - Orphan `TemporaryUpload` after 24 hours.
 - Observation media when the last active CREATED_FROM signal disappears.
 - Transcription temp files at end of request.

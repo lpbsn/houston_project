@@ -50,3 +50,5 @@ apps/api/celerybeat-schedule*
 # Local/private runtime media
 apps/api/private_media/**
 !apps/api/private_media/.gitkeep
+apps/api/private_chat_media/*
+!apps/api/private_chat_media/.gitkeep

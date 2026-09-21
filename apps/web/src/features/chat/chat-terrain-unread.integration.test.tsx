@@ -31,6 +31,7 @@ vi.mock('./hooks/use-chat-websocket', () => ({
 vi.mock('@/app/auth-provider', () => ({
   useAuth: () => ({
     bootstrap: {
+      user: { id: 'user-1', username: 'viewer' },
       active_membership: {
         id: VIEWER_MEMBERSHIP_ID,
         establishment_id: ESTABLISHMENT_ID,
@@ -76,6 +77,10 @@ const incomingMessage = (): ChatMessage => ({
   body: 'New message',
   client_message_id: 'client-2',
   created_at: '2026-06-09T15:00:00.000Z',
+  is_reply: false,
+  reply_to: null,
+  mentions: [],
+  attachments: [],
 })
 
 function TerrainUnreadHarness({ queryClient }: { queryClient: QueryClient }) {

@@ -26,10 +26,14 @@ def _is_missing_storage_object_error(exc: BaseException) -> bool:
     return code in {"404", "NoSuchKey", "NotFound"}
 
 
-def delete_private_media_object_idempotent(*, storage_key: str) -> None:
+def delete_private_media_object_idempotent(
+    *,
+    storage_key: str,
+    storage: PrivateMediaStorage | None = None,
+) -> None:
     if not storage_key:
         return
-    storage = get_private_media_storage()
+    storage = storage or get_private_media_storage()
     try:
         storage.delete(storage_key)
     except Exception as exc:
@@ -101,16 +105,30 @@ def _s3_object_key(*, inner: Storage, name: str) -> str:
     return name
 
 
-def generate_private_media_presigned_get_url(*, name: str) -> str:
-    backend = getattr(settings, "HOUSTON_PRIVATE_MEDIA_BACKEND", PRIVATE_MEDIA_BACKEND_FILESYSTEM)
-    if (backend or "").strip().lower() != PRIVATE_MEDIA_BACKEND_S3:
-        raise ImproperlyConfigured(
-            "Presigned GET URLs require HOUSTON_PRIVATE_MEDIA_BACKEND=s3."
+def generate_private_media_presigned_get_url(
+    *,
+    name: str,
+    storage: PrivateMediaStorage | None = None,
+    expires_in: int | None = None,
+) -> str:
+    if storage is None:
+        backend = getattr(
+            settings, "HOUSTON_PRIVATE_MEDIA_BACKEND", PRIVATE_MEDIA_BACKEND_FILESYSTEM
         )
-    storage = get_private_media_storage()
+        if (backend or "").strip().lower() != PRIVATE_MEDIA_BACKEND_S3:
+            raise ImproperlyConfigured(
+                "Presigned GET URLs require HOUSTON_PRIVATE_MEDIA_BACKEND=s3."
+            )
+        storage = get_private_media_storage()
     inner = storage._inner
-    expires_in = int(settings.HOUSTON_OBSERVATION_MEDIA_S3_PRESIGN_TTL_SECONDS)
-    cache_control = f"private, max-age={expires_in}, must-revalidate"
+    if not hasattr(inner, "bucket"):
+        raise ImproperlyConfigured("Presigned GET URLs require an S3 private media backend.")
+    ttl = int(
+        expires_in
+        if expires_in is not None
+        else settings.HOUSTON_OBSERVATION_MEDIA_S3_PRESIGN_TTL_SECONDS
+    )
+    cache_control = f"private, max-age={ttl}, must-revalidate"
     client = inner.bucket.meta.client
     return client.generate_presigned_url(
         "get_object",
@@ -119,42 +137,122 @@ def generate_private_media_presigned_get_url(*, name: str) -> str:
             "Key": _s3_object_key(inner=inner, name=name),
             "ResponseCacheControl": cache_control,
         },
-        ExpiresIn=expires_in,
+        ExpiresIn=ttl,
     )
 
 
-def _build_s3_storage() -> Storage:
+def generate_private_media_presigned_put_url(
+    *,
+    name: str,
+    content_type: str,
+    storage: PrivateMediaStorage,
+    expires_in: int,
+) -> str:
+    inner = storage._inner
+    if not hasattr(inner, "bucket"):
+        raise ImproperlyConfigured("Presigned PUT URLs require an S3 private media backend.")
+    client = inner.bucket.meta.client
+    return client.generate_presigned_url(
+        "put_object",
+        Params={
+            "Bucket": inner.bucket_name,
+            "Key": _s3_object_key(inner=inner, name=name),
+            "ContentType": content_type,
+        },
+        ExpiresIn=int(expires_in),
+        HttpMethod="PUT",
+    )
+
+
+def _build_s3_storage(
+    *,
+    bucket: str,
+    access_key: str,
+    secret_key: str,
+    endpoint_url: str,
+    region: str,
+    addressing_style: str,
+) -> Storage:
     from storages.backends.s3 import S3Storage
 
     options: dict[str, object] = {
-        "bucket_name": settings.HOUSTON_S3_BUCKET,
-        "access_key": settings.HOUSTON_S3_ACCESS_KEY_ID,
-        "secret_key": settings.HOUSTON_S3_SECRET_ACCESS_KEY,
-        "endpoint_url": settings.HOUSTON_S3_ENDPOINT_URL,
-        "region_name": settings.HOUSTON_S3_REGION,
+        "bucket_name": bucket,
+        "access_key": access_key,
+        "secret_key": secret_key,
+        "endpoint_url": endpoint_url,
+        "region_name": region,
         "default_acl": None,
         "querystring_auth": False,
         "file_overwrite": False,
     }
-    addressing_style = (settings.HOUSTON_S3_ADDRESSING_STYLE or "").strip()
     if addressing_style:
         options["addressing_style"] = addressing_style
     return S3Storage(**options)
 
 
-def get_private_media_storage() -> PrivateMediaStorage:
-    backend = getattr(settings, "HOUSTON_PRIVATE_MEDIA_BACKEND", PRIVATE_MEDIA_BACKEND_FILESYSTEM)
-    backend = (backend or PRIVATE_MEDIA_BACKEND_FILESYSTEM).strip().lower()
-    if backend == PRIVATE_MEDIA_BACKEND_FILESYSTEM:
+def _build_private_media_storage(
+    *,
+    backend: str,
+    filesystem_root: str,
+    bucket: str,
+    access_key: str,
+    secret_key: str,
+    endpoint_url: str,
+    region: str,
+    addressing_style: str,
+) -> PrivateMediaStorage:
+    normalized = (backend or PRIVATE_MEDIA_BACKEND_FILESYSTEM).strip().lower()
+    if normalized == PRIVATE_MEDIA_BACKEND_FILESYSTEM:
         return PrivateMediaStorage(
             FileSystemStorage(
-                location=settings.HOUSTON_PRIVATE_MEDIA_ROOT,
+                location=filesystem_root,
                 base_url=None,
             )
         )
-    if backend == PRIVATE_MEDIA_BACKEND_S3:
-        return PrivateMediaStorage(_build_s3_storage())
+    if normalized == PRIVATE_MEDIA_BACKEND_S3:
+        return PrivateMediaStorage(
+            _build_s3_storage(
+                bucket=bucket,
+                access_key=access_key,
+                secret_key=secret_key,
+                endpoint_url=endpoint_url,
+                region=region,
+                addressing_style=addressing_style,
+            )
+        )
     raise ImproperlyConfigured(
-        f"Unsupported HOUSTON_PRIVATE_MEDIA_BACKEND={backend!r}. "
-        "Use 'filesystem' or 's3'."
+        f"Unsupported private media backend={normalized!r}. Use 'filesystem' or 's3'."
+    )
+
+
+def get_private_media_storage() -> PrivateMediaStorage:
+    backend = getattr(settings, "HOUSTON_PRIVATE_MEDIA_BACKEND", PRIVATE_MEDIA_BACKEND_FILESYSTEM)
+    return _build_private_media_storage(
+        backend=backend,
+        filesystem_root=settings.HOUSTON_PRIVATE_MEDIA_ROOT,
+        bucket=settings.HOUSTON_S3_BUCKET,
+        access_key=settings.HOUSTON_S3_ACCESS_KEY_ID,
+        secret_key=settings.HOUSTON_S3_SECRET_ACCESS_KEY,
+        endpoint_url=settings.HOUSTON_S3_ENDPOINT_URL,
+        region=settings.HOUSTON_S3_REGION,
+        addressing_style=(settings.HOUSTON_S3_ADDRESSING_STYLE or "").strip(),
+    )
+
+
+def get_chat_private_media_storage() -> PrivateMediaStorage:
+    backend = getattr(settings, "HOUSTON_PRIVATE_MEDIA_BACKEND", PRIVATE_MEDIA_BACKEND_FILESYSTEM)
+    filesystem_root = getattr(
+        settings,
+        "HOUSTON_CHAT_PRIVATE_MEDIA_ROOT",
+        "",
+    ) or str(settings.BASE_DIR / "private_chat_media")
+    return _build_private_media_storage(
+        backend=backend,
+        filesystem_root=filesystem_root,
+        bucket=getattr(settings, "HOUSTON_CHAT_S3_BUCKET", ""),
+        access_key=getattr(settings, "HOUSTON_CHAT_S3_ACCESS_KEY_ID", ""),
+        secret_key=getattr(settings, "HOUSTON_CHAT_S3_SECRET_ACCESS_KEY", ""),
+        endpoint_url=getattr(settings, "HOUSTON_CHAT_S3_ENDPOINT_URL", ""),
+        region=getattr(settings, "HOUSTON_CHAT_S3_REGION", ""),
+        addressing_style=(getattr(settings, "HOUSTON_CHAT_S3_ADDRESSING_STYLE", "") or "").strip(),
     )

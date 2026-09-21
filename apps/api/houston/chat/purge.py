@@ -6,9 +6,11 @@ from dataclasses import dataclass
 from datetime import timedelta
 
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 from houston.chat.constants import CHAT_MESSAGE_RETENTION_DAYS, CHAT_PURGE_BATCH_SIZE
-from houston.chat.models import ChatConversation, ChatMessage
+from houston.chat.models import ChatConversation, ChatMessage, ChatUpload
+from houston.chat.upload_services import chat_object_keys_for_uploads, delete_chat_storage_keys
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +85,17 @@ def purge_chat_messages(
             .values_list("conversation_id", flat=True)
             .distinct()
         )
+        uploads = list(
+            ChatUpload.objects.filter(attachment__message_id__in=message_ids)
+        )
+        storage_keys = chat_object_keys_for_uploads(uploads)
+        upload_ids = [upload.id for upload in uploads]
         deleted_count, _ = ChatMessage.objects.filter(id__in=message_ids).delete()
+        if upload_ids:
+            ChatUpload.objects.filter(id__in=upload_ids).delete()
+        if storage_keys:
+            captured_keys = list(storage_keys)
+            transaction.on_commit(lambda: delete_chat_storage_keys(captured_keys))
         total_deleted += deleted_count
         batch_count += 1
         _refresh_last_message_at(conversation_ids=conversation_ids)

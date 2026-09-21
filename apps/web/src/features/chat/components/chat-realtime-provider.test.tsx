@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 
 import { createElement } from 'react'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { chatQueryKeys } from '../api'
+import { ChatApiError, chatQueryKeys } from '../api'
+import { __resetChatOutboxTestStores, __setChatOutboxTestStores, loadChatOutboxDrafts } from '../lib/chat-outbox'
+import { MessageBubble } from './message-bubble'
 import type {
   ChatConversationListItem,
   ChatWsConversationUpdatedEvent,
@@ -23,7 +25,51 @@ let capturedOnMessageCreated: ((event: ChatWsMessageCreatedEvent) => void) | und
 let capturedOnMessageRejected: ((event: ChatWsMessageRejectedEvent) => void) | undefined
 let capturedOnConversationUpdated: ((event: ChatWsConversationUpdatedEvent) => void) | undefined
 let capturedOnReconnect: (() => void) | undefined
-const sendMessageMock = vi.fn(() => true)
+const UPLOAD_ID = '11111111-1111-4111-8111-111111111111'
+
+const { sendChatMessageHttp, reserveChatUpload, putChatUploadBytes, completeChatUpload, appendCache } =
+  vi.hoisted(() => ({
+    sendChatMessageHttp: vi.fn(async () => ({
+      created: true,
+      message: {
+        id: 'msg-sent',
+        author_membership_id: 'mbr-viewer',
+        author_display_name: 'Viewer',
+        body: 'Hello',
+        client_message_id: 'ignored',
+        created_at: '2026-06-09T16:00:00.000Z',
+        is_reply: false,
+        reply_to: null,
+        mentions: [],
+        attachments: [],
+      },
+    })),
+    reserveChatUpload: vi.fn(async () => ({
+      upload_id: '11111111-1111-4111-8111-111111111111',
+      put_url: '',
+      expires_at: '2099-01-01T00:00:00.000Z',
+    })),
+    putChatUploadBytes: vi.fn(async () => undefined),
+    completeChatUpload: vi.fn(async () => ({
+      upload_id: '11111111-1111-4111-8111-111111111111',
+      status: 'ready',
+      kind: 'image',
+      content_type: 'image/jpeg',
+      size_bytes: 3,
+    })),
+    appendCache: { throwOnAppend: false },
+  }))
+
+vi.mock('../api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../api')>()
+  return {
+    ...actual,
+    sendChatMessage: sendChatMessageHttp as typeof actual.sendChatMessage,
+    reserveChatUpload: reserveChatUpload as typeof actual.reserveChatUpload,
+    putChatUploadBytes: putChatUploadBytes as typeof actual.putChatUploadBytes,
+    completeChatUpload: completeChatUpload as typeof actual.completeChatUpload,
+  }
+})
 
 vi.mock('../hooks/use-chat-websocket', () => ({
   useChatWebSocket: (options: {
@@ -38,7 +84,6 @@ vi.mock('../hooks/use-chat-websocket', () => ({
     capturedOnReconnect = options.onReconnect
     return {
       connectionStatus: 'connected',
-      sendMessage: sendMessageMock,
       reconnect: vi.fn(),
     }
   },
@@ -55,6 +100,7 @@ vi.mock('@/features/auth/api', () => ({
 vi.mock('@/app/auth-provider', () => ({
   useAuth: () => ({
     bootstrap: {
+      user: { id: 'user-1', username: 'viewer' },
       active_membership: {
         id: VIEWER_MEMBERSHIP_ID,
         establishment_id: ESTABLISHMENT_ID,
@@ -76,6 +122,15 @@ vi.mock('../hooks', async (importOriginal) => {
         can_manage_settings: false,
       },
     }),
+    useAppendChatMessageToCache: () => {
+      const append = actual.useAppendChatMessageToCache()
+      return (...args: Parameters<typeof append>) => {
+        if (appendCache.throwOnAppend) {
+          throw new Error('cache merge failed')
+        }
+        return append(...args)
+      }
+    },
   }
 })
 
@@ -93,7 +148,7 @@ const sampleConversation = (): ChatConversationListItem => ({
   can_delete: false,
 })
 
-function Probe() {
+function Probe({ files }: { files?: File[] } = {}) {
   const { localMessages, sendChatMessage } = useChatRealtime()
   return createElement(
     'div',
@@ -108,9 +163,18 @@ function Probe() {
             body: 'Hello',
             authorMembershipId: VIEWER_MEMBERSHIP_ID,
             authorDisplayName: 'Viewer',
+            files,
           }),
       },
       'send',
+    ),
+    ...localMessages.map((message) =>
+      createElement(MessageBubble, {
+        key: message.clientMessageId,
+        message,
+        isOwn: true,
+        onRetry: message.status === 'failed' ? () => undefined : undefined,
+      }),
     ),
     createElement('pre', { 'data-testid': 'local-messages' }, JSON.stringify(localMessages)),
   )
@@ -120,7 +184,7 @@ function readLocalMessages(): LocalChatMessage[] {
   return JSON.parse(screen.getByTestId('local-messages').textContent ?? '[]') as LocalChatMessage[]
 }
 
-function renderProviderWithProbe() {
+function renderProviderWithProbe(files?: File[]) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -131,7 +195,7 @@ function renderProviderWithProbe() {
       createElement(
         ChatRealtimeProvider,
         { establishmentId: ESTABLISHMENT_ID, activeConversationId: 'conv-1' },
-        createElement(Probe),
+        createElement(Probe, { files }),
       ),
     ),
   )
@@ -143,12 +207,32 @@ describe('ChatRealtimeProvider', () => {
     capturedOnMessageRejected = undefined
     capturedOnConversationUpdated = undefined
     capturedOnReconnect = undefined
-    sendMessageMock.mockReset()
-    sendMessageMock.mockReturnValue(true)
+    sendChatMessageHttp.mockReset()
+    reserveChatUpload.mockClear()
+    putChatUploadBytes.mockClear()
+    completeChatUpload.mockClear()
+    appendCache.throwOnAppend = false
+    sendChatMessageHttp.mockResolvedValue({
+      created: true,
+      message: {
+        id: 'msg-sent',
+        author_membership_id: VIEWER_MEMBERSHIP_ID,
+        author_display_name: 'Viewer',
+        body: 'Hello',
+        client_message_id: 'ignored',
+        created_at: '2026-06-09T16:00:00.000Z',
+        is_reply: false,
+        reply_to: null,
+        mentions: [],
+        attachments: [],
+      },
+    })
+    __setChatOutboxTestStores({})
   })
 
   afterEach(() => {
     cleanup()
+    __resetChatOutboxTestStores()
   })
 
   it('patches conversations cache on message.created', () => {
@@ -182,6 +266,10 @@ describe('ChatRealtimeProvider', () => {
         body: 'Ping',
         client_message_id: 'client-1',
         created_at: '2026-06-09T16:00:00.000Z',
+        is_reply: false,
+        reply_to: null,
+        mentions: [],
+        attachments: [],
       },
     })
 
@@ -194,6 +282,39 @@ describe('ChatRealtimeProvider', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: chatQueryKeys.conversations(ESTABLISHMENT_ID),
     })
+  })
+
+  it('merges HTTP send into the messages cache without waiting for WS', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    queryClient.setQueryData(chatQueryKeys.messages(ESTABLISHMENT_ID, 'conv-1'), {
+      pages: [{ items: [], has_more: false }],
+      pageParams: [undefined],
+    })
+
+    render(
+      createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(
+          ChatRealtimeProvider,
+          { establishmentId: ESTABLISHMENT_ID, activeConversationId: 'conv-1' },
+          createElement(Probe),
+        ),
+      ),
+    )
+
+    fireEvent.click(screen.getByText('send'))
+
+    await waitFor(() => {
+      const cached = queryClient.getQueryData<{
+        pages: Array<{ items: Array<{ id: string; body: string }> }>
+      }>(chatQueryKeys.messages(ESTABLISHMENT_ID, 'conv-1'))
+      expect(cached?.pages[0]?.items[0]?.id).toBe('msg-sent')
+      expect(readLocalMessages()).toEqual([])
+    })
+    expect(capturedOnMessageCreated).toBeDefined()
   })
 
   it('does not increment unread_count on duplicate message.created events', () => {
@@ -226,6 +347,10 @@ describe('ChatRealtimeProvider', () => {
         body: 'Ping',
         client_message_id: 'client-1',
         created_at: '2026-06-09T16:00:00.000Z',
+        is_reply: false,
+        reply_to: null,
+        mentions: [],
+        attachments: [],
       },
     }
 
@@ -353,6 +478,7 @@ describe('ChatRealtimeProvider', () => {
   })
 
   it('resyncs bootstrap on terms_acceptance_required without a local consent sheet', () => {
+    sendChatMessageHttp.mockImplementation(() => new Promise(() => {}))
     renderProviderWithProbe()
     fireEvent.click(screen.getByText('send'))
     fireEvent.click(screen.getByText('send'))
@@ -360,8 +486,6 @@ describe('ChatRealtimeProvider', () => {
     const [termsMessage, validationMessage] = readLocalMessages()
     expect(termsMessage).toBeDefined()
     expect(validationMessage).toBeDefined()
-
-    sendMessageMock.mockClear()
 
     act(() => {
       capturedOnMessageRejected?.({
@@ -394,15 +518,14 @@ describe('ChatRealtimeProvider', () => {
     expect(resyncBootstrapAfterLegalError).toHaveBeenCalledWith({
       code: 'terms_acceptance_required',
     })
-    expect(sendMessageMock).not.toHaveBeenCalled()
   })
 
   it('does not open terms consent for permission_denied', () => {
+    sendChatMessageHttp.mockImplementation(() => new Promise(() => {}))
     renderProviderWithProbe()
     fireEvent.click(screen.getByText('send'))
 
     const [message] = readLocalMessages()
-    sendMessageMock.mockClear()
 
     act(() => {
       capturedOnMessageRejected?.({
@@ -420,10 +543,10 @@ describe('ChatRealtimeProvider', () => {
       }),
     )
     expect(screen.queryByTestId('legal-consent-sheet')).toBeNull()
-    expect(sendMessageMock).not.toHaveBeenCalled()
   })
 
   it('keeps terms-failed messages after bootstrap resync', () => {
+    sendChatMessageHttp.mockImplementation(() => new Promise(() => {}))
     renderProviderWithProbe()
     fireEvent.click(screen.getByText('send'))
 
@@ -445,5 +568,52 @@ describe('ChatRealtimeProvider', () => {
         rejectCode: 'terms_acceptance_required',
       }),
     )
+  })
+
+  it('keeps the persisted uploadId when send fails before POST', async () => {
+    sendChatMessageHttp.mockRejectedValue(new ChatApiError({ status: 500, detail: 'send failed' }))
+    renderProviderWithProbe([new File(['abc'], 'a.jpg', { type: 'image/jpeg' })])
+    fireEvent.click(screen.getByText('send'))
+
+    await waitFor(async () => {
+      const [message] = readLocalMessages()
+      expect(message?.status).toBe('failed')
+      const stored = await loadChatOutboxDrafts({ clientMessageId: message.clientMessageId })
+      expect(stored[0]?.attachments[0]).toEqual(
+        expect.objectContaining({
+          uploadId: UPLOAD_ID,
+          state: 'ready',
+        }),
+      )
+      expect(stored[0]?.status).toBe('failed')
+    })
+    expect(screen.getByRole('button', { name: 'Réessayer' })).toBeTruthy()
+    expect(sendChatMessageHttp).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not mark failed or offer retry when POST succeeds and local cleanup throws', async () => {
+    appendCache.throwOnAppend = true
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(
+          ChatRealtimeProvider,
+          { establishmentId: ESTABLISHMENT_ID, activeConversationId: 'conv-1' },
+          createElement(Probe),
+        ),
+      ),
+    )
+    fireEvent.click(screen.getByText('send'))
+
+    await waitFor(() => {
+      expect(sendChatMessageHttp).toHaveBeenCalledTimes(1)
+      expect(readLocalMessages()).toEqual([])
+    })
+    expect(screen.queryByRole('button', { name: 'Réessayer' })).toBeNull()
+    expect(readLocalMessages().some((message) => message.status === 'failed')).toBe(false)
   })
 })

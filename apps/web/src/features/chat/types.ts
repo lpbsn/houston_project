@@ -19,12 +19,46 @@ export type ChatConnectionStatus =
   | 'reconnecting'
   | 'disconnected'
 
+export type ChatAttachment = components['schemas']['ChatAttachment']
+export type ChatMessageMention = components['schemas']['ChatMessageMention']
+export type ChatReplyTo = components['schemas']['ChatReplyTo']
+export type ChatReserveUploadResponse = components['schemas']['ChatReserveUploadResponse']
+export type ChatSendMessageResponse = components['schemas']['ChatSendMessageResponse']
+export type ChatUploadCompleteResponse = components['schemas']['ChatUploadCompleteResponse']
+
+export type ChatSharedMediaResponse = components['schemas']['ChatSharedMediaResponse']
+
 export type LocalChatMessageStatus = 'pending' | 'sent' | 'failed'
+export type LocalChatAttachmentState =
+  | 'reserving'
+  | 'uploading'
+  | 'finalizing'
+  | 'ready'
+  | 'failed'
+
+export type LocalChatAttachment = {
+  localAttachmentId: string
+  uploadId: string | null
+  filename: string
+  contentType: string
+  sizeBytes: number
+  state: LocalChatAttachmentState
+  previewUrl?: string
+  progress?: number
+}
 
 export type LocalChatMessage = {
   clientMessageId: string
   conversationId: string
   body: string
+  mentions: Array<Pick<ChatMessageMention, 'membership_id' | 'start' | 'end'>>
+  replyToId: string | null
+  replyPreview?: {
+    authorDisplayName: string
+    excerpt: string
+    unavailable?: boolean
+  } | null
+  attachments: LocalChatAttachment[]
   status: LocalChatMessageStatus
   createdAt: string
   authorMembershipId: string

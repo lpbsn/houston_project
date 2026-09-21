@@ -384,29 +384,8 @@ export function useChatWebSocket({
     }
   }, [clearReconnectTimer, closeSocket, enabled, establishmentId])
 
-  const sendMessage = useCallback(
-    (payload: { conversationId: string; clientMessageId: string; body: string }) => {
-      const socket = socketRef.current
-      if (!socket || socket.readyState !== WebSocket.OPEN || connectionStatus !== 'connected') {
-        return false
-      }
-
-      socket.send(
-        JSON.stringify({
-          type: 'message.send',
-          conversation_id: payload.conversationId,
-          client_message_id: payload.clientMessageId,
-          body: payload.body,
-        }),
-      )
-      return true
-    },
-    [connectionStatus],
-  )
-
   return {
     connectionStatus: enabled ? connectionStatus : 'idle',
-    sendMessage,
     reconnect: connect,
   }
 }

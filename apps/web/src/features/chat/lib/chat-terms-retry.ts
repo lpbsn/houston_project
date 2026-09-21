@@ -12,13 +12,7 @@ export function selectLocalMessagesToRetryAfterTermsAccept(
 }
 
 export function asPendingLocalChatMessage(message: LocalChatMessage): LocalChatMessage {
-  return {
-    clientMessageId: message.clientMessageId,
-    conversationId: message.conversationId,
-    body: message.body,
-    status: 'pending',
-    createdAt: message.createdAt,
-    authorMembershipId: message.authorMembershipId,
-    authorDisplayName: message.authorDisplayName,
-  }
+  const next: LocalChatMessage = { ...message, status: 'pending' }
+  delete next.rejectCode
+  return next
 }

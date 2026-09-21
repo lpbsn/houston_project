@@ -6,8 +6,14 @@ from houston.chat.api.serializers import serialize_message
 from houston.chat.models import ChatMessage
 
 
-def serialize_message_for_ws(message: ChatMessage) -> dict:
-    payload = serialize_message(message)
+def serialize_message_for_ws(message: ChatMessage, *, history_cutoff_at=None) -> dict:
+    payload = serialize_message(message, history_cutoff_at=history_cutoff_at)
+    reply_to = payload["reply_to"]
+    if reply_to is not None:
+        reply_to = {
+            **reply_to,
+            "id": str(reply_to["id"]),
+        }
     return {
         "id": str(payload["id"]),
         "author_membership_id": str(payload["author_membership_id"]),
@@ -15,14 +21,39 @@ def serialize_message_for_ws(message: ChatMessage) -> dict:
         "body": payload["body"],
         "client_message_id": str(payload["client_message_id"]),
         "created_at": payload["created_at"].isoformat(),
+        "is_reply": payload["is_reply"],
+        "reply_to": reply_to,
+        "mentions": [
+            {
+                "membership_id": str(item["membership_id"]),
+                "start": item["start"],
+                "end": item["end"],
+                "display_name": item["display_name"],
+            }
+            for item in payload["mentions"]
+        ],
+        "attachments": [
+            {
+                **item,
+                "id": str(item["id"]),
+                "message_id": str(item["message_id"]),
+                "created_at": item["created_at"].isoformat(),
+            }
+            for item in payload["attachments"]
+        ],
     }
 
 
-def build_message_created_payload(*, conversation_id: UUID, message: ChatMessage) -> dict:
+def build_message_created_payload(
+    *,
+    conversation_id: UUID,
+    message: ChatMessage,
+    history_cutoff_at=None,
+) -> dict:
     return {
         "type": "message.created",
         "conversation_id": str(conversation_id),
-        "message": serialize_message_for_ws(message),
+        "message": serialize_message_for_ws(message, history_cutoff_at=history_cutoff_at),
     }
 
 

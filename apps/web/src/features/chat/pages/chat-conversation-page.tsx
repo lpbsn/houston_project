@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { LoaderCircle, Users } from 'lucide-react'
+import { Info, LoaderCircle, Users } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 
 import { ChatApiError } from '../api'
+import { ChatAttachmentPreviewDialog } from '../components/chat-attachment-preview-dialog'
 import { ChatComposer } from '../components/chat-composer'
+import { ChatConversationInfoSheet } from '../components/chat-conversation-info-sheet'
 import { ChatManageMembersSheet } from '../components/chat-manage-members-sheet'
 import { ChatReconnectBanner } from '../components/chat-reconnect-banner'
 import { MessageBubble } from '../components/message-bubble'
@@ -16,7 +18,14 @@ import {
   getConversationTitle,
   isSameChatDay,
 } from '../lib/chat-display'
+import { formatChatRetentionNotice } from '../lib/chat-limits'
+import {
+  isChatImageAttachment,
+  isChatPdfAttachment,
+  type ChatAttachmentPreviewItem,
+} from '../lib/chat-media'
 import { flattenChatMessagePages, mergeServerAndLocalMessages } from '../lib/chat-messages'
+import { chatPdfAlertMessage, openChatPdfAttachment } from '../lib/chat-pdf'
 import {
   useChatConversationDetailQuery,
   useChatMessagesInfiniteQuery,
@@ -34,6 +43,14 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
   const viewerMembershipId = auth.bootstrap?.active_membership?.id ?? null
   const viewerDisplayName = auth.bootstrap?.user.username ?? 'Vous'
   const [manageMembersOpen, setManageMembersOpen] = useState(false)
+  const [infoOpen, setInfoOpen] = useState(false)
+  const [previewItem, setPreviewItem] = useState<ChatAttachmentPreviewItem | null>(null)
+  const [pdfAlert, setPdfAlert] = useState<string | null>(null)
+  const [replyTo, setReplyTo] = useState<{
+    id: string
+    authorDisplayName: string
+    excerpt: string
+  } | null>(null)
 
   const messagesScrollRef = useRef<HTMLDivElement | null>(null)
   const detailQuery = useChatConversationDetailQuery(establishmentId, conversationId)
@@ -56,6 +73,7 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
       queued: false,
     }))
   const retryFailedMessage = realtime?.retryFailedMessage ?? (() => false)
+  const cancelSendingMessage = realtime?.cancelSendingMessage ?? (() => false)
 
   const serverMessages = useMemo(
     () => flattenChatMessagePages(messagesQuery.data?.pages ?? []),
@@ -66,6 +84,23 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
     () => mergeServerAndLocalMessages(serverMessages, localMessages, conversationId),
     [conversationId, localMessages, serverMessages],
   )
+
+  async function handleSelectAttachment(item: ChatAttachmentPreviewItem) {
+    if (isChatImageAttachment(item)) {
+      setPreviewItem(item)
+      return
+    }
+    if (!isChatPdfAttachment(item)) {
+      return
+    }
+    setPdfAlert(null)
+    const result = await openChatPdfAttachment({
+      src: item.src,
+      filename: item.filename,
+      id: item.id,
+    })
+    setPdfAlert(chatPdfAlertMessage(result.reason))
+  }
 
   useEffect(() => {
     if (!establishmentId || !conversationId || !detailQuery.isSuccess) {
@@ -135,10 +170,17 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="text-sm font-semibold text-[#1a1a1a]">{conversationTitle}</p>
-            <p className="text-[11px] text-[#7D7B75]">
-              Les messages de plus de 7 jours sont automatiquement supprimés.
-            </p>
+            <p className="text-[11px] text-[#7D7B75]">{formatChatRetentionNotice()}</p>
           </div>
+          <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-[#E8E6DF] bg-[#F5F4F0] px-2.5 py-1.5 text-xs font-semibold text-[#1a1a1a]"
+            onClick={() => setInfoOpen(true)}
+          >
+            <Info className="h-3.5 w-3.5" aria-hidden="true" />
+            Infos
+          </button>
           {canManageMembers ? (
             <button
               type="button"
@@ -149,6 +191,7 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
               Gérer les membres
             </button>
           ) : null}
+          </div>
         </div>
       </div>
 
@@ -167,6 +210,12 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
               {messagesQuery.isFetchingNextPage ? 'Chargement…' : 'Messages plus anciens'}
             </button>
           </div>
+        ) : null}
+
+        {pdfAlert ? (
+          <p className="mb-3 text-sm text-[#E24B4A]" role="alert">
+            {pdfAlert}
+          </p>
         ) : null}
 
         {mergedMessages.length === 0 ? (
@@ -211,10 +260,26 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
                     <MessageBubble
                       message={message}
                       isOwn={isOwn}
+                      onReply={setReplyTo}
+                      onSelectAttachment={(item) => {
+                        void handleSelectAttachment(item)
+                      }}
+                      onJumpToMessage={(messageId) => {
+                        document.getElementById(`chat-msg-${messageId}`)?.scrollIntoView({
+                          block: 'center',
+                        })
+                      }}
                       onRetry={
                         entry.kind === 'local' && entry.message.status === 'failed'
                           ? () => {
                               retryFailedMessage(entry.message.clientMessageId)
+                            }
+                          : undefined
+                      }
+                      onCancel={
+                        entry.kind === 'local' && entry.message.status === 'pending'
+                          ? () => {
+                              cancelSendingMessage(entry.message.clientMessageId)
                             }
                           : undefined
                       }
@@ -228,16 +293,43 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
       </div>
 
       <ChatComposer
-        disabled={connectionStatus !== 'connected'}
-        onSend={(body) => {
+        participants={detailQuery.data.participants}
+        viewerMembershipId={viewerMembershipId}
+        userId={auth.bootstrap?.user.id ?? null}
+        establishmentId={establishmentId}
+        conversationId={conversationId}
+        replyTo={replyTo}
+        onClearReply={() => setReplyTo(null)}
+        onRestoreReply={setReplyTo}
+        onSend={(payload) => {
           sendChatMessage({
             conversationId,
-            body,
+            body: payload.body,
+            mentions: payload.mentions,
+            replyToId: payload.replyToId,
+            replyPreview: replyTo,
+            files: payload.files,
             authorMembershipId: viewerMembershipId,
             authorDisplayName: viewerDisplayName,
           })
         }}
       />
+
+      <ChatConversationInfoSheet
+        establishmentId={establishmentId}
+        conversation={detailQuery.data}
+        open={infoOpen}
+        onClose={() => setInfoOpen(false)}
+        knownMessageIds={new Set(serverMessages.map((message) => message.id))}
+        pdfAlert={pdfAlert}
+        onSelectAttachment={(item) => {
+          void handleSelectAttachment(item)
+        }}
+      />
+
+      {previewItem ? (
+        <ChatAttachmentPreviewDialog item={previewItem} onClose={() => setPreviewItem(null)} />
+      ) : null}
 
       {canManageMembers ? (
         <ChatManageMembersSheet

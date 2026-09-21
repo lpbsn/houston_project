@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+import logging
 import uuid
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.db import transaction
 from houston.chat.groups import membership_group_name, session_group_name
+from houston.chat.models import ChatMessage, ChatParticipant
 from houston.chat.ws_payloads import (
     build_conversation_access_revoked_payload,
     build_conversation_updated_payload,
     build_membership_access_revoked_payload,
+    build_message_created_payload,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _send_access_revoked_to_group(
@@ -204,6 +209,85 @@ def notify_conversation_updated_for_memberships(
             membership_id=membership_id,
             conversation_id=conversation_id,
         )
+
+
+def notify_message_created(
+    *,
+    establishment_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    message: ChatMessage,
+    recipient_membership_ids: list[uuid.UUID],
+) -> None:
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        return
+
+    history_cutoffs_by_membership_id = {
+        participant.membership_id: participant.history_cutoff_at
+        for participant in ChatParticipant.objects.filter(
+            conversation_id=conversation_id,
+            membership_id__in=recipient_membership_ids,
+            left_at__isnull=True,
+        ).only("membership_id", "history_cutoff_at")
+    }
+    for membership_id in recipient_membership_ids:
+        payload = build_message_created_payload(
+            conversation_id=conversation_id,
+            message=message,
+            history_cutoff_at=history_cutoffs_by_membership_id.get(membership_id),
+        )
+        async_to_sync(channel_layer.group_send)(
+            membership_group_name(
+                establishment_id=establishment_id,
+                membership_id=membership_id,
+            ),
+            {
+                "type": "chat.message.created",
+                "payload": payload,
+            },
+        )
+
+
+def schedule_message_created(
+    *,
+    establishment_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    message_id: uuid.UUID,
+    recipient_membership_ids: list[uuid.UUID],
+) -> None:
+    captured_membership_ids = list(recipient_membership_ids)
+
+    def _notify() -> None:
+        try:
+            message = (
+                ChatMessage.objects.select_related(
+                    "author_membership",
+                    "author_membership__user",
+                    "conversation",
+                )
+                .prefetch_related("mentions__membership__user", "attachments__upload")
+                .filter(id=message_id)
+                .first()
+            )
+            if message is None:
+                return
+            notify_message_created(
+                establishment_id=establishment_id,
+                conversation_id=conversation_id,
+                message=message,
+                recipient_membership_ids=captured_membership_ids,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to fan out chat message.created after business commit",
+                extra={
+                    "event": "chat_message_created_notify_failed",
+                    "message_id": str(message_id),
+                    "conversation_id": str(conversation_id),
+                },
+            )
+
+    transaction.on_commit(_notify)
 
 
 def schedule_conversation_updated(

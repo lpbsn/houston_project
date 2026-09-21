@@ -28,13 +28,14 @@ Chat V1 is **not** a single establishment-wide general chat room.
 
 ### Messages
 
-- Text only.
+- Text, optional reply-to, structured mentions by Unicode code-point offsets, and attachments (`image` / `document`).
+- A valid message has a non-empty trimmed `body` **or** at least one validated attachment.
 - Max 2,000 characters after trim.
 - Ordering : `created_at` ascending, then `id`.
-- Idempotency via `client_message_id` per `(conversation, author_membership)`.
-- **WebSocket is the only message send channel in V1** (no REST message write endpoint).
-- Messages are stored in PostgreSQL **before** WebSocket broadcast.
-- Hard purge of messages older than 7 days (automatic).
+- Idempotency via `client_message_id` per `(conversation, author_membership)`. Retry `POST` returns the existing message (`created=false`) without a second WS fan-out or `chat.message.received` notification.
+- **HTTP `POST …/messages/` is the only send command.** WebSocket is events only (`message.created`, access/structure events). A `message.send` frame is a protocol error (close, no persist).
+- Fan-out `message.created` and notification only when `created=true`, and only `transaction.on_commit`.
+- Hard purge of messages older than **30** days (automatic ; `HOUSTON_CHAT_MESSAGE_RETENTION_DAYS`).
 
 ### Access
 
@@ -60,7 +61,7 @@ Chat V1 is **not** a single establishment-wide general chat room.
 - WebSocket auth : REST one-time ticket in the first message (see [`authentication_charter.md`](../../architecture/authentication_charter.md)).
 - Allowed WS server events in V1 :
   - `message.created`
-  - `message.rejected`
+  - `message.rejected` (legacy send-path errors ; send failures are HTTP now)
   - `access.revoked` (global Chat WS access loss — closes socket)
   - `conversation.access_revoked` (targeted to the affected user only — does **not** close global socket)
   - `conversation.updated` (structure invalidation hint after add/promote/remove/leave — to remaining active participants only ; `{ conversation_id }` only ; no sensitive payload)
@@ -82,7 +83,7 @@ Supported `access.revoked` `reason` values :
 | `session_revoked` | logout / `revoke_session` |
 | `establishment_switched` | `switch_selected_establishment` on current `UserSession` |
 | `chat_disabled` | `update_establishment_chat_enabled(False)` |
-| `access_denied` | `message.send` revalidation failure |
+| `access_denied` | live WS revalidation failure |
 
 - Backend revalidates session (`refresh_expires_at` and `absolute_expires_at`), membership, establishment, organization, `chat_enabled`, and `selected_establishment` on Chat WS auth, before each supported client application frame, and before delivering `message.created` / `conversation.updated` / `conversation.access_revoked`.
 - Unsupported or invalid client frame types after `auth.ok` are rejected as protocol errors without a PostgreSQL revalidation.
@@ -165,13 +166,15 @@ Supported `access.revoked` `reason` values :
 - `ChatMessage`
   - `conversation` FK
   - `author_membership` FK
-  - `body` (text, max 2000 trimmed)
+  - `body` (text, max 2000 trimmed, `blank=True` for later attachment-only messages)
   - `client_message_id` (UUID, idempotency key)
+  - `reply_to_id` (UUID, **no FK**) ; parent must exist in the same conversation at send time
+  - `ChatMessageMention` : `(membership_id, start, end)` half-open Unicode offsets on the stored trimmed body ; unique `(message, start)`
 
 ## 6. Lifecycle / Statuses
 
 - `ChatConversation` : active until group deleted (`deleted_at`) ; DM deleted when involving inactive membership.
-- `ChatMessage` : `created` → hard-deleted by purge after 7 days.
+- `ChatMessage` : `created` → hard-deleted by purge after 30 days.
 - No user message edit/delete in V1.
 
 ## 7. Permissions
@@ -182,7 +185,7 @@ Supported `access.revoked` `reason` values :
 | Create DM | Any active member ; target = active membership same establishment |
 | Create group | Manager, Director, Owner |
 | View conversation | Active participant only |
-| Send message | Active participant ; WS only ; revalidated on each supported send frame |
+| Send message | Active participant ; HTTP `POST …/messages/` ; same authz as GET messages |
 | Group admin actions | Participant with `admin` role |
 | Add/remove/promote participants | Group admin |
 | Rename group | Group admin |
@@ -228,7 +231,7 @@ All under `/api/v1/establishments/{establishment_id}/chat/` :
 - `POST conversations/dm/` (reopening a hidden DM clears `list_hidden_at` for the actor)
 - `POST conversations/groups/`
 - `GET/PATCH/DELETE conversations/{id}/` (delete : admin participant only)
-- `GET conversations/{id}/messages/` (read only ; applies viewer `history_cutoff_at`)
+- `GET/POST conversations/{id}/messages/` (GET history ; POST send ; applies viewer `history_cutoff_at` on read)
 - `POST conversations/{id}/seen/`
 - `POST conversations/{id}/pin/` / `DELETE conversations/{id}/pin/`
 - `POST conversations/{id}/hide/` (DM only)
@@ -236,13 +239,11 @@ All under `/api/v1/establishments/{establishment_id}/chat/` :
 - Participant management endpoints (add, remove, promote, leave) — group admin only ; mutations lock the conversation row to keep ≥1 admin
 - `PATCH settings/` (`chat_enabled` toggle)
 
-**No** `POST conversations/{id}/messages/` in V1.
-
 ### WebSocket
 
 - Path : `/ws/v1/establishments/{establishment_id}/chat/`
 - Auth : first message `{ "type": "auth", "ticket": "..." }`
-- Send : `{ "type": "message.send", "conversation_id", "client_message_id", "body" }`
+- Client application frames do not persist messages. `message.send` → protocol error + close.
 - ASGI : `OriginValidator(HOUSTON_CLIENT_ORIGINS)` + `URLRouter` ; **no** `AuthMiddlewareStack`
 - Server : Daphne
 
@@ -257,22 +258,22 @@ All under `/api/v1/establishments/{establishment_id}/chat/` :
 - Route `/chat` ; mobile-first Terrain UI (WhatsApp-inspired), not a parallel design system.
 - TanStack Query : conversations, messages, eligible-memberships, seen mutations.
 - Group detail (`/chat/:id`) : when `can_manage`, show « Gérer les membres » (add/remove multi-select sequential ops with partial-failure summary ; promote with confirm).
-- WebSocket : message send + receive ; failed send → local `failed` state → retry after reconnect (WS only).
+- WebSocket : live receive + banner. Composer send is HTTP and remains usable if WS is down.
 - On `conversation.updated` : invalidate conversations list + that conversation detail.
 - Reconnect : new ws-ticket ; refetch conversations and open conversation messages.
-- No localStorage/sessionStorage for tokens or chat payloads.
+- No localStorage/sessionStorage for tokens or chat payloads. Chat send drafts and attachment bytes may persist in a dedicated outbox (IndexedDB / Capacitor Data), purged on success, cancel, TTL, logout, switch, and access revocation.
 - No read-receipt UI ; minimal unread badge only.
-- Show retention notice : messages older than 7 days are automatically deleted.
+- Show retention notice : messages older than 30 days are automatically deleted.
 - Hide chat nav when `chat_enabled=false` or user cannot access.
 
 ## 11. AI Agent Notes
 
 - Inspect `apps/api/schema.yml` for the current Chat REST surface (implemented).
-- Inspect §1–§10 of this doc for remaining post-core gaps (bootstrap flag, no REST message write).
+- Inspect §1–§10 of this doc for remaining post-core gaps.
 - Inspect [`realtime_domain.md`](realtime_domain.md) for Chat vs global realtime boundary.
 - Inspect [`authentication_charter.md`](../../architecture/authentication_charter.md) before WebSocket auth work.
 - Inspect [`rbac_permissions_domain.md`](rbac_permissions_domain.md) and [`identity_membership_domain.md`](identity_membership_domain.md) for eligibility.
-- Do not implement general establishment chat, REST message send, read receipts, chat push notifications, or Signal/Action links.
+- Do not implement general establishment chat, read receipts, mention-specific push, or Signal/Action links.
 - Do not use `AuthMiddlewareStack` for Chat WebSocket.
 - Do not rely only on conversation groups joined at auth for message delivery.
 - When implementing Chat, update OpenAPI, generated clients, tests, and this document together.
@@ -286,8 +287,8 @@ Checklist aligned with Chat V1 implementation plan §3.5 — verified **2026-06-
 - [x] Chat realtime separated from deferred global Signal/Action/Notification invalidation
 - [x] Chat push/sounds/presence-aware notification suppression out of scope (§3); in-app `chat.message.received` handled by Notification domain
 - [x] Minimal unread only ; no read receipts ; unread survives purge (`last_seen_message_id` UUID non-FK + `last_seen_message_created_at`)
-- [x] Hard purge after 7 days documented and implemented (Celery + management command) ; purge does not break participant seen state
-- [x] Message send WebSocket-only ; no REST `POST .../messages/`
+- [x] Hard purge after 30 days documented and implemented (Celery + management command) ; purge does not break participant seen state
+- [x] Message send HTTP-only ; WebSocket is events only
 - [x] Membership-centric model (`ChatParticipant.membership`, `ChatMessage.author_membership`)
 - [x] Participant eligibility and permissions documented (§7) and enforced in backend tests
 - [x] REST + WS endpoints present in [`apps/api/schema.yml`](../../../apps/api/schema.yml) and backend `houston/chat/`

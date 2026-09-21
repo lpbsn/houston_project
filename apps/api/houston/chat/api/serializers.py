@@ -4,6 +4,8 @@ import uuid
 
 from houston.chat.constants import (
     CHAT_GROUP_TITLE_MAX_LENGTH,
+    CHAT_MESSAGE_BODY_MAX_LENGTH,
+    CHAT_REPLY_EXCERPT_MAX_LENGTH,
 )
 from houston.chat.models import ChatConversation, ChatMessage, ChatParticipant
 from houston.establishments.models import EstablishmentMembership
@@ -38,12 +40,43 @@ class ChatParticipantSummarySerializer(serializers.Serializer):
     participant_role = serializers.CharField()
 
 
+class ChatMessageMentionSerializer(serializers.Serializer):
+    membership_id = serializers.UUIDField()
+    start = serializers.IntegerField(min_value=0)
+    end = serializers.IntegerField(min_value=1)
+    display_name = serializers.CharField(required=False)
+
+
+class ChatAttachmentSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    kind = serializers.CharField()
+    content_type = serializers.CharField()
+    size_bytes = serializers.IntegerField()
+    original_filename = serializers.CharField()
+    preview_url = serializers.CharField()
+    thumbnail_url = serializers.CharField(allow_null=True)
+    message_id = serializers.UUIDField()
+    created_at = serializers.DateTimeField()
+    author_display_name = serializers.CharField()
+
+
+class ChatReplyToSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    unavailable = serializers.BooleanField()
+    author_display_name = serializers.CharField(required=False, allow_null=True)
+    excerpt = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+
+
 class ChatMessagePreviewSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     author_membership_id = serializers.UUIDField()
     author_display_name = serializers.CharField()
-    body = serializers.CharField()
+    body = serializers.CharField(allow_blank=True)
     created_at = serializers.DateTimeField()
+    is_reply = serializers.BooleanField(required=False)
+    reply_to = ChatReplyToSerializer(allow_null=True, required=False)
+    mentions = ChatMessageMentionSerializer(many=True, required=False)
+    attachments = ChatAttachmentSerializer(many=True, required=False)
 
 
 class ChatConversationListItemSerializer(serializers.Serializer):
@@ -81,9 +114,68 @@ class ChatMessageSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     author_membership_id = serializers.UUIDField()
     author_display_name = serializers.CharField()
-    body = serializers.CharField()
+    body = serializers.CharField(allow_blank=True)
     client_message_id = serializers.UUIDField()
     created_at = serializers.DateTimeField()
+    is_reply = serializers.BooleanField()
+    reply_to = ChatReplyToSerializer(allow_null=True)
+    mentions = ChatMessageMentionSerializer(many=True)
+    attachments = ChatAttachmentSerializer(many=True)
+
+
+class ChatSendMessageRequestSerializer(serializers.Serializer):
+    client_message_id = serializers.UUIDField()
+    body = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=CHAT_MESSAGE_BODY_MAX_LENGTH,
+        default="",
+    )
+    reply_to_id = serializers.UUIDField(required=False, allow_null=True)
+    mentions = ChatMessageMentionSerializer(many=True, required=False)
+    attachment_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        allow_empty=True,
+    )
+
+    def validate_mentions(self, value):
+        for item in value:
+            if item["start"] >= item["end"]:
+                raise serializers.ValidationError("Mention start must be less than end.")
+        return value
+
+
+class ChatReserveUploadRequestSerializer(serializers.Serializer):
+    conversation_id = serializers.UUIDField()
+    filename = serializers.CharField(max_length=255)
+    content_type = serializers.CharField(max_length=120)
+    size_bytes = serializers.IntegerField(min_value=1)
+
+
+class ChatReserveUploadResponseSerializer(serializers.Serializer):
+    upload_id = serializers.UUIDField()
+    put_url = serializers.CharField(allow_blank=True)
+    expires_at = serializers.DateTimeField()
+
+
+class ChatUploadCompleteResponseSerializer(serializers.Serializer):
+    upload_id = serializers.UUIDField()
+    status = serializers.CharField()
+    kind = serializers.CharField()
+    content_type = serializers.CharField()
+    size_bytes = serializers.IntegerField(allow_null=True)
+
+
+class ChatSharedMediaResponseSerializer(serializers.Serializer):
+    items = ChatAttachmentSerializer(many=True)
+    has_more = serializers.BooleanField()
+    cursor = serializers.CharField(allow_null=True)
+
+
+class ChatSendMessageResponseSerializer(serializers.Serializer):
+    message = ChatMessageSerializer()
+    created = serializers.BooleanField()
 
 
 class ChatMessageListResponseSerializer(serializers.Serializer):
@@ -159,7 +251,121 @@ def serialize_participant_summary(participant: ChatParticipant) -> dict:
     }
 
 
-def serialize_message(message: ChatMessage) -> dict:
+def _serialize_reply_to(message: ChatMessage, *, parent: ChatMessage | None) -> dict | None:
+    reply_to_id = getattr(message, "reply_to_id", None)
+    if reply_to_id is None:
+        return None
+    if parent is None:
+        return {"id": reply_to_id, "unavailable": True}
+    excerpt = parent.body[:CHAT_REPLY_EXCERPT_MAX_LENGTH]
+    return {
+        "id": parent.id,
+        "unavailable": False,
+        "author_display_name": membership_display_name(parent.author_membership),
+        "excerpt": excerpt,
+    }
+
+
+def _visible_reply_parent(
+    parent: ChatMessage | None,
+    *,
+    history_cutoff_at,
+) -> ChatMessage | None:
+    if parent is None:
+        return None
+    if history_cutoff_at is not None and parent.created_at <= history_cutoff_at:
+        return None
+    return parent
+
+
+def _history_cutoff_for_message(
+    message: ChatMessage,
+    *,
+    history_cutoff_at=None,
+    history_cutoffs_by_conversation_id: dict | None = None,
+):
+    if history_cutoff_at is not None:
+        return history_cutoff_at
+    if history_cutoffs_by_conversation_id is None:
+        return None
+    return history_cutoffs_by_conversation_id.get(message.conversation_id)
+
+
+def _serialize_mentions(message: ChatMessage) -> list[dict]:
+    mentions = getattr(message, "_prefetched_objects_cache", {}).get("mentions")
+    if mentions is None:
+        mentions = list(message.mentions.select_related("membership__user").all())
+    items = []
+    for mention in mentions:
+        items.append(
+            {
+                "membership_id": mention.membership_id,
+                "start": mention.start,
+                "end": mention.end,
+                "display_name": membership_display_name(mention.membership),
+            }
+        )
+    items.sort(key=lambda item: item["start"])
+    return items
+
+
+def serialize_attachment(attachment, *, message: ChatMessage | None = None) -> dict:
+    resolved_message = message or attachment.message
+    establishment_id = resolved_message.conversation.establishment_id
+    thumbnail_key = getattr(attachment.upload, "thumbnail_storage_key", "")
+    return {
+        "id": attachment.id,
+        "kind": attachment.kind,
+        "content_type": attachment.content_type,
+        "size_bytes": attachment.size_bytes,
+        "original_filename": attachment.original_filename,
+        "preview_url": (
+            f"/api/v1/establishments/{establishment_id}"
+            f"/chat/attachments/{attachment.id}/preview/"
+        ),
+        "thumbnail_url": (
+            f"/api/v1/establishments/{establishment_id}"
+            f"/chat/attachments/{attachment.id}/preview/?variant=thumbnail"
+            if thumbnail_key
+            else None
+        ),
+        "message_id": resolved_message.id,
+        "created_at": attachment.created_at,
+        "author_display_name": membership_display_name(resolved_message.author_membership),
+    }
+
+
+def _serialize_attachments(message: ChatMessage) -> list[dict]:
+    attachments = getattr(message, "_prefetched_objects_cache", {}).get("attachments")
+    if attachments is None:
+        attachments = list(message.attachments.select_related("upload").all())
+    return [
+        serialize_attachment(attachment, message=message)
+        for attachment in sorted(attachments, key=lambda item: (item.position, item.id))
+    ]
+
+
+def serialize_message(
+    message: ChatMessage,
+    *,
+    parent: ChatMessage | None = None,
+    parents_by_id: dict | None = None,
+    history_cutoff_at=None,
+) -> dict:
+    reply_to_id = getattr(message, "reply_to_id", None)
+    resolved_parent = parent
+    if resolved_parent is None and parents_by_id is not None and reply_to_id is not None:
+        resolved_parent = parents_by_id.get(reply_to_id)
+    elif resolved_parent is None and reply_to_id is not None:
+        resolved_parent = (
+            ChatMessage.objects.select_related("author_membership", "author_membership__user")
+            .filter(id=reply_to_id, conversation_id=message.conversation_id)
+            .first()
+        )
+    resolved_parent = _visible_reply_parent(
+        resolved_parent,
+        history_cutoff_at=history_cutoff_at,
+    )
     return {
         "id": message.id,
         "author_membership_id": message.author_membership_id,
@@ -167,7 +373,43 @@ def serialize_message(message: ChatMessage) -> dict:
         "body": message.body,
         "client_message_id": message.client_message_id,
         "created_at": message.created_at,
+        "is_reply": reply_to_id is not None,
+        "reply_to": _serialize_reply_to(message, parent=resolved_parent),
+        "mentions": _serialize_mentions(message),
+        "attachments": _serialize_attachments(message),
     }
+
+
+def serialize_messages(
+    messages: list[ChatMessage],
+    *,
+    history_cutoff_at=None,
+    history_cutoffs_by_conversation_id: dict | None = None,
+) -> list[dict]:
+    parent_ids = [
+        message.reply_to_id for message in messages if getattr(message, "reply_to_id", None)
+    ]
+    parents_by_id = {}
+    if parent_ids:
+        parents_by_id = {
+            parent.id: parent
+            for parent in ChatMessage.objects.filter(id__in=parent_ids).select_related(
+                "author_membership",
+                "author_membership__user",
+            )
+        }
+    return [
+        serialize_message(
+            message,
+            parents_by_id=parents_by_id,
+            history_cutoff_at=_history_cutoff_for_message(
+                message,
+                history_cutoff_at=history_cutoff_at,
+                history_cutoffs_by_conversation_id=history_cutoffs_by_conversation_id,
+            ),
+        )
+        for message in messages
+    ]
 
 
 def conversation_title(

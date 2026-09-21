@@ -46,6 +46,10 @@ const serverMessage: ChatMessage = {
   body: 'wd',
   client_message_id: 'client-1',
   created_at: '2026-07-11T17:16:00.000Z',
+  is_reply: false,
+  reply_to: null,
+  mentions: [],
+  attachments: [],
 }
 
 vi.mock('@/app/auth-provider', () => ({
@@ -62,13 +66,16 @@ vi.mock('@/app/auth-provider', () => ({
   }),
 }))
 
+const realtimeState = {
+  connectionStatus: 'disconnected' as const,
+  localMessages: [],
+  sendChatMessage: () => ({ clientMessageId: 'client-local', queued: true }),
+  retryFailedMessage: () => false,
+  cancelSendingMessage: () => false,
+}
+
 vi.mock('../components/chat-realtime-provider', () => ({
-  useOptionalChatRealtime: () => ({
-    connectionStatus: 'connected',
-    localMessages: [],
-    sendChatMessage: () => ({ clientMessageId: 'client-local', queued: true }),
-    retryFailedMessage: () => false,
-  }),
+  useOptionalChatRealtime: () => realtimeState,
 }))
 
 vi.mock('../hooks/use-chat-conversation-presence', () => ({
@@ -200,6 +207,20 @@ describe('ChatConversationPage', () => {
     renderConversationPage()
 
     expect(screen.getByRole('button', { name: 'Gérer les membres' })).toBeTruthy()
+  })
+
+  it('keeps the composer usable while the websocket is disconnected', () => {
+    detailQueryMock.mockReturnValue(buildDetailQueryState())
+    messagesQueryMock.mockReturnValue(buildMessagesQueryState())
+    realtimeState.connectionStatus = 'disconnected'
+
+    renderConversationPage()
+
+    expect(screen.getByPlaceholderText('Écrire un message…')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Envoyer' })).toBeTruthy()
+    expect((screen.getByPlaceholderText('Écrire un message…') as HTMLTextAreaElement).disabled).toBe(
+      false,
+    )
   })
 
   it('hides manage members for standard group members', () => {

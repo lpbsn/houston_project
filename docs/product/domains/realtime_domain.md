@@ -42,7 +42,7 @@ Chat V1 is a **separate** WebSocket contract from operational invalidation (same
 - Chat message text may be transported over WebSocket **only** to authorized active participants of that conversation.
 - Chat V1 is **not** generic invalidation/refetch ; it is live message delivery with PostgreSQL as persisted truth.
 - REST remains authoritative for conversation structure, history, participants, seen state, and ws-ticket issuance.
-- **No REST message send in V1** ; WebSocket is the only write channel for messages.
+- Chat message **send** is HTTP `POST …/messages/` ; WebSocket delivers `message.created` and access/structure events only.
 
 Chat WebSocket delivery must not depend only on conversation groups joined at auth :
 

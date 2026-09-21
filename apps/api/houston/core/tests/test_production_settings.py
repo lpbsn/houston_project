@@ -181,6 +181,11 @@ def test_production_deploy_check_allows_s3_backend_without_disk_root(valid_produ
     valid_production_overrides["HOUSTON_S3_ACCESS_KEY_ID"] = "access-key"
     valid_production_overrides["HOUSTON_S3_SECRET_ACCESS_KEY"] = "secret-key"
     valid_production_overrides["HOUSTON_S3_REGION"] = "auto"
+    valid_production_overrides["HOUSTON_CHAT_S3_ENDPOINT_URL"] = "https://s3.chat.invalid"
+    valid_production_overrides["HOUSTON_CHAT_S3_BUCKET"] = "chat-attachement"
+    valid_production_overrides["HOUSTON_CHAT_S3_ACCESS_KEY_ID"] = "chat-access-key"
+    valid_production_overrides["HOUSTON_CHAT_S3_SECRET_ACCESS_KEY"] = "chat-secret-key"
+    valid_production_overrides["HOUSTON_CHAT_S3_REGION"] = "auto"
     with override_settings(**valid_production_overrides):
         call_command("check", deploy=True)
 

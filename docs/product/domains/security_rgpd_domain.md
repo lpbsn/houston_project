@@ -48,7 +48,7 @@ Identity / Membership defines who the user is and which establishment they belon
 - Technical logs must not contain raw Observation text, full comments, chat message body, audio, photos, tokens, secrets, or full AI prompt/content.
 - Chat message body may be transmitted over Chat V1 WebSocket only to authorized active participants ; not in logs, notifications, or generic realtime invalidation payloads.
 - Retention is limited by purpose; exact durations are candidate unless separately validated.
-- Chat V1 messages : hard purge after 7 days (`created_at < now - 7 days`) ; conversations may remain without messages.
+- Chat V1 messages : hard purge after 30 days (`created_at < now - 30 days`) ; conversations may remain without messages.
 
 ## 5. Main Objects
 

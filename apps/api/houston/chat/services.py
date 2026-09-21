@@ -1,14 +1,21 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
 from houston.accounts.models import User
 from houston.chat.exceptions import ChatNotFoundError, ChatPermissionError, ChatValidationError
-from houston.chat.models import ChatConversation, ChatMessage, ChatParticipant
+from houston.chat.models import (
+    ChatConversation,
+    ChatMessage,
+    ChatMessageMention,
+    ChatParticipant,
+    ChatUpload,
+)
 from houston.chat.permissions import (
     can_access_chat,
     can_create_dm,
@@ -37,8 +44,10 @@ from .ws_notify import (
     schedule_conversation_access_revoked_for_memberships,
     schedule_conversation_updated,
     schedule_membership_access_revoked,
+    schedule_message_created,
 )
 
+logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class MessageSendResult:
@@ -143,6 +152,35 @@ def _require_locked_group_for_actor(
     return conversation
 
 
+def hard_delete_conversations(*, conversations: list[ChatConversation]) -> None:
+    if not conversations:
+        return
+    from houston.chat.upload_services import chat_object_keys_for_uploads, delete_chat_storage_keys
+
+    conversation_ids = [conversation.id for conversation in conversations]
+    uploads = list(ChatUpload.objects.filter(conversation_id__in=conversation_ids))
+    storage_keys = chat_object_keys_for_uploads(uploads)
+    ChatConversation.objects.filter(id__in=conversation_ids).delete()
+    if not storage_keys:
+        return
+    captured_keys = list(storage_keys)
+
+    def _cleanup_storage() -> None:
+        try:
+            delete_chat_storage_keys(captured_keys)
+        except Exception as exc:
+            logger.warning(
+                "chat_conversation_storage_cleanup_failed",
+                extra={
+                    "event": "chat_conversation_storage_cleanup_failed",
+                    "exception_class": type(exc).__name__,
+                    "key_count": len(captured_keys),
+                },
+            )
+
+    transaction.on_commit(_cleanup_storage)
+
+
 @transaction.atomic
 def handle_membership_chat_deactivation(*, membership: EstablishmentMembership) -> None:
     establishment_id = membership.establishment_id
@@ -164,7 +202,7 @@ def handle_membership_chat_deactivation(*, membership: EstablishmentMembership) 
             membership_ids=participant_membership_ids,
             reason="membership_deactivated",
         )
-        conversation.delete()
+    hard_delete_conversations(conversations=dm_conversations)
 
     group_conversation_ids = list(
         ChatParticipant.objects.filter(
@@ -813,15 +851,88 @@ def update_establishment_chat_enabled(
     return establishment
 
 
-def normalize_message_body(body: str) -> str:
+def normalize_message_body(body: str, *, required: bool = True) -> str:
     normalized = body.strip()
-    if not normalized:
+    if required and not normalized:
         raise ChatValidationError("Message body is required.")
     if len(normalized) > CHAT_MESSAGE_BODY_MAX_LENGTH:
         raise ChatValidationError(
             f"Message body must be at most {CHAT_MESSAGE_BODY_MAX_LENGTH} characters."
         )
     return normalized
+
+
+def _mention_expected_label(*, membership) -> str:
+    from houston.chat.api.serializers import membership_display_name
+
+    return f"@{membership_display_name(membership)}"
+
+
+def _validate_reply_to(
+    *,
+    conversation_id: uuid.UUID,
+    reply_to_id: uuid.UUID | None,
+) -> uuid.UUID | None:
+    if reply_to_id is None:
+        return None
+    parent = ChatMessage.objects.filter(
+        id=reply_to_id,
+        conversation_id=conversation_id,
+    ).first()
+    if parent is None:
+        raise ChatValidationError("Reply target must exist in the same conversation.")
+    return parent.id
+
+
+def _validate_mentions(
+    *,
+    conversation_id: uuid.UUID,
+    body: str,
+    mentions: list[dict],
+) -> list[dict]:
+    if not mentions:
+        return []
+
+    body_len = len(body)
+    sorted_mentions = sorted(mentions, key=lambda item: (item["start"], item["end"]))
+    previous_end = 0
+    seen_starts: set[int] = set()
+    validated: list[dict] = []
+
+    membership_ids = [item["membership_id"] for item in sorted_mentions]
+    participants = {
+        participant.membership_id: participant.membership
+        for participant in active_participant_queryset(conversation_id=conversation_id).filter(
+            membership_id__in=membership_ids
+        )
+    }
+
+    for item in sorted_mentions:
+        start = int(item["start"])
+        end = int(item["end"])
+        membership_id = item["membership_id"]
+        if start in seen_starts:
+            raise ChatValidationError("Mention offsets must be unique.")
+        if not (0 <= start < end <= body_len):
+            raise ChatValidationError("Mention offsets are out of range.")
+        if start < previous_end:
+            raise ChatValidationError("Mention offsets must not overlap.")
+        membership = participants.get(membership_id)
+        if membership is None:
+            raise ChatValidationError("Mentioned membership must be an active participant.")
+        expected = _mention_expected_label(membership=membership)
+        if body[start:end] != expected:
+            raise ChatValidationError("Mention text must match the participant display name.")
+        seen_starts.add(start)
+        previous_end = end
+        validated.append(
+            {
+                "membership_id": membership_id,
+                "start": start,
+                "end": end,
+            }
+        )
+    return validated
 
 
 def _active_recipient_membership_ids(*, conversation_id: uuid.UUID) -> tuple[uuid.UUID, ...]:
@@ -833,6 +944,24 @@ def _active_recipient_membership_ids(*, conversation_id: uuid.UUID) -> tuple[uui
     )
 
 
+def _existing_client_message(
+    *,
+    conversation_id: uuid.UUID,
+    author_membership_id: uuid.UUID,
+    client_message_id: uuid.UUID,
+) -> ChatMessage | None:
+    return (
+        ChatMessage.objects.select_related("author_membership", "author_membership__user")
+        .prefetch_related("mentions__membership__user", "attachments__upload")
+        .filter(
+            conversation_id=conversation_id,
+            author_membership_id=author_membership_id,
+            client_message_id=client_message_id,
+        )
+        .first()
+    )
+
+
 @transaction.atomic
 def create_message(
     *,
@@ -841,6 +970,9 @@ def create_message(
     conversation_id: uuid.UUID,
     client_message_id: uuid.UUID,
     body: str,
+    reply_to_id: uuid.UUID | None = None,
+    mentions: list[dict] | None = None,
+    attachment_ids: list[uuid.UUID] | None = None,
 ) -> MessageSendResult:
     if not can_access_chat(author_membership):
         raise ChatPermissionError()
@@ -885,31 +1017,97 @@ def create_message(
             except MembershipBlockedError:
                 raise ChatPermissionError(MEMBERSHIP_BLOCKED_DETAIL, code="membership_blocked")
 
-    normalized_body = normalize_message_body(body)
-    recipient_membership_ids = _active_recipient_membership_ids(conversation_id=conversation.id)
-
-    existing = (
-        ChatMessage.objects.select_related("author_membership", "author_membership__user")
-        .filter(
-            conversation_id=conversation.id,
-            author_membership_id=author_membership.id,
-            client_message_id=client_message_id,
-        )
-        .first()
+    existing = _existing_client_message(
+        conversation_id=conversation.id,
+        author_membership_id=author_membership.id,
+        client_message_id=client_message_id,
     )
     if existing is not None:
         return MessageSendResult(
             message=existing,
             created=False,
-            recipient_membership_ids=recipient_membership_ids,
+            recipient_membership_ids=_active_recipient_membership_ids(
+                conversation_id=conversation.id
+            ),
         )
 
-    message = ChatMessage.objects.create(
-        conversation=conversation,
-        author_membership=author_membership,
-        body=normalized_body,
-        client_message_id=client_message_id,
+    uploads = []
+    if attachment_ids:
+        from houston.chat.upload_services import lock_validated_uploads_for_message
+
+        uploads = lock_validated_uploads_for_message(
+            actor_membership=author_membership,
+            conversation_id=conversation.id,
+            attachment_ids=attachment_ids,
+            allow_linked=True,
+        )
+        if any(upload.status == ChatUpload.Status.LINKED for upload in uploads):
+            existing = _existing_client_message(
+                conversation_id=conversation.id,
+                author_membership_id=author_membership.id,
+                client_message_id=client_message_id,
+            )
+            if existing is not None:
+                return MessageSendResult(
+                    message=existing,
+                    created=False,
+                    recipient_membership_ids=_active_recipient_membership_ids(
+                        conversation_id=conversation.id
+                    ),
+                )
+            raise ChatValidationError("Attachment has already been used.")
+    normalized_body = normalize_message_body(body, required=not uploads)
+    validated_reply_to_id = _validate_reply_to(
+        conversation_id=conversation.id,
+        reply_to_id=reply_to_id,
     )
+    validated_mentions = _validate_mentions(
+        conversation_id=conversation.id,
+        body=normalized_body,
+        mentions=list(mentions or []),
+    )
+    recipient_membership_ids = _active_recipient_membership_ids(conversation_id=conversation.id)
+
+    try:
+        with transaction.atomic():
+            message = ChatMessage.objects.create(
+                conversation=conversation,
+                author_membership=author_membership,
+                body=normalized_body,
+                client_message_id=client_message_id,
+                reply_to_id=validated_reply_to_id,
+            )
+    except IntegrityError as exc:
+        if "uniq_chat_message_client_id" not in str(exc):
+            raise
+        existing = _existing_client_message(
+            conversation_id=conversation.id,
+            author_membership_id=author_membership.id,
+            client_message_id=client_message_id,
+        )
+        if existing is None:
+            raise
+        return MessageSendResult(
+            message=existing,
+            created=False,
+            recipient_membership_ids=recipient_membership_ids,
+        )
+    if uploads:
+        from houston.chat.upload_services import link_uploads_to_message
+
+        link_uploads_to_message(message=message, uploads=uploads)
+    if validated_mentions:
+        ChatMessageMention.objects.bulk_create(
+            [
+                ChatMessageMention(
+                    message=message,
+                    membership_id=item["membership_id"],
+                    start=item["start"],
+                    end=item["end"],
+                )
+                for item in validated_mentions
+            ]
+        )
     conversation.last_message_at = message.created_at
     conversation.save(update_fields=["last_message_at", "updated_at"])
     ChatParticipant.objects.filter(
@@ -923,6 +1121,12 @@ def create_message(
     schedule_chat_message_received_notification(
         message_id=message.id,
         actor_membership_id=author_membership.id,
+    )
+    schedule_message_created(
+        establishment_id=establishment_id,
+        conversation_id=conversation.id,
+        message_id=message.id,
+        recipient_membership_ids=list(recipient_membership_ids),
     )
     return MessageSendResult(
         message=message,

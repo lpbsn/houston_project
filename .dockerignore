@@ -42,6 +42,8 @@ apps/web/coverage/
 # Runtime media
 apps/api/private_media/
 apps/api/private_media/**
+apps/api/private_chat_media/
+apps/api/private_chat_media/**
 
 # Celery Beat runtime files
 apps/api/celerybeat-schedule*

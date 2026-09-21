@@ -32,6 +32,10 @@ const sampleMessage = (overrides: Partial<ChatMessage> = {}): ChatMessage => ({
   body: 'Hello',
   client_message_id: 'client-1',
   created_at: '2026-06-09T12:00:00.000Z',
+  is_reply: false,
+  reply_to: null,
+  mentions: [],
+  attachments: [],
   ...overrides,
 })
 

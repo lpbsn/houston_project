@@ -25,12 +25,13 @@ ACTION_PLAN_EXECUTION_FEED_ONE_ITEM_MAX_QUERIES = 15
 
 # GET .../chat/conversations/ — 3 DMs with one message each
 # Phase L: 12 queries; Phase S1: 10 (batched latest messages + single participant pass)
-CHAT_CONVERSATIONS_LIST_MAX_QUERIES_THREE_ITEMS = 10
+# +1 mentions/reply parent batch for last_message_preview
+CHAT_CONVERSATIONS_LIST_MAX_QUERIES_THREE_ITEMS = 12
 # Observed delta when increasing conversations from 1 to 3 (flat after Phase S1 batching)
 CHAT_CONVERSATIONS_MAX_QUERY_DELTA_ONE_TO_THREE = 0
 
 # GET .../conversations/{id}/messages/ — default page, 1 stored message
-CHAT_MESSAGES_LIST_MAX_QUERIES = 10
+CHAT_MESSAGES_LIST_MAX_QUERIES = 12
 
 # build_pipeline_input — one observation, dual context, one BU/AS
 OBSERVATION_PIPELINE_INPUT_BUILD_MAX_QUERIES = 12

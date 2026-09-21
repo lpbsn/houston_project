@@ -19,6 +19,14 @@ _S3_REQUIRED_SETTINGS = (
     "HOUSTON_S3_REGION",
 )
 
+_CHAT_S3_REQUIRED_SETTINGS = (
+    "HOUSTON_CHAT_S3_ENDPOINT_URL",
+    "HOUSTON_CHAT_S3_BUCKET",
+    "HOUSTON_CHAT_S3_ACCESS_KEY_ID",
+    "HOUSTON_CHAT_S3_SECRET_ACCESS_KEY",
+    "HOUSTON_CHAT_S3_REGION",
+)
+
 
 def _private_media_backend() -> str:
     backend = getattr(settings, "HOUSTON_PRIVATE_MEDIA_BACKEND", PRIVATE_MEDIA_BACKEND_FILESYSTEM)
@@ -99,24 +107,42 @@ def check_private_media_s3_configured(app_configs, **kwargs):
     if _private_media_backend() != PRIVATE_MEDIA_BACKEND_S3:
         return []
 
+    errors = []
     missing = [
         name
         for name in _S3_REQUIRED_SETTINGS
         if not (getattr(settings, name, "") or "").strip()
     ]
-    if not missing:
-        return []
-    return [
-        Error(
-            "S3 private media settings are incomplete: " + ", ".join(missing),
-            hint=(
-                "Set HOUSTON_S3_ENDPOINT_URL, HOUSTON_S3_BUCKET, "
-                "HOUSTON_S3_ACCESS_KEY_ID, HOUSTON_S3_SECRET_ACCESS_KEY, "
-                "and HOUSTON_S3_REGION. HOUSTON_S3_ADDRESSING_STYLE is optional."
-            ),
-            id="uploads.E004",
+    if missing:
+        errors.append(
+            Error(
+                "S3 private media settings are incomplete: " + ", ".join(missing),
+                hint=(
+                    "Set HOUSTON_S3_ENDPOINT_URL, HOUSTON_S3_BUCKET, "
+                    "HOUSTON_S3_ACCESS_KEY_ID, HOUSTON_S3_SECRET_ACCESS_KEY, "
+                    "and HOUSTON_S3_REGION. HOUSTON_S3_ADDRESSING_STYLE is optional."
+                ),
+                id="uploads.E004",
+            )
         )
+    chat_missing = [
+        name
+        for name in _CHAT_S3_REQUIRED_SETTINGS
+        if not (getattr(settings, name, "") or "").strip()
     ]
+    if chat_missing:
+        errors.append(
+            Error(
+                "S3 chat media settings are incomplete: " + ", ".join(chat_missing),
+                hint=(
+                    "Set HOUSTON_CHAT_S3_ENDPOINT_URL, HOUSTON_CHAT_S3_BUCKET, "
+                    "HOUSTON_CHAT_S3_ACCESS_KEY_ID, HOUSTON_CHAT_S3_SECRET_ACCESS_KEY, "
+                    "and HOUSTON_CHAT_S3_REGION. HOUSTON_CHAT_S3_ADDRESSING_STYLE is optional."
+                ),
+                id="uploads.E007",
+            )
+        )
+    return errors
 
 
 @register()

@@ -6,6 +6,7 @@ from django.core.files.storage import FileSystemStorage
 from houston.uploads.private_storage import (
     PrivateMediaStorage,
     generate_private_media_presigned_get_url,
+    get_chat_private_media_storage,
     get_private_media_storage,
 )
 from storages.backends.s3 import S3Storage
@@ -47,6 +48,29 @@ def test_factory_builds_s3_storage_from_houston_settings(settings):
     assert storage._inner.region_name == "auto"
     assert storage._inner.addressing_style == "path"
     assert not hasattr(storage, "location")
+
+
+def test_chat_factory_does_not_use_signal_bucket(settings):
+    settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "s3"
+    settings.HOUSTON_S3_ENDPOINT_URL = "https://s3.signal.invalid"
+    settings.HOUSTON_S3_BUCKET = "houston-private-media"
+    settings.HOUSTON_S3_ACCESS_KEY_ID = "signal-access-key"
+    settings.HOUSTON_S3_SECRET_ACCESS_KEY = "signal-secret-key"
+    settings.HOUSTON_S3_REGION = "auto"
+    settings.HOUSTON_S3_ADDRESSING_STYLE = "path"
+    settings.HOUSTON_CHAT_S3_ENDPOINT_URL = "https://s3.chat.invalid"
+    settings.HOUSTON_CHAT_S3_BUCKET = "chat-attachement"
+    settings.HOUSTON_CHAT_S3_ACCESS_KEY_ID = "chat-access-key"
+    settings.HOUSTON_CHAT_S3_SECRET_ACCESS_KEY = "chat-secret-key"
+    settings.HOUSTON_CHAT_S3_REGION = "auto"
+    settings.HOUSTON_CHAT_S3_ADDRESSING_STYLE = "virtual"
+
+    storage = get_chat_private_media_storage()
+
+    assert isinstance(storage._inner, S3Storage)
+    assert storage._inner.bucket_name == "chat-attachement"
+    assert storage._inner.endpoint_url == "https://s3.chat.invalid"
+    assert storage._inner.addressing_style == "virtual"
 
 
 def test_factory_rejects_unknown_backend(settings):

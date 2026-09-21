@@ -46,6 +46,13 @@ async function bootstrap() {
     }
 
     try {
+      const { startChatPdfCachePurge } = await import('@/features/chat/lib/chat-pdf')
+      startChatPdfCachePurge()
+    } catch {
+      // Expired chat PDF cache stays until the next native boot or foreground.
+    }
+
+    try {
       const { configureNativeKeyboard } = await import('@/lib/native-keyboard')
       await configureNativeKeyboard()
     } catch {
