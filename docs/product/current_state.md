@@ -18,9 +18,11 @@ Observation → Signal → Action Plan → Execution → Validation → Feed upd
 
 The execution surface is **Action Plan** only.
 
-## Backend apps (14 installed)
+## Backend apps (16 installed)
 
-`core`, `accounts`, `organizations`, `establishments`, `platform`, `observations`, `signals`, `action_plans`, `comments`, `notifications`, `realtime`, `chat`, `ai`, `uploads`
+`core`, `accounts`, `organizations`, `platform`, `establishments`, `observations`, `signals`, `analytics`, `action_plans`, `comments`, `notifications`, `realtime`, `chat`, `ai`, `uploads`, `gamification`
+
+`analytics` is a live product surface (table below). `gamification` is backend/API (`…/gamification/me/`) plus the profile widget (`GamificationScoreCard` on [`profile-page.tsx`](../../apps/web/src/features/auth/pages/profile-page.tsx)); there is no dedicated hub. `ComingSoonPage` is not Gamification.
 
 ## Implemented surfaces (pilot)
 
@@ -38,6 +40,7 @@ The execution surface is **Action Plan** only.
 | AI observation → Signal | Live | Pipeline **v6** (schema `ai_observation_pipeline_v6`, prompt `ai_observation_pipeline_v6_2`); Fake (CI) / OpenAI (opt-in smoke) |
 | Signal feed + lifecycle | Live | Pin, mark interesting, cancel (open and interesting), resolve (open), qualify merge absorb+delete |
 | Action Plan catalog + executions + feed | Live | [`domains/action_plan_domain.md`](domains/action_plan_domain.md) |
+| Analytics dashboard + pattern detail | Live | `/analytics`, `/analytics/patterns/{id}`, `LazyAnalyticsPage`; API `api/v1/analytics/…` (`houston.analytics`). No domain doc. |
 | Comments (signal + execution threads) | Live | REST + mention picker |
 | Notifications in-app | Live | List, preferences, mark read |
 | Native push (FCM) | Live | Membership `push_enabled`; Web Push removed |
