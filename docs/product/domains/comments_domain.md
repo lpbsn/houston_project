@@ -31,7 +31,7 @@ V1 supports:
 - Mention active users of the same establishment with `@`.
 - Display inherited Signal comments inside linked Action Plan executions.
 - Attach photos and PDF files to Action Plan **execution** comments (root or reply) when the plan is `in_progress` or `pending_validation`.
-- Surface those files under the originating comment and in « Pièces jointes du plan » on the Comments tab.
+- Surface those files under the originating comment and via Comments-tab **Médias** (Médias / Documents sheet).
 - Live refresh of comment lists via operational WebSocket **invalidation** (authorized refetch after `comment.*` messages — no comment body on the socket). See [`realtime_domain.md`](realtime_domain.md) and §9.
 
 V1 does not support:
@@ -198,7 +198,7 @@ Comment content must not be logged, sent to AI, exposed in technical events, or 
 
 ## 8. Frontend
 
-List items carry `origin`: `signal` for Signal comments (including inherited rows on execution detail); `action_plan_execution` for direct execution comments. Execution comments may include `attachments` metadata (`preview_url` / `thumbnail_url` Houston gates, never bucket URLs). UI: Signal detail and Action Plan execution detail; Comments tab also shows « Pièces jointes du plan ». Composer files are execution-only; required trimmed body, max 2,000 characters; disable submit while pending or uploading.
+List items carry `origin`: `signal` for Signal comments (including inherited rows on execution detail); `action_plan_execution` for direct execution comments. Execution comments may include `attachments` metadata (`preview_url` / `thumbnail_url` Houston gates, never bucket URLs). UI: Signal detail and Action Plan execution detail; Comments tab **Médias** opens a Médias / Documents sheet of available execution attachments. Composer files are execution-only; required trimmed body, max 2,000 characters; disable submit while pending or uploading.
 
 ## 9. Non-goals V1
 
