@@ -1,6 +1,7 @@
-import type { InfiniteData, QueryClient } from '@tanstack/react-query'
+import type { QueryClient } from '@tanstack/react-query'
 
 import { signalsQueryKeys } from '../api'
+import type { SignalFeedStatusFilter } from './signal-feed-filters'
 import type {
   SignalDetail,
   SignalFeedFilters,
@@ -17,6 +18,28 @@ export type SignalQuickActionCacheContext = {
 }
 
 const SIGNAL_FEED_VIEW_MODES: SignalViewMode[] = ['personal', 'general']
+
+const SIGNAL_FEED_MAX_PAGE_SIZE = 50
+const SIGNAL_FEED_MAX_RESTORE_PAGES = 10
+
+function continuationPageSizeForRemainingDepth(remainingDepth: number): number {
+  return Math.min(SIGNAL_FEED_MAX_PAGE_SIZE, Math.max(0, remainingDepth))
+}
+
+export function signalFeedQueryKey(options: {
+  source?: 'establishment' | 'cross'
+  establishmentId: string | null
+  viewMode: SignalViewMode
+  filters: SignalFeedFilters
+}) {
+  if (options.source === 'cross') {
+    return signalsQueryKeys.crossFeed(options.filters)
+  }
+  if (options.establishmentId) {
+    return signalsQueryKeys.feed(options.establishmentId, options.viewMode, options.filters)
+  }
+  return null
+}
 
 export function feedItemPatchFromDetail(detail: SignalDetail): Partial<SignalFeedItem> {
   return {
@@ -60,28 +83,147 @@ export function patchSignalInActiveFeedCache(
     options.filters,
   )
 
-  queryClient.setQueryData<InfiniteData<SignalFeedResponse>>(queryKey, (current) => {
+  queryClient.setQueryData<SignalFeedResponse>(queryKey, (current) => {
     if (!current) {
       return current
     }
 
     let updated = false
-    const pages = current.pages.map((page) => {
-      const items = page.items.map((item) => {
+    const sections = current.sections.map((section) => {
+      const items = section.items.map((item) => {
         if (item.id !== options.signalId) {
           return item
         }
         updated = true
         return { ...item, ...options.patch }
       })
-      return items === page.items ? page : { ...page, items }
+      return items === section.items ? section : { ...section, items }
     })
 
     if (!updated) {
       return current
     }
 
-    return { ...current, pages }
+    return { ...current, sections }
+  })
+}
+
+export async function refillSignalFeedToLoadedDepth(
+  firstPage: SignalFeedResponse,
+  previous: SignalFeedResponse | undefined,
+  fetchSectionPage: (
+    status: SignalFeedStatusFilter,
+    cursor: string,
+    pageSize: number,
+  ) => Promise<SignalFeedResponse>,
+): Promise<SignalFeedResponse> {
+  if (!previous) {
+    return firstPage
+  }
+
+  const previousByStatus = new Map(
+    previous.sections.map((section) => [section.status, section]),
+  )
+
+  const sections = await Promise.all(
+    firstPage.sections.map(async (section) => {
+      const prior = previousByStatus.get(section.status)
+      const target = prior?.items.length ?? 0
+      if (!prior || target <= section.items.length) {
+        return section
+      }
+
+      const seen = new Set(section.items.map((item) => item.id))
+      const items = [...section.items]
+      let nextCursor = section.next_cursor
+      let hasMore = section.has_more
+      let extraPages = 0
+
+      while (
+        items.length < target &&
+        hasMore &&
+        nextCursor &&
+        extraPages < SIGNAL_FEED_MAX_RESTORE_PAGES
+      ) {
+        const pageSize = continuationPageSizeForRemainingDepth(target - items.length)
+        if (pageSize <= 0) {
+          break
+        }
+        extraPages += 1
+        const page = await fetchSectionPage(
+          section.status as SignalFeedStatusFilter,
+          nextCursor,
+          pageSize,
+        )
+        const incoming = page.sections.find((entry) => entry.status === section.status)
+        if (!incoming) {
+          break
+        }
+        for (const item of incoming.items) {
+          if (seen.has(item.id)) {
+            continue
+          }
+          seen.add(item.id)
+          items.push(item)
+          if (items.length >= target) {
+            break
+          }
+        }
+        nextCursor = incoming.next_cursor
+        hasMore = incoming.has_more
+      }
+
+      return {
+        ...section,
+        items,
+        next_cursor: nextCursor,
+        has_more: hasMore,
+      }
+    }),
+  )
+
+  return { ...firstPage, sections }
+}
+
+export function appendSignalFeedSectionPage(
+  queryClient: QueryClient,
+  options: {
+    establishmentId: string | null
+    viewMode: SignalViewMode
+    filters: SignalFeedFilters
+    source?: 'establishment' | 'cross'
+    status: string
+    page: SignalFeedResponse
+  },
+): void {
+  const queryKey = signalFeedQueryKey(options)
+  if (queryKey == null) {
+    return
+  }
+
+  const incoming = options.page.sections.find((section) => section.status === options.status)
+  if (!incoming) {
+    return
+  }
+
+  queryClient.setQueryData<SignalFeedResponse>(queryKey, (current) => {
+    if (!current) {
+      return current
+    }
+    return {
+      ...current,
+      sections: current.sections.map((section) => {
+        if (section.status !== options.status) {
+          return section
+        }
+        return {
+          ...section,
+          items: [...section.items, ...incoming.items],
+          next_cursor: incoming.next_cursor,
+          has_more: incoming.has_more,
+        }
+      }),
+    }
   })
 }
 

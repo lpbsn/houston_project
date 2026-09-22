@@ -18,14 +18,15 @@ import {
   SignalFeedFiltersBar,
 } from '../components/signal-feed-filters-bar'
 import { SignalFeedTabs } from '../components/signal-feed-tabs'
-import { useSignalFeedQuery } from '../hooks'
+import { useLoadMoreSignalFeedSection, useSignalFeedQuery } from '../hooks'
 import { useSignalFeedQuickActions } from '../hooks/use-signal-feed-quick-actions'
 import { SignalsApiError } from '../api'
-import { groupFeedItemsByStatus, partitionFeedPinnedItems } from '../lib/signal-display'
+import { composeSignalFeedPresentation } from '../lib/signal-display'
 import {
   hasActiveSignalFeedFilters,
   normalizeSignalFeedFilters,
   type SignalFeedFilters,
+  type SignalFeedStatusFilter,
 } from '../lib/signal-feed-filters'
 import type { SignalFeedItem, SignalViewMode } from '../types'
 
@@ -54,6 +55,12 @@ export function SignalFeedPage({
   const feedQuery = useSignalFeedQuery(establishmentId, viewMode, normalizedFilters, {
     source,
   })
+  const loadMoreSection = useLoadMoreSignalFeedSection(
+    establishmentId,
+    viewMode,
+    normalizedFilters,
+    { source },
+  )
   const filtersActive = hasActiveSignalFeedFilters(normalizedFilters)
   const quickActions = useSignalFeedQuickActions({
     establishmentId,
@@ -61,17 +68,13 @@ export function SignalFeedPage({
     filters: normalizedFilters,
   })
 
-  const feedItems =
-    (establishmentId || isCross) &&
-    feedQuery.isSuccess &&
-    feedQuery.data.pages.some((page) => page.items.length > 0)
-      ? feedQuery.data.pages.flatMap((page) => page.items)
+  const presentation =
+    (establishmentId || isCross) && feedQuery.isSuccess && feedQuery.data
+      ? composeSignalFeedPresentation(feedQuery.data.sections)
       : null
-  const { pinnedItems, unpinnedItems } = feedItems
-    ? partitionFeedPinnedItems(feedItems)
-    : { pinnedItems: [], unpinnedItems: [] }
-  const groups =
-    unpinnedItems.length > 0 ? groupFeedItemsByStatus(unpinnedItems) : null
+  const pinnedItems = presentation?.pinnedItems ?? []
+  const groups = presentation?.groups ?? null
+  const unpinnedItems = presentation?.flatUnpinnedItems ?? []
   const sectionKeys = groups?.map((group) => group.status) ?? []
   const sectionExpansionResetToken = useMemo(
     () => `${viewMode}:${JSON.stringify(normalizedFilters)}`,
@@ -107,6 +110,25 @@ export function SignalFeedPage({
 
   function handleClearFilters() {
     setFilters(EMPTY_SIGNAL_FEED_FILTERS)
+  }
+
+  function renderLoadMore(status: SignalFeedStatusFilter | null, hasMore: boolean) {
+    if (!status || !hasMore) {
+      return null
+    }
+    const isPending = loadMoreSection.isPending && loadMoreSection.variables === status
+    return (
+      <div className="flex justify-center py-4">
+        <button
+          type="button"
+          className="text-xs font-semibold text-[#1B4FD8] disabled:opacity-60"
+          onClick={() => loadMoreSection.mutate(status)}
+          disabled={loadMoreSection.isPending}
+        >
+          {isPending ? 'Chargement…' : 'Charger plus'}
+        </button>
+      </div>
+    )
   }
 
   return (
@@ -153,9 +175,7 @@ export function SignalFeedPage({
           />
         ) : null}
 
-        {feedQuery.isSuccess &&
-        feedQuery.data.pages.every((page) => page.items.length === 0) &&
-        filtersActive ? (
+        {feedQuery.isSuccess && presentation && !presentation.hasContent && filtersActive ? (
           <div className="mx-3 mt-3 space-y-2">
             <TerrainEmptyState
               title="Aucun résultat"
@@ -171,9 +191,7 @@ export function SignalFeedPage({
           </div>
         ) : null}
 
-        {feedQuery.isSuccess &&
-        feedQuery.data.pages.every((page) => page.items.length === 0) &&
-        !filtersActive ? (
+        {feedQuery.isSuccess && presentation && !presentation.hasContent && !filtersActive ? (
           <TerrainEmptyState
             className="mx-3 mt-3"
             title="Aucune observation active"
@@ -185,7 +203,7 @@ export function SignalFeedPage({
           />
         ) : null}
 
-        {feedQuery.isSuccess && feedItems && feedItems.length > 0 ? (
+        {feedQuery.isSuccess && presentation?.hasContent ? (
           <div className="flex flex-col gap-3 pt-5">
             {pinnedItems.length > 0 ? renderItems(pinnedItems, 'pinned') : null}
 
@@ -200,7 +218,8 @@ export function SignalFeedPage({
                     expanded={isExpanded(group.status)}
                     onToggle={() => toggle(group.status)}
                   >
-                    {renderItems(group.items)}
+                    {group.items.length > 0 ? renderItems(group.items) : null}
+                    {renderLoadMore(group.status, group.hasMore)}
                   </TerrainCollapsibleFeedSection>
                 ))}
               </div>
@@ -210,18 +229,9 @@ export function SignalFeedPage({
               <div>{renderItems(unpinnedItems)}</div>
             ) : null}
 
-            {feedQuery.hasNextPage ? (
-              <div className="flex justify-center py-4">
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-[#1B4FD8] disabled:opacity-60"
-                  onClick={() => void feedQuery.fetchNextPage()}
-                  disabled={feedQuery.isFetchingNextPage}
-                >
-                  {feedQuery.isFetchingNextPage ? 'Chargement…' : 'Charger plus'}
-                </button>
-              </div>
-            ) : null}
+            {!groups
+              ? renderLoadMore(presentation.flatStatus, presentation.flatHasMore)
+              : null}
           </div>
         ) : null}
       </div>

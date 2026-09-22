@@ -22,14 +22,16 @@ from houston.signals.api.serializers import (
 )
 from houston.signals.feed_cursor import (
     SignalFeedCursorError,
-    apply_signal_feed_cursor,
-    encode_signal_feed_cursor,
     parse_signal_feed_cursor,
 )
 from houston.signals.feed_filters import (
     SignalFeedFilterValidationError,
     build_applied_filters_payload,
     parse_cross_signal_feed_filters,
+)
+from houston.signals.feed_pagination import (
+    SignalFeedPaginationError,
+    paginate_signal_feed_sections,
 )
 from houston.signals.permissions import can_use_needs_qualification_filter
 from houston.signals.selectors import (
@@ -115,7 +117,15 @@ class CrossSignalFeedView(APIView):
         parameters=[
             OpenApiParameter(name="establishment_id", required=False, type=str),
             OpenApiParameter(name="page_size", required=False, type=int),
-            OpenApiParameter(name="cursor", required=False, type=str),
+            OpenApiParameter(
+                name="cursor",
+                required=False,
+                type=str,
+                description=(
+                    "Opaque pagination cursor from a previous section next_cursor. "
+                    "Requires exactly one statuses value matching the cursor status."
+                ),
+            ),
             OpenApiParameter(name="statuses", required=False, type=str),
             OpenApiParameter(name="business_unit_ids", required=False, type=str),
             OpenApiParameter(name="activity_subject_ids", required=False, type=str),
@@ -171,24 +181,41 @@ class CrossSignalFeedView(APIView):
             memberships=memberships,
             filters=feed_filters if feed_filters.has_any() else None,
         )
-        if cursor is not None:
-            queryset = apply_signal_feed_cursor(queryset, cursor)
-        page_candidates = list(queryset[: page_size + 1])
-        has_more = len(page_candidates) > page_size
-        items = page_candidates[:page_size]
-        next_cursor = encode_signal_feed_cursor(items[-1]) if has_more and items else None
+        try:
+            sections = paginate_signal_feed_sections(
+                queryset,
+                page_size=page_size,
+                requested_statuses=feed_filters.statuses,
+                cursor=cursor,
+            )
+        except SignalFeedPaginationError as exc:
+            return Response(
+                {"code": "validation_error", "detail": exc.detail},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except SignalFeedCursorError as exc:
+            return Response(
+                {"code": "validation_error", "detail": exc.detail},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         payload = {
-            "items": [
-                serialize_signal_feed_item(
-                    signal=signal,
-                    membership=actor,
-                    read_only=True,
-                )
-                for signal in items
+            "sections": [
+                {
+                    "status": section.status,
+                    "items": [
+                        serialize_signal_feed_item(
+                            signal=signal,
+                            membership=actor,
+                            read_only=True,
+                        )
+                        for signal in section.items
+                    ],
+                    "next_cursor": section.next_cursor,
+                    "has_more": section.has_more,
+                }
+                for section in sections
             ],
-            "next_cursor": next_cursor,
-            "has_more": has_more,
             "applied_filters": build_applied_filters_payload(
                 view_mode="general",
                 filters=feed_filters,

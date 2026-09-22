@@ -15,6 +15,7 @@ from houston.signals.tests.conftest import (
     signal_detail_url,
     signal_feed_url,
 )
+from houston.testing.signal_feed import flatten_signal_feed_items
 
 pytestmark = pytest.mark.django_db
 
@@ -43,7 +44,7 @@ def test_feed_item_exposes_routing_status_not_issue_focus(api_client):
     )
 
     assert response.status_code == 200
-    items = {item["id"]: item for item in response.json()["items"]}
+    items = {item["id"]: item for item in flatten_signal_feed_items(response.json())}
     assert items[str(unassigned.id)]["routing_status"] == Signal.RoutingStatus.UNASSIGNED
     assert items[str(resolved.id)]["routing_status"] == Signal.RoutingStatus.RESOLVED
     assert "issue_focus" not in items[str(unassigned.id)]

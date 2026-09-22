@@ -32,6 +32,7 @@ from houston.signals.tests.conftest import (
     login,
     signal_feed_url,
 )
+from houston.testing.signal_feed import flatten_signal_feed_items
 
 pytestmark = pytest.mark.django_db
 
@@ -71,10 +72,10 @@ def test_general_feed_returns_active_signals(api_client):
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body["items"]) == 1
-    assert "module_key" not in body["items"][0]
-    assert "domain_key" not in body["items"][0]
-    assert "subject_key" not in body["items"][0]
+    assert len(flatten_signal_feed_items(body)) == 1
+    assert "module_key" not in flatten_signal_feed_items(body)[0]
+    assert "domain_key" not in flatten_signal_feed_items(body)[0]
+    assert "subject_key" not in flatten_signal_feed_items(body)[0]
     assert "raw_text" not in response.content.decode()
 
 
@@ -91,7 +92,7 @@ def test_personal_feed_empty_without_scope_for_staff(api_client):
     )
 
     assert response.status_code == 200
-    assert response.json()["items"] == []
+    assert flatten_signal_feed_items(response.json()) == []
 
 
 def test_scoped_manager_general_feed_includes_out_of_scope_signals(api_client):
@@ -131,7 +132,7 @@ def test_scoped_manager_general_feed_includes_out_of_scope_signals(api_client):
         **auth_headers(token),
     )
     assert personal_response.status_code == 200
-    personal_ids = {item["id"] for item in personal_response.json()["items"]}
+    personal_ids = {item["id"] for item in flatten_signal_feed_items(personal_response.json())}
     assert str(in_scope_signal.id) in personal_ids
     assert str(out_of_scope_signal.id) not in personal_ids
 
@@ -140,7 +141,7 @@ def test_scoped_manager_general_feed_includes_out_of_scope_signals(api_client):
         **auth_headers(token),
     )
     assert general_response.status_code == 200
-    general_ids = {item["id"] for item in general_response.json()["items"]}
+    general_ids = {item["id"] for item in flatten_signal_feed_items(general_response.json())}
     assert str(in_scope_signal.id) in general_ids
     assert str(out_of_scope_signal.id) in general_ids
 
@@ -171,7 +172,7 @@ def test_personal_feed_matches_scope(api_client):
     )
 
     assert response.status_code == 200
-    assert len(response.json()["items"]) == 1
+    assert len(flatten_signal_feed_items(response.json())) == 1
 
 
 def test_staff_maintenance_scope_sees_maintenance_signal_in_personal_feed(api_client):
@@ -223,7 +224,7 @@ def test_staff_maintenance_scope_sees_maintenance_signal_in_personal_feed(api_cl
     )
 
     assert response.status_code == 200
-    items = response.json()["items"]
+    items = flatten_signal_feed_items(response.json())
     assert len(items) == 1
     assert items[0]["title"] == "Clim en panne chambre 104"
     assert "raw_text" not in response.content.decode()
@@ -244,7 +245,7 @@ def test_general_feed_shows_active_signal_same_establishment(api_client):
     )
 
     assert response.status_code == 200
-    item_ids = {item["id"] for item in response.json()["items"]}
+    item_ids = {item["id"] for item in flatten_signal_feed_items(response.json())}
     assert str(visible.id) in item_ids
     assert len(item_ids) == 1
 
@@ -271,7 +272,7 @@ def test_general_feed_shows_two_golden_signals(api_client):
     )
 
     assert response.status_code == 200
-    items = response.json()["items"]
+    items = flatten_signal_feed_items(response.json())
     assert len(items) == 2
     activity_subjects = {item["activity_subject_normalized_name"] for item in items}
     assert taxonomy.lighting_subject.normalized_name in activity_subjects
@@ -300,7 +301,7 @@ def test_personal_feed_staff_salle_maintenance_sees_lighting_only(api_client):
     )
 
     assert response.status_code == 200
-    items = response.json()["items"]
+    items = flatten_signal_feed_items(response.json())
     assert len(items) == 1
     assert items[0]["affected_business_unit_key"] == RESTAURANT_MODULE_KEY
 
@@ -323,7 +324,7 @@ def test_personal_feed_staff_bar_stock_sees_syrup_only(api_client):
     )
 
     assert response.status_code == 200
-    items = response.json()["items"]
+    items = flatten_signal_feed_items(response.json())
     assert len(items) == 1
     assert items[0]["activity_subject_normalized_name"] == taxonomy.stock_subject.normalized_name
 
@@ -369,7 +370,7 @@ def test_signal_feed_query_count_baseline_two_items(api_client):
         response = api_client.get(url, **auth_headers(token))
 
     assert response.status_code == 200
-    assert len(response.json()["items"]) == 2
+    assert len(flatten_signal_feed_items(response.json())) == 2
     assert_query_count_at_most(
         context,
         max_queries=SIGNAL_FEED_MAX_QUERIES_TWO_ITEMS,
@@ -393,7 +394,7 @@ def test_signal_feed_query_count_grows_with_item_count(api_client):
         with capture_queries() as context:
             response = api_client.get(url, **auth_headers(token))
         assert response.status_code == 200
-        assert len(response.json()["items"]) == item_count
+        assert len(flatten_signal_feed_items(response.json())) == item_count
         return len(context.captured_queries)
 
     one_item = query_count_for(1)
@@ -446,10 +447,10 @@ def test_signal_feed_query_count_flat_across_distinct_responsible_poles(api_clie
         with capture_queries() as context:
             response = api_client.get(url, **auth_headers(token))
         assert response.status_code == 200
-        assert len(response.json()["items"]) == item_count
+        assert len(flatten_signal_feed_items(response.json())) == item_count
         assert all(
             item["permission_hints"]["can_request_resolution"] is True
-            for item in response.json()["items"]
+            for item in flatten_signal_feed_items(response.json())
         )
         return len(context.captured_queries)
 
@@ -489,7 +490,7 @@ def test_signal_feed_query_count_flat_for_manager_resolution_hints(api_client):
         with capture_queries() as context:
             response = api_client.get(url, **auth_headers(token))
         assert response.status_code == 200
-        assert len(response.json()["items"]) == item_count
+        assert len(flatten_signal_feed_items(response.json())) == item_count
         return len(context.captured_queries)
 
     one_item = query_count_for(1)

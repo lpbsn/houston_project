@@ -9,8 +9,9 @@ import type { SignalFeedItem } from '@/features/signals/types'
 
 import { SignalFeedPage } from './signal-feed-page'
 
-const feedFetchNextPage = vi.fn()
+const feedLoadMoreMutate = vi.fn()
 const feedQueryMock = vi.fn()
+const loadMoreMock = vi.fn()
 
 function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem {
   return {
@@ -55,12 +56,15 @@ function buildFeedQueryState(overrides: Record<string, unknown> = {}) {
     isLoading: false,
     isError: false,
     isSuccess: true,
-    hasNextPage: false,
-    isFetchingNextPage: false,
-    fetchNextPage: feedFetchNextPage,
     refetch: vi.fn(),
     data: {
-      pages: [{ items: [], next_cursor: null, has_more: false }],
+      sections: [] as Array<{
+        status: string
+        items: SignalFeedItem[]
+        next_cursor: string | null
+        has_more: boolean
+      }>,
+      applied_filters: {},
     },
     ...overrides,
   }
@@ -79,6 +83,7 @@ vi.mock('@/app/auth-provider', () => ({
 
 vi.mock('@/features/signals/hooks', () => ({
   useSignalFeedQuery: () => feedQueryMock(),
+  useLoadMoreSignalFeedSection: () => loadMoreMock(),
 }))
 
 vi.mock('@/features/signals/hooks/use-signal-feed-quick-actions', () => ({
@@ -119,7 +124,12 @@ function renderSignalFeedPage() {
 
 describe('SignalFeedPage collapsible sections', () => {
   beforeEach(() => {
-    feedFetchNextPage.mockClear()
+    feedLoadMoreMutate.mockClear()
+    loadMoreMock.mockReturnValue({
+      mutate: feedLoadMoreMutate,
+      isPending: false,
+      variables: undefined,
+    })
     feedQueryMock.mockReturnValue(buildFeedQueryState())
   })
 
@@ -131,11 +141,24 @@ describe('SignalFeedPage collapsible sections', () => {
     feedQueryMock.mockReturnValue(
       buildFeedQueryState({
         data: {
-          pages: [
+          sections: [
             {
+              status: 'open',
+              items: [buildFeedItem({ id: 'signal-open', title: 'Signal ouvert', status: 'open' })],
+              next_cursor: null,
+              has_more: false,
+            },
+            {
+              status: 'resolved',
               items: [
-                buildFeedItem({ id: 'signal-open', title: 'Signal ouvert', status: 'open' }),
                 buildFeedItem({ id: 'signal-resolved', title: 'Signal résolu', status: 'resolved' }),
+              ],
+              next_cursor: null,
+              has_more: false,
+            },
+            {
+              status: 'canceled',
+              items: [
                 buildFeedItem({ id: 'signal-canceled', title: 'Signal annulé', status: 'canceled' }),
               ],
               next_cursor: null,
@@ -159,11 +182,21 @@ describe('SignalFeedPage collapsible sections', () => {
     feedQueryMock.mockReturnValue(
       buildFeedQueryState({
         data: {
-          pages: [
+          sections: [
             {
+              status: 'open',
+              items: [buildFeedItem({ id: 'signal-open', title: 'Signal ouvert', status: 'open' })],
+              next_cursor: null,
+              has_more: false,
+            },
+            {
+              status: 'in_progress',
               items: [
-                buildFeedItem({ id: 'signal-open', title: 'Signal ouvert', status: 'open' }),
-                buildFeedItem({ id: 'signal-progress', title: 'Signal en cours', status: 'in_progress' }),
+                buildFeedItem({
+                  id: 'signal-progress',
+                  title: 'Signal en cours',
+                  status: 'in_progress',
+                }),
               ],
               next_cursor: null,
               has_more: false,
@@ -182,5 +215,79 @@ describe('SignalFeedPage collapsible sections', () => {
     expect(screen.queryByRole('heading', { level: 3, name: 'Signal ouvert' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Déplier la section En attente' })).toBeTruthy()
     expect(screen.getByRole('heading', { level: 3, name: 'Signal en cours' })).toBeTruthy()
+  })
+
+  it('shows later sections and per-section load more when open still has more', () => {
+    feedQueryMock.mockReturnValue(
+      buildFeedQueryState({
+        data: {
+          sections: [
+            {
+              status: 'open',
+              items: [
+                buildFeedItem({ id: 'signal-open', title: 'Signal ouvert', status: 'open' }),
+              ],
+              next_cursor: 'open-cursor',
+              has_more: true,
+            },
+            {
+              status: 'resolved',
+              items: [
+                buildFeedItem({ id: 'signal-resolved', title: 'Signal résolu', status: 'resolved' }),
+              ],
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+
+    renderSignalFeedPage()
+
+    expect(screen.getByRole('heading', { level: 3, name: 'Signal ouvert' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Déplier la section Résolues' })).toBeTruthy()
+    const loadMore = screen.getByRole('button', { name: 'Charger plus' })
+    fireEvent.click(loadMore)
+    expect(feedLoadMoreMutate).toHaveBeenCalledWith('open')
+  })
+
+  it('keeps open load more when every loaded open item is pinned', () => {
+    feedQueryMock.mockReturnValue(
+      buildFeedQueryState({
+        data: {
+          sections: [
+            {
+              status: 'open',
+              items: [
+                buildFeedItem({
+                  id: 'pinned-open',
+                  title: 'Épinglée ouverte',
+                  status: 'open',
+                  is_pinned: true,
+                }),
+              ],
+              next_cursor: 'open-cursor',
+              has_more: true,
+            },
+            {
+              status: 'resolved',
+              items: [
+                buildFeedItem({ id: 'signal-resolved', title: 'Signal résolu', status: 'resolved' }),
+              ],
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+
+    renderSignalFeedPage()
+
+    expect(screen.getByRole('heading', { level: 3, name: 'Épinglée ouverte' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Replier la section En attente' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Charger plus' }))
+    expect(feedLoadMoreMutate).toHaveBeenCalledWith('open')
   })
 })

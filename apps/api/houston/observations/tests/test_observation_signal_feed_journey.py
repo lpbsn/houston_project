@@ -8,6 +8,7 @@ from houston.signals.tests.pipeline_helpers import setup_hotel_taxonomy
 from houston.testing.auth import auth_headers, build_api_membership, login
 from houston.testing.factories import create_establishment, create_membership
 from houston.testing.pipeline import signal_feed_url
+from houston.testing.signal_feed import flatten_signal_feed_items
 from rest_framework.test import APIClient
 
 pytestmark = pytest.mark.django_db
@@ -59,7 +60,7 @@ def test_submit_observation_fake_pipeline_surfaces_signal_in_general_feed(api_cl
         **auth_headers(token),
     )
     assert feed_response.status_code == 200
-    feed_items = feed_response.json()["items"]
+    feed_items = flatten_signal_feed_items(feed_response.json())
     assert len(feed_items) == 1
     assert feed_items[0]["title"] == "Structured issue"
     assert "raw_text" not in feed_response.content.decode()
@@ -103,7 +104,7 @@ def test_submit_observation_signal_not_visible_in_other_establishment_feed(api_c
         **auth_headers(token),
     )
     assert feed_a.status_code == 200
-    assert len(feed_a.json()["items"]) == 1
+    assert len(flatten_signal_feed_items(feed_a.json())) == 1
 
     token = switch_establishment(
         api_client,
@@ -115,4 +116,4 @@ def test_submit_observation_signal_not_visible_in_other_establishment_feed(api_c
         **auth_headers(token),
     )
     assert feed_b.status_code == 200
-    assert feed_b.json()["items"] == []
+    assert flatten_signal_feed_items(feed_b.json()) == []

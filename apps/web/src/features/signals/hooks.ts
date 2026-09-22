@@ -1,5 +1,4 @@
 import {
-  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -30,18 +29,43 @@ import {
   unpinSignal,
 } from './api'
 import {
+  appendSignalFeedSectionPage,
   applySignalQuickActionSuccess,
+  refillSignalFeedToLoadedDepth,
+  signalFeedQueryKey,
   type SignalQuickActionCacheContext,
 } from './lib/signal-feed-cache'
+import type { SignalFeedStatusFilter } from './lib/signal-feed-filters'
 import type {
   SignalDetail,
   SignalFeedFilters,
+  SignalFeedResponse,
   SignalQualifyRoutingRequest,
   SignalQualifyRoutingResponse,
   SignalViewMode,
 } from './types'
 
 export type { SignalQuickActionCacheContext } from './lib/signal-feed-cache'
+
+const IDLE_SIGNAL_FEED_QUERY_KEY = ['signals', 'feed', 'none'] as const
+
+function fetchSignalFeedSectionContinuation(
+  source: 'establishment' | 'cross',
+  establishmentId: string | null,
+  viewMode: SignalViewMode,
+  filters: SignalFeedFilters,
+  status: SignalFeedStatusFilter,
+  options: { cursor?: string; pageSize?: number } = {},
+) {
+  const sectionFilters = { ...filters, statuses: [status] }
+  if (source === 'cross') {
+    return fetchCrossSignalFeed(sectionFilters, options)
+  }
+  if (!establishmentId) {
+    throw new Error('Établissement non sélectionné.')
+  }
+  return fetchSignalFeed(establishmentId, viewMode, sectionFilters, options)
+}
 
 export function useSignalFeedQuery(
   establishmentId: string | null,
@@ -51,32 +75,78 @@ export function useSignalFeedQuery(
 ) {
   const source = options?.source ?? 'establishment'
   const enabled = source === 'cross' || Boolean(establishmentId)
-  return useInfiniteQuery({
-    queryKey:
-      source === 'cross'
-        ? signalsQueryKeys.crossFeed(filters)
-        : establishmentId
-          ? signalsQueryKeys.feed(establishmentId, viewMode, filters)
-          : ['signals', 'feed', 'none'],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) => {
-      if (source === 'cross') {
-        return fetchCrossSignalFeed(filters, { cursor: pageParam })
-      }
-      if (!establishmentId) {
+  const queryClient = useQueryClient()
+  const queryKey =
+    signalFeedQueryKey({ source, establishmentId, viewMode, filters }) ??
+    IDLE_SIGNAL_FEED_QUERY_KEY
+  return useQuery({
+    queryKey,
+    queryFn: async () => {
+      const previous = queryClient.getQueryData<SignalFeedResponse>(queryKey)
+      if (source !== 'cross' && !establishmentId) {
         throw new Error('Établissement non sélectionné.')
       }
-      return fetchSignalFeed(establishmentId, viewMode, filters, {
-        cursor: pageParam,
-      })
-    },
-    getNextPageParam: (lastPage) => {
-      if (!lastPage.has_more || !lastPage.next_cursor) {
-        return undefined
-      }
-      return lastPage.next_cursor
+      const firstPage =
+        source === 'cross'
+          ? await fetchCrossSignalFeed(filters)
+          : await fetchSignalFeed(establishmentId as string, viewMode, filters)
+      return refillSignalFeedToLoadedDepth(firstPage, previous, (status, cursor, pageSize) =>
+        fetchSignalFeedSectionContinuation(
+          source,
+          establishmentId,
+          viewMode,
+          filters,
+          status,
+          { cursor, pageSize },
+        ),
+      )
     },
     enabled,
+  })
+}
+
+export function useLoadMoreSignalFeedSection(
+  establishmentId: string | null,
+  viewMode: SignalViewMode,
+  filters: SignalFeedFilters,
+  options?: { source?: 'establishment' | 'cross' },
+) {
+  const source = options?.source ?? 'establishment'
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (status: SignalFeedStatusFilter) => {
+      const queryKey = signalFeedQueryKey({
+        source,
+        establishmentId,
+        viewMode,
+        filters,
+      })
+      if (queryKey == null) {
+        throw new Error('Établissement non sélectionné.')
+      }
+      const current = queryClient.getQueryData<SignalFeedResponse>(queryKey)
+      const section = current?.sections.find((entry) => entry.status === status)
+      if (!section?.has_more || !section.next_cursor) {
+        return current
+      }
+      const page = await fetchSignalFeedSectionContinuation(
+        source,
+        establishmentId,
+        viewMode,
+        filters,
+        status,
+        { cursor: section.next_cursor },
+      )
+      appendSignalFeedSectionPage(queryClient, {
+        establishmentId,
+        viewMode,
+        filters,
+        source,
+        status,
+        page,
+      })
+      return page
+    },
   })
 }
 

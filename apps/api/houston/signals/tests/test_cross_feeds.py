@@ -8,6 +8,7 @@ from houston.action_plans.tests.helpers import build_assignee_payload, build_tas
 from houston.establishments.models import EstablishmentMembership
 from houston.testing.auth import auth_headers, build_api_membership, login
 from houston.testing.factories import create_establishment, create_membership, create_user
+from houston.testing.signal_feed import flatten_signal_feed_items
 from houston.testing.taxonomy import (
     create_business_unit,
     create_membership_with_business_unit_scope,
@@ -31,7 +32,7 @@ def test_cross_signal_feed_is_read_only_and_includes_establishment(api_client):
     post = api_client.post("/api/v1/cross/signal-feed/", **auth_headers(token))
 
     assert response.status_code == 200
-    item = response.json()["items"][0]
+    item = flatten_signal_feed_items(response.json())[0]
     assert item["establishment_id"] == str(owner.establishment_id)
     assert item["establishment_name"] == owner.establishment.name
     assert item["permission_hints"]["can_pin"] is False
@@ -65,7 +66,7 @@ def test_cross_signal_feed_unions_management_establishments(api_client):
     token = login(api_client, user=user)
 
     response = api_client.get("/api/v1/cross/signal-feed/", **auth_headers(token))
-    titles = {item["title"] for item in response.json()["items"]}
+    titles = {item["title"] for item in flatten_signal_feed_items(response.json())}
     assert titles == {"From A", "From B"}
 
 
@@ -129,7 +130,7 @@ def test_signal_feed_uses_url_establishment_when_session_is_another(api_client):
         **auth_headers(token),
     )
     assert response.status_code == 200
-    titles = {item["title"] for item in response.json()["items"]}
+    titles = {item["title"] for item in flatten_signal_feed_items(response.json())}
     assert titles == {"Only on B"}
 
 

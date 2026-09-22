@@ -9,6 +9,7 @@ from houston.signals.feed_cursor import (
     SignalFeedCursorError,
     encode_signal_feed_cursor,
     parse_signal_feed_cursor,
+    status_for_signal_feed_cursor,
 )
 from houston.signals.models import Signal
 from houston.signals.tests.conftest import build_api_membership, create_minimal_v3_signal
@@ -22,8 +23,9 @@ def _create_signal(
     status: str = Signal.Status.OPEN,
     is_pinned: bool = False,
     last_activity_at=None,
+    title: str = "Cursor signal",
 ):
-    signal = create_minimal_v3_signal(membership, title="Cursor signal", status=status)
+    signal = create_minimal_v3_signal(membership, title=title, status=status)
     if is_pinned or last_activity_at is not None:
         signal.is_pinned = is_pinned
         if last_activity_at is not None:
@@ -52,6 +54,22 @@ def test_encode_and_parse_signal_feed_cursor_round_trip():
     assert parsed.last_activity_at == signal.last_activity_at
     assert parsed.created_at == signal.created_at
     assert parsed.signal_id == signal.id
+    assert status_for_signal_feed_cursor(parsed) == Signal.Status.IN_PROGRESS
+
+
+def test_status_for_signal_feed_cursor_maps_feed_statuses():
+    membership = build_api_membership()
+    for status in (
+        Signal.Status.OPEN,
+        Signal.Status.IN_PROGRESS,
+        Signal.Status.INTERESTING,
+        Signal.Status.RESOLVED,
+        Signal.Status.CANCELED,
+    ):
+        signal = _create_signal(membership, status=status, title=f"Cursor {status}")
+        parsed = parse_signal_feed_cursor(encode_signal_feed_cursor(signal))
+        assert parsed is not None
+        assert status_for_signal_feed_cursor(parsed) == status
 
 
 def test_parse_signal_feed_cursor_rejects_invalid_values():

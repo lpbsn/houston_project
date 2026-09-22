@@ -34,14 +34,16 @@ from houston.signals.exceptions import (
 )
 from houston.signals.feed_cursor import (
     SignalFeedCursorError,
-    apply_signal_feed_cursor,
-    encode_signal_feed_cursor,
     parse_signal_feed_cursor,
 )
 from houston.signals.feed_filters import (
     SignalFeedFilterValidationError,
     build_applied_filters_payload,
     parse_signal_feed_filters,
+)
+from houston.signals.feed_pagination import (
+    SignalFeedPaginationError,
+    paginate_signal_feed_sections,
 )
 from houston.signals.models import Signal
 from houston.signals.permissions import (
@@ -122,7 +124,10 @@ class SignalFeedView(EstablishmentScopedSignalMixin, APIView):
                 name="cursor",
                 required=False,
                 type=str,
-                description="Opaque pagination cursor from a previous response next_cursor.",
+                description=(
+                    "Opaque pagination cursor from a previous section next_cursor. "
+                    "Requires exactly one statuses value matching the cursor status."
+                ),
             ),
             OpenApiParameter(
                 name="statuses",
@@ -222,19 +227,37 @@ class SignalFeedView(EstablishmentScopedSignalMixin, APIView):
             view_mode=view_mode,  # type: ignore[arg-type]
             filters=feed_filters if feed_filters.has_any() else None,
         )
-        if cursor is not None:
-            queryset = apply_signal_feed_cursor(queryset, cursor)
-        page_candidates = list(queryset[: page_size + 1])
-        has_more = len(page_candidates) > page_size
-        items = page_candidates[:page_size]
-        next_cursor = encode_signal_feed_cursor(items[-1]) if has_more and items else None
+        try:
+            sections = paginate_signal_feed_sections(
+                queryset,
+                page_size=page_size,
+                requested_statuses=feed_filters.statuses,
+                cursor=cursor,
+            )
+        except SignalFeedPaginationError as exc:
+            return Response(
+                {"code": "validation_error", "detail": exc.detail},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except SignalFeedCursorError as exc:
+            return Response(
+                {"code": "validation_error", "detail": exc.detail},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         payload = {
-            "items": [
-                serialize_signal_feed_item(signal=signal, membership=membership) for signal in items
+            "sections": [
+                {
+                    "status": section.status,
+                    "items": [
+                        serialize_signal_feed_item(signal=signal, membership=membership)
+                        for signal in section.items
+                    ],
+                    "next_cursor": section.next_cursor,
+                    "has_more": section.has_more,
+                }
+                for section in sections
             ],
-            "next_cursor": next_cursor,
-            "has_more": has_more,
             "applied_filters": build_applied_filters_payload(
                 view_mode=view_mode,
                 filters=feed_filters,

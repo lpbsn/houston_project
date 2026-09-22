@@ -12,6 +12,7 @@ from houston.signals.tests.conftest import (
     signal_detail_url,
     signal_feed_url,
 )
+from houston.testing.signal_feed import flatten_signal_feed_items
 
 pytestmark = pytest.mark.django_db
 
@@ -27,7 +28,7 @@ def _feed_item_for_signal(api_client, membership, signal: Signal):
         **auth_headers(token),
     )
     assert response.status_code == 200
-    for item in response.json()["items"]:
+    for item in flatten_signal_feed_items(response.json()):
         if item["id"] == str(signal.id):
             return item
     pytest.fail("signal not found in feed")

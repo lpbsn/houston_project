@@ -5168,12 +5168,16 @@ export interface components {
             establishment_name?: string;
         };
         SignalFeedResponse: {
-            items: components["schemas"]["SignalFeedItem"][];
-            next_cursor: string | null;
-            has_more: boolean;
+            sections: components["schemas"]["SignalFeedSection"][];
             applied_filters: {
                 [key: string]: unknown;
             };
+        };
+        SignalFeedSection: {
+            status: string;
+            items: components["schemas"]["SignalFeedItem"][];
+            next_cursor: string | null;
+            has_more: boolean;
         };
         SignalLinkedActionPlanExecution: {
             /** Format: uuid */
@@ -7152,6 +7156,7 @@ export interface operations {
             query?: {
                 activity_subject_ids?: string;
                 business_unit_ids?: string;
+                /** @description Opaque pagination cursor from a previous section next_cursor. Requires exactly one statuses value matching the cursor status. */
                 cursor?: string;
                 establishment_id?: string;
                 needs_qualification?: boolean;
@@ -12136,7 +12141,7 @@ export interface operations {
                 activity_subject_ids?: string;
                 /** @description Comma-separated BusinessUnit UUIDs (max 20). Matches affected_business_unit OR responsible_business_unit. */
                 business_unit_ids?: string;
-                /** @description Opaque pagination cursor from a previous response next_cursor. */
+                /** @description Opaque pagination cursor from a previous section next_cursor. Requires exactly one statuses value matching the cursor status. */
                 cursor?: string;
                 /** @description When true, restrict to signals with no responsible business unit (affected and activity_subject ignored) among active lifecycle statuses. Owner/Director/Manager only; Staff receives 403. */
                 needs_qualification?: boolean;

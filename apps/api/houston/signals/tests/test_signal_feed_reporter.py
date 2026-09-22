@@ -20,6 +20,7 @@ from houston.signals.tests.conftest import (
     login,
     signal_feed_url,
 )
+from houston.testing.signal_feed import flatten_signal_feed_items
 
 _LEAK_MARKER = "LEAK_RAW_OBSERVATION_TEXT_DO_NOT_EXPOSE"
 
@@ -35,7 +36,7 @@ def _feed_item_for_signal(api_client, membership, signal: Signal):
         **auth_headers(token),
     )
     assert response.status_code == 200
-    for item in response.json()["items"]:
+    for item in flatten_signal_feed_items(response.json()):
         if item["id"] == str(signal.id):
             return item
     pytest.fail("signal not found in feed")
@@ -201,7 +202,7 @@ def test_feed_reporter_null_when_only_email_username(api_client):
         **auth_headers(token),
     )
     assert response.status_code == 200
-    item = next(i for i in response.json()["items"] if i["id"] == str(signal.id))
+    item = next(i for i in flatten_signal_feed_items(response.json()) if i["id"] == str(signal.id))
     assert item["reporter_display_name"] is None
     body = response.content.decode()
     if user.email:

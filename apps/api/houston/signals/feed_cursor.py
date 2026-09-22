@@ -70,6 +70,22 @@ def status_rank_for_signal(signal: Signal) -> int:
     return 3
 
 
+_CURSOR_STATUS_BY_RANKS = {
+    (0, 0): Signal.Status.OPEN,
+    (0, 1): Signal.Status.IN_PROGRESS,
+    (1, 2): Signal.Status.INTERESTING,
+    (2, 3): Signal.Status.RESOLVED,
+    (3, 3): Signal.Status.CANCELED,
+}
+
+
+def status_for_signal_feed_cursor(cursor: SignalFeedCursor) -> str:
+    status = _CURSOR_STATUS_BY_RANKS.get((cursor.status_group_rank, cursor.status_rank))
+    if status is None:
+        raise SignalFeedCursorError()
+    return status
+
+
 def encode_signal_feed_cursor(signal: Signal) -> str:
     raw = "|".join(
         [

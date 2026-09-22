@@ -6,6 +6,7 @@ import pytest
 from django.utils import timezone
 
 from houston.establishments.models import EstablishmentMembership
+from houston.signals.feed_cursor import encode_signal_feed_cursor
 from houston.signals.models import Signal
 from houston.signals.selectors import apply_feed_sorting, feed_signals_for_establishment
 from houston.signals.tests.conftest import (
@@ -16,6 +17,7 @@ from houston.signals.tests.conftest import (
     signal_detail_url,
     signal_feed_url,
 )
+from houston.testing.signal_feed import flatten_signal_feed_items, signal_feed_section
 
 pytestmark = pytest.mark.django_db
 
@@ -51,7 +53,7 @@ def test_feed_includes_open_in_progress_resolved_and_canceled(api_client):
     )
 
     assert response.status_code == 200
-    statuses = {item["status"] for item in response.json()["items"]}
+    statuses = {item["status"] for item in flatten_signal_feed_items(response.json())}
     assert statuses == {
         Signal.Status.OPEN,
         Signal.Status.IN_PROGRESS,
@@ -92,9 +94,15 @@ def test_feed_orders_all_active_before_resolved(api_client):
     )
 
     assert response.status_code == 200
-    ids = [item["id"] for item in response.json()["items"]]
-    assert ids.index(str(strong_active.id)) < ids.index(str(weak_active.id))
-    assert ids.index(str(weak_active.id)) < ids.index(str(resolved.id))
+    section_statuses = [section["status"] for section in response.json()["sections"]]
+    assert section_statuses == [
+        Signal.Status.OPEN,
+        Signal.Status.IN_PROGRESS,
+        Signal.Status.RESOLVED,
+    ]
+    ids = [item["id"] for item in flatten_signal_feed_items(response.json())]
+    assert ids.index(str(weak_active.id)) < ids.index(str(strong_active.id))
+    assert ids.index(str(strong_active.id)) < ids.index(str(resolved.id))
 
 
 def test_feed_orders_resolved_before_canceled(api_client):
@@ -122,7 +130,7 @@ def test_feed_orders_resolved_before_canceled(api_client):
     )
 
     assert response.status_code == 200
-    ids = [item["id"] for item in response.json()["items"]]
+    ids = [item["id"] for item in flatten_signal_feed_items(response.json())]
     assert ids.index(str(resolved.id)) < ids.index(str(canceled.id))
 
 
@@ -151,7 +159,7 @@ def test_apply_feed_sorting_active_before_dirty_resolved():
     assert [signal.id for signal in ordered] == [active.id, resolved.id]
 
 
-def test_feed_pagination_offset_may_hide_resolved_when_actives_fill_page(api_client):
+def test_feed_pagination_keeps_later_sections_visible_when_actives_fill_page(api_client):
     membership = build_api_membership()
     for index in range(3):
         _create_signal(
@@ -159,6 +167,7 @@ def test_feed_pagination_offset_may_hide_resolved_when_actives_fill_page(api_cli
             title=f"Active {index}",
             status=Signal.Status.OPEN,
         )
+    _create_signal(membership, title="Progress", status=Signal.Status.IN_PROGRESS)
     resolved = _create_signal(membership, title="Resolved", status=Signal.Status.RESOLVED)
     token = login(api_client, user=membership.user)
 
@@ -169,21 +178,59 @@ def test_feed_pagination_offset_may_hide_resolved_when_actives_fill_page(api_cli
 
     body = response.json()
     assert response.status_code == 200
-    assert len(body["items"]) == 2
-    assert all(item["status"] != Signal.Status.RESOLVED for item in body["items"])
-    assert body["has_more"] is True
-    assert body["next_cursor"] is not None
+    open_section = signal_feed_section(body, Signal.Status.OPEN)
+    progress_section = signal_feed_section(body, Signal.Status.IN_PROGRESS)
+    resolved_section = signal_feed_section(body, Signal.Status.RESOLVED)
+    assert open_section is not None
+    assert len(open_section["items"]) == 2
+    assert open_section["has_more"] is True
+    assert open_section["next_cursor"] is not None
+    assert progress_section is not None
+    assert len(progress_section["items"]) == 1
+    assert progress_section["has_more"] is False
+    assert resolved_section is not None
+    assert [item["id"] for item in resolved_section["items"]] == [str(resolved.id)]
+    assert resolved_section["has_more"] is False
 
     page_two = api_client.get(
         signal_feed_url(membership.establishment_id)
-        + f"?view_mode=general&page_size=2&cursor={body['next_cursor']}",
+        + (
+            "?view_mode=general&page_size=2"
+            f"&statuses=open&cursor={open_section['next_cursor']}"
+        ),
         **auth_headers(token),
     )
 
     assert page_two.status_code == 200
     page_two_body = page_two.json()
-    page_two_ids = {item["id"] for item in page_two_body["items"]}
-    assert str(resolved.id) in page_two_ids
+    assert [section["status"] for section in page_two_body["sections"]] == [Signal.Status.OPEN]
+    page_two_ids = {item["id"] for item in flatten_signal_feed_items(page_two_body)}
+    first_page_open_ids = {item["id"] for item in open_section["items"]}
+    assert page_two_ids.isdisjoint(first_page_open_ids)
+    assert len(page_two_ids) == 1
+    assert page_two_body["sections"][0]["has_more"] is False
+
+
+def test_feed_cursor_without_single_status_returns_400(api_client):
+    membership = build_api_membership()
+    signal = _create_signal(membership, status=Signal.Status.OPEN)
+    token = login(api_client, user=membership.user)
+    cursor = encode_signal_feed_cursor(signal)
+
+    missing_status = api_client.get(
+        signal_feed_url(membership.establishment_id) + f"?view_mode=general&cursor={cursor}",
+        **auth_headers(token),
+    )
+    mismatched = api_client.get(
+        signal_feed_url(membership.establishment_id)
+        + f"?view_mode=general&statuses=resolved&cursor={cursor}",
+        **auth_headers(token),
+    )
+
+    assert missing_status.status_code == 400
+    assert missing_status.json()["code"] == "validation_error"
+    assert mismatched.status_code == 400
+    assert mismatched.json()["code"] == "validation_error"
 
 
 def test_detail_resolved_returns_200(api_client):
@@ -231,7 +278,9 @@ def test_in_progress_permission_hints_deny_pin(api_client):
     )
     assert feed_response.status_code == 200
     feed_item = next(
-        item for item in feed_response.json()["items"] if item["id"] == str(signal.id)
+        item
+        for item in flatten_signal_feed_items(feed_response.json())
+        if item["id"] == str(signal.id)
     )
     assert feed_item["permission_hints"]["can_pin"] is False
 

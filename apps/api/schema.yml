@@ -1921,6 +1921,8 @@ paths:
         name: cursor
         schema:
           type: string
+        description: Opaque pagination cursor from a previous section next_cursor.
+          Requires exactly one statuses value matching the cursor status.
       - in: query
         name: establishment_id
         schema:
@@ -6838,7 +6840,8 @@ paths:
         name: cursor
         schema:
           type: string
-        description: Opaque pagination cursor from a previous response next_cursor.
+        description: Opaque pagination cursor from a previous section next_cursor.
+          Requires exactly one statuses value matching the cursor status.
       - in: path
         name: establishment_id
         schema:
@@ -14913,6 +14916,21 @@ components:
     SignalFeedResponse:
       type: object
       properties:
+        sections:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignalFeedSection'
+        applied_filters:
+          type: object
+          additionalProperties: {}
+      required:
+      - applied_filters
+      - sections
+    SignalFeedSection:
+      type: object
+      properties:
+        status:
+          type: string
         items:
           type: array
           items:
@@ -14922,14 +14940,11 @@ components:
           nullable: true
         has_more:
           type: boolean
-        applied_filters:
-          type: object
-          additionalProperties: {}
       required:
-      - applied_filters
       - has_more
       - items
       - next_cursor
+      - status
     SignalLinkedActionPlanExecution:
       type: object
       properties:
