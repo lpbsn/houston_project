@@ -256,3 +256,24 @@ def get_chat_private_media_storage() -> PrivateMediaStorage:
         region=getattr(settings, "HOUSTON_CHAT_S3_REGION", ""),
         addressing_style=(getattr(settings, "HOUSTON_CHAT_S3_ADDRESSING_STYLE", "") or "").strip(),
     )
+
+
+def get_action_plan_comment_private_media_storage() -> PrivateMediaStorage:
+    backend = getattr(settings, "HOUSTON_PRIVATE_MEDIA_BACKEND", PRIVATE_MEDIA_BACKEND_FILESYSTEM)
+    filesystem_root = getattr(
+        settings,
+        "HOUSTON_ACTION_PLAN_PRIVATE_MEDIA_ROOT",
+        "",
+    ) or str(settings.BASE_DIR / "private_action_plan_media")
+    return _build_private_media_storage(
+        backend=backend,
+        filesystem_root=filesystem_root,
+        bucket=getattr(settings, "HOUSTON_ACTION_PLAN_S3_BUCKET", ""),
+        access_key=getattr(settings, "HOUSTON_ACTION_PLAN_S3_ACCESS_KEY_ID", ""),
+        secret_key=getattr(settings, "HOUSTON_ACTION_PLAN_S3_SECRET_ACCESS_KEY", ""),
+        endpoint_url=getattr(settings, "HOUSTON_ACTION_PLAN_S3_ENDPOINT_URL", ""),
+        region=getattr(settings, "HOUSTON_ACTION_PLAN_S3_REGION", ""),
+        addressing_style=(
+            getattr(settings, "HOUSTON_ACTION_PLAN_S3_ADDRESSING_STYLE", "") or ""
+        ).strip(),
+    )

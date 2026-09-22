@@ -94,6 +94,11 @@ def test_s3_backend_skips_filesystem_root_checks(settings):
     settings.HOUSTON_CHAT_S3_ACCESS_KEY_ID = "chat-access-key"
     settings.HOUSTON_CHAT_S3_SECRET_ACCESS_KEY = "chat-secret-key"
     settings.HOUSTON_CHAT_S3_REGION = "auto"
+    settings.HOUSTON_ACTION_PLAN_S3_ENDPOINT_URL = "https://s3.plans.invalid"
+    settings.HOUSTON_ACTION_PLAN_S3_BUCKET = "action-plan-attachments"
+    settings.HOUSTON_ACTION_PLAN_S3_ACCESS_KEY_ID = "plan-access-key"
+    settings.HOUSTON_ACTION_PLAN_S3_SECRET_ACCESS_KEY = "plan-secret-key"
+    settings.HOUSTON_ACTION_PLAN_S3_REGION = "auto"
 
     assert check_private_media_root_configured(None) == []
     assert check_private_media_root_writable(None) == []
@@ -116,7 +121,7 @@ def test_s3_backend_fails_when_required_settings_missing(settings):
 
     errors = check_private_media_s3_configured(None)
 
-    assert {error.id for error in errors} == {"uploads.E004", "uploads.E007"}
+    assert {error.id for error in errors} == {"uploads.E004", "uploads.E007", "uploads.E008"}
 
 
 def test_s3_backend_fails_when_chat_settings_missing(settings):
@@ -132,11 +137,41 @@ def test_s3_backend_fails_when_chat_settings_missing(settings):
     settings.HOUSTON_CHAT_S3_ACCESS_KEY_ID = ""
     settings.HOUSTON_CHAT_S3_SECRET_ACCESS_KEY = ""
     settings.HOUSTON_CHAT_S3_REGION = ""
+    settings.HOUSTON_ACTION_PLAN_S3_ENDPOINT_URL = "https://s3.plans.invalid"
+    settings.HOUSTON_ACTION_PLAN_S3_BUCKET = "action-plan-attachments"
+    settings.HOUSTON_ACTION_PLAN_S3_ACCESS_KEY_ID = "plan-access-key"
+    settings.HOUSTON_ACTION_PLAN_S3_SECRET_ACCESS_KEY = "plan-secret-key"
+    settings.HOUSTON_ACTION_PLAN_S3_REGION = "auto"
 
     errors = check_private_media_s3_configured(None)
 
     assert len(errors) == 1
     assert errors[0].id == "uploads.E007"
+
+
+def test_s3_backend_fails_when_action_plan_settings_missing(settings):
+    settings.DEBUG = False
+    settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "s3"
+    settings.HOUSTON_S3_ENDPOINT_URL = "https://s3.example.invalid"
+    settings.HOUSTON_S3_BUCKET = "houston-private-media"
+    settings.HOUSTON_S3_ACCESS_KEY_ID = "access-key"
+    settings.HOUSTON_S3_SECRET_ACCESS_KEY = "secret-key"
+    settings.HOUSTON_S3_REGION = "auto"
+    settings.HOUSTON_CHAT_S3_ENDPOINT_URL = "https://s3.chat.invalid"
+    settings.HOUSTON_CHAT_S3_BUCKET = "chat-attachement"
+    settings.HOUSTON_CHAT_S3_ACCESS_KEY_ID = "chat-access-key"
+    settings.HOUSTON_CHAT_S3_SECRET_ACCESS_KEY = "chat-secret-key"
+    settings.HOUSTON_CHAT_S3_REGION = "auto"
+    settings.HOUSTON_ACTION_PLAN_S3_ENDPOINT_URL = ""
+    settings.HOUSTON_ACTION_PLAN_S3_BUCKET = ""
+    settings.HOUSTON_ACTION_PLAN_S3_ACCESS_KEY_ID = ""
+    settings.HOUSTON_ACTION_PLAN_S3_SECRET_ACCESS_KEY = ""
+    settings.HOUSTON_ACTION_PLAN_S3_REGION = ""
+
+    errors = check_private_media_s3_configured(None)
+
+    assert len(errors) == 1
+    assert errors[0].id == "uploads.E008"
 
 
 def test_unknown_backend_fails_in_production(settings):

@@ -11,7 +11,7 @@ import {
   searchEstablishmentUsersForMentions,
   unresolveExecutionComment,
 } from './api'
-import type { CommentCreateRequest } from './types'
+import type { CommentCreateRequest, ExecutionCommentCreateRequest } from './types'
 
 const MENTION_SEARCH_MIN_LENGTH = 2
 
@@ -98,7 +98,7 @@ export function useCreateExecutionCommentMutation(
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (payload: CommentCreateRequest) => {
+    mutationFn: (payload: ExecutionCommentCreateRequest) => {
       if (!establishmentId || !executionId) {
         throw new Error('Exécution introuvable.')
       }

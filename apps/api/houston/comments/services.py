@@ -241,8 +241,14 @@ def create_action_plan_execution_comment(
     body: str,
     mentioned_membership_ids: list[uuid.UUID] | None = None,
     parent_comment_id: uuid.UUID | None = None,
+    attachment_ids: list[uuid.UUID] | None = None,
 ) -> Comment:
     from houston.accounts.legal_services import require_current_terms
+    from houston.comments.upload_services import (
+        execution_accepts_comment_attachments,
+        link_uploads_to_comment,
+        lock_validated_uploads_for_comment,
+    )
 
     require_current_terms(user=author_membership.user)
     normalized_body = normalize_comment_body(body)
@@ -261,13 +267,28 @@ def create_action_plan_execution_comment(
             parent_comment_id=parent_comment_id,
         )
 
+    locked_execution = ActionPlanExecution.objects.select_for_update().get(pk=execution.id)
+    uploads = []
+    if attachment_ids:
+        if not execution_accepts_comment_attachments(locked_execution):
+            from houston.comments.constants import ATTACHMENTS_NOT_ALLOWED_ERROR_DETAIL
+
+            raise CommentValidationError(ATTACHMENTS_NOT_ALLOWED_ERROR_DETAIL)
+        uploads = lock_validated_uploads_for_comment(
+            actor_membership=author_membership,
+            execution=locked_execution,
+            attachment_ids=attachment_ids,
+        )
+
     comment = Comment.objects.create(
         establishment_id=execution.establishment_id,
-        action_plan_execution=execution,
+        action_plan_execution=locked_execution,
         author_membership=author_membership,
         parent_comment=parent_comment,
         body=normalized_body,
     )
+    if uploads:
+        link_uploads_to_comment(comment=comment, uploads=uploads)
     _create_mentions(comment=comment, mentioned_memberships=mentioned_memberships)
     if mentioned_memberships:
         from houston.notifications.scheduling import schedule_comment_mention_created_notification

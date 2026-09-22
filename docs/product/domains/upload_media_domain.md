@@ -60,6 +60,10 @@ It does not own Observation submission validity, AI transcription behavior, priv
   - Chat attachments live in the dedicated `chat-attachement` bucket (`HOUSTON_CHAT_S3_*` / `HOUSTON_CHAT_PRIVATE_MEDIA_ROOT`).
   - Reserve + presigned PUT + Houston `complete` (validation + Celery thumbnail for images). Not `TemporaryUpload`.
 
+- `ActionPlanCommentUpload` / `ActionPlanCommentAttachment`
+  - Execution-comment attachments live in a **third** dedicated bucket (`HOUSTON_ACTION_PLAN_S3_*` / `HOUSTON_ACTION_PLAN_PRIVATE_MEDIA_ROOT`), distinct from Chat and Observation.
+  - Same reserve / presigned PUT / Houston `complete` experience as Chat, linked at comment publish. Access follows plan readability. `canceled` purges immediately; `done` remains consultable 30 days then purge. Reopen from `pending_validation` keeps remaining files and re-allows attach.
+
 - `TemporaryUpload`
   - Unlinked file captured before the final Observation submit flow completes.
   - Exists only until it is linked, deleted, or cleaned up.

@@ -815,6 +815,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comment-attachments/{attachment_id}/preview/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_action_plan_executions_comment_attachments_preview_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comment-uploads/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_action_plan_executions_comment_uploads_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comment-uploads/{upload_id}/complete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_action_plan_executions_comment_uploads_complete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comment-uploads/{upload_id}/content/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["v1_establishments_action_plan_executions_comment_uploads_content_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comment-uploads/{upload_id}/presign/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_action_plan_executions_comment_uploads_presign_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comments/": {
         parameters: {
             query?: never;
@@ -2787,6 +2867,26 @@ export interface components {
             active: boolean;
             generic: components["schemas"]["BusinessUnitGeneric"];
         };
+        ActionPlanCommentReserveUploadRequest: {
+            filename: string;
+            content_type: string;
+            size_bytes: number;
+        };
+        ActionPlanCommentReserveUploadResponse: {
+            /** Format: uuid */
+            upload_id: string;
+            put_url: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        ActionPlanCommentUploadCompleteResponse: {
+            /** Format: uuid */
+            upload_id: string;
+            status: string;
+            kind: string;
+            content_type: string;
+            size_bytes: number | null;
+        };
         ActionPlanCreate201Response: components["schemas"]["ActionPlanDetail"] | components["schemas"]["ActionPlanExecutionDetail"] | components["schemas"]["ActionPlanPlanningSubmitResponse"];
         ActionPlanCreateRequest: {
             title: string;
@@ -3962,6 +4062,27 @@ export interface components {
         ClientRequirementsResponse: {
             android_min_supported_version_code: number;
         };
+        CommentAttachment: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["CommentAttachmentKindEnum"];
+            content_type: string;
+            size_bytes: number;
+            original_filename: string;
+            preview_url: string;
+            thumbnail_url: string | null;
+            /** Format: uuid */
+            comment_id: string;
+            /** Format: date-time */
+            created_at: string;
+            author_display_name: string;
+        };
+        /**
+         * @description * `image` - image
+         *     * `document` - document
+         * @enum {string}
+         */
+        CommentAttachmentKindEnum: "image" | "document";
         CommentAuthor: {
             /** Format: uuid */
             membership_id: string;
@@ -3982,6 +4103,7 @@ export interface components {
             mentions: components["schemas"]["CommentMention"][];
             /** Format: date-time */
             created_at: string;
+            attachments?: components["schemas"]["CommentAttachment"][];
         };
         CommentMention: {
             /** Format: uuid */
@@ -4260,6 +4382,13 @@ export interface components {
          * @enum {string}
          */
         EventTypeEnum: "created" | "approved" | "rejected" | "canceled";
+        ExecutionCommentCreateRequest: {
+            body: string;
+            mentioned_membership_ids?: string[];
+            /** Format: uuid */
+            parent_comment_id?: string | null;
+            attachment_ids?: string[];
+        };
         ExecutionCommentListItem: {
             item_type: components["schemas"]["ExecutionCommentListItemItemTypeEnum"];
             /** Format: uuid */
@@ -4270,6 +4399,7 @@ export interface components {
             mentions: components["schemas"]["CommentMention"][];
             /** Format: date-time */
             created_at: string;
+            attachments?: components["schemas"]["CommentAttachment"][];
             replies?: components["schemas"]["CommentItem"][];
             is_resolved?: boolean;
             /** Format: date-time */
@@ -4293,6 +4423,7 @@ export interface components {
             mentions: components["schemas"]["CommentMention"][];
             /** Format: date-time */
             created_at: string;
+            attachments?: components["schemas"]["CommentAttachment"][];
             replies: components["schemas"]["CommentItem"][];
             is_resolved: boolean;
             /** Format: date-time */
@@ -7787,6 +7918,212 @@ export interface operations {
             };
         };
     };
+    v1_establishments_action_plan_executions_comment_attachments_preview_retrieve: {
+        parameters: {
+            query?: {
+                variant?: "full" | "thumbnail";
+            };
+            header?: never;
+            path: {
+                attachment_id: string;
+                establishment_id: string;
+                execution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Binary attachment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Redirect to presigned GET. */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_establishments_action_plan_executions_comment_uploads_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                execution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActionPlanCommentReserveUploadRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ActionPlanCommentReserveUploadRequest"];
+                "multipart/form-data": components["schemas"]["ActionPlanCommentReserveUploadRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPlanCommentReserveUploadResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_action_plan_executions_comment_uploads_complete_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                execution_id: string;
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPlanCommentUploadCompleteResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_action_plan_executions_comment_uploads_content_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                execution_id: string;
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Content stored. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_action_plan_executions_comment_uploads_presign_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                execution_id: string;
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPlanCommentReserveUploadResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
     v1_establishments_action_plan_executions_comments_list: {
         parameters: {
             query?: never;
@@ -7837,9 +8174,9 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CommentCreateRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["CommentCreateRequest"];
-                "multipart/form-data": components["schemas"]["CommentCreateRequest"];
+                "application/json": components["schemas"]["ExecutionCommentCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ExecutionCommentCreateRequest"];
+                "multipart/form-data": components["schemas"]["ExecutionCommentCreateRequest"];
             };
         };
         responses: {

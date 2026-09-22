@@ -12,7 +12,12 @@ import {
   commentDomId,
   scrollToHighlightedComment,
 } from '../lib/comment-highlight'
-import type { CommentCreateRequest, ExecutionCommentListItem } from '../types'
+import type {
+  CommentAttachment,
+  ExecutionCommentCreateRequest,
+  ExecutionCommentListItem,
+} from '../types'
+import { CommentAttachmentTiles } from './comment-attachment-tiles'
 import { isExecutionThreadItem } from '../types'
 import { CommentComposer } from './comment-composer'
 import { MentionDeepLinkBadge, useMentionDeepLinkBadge } from './mention-deep-link-badge'
@@ -37,14 +42,17 @@ type CommentThreadItemProps = {
   isReplyPending?: boolean
   isResolvePending?: boolean
   highlightCommentId?: string | null
-  onReply: (payload: CommentCreateRequest, callbacks?: ReplySubmitCallbacks) => void
+  onReply: (payload: ExecutionCommentCreateRequest, callbacks?: ReplySubmitCallbacks) => void
   onResolve: (commentId: string) => void
   onUnresolve: (commentId: string) => void
+  onOpenAttachment?: (attachment: CommentAttachment) => void
+  attachEnabled?: boolean
+  executionId?: string
 }
 
 type CommentContent = Pick<
   ExecutionCommentListItem,
-  'author' | 'origin' | 'body' | 'mentions'
+  'author' | 'origin' | 'body' | 'mentions' | 'attachments'
 >
 
 function getAvatarColorClass(seed: string): string {
@@ -98,12 +106,14 @@ function CommentBubble({
   highlightCommentId = null,
   showOrigin = false,
   isResolved = false,
+  onOpenAttachment,
 }: {
   comment: CommentContent
   commentId: string
   highlightCommentId?: string | null
   showOrigin?: boolean
   isResolved?: boolean
+  onOpenAttachment?: (attachment: CommentAttachment) => void
 }) {
   const showBadge = useMentionDeepLinkBadge(commentId, highlightCommentId)
 
@@ -117,6 +127,9 @@ function CommentBubble({
         <p className="mt-0.5 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-[#1a1a1a]">
           {comment.body}
         </p>
+        {comment.attachments && comment.attachments.length > 0 && onOpenAttachment ? (
+          <CommentAttachmentTiles attachments={comment.attachments} onOpen={onOpenAttachment} />
+        ) : null}
       </div>
       {showBadge ? <MentionDeepLinkBadge /> : null}
       {isResolved ? <ResolvedTickBadge /> : null}
@@ -220,6 +233,7 @@ function CommentRow({
   showOrigin = false,
   isResolved = false,
   avatarSize = 'md',
+  onOpenAttachment,
 }: {
   comment: CommentContent & { author: { membership_id: string; display_name: string } }
   commentId: string
@@ -227,6 +241,7 @@ function CommentRow({
   showOrigin?: boolean
   isResolved?: boolean
   avatarSize?: 'md' | 'sm'
+  onOpenAttachment?: (attachment: CommentAttachment) => void
 }) {
   return (
     <div className="flex gap-2">
@@ -241,6 +256,7 @@ function CommentRow({
         highlightCommentId={highlightCommentId}
         showOrigin={showOrigin}
         isResolved={isResolved}
+        onOpenAttachment={onOpenAttachment}
       />
     </div>
   )
@@ -276,6 +292,9 @@ export function ActionCommentThreadCard({
   onReply,
   onResolve,
   onUnresolve,
+  onOpenAttachment,
+  attachEnabled = false,
+  executionId,
 }: CommentThreadItemProps) {
   const isThread = isExecutionThreadItem(item)
   const highlightTargetsReply =
@@ -308,6 +327,7 @@ export function ActionCommentThreadCard({
         highlightCommentId={highlightCommentId}
         showOrigin
         isResolved={isResolved}
+        onOpenAttachment={onOpenAttachment}
       />
 
       <div className="ml-10">
@@ -335,12 +355,15 @@ export function ActionCommentThreadCard({
               disabled={disabled || isReplyPending}
               errorMessage={replyErrorMessage}
               placeholder={`Répondre à ${item.author.display_name}…`}
-              onSubmit={({ body, mentionedMembershipIds }) => {
+              attachEnabled={attachEnabled}
+              executionId={executionId}
+              onSubmit={({ body, mentionedMembershipIds, attachmentIds }) => {
                 onReply(
                   {
                     body,
                     mentioned_membership_ids: mentionedMembershipIds,
                     parent_comment_id: item.id,
+                    ...(attachmentIds.length > 0 ? { attachment_ids: attachmentIds } : {}),
                   },
                   {
                     onSuccess: () => {
@@ -400,6 +423,7 @@ export function ActionCommentThreadCard({
                       commentId={reply.id}
                       highlightCommentId={highlightCommentId}
                       avatarSize="sm"
+                      onOpenAttachment={onOpenAttachment}
                     />
                   </li>
                 ))}

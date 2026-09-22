@@ -499,6 +499,10 @@ function ActionPlanExecutionDetailPageContent({
               targetId={executionId}
               highlightCommentId={highlightCommentId}
               readOnly={source === 'cross'}
+              attachEnabled={
+                source !== 'cross' &&
+                (execution.status === 'in_progress' || execution.status === 'pending_validation')
+              }
             />
           </div>
         ) : null}

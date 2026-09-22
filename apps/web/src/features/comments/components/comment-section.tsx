@@ -21,8 +21,14 @@ import {
   useSignalCommentsQuery,
   useUnresolveExecutionCommentMutation,
 } from '../hooks'
+import { flattenAvailablePlanAttachments } from '../lib/flatten-plan-attachments'
+import { commentPdfAlertMessage, openCommentPdfAttachment } from '../lib/comment-pdf'
+import { isCommentPdfAttachment } from '../lib/comment-media'
+import type { CommentAttachment } from '../types'
+import { CommentAttachmentPreviewDialog } from './comment-attachment-preview-dialog'
 import { CommentComposer, type CommentComposerHandle } from './comment-composer'
 import { CommentList } from './comment-list'
+import { ExecutionPlanAttachments } from './execution-plan-attachments'
 
 type CommentSectionProps = {
   establishmentId: string
@@ -30,6 +36,7 @@ type CommentSectionProps = {
   targetId: string
   highlightCommentId?: string | null
   readOnly?: boolean
+  attachEnabled?: boolean
 }
 
 function CommentUnavailableMessage() {
@@ -89,6 +96,7 @@ export function CommentSection({
   targetId,
   highlightCommentId = null,
   readOnly = false,
+  attachEnabled = false,
 }: CommentSectionProps) {
   const composerRef = useRef<CommentComposerHandle>(null)
   const [replyErrorCommentId, setReplyErrorCommentId] = useState<string | null>(null)
@@ -97,6 +105,7 @@ export function CommentSection({
     contentId: string
     membershipId: string
   } | null>(null)
+  const [previewAttachment, setPreviewAttachment] = useState<CommentAttachment | null>(null)
 
   const isSignal = targetType === 'signal'
   const isExecution = targetType === 'action-plan-execution'
@@ -154,9 +163,39 @@ export function CommentSection({
     highlightCommentId,
   }
 
+  function handleOpenAttachment(attachment: CommentAttachment) {
+    if (
+      isCommentPdfAttachment({
+        kind: attachment.kind,
+        contentType: attachment.content_type,
+      })
+    ) {
+      void openCommentPdfAttachment({
+        src: attachment.preview_url,
+        filename: attachment.original_filename,
+        id: attachment.id,
+      }).then((result) => {
+        if (!result.ok) {
+          const message = commentPdfAlertMessage(result.reason)
+          if (message) {
+            window.alert(message)
+          }
+        }
+      })
+      return
+    }
+    setPreviewAttachment(attachment)
+  }
+
   const list = (
     <>
       <TerrainFieldLabel className="lg:hidden">Commentaires</TerrainFieldLabel>
+      {isExecution && executionQuery.isSuccess ? (
+        <ExecutionPlanAttachments
+          attachments={flattenAvailablePlanAttachments(executionQuery.data)}
+          onOpen={handleOpenAttachment}
+        />
+      ) : null}
 
       {commentsQuery.isLoading ? (
         <div className="mt-4 flex items-center justify-center py-6 text-[#7D7B75]">
@@ -238,6 +277,9 @@ export function CommentSection({
             }
             unresolveExecutionMutation.mutate(commentId)
           }}
+          onOpenAttachment={handleOpenAttachment}
+          attachEnabled={attachEnabled && !readOnly}
+          executionId={targetId}
         />
       ) : null}
     </>
@@ -248,6 +290,8 @@ export function CommentSection({
       ref={composerRef}
       establishmentId={establishmentId}
       compactOnLg
+      attachEnabled={isExecution && attachEnabled}
+      executionId={isExecution ? targetId : null}
       disabled={createMutation.isPending || commentsQuery.isLoading || commentsQuery.isError}
       errorMessage={
         createMutation.error
@@ -258,11 +302,14 @@ export function CommentSection({
             )
           : null
       }
-      onSubmit={({ body, mentionedMembershipIds }) => {
+      onSubmit={({ body, mentionedMembershipIds, attachmentIds }) => {
         createMutation.mutate(
           {
             body,
             mentioned_membership_ids: mentionedMembershipIds,
+            ...(isExecution && attachmentIds.length > 0
+              ? { attachment_ids: attachmentIds }
+              : {}),
           },
           {
             onSuccess: () => {
@@ -280,6 +327,10 @@ export function CommentSection({
   return (
     <>
       <OperationalCommentsLayout list={list} composer={composer} />
+      <CommentAttachmentPreviewDialog
+        attachment={previewAttachment}
+        onClose={() => setPreviewAttachment(null)}
+      />
       <SafetyReportSheet
         open={reportComment !== null}
         establishmentId={establishmentId}

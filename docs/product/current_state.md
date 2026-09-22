@@ -41,13 +41,13 @@ The execution surface is **Action Plan** only.
 | Signal feed + lifecycle | Live | Pin, mark interesting, cancel (open and interesting), resolve (open), qualify merge absorb+delete |
 | Action Plan catalog + executions + feed | Live | [`domains/action_plan_domain.md`](domains/action_plan_domain.md) |
 | Analytics dashboard + pattern detail | Live | `/analytics`, `/analytics/patterns/{id}`, `LazyAnalyticsPage`; API `api/v1/analytics/…` (`houston.analytics`). No domain doc. |
-| Comments (signal + execution threads) | Live | REST + mention picker |
+| Comments (signal + execution threads) | Live | REST + mention picker; execution comments can attach images/PDF (dedicated bucket) |
 | Notifications in-app | Live | List, preferences, mark read |
 | Native push (FCM) | Live | Membership `push_enabled`; Web Push removed |
 | Native HTTPS deep links | Live | Handler (`getLaunchUrl` / `appUrlOpen`). **Play** `assetlinks.json` and **App Store** AASA wait on store identities |
 | Operational realtime (invalidation) | Live | WS ticket + `OperationalRealtimeProvider` on terrain routes |
 | Chat V1 core | Live | DM + groups, HTTP send, WS fan-out, attachments, Terrain UI `/chat`; conversation pin/hide/leave and group member admin live |
-| Upload / private media | Live | Authorized reads only |
+| Upload / private media | Live | Authorized reads only; Observation, Chat, and action-plan comment stores are separate |
 | Security / RGPD baseline | Live | See domain doc |
 
 ## Notifications / realtime / chat
