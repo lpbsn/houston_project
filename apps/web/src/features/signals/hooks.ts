@@ -31,6 +31,7 @@ import {
 import {
   appendSignalFeedSectionPage,
   applySignalQuickActionSuccess,
+  refillSignalFeedToLoadedDepth,
   type SignalQuickActionCacheContext,
 } from './lib/signal-feed-cache'
 import type { SignalFeedStatusFilter } from './lib/signal-feed-filters'
@@ -53,21 +54,38 @@ export function useSignalFeedQuery(
 ) {
   const source = options?.source ?? 'establishment'
   const enabled = source === 'cross' || Boolean(establishmentId)
+  const queryClient = useQueryClient()
+  const queryKey =
+    source === 'cross'
+      ? signalsQueryKeys.crossFeed(filters)
+      : establishmentId
+        ? signalsQueryKeys.feed(establishmentId, viewMode, filters)
+        : (['signals', 'feed', 'none'] as const)
   return useQuery({
-    queryKey:
-      source === 'cross'
-        ? signalsQueryKeys.crossFeed(filters)
-        : establishmentId
-          ? signalsQueryKeys.feed(establishmentId, viewMode, filters)
-          : ['signals', 'feed', 'none'],
-    queryFn: () => {
+    queryKey,
+    queryFn: async () => {
+      const previous = queryClient.getQueryData<SignalFeedResponse>(queryKey)
       if (source === 'cross') {
-        return fetchCrossSignalFeed(filters)
+        const firstPage = await fetchCrossSignalFeed(filters)
+        return refillSignalFeedToLoadedDepth(firstPage, previous, (status, cursor, pageSize) =>
+          fetchCrossSignalFeed({ ...filters, statuses: [status as SignalFeedStatusFilter] }, {
+            cursor,
+            pageSize,
+          }),
+        )
       }
       if (!establishmentId) {
         throw new Error('Établissement non sélectionné.')
       }
-      return fetchSignalFeed(establishmentId, viewMode, filters)
+      const firstPage = await fetchSignalFeed(establishmentId, viewMode, filters)
+      return refillSignalFeedToLoadedDepth(firstPage, previous, (status, cursor, pageSize) =>
+        fetchSignalFeed(
+          establishmentId,
+          viewMode,
+          { ...filters, statuses: [status as SignalFeedStatusFilter] },
+          { cursor, pageSize },
+        ),
+      )
     },
     enabled,
   })

@@ -18,6 +18,13 @@ export type SignalQuickActionCacheContext = {
 
 const SIGNAL_FEED_VIEW_MODES: SignalViewMode[] = ['personal', 'general']
 
+export const SIGNAL_FEED_MAX_PAGE_SIZE = 50
+const SIGNAL_FEED_MAX_RESTORE_PAGES = 10
+
+export function continuationPageSizeForRemainingDepth(remainingDepth: number): number {
+  return Math.min(SIGNAL_FEED_MAX_PAGE_SIZE, Math.max(0, remainingDepth))
+}
+
 export function feedItemPatchFromDetail(detail: SignalDetail): Partial<SignalFeedItem> {
   return {
     title: detail.title,
@@ -83,6 +90,79 @@ export function patchSignalInActiveFeedCache(
 
     return { ...current, sections }
   })
+}
+
+export async function refillSignalFeedToLoadedDepth(
+  firstPage: SignalFeedResponse,
+  previous: SignalFeedResponse | undefined,
+  fetchSectionPage: (
+    status: string,
+    cursor: string,
+    pageSize: number,
+  ) => Promise<SignalFeedResponse>,
+): Promise<SignalFeedResponse> {
+  if (!previous) {
+    return firstPage
+  }
+
+  const previousByStatus = new Map(
+    previous.sections.map((section) => [section.status, section]),
+  )
+
+  const sections = await Promise.all(
+    firstPage.sections.map(async (section) => {
+      const prior = previousByStatus.get(section.status)
+      const target = prior?.items.length ?? 0
+      if (!prior || target <= section.items.length) {
+        return section
+      }
+
+      const seen = new Set(section.items.map((item) => item.id))
+      const items = [...section.items]
+      let nextCursor = section.next_cursor
+      let hasMore = section.has_more
+      let extraPages = 0
+
+      while (
+        items.length < target &&
+        hasMore &&
+        nextCursor &&
+        extraPages < SIGNAL_FEED_MAX_RESTORE_PAGES
+      ) {
+        const pageSize = continuationPageSizeForRemainingDepth(target - items.length)
+        if (pageSize <= 0) {
+          break
+        }
+        extraPages += 1
+        const page = await fetchSectionPage(section.status, nextCursor, pageSize)
+        const incoming = page.sections.find((entry) => entry.status === section.status)
+        if (!incoming) {
+          break
+        }
+        for (const item of incoming.items) {
+          if (seen.has(item.id)) {
+            continue
+          }
+          seen.add(item.id)
+          items.push(item)
+          if (items.length >= target) {
+            break
+          }
+        }
+        nextCursor = incoming.next_cursor
+        hasMore = incoming.has_more
+      }
+
+      return {
+        ...section,
+        items,
+        next_cursor: nextCursor,
+        has_more: hasMore,
+      }
+    }),
+  )
+
+  return { ...firstPage, sections }
 }
 
 export function appendSignalFeedSectionPage(

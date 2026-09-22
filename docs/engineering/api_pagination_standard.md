@@ -142,7 +142,7 @@ Signal Feed is the **existing reference** for Tier A (backend + frontend).
 
 | File | Role |
 |------|------|
-| [`apps/web/src/features/signals/hooks.ts`](../../apps/web/src/features/signals/hooks.ts) | `useSignalFeedQuery` — one `useQuery` for the first sectioned page; `useLoadMoreSignalFeedSection` appends one status |
+| [`apps/web/src/features/signals/hooks.ts`](../../apps/web/src/features/signals/hooks.ts) | `useSignalFeedQuery` — one `useQuery` for the first sectioned page (default `page_size`); refetch restores only sections previously loaded past page 1 via per-status continuations (`page_size = min(50, remainingDepth)`). `useLoadMoreSignalFeedSection` appends one status |
 | [`apps/web/src/features/signals/api.ts`](../../apps/web/src/features/signals/api.ts) | `fetchSignalFeed` — passes `cursor` with a single `statuses` value on continuation |
 | [`apps/web/src/features/signals/pages/signal-feed-page.tsx`](../../apps/web/src/features/signals/pages/signal-feed-page.tsx) | Renders `sections[]`; « Charger plus » from `sections[].has_more` |
 
