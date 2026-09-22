@@ -173,7 +173,7 @@ When changing list pagination or response shape:
 1. **Backend** — view/selector/serializer; add or fix tests (`pytest` focused on endpoint).
 2. **OpenAPI** — `make schema`; verify `cursor` / `page_size` / response fields in `schema.yml`.
 3. **Frontend types** — `make web-api-generate`.
-4. **Frontend callers** — hooks (`useInfiniteQuery` for Tier A), pages, query keys / invalidation.
+4. **Frontend callers** — hooks (Signal Feed: `useQuery` + per-section continuation; other Tier A including Execution Feed: `useInfiniteQuery`), pages, query keys / invalidation.
 5. **Tests** — API tests green (`make backend-test` or focused `pytest`); FE `npm test` + `npm run typecheck`.
 
 One PR = one endpoint (or one coherent group) fully aligned. No dual-format transition period.

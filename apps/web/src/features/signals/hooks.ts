@@ -32,6 +32,7 @@ import {
   appendSignalFeedSectionPage,
   applySignalQuickActionSuccess,
   refillSignalFeedToLoadedDepth,
+  signalFeedQueryKey,
   type SignalQuickActionCacheContext,
 } from './lib/signal-feed-cache'
 import type { SignalFeedStatusFilter } from './lib/signal-feed-filters'
@@ -46,6 +47,26 @@ import type {
 
 export type { SignalQuickActionCacheContext } from './lib/signal-feed-cache'
 
+const IDLE_SIGNAL_FEED_QUERY_KEY = ['signals', 'feed', 'none'] as const
+
+function fetchSignalFeedSectionContinuation(
+  source: 'establishment' | 'cross',
+  establishmentId: string | null,
+  viewMode: SignalViewMode,
+  filters: SignalFeedFilters,
+  status: SignalFeedStatusFilter,
+  options: { cursor?: string; pageSize?: number } = {},
+) {
+  const sectionFilters = { ...filters, statuses: [status] }
+  if (source === 'cross') {
+    return fetchCrossSignalFeed(sectionFilters, options)
+  }
+  if (!establishmentId) {
+    throw new Error('Établissement non sélectionné.')
+  }
+  return fetchSignalFeed(establishmentId, viewMode, sectionFilters, options)
+}
+
 export function useSignalFeedQuery(
   establishmentId: string | null,
   viewMode: SignalViewMode,
@@ -56,33 +77,26 @@ export function useSignalFeedQuery(
   const enabled = source === 'cross' || Boolean(establishmentId)
   const queryClient = useQueryClient()
   const queryKey =
-    source === 'cross'
-      ? signalsQueryKeys.crossFeed(filters)
-      : establishmentId
-        ? signalsQueryKeys.feed(establishmentId, viewMode, filters)
-        : (['signals', 'feed', 'none'] as const)
+    signalFeedQueryKey({ source, establishmentId, viewMode, filters }) ??
+    IDLE_SIGNAL_FEED_QUERY_KEY
   return useQuery({
     queryKey,
     queryFn: async () => {
       const previous = queryClient.getQueryData<SignalFeedResponse>(queryKey)
-      if (source === 'cross') {
-        const firstPage = await fetchCrossSignalFeed(filters)
-        return refillSignalFeedToLoadedDepth(firstPage, previous, (status, cursor, pageSize) =>
-          fetchCrossSignalFeed({ ...filters, statuses: [status as SignalFeedStatusFilter] }, {
-            cursor,
-            pageSize,
-          }),
-        )
-      }
-      if (!establishmentId) {
+      if (source !== 'cross' && !establishmentId) {
         throw new Error('Établissement non sélectionné.')
       }
-      const firstPage = await fetchSignalFeed(establishmentId, viewMode, filters)
+      const firstPage =
+        source === 'cross'
+          ? await fetchCrossSignalFeed(filters)
+          : await fetchSignalFeed(establishmentId as string, viewMode, filters)
       return refillSignalFeedToLoadedDepth(firstPage, previous, (status, cursor, pageSize) =>
-        fetchSignalFeed(
+        fetchSignalFeedSectionContinuation(
+          source,
           establishmentId,
           viewMode,
-          { ...filters, statuses: [status as SignalFeedStatusFilter] },
+          filters,
+          status,
           { cursor, pageSize },
         ),
       )
@@ -101,12 +115,12 @@ export function useLoadMoreSignalFeedSection(
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (status: SignalFeedStatusFilter) => {
-      const queryKey =
-        source === 'cross'
-          ? signalsQueryKeys.crossFeed(filters)
-          : establishmentId
-            ? signalsQueryKeys.feed(establishmentId, viewMode, filters)
-            : null
+      const queryKey = signalFeedQueryKey({
+        source,
+        establishmentId,
+        viewMode,
+        filters,
+      })
       if (queryKey == null) {
         throw new Error('Établissement non sélectionné.')
       }
@@ -115,13 +129,14 @@ export function useLoadMoreSignalFeedSection(
       if (!section?.has_more || !section.next_cursor) {
         return current
       }
-      const sectionFilters = { ...filters, statuses: [status] }
-      const page =
-        source === 'cross'
-          ? await fetchCrossSignalFeed(sectionFilters, { cursor: section.next_cursor })
-          : await fetchSignalFeed(establishmentId as string, viewMode, sectionFilters, {
-              cursor: section.next_cursor,
-            })
+      const page = await fetchSignalFeedSectionContinuation(
+        source,
+        establishmentId,
+        viewMode,
+        filters,
+        status,
+        { cursor: section.next_cursor },
+      )
       appendSignalFeedSectionPage(queryClient, {
         establishmentId,
         viewMode,

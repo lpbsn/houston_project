@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query'
 
 import { signalsQueryKeys } from '../api'
+import type { SignalFeedStatusFilter } from './signal-feed-filters'
 import type {
   SignalDetail,
   SignalFeedFilters,
@@ -18,11 +19,26 @@ export type SignalQuickActionCacheContext = {
 
 const SIGNAL_FEED_VIEW_MODES: SignalViewMode[] = ['personal', 'general']
 
-export const SIGNAL_FEED_MAX_PAGE_SIZE = 50
+const SIGNAL_FEED_MAX_PAGE_SIZE = 50
 const SIGNAL_FEED_MAX_RESTORE_PAGES = 10
 
-export function continuationPageSizeForRemainingDepth(remainingDepth: number): number {
+function continuationPageSizeForRemainingDepth(remainingDepth: number): number {
   return Math.min(SIGNAL_FEED_MAX_PAGE_SIZE, Math.max(0, remainingDepth))
+}
+
+export function signalFeedQueryKey(options: {
+  source?: 'establishment' | 'cross'
+  establishmentId: string | null
+  viewMode: SignalViewMode
+  filters: SignalFeedFilters
+}) {
+  if (options.source === 'cross') {
+    return signalsQueryKeys.crossFeed(options.filters)
+  }
+  if (options.establishmentId) {
+    return signalsQueryKeys.feed(options.establishmentId, options.viewMode, options.filters)
+  }
+  return null
 }
 
 export function feedItemPatchFromDetail(detail: SignalDetail): Partial<SignalFeedItem> {
@@ -96,7 +112,7 @@ export async function refillSignalFeedToLoadedDepth(
   firstPage: SignalFeedResponse,
   previous: SignalFeedResponse | undefined,
   fetchSectionPage: (
-    status: string,
+    status: SignalFeedStatusFilter,
     cursor: string,
     pageSize: number,
   ) => Promise<SignalFeedResponse>,
@@ -134,7 +150,11 @@ export async function refillSignalFeedToLoadedDepth(
           break
         }
         extraPages += 1
-        const page = await fetchSectionPage(section.status, nextCursor, pageSize)
+        const page = await fetchSectionPage(
+          section.status as SignalFeedStatusFilter,
+          nextCursor,
+          pageSize,
+        )
         const incoming = page.sections.find((entry) => entry.status === section.status)
         if (!incoming) {
           break
@@ -176,12 +196,7 @@ export function appendSignalFeedSectionPage(
     page: SignalFeedResponse
   },
 ): void {
-  const queryKey =
-    options.source === 'cross'
-      ? signalsQueryKeys.crossFeed(options.filters)
-      : options.establishmentId
-        ? signalsQueryKeys.feed(options.establishmentId, options.viewMode, options.filters)
-        : null
+  const queryKey = signalFeedQueryKey(options)
   if (queryKey == null) {
     return
   }

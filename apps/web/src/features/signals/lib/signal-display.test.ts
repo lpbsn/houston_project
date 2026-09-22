@@ -8,7 +8,6 @@ import {
   getSignalCardLeftAccentColor,
   getSignalStatusBadgeVariant,
   composeSignalFeedPresentation,
-  groupFeedItemsByStatus,
   partitionFeedPinnedItems,
   PINNED_SIGNAL_CARD_CLASS,
   SIGNAL_CARD_LEFT_ACCENT,
@@ -41,98 +40,6 @@ function item(overrides: Partial<SignalFeedItem> & { id: string }): SignalFeedIt
   }
 }
 
-describe('groupFeedItemsByStatus', () => {
-  it('returns null when only one status is present', () => {
-    expect(
-      groupFeedItemsByStatus([
-        item({ id: '1', status: 'open' }),
-        item({ id: '2', status: 'open' }),
-      ]),
-    ).toBeNull()
-  })
-
-  it('returns sections when open and in_progress are both present', () => {
-    const groups = groupFeedItemsByStatus([
-      item({ id: '1', status: 'open' }),
-      item({ id: '2', status: 'in_progress' }),
-    ])
-    expect(groups).toHaveLength(2)
-    expect(groups?.[0].dotVariant).toBe('warning')
-    expect(groups?.[1].dotVariant).toBe('teal')
-  })
-
-  it('places interesting before resolved', () => {
-    const groups = groupFeedItemsByStatus([
-      item({ id: '1', status: 'open' }),
-      item({ id: '2', status: 'interesting' }),
-      item({ id: '3', status: 'resolved' }),
-    ])
-    expect(groups).toHaveLength(3)
-    expect(groups?.[0].status).toBe('open')
-    expect(groups?.[1].status).toBe('interesting')
-    expect(groups?.[1].label).toBe('Intéressants')
-    expect(groups?.[1].dotVariant).toBe('mint')
-    expect(groups?.[2].status).toBe('resolved')
-  })
-
-  it('returns sections with interesting before resolved and canceled', () => {
-    const groups = groupFeedItemsByStatus([
-      item({ id: '1', status: 'open' }),
-      item({ id: '2', status: 'in_progress' }),
-      item({ id: '3', status: 'interesting' }),
-      item({ id: '4', status: 'resolved' }),
-      item({ id: '5', status: 'canceled' }),
-    ])
-    expect(groups).toHaveLength(5)
-    expect(groups?.map((group) => group.status)).toEqual([
-      'open',
-      'in_progress',
-      'interesting',
-      'resolved',
-      'canceled',
-    ])
-  })
-
-  it('returns three sections with resolved before canceled when all statuses are present', () => {
-    const groups = groupFeedItemsByStatus([
-      item({ id: '1', status: 'open' }),
-      item({ id: '2', status: 'in_progress' }),
-      item({ id: '3', status: 'resolved' }),
-      item({ id: '4', status: 'canceled' }),
-    ])
-    expect(groups).toHaveLength(4)
-    expect(groups?.[0].dotVariant).toBe('warning')
-    expect(groups?.[1].dotVariant).toBe('teal')
-    expect(groups?.[2].dotVariant).toBe('success')
-    expect(groups?.[3].dotVariant).toBe('muted')
-    expect(groups?.[3].label).toBe('Annulées')
-    expect(groups?.[3].items.map((entry) => entry.id)).toEqual(['4'])
-  })
-
-  it('returns three sections with resolved last when all active statuses are present', () => {
-    const groups = groupFeedItemsByStatus([
-      item({ id: '1', status: 'open' }),
-      item({ id: '2', status: 'in_progress' }),
-      item({ id: '3', status: 'resolved' }),
-    ])
-    expect(groups).toHaveLength(3)
-    expect(groups?.[0].dotVariant).toBe('warning')
-    expect(groups?.[1].dotVariant).toBe('teal')
-    expect(groups?.[2].dotVariant).toBe('success')
-    expect(groups?.[2].items.map((entry) => entry.id)).toEqual(['3'])
-  })
-
-  it('places resolved items after active buckets in section order', () => {
-    const groups = groupFeedItemsByStatus([
-      item({ id: 'active', status: 'open' }),
-      item({ id: 'done', status: 'resolved' }),
-    ])
-    expect(groups).toHaveLength(2)
-    expect(groups?.[0].dotVariant).toBe('warning')
-    expect(groups?.[1].dotVariant).toBe('success')
-  })
-})
-
 describe('partitionFeedPinnedItems', () => {
   it('splits pinned and unpinned while preserving API order', () => {
     const items = [
@@ -145,18 +52,6 @@ describe('partitionFeedPinnedItems', () => {
     expect(pinnedItems.map((entry) => entry.id)).toEqual(['a', 'c'])
     expect(unpinnedItems.map((entry) => entry.id)).toEqual(['b', 'd'])
   })
-
-  it('excludes pinned items from status grouping when using unpinned only', () => {
-    const { unpinnedItems } = partitionFeedPinnedItems([
-      item({ id: 'pinned-open', is_pinned: true, status: 'open' }),
-      item({ id: 'plain-open', status: 'open' }),
-      item({ id: 'progress', status: 'in_progress' }),
-    ])
-    const groups = groupFeedItemsByStatus(unpinnedItems)
-    expect(groups).toHaveLength(2)
-    expect(groups?.[0].items.map((entry) => entry.id)).toEqual(['plain-open'])
-    expect(groups?.[1].items.map((entry) => entry.id)).toEqual(['progress'])
-  })
 })
 
 describe('composeSignalFeedPresentation', () => {
@@ -165,13 +60,11 @@ describe('composeSignalFeedPresentation', () => {
       {
         status: 'open',
         items: [item({ id: 'pinned-open', is_pinned: true, status: 'open' })],
-        next_cursor: 'open-cursor',
         has_more: true,
       },
       {
         status: 'resolved',
         items: [item({ id: 'done', status: 'resolved' })],
-        next_cursor: null,
         has_more: false,
       },
     ])
@@ -181,7 +74,6 @@ describe('composeSignalFeedPresentation', () => {
     expect(presentation.groups?.[0].status).toBe('open')
     expect(presentation.groups?.[0].items).toEqual([])
     expect(presentation.groups?.[0].hasMore).toBe(true)
-    expect(presentation.groups?.[0].nextCursor).toBe('open-cursor')
   })
 
   it('uses a flat list when the API returns a single section', () => {
@@ -189,7 +81,6 @@ describe('composeSignalFeedPresentation', () => {
       {
         status: 'open',
         items: [item({ id: '1', status: 'open' })],
-        next_cursor: 'cursor',
         has_more: true,
       },
     ])
@@ -198,6 +89,51 @@ describe('composeSignalFeedPresentation', () => {
     expect(presentation.flatUnpinnedItems.map((entry) => entry.id)).toEqual(['1'])
     expect(presentation.flatHasMore).toBe(true)
     expect(presentation.flatStatus).toBe('open')
+  })
+
+  it('keeps API section order and labels when several statuses are present', () => {
+    const presentation = composeSignalFeedPresentation([
+      { status: 'open', items: [item({ id: '1', status: 'open' })], has_more: false },
+      {
+        status: 'interesting',
+        items: [item({ id: '2', status: 'interesting' })],
+        has_more: false,
+      },
+      { status: 'resolved', items: [item({ id: '3', status: 'resolved' })], has_more: false },
+      { status: 'canceled', items: [item({ id: '4', status: 'canceled' })], has_more: false },
+    ])
+
+    expect(presentation.groups?.map((group) => group.status)).toEqual([
+      'open',
+      'interesting',
+      'resolved',
+      'canceled',
+    ])
+    expect(presentation.groups?.[1]?.label).toBe('Intéressants')
+    expect(presentation.groups?.[1]?.dotVariant).toBe('mint')
+    expect(presentation.groups?.[3]?.label).toBe('Annulées')
+  })
+
+  it('excludes pinned open items from the open section', () => {
+    const presentation = composeSignalFeedPresentation([
+      {
+        status: 'open',
+        items: [
+          item({ id: 'pinned-open', is_pinned: true, status: 'open' }),
+          item({ id: 'plain-open', status: 'open' }),
+        ],
+        has_more: false,
+      },
+      {
+        status: 'in_progress',
+        items: [item({ id: 'progress', status: 'in_progress' })],
+        has_more: false,
+      },
+    ])
+
+    expect(presentation.pinnedItems.map((entry) => entry.id)).toEqual(['pinned-open'])
+    expect(presentation.groups?.[0]?.items.map((entry) => entry.id)).toEqual(['plain-open'])
+    expect(presentation.groups?.[1]?.items.map((entry) => entry.id)).toEqual(['progress'])
   })
 })
 

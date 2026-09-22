@@ -8,7 +8,6 @@ import type { SignalDetail, SignalFeedItem, SignalFeedResponse } from '../types'
 import {
   appendSignalFeedSectionPage,
   applySignalQuickActionSuccess,
-  continuationPageSizeForRemainingDepth,
   feedItemPatchFromDetail,
   invalidateSignalFeedViewModes,
   patchSignalInActiveFeedCache,
@@ -267,12 +266,7 @@ describe('refillSignalFeedToLoadedDepth', () => {
     expect(result.sections[0]?.next_cursor).toBe('cursor-2')
     expect(result.sections[0]?.has_more).toBe(true)
     expect(fetchSectionPage).toHaveBeenCalledTimes(1)
-    expect(fetchSectionPage).toHaveBeenCalledWith(
-      'open',
-      'cursor-1',
-      continuationPageSizeForRemainingDepth(15),
-    )
-    expect(continuationPageSizeForRemainingDepth(15)).toBe(15)
+    expect(fetchSectionPage).toHaveBeenCalledWith('open', 'cursor-1', 15)
   })
 
   it('does not enlarge an unpaginated section because another section was deeper', async () => {

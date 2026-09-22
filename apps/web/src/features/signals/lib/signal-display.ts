@@ -45,61 +45,6 @@ const STATUS_GROUP_META: Record<
   canceled: { label: 'Annulées', dotVariant: 'muted' },
 }
 
-/**
- * Groups feed items by Signal status for section labels. Preserves API order within each group.
- * Omits grouping when only one status is present (flat list).
- */
-export function groupFeedItemsByStatus(items: SignalFeedItem[]): SignalFeedStatusGroup[] | null {
-  const open = items.filter((item) => item.status === 'open')
-  const inProgress = items.filter((item) => item.status === 'in_progress')
-  const interesting = items.filter((item) => item.status === 'interesting')
-  const resolved = items.filter((item) => item.status === 'resolved')
-  const canceled = items.filter((item) => item.status === 'canceled')
-
-  const presentGroups: SignalFeedStatusGroup[] = []
-  if (open.length > 0) {
-    presentGroups.push({
-      status: 'open',
-      ...STATUS_GROUP_META.open,
-      items: open,
-    })
-  }
-  if (inProgress.length > 0) {
-    presentGroups.push({
-      status: 'in_progress',
-      ...STATUS_GROUP_META.in_progress,
-      items: inProgress,
-    })
-  }
-  if (interesting.length > 0) {
-    presentGroups.push({
-      status: 'interesting',
-      ...STATUS_GROUP_META.interesting,
-      items: interesting,
-    })
-  }
-  if (resolved.length > 0) {
-    presentGroups.push({
-      status: 'resolved',
-      ...STATUS_GROUP_META.resolved,
-      items: resolved,
-    })
-  }
-  if (canceled.length > 0) {
-    presentGroups.push({
-      status: 'canceled',
-      ...STATUS_GROUP_META.canceled,
-      items: canceled,
-    })
-  }
-
-  if (presentGroups.length <= 1) {
-    return null
-  }
-
-  return presentGroups
-}
-
 /** Splits API-ordered feed items into pinned (top zone) and unpinned (status sections). */
 export function partitionFeedPinnedItems(items: SignalFeedItem[]): {
   pinnedItems: SignalFeedItem[]
@@ -120,13 +65,11 @@ export function partitionFeedPinnedItems(items: SignalFeedItem[]): {
 export type SignalFeedSectionInput = {
   status: SignalFeedStatusGroup['status'] | string
   items: SignalFeedItem[]
-  next_cursor: string | null
   has_more: boolean
 }
 
 export type SignalFeedSectionPresentation = SignalFeedStatusGroup & {
   hasMore: boolean
-  nextCursor: string | null
 }
 
 export function composeSignalFeedPresentation(sections: SignalFeedSectionInput[]): {
@@ -135,7 +78,6 @@ export function composeSignalFeedPresentation(sections: SignalFeedSectionInput[]
   flatUnpinnedItems: SignalFeedItem[]
   flatHasMore: boolean
   flatStatus: SignalFeedStatusGroup['status'] | null
-  flatNextCursor: string | null
   hasContent: boolean
 } {
   const pinnedItems: SignalFeedItem[] = []
@@ -158,7 +100,6 @@ export function composeSignalFeedPresentation(sections: SignalFeedSectionInput[]
       ...meta,
       items,
       hasMore: section.has_more,
-      nextCursor: section.next_cursor,
     })
   }
 
@@ -174,7 +115,6 @@ export function composeSignalFeedPresentation(sections: SignalFeedSectionInput[]
       flatUnpinnedItems: only?.items ?? [],
       flatHasMore: only?.hasMore ?? false,
       flatStatus: only?.status ?? null,
-      flatNextCursor: only?.nextCursor ?? null,
       hasContent,
     }
   }
@@ -185,7 +125,6 @@ export function composeSignalFeedPresentation(sections: SignalFeedSectionInput[]
     flatUnpinnedItems: [],
     flatHasMore: false,
     flatStatus: null,
-    flatNextCursor: null,
     hasContent,
   }
 }
