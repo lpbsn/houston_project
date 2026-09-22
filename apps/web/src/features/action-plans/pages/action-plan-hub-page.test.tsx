@@ -112,10 +112,9 @@ describe('ActionPlanHubPage', () => {
     vi.clearAllMocks()
   })
 
-  it('renders catalog frame without a centered 7xl rail', () => {
+  it('renders the catalog heading and a catalog row', () => {
     render(createElement(ActionPlanHubPage))
 
-    expect(screen.getByTestId('action-plan-hub-frame').className).not.toContain('max-w-7xl')
     expect(screen.getByRole('heading', { name: 'Bibliothèque' })).toBeTruthy()
     expect(screen.getByText('Réassort bar hebdomadaire')).toBeTruthy()
   })

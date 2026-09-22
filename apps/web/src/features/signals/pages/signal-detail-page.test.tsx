@@ -238,17 +238,7 @@ describe('SignalDetailPage aggregation count', () => {
 })
 
 describe('SignalDetailPage tabs', () => {
-  it('shows Détails tab by default and does not mount CommentSection', () => {
-    renderPage()
-
-    expect(getDetailsTab().getAttribute('aria-selected')).toBe('true')
-    expect(getCommentsTab().getAttribute('aria-selected')).toBe('false')
-    expect(screen.getByText('Fuite d eau')).toBeTruthy()
-    expect(screen.queryByTestId('comment-section')).toBeNull()
-    expect(CommentSectionMock).not.toHaveBeenCalled()
-  })
-
-  it('renders one responsive details layout without duplicate fetches or actions', () => {
+  it('renders one details layout without duplicate fetches or actions', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -272,12 +262,9 @@ describe('SignalDetailPage tabs', () => {
     renderPage()
 
     const detailsPanel = screen.getByTestId('signal-detail-details-panel')
-    expect(detailsPanel.className).not.toContain('hidden')
     const frame = screen.getByTestId('signal-detail-frame')
-    expect(frame.className).not.toContain('max-w-7xl')
     expect(frame.contains(screen.getByTestId('signal-detail-tab-bar'))).toBe(true)
     expect(frame.contains(detailsPanel)).toBe(true)
-    expect(screen.getByTestId('signal-detail-tab-bar').className).toContain('lg:sticky')
     expect(screen.getAllByRole('button', { name: "+ Plan d'action" })).toHaveLength(1)
     expect(detailQueryMock).toHaveBeenCalledTimes(1)
     expect(CommentSectionMock).not.toHaveBeenCalled()
@@ -368,10 +355,9 @@ describe('SignalDetailPage tabs', () => {
 
     fireEvent.click(getCommentsTab())
 
-    expect(screen.getByTestId('signal-detail-details-panel').className).toContain('hidden')
-    expect(screen.getByTestId('signal-detail-comments-panel').className).not.toContain('hidden')
     expect(getCommentsTab().getAttribute('aria-selected')).toBe('true')
     expect(getDetailsTab().getAttribute('aria-selected')).toBe('false')
+    expect(screen.getByTestId('comment-section')).toBeTruthy()
   })
 
   it('preserves Analytics context when opening Signal-linked Plan creation', () => {
@@ -575,9 +561,6 @@ describe('SignalDetailPage lifecycle actions', () => {
 
     expect(screen.getByText('Demande de résolution')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Demander la résolution' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Demander la résolution' }).className).toContain(
-      'bg-[#114660]',
-    )
   })
 
   it('places resolution section after description', () => {
@@ -706,10 +689,8 @@ describe('SignalDetailPage lifecycle actions', () => {
 
     renderPage()
 
-    const approve = screen.getByRole('button', { name: 'Approuver' })
-    const reject = screen.getByRole('button', { name: 'Refuser la demande' })
-    expect(approve.className).toContain('bg-[#1D9E75]')
-    expect(reject.className).toContain('bg-destructive')
+    expect(screen.getByRole('button', { name: 'Approuver' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Refuser la demande' })).toBeTruthy()
   })
 
   it('keeps history and create CTA after rejected request', () => {

@@ -44,6 +44,7 @@ markers = [
     "allow_openai_pattern_classify: test may call OpenAIPatternClassifierProvider.classify with a mocked client",
     "openai_transcription_smoke: opt-in live OpenAI transcription test",
     "slow: tests over 1s or explicit sleep",
+    "heavy: measured dataset/catalog-mass/demo-replay cost that is not a runtime user invariant",
     "auth_throttle: tests that assert real rate-limit behavior (429); excluded from relaxed-throttle fixture",
 ]
 

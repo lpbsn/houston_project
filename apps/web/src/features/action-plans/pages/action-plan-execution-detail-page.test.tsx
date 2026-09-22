@@ -239,17 +239,6 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
     })
   })
 
-  it('shows Détails tab by default and does not mount CommentSection', () => {
-    renderPage()
-
-    expect(getDetailsTab().getAttribute('aria-selected')).toBe('true')
-    expect(getCommentsTab().getAttribute('aria-selected')).toBe('false')
-    expect(screen.getByText('Plan nettoyage terrasse')).toBeTruthy()
-    expect(screen.getByRole('tabpanel', { name: /détails/i })).toBeTruthy()
-    expect(screen.queryByTestId('comment-section')).toBeNull()
-    expect(CommentSectionMock).not.toHaveBeenCalled()
-  })
-
   it('mounts CommentSection on first click on Commentaires', () => {
     renderPage()
 
@@ -403,10 +392,9 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
 
     fireEvent.click(getCommentsTab())
 
-    expect(screen.getByTestId('execution-detail-details-panel').className).toContain('hidden')
-    expect(screen.getByTestId('execution-detail-comments-panel').className).not.toContain('hidden')
     expect(getCommentsTab().getAttribute('aria-selected')).toBe('true')
     expect(getDetailsTab().getAttribute('aria-selected')).toBe('false')
+    expect(screen.getByTestId('comment-section')).toBeTruthy()
   })
 
   it('renders a single lifecycle footer inside the responsive desktop panel', () => {
@@ -414,26 +402,13 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
 
     const footer = screen.getByTestId('execution-validation-actions')
     expect(footer.tagName).toBe('FOOTER')
-    expect(footer.className).toContain('sticky')
-    expect(footer.className).not.toContain('lg:relative')
-    expect(footer.className).not.toContain('lg:bottom-auto')
-    expect(footer.className).toContain('lg:rounded-2xl')
     expect(screen.getAllByTestId('execution-validation-actions')).toHaveLength(1)
-    expect(screen.getByTestId('execution-detail-tab-bar').className).toContain('lg:sticky')
     const detailsPanel = screen.getByTestId('execution-detail-details-panel')
-    expect(detailsPanel.className).toContain('flex')
-    expect(detailsPanel.className).toContain('min-h-full')
-    expect(detailsPanel.className).toContain('flex-col')
-    expect(detailsPanel.className).not.toContain('hidden')
-    expect(detailsPanel.className).not.toContain('flex-1')
-    expect(detailsPanel.className).not.toContain('min-h-0')
     expect(detailsPanel.contains(footer)).toBe(true)
     const paddedContent = screen.getByTestId('execution-detail-details-content')
-    expect(paddedContent.className).not.toContain('pb-40')
     expect(detailsPanel.contains(paddedContent)).toBe(true)
     expect(paddedContent.contains(footer)).toBe(false)
     const frame = screen.getByTestId('execution-detail-frame')
-    expect(frame.className).not.toContain('max-w-7xl')
     expect(frame.contains(screen.getByTestId('execution-detail-tab-bar'))).toBe(true)
     expect(frame.contains(detailsPanel)).toBe(true)
   })

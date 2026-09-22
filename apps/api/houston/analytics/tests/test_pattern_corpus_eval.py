@@ -22,7 +22,7 @@ from houston.analytics.pattern_corpus_eval import (
     selected_scenarios_have_no_orphan_pairs,
 )
 from houston.analytics.services import create_operational_pattern
-from houston.analytics.tests.test_classification_services import create_signal_for_membership
+from houston.analytics.tests.helpers import create_signal_for_membership
 from houston.signals.models import Signal
 from houston.testing.analytics_pattern_corpus import (
     CORPUS_SCHEMA_VERSION,

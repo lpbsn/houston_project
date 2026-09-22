@@ -6,13 +6,15 @@ import pytest
 
 from houston.action_plans.services import create_action_plan_with_execution
 from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
+from houston.chat.models import ChatConversation, ChatParticipant
+from houston.comments.services import create_signal_comment
 from houston.establishments.models import EstablishmentMembership
 from houston.notifications.models import Notification
 from houston.notifications.permissions import (
     notification_visible_to_membership,
     recipient_can_view_notification_subject,
 )
-from houston.notifications.tests.conftest import create_test_notification
+from houston.notifications.tests.helpers import create_test_notification
 from houston.signals.models import Signal
 from houston.signals.tests.conftest import create_minimal_v3_signal
 from houston.testing.auth import (
@@ -134,6 +136,63 @@ def test_recipient_can_view_canceled_signal_director_without_pole_scope():
         establishment_id=owner.establishment_id,
         subject_type=Notification.SubjectType.SIGNAL,
         subject_id=canceled_signal.id,
+    )
+
+
+def test_recipient_can_view_comment_subject_on_visible_signal():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = create_minimal_v3_signal(owner, status=Signal.Status.OPEN)
+    comment = create_signal_comment(author_membership=owner, signal=signal, body="Seen")
+
+    assert recipient_can_view_notification_subject(
+        recipient=owner,
+        establishment_id=owner.establishment_id,
+        subject_type=Notification.SubjectType.COMMENT,
+        subject_id=comment.id,
+    )
+    outsider = build_api_membership()
+    assert (
+        recipient_can_view_notification_subject(
+            recipient=outsider,
+            establishment_id=outsider.establishment_id,
+            subject_type=Notification.SubjectType.COMMENT,
+            subject_id=comment.id,
+        )
+        is False
+    )
+
+
+def test_recipient_can_view_chat_subject_only_as_participant():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    owner.establishment.chat_enabled = True
+    owner.establishment.save(update_fields=["chat_enabled"])
+    conversation = ChatConversation.objects.create(
+        establishment=owner.establishment,
+        type=ChatConversation.Type.GROUP,
+        title="Ops",
+        created_by_membership=owner,
+    )
+    ChatParticipant.objects.create(
+        conversation=conversation,
+        membership=owner,
+        role=ChatParticipant.Role.ADMIN,
+    )
+
+    assert recipient_can_view_notification_subject(
+        recipient=owner,
+        establishment_id=owner.establishment_id,
+        subject_type=Notification.SubjectType.CHAT_CONVERSATION,
+        subject_id=conversation.id,
+    )
+    outsider = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    assert (
+        recipient_can_view_notification_subject(
+            recipient=outsider,
+            establishment_id=owner.establishment_id,
+            subject_type=Notification.SubjectType.CHAT_CONVERSATION,
+            subject_id=conversation.id,
+        )
+        is False
     )
 
 

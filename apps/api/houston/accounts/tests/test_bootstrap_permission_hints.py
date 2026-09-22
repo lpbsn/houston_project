@@ -5,6 +5,7 @@ from rest_framework.test import APIClient
 
 from houston.accounts.models import User
 from houston.accounts.permission_hints import build_bootstrap_permission_hints
+from houston.accounts.tests.helpers import create_membership, ensure_csrf, login
 from houston.action_plans.permissions import (
     can_create_catalog_action_plan,
     can_view_action_plan_catalog,
@@ -18,8 +19,6 @@ from houston.establishments.permissions import (
     can_view_team_memberships,
 )
 from houston.organizations.models import Organization
-
-from .test_auth_api import create_membership, ensure_csrf, login
 
 pytestmark = pytest.mark.django_db
 

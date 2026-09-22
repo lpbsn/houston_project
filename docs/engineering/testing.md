@@ -6,11 +6,14 @@ Phase build: tests protect **product risk**, not line coverage or implementation
 
 - A test must protect a **behavior**, **business rule**, **permission**, **API contract**, or **critical regression**.
 - **Check existing coverage** in the same domain and layer before adding a test — extend a focused test rather than duplicating another layer.
+- **Grow by extending, not by multiplying files.** When a feature lands: find the existing invariant (permissions matrix, service test, selector, one API case, or corpus row); extend that table or corpus. Add another layer only when the new risk is distinct (HTTP shape, CSRF, after-commit, IDOR with a side effect). Do not add `test_*lot*`, `*_spike*`, a versioned golden (`*_vN_golden` beside the current apply-side corpus), or a journey that only re-proves wiring already covered.
+- **Isolation is a table, not a new file per endpoint.** Cross-establishment 404/empty-list cases belong in one parametrized suite per domain. Do not re-prove `is_valid_membership` fail-closed in every app’s `test_permissions.py`.
+- **Pipeline apply-side has one current corpus.** Lots are metadata on that corpus, not extra pytest modules. Keep G01–G11 / current V6 apply-side in the PR suite. Live OpenAI smokes stay opt-in.
 - Prefer explicit setup over opaque fixtures.
-- Do not use source inspection (`readFileSync` + `toContain`) for behavior.
+- Do not use source inspection (`readFileSync` + `toContain`) for application behavior. Isolation tests may read committed nginx / Capacitor / Vite / package scripts when the invariant is a **deploy file** that TypeScript never executes. That is complementary to `apps/web/scripts/validate-*-build.mjs`, which assert **produced** `dist` / `dist-native` / `dist-landing` artifacts after a build. Do not use `readFileSync` to assert that a TypeScript source still contains a symbol.
 - Do not chase global coverage percentages or per-file test quotas.
 - Delete weak tests rather than maintaining historical noise.
-- During development: run **targeted** tests (`make backend-test ARGS='…'`, `npm test -- path`); before merge: project gates (`make backend-check`, `make verify`, `make web-lint`).
+- During development: run **targeted** tests (`make backend-test ARGS='…'`, `npm test -- path`); before merge: project gates (`make backend-check`, `make web-check` / `make verify`).
 
 ## Risk by layer
 
@@ -62,7 +65,10 @@ make lint
 docker compose exec api sh -lc 'cd /app/apps/api && uv run pytest --durations=50 -q'
 
 # Reproduce CI backend test env locally (DJANGO_DEBUG=0, production throttle rates)
-docker compose exec api sh -lc 'cd /app/apps/api && DJANGO_DEBUG=0 uv run pytest -m "not openai_observation_smoke and not openai_smoke and not slow" -q'
+make backend-test-ci
+
+# Heavy suite (Konoha replay and other measured `heavy` tests; not a PR gate)
+make backend-test-heavy
 ```
 
 Do not run `cd apps/api && uv run pytest` on the host — use Make targets or `docker compose exec api`.
@@ -89,21 +95,22 @@ Do not run `cd apps/api && uv run pytest` on the host — use Make targets or `d
 |--------|---------|-------|
 | *(none)* | Standard fake-provider suite | Yes |
 | `slow` | Reserved — requires **explicit justification** in code review: real sleep, sustained >1s runtime, live external API, or heavy concurrency | No (excluded via Makefile/CI filter) |
+| `heavy` | Measured dataset / catalog-mass / demo-replay cost that is not a runtime user invariant (e.g. Konoha replay). Requires `--durations` evidence. **Do not** mark apply-side pipeline goldens G01–G11 or V6 acceptance that guard aggregation. | No (excluded via Makefile/CI filter; run with `make backend-test-heavy` or drop `-m`) |
 | `openai_observation_smoke` | Live OpenAI observation pipeline; env `HOUSTON_RUN_OPENAI_OBSERVATION_SMOKE_TEST=1` | No |
 | `openai_smoke` | Reserved onboarding live smoke; env `HOUSTON_RUN_OPENAI_SMOKE_TEST=1` — **no tests yet** | No |
 | `openai_transcription_smoke` | Reserved transcription live smoke — **no tests yet** | No |
-| `auth_throttle` | Real rate-limit behavior (429); excluded from relaxed-throttle autouse fixture | Yes (when not also `slow`) |
+| `auth_throttle` | Real rate-limit behavior (429); excluded from relaxed-throttle autouse fixture | Yes (when not also `slow` / `heavy`) |
 
 #### Fake provider vs live smoke (do not conflate)
 
 | Category | Provider | CI PR |
 |----------|----------|-------|
-| **Standard suite** (~1 600+ tests) | `FakeObservationPipelineProvider` via autouse `force_fake_observation_pipeline_provider` | Yes |
+| **Standard suite** (PR filter; ~2 900 collected functions as of the backend test-strategy audit) | `FakeObservationPipelineProvider` via autouse `force_fake_observation_pipeline_provider` | Yes |
 | **Provider guard tests** | Fake + mocked OpenAI client (`test_observation_pipeline_provider.py`) | Yes |
 | **Pipeline validation / golden** | Fake provider, DB-heavy | Yes (in PR) |
 | **Live OpenAI smoke** | Real OpenAI (`test_openai_observation_pipeline_v6_contract_smoke.py`, `test_openai_observation_pipeline_v6_business_smoke.py`) | No — manual / pre-release only; optional local archives under `.artifacts/pipeline-v6-smoke/` (gitignored, not source of truth) |
 
-PR filter (Makefile + CI): `-m "not openai_observation_smoke and not openai_smoke and not slow"`.
+PR filter (Makefile + CI — keep the two strings identical): `-m "not openai_observation_smoke and not openai_smoke and not slow and not heavy"`.
 
 ### Auth throttling in pytest
 
@@ -162,8 +169,9 @@ cd apps/web && npm run typecheck
 - Lib tests stay in **Node** (fast, no DOM).
 - Auth provider uses **jsdom** (app `queryClient`). TanStack Query mutations use **jsdom** + `createTestQueryClient`. WebSocket hooks use **jsdom** with local mocks.
 - Do not wait on real time for WebSocket auth timeout or reconnect. Use `vi.useFakeTimers()` and `vi.advanceTimersByTimeAsync` in the chat/operational WS hook tests. Presence intervals can use `vi.advanceTimersByTime` (`use-chat-conversation-presence.test.ts`). Do not raise the global `testTimeout` to absorb load.
-- Do not assert exact Tailwind classes, shadcn primitive styling, or French copy unless the string encodes a business rule exported from lib code.
+- Do not assert exact Tailwind classes, shadcn primitive styling, or decorative/marketing French copy. Keep copy that **is** the product contract (permission denial, destructive confirmation, legal obligation, error that blocks a critical action), even without a dedicated lib constant. Shell overflow / safe-area contracts already justified in `TerrainShell` tests may assert classes when behavior (scroll, focus) is not enough.
 - Do not add page tests for layout or copy when the rule already lives in lib/hook tests.
+- Test files are excluded from `tsconfig.app.json`. `tsconfig.vitest.json` sets `noCheck: true` because a full test typecheck currently reports ~150 diagnostics, mostly partial mocks (`TS2345`/`TS2556` spread/callback arity) and incomplete fixtures (`TS2353`/`TS2739`), not a small set of real call-site errors. Do not add `vitest --typecheck` beside `tsc -b`.
 
 ## CI vs local gates
 
@@ -175,28 +183,31 @@ GitHub Actions (`.github/workflows/ci.yml`):
 
 | Job | Steps |
 |-----|-------|
-| `backend-tests` | Django check, deploy check, migrations, ruff, OpenAPI regen + diff, pytest (PostgreSQL + Redis; smoke/slow excluded) |
+| `backend-tests` | Django check, deploy check, migrations, ruff, OpenAPI regen + diff, pytest (PostgreSQL + Redis; smoke/slow/heavy excluded) |
 | `frontend-tests` | `npm ci`, `api:generate` + diff, lint, vitest, `typecheck` (`tsc -b` once), `build:bundle` and `build:native:bundle` (vite only — no second `tsc -b`) |
 | `docs-check` | `scripts/docs_check.py`, `scripts/agent_config_check.py` |
 
 **Runtime note:** CI backend steps run **native `uv`** with GitHub Actions Postgres/Redis services. Local backend validation uses **Make/Docker only** (`make backend-check`, `make verify`) — do not run `cd apps/api && uv run …` on the host. Frontend checks may run natively from `apps/web` or via `make web-*`.
 
-**Lint parity:** CI runs `npm run lint`; `make verify` / `web-check` do not — run `make web-lint` before merge when you need full parity.
+`make web-check` matches the **validations** of `frontend-tests`: lint, vitest, `tsc -b` once (`web-typecheck`), web bundle via `npm run build:bundle` (no second `tsc`), native bundle (`web-build-native-check`), `web-api-generate-check`. Standalone `make web-build` still runs `npm run build` (`tsc -b` + vite) for a full local production build.
 
 ### Local validation targets
 
 | Target | What it runs |
 |--------|----------------|
-| `make backend-check` | Django check, ruff, migrations check, schema diff, pytest |
+| `make backend-test-ci` | Same pytest filter as PR, with `DJANGO_DEBUG=0` (production throttle/cache baseline) |
+| `make backend-test-heavy` | `heavy` tests only (Konoha replay); not a PR gate |
+| `make backend-deploy-check` | `manage.py check --deploy` with CI-equivalent env — **CI runs this; `backend-check` does not** |
+| `make backend-check` | Django check, ruff, migrations check, schema diff, pytest (PR marker filter) |
 | `make web-api-generate-check` | regen `types.ts` from committed `schema.yml` + `git diff` |
-| `make web-check` | vitest, typecheck, web build, native bundle with placeholder `VITE_API_BASE_URL` and `VITE_PUBLIC_APP_URL` (`web-build-native-check`), `web-api-generate-check` |
+| `make web-check` | lint, vitest, typecheck once, `build:bundle`, native bundle with placeholder `VITE_API_BASE_URL` and `VITE_PUBLIC_APP_URL` (`web-build-native-check`), `web-api-generate-check` |
 | `make local-check` | `backend-check` + `web-check` |
 | `make verify` | alias for `local-check` |
 | `make docs-check` | `scripts/docs_check.py` + `scripts/agent_config_check.py` |
 | `make agent-config-check` | `.cursor` / `.agents` structural invariants |
 | `make agent-config-sync` | copy canonical `.cursor` commands/rules/skills → `.agents` |
 
-Run `make verify && make web-lint` before merging when the Docker stack is up and you need full confidence. For day-to-day backend work, `make backend-test` or `make backend-lint` is enough.
+Run `make verify` before merging when the Docker stack is up and you need full confidence. For day-to-day backend work, `make backend-test` or `make backend-lint` is enough.
 
 Profiling: `--durations=50` and optional local Vitest JSON under `.artifacts/` — **no arbitrary duration quotas**; optimize only measured bottlenecks.
 

@@ -2,7 +2,7 @@
 	build build-backend build-web build-prod-test-web \
 	up up-build up-backend up-scheduler up-prod-test down-prod-test migrate-prod-test restart-backend recreate-backend down \
 	check test lint schema schema-check shell migrate migrations-check \
-	backend-lint backend-migrations-check backend-schema backend-schema-check backend-deploy-check backend-test backend-check backend-rebuild \
+	backend-lint backend-migrations-check backend-schema backend-schema-check backend-deploy-check backend-test backend-test-ci backend-test-heavy backend-check backend-rebuild \
 	web-install web-dev web-dev-native web-dev-landing web-build web-build-native web-build-native-check web-cap-sync web-cap-sync-release android-bundle-release web-build-landing web-typecheck web-lint web-test web-api-generate web-api-generate-check web-check \
 	verify local-check docker-verify-security infra-check \
 	docs-check agent-config-check agent-config-sync \
@@ -26,7 +26,8 @@ API_DIR := /app/apps/api
 WEB_DIR := apps/web
 NATIVE_RELEASE_ORIGIN := https://app.spore-os.com
 
-PYTEST_MARKERS := not openai_observation_smoke and not openai_smoke and not slow
+PYTEST_MARKERS := not openai_observation_smoke and not openai_smoke and not slow and not heavy
+PYTEST_HEAVY_MARKERS := heavy and not openai_observation_smoke and not openai_smoke
 PYTEST_ARGS := -m "$(PYTEST_MARKERS)" -q
 # Optional extra pytest args, e.g. make backend-test PYTEST_EXTRA_ARGS="houston/action_plans/tests/test_schedule_api.py -k staff"
 PYTEST_EXTRA_ARGS ?=
@@ -164,6 +165,12 @@ backend-deploy-check:
 backend-test: assert-local-dev-db
 	$(API_CMD) 'cd $(API_DIR) && uv run pytest $(PYTEST_ARGS) $(PYTEST_EXTRA_ARGS)'
 
+backend-test-ci: assert-local-dev-db
+	$(API_CMD) 'cd $(API_DIR) && DJANGO_DEBUG=0 uv run pytest $(PYTEST_ARGS) $(PYTEST_EXTRA_ARGS)'
+
+backend-test-heavy: assert-local-dev-db
+	$(API_CMD) 'cd $(API_DIR) && uv run pytest -m "$(PYTEST_HEAVY_MARKERS)" -q $(PYTEST_EXTRA_ARGS)'
+
 backend-check: check backend-lint backend-migrations-check backend-schema-check backend-test
 
 backend-rebuild: down build-backend up-backend
@@ -265,7 +272,10 @@ web-api-generate-check:
 	cd $(WEB_DIR) && npm run api:generate
 	git diff --exit-code apps/web/src/api/generated/types.ts
 
-web-check: web-test web-typecheck web-build web-build-native-check web-api-generate-check
+# Same validations as CI frontend-tests: lint, vitest, tsc once, vite bundles
+# (no second tsc via `npm run build`). Standalone `web-build` still typechecks.
+web-check: web-lint web-test web-typecheck web-build-native-check web-api-generate-check
+	cd $(WEB_DIR) && npm run build:bundle
 
 # -----------------------------------------------------------------------------
 # Full validation

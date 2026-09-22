@@ -34,7 +34,7 @@ from houston.gamification.constants import BADGE_CODE_BRONZE, CURRENT_RULE_VERSI
 from houston.gamification.models import BadgeAward, GamificationSeason, PointTransaction
 from houston.gamification.services import open_season
 from houston.notifications.models import Notification
-from houston.notifications.tests.conftest import create_test_notification
+from houston.notifications.tests.helpers import create_test_notification
 from houston.observations.models import Observation, ObservationMedia, ObservationProcessing
 from houston.signals.models import Signal
 from houston.testing.factories import build_membership

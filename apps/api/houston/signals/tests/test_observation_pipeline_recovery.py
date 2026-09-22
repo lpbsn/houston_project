@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -80,6 +81,10 @@ def test_provider_unavailable_then_retry_completes_without_duplicate_signals():
     assert processing.outcome
     assert processing.attempt_count >= 2
     assert Signal.objects.filter(establishment=membership.establishment).count() == 1
+
+
+def test_process_observation_task_unknown_observation_is_noop():
+    process_observation_task.run(str(uuid.uuid4()))
 
 
 def test_process_observation_task_retries_after_provider_unavailable():
