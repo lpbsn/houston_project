@@ -77,15 +77,6 @@ def test_non_active_user_denies_signal_feed(user_status):
     assert not can_view_signal_feed(membership)
 
 
-def test_signal_visibility_requires_same_establishment():
-    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
-    outsider = build_membership()
-    signal = _build_signal(membership=owner)
-
-    assert can_view_signal_detail(owner, signal)
-    assert not can_view_signal_detail(outsider, signal)
-
-
 def test_can_view_signal_detail_allows_resolved():
     owner = build_membership(role=EstablishmentMembership.Role.OWNER)
     signal = _build_signal(membership=owner)

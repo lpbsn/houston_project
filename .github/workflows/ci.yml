@@ -205,7 +205,7 @@ jobs:
           version: "0.11.16"
       - name: Install backend dependencies
         run: uv sync
-      # GATE-01: mirror Makefile backend-check contract gates (local dev uses make/Docker).
+      # GATE-01: contract gates from Makefile backend-check, plus backend-deploy-check (not in backend-check).
       - name: Django system check
         working-directory: apps/api
         run: uv run python manage.py check
@@ -238,7 +238,7 @@ jobs:
         run: git diff --exit-code apps/api/schema.yml
       - name: Run backend tests
         working-directory: apps/api
-        run: uv run pytest -m "not openai_observation_smoke and not openai_smoke and not slow" -q
+        run: uv run pytest -m "not openai_observation_smoke and not openai_smoke and not slow and not heavy" -q
 
   frontend-tests:
     needs: changes

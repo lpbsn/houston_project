@@ -50,7 +50,7 @@ from houston.action_plans.tests.helpers import (
 )
 from houston.comments.models import Comment
 from houston.notifications.models import Notification
-from houston.notifications.tests.conftest import create_test_notification
+from houston.notifications.tests.helpers import create_test_notification
 from houston.observations.models import Observation
 
 pytestmark = pytest.mark.django_db

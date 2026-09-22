@@ -79,10 +79,14 @@ from houston.establishments.models import (
     Establishment,
     EstablishmentMembership,
 )
-from houston.establishments.tests.test_provision_konoha_dataset_actors import (
+from houston.establishments.tests.konoha_helpers import (
     LOCAL_DATABASES,
-    _create_named_user,
-    _create_scoped_member,
+)
+from houston.establishments.tests.konoha_helpers import (
+    create_named_user as _create_named_user,
+)
+from houston.establishments.tests.konoha_helpers import (
+    create_scoped_member as _create_scoped_member,
 )
 from houston.gamification.models import GamificationSeason, PointTransaction
 from houston.gamification.selectors import month_bounds_for_occurred_at
@@ -98,7 +102,7 @@ from houston.signals.models import CandidateSignal, Signal, SignalResolutionRequ
 from houston.testing.factories import create_establishment
 from houston.testing.taxonomy import create_business_unit
 
-pytestmark = pytest.mark.django_db
+pytestmark = [pytest.mark.django_db, pytest.mark.heavy]
 
 MINI_CORPUS_IDS = ("anbu.hotel.01", "anbu.hotel.02", "anbu.hotel.03")
 

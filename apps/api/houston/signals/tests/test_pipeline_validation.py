@@ -605,3 +605,19 @@ def test_apply_pipeline_logs_create_when_issue_focus_differs(caplog):
     assert record.hint_used is False
     assert getattr(record, "hint_rejected_reason", "") == ""
     assert record.candidate_outcome == CandidateSignal.Outcome.CREATED_SIGNAL
+
+
+def test_no_signal_created_when_candidates_empty():
+    membership = build_membership()
+    _setup_hotel_taxonomy(membership.establishment)
+    observation = create_observation(membership=membership)
+
+    outcome = apply_pipeline_output(
+        observation=observation,
+        output=ObservationPipelineOutput(
+            schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+            candidates=[],
+        ),
+    ).outcome
+
+    assert outcome == ObservationProcessing.Outcome.NO_SIGNAL_CREATED
