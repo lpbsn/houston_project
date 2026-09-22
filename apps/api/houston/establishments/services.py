@@ -1095,7 +1095,16 @@ def _accept_organizational_owner_invitation(
         raise InvalidEstablishmentInvitationError
     if membership.establishment.organization_id != organization_id:
         raise InvalidEstablishmentInvitationError
-    if membership.establishment.status != Establishment.Status.ACTIVE:
+    anchor_establishment = membership.establishment
+    if anchor_establishment.status == Establishment.Status.DRAFT:
+        has_active_onboarding = OnboardingSession.objects.filter(
+            organization_id=organization_id,
+            establishment_id=anchor_establishment.id,
+            status__in=OnboardingSession.NON_TERMINAL_STATUSES,
+        ).exists()
+        if not has_active_onboarding:
+            raise InvalidEstablishmentInvitationError
+    elif anchor_establishment.status != Establishment.Status.ACTIVE:
         raise InvalidEstablishmentInvitationError
     if invitation.accepted_at is not None:
         raise EstablishmentInvitationAlreadyAcceptedError

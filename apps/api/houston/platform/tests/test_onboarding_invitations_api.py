@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import uuid
+from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from houston.accounts.models import User
@@ -120,9 +122,7 @@ def test_http_owner_invitation_creates_membership_without_operator_row(api_clien
     assert membership.status == EstablishmentMembership.Status.INVITED
     assert EstablishmentMembership.objects.filter(user=operator).count() == 0
 
-    Establishment.objects.filter(pk=membership.establishment_id).update(
-        status=Establishment.Status.ACTIVE
-    )
+    assert membership.establishment.status == Establishment.Status.DRAFT
     csrf_token = ensure_csrf(api_client)
     accepted = api_client.post(
         "/api/v1/invitations/accept/",
@@ -139,6 +139,95 @@ def test_http_owner_invitation_creates_membership_without_operator_row(api_clien
     membership.refresh_from_db()
     assert membership.status == EstablishmentMembership.Status.ACTIVE
     assert EstablishmentMembership.objects.filter(user=operator).count() == 0
+
+
+def test_expired_owner_invitation_can_be_reissued_accepted_then_completed(api_client):
+    sync_catalog_from_normalized_rows()
+    operator = create_user(username="plat_owner_reinvite_op")
+    grant_operator(operator)
+    token = login(api_client, user=operator)
+    body = _start_onboarding(api_client, token)
+    session_id = body["id"]
+    session = OnboardingSession.objects.get(pk=session_id)
+    owner_email = f"owner_{uuid.uuid4().hex[:8]}@example.com"
+    director_email = f"director_{uuid.uuid4().hex[:8]}@example.com"
+    issued_tokens: list[str] = []
+
+    upsert_onboarding_draft_core(
+        session=session,
+        actor=operator,
+        payload=_valid_payload(
+            establishment_name=session.establishment.name,
+            director_email=director_email,
+        ),
+    )
+
+    def _capture_token(*, invitation, membership, raw_token):
+        issued_tokens.append(raw_token)
+        return "queued"
+
+    invite_path = f"/api/v1/platform/onboardings/{session_id}/owner-invitations/"
+    invite_payload = {
+        "email": owner_email,
+        "first_name": "Own",
+        "last_name": "Er",
+    }
+    with patch(
+        "houston.establishments.invitation_email.schedule_establishment_invitation_email",
+        side_effect=_capture_token,
+    ):
+        first_invite = api_client.post(
+            invite_path,
+            invite_payload,
+            format="json",
+            **auth_headers(token),
+        )
+        assert first_invite.status_code == 201
+        membership = EstablishmentMembership.objects.get(
+            pk=first_invite.json()["membership_id"]
+        )
+        first_invitation = EstablishmentInvitation.objects.get(
+            membership=membership,
+            revoked_at__isnull=True,
+        )
+        first_invitation.expires_at = timezone.now() - timedelta(minutes=1)
+        first_invitation.save(update_fields=["expires_at", "updated_at"])
+
+        second_invite = api_client.post(
+            invite_path,
+            invite_payload,
+            format="json",
+            **auth_headers(token),
+        )
+
+    assert second_invite.status_code == 201
+    assert len(issued_tokens) == 2
+    first_invitation.refresh_from_db()
+    assert first_invitation.revoked_at is not None
+
+    accepted = api_client.post(
+        "/api/v1/invitations/accept/",
+        {
+            "token": issued_tokens[-1],
+            "password": ACCEPT_PASSWORD,
+            "password_confirmation": ACCEPT_PASSWORD,
+            "refresh_token_transport": "cookie",
+        },
+        format="json",
+        HTTP_X_CSRFTOKEN=ensure_csrf(api_client),
+    )
+    assert accepted.status_code == 201, accepted.json()
+
+    complete = api_client.post(
+        f"/api/v1/platform/onboardings/{session_id}/complete/",
+        **auth_headers(token),
+    )
+    assert complete.status_code == 200, complete.json()
+    assert complete.json()["activated"] is True
+    membership.refresh_from_db()
+    session.refresh_from_db()
+    assert membership.status == EstablishmentMembership.Status.ACTIVE
+    assert session.status == OnboardingSession.Status.ACTIVATED
 
 
 def test_http_director_invite_and_complete_from_draft(api_client):
