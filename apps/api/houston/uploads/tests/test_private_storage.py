@@ -73,6 +73,37 @@ def test_chat_factory_does_not_use_signal_bucket(settings):
     assert storage._inner.addressing_style == "virtual"
 
 
+def test_action_plan_factory_does_not_use_chat_or_signal_bucket(settings):
+    settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "s3"
+    settings.HOUSTON_S3_ENDPOINT_URL = "https://s3.signal.invalid"
+    settings.HOUSTON_S3_BUCKET = "houston-private-media"
+    settings.HOUSTON_S3_ACCESS_KEY_ID = "signal-access-key"
+    settings.HOUSTON_S3_SECRET_ACCESS_KEY = "signal-secret-key"
+    settings.HOUSTON_S3_REGION = "auto"
+    settings.HOUSTON_S3_ADDRESSING_STYLE = "path"
+    settings.HOUSTON_CHAT_S3_ENDPOINT_URL = "https://s3.chat.invalid"
+    settings.HOUSTON_CHAT_S3_BUCKET = "chat-attachement"
+    settings.HOUSTON_CHAT_S3_ACCESS_KEY_ID = "chat-access-key"
+    settings.HOUSTON_CHAT_S3_SECRET_ACCESS_KEY = "chat-secret-key"
+    settings.HOUSTON_CHAT_S3_REGION = "auto"
+    settings.HOUSTON_CHAT_S3_ADDRESSING_STYLE = "virtual"
+    settings.HOUSTON_ACTION_PLAN_S3_ENDPOINT_URL = "https://s3.plans.invalid"
+    settings.HOUSTON_ACTION_PLAN_S3_BUCKET = "action-plan-attachments"
+    settings.HOUSTON_ACTION_PLAN_S3_ACCESS_KEY_ID = "plan-access-key"
+    settings.HOUSTON_ACTION_PLAN_S3_SECRET_ACCESS_KEY = "plan-secret-key"
+    settings.HOUSTON_ACTION_PLAN_S3_REGION = "auto"
+    settings.HOUSTON_ACTION_PLAN_S3_ADDRESSING_STYLE = "virtual"
+
+    from houston.uploads.private_storage import get_action_plan_comment_private_media_storage
+
+    storage = get_action_plan_comment_private_media_storage()
+
+    assert isinstance(storage._inner, S3Storage)
+    assert storage._inner.bucket_name == "action-plan-attachments"
+    assert storage._inner.endpoint_url == "https://s3.plans.invalid"
+    assert storage._inner.addressing_style == "virtual"
+
+
 def test_factory_rejects_unknown_backend(settings):
     settings.HOUSTON_PRIVATE_MEDIA_BACKEND = "minio"
 

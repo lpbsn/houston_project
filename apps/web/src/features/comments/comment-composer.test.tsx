@@ -56,6 +56,7 @@ describe('CommentComposer', () => {
     expect(onSubmit).toHaveBeenCalledWith({
       body: 'ping @Marie Martin',
       mentionedMembershipIds: ['member-1'],
+      attachmentIds: [],
     })
   })
 
@@ -72,6 +73,7 @@ describe('CommentComposer', () => {
     expect(onSubmit).toHaveBeenCalledWith({
       body: 'hello',
       mentionedMembershipIds: [],
+      attachmentIds: [],
     })
     expect((textarea as HTMLTextAreaElement).value).toBe('hello')
 
@@ -106,6 +108,25 @@ describe('CommentComposer', () => {
     expect(onSubmit).toHaveBeenCalledWith({
       body: 'Ma réponse',
       mentionedMembershipIds: [],
+      attachmentIds: [],
     })
+  })
+
+  it('does not show attach controls on Signal composer', () => {
+    render(<CommentComposer establishmentId="est-1" onSubmit={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: 'Joindre un fichier' })).toBeNull()
+  })
+
+  it('shows attach limits when enabled on an execution', () => {
+    render(
+      <CommentComposer
+        establishmentId="est-1"
+        executionId="exec-1"
+        attachEnabled
+        onSubmit={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Joindre un fichier' })).toBeTruthy()
+    expect(screen.getByText(/10 Mo max/)).toBeTruthy()
   })
 })

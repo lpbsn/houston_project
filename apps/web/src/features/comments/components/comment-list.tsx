@@ -12,8 +12,9 @@ import {
   scrollToHighlightedComment,
 } from '../lib/comment-highlight'
 import type {
-  CommentCreateRequest,
+  CommentAttachment,
   CommentItem,
+  ExecutionCommentCreateRequest,
   ExecutionCommentListItem,
 } from '../types'
 import { isExecutionInheritedSignalItem, isExecutionThreadItem } from '../types'
@@ -38,11 +39,14 @@ type ThreadedCommentListProps = {
   pendingReplyCommentId?: string | null
   isResolvePending?: boolean
   onReply: (
-    payload: CommentCreateRequest,
+    payload: ExecutionCommentCreateRequest,
     callbacks?: { onSuccess?: () => void },
   ) => void
   onResolve: (commentId: string) => void
   onUnresolve: (commentId: string) => void
+  onOpenAttachment?: (attachment: CommentAttachment) => void
+  attachEnabled?: boolean
+  executionId?: string
 } & HighlightableListProps
 
 type CommentListProps =
@@ -178,6 +182,9 @@ function ExecutionCommentList({
   onReply,
   onResolve,
   onUnresolve,
+  onOpenAttachment,
+  attachEnabled,
+  executionId,
 }: Extract<CommentListProps, { mode: 'execution' }>) {
   useScrollToHighlightedComment(highlightCommentId, comments)
 
@@ -224,6 +231,9 @@ function ExecutionCommentList({
               onReply={onReply}
               onResolve={onResolve}
               onUnresolve={onUnresolve}
+              onOpenAttachment={onOpenAttachment}
+              attachEnabled={attachEnabled}
+              executionId={executionId}
             />
           )
         }

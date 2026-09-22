@@ -1,10 +1,13 @@
-import { apiClient, withAuthRetry } from '@/api/client'
+import { apiClient, fetchWithAuthRetry, withAuthRetry } from '@/api/client'
 
 import { parseStandardApiError } from '@/lib/api-errors'
+import { resolveApiUrl } from '@/lib/runtime'
 
+import { isExternalPresignedPutUrl } from './lib/comment-upload-put'
 import type {
   CommentCreateRequest,
   CommentItem,
+  ExecutionCommentCreateRequest,
   ExecutionCommentListItem,
   ExecutionCommentThreadItem,
   MentionUserSearchResult,
@@ -131,7 +134,7 @@ export async function fetchExecutionComments(
 export async function createExecutionComment(
   establishmentId: string,
   executionId: string,
-  payload: CommentCreateRequest,
+  payload: ExecutionCommentCreateRequest,
 ): Promise<CommentItem> {
   const result = await withAuthRetry(
     (accessToken) =>
@@ -223,4 +226,130 @@ export async function searchEstablishmentUsersForMentions(
   )
 
   return assertCommentsData<MentionUserSearchResult[]>(result)
+}
+
+export type ActionPlanCommentReserveUploadResponse = {
+  upload_id: string
+  put_url: string
+  expires_at: string
+}
+
+export type ActionPlanCommentUploadCompleteResponse = {
+  upload_id: string
+  status: string
+  kind: string
+  content_type: string
+  size_bytes: number | null
+}
+
+export async function reserveActionPlanCommentUpload(
+  establishmentId: string,
+  executionId: string,
+  payload: { filename: string; contentType: string; sizeBytes: number },
+): Promise<ActionPlanCommentReserveUploadResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comment-uploads/',
+        {
+          params: {
+            path: {
+              establishment_id: establishmentId,
+              execution_id: executionId,
+            },
+          },
+          body: {
+            filename: payload.filename,
+            content_type: payload.contentType,
+            size_bytes: payload.sizeBytes,
+          },
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+  return assertCommentsData<ActionPlanCommentReserveUploadResponse>(result)
+}
+
+export async function refreshActionPlanCommentUploadPresign(
+  establishmentId: string,
+  executionId: string,
+  uploadId: string,
+): Promise<ActionPlanCommentReserveUploadResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comment-uploads/{upload_id}/presign/',
+        {
+          params: {
+            path: {
+              establishment_id: establishmentId,
+              execution_id: executionId,
+              upload_id: uploadId,
+            },
+          },
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+  return assertCommentsData<ActionPlanCommentReserveUploadResponse>(result)
+}
+
+export async function completeActionPlanCommentUpload(
+  establishmentId: string,
+  executionId: string,
+  uploadId: string,
+): Promise<ActionPlanCommentUploadCompleteResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comment-uploads/{upload_id}/complete/',
+        {
+          params: {
+            path: {
+              establishment_id: establishmentId,
+              execution_id: executionId,
+              upload_id: uploadId,
+            },
+          },
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+  return assertCommentsData<ActionPlanCommentUploadCompleteResponse>(result)
+}
+
+export async function putActionPlanCommentUploadBytes(options: {
+  establishmentId: string
+  executionId: string
+  uploadId: string
+  putUrl: string
+  blob: Blob
+  contentType: string
+}): Promise<void> {
+  const houstonContentUrl = resolveApiUrl(
+    `/api/v1/establishments/${options.establishmentId}/action-plan-executions/${options.executionId}/comment-uploads/${options.uploadId}/content/`,
+  )
+  if (isExternalPresignedPutUrl(options.putUrl, houstonContentUrl)) {
+    const response = await fetch(options.putUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': options.contentType },
+      body: options.blob,
+    })
+    if (!response.ok) {
+      throw new CommentsApiError({ status: response.status, detail: 'Échec de l’envoi du fichier.' })
+    }
+    return
+  }
+  const response = await fetchWithAuthRetry(houstonContentUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': options.contentType },
+    body: options.blob,
+  })
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}))
+    throw parseError(response, payload)
+  }
 }

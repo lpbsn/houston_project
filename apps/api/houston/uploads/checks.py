@@ -27,6 +27,14 @@ _CHAT_S3_REQUIRED_SETTINGS = (
     "HOUSTON_CHAT_S3_REGION",
 )
 
+_ACTION_PLAN_S3_REQUIRED_SETTINGS = (
+    "HOUSTON_ACTION_PLAN_S3_ENDPOINT_URL",
+    "HOUSTON_ACTION_PLAN_S3_BUCKET",
+    "HOUSTON_ACTION_PLAN_S3_ACCESS_KEY_ID",
+    "HOUSTON_ACTION_PLAN_S3_SECRET_ACCESS_KEY",
+    "HOUSTON_ACTION_PLAN_S3_REGION",
+)
+
 
 def _private_media_backend() -> str:
     backend = getattr(settings, "HOUSTON_PRIVATE_MEDIA_BACKEND", PRIVATE_MEDIA_BACKEND_FILESYSTEM)
@@ -140,6 +148,26 @@ def check_private_media_s3_configured(app_configs, **kwargs):
                     "and HOUSTON_CHAT_S3_REGION. HOUSTON_CHAT_S3_ADDRESSING_STYLE is optional."
                 ),
                 id="uploads.E007",
+            )
+        )
+    action_plan_missing = [
+        name
+        for name in _ACTION_PLAN_S3_REQUIRED_SETTINGS
+        if not (getattr(settings, name, "") or "").strip()
+    ]
+    if action_plan_missing:
+        errors.append(
+            Error(
+                "S3 action-plan comment media settings are incomplete: "
+                + ", ".join(action_plan_missing),
+                hint=(
+                    "Set HOUSTON_ACTION_PLAN_S3_ENDPOINT_URL, HOUSTON_ACTION_PLAN_S3_BUCKET, "
+                    "HOUSTON_ACTION_PLAN_S3_ACCESS_KEY_ID, "
+                    "HOUSTON_ACTION_PLAN_S3_SECRET_ACCESS_KEY, "
+                    "and HOUSTON_ACTION_PLAN_S3_REGION. "
+                    "HOUSTON_ACTION_PLAN_S3_ADDRESSING_STYLE is optional."
+                ),
+                id="uploads.E008",
             )
         )
     return errors

@@ -1,7 +1,7 @@
 # Comments Domain — Signal & Action Plan Execution Comments
 
 Status: authoritative
-Last reviewed: 2026-09-21
+Last reviewed: 2026-09-22
 
 Implementation status: implemented (REST threads, mentions, realtime invalidation)
 
@@ -30,6 +30,8 @@ V1 supports:
 - Display comments from oldest at the top to newest at the bottom.
 - Mention active users of the same establishment with `@`.
 - Display inherited Signal comments inside linked Action Plan executions.
+- Attach photos and PDF files to Action Plan **execution** comments (root or reply) when the plan is `in_progress` or `pending_validation`.
+- Surface those files under the originating comment and via Comments-tab **Médias** (Médias / Documents sheet).
 - Live refresh of comment lists via operational WebSocket **invalidation** (authorized refetch after `comment.*` messages — no comment body on the socket). See [`realtime_domain.md`](realtime_domain.md) and §9.
 
 V1 does not support:
@@ -37,7 +39,7 @@ V1 does not support:
 - Chat behavior.
 - Comment edit / delete.
 - Comment reactions.
-- Comment attachments.
+- Attachments on Signal comments.
 - Comment moderation.
 - Offline mutation queue.
 - AI processing of comments.
@@ -175,9 +177,9 @@ Frontend permission checks are UX only.
 
 ## 6. Content rules
 
-A comment body is plain text.
+A comment body is plain text and remains required even when files are attached.
 
-V1 does not support rich text, markdown rendering, file attachments, or embedded media.
+V1 does not support rich text or markdown rendering. Execution comments may carry 1–4 image/PDF attachments; Signal comments remain text-only.
 
 Recommended constraints:
 
@@ -192,18 +194,19 @@ Comment content must not be logged, sent to AI, exposed in technical events, or 
 
 ## 7. HTTP
 
-[`apps/api/schema.yml`](../../../apps/api/schema.yml). Signal and action-plan-execution comment list/create; execution comments also have resolve/unresolve. POST body: `body`, `mentioned_membership_ids`. Comment body is sensitive — never in logs, AI, generic realtime, or durable frontend storage.
+[`apps/api/schema.yml`](../../../apps/api/schema.yml). Signal and action-plan-execution comment list/create; execution comments also have resolve/unresolve and a reserve/PUT/complete upload flow plus Bearer-gated preview. Execution POST body: `body`, `mentioned_membership_ids`, optional `attachment_ids`. Signal POST stays text-only. Comment body and media paths are sensitive — never in logs, AI, generic realtime, or durable frontend storage.
 
 ## 8. Frontend
 
-List items carry `origin`: `signal` for Signal comments (including inherited rows on execution detail); `action_plan_execution` for direct execution comments. UI: Signal detail and Action Plan execution detail; mobile-first; empty/error/unauthorized explicit. Composer: required trimmed body, max 2,000 characters; disable submit while pending.
+List items carry `origin`: `signal` for Signal comments (including inherited rows on execution detail); `action_plan_execution` for direct execution comments. Execution comments may include `attachments` metadata (`preview_url` / `thumbnail_url` Houston gates, never bucket URLs). UI: Signal detail and Action Plan execution detail; Comments tab **Médias** opens a Médias / Documents sheet of available execution attachments. Composer files are execution-only; required trimmed body, max 2,000 characters; disable submit while pending or uploading.
 
 ## 9. Non-goals V1
 
 The following are explicitly out of scope:
 
 - comment edit/delete,
-- attachments,
+- attachments on Signal comments,
+- manual delete / restore / versioning of published execution attachments,
 - reactions,
 - moderation workflow,
 - audit export,

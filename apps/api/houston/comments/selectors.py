@@ -8,10 +8,18 @@ from django.db.models import Prefetch, Q, QuerySet
 
 from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.selectors import get_action_plan_execution_for_detail
-from houston.comments.models import Comment, CommentMention
+from houston.comments.models import ActionPlanCommentAttachment, Comment, CommentMention
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.models import Signal
 from houston.signals.selectors import get_signal_for_detail
+
+_ATTACHMENT_PREFETCH = Prefetch(
+    "plan_comment_attachments",
+    queryset=ActionPlanCommentAttachment.objects.select_related("upload").order_by(
+        "position",
+        "id",
+    ),
+)
 
 _COMMENT_PREFETCH = (
     "author_membership__user",
@@ -25,6 +33,7 @@ _COMMENT_PREFETCH = (
             "mentioned_membership_id",
         ),
     ),
+    _ATTACHMENT_PREFETCH,
     Prefetch(
         "replies",
         queryset=Comment.objects.select_related("author_membership__user")
@@ -40,6 +49,7 @@ _COMMENT_PREFETCH = (
                     "mentioned_membership_id",
                 ),
             ),
+            _ATTACHMENT_PREFETCH,
         )
         .order_by("created_at", "id"),
     ),

@@ -2563,6 +2563,234 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  ? /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comment-attachments/{attachment_id}/preview/
+  : get:
+      operationId: v1_establishments_action_plan_executions_comment_attachments_preview_retrieve
+      parameters:
+      - in: path
+        name: attachment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: variant
+        schema:
+          type: string
+          enum:
+          - full
+          - thumbnail
+      tags:
+      - comments
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          description: Binary attachment.
+        '302':
+          description: Redirect to presigned GET.
+        '404':
+          description: Not found.
+  /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comment-uploads/:
+    post:
+      operationId: v1_establishments_action_plan_executions_comment_uploads_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - comments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionPlanCommentReserveUploadRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ActionPlanCommentReserveUploadRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ActionPlanCommentReserveUploadRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanCommentReserveUploadResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comment-uploads/{upload_id}/complete/:
+    post:
+      operationId: v1_establishments_action_plan_executions_comment_uploads_complete_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: upload_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - comments
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanCommentUploadCompleteResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comment-uploads/{upload_id}/content/:
+    put:
+      operationId: v1_establishments_action_plan_executions_comment_uploads_content_update
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: upload_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - comments
+      security:
+      - BearerAccessToken: []
+      responses:
+        '204':
+          description: Content stored.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comment-uploads/{upload_id}/presign/:
+    post:
+      operationId: v1_establishments_action_plan_executions_comment_uploads_presign_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: upload_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - comments
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanCommentReserveUploadResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comments/:
     get:
       operationId: v1_establishments_action_plan_executions_comments_list
@@ -2628,13 +2856,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CommentCreateRequest'
+              $ref: '#/components/schemas/ExecutionCommentCreateRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/CommentCreateRequest'
+              $ref: '#/components/schemas/ExecutionCommentCreateRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/CommentCreateRequest'
+              $ref: '#/components/schemas/ExecutionCommentCreateRequest'
         required: true
       security:
       - BearerAccessToken: []
@@ -8942,6 +9170,55 @@ components:
       - id
       - instance_description
       - specific_name
+    ActionPlanCommentReserveUploadRequest:
+      type: object
+      properties:
+        filename:
+          type: string
+        content_type:
+          type: string
+        size_bytes:
+          type: integer
+      required:
+      - content_type
+      - filename
+      - size_bytes
+    ActionPlanCommentReserveUploadResponse:
+      type: object
+      properties:
+        upload_id:
+          type: string
+          format: uuid
+        put_url:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - expires_at
+      - put_url
+      - upload_id
+    ActionPlanCommentUploadCompleteResponse:
+      type: object
+      properties:
+        upload_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        kind:
+          type: string
+        content_type:
+          type: string
+        size_bytes:
+          type: integer
+          nullable: true
+      required:
+      - content_type
+      - kind
+      - size_bytes
+      - status
+      - upload_id
     ActionPlanCreate201Response:
       oneOf:
       - $ref: '#/components/schemas/ActionPlanDetail'
@@ -11974,6 +12251,52 @@ components:
           minimum: 0
       required:
       - android_min_supported_version_code
+    CommentAttachment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/CommentAttachmentKindEnum'
+        content_type:
+          type: string
+        size_bytes:
+          type: integer
+        original_filename:
+          type: string
+        preview_url:
+          type: string
+        thumbnail_url:
+          type: string
+          nullable: true
+        comment_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        author_display_name:
+          type: string
+      required:
+      - author_display_name
+      - comment_id
+      - content_type
+      - created_at
+      - id
+      - kind
+      - original_filename
+      - preview_url
+      - size_bytes
+      - thumbnail_url
+    CommentAttachmentKindEnum:
+      enum:
+      - image
+      - document
+      type: string
+      description: |-
+        * `image` - image
+        * `document` - document
     CommentAuthor:
       type: object
       properties:
@@ -12020,6 +12343,10 @@ components:
         created_at:
           type: string
           format: date-time
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommentAttachment'
       required:
       - author
       - body
@@ -12689,6 +13016,27 @@ components:
         * `approved` - approved
         * `rejected` - rejected
         * `canceled` - canceled
+    ExecutionCommentCreateRequest:
+      type: object
+      properties:
+        body:
+          type: string
+        mentioned_membership_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        parent_comment_id:
+          type: string
+          format: uuid
+          nullable: true
+        attachment_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - body
     ExecutionCommentListItem:
       type: object
       properties:
@@ -12710,6 +13058,10 @@ components:
         created_at:
           type: string
           format: date-time
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommentAttachment'
         replies:
           type: array
           items:
@@ -12763,6 +13115,10 @@ components:
         created_at:
           type: string
           format: date-time
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommentAttachment'
         replies:
           type: array
           items:

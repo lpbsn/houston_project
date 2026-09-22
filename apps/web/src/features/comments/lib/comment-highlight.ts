@@ -81,3 +81,76 @@ export function scrollToHighlightedComment(commentId: string): () => void {
   rafId = requestAnimationFrame(tryScroll)
   return cancel
 }
+
+function isActuallyScrollable(node: HTMLElement): boolean {
+  const overflowY = getComputedStyle(node).overflowY
+  if (overflowY !== 'auto' && overflowY !== 'scroll') {
+    return false
+  }
+  return node.scrollHeight > node.clientHeight
+}
+
+function nearestOverflowYScroller(element: HTMLElement): HTMLElement | null {
+  let parent = element.parentElement
+  while (parent && parent !== document.documentElement) {
+    if (isActuallyScrollable(parent)) {
+      return parent
+    }
+    parent = parent.parentElement
+  }
+  return null
+}
+
+function boundedScrollTop(scroller: HTMLElement, unclampedTop: number): number {
+  const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight)
+  return Math.min(maxScroll, Math.max(0, unclampedTop))
+}
+
+export function scrollCommentIntoList(commentId: string): () => void {
+  let cancelled = false
+  let attempt = 0
+  let rafId: number | null = null
+
+  const cancel = () => {
+    cancelled = true
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId)
+    }
+  }
+
+  const tryScroll = () => {
+    if (cancelled) {
+      return
+    }
+
+    const element = document.getElementById(commentDomId(commentId))
+    if (element) {
+      const scroller = nearestOverflowYScroller(element)
+      if (!scroller) {
+        return
+      }
+      const elementRect = element.getBoundingClientRect()
+      const scrollerRect = scroller.getBoundingClientRect()
+      const delta =
+        elementRect.top -
+        scrollerRect.top -
+        scroller.clientHeight / 2 +
+        elementRect.height / 2
+      scroller.scrollTo({
+        top: boundedScrollTop(scroller, scroller.scrollTop + delta),
+        behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+      })
+      return
+    }
+
+    attempt += 1
+    if (attempt >= SCROLL_RETRY_MAX_ATTEMPTS) {
+      return
+    }
+
+    rafId = requestAnimationFrame(tryScroll)
+  }
+
+  rafId = requestAnimationFrame(tryScroll)
+  return cancel
+}

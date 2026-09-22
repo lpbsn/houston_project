@@ -183,6 +183,8 @@ describe('CommentSection', () => {
 
     expect(screen.getByText("Aucun commentaire pour l'instant.")).toBeTruthy()
     expect(screen.getByLabelText('Publier le commentaire')).toHaveProperty('disabled', true)
+    expect(screen.queryByTestId('execution-plan-medias')).toBeNull()
+    expect(screen.queryByText('Pièces jointes du plan')).toBeNull()
   })
 
   it('hides the composer in read-only mode without posting', () => {
@@ -216,6 +218,14 @@ describe('CommentSection', () => {
     expect(screen.getAllByLabelText('Répondre au commentaire')).toHaveLength(1)
     expect(screen.getByLabelText('Marquer le commentaire comme non résolu')).toBeTruthy()
     expect(screen.queryByLabelText('Marquer le commentaire comme résolu', { exact: true })).toBeNull()
+    expect(screen.getByTestId('execution-plan-medias')).toBeTruthy()
+    expect(screen.queryByText('Pièces jointes du plan')).toBeNull()
+    expect(screen.queryByTestId('execution-plan-attachments')).toBeNull()
+
+    fireEvent.click(screen.getByTestId('execution-plan-medias'))
+    expect(screen.getByRole('dialog', { name: 'Médias' })).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'Médias' }).length).toBeGreaterThan(1)
+    expect(screen.getByRole('button', { name: 'Documents' })).toBeTruthy()
   })
 
   it('keeps reply composer open and shows error on the failing thread', () => {

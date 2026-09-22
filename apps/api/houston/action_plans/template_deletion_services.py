@@ -129,6 +129,9 @@ def hard_delete_scheduled_execution_for_template_deletion(
         execution=execution,
         comment_ids=comment_ids,
     )
+    from houston.comments.upload_services import purge_action_plan_comment_media_for_execution
+
+    purge_action_plan_comment_media_for_execution(execution_id=execution.id)
     _delete_execution_comments_respecting_parent_protect(execution=execution)
     execution.delete()
 

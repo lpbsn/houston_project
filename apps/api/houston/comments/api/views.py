@@ -13,6 +13,7 @@ from houston.accounts.legal_services import TermsAcceptanceRequiredError
 from houston.comments.api.serializers import (
     CommentCreateRequestSerializer,
     CommentItemSerializer,
+    ExecutionCommentCreateRequestSerializer,
     ExecutionCommentListItemSerializer,
     ExecutionCommentThreadItemSerializer,
     serialize_comment,
@@ -176,7 +177,7 @@ class ActionPlanExecutionCommentsView(EstablishmentScopedObservationMixin, APIVi
 
     @extend_schema(
         tags=["comments"],
-        request=CommentCreateRequestSerializer,
+        request=ExecutionCommentCreateRequestSerializer,
         responses={
             201: CommentItemSerializer,
             400: OpenApiResponse(response=ApiErrorResponseSerializer),
@@ -200,7 +201,7 @@ class ActionPlanExecutionCommentsView(EstablishmentScopedObservationMixin, APIVi
         if execution is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        request_serializer = CommentCreateRequestSerializer(data=request.data)
+        request_serializer = ExecutionCommentCreateRequestSerializer(data=request.data)
         request_serializer.is_valid(raise_exception=True)
 
         try:
@@ -212,6 +213,7 @@ class ActionPlanExecutionCommentsView(EstablishmentScopedObservationMixin, APIVi
                     "mentioned_membership_ids"
                 ),
                 parent_comment_id=request_serializer.validated_data.get("parent_comment_id"),
+                attachment_ids=request_serializer.validated_data.get("attachment_ids"),
             )
         except TermsAcceptanceRequiredError as exc:
             from houston.accounts.api.legal_errors import legal_error_response
@@ -224,7 +226,7 @@ class ActionPlanExecutionCommentsView(EstablishmentScopedObservationMixin, APIVi
             )
 
         return Response(
-            CommentItemSerializer(serialize_comment(comment)).data,
+            CommentItemSerializer(serialize_comment(comment, execution=execution)).data,
             status=status.HTTP_201_CREATED,
         )
 

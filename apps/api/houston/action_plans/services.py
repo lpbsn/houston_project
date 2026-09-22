@@ -292,6 +292,9 @@ def _cancel_linked_active_executions_for_signal_resolve(
             execution_id=execution.id,
             actor_membership_id=None,
         )
+        from houston.comments.upload_services import purge_action_plan_comment_media_for_execution
+
+        purge_action_plan_comment_media_for_execution(execution_id=execution.id)
 
 
 def _reopen_linked_signal_after_execution_reopen(
@@ -2241,6 +2244,9 @@ def cancel_action_plan_execution(
         execution_id=execution.id,
         actor_membership_id=actor.id,
     )
+    from houston.comments.upload_services import purge_action_plan_comment_media_for_execution
+
+    purge_action_plan_comment_media_for_execution(execution_id=execution.id)
     return execution
 
 

@@ -224,6 +224,9 @@ def _cancel_schedule_future_execution(*, execution: ActionPlanExecution) -> None
         execution_id=execution.id,
         actor_membership_id=None,
     )
+    from houston.comments.upload_services import purge_action_plan_comment_media_for_execution
+
+    purge_action_plan_comment_media_for_execution(execution_id=execution.id)
 
 
 def _schedule_assignee_for_execution(

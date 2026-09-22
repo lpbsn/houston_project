@@ -1,5 +1,12 @@
 from django.urls import path
 
+from houston.comments.api.upload_views import (
+    ActionPlanCommentAttachmentPreviewView,
+    ActionPlanCommentCompleteUploadView,
+    ActionPlanCommentRefreshUploadPresignView,
+    ActionPlanCommentReserveUploadView,
+    ActionPlanCommentUploadContentView,
+)
 from houston.comments.api.views import (
     ActionPlanExecutionCommentResolveView,
     ActionPlanExecutionCommentsView,
@@ -36,5 +43,45 @@ urlpatterns = [
         ),
         ActionPlanExecutionCommentUnresolveView.as_view(),
         name="action-plan-execution-comment-unresolve",
+    ),
+    path(
+        (
+            "establishments/<uuid:establishment_id>/action-plan-executions/"
+            "<uuid:execution_id>/comment-uploads/"
+        ),
+        ActionPlanCommentReserveUploadView.as_view(),
+        name="action-plan-execution-comment-uploads",
+    ),
+    path(
+        (
+            "establishments/<uuid:establishment_id>/action-plan-executions/"
+            "<uuid:execution_id>/comment-uploads/<uuid:upload_id>/presign/"
+        ),
+        ActionPlanCommentRefreshUploadPresignView.as_view(),
+        name="action-plan-execution-comment-upload-presign",
+    ),
+    path(
+        (
+            "establishments/<uuid:establishment_id>/action-plan-executions/"
+            "<uuid:execution_id>/comment-uploads/<uuid:upload_id>/content/"
+        ),
+        ActionPlanCommentUploadContentView.as_view(),
+        name="action-plan-execution-comment-upload-content",
+    ),
+    path(
+        (
+            "establishments/<uuid:establishment_id>/action-plan-executions/"
+            "<uuid:execution_id>/comment-uploads/<uuid:upload_id>/complete/"
+        ),
+        ActionPlanCommentCompleteUploadView.as_view(),
+        name="action-plan-execution-comment-upload-complete",
+    ),
+    path(
+        (
+            "establishments/<uuid:establishment_id>/action-plan-executions/"
+            "<uuid:execution_id>/comment-attachments/<uuid:attachment_id>/preview/"
+        ),
+        ActionPlanCommentAttachmentPreviewView.as_view(),
+        name="action-plan-execution-comment-attachment-preview",
     ),
 ]

@@ -94,9 +94,11 @@ Forbidden placeholders: `replace-me-for-local-dev`, empty values.
 | `HOUSTON_PRIVATE_MEDIA_BACKEND` | yes — `s3` | yes — `s3` | no |
 | `HOUSTON_S3_ENDPOINT_URL`, `HOUSTON_S3_BUCKET`, `HOUSTON_S3_ACCESS_KEY_ID`, `HOUSTON_S3_SECRET_ACCESS_KEY`, `HOUSTON_S3_REGION`, `HOUSTON_S3_ADDRESSING_STYLE` | yes — same values | yes — same values | no |
 | `HOUSTON_CHAT_S3_ENDPOINT_URL`, `HOUSTON_CHAT_S3_BUCKET`, `HOUSTON_CHAT_S3_ACCESS_KEY_ID`, `HOUSTON_CHAT_S3_SECRET_ACCESS_KEY`, `HOUSTON_CHAT_S3_REGION`, `HOUSTON_CHAT_S3_ADDRESSING_STYLE` | yes — refs to bucket `chat-attachement` | yes — same refs | no |
+| `HOUSTON_ACTION_PLAN_S3_ENDPOINT_URL`, `HOUSTON_ACTION_PLAN_S3_BUCKET`, `HOUSTON_ACTION_PLAN_S3_ACCESS_KEY_ID`, `HOUSTON_ACTION_PLAN_S3_SECRET_ACCESS_KEY`, `HOUSTON_ACTION_PLAN_S3_REGION`, `HOUSTON_ACTION_PLAN_S3_ADDRESSING_STYLE` | yes — dedicated action-plan comment bucket | yes — same refs | no |
 | `HOUSTON_CHAT_MESSAGE_RETENTION_DAYS` | optional (`30` default in code) | optional (same) | no |
 | `HOUSTON_PRIVATE_MEDIA_ROOT` | not media truth when backend=s3 | not media truth when backend=s3 | no |
 | `HOUSTON_CHAT_PRIVATE_MEDIA_ROOT` | local/CI filesystem only | local/CI filesystem only | no |
+| `HOUSTON_ACTION_PLAN_PRIVATE_MEDIA_ROOT` | local/CI filesystem only | local/CI filesystem only | no |
 | `PORT` | injected by Railway | n/a | n/a |
 | `HOUSTON_ENABLE_API_DOCS` | optional (`0` default prod-test) | optional | optional |
 | `HOUSTON_LOG_LEVEL` | optional (`INFO`) | optional | optional |
@@ -147,6 +149,21 @@ Bucket CORS (S3 `PutBucketCors`, not Houston CORS) must allow browser/WebView **
 Local/CI filesystem backend uses `HOUSTON_CHAT_PRIVATE_MEDIA_ROOT` (distinct from `HOUSTON_PRIVATE_MEDIA_ROOT`).
 
 Message retention default in code is **30** days (`HOUSTON_CHAT_MESSAGE_RETENTION_DAYS`). Override on `houston_project` + `Celery-worker` only if ops need a different window.
+
+### Action-plan comment attachments
+
+Execution-comment media is a **third** private Railway bucket, distinct from Signal `HOUSTON_S3_*` and Chat `chat-attachement`. Map credentials with variable references, not copied secrets:
+
+| Houston variable | Railway reference |
+|---|---|
+| `HOUSTON_ACTION_PLAN_S3_ENDPOINT_URL` | `${{action-plan-attachments.ENDPOINT}}` |
+| `HOUSTON_ACTION_PLAN_S3_BUCKET` | `${{action-plan-attachments.BUCKET}}` |
+| `HOUSTON_ACTION_PLAN_S3_ACCESS_KEY_ID` | `${{action-plan-attachments.ACCESS_KEY_ID}}` |
+| `HOUSTON_ACTION_PLAN_S3_SECRET_ACCESS_KEY` | `${{action-plan-attachments.SECRET_ACCESS_KEY}}` |
+| `HOUSTON_ACTION_PLAN_S3_REGION` | `${{action-plan-attachments.REGION}}` |
+| `HOUSTON_ACTION_PLAN_S3_ADDRESSING_STYLE` | `virtual` |
+
+Bucket CORS must allow browser/WebView **presigned** `PUT`, `GET`, `HEAD` (same origins as Chat). Local/CI filesystem uses `HOUSTON_ACTION_PLAN_PRIVATE_MEDIA_ROOT`. Retention after `done` defaults to **30** days (`HOUSTON_ACTION_PLAN_COMMENT_RETENTION_DAYS`). Required on `api-web` and `celery-worker` when `HOUSTON_PRIVATE_MEDIA_BACKEND=s3`.
 
 ### Live `houston_project` startCommand (ops risk)
 
