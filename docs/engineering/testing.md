@@ -7,10 +7,10 @@ Phase build: tests protect **product risk**, not line coverage or implementation
 - A test must protect a **behavior**, **business rule**, **permission**, **API contract**, or **critical regression**.
 - **Check existing coverage** in the same domain and layer before adding a test — extend a focused test rather than duplicating another layer.
 - Prefer explicit setup over opaque fixtures.
-- Do not use source inspection (`readFileSync` + `toContain`) for behavior.
+- Do not use source inspection (`readFileSync` + `toContain`) for application behavior. Isolation tests may read committed nginx / Capacitor / Vite / package scripts when the invariant is a **deploy file** that TypeScript never executes. That is complementary to `apps/web/scripts/validate-*-build.mjs`, which assert **produced** `dist` / `dist-native` / `dist-landing` artifacts after a build. Do not use `readFileSync` to assert that a TypeScript source still contains a symbol.
 - Do not chase global coverage percentages or per-file test quotas.
 - Delete weak tests rather than maintaining historical noise.
-- During development: run **targeted** tests (`make backend-test ARGS='…'`, `npm test -- path`); before merge: project gates (`make backend-check`, `make verify`, `make web-lint`).
+- During development: run **targeted** tests (`make backend-test ARGS='…'`, `npm test -- path`); before merge: project gates (`make backend-check`, `make web-check` / `make verify`).
 
 ## Risk by layer
 
@@ -162,8 +162,9 @@ cd apps/web && npm run typecheck
 - Lib tests stay in **Node** (fast, no DOM).
 - Auth provider uses **jsdom** (app `queryClient`). TanStack Query mutations use **jsdom** + `createTestQueryClient`. WebSocket hooks use **jsdom** with local mocks.
 - Do not wait on real time for WebSocket auth timeout or reconnect. Use `vi.useFakeTimers()` and `vi.advanceTimersByTimeAsync` in the chat/operational WS hook tests. Presence intervals can use `vi.advanceTimersByTime` (`use-chat-conversation-presence.test.ts`). Do not raise the global `testTimeout` to absorb load.
-- Do not assert exact Tailwind classes, shadcn primitive styling, or French copy unless the string encodes a business rule exported from lib code.
+- Do not assert exact Tailwind classes, shadcn primitive styling, or decorative/marketing French copy. Keep copy that **is** the product contract (permission denial, destructive confirmation, legal obligation, error that blocks a critical action), even without a dedicated lib constant. Shell overflow / safe-area contracts already justified in `TerrainShell` tests may assert classes when behavior (scroll, focus) is not enough.
 - Do not add page tests for layout or copy when the rule already lives in lib/hook tests.
+- Test files are excluded from `tsconfig.app.json`. `tsconfig.vitest.json` sets `noCheck: true` because a full test typecheck currently reports ~150 diagnostics, mostly partial mocks (`TS2345`/`TS2556` spread/callback arity) and incomplete fixtures (`TS2353`/`TS2739`), not a small set of real call-site errors. Do not add `vitest --typecheck` beside `tsc -b`.
 
 ## CI vs local gates
 
@@ -181,7 +182,7 @@ GitHub Actions (`.github/workflows/ci.yml`):
 
 **Runtime note:** CI backend steps run **native `uv`** with GitHub Actions Postgres/Redis services. Local backend validation uses **Make/Docker only** (`make backend-check`, `make verify`) — do not run `cd apps/api && uv run …` on the host. Frontend checks may run natively from `apps/web` or via `make web-*`.
 
-**Lint parity:** CI runs `npm run lint`; `make verify` / `web-check` do not — run `make web-lint` before merge when you need full parity.
+`make web-check` matches the **validations** of `frontend-tests`: lint, vitest, `tsc -b` once (`web-typecheck`), web bundle via `npm run build:bundle` (no second `tsc`), native bundle (`web-build-native-check`), `web-api-generate-check`. Standalone `make web-build` still runs `npm run build` (`tsc -b` + vite) for a full local production build.
 
 ### Local validation targets
 
@@ -189,14 +190,14 @@ GitHub Actions (`.github/workflows/ci.yml`):
 |--------|----------------|
 | `make backend-check` | Django check, ruff, migrations check, schema diff, pytest |
 | `make web-api-generate-check` | regen `types.ts` from committed `schema.yml` + `git diff` |
-| `make web-check` | vitest, typecheck, web build, native bundle with placeholder `VITE_API_BASE_URL` and `VITE_PUBLIC_APP_URL` (`web-build-native-check`), `web-api-generate-check` |
+| `make web-check` | lint, vitest, typecheck once, `build:bundle`, native bundle with placeholder `VITE_API_BASE_URL` and `VITE_PUBLIC_APP_URL` (`web-build-native-check`), `web-api-generate-check` |
 | `make local-check` | `backend-check` + `web-check` |
 | `make verify` | alias for `local-check` |
 | `make docs-check` | `scripts/docs_check.py` + `scripts/agent_config_check.py` |
 | `make agent-config-check` | `.cursor` / `.agents` structural invariants |
 | `make agent-config-sync` | copy canonical `.cursor` commands/rules/skills → `.agents` |
 
-Run `make verify && make web-lint` before merging when the Docker stack is up and you need full confidence. For day-to-day backend work, `make backend-test` or `make backend-lint` is enough.
+Run `make verify` before merging when the Docker stack is up and you need full confidence. For day-to-day backend work, `make backend-test` or `make backend-lint` is enough.
 
 Profiling: `--durations=50` and optional local Vitest JSON under `.artifacts/` — **no arbitrary duration quotas**; optimize only measured bottlenecks.
 

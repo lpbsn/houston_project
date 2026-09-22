@@ -162,7 +162,6 @@ describe('ActionPlanUseSheet', () => {
 
     const launchButton = screen.getByRole('button', { name: "Lancer l'exécution" })
     expect(launchButton).toBeTruthy()
-    expect(launchButton.className).toContain('bg-[#114660]')
     expect(screen.queryByRole('button', { name: 'Planifier la récurrence' })).toBeNull()
   })
 

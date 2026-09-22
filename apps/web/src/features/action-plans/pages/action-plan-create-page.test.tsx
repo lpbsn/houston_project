@@ -393,10 +393,6 @@ describe('ActionPlanCreatePage', () => {
     expect(
       optionsLabel.compareDocumentPosition(addTaskButton) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
-    expect(optionsLabel.closest('section')?.className).not.toContain('max-w-')
-    expect(screen.getByTestId('event-planning-form').parentElement?.className).not.toContain(
-      'max-w-',
-    )
   })
 
   it('keeps planning form visible when save to library is enabled', () => {
@@ -1030,13 +1026,6 @@ describe('ActionPlanCreatePage', () => {
     expect(createButtons).toHaveLength(1)
     const footer = createButtons[0]?.closest('footer')
     const form = footer?.closest('form')
-    const frame = screen.getByTestId('action-plan-create-frame')
-    expect(frame.className).not.toContain('max-w-7xl')
-    expect(footer?.className).not.toContain('lg:col-start-2')
-    expect(screen.getByText('Options').closest('section')?.className).not.toContain('max-w-')
-    expect(screen.getByTestId('event-planning-form').parentElement?.className).not.toContain(
-      'max-w-',
-    )
     expect(form).toBeTruthy()
     expect(form!.contains(screen.getAllByRole('textbox')[0]!)).toBe(true)
   })
@@ -1145,7 +1134,6 @@ describe('ActionPlanCreatePage', () => {
 
     renderPage({ mode: 'template-edit', actionPlanId: 'plan-1' })
 
-    const saveButton = await screen.findByRole('button', { name: 'Enregistrer les modifications' })
-    expect(saveButton.className).toContain('bg-[#114660]')
+    expect(await screen.findByRole('button', { name: 'Enregistrer les modifications' })).toBeTruthy()
   })
 })

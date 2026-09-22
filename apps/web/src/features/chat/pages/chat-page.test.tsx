@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { createElement } from 'react'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -257,19 +257,6 @@ describe('ChatPage flat conversation list', () => {
     expect(screen.queryByText('Groupes')).toBeNull()
   })
 
-  it('uses a pill search field and a single 40px create target', () => {
-    renderChatPage()
-
-    const search = screen.getByPlaceholderText('Rechercher une conversation')
-    expect(search.className).toContain('h-8')
-    expect(search.className).toContain('rounded-full')
-
-    const createButton = screen.getByRole('button', { name: 'Nouvelle conversation' })
-    expect(createButton.className).toContain('h-10')
-    expect(createButton.className).toContain('w-10')
-    expect(within(createButton).getByText('', { selector: 'span' }).className).toContain('h-8')
-    expect(within(createButton).getByText('', { selector: 'span' }).className).toContain('w-8')
-  })
 })
 
 describe('ChatPage scroll layout', () => {
@@ -283,11 +270,7 @@ describe('ChatPage scroll layout', () => {
   })
 
   function expectChatPageRoot() {
-    const root = screen.getByTestId('chat-page-root')
-    expect(root.className).toContain('h-full')
-    expect(root.className).toContain('min-h-0')
-    expect(root.className).toContain('flex-col')
-    return root
+    return screen.getByTestId('chat-page-root')
   }
 
   it('success state uses one scroll zone and reconnect banner is outside the scroller', () => {
@@ -303,7 +286,6 @@ describe('ChatPage scroll layout', () => {
     const root = expectChatPageRoot()
     const scrollArea = expectSinglePageScrollZone(container)
 
-    expect(scrollArea.className).toContain('overflow-y-auto')
     expect(root.contains(scrollArea)).toBe(true)
 
     const reconnectBanner = screen.getByRole('status')

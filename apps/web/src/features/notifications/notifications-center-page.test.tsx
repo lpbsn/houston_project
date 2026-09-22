@@ -141,28 +141,6 @@ describe('NotificationsCenterPage', () => {
     expect(screen.getByText('2 notifications non lues')).toBeTruthy()
   })
 
-  it('applies brand active classes on the selected filter and unread count badge', () => {
-    render(<NotificationsCenterPage establishmentId="est-1" onNavigate={onNavigate} />)
-
-    const allTab = screen.getByRole('button', { name: 'Toutes' })
-    const unreadTab = screen.getByRole('button', { name: /Non lues/ })
-
-    expect(allTab.className).toContain('bg-[#114660]')
-    expect(allTab.className).toContain('border-[#114660]')
-    expect(unreadTab.className).not.toContain('bg-[#114660]')
-
-    const unreadBadge = screen.getByText('2')
-    expect(unreadBadge.className).toContain('bg-[#114660]')
-  })
-
-  it('renders unread notifications with chat-aligned unread dot color', () => {
-    const { container } = render(
-      <NotificationsCenterPage establishmentId="est-1" onNavigate={onNavigate} />,
-    )
-
-    expect(container.querySelector('.bg-\\[\\#4c8543\\].rounded-full')).toBeTruthy()
-  })
-
   it('switches filter between all and unread', () => {
     render(<NotificationsCenterPage establishmentId="est-1" onNavigate={onNavigate} />)
 

@@ -191,19 +191,12 @@ describe('ExecutionCalendarView', () => {
     expect(screen.getByText('Non planifiés · 1')).toBeTruthy()
     expect(screen.queryByText('Sans créneau')).toBeNull()
 
-    const hub = screen.getByTestId('calendar-hub-scroller')
     const gridCard = screen.getByTestId('calendar-grid-card')
-    expect(hub.className).not.toMatch(/overflow-y-auto/)
-    expect(hub.className).toMatch(/overflow-hidden/)
-    expect(gridCard.className).toMatch(/min-h-0/)
-    expect(gridCard.className).toMatch(/flex-1/)
-    expect(gridCard.className).not.toMatch(/min-h-full/)
     expect(
       gridCard.compareDocumentPosition(unplannedToggle) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
 
     const scroller = screen.getByTestId('calendar-time-scroller')
-    expect(scroller.className).toMatch(/overflow-y-auto/)
     expect(scroller.scrollTop).toBe(TIME_GRID_INITIAL_SCROLL_TOP)
     expect(scroller.textContent).toContain('00:00')
     expect(scroller.contains(screen.getByText('Journée'))).toBe(false)
@@ -369,10 +362,8 @@ describe('ExecutionCalendarView', () => {
     const scroller = screen.getByTestId('calendar-month-scroller')
     const grid = screen.getByTestId('calendar-month-grid')
     const unplannedToggle = screen.getByRole('button', { name: 'Déplier la section Non planifiés' })
-    expect(scroller.className).toMatch(/overflow-y-auto/)
     expect(scroller.contains(grid)).toBe(true)
     expect(scroller.contains(unplannedToggle)).toBe(false)
-    expect(grid.className).not.toMatch(/overflow-y-auto/)
     expect(
       grid.compareDocumentPosition(unplannedToggle) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
@@ -387,7 +378,6 @@ describe('ExecutionCalendarView', () => {
     expect(scroller.contains(screen.getByRole('button', { name: /Sans créneau/ }))).toBe(false)
     expect(screen.getByText('lun.')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Brief cuisine/ })).toBeTruthy()
-    expect(screen.getByTestId('calendar-unplanned-list').className).toMatch(/overflow-y-auto/)
     expect(collectOverflowYScrollElements(scroller)).toEqual([])
   })
 
@@ -422,9 +412,6 @@ describe('ExecutionCalendarView', () => {
     const chips = screen.getAllByRole('button', { name: /Chantier toiture/ })
     const suiteChip = chips.find((chip) => chip.textContent?.includes('Suite'))
     expect(suiteChip).toBeTruthy()
-    const suite = Array.from(suiteChip!.querySelectorAll('span')).find((node) => node.textContent === 'Suite')
-    expect(suite?.className).toMatch(/\bhidden\b/)
-    expect(suite?.className).toMatch(/\bmd:inline\b/)
     fireEvent.click(chips[0])
     fireEvent.click(chips[chips.length - 1])
     expect(onOpen).toHaveBeenCalledWith('exec-span')
@@ -535,7 +522,6 @@ describe('ExecutionCalendarView', () => {
     expect(card.textContent).not.toMatch(/08:00|10:00/)
     expect(card.textContent).not.toContain('En cours')
     expect(screen.getByTestId('calendar-time-scroller').contains(card)).toBe(false)
-    expect(screen.getByTestId('calendar-unplanned-list').className).toMatch(/overflow-y-auto/)
   })
 
   it('keeps the time scroller as the day-grid owner when unplanned is expanded', () => {
@@ -580,26 +566,12 @@ describe('ExecutionCalendarView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Déplier la section Non planifiés' }))
 
     const hub = screen.getByTestId('calendar-hub-scroller')
-    const gridCard = screen.getByTestId('calendar-grid-card')
     const timeScroller = screen.getByTestId('calendar-time-scroller')
     const unplannedList = screen.getByTestId('calendar-unplanned-list')
-    const innerColumn = timeScroller.parentElement
-    expect(hub.className).not.toMatch(/overflow-y-auto/)
-    expect(hub.className).toMatch(/overflow-hidden/)
-    expect(gridCard.className).toMatch(/min-h-0/)
-    expect(gridCard.className).toMatch(/\bflex-1\b/)
-    expect(gridCard.className).not.toMatch(/min-h-full/)
-    expect(innerColumn?.className).toMatch(/min-h-0/)
-    expect(innerColumn?.className).toMatch(/\bflex-1\b/)
-    expect(timeScroller.className).toMatch(/overflow-y-auto/)
-    expect(timeScroller.className).toMatch(/overscroll-y-contain/)
-    expect(timeScroller.className).toMatch(/min-h-0/)
-    expect(timeScroller.className).toMatch(/\bflex-1\b/)
     expect(timeScroller.textContent).toContain('00:00')
     expect(screen.queryByText('Journée')).toBeNull()
     expect(screen.queryByTestId('calendar-all-day-lane')).toBeNull()
     expect(timeScroller.contains(screen.getByRole('button', { name: /Sans créneau A/ }))).toBe(false)
-    expect(unplannedList.className).toMatch(/overflow-y-auto/)
     expect(timeScroller.contains(unplannedList)).toBe(false)
     expect(collectOverflowYScrollElements(hub)).toEqual([timeScroller, unplannedList])
   })
@@ -633,13 +605,7 @@ describe('ExecutionCalendarView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Déplier la section Non planifiés' }))
 
     const hub = screen.getByTestId('calendar-hub-scroller')
-    const gridCard = screen.getByTestId('calendar-grid-card')
     const timeScroller = screen.getByTestId('calendar-time-scroller')
-    expect(hub.className).not.toMatch(/overflow-y-auto/)
-    expect(gridCard.className).not.toMatch(/overflow-x-auto/)
-    expect(gridCard.className).toMatch(/overflow-hidden/)
-    expect(gridCard.className).not.toMatch(/overflow-y-auto/)
-    expect(timeScroller.className).toMatch(/overflow-y-auto/)
     expect(collectOverflowYScrollElements(hub)).toEqual([
       timeScroller,
       screen.getByTestId('calendar-unplanned-list'),
@@ -805,7 +771,7 @@ describe('ExecutionCalendarView', () => {
     expect(screen.getByRole('button', { name: /Inventaire B/ })).toBeTruthy()
   })
 
-  it('shows a 3-day compact week window stepped by one day without overflow-x', () => {
+  it('shows a 3-day compact week window stepped by one day', () => {
     mockToday('2026-09-07')
     render(
       <ExecutionCalendarView
@@ -823,7 +789,6 @@ describe('ExecutionCalendarView', () => {
 
     expect(visibleWeekDays()).toEqual(['2026-09-07', '2026-09-08', '2026-09-09'])
     expect(screen.queryByTestId('calendar-weekday-2026-09-10')).toBeNull()
-    expect(screen.getByTestId('calendar-grid-card').className).not.toMatch(/overflow-x-auto/)
     expect(screen.getByTestId('calendar-time-scroller').textContent).toContain('00:00')
     expect(screen.getByRole('button', { name: 'Jours précédents de la semaine' })).toHaveProperty(
       'disabled',

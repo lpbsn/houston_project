@@ -40,7 +40,6 @@ function expectClassificationBadgesWithAffectedLineBelow() {
   const affectedLine = screen.getByText('Concerné : Restaurant')
   const badgesRow = pilotBadge.parentElement
 
-  expect(badgesRow?.className).toContain('items-center')
   expect(badgesRow?.contains(classificationBadge)).toBe(true)
   expect(badgesRow?.contains(affectedLine)).toBe(false)
   expect(affectedLine.parentElement?.contains(badgesRow as Node)).toBe(true)
@@ -127,9 +126,6 @@ describe('ActionPlanExecutionFeedCard', () => {
     expect(screen.getByText('Alice Martin')).toBeTruthy()
     expect(screen.queryByText('En cours')).toBeNull()
 
-    const avatar = document.querySelector('.bg-\\[\\#3A7A96\\]')
-    expect(avatar).toBeTruthy()
-
     expect(screen.queryByText('Description longue à ne pas afficher')).toBeNull()
     expect(screen.queryByText('Tâche 1')).toBeNull()
     expect(screen.queryByText('Tâche 2')).toBeNull()
@@ -153,8 +149,7 @@ describe('ActionPlanExecutionFeedCard', () => {
     )
 
     expect(screen.getByText('∞')).toBeTruthy()
-    const sidebar = screen.getByLabelText('Sans échéance')
-    expect(sidebar.querySelector('.rounded-full.bg-white\\/20')).toBeTruthy()
+    expect(screen.getByLabelText('Sans échéance')).toBeTruthy()
     expect(screen.queryByText('DANS')).toBeNull()
     expect(screen.getByText('1/4')).toBeTruthy()
   })
@@ -175,7 +170,6 @@ describe('ActionPlanExecutionFeedCard', () => {
     expect(screen.getByText('0h')).toBeTruthy()
     const sidebar = screen.getByLabelText('Échéance dépassée de 0h')
     expect(sidebar.querySelector('svg')).toBeNull()
-    expect(document.querySelector('.bg-\\[\\#E24B4A\\]')).toBeTruthy()
   })
 
   it('shows teal 0h countdown when is_overdue is false and end_at is past', () => {
@@ -189,8 +183,6 @@ describe('ActionPlanExecutionFeedCard', () => {
     expect(screen.getByText('DANS')).toBeTruthy()
     expect(screen.getByText('0h')).toBeTruthy()
     expect(screen.queryByLabelText('Échéance dépassée')).toBeNull()
-    expect(document.querySelector('.bg-\\[\\#E24B4A\\]')).toBeNull()
-    expect(document.querySelector('.bg-\\[\\#3A7A96\\]')).toBeTruthy()
   })
 
   it('shows overdue duration when is_overdue is true and end_at is past', () => {
@@ -205,7 +197,6 @@ describe('ActionPlanExecutionFeedCard', () => {
     expect(screen.getByText('RETARD')).toBeTruthy()
     expect(screen.getByText('1h')).toBeTruthy()
     expect(screen.getByLabelText('Échéance dépassée de 1h')).toBeTruthy()
-    expect(document.querySelector('.bg-\\[\\#E24B4A\\]')).toBeTruthy()
   })
 
   it('omits task progress bar when task_count is zero on in_progress cards', () => {
@@ -247,13 +238,11 @@ describe('ActionPlanExecutionFeedCard', () => {
     expect(screen.getByText('3j')).toBeTruthy()
     expect(screen.getByText('Planifiée')).toBeTruthy()
     expect(screen.getByLabelText('Début dans 3j')).toBeTruthy()
-    expect(document.querySelector('.bg-\\[\\#8B6914\\]')).toBeTruthy()
     expect(screen.queryByRole('progressbar')).toBeNull()
 
     const { affectedLine, badgesRow } = expectClassificationBadgesWithAffectedLineBelow()
     const headerRow = badgesRow?.parentElement
 
-    expect(headerRow?.className).toContain('justify-between')
     expect(headerRow?.contains(affectedLine)).toBe(false)
     expect(affectedLine.parentElement?.contains(headerRow as Node)).toBe(true)
   })
@@ -272,7 +261,6 @@ describe('ActionPlanExecutionFeedCard', () => {
     const { affectedLine, badgesRow } = expectClassificationBadgesWithAffectedLineBelow()
     const headerRow = badgesRow?.parentElement
 
-    expect(headerRow?.className).toContain('justify-between')
     expect(headerRow?.contains(affectedLine)).toBe(false)
     expect(affectedLine.parentElement?.contains(headerRow as Node)).toBe(true)
   })
@@ -300,8 +288,7 @@ describe('ActionPlanExecutionFeedCard', () => {
       />,
     )
 
-    const deadline = screen.getByText(/Échéance :/)
-    expect(deadline.className).toContain('text-[#E24B4A]')
+    expect(screen.getByText(/Échéance :/)).toBeTruthy()
   })
 
   it('renders distinct pending validation card without duplicate status badge', () => {
@@ -315,7 +302,6 @@ describe('ActionPlanExecutionFeedCard', () => {
     expect(screen.getByText('En attente de validation')).toBeTruthy()
     expect(screen.queryByText('En cours')).toBeNull()
     expect(screen.getAllByText('En attente de validation')).toHaveLength(1)
-    expect(document.querySelector('.bg-\\[\\#FCE9B8\\]')).toBeTruthy()
     expect(screen.queryByRole('progressbar')).toBeNull()
   })
 
@@ -341,7 +327,6 @@ describe('ActionPlanExecutionFeedCard', () => {
     const metaRow = actionsButton.parentElement?.parentElement?.parentElement
 
     expect(screen.getByText('Restaurant')).toBeTruthy()
-    expect(metaRow?.className).toContain('items-center')
     expect(metaRow?.contains(actionsButton)).toBe(true)
     expect(title).toBeTruthy()
   })
@@ -370,7 +355,6 @@ describe('ActionPlanExecutionFeedCard', () => {
 
     expect(screen.getByText('Linge')).toBeTruthy()
     expect(screen.getByText('Restaurant')).toBeTruthy()
-    expect(metaRow?.className).toContain('items-center')
     expect(metaRow?.contains(actionsButton)).toBe(true)
     expect(title).toBeTruthy()
   })
@@ -450,7 +434,6 @@ describe('ActionPlanExecutionFeedCard', () => {
     const actionsButton = screen.getByRole('button', { name: 'Actions du plan d’action' })
     const bannerRow = bannerLabel.parentElement?.parentElement
 
-    expect(bannerRow?.className).toContain('justify-between')
     expect(bannerRow?.contains(actionsButton)).toBe(true)
     expect(screen.getByText('Restaurant')).toBeTruthy()
     expect(screen.getByRole('heading', { level: 3, name: 'Plan incendie' })).toBeTruthy()
@@ -489,7 +472,6 @@ describe('ActionPlanExecutionFeedCard', () => {
 
     expect(screen.getByLabelText('Terminé')).toBeTruthy()
     expect(screen.getByText('Terminé')).toBeTruthy()
-    expect(document.querySelector('.bg-\\[\\#1D9E75\\]')).toBeTruthy()
     expect(screen.getByRole('progressbar', { name: 'Progression des tâches : 4/4' })).toBeTruthy()
     expect(screen.getByText('4/4')).toBeTruthy()
     expect(screen.queryByText('Tâche 4/4')).toBeNull()
@@ -523,7 +505,6 @@ describe('ActionPlanExecutionFeedCard', () => {
     )
 
     expect(screen.getByLabelText('Annulé')).toBeTruthy()
-    expect(document.querySelector('.bg-\\[\\#7D7B75\\]')).toBeTruthy()
     expect(screen.getByRole('progressbar', { name: 'Progression des tâches : 0/2' })).toBeTruthy()
     expect(screen.getByText('0/2')).toBeTruthy()
     expect(screen.queryByText('Annulé')).toBeNull()

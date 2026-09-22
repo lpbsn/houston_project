@@ -265,7 +265,10 @@ web-api-generate-check:
 	cd $(WEB_DIR) && npm run api:generate
 	git diff --exit-code apps/web/src/api/generated/types.ts
 
-web-check: web-test web-typecheck web-build web-build-native-check web-api-generate-check
+# Same validations as CI frontend-tests: lint, vitest, tsc once, vite bundles
+# (no second tsc via `npm run build`). Standalone `web-build` still typechecks.
+web-check: web-lint web-test web-typecheck web-build-native-check web-api-generate-check
+	cd $(WEB_DIR) && npm run build:bundle
 
 # -----------------------------------------------------------------------------
 # Full validation

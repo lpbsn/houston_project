@@ -59,20 +59,14 @@ describe('ConversationRow', () => {
     cleanup()
   })
 
-  it('renders dm avatar with teal background and compact card sizing', () => {
-    const { container } = renderRow(buildConversation())
+  it('renders dm initials from the peer display name', () => {
+    renderRow(buildConversation())
 
-    const card = container.querySelector('article')
-    expect(card?.className).toContain('py-2')
-    expect(card?.className).toContain('px-3')
-    expect(card?.className).toContain('rounded-[22px]')
-
-    const avatar = container.querySelector('.h-9.w-9')
-    expect(avatar?.className).toContain('bg-[#3A7A96]')
-    expect(avatar?.textContent).toBe('SM')
+    expect(screen.getByText('SM')).toBeTruthy()
+    expect(screen.getByText('Sarah M.')).toBeTruthy()
   })
 
-  it('renders group avatar with navy background and users icon', () => {
+  it('renders a group conversation with a users icon', () => {
     const { container } = renderRow(
       buildConversation({
         type: 'group',
@@ -89,25 +83,12 @@ describe('ConversationRow', () => {
       }),
     )
 
-    const avatar = container.querySelector('.h-9.w-9')
-    expect(avatar?.className).toContain('bg-[#114660]')
+    expect(screen.getByText('Équipe Cuisine')).toBeTruthy()
     expect(container.querySelector('.lucide-users')).toBeTruthy()
   })
 
-  it('applies unread styling for border, time, preview, and numeric badge', () => {
-    const { container } = renderRow(
-      buildConversation({ unread: true, unread_count: 3 }),
-    )
-
-    const card = container.querySelector('article')
-    expect(card?.className).toContain('border-[#4c8543]/35')
-
-    const time = container.querySelector('.text-\\[\\#4c8543\\]')
-    expect(time).toBeTruthy()
-
-    const preview = container.querySelector('p')
-    expect(preview?.className).toContain('font-medium')
-    expect(preview?.className).toContain('text-[#1a1a1a]')
+  it('exposes unread count and accessible label', () => {
+    renderRow(buildConversation({ unread: true, unread_count: 3 }))
 
     expect(screen.getByText('3')).toBeTruthy()
     expect(screen.getByLabelText('3 messages non lus')).toBeTruthy()
@@ -120,15 +101,9 @@ describe('ConversationRow', () => {
     expect(screen.getByLabelText('150 messages non lus')).toBeTruthy()
   })
 
-  it('keeps read styling muted without unread badge', () => {
-    const { container } = renderRow(buildConversation({ unread: false, unread_count: 0 }))
+  it('hides the unread badge when the conversation is read', () => {
+    renderRow(buildConversation({ unread: false, unread_count: 0 }))
 
-    const card = container.querySelector('article')
-    expect(card?.className).toContain('border-[#E8E6DF]')
-    expect(card?.className).not.toContain('border-[#4c8543]/35')
-
-    const preview = container.querySelector('p')
-    expect(preview?.className).toContain('text-[#7D7B75]')
     expect(screen.queryByLabelText(/messages non lus/)).toBeNull()
   })
 })
