@@ -1,0 +1,85 @@
+{
+  "schema_version": "mama_nice_dataset_v1",
+  "oneshots": [
+    {
+      "seed_key": "oneshot:private:horizon-azur-2026-11-12",
+      "title": "Séminaire Horizon Azur",
+      "date": "2026-11-12",
+      "start_at": "09:00",
+      "end_at": "18:00",
+      "start_date": "2026-11-10",
+      "end_date": "2026-11-13",
+      "plan_seed_key": "plan:preparation-seminaire",
+      "pole": "evenements_privatisations",
+      "public": false,
+      "golden_path": 3
+    },
+    {
+      "seed_key": "oneshot:private:privatisation-2026-11-06",
+      "title": "Privatisation Ateliers — soirée entreprise",
+      "date": "2026-11-06",
+      "start_at": "18:00",
+      "end_at": "23:00",
+      "plan_seed_key": "plan:preparation-privatisation",
+      "pole": "evenements_privatisations",
+      "public": false
+    },
+    {
+      "seed_key": "oneshot:private:campagne-comm-2026-11-19",
+      "title": "Campagne communication novembre",
+      "date": "2026-11-19",
+      "start_at": "10:00",
+      "end_at": "12:00",
+      "plan_seed_key": "plan:avis-client-negatif",
+      "pole": "communication",
+      "public": false
+    },
+    {
+      "seed_key": "oneshot:private:controle-cuisine-2026-11-20",
+      "title": "Contrôle cuisine et plonge",
+      "date": "2026-11-20",
+      "start_at": "09:00",
+      "end_at": "11:00",
+      "plan_seed_key": "plan:incident-service-resto",
+      "pole": "restaurant",
+      "public": false
+    },
+    {
+      "seed_key": "oneshot:private:prepa-dj-2026-11-21",
+      "title": "Préparation technique DJ weekend",
+      "date": "2026-11-21",
+      "start_at": "14:00",
+      "end_at": "17:00",
+      "plan_seed_key": "plan:preparation-evenement-dj",
+      "pole": "evenements_privatisations",
+      "public": false
+    },
+    {
+      "seed_key": "oneshot:private:privatisation-2026-11-27",
+      "title": "Privatisation Studio — cocktail",
+      "date": "2026-11-27",
+      "start_at": "18:00",
+      "end_at": "22:00",
+      "plan_seed_key": "plan:preparation-privatisation",
+      "pole": "evenements_privatisations",
+      "public": false
+    },
+    {
+      "seed_key": "oneshot:private:cvc-2027-03-09",
+      "title": "Maintenance préventive CVC",
+      "date": "2027-03-09",
+      "start_at": "09:00",
+      "end_at": "12:00",
+      "plan_seed_key": "plan:diagnostic-clim",
+      "pole": "maintenance",
+      "public": false,
+      "schedule_id_null": true
+    }
+  ],
+  "private_oneshot_dates": {
+    "2026-12": ["2026-12-03", "2026-12-09", "2026-12-10", "2026-12-11", "2026-12-16", "2026-12-17", "2026-12-18", "2026-12-22", "2026-12-23"],
+    "2027-01": ["2027-01-07", "2027-01-08", "2027-01-14", "2027-01-15", "2027-01-20", "2027-01-21", "2027-01-22", "2027-01-29"],
+    "2027-02": ["2027-02-03", "2027-02-04", "2027-02-05", "2027-02-12", "2027-02-18", "2027-02-19", "2027-02-24", "2027-02-25"],
+    "2027-03": ["2027-03-03", "2027-03-04", "2027-03-05", "2027-03-11", "2027-03-12", "2027-03-16", "2027-03-17", "2027-03-25"]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": "mama_nice_dataset_v1",
+  "units": [
+    {"seed_key": "ou:reception-lobby", "key": "reception_lobby", "label": "Réception / Lobby"},
+    {"seed_key": "ou:chambres", "key": "chambres", "label": "Chambres"},
+    {"seed_key": "ou:circulations-chambres", "key": "circulations_chambres", "label": "Circulations chambres"},
+    {"seed_key": "ou:restaurant-rdc", "key": "restaurant_rdc", "label": "Restaurant RDC"},
+    {"seed_key": "ou:bar-central", "key": "bar_central", "label": "Bar central"},
+    {"seed_key": "ou:cuisine", "key": "cuisine", "label": "Cuisine"},
+    {"seed_key": "ou:plonge-economat", "key": "plonge_economat", "label": "Plonge / économat"},
+    {"seed_key": "ou:rooftop", "key": "rooftop", "label": "Rooftop"},
+    {"seed_key": "ou:piscine", "key": "piscine", "label": "Piscine"},
+    {"seed_key": "ou:atelier-1", "key": "atelier_1", "label": "Atelier 1"},
+    {"seed_key": "ou:atelier-2", "key": "atelier_2", "label": "Atelier 2"},
+    {"seed_key": "ou:breakroom", "key": "breakroom", "label": "Breakroom"},
+    {"seed_key": "ou:studio-1", "key": "studio_1", "label": "Studio 1"},
+    {"seed_key": "ou:studio-2", "key": "studio_2", "label": "Studio 2"},
+    {"seed_key": "ou:parking", "key": "parking", "label": "Parking"},
+    {"seed_key": "ou:bornes-electriques", "key": "bornes_electriques", "label": "Bornes électriques"},
+    {"seed_key": "ou:locaux-techniques", "key": "locaux_techniques", "label": "Locaux techniques"},
+    {"seed_key": "ou:back-office-admin", "key": "back_office_administratif", "label": "Back-office administratif"}
+  ]
+}

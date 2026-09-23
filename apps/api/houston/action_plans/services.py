@@ -1384,6 +1384,29 @@ def replace_action_plan_tasks(
 
 
 @transaction.atomic
+def publish_one_shot_action_plan(
+    *,
+    action_plan: ActionPlan,
+    actor: EstablishmentMembership,
+) -> ActionPlan:
+    if not can_manage_action_plan(actor, action_plan):
+        raise ActionPlanPermissionError("Not allowed to publish this action plan.")
+    if action_plan.is_reusable and action_plan.catalog_status == CATALOG_STATUS_ACTIVE:
+        return action_plan
+    if action_plan.is_reusable or action_plan.catalog_status is not None:
+        raise ActionPlanValidationError(
+            "Only a one-shot action plan can be published to the catalog."
+        )
+    action_plan.is_reusable = True
+    action_plan.catalog_status = CATALOG_STATUS_ACTIVE
+    action_plan.save(update_fields=["is_reusable", "catalog_status", "updated_at"])
+    from houston.action_plans.realtime import schedule_action_plan_invalidation
+
+    schedule_action_plan_invalidation(action_plan=action_plan, reason="action_plan.updated")
+    return action_plan
+
+
+@transaction.atomic
 def activate_action_plan(
     *,
     action_plan: ActionPlan,

@@ -10,7 +10,10 @@
 	preflight-organizational-owners repair-organizational-owners \
 	bootstrap-dev reset-dev-db assert-local-dev-db clean-operational-test-data \
 	provision-konoha-dataset-actors \
-	provision-konoha-dataset-replay
+	provision-konoha-dataset-replay \
+	bootstrap-mama-nice-dataset \
+	seed-mama-nice-dataset \
+	validate-mama-nice-dataset
 
 # -----------------------------------------------------------------------------
 # Compose / env
@@ -218,6 +221,21 @@ provision-konoha-dataset-actors: assert-local-dev-db
 
 provision-konoha-dataset-replay: assert-local-dev-db
 	$(API_CMD) 'cd $(API_DIR) && uv run python manage.py replay_konoha_dataset_observations $(ARGS)'
+
+bootstrap-mama-nice-dataset: assert-local-dev-db
+	$(API_CMD) 'cd $(API_DIR) && uv run python manage.py bootstrap_mama_nice_dataset $(ARGS)'
+
+seed-mama-nice-dataset: assert-local-dev-db
+	$(API_CMD) 'cd $(API_DIR) && uv run python manage.py seed_mama_nice_dataset $(ARGS)'
+
+validate-mama-nice-dataset: assert-local-dev-db
+	$(API_CMD) 'cd $(API_DIR) && uv run python manage.py validate_mama_nice_dataset $(ARGS)'
+
+export-mama-nice-corpus:
+	$(API_CMD) 'cd $(API_DIR) && uv run python manage.py export_mama_nice_corpus $(ARGS)'
+
+export-mama-nice-sample:
+	$(API_CMD) 'cd $(API_DIR) && uv run python manage.py export_mama_nice_corpus --sample --output-dir var/mama_nice_corpus_sample $(ARGS)'
 
 # -----------------------------------------------------------------------------
 # Frontend — native Mac

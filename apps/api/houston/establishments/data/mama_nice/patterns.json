@@ -1,0 +1,29 @@
+{
+  "schema_version": "mama_nice_dataset_v1",
+  "patterns": [
+    {"n": 1, "seed_key": "pattern:clim-chambres", "label": "Dysfonctionnements de climatisation dans les chambres", "status": "active", "pole": "maintenance", "min_signals": 12},
+    {"n": 2, "seed_key": "pattern:linge", "label": "Linge manquant ou livré en retard", "status": "active", "pole": "hotel", "min_signals": 6},
+    {"n": 3, "seed_key": "pattern:chambres-non-pretes", "label": "Chambres non prêtes à l'heure d'arrivée", "status": "active", "pole": "hotel", "min_signals": 6},
+    {"n": 4, "seed_key": "pattern:attente-checkin", "label": "Attente excessive au check-in", "status": "active", "pole": "hotel", "min_signals": 6},
+    {"n": 5, "seed_key": "pattern:facturation-caisse", "label": "Anomalies de facturation ou de caisse à la réception", "status": "active", "pole": "hotel", "min_signals": 6},
+    {"n": 6, "seed_key": "pattern:ruptures-buffet", "label": "Ruptures récurrentes au buffet du petit-déjeuner", "status": "active", "pole": "petit_dejeuner", "min_signals": 10},
+    {"n": 7, "seed_key": "pattern:equipements-cafe", "label": "Pannes des équipements café et buffet", "status": "active", "pole": "petit_dejeuner", "min_signals": 6},
+    {"n": 8, "seed_key": "pattern:proprete-buffet", "label": "Écarts de propreté sur le buffet et sa zone", "status": "active", "pole": "petit_dejeuner", "min_signals": 6},
+    {"n": 9, "seed_key": "pattern:attente-restaurant", "label": "Attente excessive au restaurant", "status": "active", "pole": "restaurant", "min_signals": 10},
+    {"n": 10, "seed_key": "pattern:erreurs-service", "label": "Erreurs de service ou de commande", "status": "active", "pole": "restaurant", "min_signals": 6},
+    {"n": 11, "seed_key": "pattern:ruptures-bar", "label": "Ruptures de stock bar ou restaurant", "status": "active", "pole": "restaurant", "min_signals": 6},
+    {"n": 12, "seed_key": "pattern:cloture-caisse", "label": "Écarts lors des clôtures de caisse", "status": "active", "pole": "restaurant", "min_signals": 6},
+    {"n": 13, "seed_key": "pattern:evacuations-cuisine", "label": "Évacuations lentes en cuisine ou plonge", "status": "active", "pole": "restaurant", "min_signals": 6},
+    {"n": 14, "seed_key": "pattern:equipements-rooftop", "label": "Défaillances d'équipements du rooftop", "status": "active", "pole": "restaurant", "min_signals": 6},
+    {"n": 15, "seed_key": "pattern:piscine", "label": "Incidents d'exploitation de la piscine", "status": "active", "pole": "hotel", "min_signals": 6},
+    {"n": 16, "seed_key": "pattern:audiovisuel-ateliers", "label": "Fiabilité audiovisuelle et réseau des Ateliers", "status": "active", "pole": "evenements_privatisations", "min_signals": 10},
+    {"n": 17, "seed_key": "pattern:eclairage", "label": "Défauts d'éclairage dans les chambres et circulations", "status": "active", "pole": "maintenance", "min_signals": 6},
+    {"n": 18, "seed_key": "pattern:fuites", "label": "Petites fuites sanitaires récurrentes", "status": "active", "pole": "maintenance", "min_signals": 6},
+    {"n": 19, "seed_key": "pattern:bornes", "label": "Indisponibilité des bornes électriques", "status": "active", "pole": "maintenance", "min_signals": 6},
+    {"n": 20, "seed_key": "pattern:signaletique-event", "label": "Défauts de signalétique événementielle", "status": "active", "pole": "evenements_privatisations", "min_signals": 6},
+    {"n": 21, "seed_key": "pattern:avis-negatifs", "label": "Thèmes négatifs récurrents dans les avis clients", "status": "active", "pole": "communication", "min_signals": 6},
+    {"n": 22, "seed_key": "pattern:sous-effectif", "label": "Sous-effectif ou besoin de formation récurrent", "status": "active", "pole": "rh", "min_signals": 6},
+    {"n": 23, "seed_key": "pattern:clickshare", "label": "Incidents ClickShare isolés", "status": "merged", "merge_into": "pattern:audiovisuel-ateliers", "pole": "evenements_privatisations", "min_signals": 3},
+    {"n": 24, "seed_key": "pattern:signaletique-lancement", "label": "Signalétique temporaire de lancement de l'établissement", "status": "retired", "pole": "communication", "min_signals": 3}
+  ]
+}

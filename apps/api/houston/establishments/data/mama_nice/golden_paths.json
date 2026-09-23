@@ -1,0 +1,30 @@
+{
+  "schema_version": "mama_nice_dataset_v1",
+  "paths": [
+    {
+      "n": 1,
+      "seed_key": "golden:chambre-318-clim",
+      "signal_seed_key": "signal:golden-clim-318",
+      "plan_seed_key": "plan:diagnostic-clim",
+      "rooms": ["318"],
+      "date": "2026-09-21"
+    },
+    {
+      "n": 2,
+      "seed_key": "golden:clim-recurrente",
+      "pattern_seed_key": "pattern:clim-chambres",
+      "issue_focuses": [
+        "La clim de la chambre 214 souffle tiède",
+        "La clim de la chambre 426 s'est coupée",
+        "La clim de la chambre 318 ne refroidit plus"
+      ],
+      "months": ["2025-11", "2026-07", "2026-09"]
+    },
+    {
+      "n": 3,
+      "seed_key": "golden:horizon-azur",
+      "execution_seed_key": "oneshot:private:horizon-azur-2026-11-12",
+      "date": "2026-11-12"
+    }
+  ]
+}

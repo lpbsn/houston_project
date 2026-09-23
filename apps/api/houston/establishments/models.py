@@ -756,3 +756,52 @@ class ActivitySubject(BaseModel):
     def __str__(self) -> str:
         display = self.label or self.routing_key
         return f"{self.business_unit.specific_name} :: {display} [{self.normalized_name}]"
+
+
+class MamaNiceSeedRecord(BaseModel):
+    class ObjectType(models.TextChoices):
+        MEMBERSHIP = "membership", "Membership"
+        OBSERVATION = "observation", "Observation"
+        SIGNAL = "signal", "Signal"
+        PATTERN = "pattern", "Pattern"
+        PLAN = "plan", "Plan"
+        SCHEDULE = "schedule", "Schedule"
+        EXECUTION = "execution", "Execution"
+        COMMENT = "comment", "Comment"
+        REVIEW = "review", "Review"
+        SEASON = "season", "Season"
+        OPERATIONAL_UNIT = "operational_unit", "Operational unit"
+        CLOCK = "clock", "Clock"
+
+    establishment = models.ForeignKey(
+        Establishment,
+        on_delete=models.CASCADE,
+        related_name="mama_nice_seed_records",
+    )
+    object_type = models.CharField(max_length=32, choices=ObjectType.choices)
+    seed_key = models.CharField(max_length=180)
+    object_id = models.UUIDField()
+    fingerprint = models.CharField(max_length=64)
+    event_kind = models.CharField(max_length=64)
+    event_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["establishment", "object_type", "seed_key"],
+                name="mama_nice_seed_est_type_key_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=["establishment", "object_type", "object_id", "event_kind"],
+                name="mama_nice_seed_est_type_object_kind_uniq",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["establishment", "object_type"],
+                name="mama_nice_seed_est_type_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.object_type}:{self.seed_key}"

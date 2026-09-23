@@ -1,0 +1,77 @@
+{
+  "schema_version": "mama_nice_dataset_v1",
+  "events": [
+    {
+      "seed_key": "oneshot:public:tim-lienderss",
+      "title": "TIM LIENDERSS — DJ set",
+      "date": "2026-09-26",
+      "start_date": "2026-09-24",
+      "end_date": "2026-09-26",
+      "start_at": "09:00",
+      "end_at": "19:00",
+      "plan_seed_key": "plan:preparation-evenement-dj",
+      "pole": "evenements_privatisations",
+      "public": true
+    },
+    {
+      "seed_key": "oneshot:public:bringue-2026-10-15",
+      "title": "La Bringue à Mémé × French Riviera Agency",
+      "date": "2026-10-15",
+      "start_at": "16:00",
+      "end_at": "19:00",
+      "plan_seed_key": "plan:preparation-evenement-dj",
+      "pole": "evenements_privatisations",
+      "public": true
+    },
+    {
+      "seed_key": "oneshot:public:club-sonore-2026-10-22",
+      "title": "Mama ❤️ Club Sonore — DJ set",
+      "date": "2026-10-22",
+      "start_at": "16:00",
+      "end_at": "19:00",
+      "plan_seed_key": "plan:preparation-evenement-dj",
+      "pole": "evenements_privatisations",
+      "public": true
+    },
+    {
+      "seed_key": "oneshot:public:bringue-2026-11-05",
+      "title": "La Bringue à Mémé × French Riviera Agency",
+      "date": "2026-11-05",
+      "start_at": "16:00",
+      "end_at": "19:00",
+      "plan_seed_key": "plan:preparation-evenement-dj",
+      "pole": "evenements_privatisations",
+      "public": true
+    },
+    {
+      "seed_key": "oneshot:public:bringue-2027-01-28",
+      "title": "La Bringue à Mémé × French Riviera Agency",
+      "date": "2027-01-28",
+      "start_at": "16:00",
+      "end_at": "19:00",
+      "plan_seed_key": "plan:preparation-evenement-dj",
+      "pole": "evenements_privatisations",
+      "public": true
+    },
+    {
+      "seed_key": "oneshot:public:bringue-2027-02-11",
+      "title": "La Bringue à Mémé × French Riviera Agency",
+      "date": "2027-02-11",
+      "start_at": "16:00",
+      "end_at": "19:00",
+      "plan_seed_key": "plan:preparation-evenement-dj",
+      "pole": "evenements_privatisations",
+      "public": true
+    },
+    {
+      "seed_key": "oneshot:public:bringue-2027-03-18",
+      "title": "La Bringue à Mémé × French Riviera Agency",
+      "date": "2027-03-18",
+      "start_at": "16:00",
+      "end_at": "19:00",
+      "plan_seed_key": "plan:preparation-evenement-dj",
+      "pole": "evenements_privatisations",
+      "public": true
+    }
+  ]
+}
