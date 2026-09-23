@@ -1,0 +1,24 @@
+{
+  "schema_version": "mama_nice_dataset_v1",
+  "note": "Canonical roster is houston.establishments.mama_nice_dataset_roster.ROSTER. This file records the 10 personas and counts.",
+  "personas": [
+    "director.demo.mama.nice@example.com",
+    "mgr.hotel.demo@example.com",
+    "staff.hotel.demo@example.com",
+    "mgr.restaurant.demo@example.com",
+    "staff.restaurant.demo@example.com",
+    "mgr.pdj.demo@example.com",
+    "mgr.maintenance.demo@example.com",
+    "mgr.communication.demo@example.com",
+    "mgr.events.demo@example.com",
+    "mgr.rh.demo@example.com"
+  ],
+  "counts": {
+    "active_fictive": 60,
+    "deactivated": 4,
+    "invited": 2,
+    "personas": 10,
+    "multi_scope": 5,
+    "badge_eligible": 21
+  }
+}

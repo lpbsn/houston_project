@@ -401,6 +401,42 @@ def test_deactivate_action_plan_rejects_non_reusable(
         deactivate_action_plan(action_plan=action_plan, actor=owner_membership)
 
 
+def test_publish_one_shot_action_plan_is_idempotent(owner_membership, action_plan):
+    from houston.action_plans.services import publish_one_shot_action_plan
+
+    published = publish_one_shot_action_plan(action_plan=action_plan, actor=owner_membership)
+    published.refresh_from_db()
+    updated_at = published.updated_at
+
+    again = publish_one_shot_action_plan(action_plan=published, actor=owner_membership)
+    again.refresh_from_db()
+
+    assert published.is_reusable is True
+    assert published.catalog_status == CATALOG_STATUS_ACTIVE
+    assert again.updated_at == updated_at
+    assert ActionPlanTask.objects.filter(action_plan=published).count() == 0
+
+
+def test_publish_one_shot_action_plan_rejects_staff_and_inactive(
+    owner_membership,
+    staff_membership,
+    action_plan,
+    inactive_catalog_action_plan,
+):
+    from houston.action_plans.services import publish_one_shot_action_plan
+
+    with pytest.raises(ActionPlanPermissionError, match="Not allowed to publish"):
+        publish_one_shot_action_plan(action_plan=action_plan, actor=staff_membership)
+    with pytest.raises(ActionPlanValidationError, match="Only a one-shot"):
+        publish_one_shot_action_plan(
+            action_plan=inactive_catalog_action_plan,
+            actor=owner_membership,
+        )
+    action_plan.refresh_from_db()
+    assert action_plan.is_reusable is False
+    assert action_plan.catalog_status is None
+
+
 def test_create_execution_from_catalog_plan(
     owner_membership,
     catalog_action_plan,

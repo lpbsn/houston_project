@@ -141,6 +141,23 @@ assert AnalyticsHistoryCoverage.objects.get().reliable_from == OCCURRED_AT_MIN
 
 Clean still resets `reliable_from` to `timezone.now()`; replay never writes it.
 
+### Mama Shelter Nice demo dataset
+
+Local bootstrap + shared corpus seed (no Chat writes). Passwords stay in the environment, never in git.
+
+```bash
+export HOUSTON_MAMA_NICE_OWNER_PASSWORD='…'
+export HOUSTON_MAMA_NICE_PERSONA_PASSWORD='…'
+make bootstrap-mama-nice-dataset ARGS='--dry-run'
+make bootstrap-mama-nice-dataset ARGS='--confirm'
+make seed-mama-nice-dataset ARGS='--local --dry-run'
+make seed-mama-nice-dataset ARGS='--local --confirm'
+make seed-mama-nice-dataset ARGS='--local --confirm --resume'
+make validate-mama-nice-dataset ARGS='--local'
+```
+
+`bootstrap_mama_nice_dataset` is local-only (`assert_local_dev_environment`). Production uses `seed_mama_nice_dataset --establishment-id fe29f398-4a6b-4f9b-a92f-00805435ddc2 --dry-run` then `--confirm` after a fail-closed preflight. Do not run bootstrap or migrate-from-host against production.
+
 ## Automatic checks
 
 | Command | Expected |

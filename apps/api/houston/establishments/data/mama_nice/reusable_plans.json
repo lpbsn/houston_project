@@ -1,0 +1,138 @@
+{
+  "schema_version": "mama_nice_dataset_v1",
+  "plans": [
+    {"n": 1, "seed_key": "plan:diagnostic-clim", "title": "Diagnostic climatisation d'une chambre", "kind": "mono", "status": "active", "pilot": "maintenance", "linked_pattern": "pattern:clim-chambres", "tasks": [
+      {"task": "Prendre en charge l'incident climatisation", "pole": "maintenance"},
+      {"task": "Diagnostiquer l'unité et le thermostat", "pole": "maintenance"},
+      {"task": "Corriger ou escalader au prestataire CVC", "pole": "maintenance"},
+      {"task": "Tester le refroidissement en chambre", "pole": "maintenance"},
+      {"task": "Informer l'Hôtel du statut chambre", "pole": "hotel"},
+      {"task": "Clôturer l'intervention", "pole": "maintenance"}
+    ]},
+    {"n": 2, "seed_key": "plan:fuite-sanitaire", "title": "Traitement d'une fuite sanitaire légère", "kind": "mono", "status": "active", "pilot": "maintenance", "tasks": [
+      {"task": "Sécuriser la zone et couper l'eau si besoin", "pole": "maintenance"},
+      {"task": "Localiser et réparer la fuite", "pole": "maintenance"},
+      {"task": "Assécher et contrôler l'évacuation", "pole": "maintenance"},
+      {"task": "Confirmer la remise en service", "pole": "maintenance"}
+    ]},
+    {"n": 3, "seed_key": "plan:defaut-eclairage", "title": "Traitement d'un défaut d'éclairage", "kind": "mono", "status": "active", "pilot": "maintenance", "tasks": [
+      {"task": "Identifier le circuit et le luminaire", "pole": "maintenance"},
+      {"task": "Remplacer ou réparer", "pole": "maintenance"},
+      {"task": "Tester l'éclairage de la zone", "pole": "maintenance"},
+      {"task": "Consigner le résultat", "pole": "maintenance"}
+    ]},
+    {"n": 4, "seed_key": "plan:borne-electrique", "title": "Remise en service d'une borne électrique", "kind": "mono", "status": "active", "pilot": "maintenance", "tasks": [
+      {"task": "Contrôler l'alimentation de la borne", "pole": "maintenance"},
+      {"task": "Redémarrer et tester une charge", "pole": "maintenance"},
+      {"task": "Signaler l'indisponibilité si blocage", "pole": "maintenance"},
+      {"task": "Confirmer la remise en service", "pole": "maintenance"}
+    ]},
+    {"n": 5, "seed_key": "plan:rattrapage-chambre", "title": "Rattrapage d'une chambre non prête", "kind": "mono", "status": "active", "pilot": "hotel", "tasks": [
+      {"task": "Prioriser le ménage de la chambre", "pole": "hotel"},
+      {"task": "Vérifier linge et équipements", "pole": "hotel"},
+      {"task": "Informer la réception", "pole": "hotel"},
+      {"task": "Confirmer la chambre prête", "pole": "hotel"}
+    ]},
+    {"n": 6, "seed_key": "plan:rupture-linge", "title": "Traitement d'une rupture de linge", "kind": "mono", "status": "active", "pilot": "hotel", "tasks": [
+      {"task": "Constater le stock manquant", "pole": "hotel"},
+      {"task": "Réaffecter le linge disponible", "pole": "hotel"},
+      {"task": "Relancer le prestataire linge", "pole": "hotel"},
+      {"task": "Confirmer le réassort", "pole": "hotel"}
+    ]},
+    {"n": 7, "seed_key": "plan:reassort-buffet-pdj", "title": "Réassort critique du buffet petit-déjeuner", "kind": "mono", "status": "active", "pilot": "petit_dejeuner", "linked_pattern": "pattern:ruptures-buffet", "tasks": [
+      {"task": "Constater la rupture au buffet", "pole": "petit_dejeuner"},
+      {"task": "Vérifier le stock économat", "pole": "petit_dejeuner"},
+      {"task": "Définir une substitution si nécessaire", "pole": "petit_dejeuner"},
+      {"task": "Réassortir le buffet", "pole": "petit_dejeuner"},
+      {"task": "Confirmer la remise en service", "pole": "petit_dejeuner"}
+    ]},
+    {"n": 8, "seed_key": "plan:remise-conformite-buffet", "title": "Remise en conformité du buffet", "kind": "mono", "status": "active", "pilot": "petit_dejeuner", "tasks": [
+      {"task": "Inspecter propreté et mise en place", "pole": "petit_dejeuner"},
+      {"task": "Corriger les écarts visibles", "pole": "petit_dejeuner"},
+      {"task": "Valider la zone client", "pole": "petit_dejeuner"}
+    ]},
+    {"n": 9, "seed_key": "plan:incident-service-resto", "title": "Traitement d'un incident de service restaurant", "kind": "mono", "status": "active", "pilot": "restaurant", "tasks": [
+      {"task": "Accueillir et calmer le service concerné", "pole": "restaurant"},
+      {"task": "Corriger commande ou attente", "pole": "restaurant"},
+      {"task": "Informer le manager de shift", "pole": "restaurant"},
+      {"task": "Clôturer l'incident", "pole": "restaurant"}
+    ]},
+    {"n": 10, "seed_key": "plan:anomalie-caisse", "title": "Analyse d'une anomalie de clôture de caisse", "kind": "mono", "status": "active", "pilot": "restaurant", "tasks": [
+      {"task": "Isoler l'écart de caisse", "pole": "restaurant"},
+      {"task": "Retracer les tickets", "pole": "restaurant"},
+      {"task": "Documenter la cause", "pole": "restaurant"},
+      {"task": "Valider la clôture corrigée", "pole": "restaurant"}
+    ]},
+    {"n": 11, "seed_key": "plan:avis-client-negatif", "title": "Traitement d'un avis client négatif", "kind": "mono", "status": "active", "pilot": "communication", "linked_pattern": "pattern:avis-negatifs", "tasks": [
+      {"task": "Qualifier le thème de l'avis", "pole": "communication"},
+      {"task": "Identifier le pôle concerné", "pole": "communication"},
+      {"task": "Préparer la réponse publique", "pole": "communication"},
+      {"task": "Suivre l'action corrective", "pole": "communication"},
+      {"task": "Clôturer le suivi", "pole": "communication"}
+    ]},
+    {"n": 12, "seed_key": "plan:verification-clickshare", "title": "Vérification d'un équipement ClickShare", "kind": "mono", "status": "active", "pilot": "maintenance", "linked_pattern": "pattern:audiovisuel-ateliers", "tasks": [
+      {"task": "Vérifier les branchements", "pole": "maintenance"},
+      {"task": "Redémarrer l'équipement", "pole": "maintenance"},
+      {"task": "Tester l'affichage et le son", "pole": "maintenance"},
+      {"task": "Confirmer le statut de la salle", "pole": "maintenance"},
+      {"task": "Consigner le résultat", "pole": "maintenance"}
+    ]},
+    {"n": 13, "seed_key": "plan:preparation-seminaire", "title": "Préparation d'un séminaire", "kind": "cross", "status": "active", "pilot": "evenements_privatisations", "tasks": [
+      {"task": "Valider le brief client", "pole": "evenements_privatisations"},
+      {"task": "Affecter les espaces", "pole": "evenements_privatisations"},
+      {"task": "Vérifier l'audiovisuel", "pole": "maintenance"},
+      {"task": "Organiser la restauration", "pole": "restaurant"},
+      {"task": "Préparer signalétique et accueil", "pole": "hotel"},
+      {"task": "Effectuer le contrôle final", "pole": "evenements_privatisations"},
+      {"task": "Clôturer après l'événement", "pole": "evenements_privatisations"}
+    ]},
+    {"n": 14, "seed_key": "plan:preparation-privatisation", "title": "Préparation d'une privatisation", "kind": "cross", "status": "active", "pilot": "evenements_privatisations", "tasks": [
+      {"task": "Confirmer jauge et espaces", "pole": "evenements_privatisations"},
+      {"task": "Préparer la restauration", "pole": "restaurant"},
+      {"task": "Organiser l'accueil", "pole": "hotel"},
+      {"task": "Installer la signalétique", "pole": "evenements_privatisations"},
+      {"task": "Contrôle final et clôture", "pole": "evenements_privatisations"}
+    ]},
+    {"n": 15, "seed_key": "plan:preparation-evenement-dj", "title": "Préparation d'un événement DJ", "kind": "cross", "status": "active", "pilot": "evenements_privatisations", "tasks": [
+      {"task": "Valider le run technique", "pole": "evenements_privatisations"},
+      {"task": "Préparer scène et sono", "pole": "maintenance"},
+      {"task": "Organiser bar et service", "pole": "restaurant"},
+      {"task": "Publier et afficher la communication", "pole": "communication"},
+      {"task": "Accueillir et clôturer", "pole": "evenements_privatisations"}
+    ]},
+    {"n": 16, "seed_key": "plan:ouverture-saison-rooftop-piscine", "title": "Ouverture de saison rooftop et piscine", "kind": "cross", "status": "active", "pilot": "evenements_privatisations", "linked_pattern": "pattern:piscine", "tasks": [
+      {"task": "Inspecter les espaces rooftop et piscine", "pole": "hotel"},
+      {"task": "Réaliser les contrôles techniques et de sécurité", "pole": "maintenance"},
+      {"task": "Préparer stocks et équipements", "pole": "restaurant"},
+      {"task": "Mettre à jour la communication", "pole": "communication"},
+      {"task": "Valider l'ouverture", "pole": "evenements_privatisations"}
+    ]},
+    {"n": 17, "seed_key": "plan:incident-client-majeur", "title": "Traitement d'un incident client majeur", "kind": "cross", "status": "active", "pilot": "hotel", "tasks": [
+      {"task": "Prendre en charge le client", "pole": "hotel"},
+      {"task": "Sécuriser le problème technique", "pole": "maintenance"},
+      {"task": "Préparer le message et le suivi", "pole": "communication"},
+      {"task": "Décider compensation et clôture", "pole": "hotel"}
+    ]},
+    {"n": 18, "seed_key": "plan:ancienne-accueil-groupe", "title": "Ancienne procédure d'accueil d'un groupe", "kind": "cross", "status": "inactive", "pilot": "hotel", "tasks": [
+      {"task": "Préparer les chambres groupe", "pole": "hotel"},
+      {"task": "Organiser l'accueil événement", "pole": "evenements_privatisations"},
+      {"task": "Brief réception", "pole": "hotel"},
+      {"task": "Clôturer l'arrivée", "pole": "hotel"}
+    ]},
+    {"n": 19, "seed_key": "plan:ancienne-incident-av", "title": "Ancienne check-list d'incident audiovisuel", "kind": "cross", "status": "inactive", "pilot": "evenements_privatisations", "tasks": [
+      {"task": "Isoler la salle", "pole": "evenements_privatisations"},
+      {"task": "Diagnostiquer le matériel", "pole": "maintenance"},
+      {"task": "Informer le client interne", "pole": "evenements_privatisations"}
+    ]},
+    {"n": 20, "seed_key": "plan:ancienne-comm-crise", "title": "Ancienne procédure de communication de crise événementielle", "kind": "cross", "status": "inactive", "pilot": "communication", "tasks": [
+      {"task": "Qualifier le message de crise", "pole": "communication"},
+      {"task": "Coordonner avec l'événementiel", "pole": "evenements_privatisations"},
+      {"task": "Publier le message et clôturer", "pole": "communication"}
+    ]},
+    {"n": 21, "seed_key": "plan:runtime-rh-routines", "title": "Routines planning RH", "kind": "mono", "status": "active", "pilot": "rh", "tasks": [
+      {"task": "Préparer le planning", "pole": "rh"},
+      {"task": "Valider le staffing", "pole": "rh"},
+      {"task": "Clôturer la revue", "pole": "rh"}
+    ]}
+  ]
+}

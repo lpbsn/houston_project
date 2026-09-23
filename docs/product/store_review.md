@@ -15,7 +15,7 @@ The store binary talks to `https://app.spore-os.com`.
 - Operational data is establishment-scoped. A reviewer with no active membership on an active establishment cannot exercise the core loop.
 - Publishing observations / comments / chat requires CGU `cgu-v1`. Transcription and the AI observation pipeline require in-app consent `openai-v1`.
 - The observation → signal path needs a running Celery worker and the production AI configuration. An empty signal feed is a review risk, not a store-metadata problem.
-- There is **no** in-app demo mode and **no** production seed command. Do not run `provision_konoha_*` on a non-local host. KONOHA is local/dev only.
+- There is **no** in-app demo mode. Do not run `provision_konoha_*` on a non-local host. KONOHA is local/dev only. The Mama Shelter Nice corpus uses the operator-targeted `seed_mama_nice_dataset` command only; it never creates Chat data.
 
 Apple 2.1 and Play App access: the reviewer must sign in without waiting on the developer during review.
 
