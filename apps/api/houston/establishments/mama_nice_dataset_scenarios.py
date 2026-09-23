@@ -152,7 +152,7 @@ PLAN_BY_PATTERN = {
     "pattern:linge": "plan:rupture-linge",
     "pattern:chambres-non-pretes": "plan:rattrapage-chambre",
     "pattern:attente-checkin": "plan:rattrapage-chambre",
-    "pattern:facturation-caisse": "plan:anomalie-cloture-caisse",
+    "pattern:facturation-caisse": "plan:anomalie-caisse",
     "pattern:piscine": "plan:ouverture-saison-rooftop-piscine",
     "pattern:ruptures-buffet": "plan:reassort-buffet-pdj",
     "pattern:equipements-cafe": "plan:reassort-buffet-pdj",

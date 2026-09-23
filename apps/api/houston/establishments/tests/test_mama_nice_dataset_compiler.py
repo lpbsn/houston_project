@@ -59,9 +59,43 @@ def test_roster_invariants():
 
 
 def test_compiler_has_no_chat_events():
+    from houston.establishments.mama_nice_dataset_compiler import observation_mentions_chat
+
     corpus = compile_mama_nice_dataset()
+    assert corpus.errors == []
     assert corpus.chat_event_count == 0
     assert all("chat" not in name for name in load_mama_nice_manifest())
+    assert not any(
+        observation_mentions_chat(obs["raw_text"]) for obs in corpus.observation_specs
+    )
+
+
+def test_observation_chat_detects_the_whole_word_only():
+    from houston.establishments.mama_nice_dataset_compiler import observation_mentions_chat
+
+    assert observation_mentions_chat("Le chat de la réception est ouvert")
+    assert observation_mentions_chat("Chat fermé à la réception")
+    assert not observation_mentions_chat("Un achat à la réception ne passe pas")
+    assert not observation_mentions_chat("Le ClickShare de l'Atelier 1 ne projette plus")
+
+
+def test_catalog_plan_guard_accepts_inactive_plans():
+    from houston.establishments.mama_nice_dataset_archetypes import ARCHETYPES
+    from houston.establishments.mama_nice_dataset_compiler import missing_catalog_plan_keys
+    from houston.establishments.mama_nice_dataset_scenarios import PLAN_BY_PATTERN
+
+    plans = load_mama_nice_manifest()["reusable_plans"]["plans"]
+    catalog_keys = {row["seed_key"] for row in plans}
+    inactive = next(row["seed_key"] for row in plans if row["status"] == "inactive")
+    assert len(catalog_keys) == 21
+    assert inactive in catalog_keys
+    assert missing_catalog_plan_keys([inactive], plans) == []
+    assert missing_catalog_plan_keys(["plan:anomalie-cloture-caisse"], plans) == [
+        "plan:anomalie-cloture-caisse"
+    ]
+    assert PLAN_BY_PATTERN["pattern:facturation-caisse"] == "plan:anomalie-caisse"
+    assert ARCHETYPES["caisse"].plans == frozenset({"plan:anomalie-caisse"})
+    assert "plan:anomalie-caisse" in catalog_keys
 
 
 def test_schedule_20_and_25_moved_to_november():
@@ -292,6 +326,7 @@ def test_authored_scenarios_have_families_and_no_fallback():
     assert {item.days_late for item in overdue} == {2, 3, 4, 5, 6, 7}
     horizon = next(item for item in corpus.oneshots if "horizon-azur" in item.seed_key)
     assert (horizon.end_at - horizon.start_at).days >= 2
+    from houston.establishments.mama_nice_dataset_archetypes import ARCHETYPES
     from houston.establishments.mama_nice_dataset_editorial import EVENT_KEYWORDS
     from houston.establishments.mama_nice_dataset_scenarios import PLAN_BY_PATTERN
 
@@ -313,6 +348,15 @@ def test_authored_scenarios_have_families_and_no_fallback():
                 assert PLAN_BY_PATTERN[item["pattern_seed_key"]] == item["plan_seed_key"]
             if item["status"] == "open":
                 assert item["plan_seed_key"] is None
+    plans = load_mama_nice_manifest()["reusable_plans"]["plans"]
+    catalog_keys = {row["seed_key"] for row in plans}
+
+    for item in corpus.scenario_specs:
+        plan_key = item.get("plan_seed_key")
+        if plan_key and plan_key.startswith("plan:"):
+            assert plan_key in catalog_keys
+    for archetype in ARCHETYPES.values():
+        assert archetype.plans <= catalog_keys
 
 
 def test_export_mama_nice_corpus_is_readable(tmp_path):
@@ -345,6 +389,10 @@ def test_export_mama_nice_corpus_is_readable(tmp_path):
     )[0]
     assert "Valider l'ouverture" not in fermeture
     assert "plan:ouverture-saison-rooftop-piscine" not in fermeture
+    exported = "\n".join(path.read_text(encoding="utf-8") for path in written)
+    assert "plan:anomalie-cloture-caisse" not in exported
+    parcours = (tmp_path / "02-parcours.md").read_text(encoding="utf-8")
+    assert "plan:anomalie-caisse — Analyse d'une anomalie de clôture de caisse" in parcours
 
 
 def test_in_progress_plans_are_archetype_compatible_without_pole_default():

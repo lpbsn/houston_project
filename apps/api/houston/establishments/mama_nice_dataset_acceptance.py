@@ -94,8 +94,22 @@ def _resolve_authored_calendar_execution(*, establishment: Establishment, spec):
     ).first()
 
 
+def _seeded_chat_row_errors(establishment: Establishment) -> list[str]:
+    conversation_count = ChatConversation.objects.filter(establishment=establishment).count()
+    message_count = ChatMessage.objects.filter(
+        conversation__establishment=establishment
+    ).count()
+    if not conversation_count and not message_count:
+        return []
+    return [
+        "chat rows were seeded: "
+        f"{conversation_count} conversations, {message_count} messages"
+    ]
+
+
 def validate_mama_nice_dataset(*, establishment: Establishment) -> list[str]:
     errors: list[str] = []
+    errors.extend(_seeded_chat_row_errors(establishment))
     if Observation.objects.filter(establishment=establishment).count() != TOTAL_OBSERVATIONS:
         errors.append("observation count diverges")
     if Signal.objects.filter(establishment=establishment).count() != TOTAL_SIGNALS:
@@ -238,8 +252,6 @@ def validate_mama_nice_dataset(*, establishment: Establishment) -> list[str]:
         object_type__in=["chat", "chat_conversation", "chat_message"],
     ).exists():
         errors.append("Chat objects were seeded")
-    ChatConversation.objects.filter(establishment=establishment).count()
-    ChatMessage.objects.filter(conversation__establishment=establishment).count()
     if Comment.objects.filter(establishment=establishment, signal__isnull=False).count() < 19:
         errors.append("signal comments are missing")
     governance_emails = {"leonard.p.boisson@gmail.com", "director.mama.nice@example.com"}

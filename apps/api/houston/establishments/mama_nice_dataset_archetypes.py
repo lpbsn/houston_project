@@ -153,7 +153,7 @@ ARCHETYPES: dict[str, Archetype] = {
         responsible_poles=frozenset({"restaurant", "hotel"}),
         activities=frozenset({"restaurant_cuisine_salle", "reception"}),
         patterns=frozenset({"pattern:cloture-caisse", "pattern:facturation-caisse"}),
-        plans=frozenset({"plan:anomalie-caisse", "plan:anomalie-cloture-caisse"}),
+        plans=frozenset({"plan:anomalie-caisse"}),
         statuses=frozenset({"open", "in_progress", "resolved", "canceled", "pending_validation"}),
     ),
     "fuite_sanitaire": Archetype(

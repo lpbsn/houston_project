@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import re
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from types import SimpleNamespace
 from typing import Any
 
 from houston.action_plans.materialization import iter_occurrence_dates
+from houston.establishments.mama_nice_dataset_archetypes import ARCHETYPES
 from houston.establishments.mama_nice_dataset_constants import (
     ACTIVE_PLAN_COUNT,
     CATALOG_KEYS,
@@ -105,6 +108,20 @@ class CompiledCorpus:
     scenario_specs: list[dict[str, Any]] = field(default_factory=list)
     overdue_specs: list[Any] = field(default_factory=list)
     chat_event_count: int = 0
+
+
+_CHAT_WORD = re.compile(r"\bchat\b", re.IGNORECASE)
+
+
+def observation_mentions_chat(raw_text: str) -> bool:
+    return _CHAT_WORD.search(raw_text) is not None
+
+
+def missing_catalog_plan_keys(plan_keys: Iterable[str | None], plans: list[dict]) -> list[str]:
+    catalog = {row["seed_key"] for row in plans}
+    return sorted(
+        {key for key in plan_keys if key and key.startswith("plan:") and key not in catalog}
+    )
 
 
 def _parse_date(value: str) -> date:
@@ -524,8 +541,21 @@ def compile_mama_nice_dataset() -> CompiledCorpus:
     texts = [obs["raw_text"] for obs in observations]
     if len(texts) != len(set(texts)):
         errors.append("observation texts must be unique")
-    if any("chat" in obs["raw_text"].lower() and "clickshare" not in obs["raw_text"].lower() for obs in []):
-        pass
+    if any(observation_mentions_chat(obs["raw_text"]) for obs in observations):
+        errors.append("observation text mentions chat")
+    unknown_plans = set(
+        missing_catalog_plan_keys(
+            (item.get("plan_seed_key") for item in scenario_specs),
+            plans,
+        )
+    )
+    for item in scenario_specs:
+        plan_key = item.get("plan_seed_key")
+        if plan_key in unknown_plans:
+            errors.append(f"{item['seed_key']}: plan {plan_key} is not a reusable plan")
+    for archetype in ARCHETYPES.values():
+        for plan_key in missing_catalog_plan_keys(archetype.plans, plans):
+            errors.append(f"{archetype.key}: plan {plan_key} is not a reusable plan")
     patterned = {signal["seed_key"] for signal in signals if signal["pattern_seed_key"]}
     if len(patterned) < PATTERN_SIGNAL_COUNT:
         errors.append(f"patterned signals {len(patterned)} < {PATTERN_SIGNAL_COUNT}")
