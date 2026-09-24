@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
@@ -9,10 +9,13 @@ import {
   TerrainEmptyState,
   TerrainErrorState,
 } from '@/components/ui/terrain'
+import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { useCollapsibleFeedSections } from '@/lib/use-collapsible-feed-sections'
+import { useLgViewport } from '@/lib/lg-viewport'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { SignalCard } from '../components/signal-card'
 import { SignalFeedCardActionsSheet } from '../components/signal-feed-card-actions-sheet'
+import { SignalFeedDesktopRow } from '../components/signal-feed-desktop-row'
 import {
   EMPTY_SIGNAL_FEED_FILTERS,
   SignalFeedFiltersBar,
@@ -28,6 +31,11 @@ import {
   type SignalFeedFilters,
   type SignalFeedStatusFilter,
 } from '../lib/signal-feed-filters'
+import {
+  readSignalFeedReading,
+  signalFeedReadingScopeKey,
+  writeSignalFeedReading,
+} from '../lib/signal-feed-reading-memory'
 import type { SignalFeedItem, SignalViewMode } from '../types'
 
 const SIGNAL_FEED_DEFAULT_COLLAPSED_SECTIONS = ['interesting', 'resolved', 'canceled'] as const
@@ -48,8 +56,17 @@ export function SignalFeedPage({
     establishmentIdProp ?? auth.bootstrap?.active_membership?.establishment_id ?? null
   const membershipRole = auth.bootstrap?.active_membership?.role ?? null
   const isCross = source === 'cross'
-  const [viewMode, setViewMode] = useState<SignalViewMode>('personal')
-  const [filters, setFilters] = useState<SignalFeedFilters>(EMPTY_SIGNAL_FEED_FILTERS)
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const readingScopeKey = signalFeedReadingScopeKey(source, establishmentId)
+  const [initialReading] = useState(() => readSignalFeedReading(readingScopeKey))
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const restoredScrollRef = useRef(false)
+  const [viewMode, setViewMode] = useState<SignalViewMode>(
+    initialReading?.viewMode ?? 'personal',
+  )
+  const [filters, setFilters] = useState<SignalFeedFilters>(
+    initialReading?.filters ?? EMPTY_SIGNAL_FEED_FILTERS,
+  )
 
   const normalizedFilters = normalizeSignalFeedFilters(filters)
   const feedQuery = useSignalFeedQuery(establishmentId, viewMode, normalizedFilters, {
@@ -80,10 +97,52 @@ export function SignalFeedPage({
     () => `${viewMode}:${JSON.stringify(normalizedFilters)}`,
     [viewMode, normalizedFilters],
   )
-  const { isExpanded, toggle } = useCollapsibleFeedSections(sectionKeys, {
+  const { isExpanded, toggle, expandedByKey } = useCollapsibleFeedSections(sectionKeys, {
     defaultCollapsedKeys: SIGNAL_FEED_DEFAULT_COLLAPSED_SECTIONS,
     resetToken: sectionExpansionResetToken,
+    initialExpandedByKey: initialReading?.expandedByKey,
   })
+  const canRememberReading = Boolean(establishmentId) || isCross
+
+  const savedScrollTop = initialReading?.scrollTop ?? 0
+  const feedHasContent = presentation?.hasContent === true
+
+  useLayoutEffect(() => {
+    if (restoredScrollRef.current) {
+      return
+    }
+    const scroller = scrollRef.current
+    if (!scroller) {
+      return
+    }
+    if (savedScrollTop > 0 && !feedHasContent) {
+      return
+    }
+    scroller.scrollTop = savedScrollTop
+    restoredScrollRef.current = true
+  }, [feedHasContent, savedScrollTop])
+
+  useEffect(() => {
+    if (!canRememberReading) {
+      return
+    }
+    writeSignalFeedReading(readingScopeKey, {
+      viewMode,
+      filters: normalizedFilters,
+      expandedByKey,
+      scrollTop: restoredScrollRef.current
+        ? (scrollRef.current?.scrollTop ?? 0)
+        : savedScrollTop,
+    })
+  }, [
+    canRememberReading,
+    expandedByKey,
+    normalizedFilters,
+    readingScopeKey,
+    savedScrollTop,
+    viewMode,
+    feedHasContent,
+  ])
 
   if (!establishmentId && !isCross) {
     return (
@@ -91,20 +150,57 @@ export function SignalFeedPage({
     )
   }
 
-  const listClassName = 'flex flex-col gap-3 px-3'
+  const listClassName = isDesktopWeb ? 'flex flex-col gap-1 px-4' : 'flex flex-col gap-3 px-3'
 
   const renderItems = (items: SignalFeedItem[], variant: 'feed' | 'pinned' = 'feed') => (
     <div className={listClassName}>
-      {items.map((item) => (
-        <SignalCard
-          key={item.id}
-          item={item}
-          variant={variant}
-          onSelect={onOpenSignal}
-          onOpenActions={isCross ? undefined : quickActions.openActions}
-          showEstablishment={isCross}
-        />
-      ))}
+      {items.map((item) =>
+        isDesktopWeb ? (
+          <SignalFeedDesktopRow
+            key={item.id}
+            item={item}
+            pinned={variant === 'pinned'}
+            onSelect={onOpenSignal}
+            showEstablishment={isCross}
+            actionsPending={quickActions.isPending}
+            actionsOpen={
+              !isCross &&
+              quickActions.actionsOpen &&
+              quickActions.activeItem?.id === item.id
+            }
+            actionError={
+              !isCross && quickActions.activeItem?.id === item.id
+                ? quickActions.actionError
+                : null
+            }
+            onActionsOpenChange={
+              isCross
+                ? undefined
+                : (open) => {
+                    if (open) {
+                      quickActions.openActions(item)
+                      return
+                    }
+                    quickActions.closeActions()
+                  }
+            }
+            onRunAction={
+              isCross
+                ? undefined
+                : (feedItem, actionId) => quickActions.runAction(actionId, feedItem)
+            }
+          />
+        ) : (
+          <SignalCard
+            key={item.id}
+            item={item}
+            variant={variant}
+            onSelect={onOpenSignal}
+            onOpenActions={isCross ? undefined : quickActions.openActions}
+            showEstablishment={isCross}
+          />
+        ),
+      )}
     </div>
   )
 
@@ -137,7 +233,7 @@ export function SignalFeedPage({
         <SignalFeedTabs viewMode={viewMode} onChange={setViewMode} />
       </TerrainHubTitleSlot>
       <TerrainHubSubheader>
-        {isCross ? null : (
+        {isCross || !establishmentId ? null : (
           <>
             <SignalFeedFiltersBar
               establishmentId={establishmentId}
@@ -160,7 +256,17 @@ export function SignalFeedPage({
         )}
       </TerrainHubSubheader>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-3">
+      <div
+        ref={scrollRef}
+        data-testid="signal-feed-scroll"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-3"
+        onScroll={(event) => {
+          if (!canRememberReading || !restoredScrollRef.current) {
+            return
+          }
+          writeSignalFeedReading(readingScopeKey, { scrollTop: event.currentTarget.scrollTop })
+        }}
+      >
         {feedQuery.isLoading ? (
           <div className="flex items-center justify-center py-16 text-[#7D7B75]">
             <LoaderCircle className="h-6 w-6 animate-spin" />
@@ -236,7 +342,7 @@ export function SignalFeedPage({
         ) : null}
       </div>
 
-      {quickActions.activeItem ? (
+      {!isDesktopWeb && quickActions.activeItem ? (
         <SignalFeedCardActionsSheet
           item={quickActions.activeItem}
           open={quickActions.actionsOpen}

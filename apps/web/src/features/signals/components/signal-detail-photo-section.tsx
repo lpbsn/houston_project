@@ -13,17 +13,20 @@ type SignalDetailMediaItem = SignalDetail['media_items'][number]
 
 type SignalDetailPhotoSectionProps = {
   mediaItems: SignalDetailMediaItem[]
+  tileSize?: 'compact' | 'comfortable'
 }
 
 const tileClassName =
-  'flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-[12px] bg-[#EEF2FF] lg:h-28 lg:w-28'
+  'flex shrink-0 items-center justify-center overflow-hidden rounded-[12px] bg-[#EEF2FF]'
 
 function PhotoTile({
   item,
   onOpen,
+  tileSize,
 }: {
   item: SignalDetailMediaItem
   onOpen: () => void
+  tileSize: 'compact' | 'comfortable'
 }) {
   const [src, setSrc] = useState(item.thumbnail_url)
   const [showIcon, setShowIcon] = useState(false)
@@ -31,7 +34,11 @@ function PhotoTile({
   return (
     <button
       type="button"
-      className={cn(tileClassName, 'cursor-pointer border-0 p-0')}
+      className={cn(
+        tileClassName,
+        tileSize === 'comfortable' ? 'h-28 w-28' : 'h-[72px] w-[72px] lg:h-28 lg:w-28',
+        'cursor-pointer border-0 p-0',
+      )}
       aria-label="Agrandir la photo"
       onClick={onOpen}
     >
@@ -121,7 +128,10 @@ function PhotoPreviewModal({
   )
 }
 
-export function SignalDetailPhotoSection({ mediaItems }: SignalDetailPhotoSectionProps) {
+export function SignalDetailPhotoSection({
+  mediaItems,
+  tileSize = 'compact',
+}: SignalDetailPhotoSectionProps) {
   const [selectedItem, setSelectedItem] = useState<SignalDetailMediaItem | null>(null)
 
   if (mediaItems.length === 0) {
@@ -134,11 +144,17 @@ export function SignalDetailPhotoSection({ mediaItems }: SignalDetailPhotoSectio
     <>
       <TerrainCard>
         <TerrainFieldLabel>Photo</TerrainFieldLabel>
-        <div className="mt-2 flex gap-2 overflow-x-auto pb-0.5">
+        <div
+          className={cn(
+            'mt-2 flex gap-2 pb-0.5',
+            tileSize === 'comfortable' ? 'flex-wrap' : 'overflow-x-auto',
+          )}
+        >
           {visibleItems.map((item) => (
             <PhotoTile
               key={`${item.id}:${item.thumbnail_url}:${item.preview_url}`}
               item={item}
+              tileSize={tileSize}
               onOpen={() => setSelectedItem(item)}
             />
           ))}

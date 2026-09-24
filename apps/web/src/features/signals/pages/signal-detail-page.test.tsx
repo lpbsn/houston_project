@@ -150,7 +150,12 @@ vi.mock('../components/signal-qualify-routing-sheet', () => ({
   SignalQualifyRoutingSheet: SignalQualifyRoutingSheetMock,
 }))
 
-function renderPage(options: { analyticsSignalReturnContext?: AnalyticsSignalReturnContext | null } = {}) {
+function renderPage(
+  options: {
+    analyticsSignalReturnContext?: AnalyticsSignalReturnContext | null
+    onBack?: () => void
+  } = {},
+) {
   const history = createBrowserHistory()
   return render(
     createElement(
@@ -159,10 +164,45 @@ function renderPage(options: { analyticsSignalReturnContext?: AnalyticsSignalRet
       createElement(SignalDetailPage, {
         signalId: 'signal-1',
         onNavigate: navigate,
+        onBack: options.onBack,
         analyticsSignalReturnContext: options.analyticsSignalReturnContext,
       }),
     ),
   )
+}
+
+function mockLgViewport(matches: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+}
+
+function signalWithCreatePlan() {
+  return buildSignal({
+    permission_hints: {
+      can_pin: false,
+      can_mark_interesting: false,
+      can_cancel: false,
+      can_resolve: false,
+      can_create_linked_action_plan: true,
+      can_qualify_routing: false,
+      can_request_resolution: false,
+      can_approve_resolution_request: false,
+      can_reject_resolution_request: false,
+      can_cancel_resolution_request: false,
+    },
+  })
 }
 
 function getDetailsTab() {
@@ -198,6 +238,7 @@ afterEach(() => {
   window.history.replaceState(null, '', '/')
   cleanup()
   vi.clearAllMocks()
+  vi.unstubAllEnvs()
 })
 
 describe('SignalDetailPage aggregation count', () => {
@@ -1059,5 +1100,155 @@ describe('SignalDetailPage linked action plans', () => {
 
     expect(screen.getByRole('button', { name: /Plan A/i })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Plan B/i })).toBeTruthy()
+  })
+})
+
+describe('SignalDetailPage desktop actions', () => {
+  it('shows comments under the content and keeps status in the context panel', () => {
+    mockLgViewport(true)
+    window.history.replaceState(
+      null,
+      '',
+      '/signals/signal-1?tab=comments&commentId=comment-42',
+    )
+    const scrollIntoView = vi.fn()
+    HTMLElement.prototype.scrollIntoView = scrollIntoView
+    const onBack = vi.fn()
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: signalWithCreatePlan(),
+      refetch: vi.fn(),
+    })
+
+    renderPage({ onBack })
+
+    expect(screen.queryByRole('tablist', { name: "Sections de l'observation" })).toBeNull()
+    expect(screen.getByTestId('signal-detail-details-panel').className).not.toContain('hidden')
+    expect(screen.getByTestId('signal-detail-comments-section')).toBeTruthy()
+    expect(CommentSectionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ highlightCommentId: 'comment-42' }),
+      undefined,
+    )
+    expect(scrollIntoView).toHaveBeenCalled()
+
+    const context = screen.getByTestId('signal-detail-context')
+    const header = screen.getByTestId('signal-detail-desktop-header')
+    const main = screen.getByTestId('signal-detail-main')
+    const comments = screen.getByTestId('signal-detail-comments-section')
+    const title = screen.getByRole('heading', { level: 1, name: 'Fuite d eau' })
+    expect(title.className).toContain('font-normal')
+    const titleLabel = screen.getByText('Titre')
+    expect(main.contains(titleLabel)).toBe(true)
+    expect(
+      titleLabel.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(comments.textContent).toContain('Commentaires')
+    expect(context.className).toContain('self-start')
+    expect(comments.className).toContain('xl:flex-1')
+    expect(context.textContent).toContain('En attente')
+    expect(context.textContent).toContain('Rapportée par Marie R.')
+    expect(header.textContent).not.toContain('En attente')
+    expect(header.textContent).not.toContain('Fuite d eau')
+    expect(header.contains(title)).toBe(false)
+    expect(main.contains(title)).toBe(true)
+    expect(main.contains(comments)).toBe(true)
+    expect(context.contains(comments)).toBe(false)
+    expect(
+      screen.getByText('Description').compareDocumentPosition(comments) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Commentaires' })).toBeNull()
+    expect(CommentSectionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ documentFlow: true }),
+      undefined,
+    )
+    const statusLabel = screen.getByText('Statut')
+    expect(context.contains(statusLabel)).toBe(true)
+    expect(
+      statusLabel.compareDocumentPosition(screen.getByText('Classification')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+
+    expect(screen.getByRole('button', { name: 'Créer un plan' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: "+ Plan d'action" })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Retour' }))
+    expect(onBack).toHaveBeenCalledOnce()
+    fireEvent.click(screen.getByRole('button', { name: 'Créer un plan' }))
+    expect(navigate).toHaveBeenCalledWith('/signals/signal-1/plan')
+    expect(screen.getByRole('button', { name: 'Créer un plan' })).toBeTruthy()
+  })
+
+  it('places comments after photos and linked plans in the main column', () => {
+    mockLgViewport(true)
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({
+        media_items: [
+          {
+            id: '11111111-1111-4111-8111-111111111111',
+            preview_url: 'https://example.com/photo-1.jpg',
+            thumbnail_url: 'https://example.com/photo-1.thumb.jpg',
+            content_type: 'image/jpeg',
+            size_bytes: 1024,
+            position: 1,
+            observation_id: '22222222-2222-4222-8222-222222222222',
+          },
+        ],
+        linked_action_plan_executions: [buildLinkedExecution()],
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    const main = screen.getByTestId('signal-detail-main')
+    const comments = screen.getByTestId('signal-detail-comments-section')
+    const photo = screen.getByText('Photo')
+    const plans = screen.getByText("Plans d'action")
+    expect(main.contains(photo)).toBe(true)
+    expect(main.contains(plans)).toBe(true)
+    expect(main.contains(comments)).toBe(true)
+    expect(photo.compareDocumentPosition(plans) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(plans.compareDocumentPosition(comments) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByTestId('signal-detail-context').contains(comments)).toBe(false)
+  })
+
+  it('omits the resolve-via-plan hint on desktop and still shows the linked plan', () => {
+    mockLgViewport(true)
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({
+        status: 'in_progress',
+        linked_action_plan_executions: [buildLinkedExecution({ title: 'Plan fuite' })],
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    expect(screen.queryByText('Cette observation sera résolue via son plan d’action.')).toBeNull()
+    expect(screen.getByRole('button', { name: /Plan fuite/i })).toBeTruthy()
+  })
+
+  it('keeps the tactile create-plan footer on a large native viewport', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    mockLgViewport(true)
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: signalWithCreatePlan(),
+      refetch: vi.fn(),
+    })
+
+    renderPage({ onBack: vi.fn() })
+
+    expect(screen.getByRole('tablist', { name: "Sections de l'observation" })).toBeTruthy()
+    expect(screen.getByRole('button', { name: "+ Plan d'action" })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Créer un plan' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Retour' })).toBeNull()
+    expect(screen.queryByTestId('signal-detail-comments-section')).toBeNull()
   })
 })

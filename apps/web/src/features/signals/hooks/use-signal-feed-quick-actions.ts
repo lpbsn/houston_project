@@ -125,20 +125,27 @@ export function useSignalFeedQuickActions({
     )
   }
 
-  function runAction(actionId: SignalFeedCardActionId): SignalFeedQuickActionResult {
-    if (!activeItem) {
+  function runAction(
+    actionId: SignalFeedCardActionId,
+    item?: SignalFeedItem,
+  ): SignalFeedQuickActionResult {
+    const target = item ?? activeItemRef.current
+    if (!target) {
       return 'abort'
+    }
+    if (item) {
+      syncActiveItem(item)
     }
 
     if (!isLifecycleAction(actionId) && isLifecycleLocked()) {
       return 'abort'
     }
 
-    const signalId = activeItem.id
+    const signalId = target.id
 
     switch (actionId) {
       case 'pin':
-        if (activeItem.is_pinned) {
+        if (target.is_pinned) {
           void unpinMutation.mutate(signalId)
         } else {
           void pinMutation.mutate(signalId)

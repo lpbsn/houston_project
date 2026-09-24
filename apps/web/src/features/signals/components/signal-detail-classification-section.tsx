@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import { isSignalNeedsQualification } from '../lib/signal-qualify-routing'
 import { isSignalMissingResponsibleClassification } from '../lib/signal-unclassified'
 import { SignalDetailLabel } from './signal-detail-label'
+import { SignalStatusBadge } from './signal-status-badge'
 import { SignalUnclassifiedBadge } from './signal-unclassified-badge'
 
 type SignalDetailClassificationSectionProps = {
@@ -24,6 +25,12 @@ type SignalDetailClassificationSectionProps = {
   isQualifyOpening: boolean
   qualifyErrorMessage: string | null
   onQualify: () => void
+  context?: {
+    status: string
+    relativeTimeLabel: string
+    reporterName: string | null
+    aggregationLabel: string | null
+  }
 }
 
 function ClassificationField({ label, value }: { label: string; value: string }) {
@@ -43,6 +50,7 @@ export function SignalDetailClassificationSection({
   isQualifyOpening,
   qualifyErrorMessage,
   onQualify,
+  context,
 }: SignalDetailClassificationSectionProps) {
   const classification = formatSignalClassification(signal)
   const location = signal.location_text?.trim()
@@ -67,6 +75,7 @@ export function SignalDetailClassificationSection({
       : null
 
   if (
+    !context &&
     !responsibleValue &&
     !subjectValue &&
     !affectedValue &&
@@ -79,6 +88,18 @@ export function SignalDetailClassificationSection({
 
   return (
     <TerrainCard>
+      {context ? (
+        <div className="mb-4 border-b border-[#E8E6DF] pb-4">
+          <SignalDetailLabel>Statut</SignalDetailLabel>
+          <div className="mt-1.5">
+            <SignalStatusBadge
+              status={context.status}
+              variant="detail"
+              className="px-3 py-1 text-xs"
+            />
+          </div>
+        </div>
+      ) : null}
       <div className="relative min-h-0 pr-24">
         <div className="flex min-w-0 items-center gap-2">
           <SignalDetailLabel>Classification</SignalDetailLabel>
@@ -114,6 +135,15 @@ export function SignalDetailClassificationSection({
         ) : null}
         {location ? <ClassificationField label="Localisation" value={location} /> : null}
       </div>
+      {context ? (
+        <div className="mt-4 space-y-2 border-t border-[#E8E6DF] pt-4 text-[13px] text-[#1a1a1a]">
+          <p>{context.relativeTimeLabel}</p>
+          {context.reporterName ? <p>Rapportée par {context.reporterName}</p> : null}
+          {context.aggregationLabel ? (
+            <p className="text-[#7D7B75]">{context.aggregationLabel}</p>
+          ) : null}
+        </div>
+      ) : null}
     </TerrainCard>
   )
 }

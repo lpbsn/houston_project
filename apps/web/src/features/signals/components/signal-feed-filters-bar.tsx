@@ -1,8 +1,12 @@
 import { useMemo, useState } from 'react'
+import { Popover } from 'radix-ui'
 
 import { TerrainFilterSlot } from '@/components/ui/terrain'
+import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { buildBusinessUnitScopeTree } from '@/features/auth/lib/business-unit-scope'
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
+import { useLgViewport } from '@/lib/lg-viewport'
+import { cn } from '@/lib/utils'
 
 import {
   buildClassificationLabelsFromTree,
@@ -12,7 +16,9 @@ import {
   formatClassificationFilterSummary,
   formatStatusFilterSummary,
   normalizeSignalFeedFilters,
+  SIGNAL_FEED_STATUS_OPTIONS,
   type SignalFeedFilters,
+  type SignalFeedStatusFilter,
 } from '../lib/signal-feed-filters'
 import { canUseNeedsQualificationFeedFilter } from '../lib/signal-qualify-routing'
 import { SignalFeedClassificationFilterSheet } from './signal-feed-classification-filter-sheet'
@@ -25,14 +31,26 @@ type SignalFeedFiltersBarProps = {
   membershipRole?: string | null
 }
 
+function toggleStatusFilter(
+  filters: SignalFeedFilters,
+  status: SignalFeedStatusFilter,
+): SignalFeedFilters {
+  const statuses = filters.statuses.includes(status)
+    ? filters.statuses.filter((value) => value !== status)
+    : [...filters.statuses, status]
+  return normalizeSignalFeedFilters({ ...filters, statuses })
+}
+
 export function SignalFeedFiltersBar({
   establishmentId,
   filters,
   onFiltersChange,
   membershipRole = null,
 }: SignalFeedFiltersBarProps) {
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   const [statusSheetOpen, setStatusSheetOpen] = useState(false)
   const [classificationSheetOpen, setClassificationSheetOpen] = useState(false)
+  const [classificationPanelOpen, setClassificationPanelOpen] = useState(false)
   const normalizedFilters = normalizeSignalFeedFilters(filters)
 
   const treeQuery = useBusinessUnitTreeQuery(establishmentId)
@@ -49,6 +67,87 @@ export function SignalFeedFiltersBar({
   }, [treeQuery.data])
 
   const showNeedsQualification = canUseNeedsQualificationFeedFilter(membershipRole)
+
+  if (isDesktopWeb) {
+    return (
+      <div
+        className="flex shrink-0 flex-wrap items-center gap-2 border-t border-[#E8E6DF] bg-white px-4 py-2"
+        aria-label="Filtres des observations"
+      >
+        {SIGNAL_FEED_STATUS_OPTIONS.map((option) => {
+          const pressed = normalizedFilters.statuses.includes(option.value)
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={pressed}
+              className={cn(
+                'rounded-full border px-2.5 py-1 text-xs font-semibold focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30 focus-visible:outline-none',
+                pressed
+                  ? 'border-[#1B4FD8] bg-[#EEF4FF] text-[#1B4FD8]'
+                  : 'border-[#E8E6DF] bg-white text-[#5c564e]',
+              )}
+              onClick={() => onFiltersChange(toggleStatusFilter(normalizedFilters, option.value))}
+            >
+              {option.label}
+            </button>
+          )
+        })}
+        {showNeedsQualification ? (
+          <label className="flex items-center gap-2 text-xs text-[#1a1a1a]">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 rounded border-[#E8E6DF]"
+              checked={normalizedFilters.needsQualification}
+              onChange={(event) =>
+                onFiltersChange(
+                  normalizeSignalFeedFilters({
+                    ...normalizedFilters,
+                    needsQualification: event.target.checked,
+                  }),
+                )
+              }
+            />
+            Non classifié
+          </label>
+        ) : null}
+        <Popover.Root open={classificationPanelOpen} onOpenChange={setClassificationPanelOpen}>
+          <Popover.Trigger
+            type="button"
+            className="rounded-full border border-[#E8E6DF] bg-white px-2.5 py-1 text-xs font-semibold text-[#1a1a1a] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30 focus-visible:outline-none"
+          >
+            Pôle / Sujet
+            <span className="ml-1 font-medium text-[#7D7B75]">
+              {formatClassificationFilterSummary(
+                normalizedFilters,
+                classificationLabels.labelByBusinessUnitId,
+                classificationLabels.labelByActivitySubjectId,
+              )}
+            </span>
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Content
+              align="start"
+              side="bottom"
+              sideOffset={6}
+              className="z-50 rounded-xl border border-[#E8E6DF] bg-white shadow-md outline-none"
+            >
+              {classificationPanelOpen ? (
+                <SignalFeedClassificationFilterSheet
+                  key={`classification-panel-${normalizedFilters.businessUnitIds.join(',')}-${normalizedFilters.activitySubjectIds.join(',')}`}
+                  establishmentId={establishmentId}
+                  appliedFilters={normalizedFilters}
+                  surface="panel"
+                  onClose={() => setClassificationPanelOpen(false)}
+                  onApply={(next) => onFiltersChange(normalizeSignalFeedFilters(next))}
+                />
+              ) : null}
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
+      </div>
+    )
+  }
 
   return (
     <>

@@ -6,9 +6,11 @@ import { hasTrueCrossEstablishmentScope } from '@/features/navigation/lib/shared
 import { formatMembershipRoleDisplay } from '@/lib/display-names'
 
 const ANALYTICS_ROLES = new Set(['owner', 'director', 'manager'])
+const SPORE_BRAIN_ROLES = new Set(['owner', 'director'])
 
 export type ScopedDesktopNavItemId =
   | 'dashboard'
+  | 'brain'
   | 'reporting'
   | 'signals'
   | 'execution'
@@ -16,12 +18,16 @@ export type ScopedDesktopNavItemId =
   | 'general'
   | 'settings'
 
+/** Visual clusters inside the single desktop destination list. */
+export type ScopedDesktopNavGroup = 1 | 2 | 3
+
 export type ScopedDesktopNavItem = {
   id: ScopedDesktopNavItemId
   label: string
-  href: string
+  href: string | null
   placeholder: boolean
   readOnly?: boolean
+  group: ScopedDesktopNavGroup
 }
 
 export type DesktopScopeOption = {
@@ -46,6 +52,18 @@ function isActiveMembership(membership: Membership): boolean {
 
 function canAccessAnalytics(membership: Membership): boolean {
   return isActiveMembership(membership) && ANALYTICS_ROLES.has(membership.role)
+}
+
+function hasActiveOwnerOrDirector(
+  bootstrap: BootstrapResponse | null | undefined,
+  establishmentId: string,
+): boolean {
+  return (bootstrap?.memberships ?? []).some(
+    (membership) =>
+      isActiveMembership(membership) &&
+      membership.establishment_id === establishmentId &&
+      SPORE_BRAIN_ROLES.has(membership.role),
+  )
 }
 
 function uniqueEstablishments(memberships: Membership[]): Membership[] {
@@ -75,6 +93,7 @@ function crossItems(): ScopedDesktopNavItem[] {
       href: serializeScopedTerrainPath(scope, 'signals'),
       placeholder: false,
       readOnly: true,
+      group: 2,
     },
     {
       id: 'execution',
@@ -82,6 +101,7 @@ function crossItems(): ScopedDesktopNavItem[] {
       href: serializeScopedTerrainPath(scope, 'execution'),
       placeholder: false,
       readOnly: true,
+      group: 2,
     },
   ]
 }
@@ -90,26 +110,29 @@ function establishmentItems(
   establishmentId: string,
   options: {
     showDashboard: boolean
+    showBrain: boolean
     showChat: boolean
   },
 ): ScopedDesktopNavItem[] {
   const scope: TerrainScope = { type: 'establishment', establishmentId }
   const items: ScopedDesktopNavItem[] = []
   if (options.showDashboard) {
-    items.push(
-      {
-        id: 'dashboard',
-        label: 'Dashboard',
-        href: serializeScopedTerrainPath(scope),
-        placeholder: false,
-      },
-      {
-        id: 'settings',
-        label: 'Paramètres Analytics',
-        href: serializeScopedTerrainPath(scope, 'settings'),
-        placeholder: true,
-      },
-    )
+    items.push({
+      id: 'dashboard',
+      label: 'Dashboard',
+      href: serializeScopedTerrainPath(scope),
+      placeholder: false,
+      group: 1,
+    })
+  }
+  if (options.showBrain) {
+    items.push({
+      id: 'brain',
+      label: 'Spore Brain',
+      href: null,
+      placeholder: true,
+      group: 1,
+    })
   }
   items.push(
     {
@@ -117,18 +140,21 @@ function establishmentItems(
       label: 'Nouvelle observation',
       href: serializeScopedTerrainPath(scope, 'reporting'),
       placeholder: false,
+      group: 2,
     },
     {
       id: 'signals',
       label: 'Observations',
       href: serializeScopedTerrainPath(scope, 'signals'),
       placeholder: false,
+      group: 2,
     },
     {
       id: 'execution',
       label: 'Exécution',
       href: serializeScopedTerrainPath(scope, 'execution'),
       placeholder: false,
+      group: 2,
     },
   )
   if (options.showChat) {
@@ -137,6 +163,7 @@ function establishmentItems(
       label: 'Chat',
       href: serializeScopedTerrainPath(scope, 'chat'),
       placeholder: false,
+      group: 2,
     })
   }
   items.push({
@@ -144,7 +171,17 @@ function establishmentItems(
     label: 'Général',
     href: serializeScopedTerrainPath(scope, 'general'),
     placeholder: false,
+    group: 3,
   })
+  if (options.showDashboard) {
+    items.push({
+      id: 'settings',
+      label: 'Paramètres Analytics',
+      href: serializeScopedTerrainPath(scope, 'settings'),
+      placeholder: true,
+      group: 3,
+    })
+  }
   return items
 }
 
@@ -192,6 +229,7 @@ function itemsForDesktopScope(
   }
   return establishmentItems(scope.establishmentId, {
     showDashboard: canAccessAnalytics(membership),
+    showBrain: hasActiveOwnerOrDirector(bootstrap, scope.establishmentId),
     showChat: membership.chat_available,
   })
 }

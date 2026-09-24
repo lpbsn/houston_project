@@ -38,6 +38,8 @@ type CommentSectionProps = {
   highlightCommentId?: string | null
   readOnly?: boolean
   attachEnabled?: boolean
+  /** Page flow: the thread grows with its content. The panel layout keeps an internal scroller. */
+  documentFlow?: boolean
 }
 
 function CommentUnavailableMessage() {
@@ -54,10 +56,21 @@ function CommentUnavailableMessage() {
 function OperationalCommentsLayout({
   list,
   composer,
+  documentFlow = false,
 }: {
   list: ReactNode
   composer: ReactNode
+  documentFlow?: boolean
 }) {
+  if (documentFlow) {
+    return (
+      <div data-testid="comment-section" className="flex min-h-0 flex-1 flex-col">
+        <div className="flex flex-col">{list}</div>
+        {composer ? <div className="mt-auto shrink-0 pt-6">{composer}</div> : null}
+      </div>
+    )
+  }
+
   return (
     <div
       data-testid="comment-section"
@@ -98,6 +111,7 @@ export function CommentSection({
   highlightCommentId = null,
   readOnly = false,
   attachEnabled = false,
+  documentFlow = false,
 }: CommentSectionProps) {
   const composerRef = useRef<CommentComposerHandle>(null)
   const [replyErrorCommentId, setReplyErrorCommentId] = useState<string | null>(null)
@@ -203,7 +217,9 @@ export function CommentSection({
             Médias
           </button>
         ) : null}
-        <TerrainFieldLabel className="lg:hidden">Commentaires</TerrainFieldLabel>
+        {documentFlow ? null : (
+          <TerrainFieldLabel className="lg:hidden">Commentaires</TerrainFieldLabel>
+        )}
       </div>
 
       {commentsQuery.isLoading ? (
@@ -231,6 +247,7 @@ export function CommentSection({
           mode="signal"
           comments={commentsQuery.data}
           highlightCommentId={highlightCommentId}
+          documentFlow={documentFlow}
           establishmentId={establishmentId}
           onReportComment={(contentId, membershipId) => {
             setReportComment({ contentId, membershipId })
@@ -335,7 +352,7 @@ export function CommentSection({
 
   return (
     <>
-      <OperationalCommentsLayout list={list} composer={composer} />
+      <OperationalCommentsLayout list={list} composer={composer} documentFlow={documentFlow} />
       {isExecution ? (
         <ExecutionPlanInfoSheet
           attachments={flattenAvailablePlanAttachments(executionQuery.data)}

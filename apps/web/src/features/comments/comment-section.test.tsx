@@ -176,6 +176,27 @@ afterEach(() => {
 })
 
 describe('CommentSection', () => {
+  it('keeps signal comments and the composer in one growing card without an internal scroller', () => {
+    render(
+      <CommentSection
+        establishmentId="est-1"
+        targetType="signal"
+        targetId="signal-1"
+        documentFlow
+      />,
+    )
+
+    const section = screen.getByTestId('comment-section')
+    const empty = screen.getByText("Aucun commentaire pour l'instant.")
+    const composer = screen.getByPlaceholderText('Ajouter un commentaire...')
+    expect(section.contains(empty)).toBe(true)
+    expect(section.contains(composer)).toBe(true)
+    expect(empty.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(section.querySelector('[class*="overflow-y-auto"]')).toBeNull()
+    expect(composer.closest('[class*="mt-auto"]')).toBeTruthy()
+    expect(screen.queryByText('Commentaires')).toBeNull()
+  })
+
   it('renders empty state and disabled submit for empty draft on signal detail', () => {
     render(
       <CommentSection establishmentId="est-1" targetType="signal" targetId="signal-1" />,

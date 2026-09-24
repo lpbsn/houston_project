@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import {
   BarChart3,
+  Brain,
   Check,
   ChevronsUpDown,
   CirclePlay,
@@ -47,6 +48,7 @@ const ITEM_ICONS: Record<
   typeof Eye
 > = {
   dashboard: BarChart3,
+  brain: Brain,
   settings: SlidersHorizontal,
   reporting: Plus,
   signals: Eye,
@@ -54,6 +56,8 @@ const ITEM_ICONS: Record<
   chat: MessageCircle,
   general: Settings,
 }
+
+const COMING_SOON_LABEL = 'Bientôt disponible'
 
 function buildUserInitials(user: BootstrapResponse['user'] | null | undefined): string {
   const firstName = user?.first_name?.trim() ?? ''
@@ -266,6 +270,38 @@ function ScopeSelector({
   )
 }
 
+function ComingSoonDestination({
+  item,
+  collapsed,
+}: {
+  item: ScopedDesktopNavItem
+  collapsed: boolean
+}) {
+  const Icon = ITEM_ICONS[item.id]
+  return (
+    <button
+      type="button"
+      disabled
+      aria-label={`${item.label} - ${COMING_SOON_LABEL}`}
+      title={COMING_SOON_LABEL}
+      className={cn(
+        'flex w-full cursor-not-allowed items-center rounded-lg text-left text-sm font-medium text-white/40 disabled:opacity-100',
+        collapsed ? 'h-10 justify-center px-0' : 'min-h-10 px-3 py-1.5',
+      )}
+    >
+      <Icon className="h-4 w-4 shrink-0" aria-hidden />
+      {collapsed ? null : (
+        <span className="ml-2 min-w-0">
+          <span className="block truncate">{item.label}</span>
+          <span className="block truncate text-xs font-normal text-white/35">
+            {COMING_SOON_LABEL}
+          </span>
+        </span>
+      )}
+    </button>
+  )
+}
+
 function NavDestination({
   item,
   active,
@@ -278,15 +314,19 @@ function NavDestination({
   onNavigate: (href: string) => void
 }) {
   const Icon = ITEM_ICONS[item.id]
+  if (!item.href) {
+    return <ComingSoonDestination item={item} collapsed={collapsed} />
+  }
+  const href = item.href
   return (
     <a
-      href={item.href}
+      href={href}
       aria-current={active ? 'page' : undefined}
       aria-label={collapsed ? item.label : undefined}
       title={item.label}
       onClick={(event) => {
         event.preventDefault()
-        onNavigate(item.href)
+        onNavigate(href)
       }}
       className={cn(
         'flex min-h-10 items-center rounded-lg text-sm font-medium transition-colors',
@@ -322,6 +362,21 @@ export function DesktopTerrainSidebar({
   const isLgViewport = useLgViewport()
   const showSignOut = Boolean(onSignOut) && isDesktopWebLanding(isLgViewport)
   const CollapseIcon = collapsed ? PanelLeftOpen : PanelLeftClose
+  const topItems = navigation.items.filter((item) => item.group === 1)
+  const middleItems = navigation.items.filter((item) => item.group === 2)
+  const bottomItems = navigation.items.filter((item) => item.group === 3)
+
+  function renderDestination(item: ScopedDesktopNavItem) {
+    return (
+      <NavDestination
+        key={item.id}
+        item={item}
+        active={isScopedNavItemActive(item.id, navigation.activeItemId)}
+        collapsed={collapsed}
+        onNavigate={navigate}
+      />
+    )
+  }
 
   function selectScope(target: TerrainScope) {
     if (isSameTerrainScope(navigation.scope, target)) {
@@ -389,15 +444,17 @@ export function DesktopTerrainSidebar({
         )}
         aria-label="Destinations"
       >
-        {navigation.items.map((item) => (
-          <NavDestination
-            key={item.id}
-            item={item}
-            active={isScopedNavItemActive(item.id, navigation.activeItemId)}
-            collapsed={collapsed}
-            onNavigate={navigate}
-          />
-        ))}
+        {topItems.length > 0 ? (
+          <div className="flex shrink-0 flex-col gap-1">{topItems.map(renderDestination)}</div>
+        ) : null}
+        {middleItems.length > 0 ? (
+          <div className="flex flex-1 flex-col justify-center gap-1">
+            {middleItems.map(renderDestination)}
+          </div>
+        ) : null}
+        {bottomItems.length > 0 ? (
+          <div className="flex shrink-0 flex-col gap-1">{bottomItems.map(renderDestination)}</div>
+        ) : null}
       </nav>
 
       <div className={cn('shrink-0 border-t border-white/10', collapsed ? 'p-2' : 'p-4')}>

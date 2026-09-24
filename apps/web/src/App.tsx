@@ -647,6 +647,7 @@ function App() {
         <LazySignalDetailPage
           signalId={route.signalId}
           onNavigate={navigate}
+          onBack={terrainBackPath ? () => navigate(terrainBackPath) : undefined}
           analyticsSignalReturnContext={analyticsSignalReturnContext}
           establishmentId={
             scope?.type === 'establishment' ? scope.establishmentId : undefined
@@ -1203,8 +1204,9 @@ function App() {
   if (usesTerrainShell(route)) {
     const terrainConfig = getTerrainRouteConfig(route)
     const topbarPlacement = resolveTerrainTopbarPlacement(route, terrainConfig)
+    const desktopSignalDetail = isDesktopWeb && route.kind === 'signal-detail'
     const terrainTopbar =
-      topbarPlacement === 'hidden' ? null : (
+      topbarPlacement === 'hidden' || desktopSignalDetail ? null : (
         <TerrainTopbar
           variant={terrainConfig.topbarVariant}
           title={terrainConfig.title}

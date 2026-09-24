@@ -3,6 +3,8 @@ import { useCallback, useMemo, useState } from 'react'
 type UseCollapsibleFeedSectionsOptions = {
   defaultCollapsedKeys?: readonly string[]
   resetToken?: unknown
+  /** Applied once, on the first mount. Later filter resets ignore it. */
+  initialExpandedByKey?: Record<string, boolean>
 }
 
 const EMPTY_DEFAULT_COLLAPSED_KEYS: readonly string[] = []
@@ -42,10 +44,14 @@ export function useCollapsibleFeedSections(
   const resetToken = options?.resetToken
   const sectionKeysKey = sectionKeys.join('\0')
 
+  const initialExpandedByKey = options?.initialExpandedByKey
   const [state, setState] = useState(() => ({
     resetToken,
     sectionKeysKey,
-    expandedByKey: buildExpansionState(sectionKeys, defaultCollapsedSet),
+    expandedByKey: {
+      ...buildExpansionState(sectionKeys, defaultCollapsedSet),
+      ...(initialExpandedByKey ?? {}),
+    },
   }))
 
   if (state.resetToken !== resetToken) {
@@ -80,5 +86,5 @@ export function useCollapsibleFeedSections(
     [defaultCollapsedSet],
   )
 
-  return { isExpanded, toggle }
+  return { isExpanded, toggle, expandedByKey: state.expandedByKey }
 }

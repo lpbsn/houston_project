@@ -180,13 +180,20 @@ describe('scoped desktop navigation', () => {
 
     expect(ownerNav.items.map((item) => item.id)).toEqual([
       'dashboard',
-      'settings',
+      'brain',
       'reporting',
       'signals',
       'execution',
       'chat',
       'general',
+      'settings',
     ])
+    expect(ownerNav.items.map((item) => item.group)).toEqual([1, 1, 2, 2, 2, 2, 3, 3])
+    expect(ownerNav.items.find((item) => item.id === 'brain')).toMatchObject({
+      label: 'Spore Brain',
+      href: null,
+      placeholder: true,
+    })
     expect(ownerNav.items.map((item) => item.id)).not.toContain('operational-config')
     expect(
       ownerNav.items.find((item) => item.id === 'settings')?.label,
@@ -214,6 +221,78 @@ describe('scoped desktop navigation', () => {
         bootstrap: data,
       }).activeItemId,
     ).toBe('general')
+  })
+
+  it('shows Spore Brain only for an active owner or director inside an establishment', () => {
+    const owner = membership({
+      role: 'owner',
+      establishment_id: 'est-owner',
+      establishment_name: 'Owner Site',
+    })
+    const director = membership({
+      role: 'director',
+      establishment_id: 'est-director',
+      establishment_name: 'Director Site',
+    })
+    const manager = membership({
+      role: 'manager',
+      establishment_id: 'est-manager',
+      establishment_name: 'Manager Site',
+    })
+    const inactiveOwner = membership({
+      role: 'owner',
+      status: 'deactivated',
+      establishment_id: 'est-1',
+      establishment_name: 'Shared Site',
+    })
+    const data = bootstrap([owner, director, manager, inactiveOwner], owner)
+
+    expect(
+      resolveDesktopScopeNavigation({
+        route: establishmentRoute('est-director', 'signals'),
+        bootstrap: data,
+      }).items.map((item) => item.id),
+    ).toEqual([
+      'dashboard',
+      'brain',
+      'reporting',
+      'signals',
+      'execution',
+      'chat',
+      'general',
+      'settings',
+    ])
+    expect(
+      resolveDesktopScopeNavigation({
+        route: establishmentRoute('est-manager', 'signals'),
+        bootstrap: data,
+      }).items.map((item) => item.id),
+    ).toEqual([
+      'dashboard',
+      'reporting',
+      'signals',
+      'execution',
+      'chat',
+      'general',
+      'settings',
+    ])
+    expect(
+      resolveDesktopScopeNavigation({
+        route: { kind: 'scoped-terrain', scope: { type: 'cross' }, page: 'signals' },
+        bootstrap: data,
+      }).items.map((item) => item.id),
+    ).toEqual(['signals', 'execution'])
+    const staff = membership({
+      role: 'staff',
+      establishment_id: 'est-1',
+      establishment_name: 'Shared Site',
+    })
+    expect(
+      resolveDesktopScopeNavigation({
+        route: establishmentRoute('est-1', 'signals'),
+        bootstrap: bootstrap([staff, inactiveOwner]),
+      }).items.map((item) => item.id),
+    ).toEqual(['reporting', 'signals', 'execution', 'chat', 'general'])
   })
 
   it('shows establishment Chat from membership chat_available', () => {

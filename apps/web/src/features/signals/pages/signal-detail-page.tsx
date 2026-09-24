@@ -1,16 +1,20 @@
-import { LoaderCircle } from 'lucide-react'
-import { useState } from 'react'
+import { ArrowLeft, LoaderCircle } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 
 import { serializeScopedExecutionDetailPath } from '@/app/scoped-terrain'
 import { useAuth } from '@/app/auth-provider'
+import { Button } from '@/components/ui/button'
 import { TerrainCard, TerrainErrorState } from '@/components/ui/terrain'
+import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { parseDetailDeepLink } from '@/features/comments/lib/detail-deep-link'
 import {
   buildAnalyticsSignalActionCreatePath,
   type AnalyticsSignalReturnContext,
 } from '@/features/analytics/lib/analytics-url-state'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { useLgViewport } from '@/lib/lg-viewport'
 import { useLocationSearch } from '@/lib/location-search'
+import { terrainBackButtonClassName } from '@/lib/terrain-styles'
 import { CommentSection } from '@/features/comments/components/comment-section'
 
 import { SignalDetailPhotoSection } from '../components/signal-detail-photo-section'
@@ -45,6 +49,7 @@ import { SIGNAL_IN_PROGRESS_RESOLVE_VIA_ACTION_PLAN_HINT } from '../lib/signal-f
 type SignalDetailPageProps = {
   signalId: string
   onNavigate: (pathname: string, options?: { replace?: boolean }) => void
+  onBack?: () => void
   analyticsSignalReturnContext?: AnalyticsSignalReturnContext | null
   establishmentId?: string | null
   source?: 'establishment' | 'cross'
@@ -58,11 +63,13 @@ function formatDescriptionContent(structuredSummary: string): string {
 export function SignalDetailPage({
   signalId,
   onNavigate,
+  onBack,
   analyticsSignalReturnContext = null,
   establishmentId: establishmentIdProp,
   source = 'establishment',
 }: SignalDetailPageProps) {
   const auth = useAuth()
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   const sessionEstablishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
   const establishmentId = establishmentIdProp ?? sessionEstablishmentId
   const locationSearch = useLocationSearch()
@@ -80,6 +87,18 @@ export function SignalDetailPage({
   const rejectRequestMutation = useRejectSignalResolutionRequestMutation(establishmentId)
   const cancelRequestMutation = useCancelSignalResolutionRequestMutation(establishmentId)
   const qualifySheet = useSignalQualifySheet({ establishmentId, onNavigate })
+  const commentsAnchorRef = useRef<HTMLElement>(null)
+  const shouldScrollToComments =
+    isDesktopWeb && (initialDeepLink.tab === 'comments' || initialDeepLink.commentId != null)
+
+  const detailReady = !detailQuery.isLoading && !detailQuery.isError && detailQuery.data != null
+
+  useEffect(() => {
+    if (!shouldScrollToComments || !detailReady) {
+      return
+    }
+    commentsAnchorRef.current?.scrollIntoView({ block: 'start' })
+  }, [shouldScrollToComments, detailReady])
 
   const handleTabChange = (tab: SignalDetailTab) => {
     if (tab === 'comments') {
@@ -173,123 +192,228 @@ export function SignalDetailPage({
     }
   }
 
+  const classificationSection = (
+    <SignalDetailClassificationSection
+      signal={signal}
+      canQualify={canQualifyRouting}
+      isQualifyOpening={qualifySheet.opening}
+      qualifyErrorMessage={!qualifySheet.open ? qualifySheet.errorMessage : null}
+      onQualify={() => void qualifySheet.openForSignal(signal.id)}
+      context={
+        isDesktopWeb
+          ? {
+              status: signal.status,
+              relativeTimeLabel: `il y a ${formatSignalRelativeTime(signal.last_activity_at)}`,
+              reporterName: reporterName || null,
+              aggregationLabel:
+                signal.aggregation_count > 0
+                  ? formatSignalAggregationLabel(signal.aggregation_count)
+                  : null,
+            }
+          : undefined
+      }
+    />
+  )
+  const descriptionCard = (
+    <TerrainCard>
+      <SignalDetailLabel>Description</SignalDetailLabel>
+      <p className="mt-2 text-[13px] leading-relaxed text-[#1a1a1a]">
+        {formatDescriptionContent(signal.structured_summary)}
+      </p>
+    </TerrainCard>
+  )
+  const progressHint =
+    signal.status === 'in_progress' ? (
+      <TerrainCard>
+        <p className="text-[13px] leading-relaxed text-[#7D7B75]">
+          {SIGNAL_IN_PROGRESS_RESOLVE_VIA_ACTION_PLAN_HINT}
+        </p>
+      </TerrainCard>
+    ) : null
+  const photoSection = (
+    <SignalDetailPhotoSection
+      mediaItems={signal.media_items ?? []}
+      tileSize={isDesktopWeb ? 'comfortable' : 'compact'}
+    />
+  )
+  const linkedPlans = (
+    <SignalLinkedActionPlansSection
+      executions={signal.linked_action_plan_executions}
+      onSelect={(executionId) =>
+        onNavigate(
+          source === 'cross'
+            ? serializeScopedExecutionDetailPath({ type: 'cross' }, executionId)
+            : `/action-plans/executions/${executionId}`,
+        )
+      }
+    />
+  )
+  const resolutionSection = (
+    <SignalResolutionRequestSection
+      events={resolutionRequestEvents}
+      permissionHints={signal.permission_hints}
+      pendingRequestId={resolutionRequest?.id ?? null}
+      errorMessage={requestActionError}
+      isCreatePending={createRequestMutation.isPending}
+      isCancelPending={cancelRequestMutation.isPending}
+      isApprovePending={approveRequestMutation.isPending}
+      isRejectPending={rejectRequestMutation.isPending}
+      onCreate={() => void handleCreateResolutionRequest()}
+      onCancel={() => void handleCancelResolutionRequest()}
+      onApprove={() => void handleApproveResolutionRequest()}
+      onReject={() => void handleRejectResolutionRequest()}
+    />
+  )
+  const showPageCreateAction = (isDesktopWeb || activeTab === 'details') && showCreateActionPlan
+  const detailsVisible = isDesktopWeb || activeTab === 'details'
+
   return (
     <div className="flex min-h-full flex-col">
       <div
         data-testid="signal-detail-frame"
         className="flex min-h-full w-full flex-1 flex-col"
       >
+      {isDesktopWeb && (onBack || showPageCreateAction) ? (
+        <header
+          data-testid="signal-detail-desktop-header"
+          className="sticky top-0 z-20 border-b border-[#E8E6DF] bg-white px-6 py-3"
+        >
+          <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3">
+          {onBack ? (
+            <Button
+              type="button"
+              variant="ghost"
+              className={terrainBackButtonClassName()}
+              onClick={onBack}
+            >
+              <ArrowLeft className="mr-1 h-4 w-4" aria-hidden />
+              Retour
+            </Button>
+          ) : (
+            <span />
+          )}
+          {showPageCreateAction ? (
+            <Button
+              type="button"
+              className="h-9 shrink-0 rounded-lg px-3 text-sm font-semibold"
+              onClick={() => onNavigate(createActionPlanPath)}
+            >
+              Créer un plan
+            </Button>
+          ) : null}
+          </div>
+        </header>
+      ) : null}
+      {isDesktopWeb ? null : (
       <div
         data-testid="signal-detail-tab-bar"
-        className="px-3 pt-2 lg:sticky lg:top-0 lg:z-20 lg:border-b lg:border-[#E8E6DF] lg:bg-[#F5F4F0] lg:px-6 lg:py-3"
+        className="px-3 pt-2"
       >
-        <SignalDetailTabs activeTab={activeTab} onChange={handleTabChange} />
+        <SignalDetailTabs
+          activeTab={activeTab}
+          onChange={handleTabChange}
+        />
       </div>
+      )}
 
-      <div className="flex w-full flex-1 flex-col gap-2.5 px-3 pt-2 pb-4 lg:gap-4 lg:px-6 lg:pt-4 lg:pb-6">
+      <div className={isDesktopWeb ? 'mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 pt-4 pb-8' : 'flex w-full flex-1 flex-col gap-2.5 px-3 pt-2 pb-4'}>
         <div
-          role="tabpanel"
+          role={isDesktopWeb ? undefined : 'tabpanel'}
           id="signal-detail-panel-details"
-          aria-labelledby="signal-detail-tab-details"
+          aria-labelledby={isDesktopWeb ? undefined : 'signal-detail-tab-details'}
           data-testid="signal-detail-details-panel"
           className={
-            activeTab === 'details'
-              ? 'flex flex-col gap-2.5 lg:gap-4'
+            detailsVisible
+              ? isDesktopWeb
+                ? 'grid grid-cols-1 items-start gap-4 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_18rem] xl:items-stretch'
+                : 'flex flex-col gap-2.5'
               : 'hidden'
           }
         >
-          <TerrainCard className="max-lg:order-1 lg:p-5">
-            <h2 className="text-[17px] font-semibold leading-snug text-[#1a1a1a] lg:text-2xl">
-              {signal.title}
-            </h2>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              <SignalStatusBadge status={signal.status} variant="detail" />
-            </div>
-            <p className="mt-2 text-[11px] text-[#aaa] lg:text-xs">
-              il y a {formatSignalRelativeTime(signal.last_activity_at)}
-            </p>
-            {(reporterName || signal.aggregation_count > 0) ? (
-              <div className="mt-3 flex items-center justify-between gap-2 text-[11px] text-[#aaa] lg:text-xs">
-                <span className="min-w-0 truncate">
-                  {reporterName ? `Rapportée par ${reporterName}` : '\u00a0'}
-                </span>
-                {signal.aggregation_count > 0 ? (
-                  <span className="shrink-0">
-                    {formatSignalAggregationLabel(signal.aggregation_count)}
-                  </span>
+          {isDesktopWeb ? (
+            <>
+              <div data-testid="signal-detail-main" className="flex min-w-0 flex-col gap-4 xl:h-full">
+                <TerrainCard>
+                  <SignalDetailLabel>Titre</SignalDetailLabel>
+                  <h1 className="mt-2 text-[13px] font-normal leading-relaxed text-[#1a1a1a]">
+                    {signal.title}
+                  </h1>
+                </TerrainCard>
+                {descriptionCard}
+                {photoSection}
+                {resolutionSection}
+                {linkedPlans}
+                {signal.establishment_id ?? establishmentId ? (
+                  <section
+                    ref={commentsAnchorRef}
+                    id="signal-detail-comments"
+                    aria-label="Commentaires"
+                    data-testid="signal-detail-comments-section"
+                    className="flex scroll-mt-4 flex-col xl:min-h-0 xl:flex-1"
+                  >
+                    <TerrainCard className="flex flex-1 flex-col">
+                      <SignalDetailLabel>Commentaires</SignalDetailLabel>
+                      <CommentSection
+                        establishmentId={signal.establishment_id ?? establishmentId ?? ''}
+                        targetType="signal"
+                        targetId={signalId}
+                        highlightCommentId={highlightCommentId}
+                        readOnly={source === 'cross'}
+                        documentFlow
+                      />
+                    </TerrainCard>
+                  </section>
                 ) : null}
               </div>
-            ) : null}
-          </TerrainCard>
-
-          <div className="max-lg:order-2 empty:hidden">
-            <SignalDetailClassificationSection
-              signal={signal}
-              canQualify={canQualifyRouting}
-              isQualifyOpening={qualifySheet.opening}
-              qualifyErrorMessage={!qualifySheet.open ? qualifySheet.errorMessage : null}
-              onQualify={() => void qualifySheet.openForSignal(signal.id)}
-            />
-          </div>
-
-          <TerrainCard className="max-lg:order-3">
-            <SignalDetailLabel>Description</SignalDetailLabel>
-            <p className="mt-2 text-[13px] leading-relaxed text-[#1a1a1a]">
-              {formatDescriptionContent(signal.structured_summary)}
-            </p>
-          </TerrainCard>
-
-          {signal.status === 'in_progress' ? (
-            <TerrainCard className="max-lg:order-6">
-              <p className="text-[13px] leading-relaxed text-[#7D7B75]">
-                {SIGNAL_IN_PROGRESS_RESOLVE_VIA_ACTION_PLAN_HINT}
-              </p>
-            </TerrainCard>
-          ) : null}
-
-          <div className="max-lg:order-5 empty:hidden">
-            <SignalDetailPhotoSection mediaItems={signal.media_items ?? []} />
-          </div>
-
-          <div className="max-lg:order-7 empty:hidden">
-            <SignalLinkedActionPlansSection
-              executions={signal.linked_action_plan_executions}
-              onSelect={(executionId) =>
-                onNavigate(
-                  source === 'cross'
-                    ? serializeScopedExecutionDetailPath({ type: 'cross' }, executionId)
-                    : `/action-plans/executions/${executionId}`,
-                )
-              }
-            />
-          </div>
-
-          {activeTab === 'details' && showCreateActionPlan ? (
-            <SignalDetailStickyFooter
-              className="max-lg:order-8 lg:relative lg:bottom-auto lg:mt-0 lg:rounded-2xl lg:border lg:border-[#E8E6DF] lg:bg-white lg:p-4 lg:shadow-none"
-              onCreateActionPlan={() => onNavigate(createActionPlanPath)}
-            />
-          ) : null}
-
-          <div className="max-lg:order-4 empty:hidden">
-            <SignalResolutionRequestSection
-              events={resolutionRequestEvents}
-              permissionHints={signal.permission_hints}
-              pendingRequestId={resolutionRequest?.id ?? null}
-              errorMessage={requestActionError}
-              isCreatePending={createRequestMutation.isPending}
-              isCancelPending={cancelRequestMutation.isPending}
-              isApprovePending={approveRequestMutation.isPending}
-              isRejectPending={rejectRequestMutation.isPending}
-              onCreate={() => void handleCreateResolutionRequest()}
-              onCancel={() => void handleCancelResolutionRequest()}
-              onApprove={() => void handleApproveResolutionRequest()}
-              onReject={() => void handleRejectResolutionRequest()}
-            />
-          </div>
+              <div
+                data-testid="signal-detail-context"
+                className="flex min-w-0 flex-col gap-4 self-start xl:col-start-2 xl:row-start-1"
+              >
+                {classificationSection}
+              </div>
+            </>
+          ) : (
+            <>
+              <TerrainCard className="order-1">
+                <h2 className="text-[17px] font-semibold leading-snug text-[#1a1a1a]">
+                  {signal.title}
+                </h2>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <SignalStatusBadge status={signal.status} variant="detail" />
+                </div>
+                <p className="mt-2 text-[11px] text-[#aaa]">
+                  il y a {formatSignalRelativeTime(signal.last_activity_at)}
+                </p>
+                {(reporterName || signal.aggregation_count > 0) ? (
+                  <div className="mt-3 flex items-center justify-between gap-2 text-[11px] text-[#aaa]">
+                    <span className="min-w-0 truncate">
+                      {reporterName ? `Rapportée par ${reporterName}` : '\u00a0'}
+                    </span>
+                    {signal.aggregation_count > 0 ? (
+                      <span className="shrink-0">
+                        {formatSignalAggregationLabel(signal.aggregation_count)}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+              </TerrainCard>
+              <div className="order-2 empty:hidden">{classificationSection}</div>
+              <div className="order-3">{descriptionCard}</div>
+              {progressHint ? <div className="order-6">{progressHint}</div> : null}
+              <div className="order-5 empty:hidden">{photoSection}</div>
+              <div className="order-7 empty:hidden">{linkedPlans}</div>
+              {showPageCreateAction ? (
+                <SignalDetailStickyFooter
+                  className="order-8"
+                  onCreateActionPlan={() => onNavigate(createActionPlanPath)}
+                />
+              ) : null}
+              <div className="order-4 empty:hidden">{resolutionSection}</div>
+            </>
+          )}
         </div>
 
-        {hasOpenedComments && (signal.establishment_id ?? establishmentId) ? (
+        {!isDesktopWeb && hasOpenedComments && (signal.establishment_id ?? establishmentId) ? (
           <div
             role="tabpanel"
             id="signal-detail-panel-comments"
