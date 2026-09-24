@@ -1,13 +1,31 @@
 // @vitest-environment jsdom
 
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { TerrainTopbar } from './terrain-topbar'
+
+function stubLgViewport(matches: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+}
 
 describe('TerrainTopbar', () => {
   afterEach(() => {
     cleanup()
+    vi.unstubAllEnvs()
   })
 
   it('renders hub page title and trailing without logo', () => {
@@ -76,5 +94,45 @@ describe('TerrainTopbar', () => {
     const backButton = screen.getByRole('button', { name: 'Retour' })
     expect(backButton.className).toContain('border-0')
     expect(backButton.className).toContain('focus-visible:ring-0')
+  })
+
+  it('applies desktop height, padding and alignment only on desktop web', () => {
+    stubLgViewport(true)
+    const { unmount } = render(<TerrainTopbar variant="hub" pageTitle="Observations" />)
+    const hubRow = screen.getByRole('banner').firstElementChild
+    expect(hubRow?.className).toContain('lg:min-h-16')
+    expect(hubRow?.className).toContain('lg:px-6')
+    unmount()
+
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    stubLgViewport(true)
+    const nativeHub = render(<TerrainTopbar variant="hub" pageTitle="Observations" />)
+    const nativeHubRow = screen.getByRole('banner').firstElementChild
+    expect(nativeHubRow?.className).not.toContain('lg:min-h-16')
+    expect(nativeHubRow?.className).not.toContain('lg:px-6')
+    expect(screen.getByRole('banner').className).toContain('pt-[max(0.75rem,var(--app-safe-top))]')
+    expect(screen.getByRole('banner').className).not.toContain('pt-0')
+    nativeHub.unmount()
+
+    const nativeDetail = render(
+      <TerrainTopbar variant="detail" title="Observation" onBack={() => undefined} />,
+    )
+    const detailRow = screen.getByRole('banner').firstElementChild
+    expect(detailRow?.className).not.toContain('lg:h-16')
+    expect(detailRow?.className).not.toContain('lg:px-6')
+    nativeDetail.unmount()
+
+    render(
+      <TerrainTopbar
+        variant="detail"
+        detailTitleLayout="belowBack"
+        title="Plan d'action"
+        onBack={() => undefined}
+      />,
+    )
+    const belowBack = screen.getByRole('banner').firstElementChild
+    expect(belowBack?.className).not.toContain('lg:px-6')
+    expect(belowBack?.firstElementChild?.className).not.toContain('lg:min-h-16')
+    expect(belowBack?.firstElementChild?.className).not.toContain('lg:items-center')
   })
 })

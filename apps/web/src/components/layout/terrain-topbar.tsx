@@ -64,7 +64,12 @@ export function TerrainTopbar({
           !isDesktopWeb && 'pb-1.5',
         )}
       >
-        <div className="flex min-h-14 items-center justify-between gap-3 px-3 lg:min-h-16 lg:px-6">
+        <div
+          className={cn(
+            'flex min-h-14 items-center justify-between gap-3 px-3',
+            isDesktopWeb && 'lg:min-h-16 lg:px-6',
+          )}
+        >
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
             {pageTitle ? (
               <h1 className="min-w-0 truncate text-left text-2xl font-semibold leading-tight text-[#1a1a1a]">
@@ -93,8 +98,13 @@ export function TerrainTopbar({
           !isDesktopWeb && 'pb-3',
         )}
       >
-        <div className="px-4 lg:px-6">
-          <div className="flex items-start justify-between gap-3 lg:min-h-16 lg:items-center">
+        <div className={cn('px-4', isDesktopWeb && 'lg:px-6')}>
+          <div
+            className={cn(
+              'flex items-start justify-between gap-3',
+              isDesktopWeb && 'lg:min-h-16 lg:items-center',
+            )}
+          >
             <div className="min-w-0 flex-1">
               {onBack ? (
                 <Button
@@ -127,7 +137,12 @@ export function TerrainTopbar({
           !isDesktopWeb && 'pb-3',
         )}
     >
-      <div className="flex items-center justify-between gap-3 px-4 lg:h-16 lg:px-6">
+      <div
+        className={cn(
+          'flex items-center justify-between gap-3 px-4',
+          isDesktopWeb && 'lg:h-16 lg:px-6',
+        )}
+      >
         {onBack ? (
           <Button
             type="button"
