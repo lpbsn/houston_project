@@ -382,6 +382,23 @@ function setOwnerGovernanceMutations() {
   })
 }
 
+function stubLgViewport(matches: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+}
+
 describe('AnalyticsPatternDetailPage', () => {
   afterEach(() => {
     cleanup()
@@ -397,6 +414,7 @@ describe('AnalyticsPatternDetailPage', () => {
     notifySuccessMock.mockClear()
     queryClientMock.invalidateQueries.mockClear()
     switchEstablishmentMock.mockReset()
+    vi.unstubAllEnvs()
     authState.current = {
       bootstrap: null,
       isBootstrapping: false,
@@ -469,7 +487,7 @@ describe('AnalyticsPatternDetailPage', () => {
     expect(screen.getByTestId('analytics-pattern-signals-list').className).toContain(
       'overflow-hidden',
     )
-    expect(screen.getByTestId('analytics-pattern-signal-row').className).toContain(
+    expect(screen.getByTestId('analytics-pattern-signal-row').className).not.toContain(
       'lg:grid-cols-',
     )
     expect(patternSignalsQueryMock).toHaveBeenCalledWith(
@@ -479,6 +497,40 @@ describe('AnalyticsPatternDetailPage', () => {
     )
     expect(screen.queryByText(/raw/i)).toBeNull()
     expect(screen.queryByText(/prompt/i)).toBeNull()
+  })
+
+  it('uses the desktop signal grid only on desktop web', () => {
+    stubLgViewport(true)
+    setDetailQuery({ data: detail() })
+    authState.current = {
+      bootstrap: bootstrap('owner'),
+      isBootstrapping: false,
+      isReady: true,
+    }
+
+    const { unmount } = render(
+      <AnalyticsPatternDetailPage
+        patternId="pattern-1"
+        analyticsState={analyticsState}
+        onNavigate={vi.fn()}
+      />,
+    )
+    expect(screen.getByTestId('analytics-pattern-signal-row').className).toContain('lg:grid-cols-')
+    unmount()
+
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    stubLgViewport(true)
+    render(
+      <AnalyticsPatternDetailPage
+        patternId="pattern-1"
+        analyticsState={analyticsState}
+        onNavigate={vi.fn()}
+      />,
+    )
+    expect(screen.getByTestId('analytics-pattern-signal-row').className).not.toContain(
+      'lg:grid-cols-',
+    )
+    expect(screen.getAllByText('Statut').length).toBeGreaterThan(0)
   })
 
   it('hides the issue report action for Owner-only users', () => {

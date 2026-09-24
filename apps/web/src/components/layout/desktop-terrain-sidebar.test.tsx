@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
-import { createElement, type ReactNode } from 'react'
+import { createElement, type ComponentProps, type ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { AppRoute } from '@/app/app-routes'
 import { DesktopTerrainSidebar } from '@/components/layout/desktop-terrain-sidebar'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
 
@@ -82,24 +83,43 @@ function renderSidebar(ui: ReactNode) {
   return render(createElement(QueryClientProvider, { client }, ui))
 }
 
+function sidebarProps(
+  overrides: Partial<ComponentProps<typeof DesktopTerrainSidebar>> = {},
+): ComponentProps<typeof DesktopTerrainSidebar> {
+  return {
+    route: { kind: 'static', path: '/general' },
+    collapsed: false,
+    onCollapsedChange: vi.fn(),
+    navigate: vi.fn(),
+    ...overrides,
+  }
+}
+
 afterEach(() => {
   cleanup()
   lgViewportState.current = false
   vi.unstubAllEnvs()
 })
 
+const crossSignalsRoute: AppRoute = {
+  kind: 'scoped-terrain',
+  scope: { type: 'cross' },
+  page: 'signals',
+}
+
 describe('DesktopTerrainSidebar', () => {
-  it('renders the establishment section for a single-establishment manager without Cross', () => {
+  it('renders one establishment destination list for a single-establishment manager', () => {
     renderSidebar(
       <DesktopTerrainSidebar
-        activePath="/analytics"
-        bootstrap={bootstrap([membership({ role: 'manager' })])}
-        navigate={vi.fn()}
+        {...sidebarProps({
+          bootstrap: bootstrap([membership({ role: 'manager' })]),
+        })}
       />,
     )
 
     const sidebar = screen.getByLabelText('Navigation principale')
-    expect(within(sidebar).getByText('Spore Analytics')).toBeTruthy()
+    expect(within(sidebar).getByText('Spore')).toBeTruthy()
+    expect(within(sidebar).queryByText('Spore Analytics')).toBeNull()
     expect(within(sidebar).queryByText('Cross-établissement')).toBeNull()
     expect(within(sidebar).getByText('Spore Paris')).toBeTruthy()
     expect(within(sidebar).getByRole('link', { name: 'Dashboard' })).toBeTruthy()
@@ -111,9 +131,10 @@ describe('DesktopTerrainSidebar', () => {
     const navigate = vi.fn()
     renderSidebar(
       <DesktopTerrainSidebar
-        activePath="/analytics"
-        bootstrap={bootstrap([membership({ role: 'manager' })])}
-        navigate={navigate}
+        {...sidebarProps({
+          bootstrap: bootstrap([membership({ role: 'manager' })]),
+          navigate,
+        })}
       />,
     )
 
@@ -125,25 +146,27 @@ describe('DesktopTerrainSidebar', () => {
     const navigate = vi.fn()
     renderSidebar(
       <DesktopTerrainSidebar
-        activePath="/cross"
-        bootstrap={bootstrap([
-          membership({
-            role: 'manager',
-            establishment_id: 'est-1',
-            establishment_name: 'Spore Paris',
-          }),
-          membership({
-            role: 'manager',
-            establishment_id: 'est-2',
-            establishment_name: 'Spore Lyon',
-          }),
-        ])}
-        navigate={navigate}
+        {...sidebarProps({
+          route: crossSignalsRoute,
+          bootstrap: bootstrap([
+            membership({
+              role: 'manager',
+              establishment_id: 'est-1',
+              establishment_name: 'Spore Paris',
+            }),
+            membership({
+              role: 'manager',
+              establishment_id: 'est-2',
+              establishment_name: 'Spore Lyon',
+            }),
+          ]),
+          navigate,
+        })}
       />,
     )
 
     const sidebar = screen.getByLabelText('Navigation principale')
-    expect(within(sidebar).getByText('Cross-établissement')).toBeTruthy()
+    expect(within(sidebar).getAllByText('Cross-établissement').length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('link', { name: 'Observations' }))
     expect(navigate).toHaveBeenCalledWith('/cross/signals')
   })
@@ -151,9 +174,14 @@ describe('DesktopTerrainSidebar', () => {
   it('hides Cross for Staff-only users', () => {
     renderSidebar(
       <DesktopTerrainSidebar
-        activePath="/e/est-1/signals"
-        bootstrap={bootstrap([membership({ role: 'staff' })])}
-        navigate={vi.fn()}
+        {...sidebarProps({
+          route: {
+            kind: 'scoped-terrain',
+            scope: { type: 'establishment', establishmentId: 'est-1' },
+            page: 'signals',
+          },
+          bootstrap: bootstrap([membership({ role: 'staff' })]),
+        })}
       />,
     )
 
@@ -166,9 +194,9 @@ describe('DesktopTerrainSidebar', () => {
   it('shows French role labels in the footer context line', () => {
     renderSidebar(
       <DesktopTerrainSidebar
-        activePath="/cross"
-        bootstrap={bootstrap([membership({ role: 'owner' })])}
-        navigate={vi.fn()}
+        {...sidebarProps({
+          bootstrap: bootstrap([membership({ role: 'owner' })]),
+        })}
       />,
     )
 
@@ -177,22 +205,40 @@ describe('DesktopTerrainSidebar', () => {
     expect(within(sidebar).queryByText(/Owner/)).toBeNull()
   })
 
+  it('names the Cross footer without the session establishment', () => {
+    renderSidebar(
+      <DesktopTerrainSidebar
+        {...sidebarProps({
+          route: crossSignalsRoute,
+          bootstrap: bootstrap([
+            membership({ role: 'owner', establishment_id: 'est-1', establishment_name: 'Spore Paris' }),
+            membership({ role: 'owner', establishment_id: 'est-2', establishment_name: 'Spore Lyon' }),
+          ]),
+        })}
+      />,
+    )
+
+    const sidebar = screen.getByLabelText('Navigation principale')
+    expect(within(sidebar).getAllByText('Cross-établissement').length).toBeGreaterThan(0)
+    expect(within(sidebar).queryByText(/Spore Paris/)).toBeNull()
+  })
+
   it('does not offer client establishment creation', () => {
     renderSidebar(
       <DesktopTerrainSidebar
-        activePath="/analytics"
-        bootstrap={bootstrap([membership({ role: 'owner' })], {
-          can_manage_organization: true,
-          platform_operator_active: false,
+        {...sidebarProps({
+          bootstrap: bootstrap([membership({ role: 'owner' })], {
+            can_manage_organization: true,
+            platform_operator_active: false,
+          }),
         })}
-        navigate={vi.fn()}
       />,
     )
 
     expect(screen.queryByRole('button', { name: /Ajouter un établissement/i })).toBeNull()
   })
 
-  it('opens establishment Chat from Cross context without a session', () => {
+  it('switches scope to the same hub and does not copy a query', () => {
     const navigate = vi.fn()
     const paris = membership({
       role: 'manager',
@@ -208,20 +254,92 @@ describe('DesktopTerrainSidebar', () => {
     })
     renderSidebar(
       <DesktopTerrainSidebar
-        activePath="/cross/signals"
-        bootstrap={bootstrap([paris, lyon], { chat_available: false }, null)}
-        navigate={navigate}
+        {...sidebarProps({
+          route: crossSignalsRoute,
+          bootstrap: bootstrap([paris, lyon], { chat_available: false }, null),
+          navigate,
+        })}
       />,
     )
 
     const sidebar = screen.getByLabelText('Navigation principale')
     expect(within(sidebar).queryByRole('link', { name: 'Chat' })).toBeNull()
-    fireEvent.click(within(sidebar).getByText('Spore Paris'))
-    fireEvent.click(within(sidebar).getByRole('link', { name: 'Chat' }))
-    expect(navigate).toHaveBeenCalledWith('/e/est-1/chat')
+    fireEvent.click(within(sidebar).getByRole('button', { name: 'Cross-établissement' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Rechercher un scope' }), {
+      target: { value: 'Lyon' },
+    })
+    expect(screen.getByRole('option', { name: 'Spore Lyon' })).toBeTruthy()
+    expect(screen.queryByRole('option', { name: 'Spore Paris' })).toBeNull()
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Rechercher un scope' }), {
+      key: 'Enter',
+    })
+    expect(navigate).toHaveBeenCalledWith('/e/est-2/signals')
+    expect(navigate.mock.calls[0]?.[0]).not.toContain('?')
+  })
 
-    fireEvent.click(within(sidebar).getByText('Spore Lyon'))
-    expect(within(sidebar).getAllByRole('link', { name: 'Chat' })).toHaveLength(1)
+  it('keeps the current route when the selected scope is already active', () => {
+    const navigate = vi.fn()
+    renderSidebar(
+      <DesktopTerrainSidebar
+        {...sidebarProps({
+          route: {
+            kind: 'scoped-terrain',
+            scope: { type: 'establishment', establishmentId: 'est-1' },
+            page: 'signals',
+          },
+          bootstrap: bootstrap([membership({ role: 'manager' })]),
+          navigate,
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Spore Paris' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Spore Paris' }))
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it('marks Chat active on a conversation and Général active on the library', () => {
+    const { unmount } = renderSidebar(
+      <DesktopTerrainSidebar
+        {...sidebarProps({
+          route: { kind: 'chat-conversation-detail', conversationId: 'conversation-1' },
+          bootstrap: bootstrap([membership({ role: 'manager', chat_available: true })]),
+        })}
+      />,
+    )
+    expect(screen.getByRole('link', { name: 'Chat' }).getAttribute('aria-current')).toBe('page')
+    unmount()
+
+    renderSidebar(
+      <DesktopTerrainSidebar
+        {...sidebarProps({
+          route: { kind: 'static', path: '/action-plans' },
+          bootstrap: bootstrap([membership({ role: 'manager' })]),
+        })}
+      />,
+    )
+    expect(screen.getByRole('link', { name: 'Général' }).getAttribute('aria-current')).toBe('page')
+  })
+
+  it('keeps destinations reachable when the sidebar is collapsed', () => {
+    lgViewportState.current = true
+    renderSidebar(
+      <DesktopTerrainSidebar
+        {...sidebarProps({
+          collapsed: true,
+          bootstrap: bootstrap([membership({ role: 'manager' })]),
+          onSignOut: vi.fn(),
+        })}
+      />,
+    )
+
+    const sidebar = screen.getByLabelText('Navigation principale')
+    expect(sidebar.getAttribute('data-collapsed')).toBe('true')
+    expect(within(sidebar).getByRole('link', { name: 'Observations' })).toBeTruthy()
+    expect(within(sidebar).getByRole('button', { name: 'Scope : Spore Paris' })).toBeTruthy()
+    expect(within(sidebar).getByLabelText('Marie Renaud')).toBeTruthy()
+    expect(within(sidebar).getByRole('button', { name: 'Déconnexion' })).toBeTruthy()
+    expect(within(sidebar).getByRole('button', { name: 'Développer la navigation' })).toBeTruthy()
   })
 
   it('signs out from the footer on desktop web', () => {
@@ -229,10 +347,10 @@ describe('DesktopTerrainSidebar', () => {
     const onSignOut = vi.fn()
     renderSidebar(
       <DesktopTerrainSidebar
-        activePath="/e/est-1"
-        bootstrap={bootstrap([membership({ role: 'manager' })])}
-        navigate={vi.fn()}
-        onSignOut={onSignOut}
+        {...sidebarProps({
+          bootstrap: bootstrap([membership({ role: 'manager' })]),
+          onSignOut,
+        })}
       />,
     )
 
@@ -244,11 +362,11 @@ describe('DesktopTerrainSidebar', () => {
     lgViewportState.current = true
     renderSidebar(
       <DesktopTerrainSidebar
-        activePath="/e/est-1"
-        bootstrap={bootstrap([membership({ role: 'manager' })])}
-        isLoggingOut
-        navigate={vi.fn()}
-        onSignOut={vi.fn()}
+        {...sidebarProps({
+          bootstrap: bootstrap([membership({ role: 'manager' })]),
+          isLoggingOut: true,
+          onSignOut: vi.fn(),
+        })}
       />,
     )
 
@@ -262,10 +380,10 @@ describe('DesktopTerrainSidebar', () => {
     lgViewportState.current = true
     renderSidebar(
       <DesktopTerrainSidebar
-        activePath="/e/est-1"
-        bootstrap={bootstrap([membership({ role: 'manager' })])}
-        navigate={vi.fn()}
-        onSignOut={vi.fn()}
+        {...sidebarProps({
+          bootstrap: bootstrap([membership({ role: 'manager' })]),
+          onSignOut: vi.fn(),
+        })}
       />,
     )
 

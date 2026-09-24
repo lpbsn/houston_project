@@ -55,9 +55,11 @@ import {
   type AnalyticsUrlState,
 } from '@/features/analytics/lib/analytics-url-state'
 import { switchEstablishment } from '@/features/auth/api'
+import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
 import { canShowAnalyticsNavigation } from '@/features/navigation/lib/shared-navigation'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { useLgViewport } from '@/lib/lg-viewport'
 import { notifySuccess } from '@/lib/success-toast'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -318,8 +320,12 @@ function InlineMetric({
 }
 
 function AnalyticsPatternDetailSkeleton() {
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4" role="status">
+    <div
+      className={cn('grid gap-3 md:grid-cols-2', isDesktopWeb && 'xl:grid-cols-4')}
+      role="status"
+    >
       {Array.from({ length: 4 }).map((_, index) => (
         <TerrainCard key={index} className="p-4">
           <div className="h-4 w-24 rounded-full bg-[#E8E6DF]" />
@@ -459,6 +465,7 @@ function PatternSignalsSection({
   onReportIssue: (item: AnalyticsPatternSignalItem) => void
   issueReportSuccess: string | null
 }) {
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   const items = useMemo(
     () => query.data?.pages.flatMap((page) => page.items) ?? [],
     [query.data],
@@ -517,7 +524,12 @@ function PatternSignalsSection({
           className="mt-4 divide-y divide-[#F0EFE9] overflow-hidden rounded-xl border border-[#F0EFE9]"
           data-testid="analytics-pattern-signals-list"
         >
-          <div className="hidden grid-cols-[minmax(180px,1fr)_120px_150px_150px_minmax(180px,auto)] gap-3 border-b border-[#F0EFE9] bg-[#FBFAF7] px-4 py-3 text-xs font-semibold uppercase tracking-[0.04em] text-[#777] lg:grid">
+          <div
+            className={cn(
+              'hidden grid-cols-[minmax(180px,1fr)_120px_150px_150px_minmax(180px,auto)] gap-3 border-b border-[#F0EFE9] bg-[#FBFAF7] px-4 py-3 text-xs font-semibold uppercase tracking-[0.04em] text-[#777]',
+              isDesktopWeb && 'lg:grid',
+            )}
+          >
             <span>Signal</span>
             <span>Statut</span>
             <span>Établissement</span>
@@ -530,7 +542,11 @@ function PatternSignalsSection({
               <div
                 key={item.signal_id}
                 data-testid="analytics-pattern-signal-row"
-                className="grid min-w-0 gap-3 px-4 py-3 text-sm transition-colors hover:bg-[#FBFAF7] lg:grid-cols-[minmax(180px,1fr)_120px_150px_150px_minmax(180px,auto)]"
+                className={cn(
+                  'grid min-w-0 gap-3 px-4 py-3 text-sm transition-colors hover:bg-[#FBFAF7]',
+                  isDesktopWeb &&
+                    'lg:grid-cols-[minmax(180px,1fr)_120px_150px_150px_minmax(180px,auto)]',
+                )}
               >
                 <button
                   type="button"
@@ -545,28 +561,61 @@ function PatternSignalsSection({
                     {item.structured_summary}
                   </span>
                 </button>
-                <dl className="grid min-w-0 gap-2 sm:grid-cols-3 lg:contents">
-                  <div className="min-w-0 rounded-lg bg-[#FBFAF7] px-3 py-2 lg:bg-transparent lg:p-0">
-                    <dt className={cn('text-[11px] font-semibold uppercase tracking-[0.04em] lg:hidden', terrain.muted)}>
+                <dl className={cn('grid min-w-0 gap-2 sm:grid-cols-3', isDesktopWeb && 'lg:contents')}>
+                  <div
+                    className={cn(
+                      'min-w-0 rounded-lg bg-[#FBFAF7] px-3 py-2',
+                      isDesktopWeb && 'lg:bg-transparent lg:p-0',
+                    )}
+                  >
+                    <dt
+                      className={cn(
+                        'text-[11px] font-semibold uppercase tracking-[0.04em]',
+                        isDesktopWeb && 'lg:hidden',
+                        terrain.muted,
+                      )}
+                    >
                       Statut
                     </dt>
-                    <dd className="mt-1 text-[#1a1a1a] lg:mt-0">
+                    <dd className={cn('mt-1 text-[#1a1a1a]', isDesktopWeb && 'lg:mt-0')}>
                       {formatStatusLabel(item.status)}
                     </dd>
                   </div>
-                  <div className="min-w-0 rounded-lg bg-[#FBFAF7] px-3 py-2 lg:bg-transparent lg:p-0">
-                    <dt className={cn('text-[11px] font-semibold uppercase tracking-[0.04em] lg:hidden', terrain.muted)}>
+                  <div
+                    className={cn(
+                      'min-w-0 rounded-lg bg-[#FBFAF7] px-3 py-2',
+                      isDesktopWeb && 'lg:bg-transparent lg:p-0',
+                    )}
+                  >
+                    <dt
+                      className={cn(
+                        'text-[11px] font-semibold uppercase tracking-[0.04em]',
+                        isDesktopWeb && 'lg:hidden',
+                        terrain.muted,
+                      )}
+                    >
                       Établissement
                     </dt>
-                    <dd className="mt-1 break-words text-[#555] lg:mt-0">
+                    <dd className={cn('mt-1 break-words text-[#555]', isDesktopWeb && 'lg:mt-0')}>
                       {item.establishment.name}
                     </dd>
                   </div>
-                  <div className="min-w-0 rounded-lg bg-[#FBFAF7] px-3 py-2 lg:bg-transparent lg:p-0">
-                    <dt className={cn('text-[11px] font-semibold uppercase tracking-[0.04em] lg:hidden', terrain.muted)}>
+                  <div
+                    className={cn(
+                      'min-w-0 rounded-lg bg-[#FBFAF7] px-3 py-2',
+                      isDesktopWeb && 'lg:bg-transparent lg:p-0',
+                    )}
+                  >
+                    <dt
+                      className={cn(
+                        'text-[11px] font-semibold uppercase tracking-[0.04em]',
+                        isDesktopWeb && 'lg:hidden',
+                        terrain.muted,
+                      )}
+                    >
                       BU
                     </dt>
-                    <dd className="mt-1 break-words text-[#555] lg:mt-0">
+                    <dd className={cn('mt-1 break-words text-[#555]', isDesktopWeb && 'lg:mt-0')}>
                       {item.responsible_business_unit?.specific_name ?? 'Non assigné'}
                     </dd>
                   </div>
@@ -576,14 +625,23 @@ function PatternSignalsSection({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="min-h-11 w-full justify-start text-[#8A5A00] hover:text-[#8A5A00] sm:w-auto lg:min-h-9 lg:justify-self-start"
+                    className={cn(
+                      'min-h-11 w-full justify-start text-[#8A5A00] hover:text-[#8A5A00] sm:w-auto',
+                      isDesktopWeb && 'lg:min-h-9 lg:justify-self-start',
+                    )}
                     onClick={() => onReportIssue(item)}
                   >
                     <Flag className="mr-2 h-4 w-4" aria-hidden />
                     Signaler un regroupement incorrect
                   </Button>
                 ) : null}
-                <span className={cn('min-w-0 break-words text-xs lg:col-span-5', terrain.muted)}>
+                <span
+                  className={cn(
+                    'min-w-0 break-words text-xs',
+                    isDesktopWeb && 'lg:col-span-5',
+                    terrain.muted,
+                  )}
+                >
                   Créé {formatDateTime(item.created_at)}
                   {item.resolved_at ? ` · Résolu ${formatDateTime(item.resolved_at)}` : ''}
                   {openingSignalId === item.signal_id ? ' · Ouverture...' : ''}
@@ -715,13 +773,19 @@ function OwnerGovernancePanel({
   success: string | null
   onOpenAction: (action: OwnerGovernanceAction) => void
 }) {
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   if (!canShow) {
     return null
   }
 
   return (
     <TerrainCard className="border-[#F0D9C8] bg-[#FFFDF9] p-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <div
+        className={cn(
+          'flex flex-col gap-3',
+          isDesktopWeb && 'lg:flex-row lg:items-start lg:justify-between',
+        )}
+      >
         <div>
           <p className="text-sm font-semibold text-[#1a1a1a]">Gouvernance Owner</p>
           <p className={cn('mt-1 text-xs leading-5', terrain.muted)}>
@@ -741,7 +805,12 @@ function OwnerGovernancePanel({
             </p>
           ) : null}
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap lg:justify-end">
+        <div
+          className={cn(
+            'grid grid-cols-2 gap-2 sm:flex sm:flex-wrap',
+            isDesktopWeb && 'lg:justify-end',
+          )}
+        >
           <Button type="button" variant="outline" size="sm" onClick={() => onOpenAction('rename')}>
             <Pencil className="mr-2 h-4 w-4" aria-hidden />
             Renommer
@@ -1080,6 +1149,7 @@ function AnalyticsPatternDetailContent({
   governanceSuccess: string | null
   onOpenGovernanceAction: (action: OwnerGovernanceAction) => void
 }) {
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   return (
     <>
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -1114,7 +1184,7 @@ function AnalyticsPatternDetailContent({
         onOpenAction={onOpenGovernanceAction}
       />
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className={cn('grid gap-3 md:grid-cols-2', isDesktopWeb && 'xl:grid-cols-4')}>
         <MetricCard
           title="Signals"
           value={formatNumber(data.metrics.signal_count)}
@@ -1184,7 +1254,7 @@ function AnalyticsPatternDetailContent({
 
       <TrendSection data={data} />
 
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className={cn('grid gap-3', isDesktopWeb && 'lg:grid-cols-2')}>
         <StatusDistributionSection data={data} />
         <DistributionList
           title="Établissements concernés"
@@ -1231,6 +1301,7 @@ export function AnalyticsPatternDetailPage({
 }: AnalyticsPatternDetailPageProps) {
   const queryClient = useQueryClient()
   const { bootstrap, isBootstrapping, isReady } = useAuth()
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   const canAccessAnalytics = canShowAnalyticsNavigation(bootstrap)
   const canShowOwnerGovernance = canShowOwnerGovernanceActions(bootstrap)
   const [signalNavigationError, setSignalNavigationError] = useState<string | null>(null)
@@ -1567,7 +1638,12 @@ export function AnalyticsPatternDetailPage({
     detailQuery.error.code === 'analytics_pattern_not_found'
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 px-3 pb-5 pt-3 md:px-5 lg:px-6">
+    <div
+      className={cn(
+        'flex min-h-0 flex-1 flex-col gap-4 px-3 pb-5 pt-3 md:px-5',
+        isDesktopWeb && 'lg:px-6',
+      )}
+    >
       {detailQuery.isLoading ? <AnalyticsPatternDetailSkeleton /> : null}
 
       {detailQuery.isError ? (

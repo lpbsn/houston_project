@@ -245,7 +245,12 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   }
 
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col gap-3 px-3 pb-4 pt-3 lg:mx-auto lg:max-w-4xl">
+    <div
+      className={cn(
+        'flex min-h-0 w-full flex-1 flex-col gap-3 px-3 pb-4 pt-3',
+        isDesktopWeb && 'lg:mx-auto lg:max-w-4xl',
+      )}
+    >
       <GamificationScoreCard
         establishmentId={establishmentId}
         data={gamificationOverviewQuery.data}

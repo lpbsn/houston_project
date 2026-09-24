@@ -4,6 +4,8 @@ import { ArrowLeft } from 'lucide-react'
 import type { TerrainDetailTitleLayout } from '@/app/terrain-routes'
 import { useTerrainHubTitleSlotValue } from '@/components/layout/terrain-hub-title-slot'
 import { Button } from '@/components/ui/button'
+import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
+import { useLgViewport } from '@/lib/lg-viewport'
 import { terrainBackButtonClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -46,6 +48,11 @@ export function TerrainTopbar({
 }: TerrainTopbarProps) {
   const slotAfterTitle = useTerrainHubTitleSlotValue()
   const titleAddon = afterTitle ?? slotAfterTitle
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const safeAreaClass = cn(
+    'pt-[max(0.75rem,var(--app-safe-top))]',
+    isDesktopWeb && 'pt-0 pb-0',
+  )
 
   if (variant === 'hub') {
     return (
@@ -53,10 +60,16 @@ export function TerrainTopbar({
         className={cn(
           'shrink-0 bg-white',
           showBottomBorder && 'border-b border-[#E8E6DF]',
-          'pt-[max(0.75rem,var(--app-safe-top))] pb-1.5 lg:pt-0 lg:pb-0',
+          safeAreaClass,
+          !isDesktopWeb && 'pb-1.5',
         )}
       >
-        <div className="flex min-h-14 items-center justify-between gap-3 px-3 lg:min-h-16 lg:px-6">
+        <div
+          className={cn(
+            'flex min-h-14 items-center justify-between gap-3 px-3',
+            isDesktopWeb && 'lg:min-h-16 lg:px-6',
+          )}
+        >
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
             {pageTitle ? (
               <h1 className="min-w-0 truncate text-left text-2xl font-semibold leading-tight text-[#1a1a1a]">
@@ -81,11 +94,17 @@ export function TerrainTopbar({
         className={cn(
           'shrink-0 bg-white',
           showBottomBorder && 'border-b border-[#E8E6DF]',
-          'pt-[max(0.75rem,var(--app-safe-top))] pb-3 lg:pt-0 lg:pb-0',
+          safeAreaClass,
+          !isDesktopWeb && 'pb-3',
         )}
       >
-        <div className="px-4 lg:px-6">
-          <div className="flex items-start justify-between gap-3 lg:min-h-16 lg:items-center">
+        <div className={cn('px-4', isDesktopWeb && 'lg:px-6')}>
+          <div
+            className={cn(
+              'flex items-start justify-between gap-3',
+              isDesktopWeb && 'lg:min-h-16 lg:items-center',
+            )}
+          >
             <div className="min-w-0 flex-1">
               {onBack ? (
                 <Button
@@ -114,10 +133,16 @@ export function TerrainTopbar({
       className={cn(
           'shrink-0 bg-white',
           showBottomBorder && 'border-b border-[#E8E6DF]',
-          'pt-[max(0.75rem,var(--app-safe-top))] pb-3 lg:pt-0 lg:pb-0',
+          safeAreaClass,
+          !isDesktopWeb && 'pb-3',
         )}
     >
-      <div className="flex items-center justify-between gap-3 px-4 lg:h-16 lg:px-6">
+      <div
+        className={cn(
+          'flex items-center justify-between gap-3 px-4',
+          isDesktopWeb && 'lg:h-16 lg:px-6',
+        )}
+      >
         {onBack ? (
           <Button
             type="button"

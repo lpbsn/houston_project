@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveScopedDesktopNavigation } from '@/features/navigation/lib/scoped-desktop-navigation'
+import type { AppRoute } from '@/app/app-routes'
+import type { TerrainScope } from '@/app/scoped-terrain'
+import {
+  resolveDesktopScopeFooterContext,
+  resolveDesktopScopeNavigation,
+  resolveDesktopScopeSwitchHref,
+} from '@/features/navigation/lib/scoped-desktop-navigation'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
+
+const SIGNAL_ID = '11111111-1111-4111-8111-111111111111'
 
 function membership(overrides: Partial<Membership>): Membership {
   return {
@@ -49,52 +57,44 @@ function bootstrap(
   }
 }
 
+function establishmentRoute(
+  establishmentId: string,
+  page: 'dashboard' | 'reporting' | 'signals' | 'execution' | 'chat' | 'general' | 'settings',
+): AppRoute {
+  return {
+    kind: 'scoped-terrain',
+    scope: { type: 'establishment', establishmentId },
+    page,
+  }
+}
+
 describe('scoped desktop navigation', () => {
-  it('puts Cross first then establishments alphabetically, with Dashboard for managers', () => {
-    const sections = resolveScopedDesktopNavigation({
-      bootstrap: bootstrap([
-        membership({
-          role: 'manager',
-          establishment_id: 'est-b',
-          establishment_name: 'Villa Mareva',
-        }),
-        membership({
-          role: 'manager',
-          establishment_id: 'est-a',
-          establishment_name: 'Brasserie Huit',
-        }),
-      ]),
+  it('lists Cross then establishments alphabetically, with one destination list for the route scope', () => {
+    const data = bootstrap([
+      membership({
+        role: 'manager',
+        establishment_id: 'est-b',
+        establishment_name: 'Villa Mareva',
+      }),
+      membership({
+        role: 'manager',
+        establishment_id: 'est-a',
+        establishment_name: 'Brasserie Huit',
+      }),
+    ])
+    const navigation = resolveDesktopScopeNavigation({
+      route: { kind: 'scoped-terrain', scope: { type: 'cross' }, page: 'signals' },
+      bootstrap: data,
     })
 
-    expect(sections.map((section) => section.id)).toEqual([
-      'cross',
-      'establishment:est-a',
-      'establishment:est-b',
-    ])
-    expect(sections[0]?.defaultExpanded).toBe(true)
-    expect(sections[1]?.defaultExpanded).toBe(false)
-    expect(sections[2]?.defaultExpanded).toBe(false)
-    expect(sections[0]?.items.map((item) => item.id)).toEqual([
-      'dashboard',
-      'settings',
-      'reporting',
-      'signals',
-      'execution',
-    ])
-    expect(sections[0]?.items.find((item) => item.id === 'settings')?.label).toBe(
-      'Paramètres Analytics',
+    expect(navigation.options.map((option) => option.id)).toEqual(['cross', 'est-a', 'est-b'])
+    expect(navigation.scope).toEqual({ type: 'cross' })
+    expect(navigation.items.map((item) => item.id)).toEqual(['signals', 'execution'])
+    expect(navigation.items.every((item) => item.placeholder === false && item.readOnly === true)).toBe(
+      true,
     )
-    expect(sections[0]?.items.map((item) => item.id)).not.toContain('chat')
-    expect(sections[0]?.items.find((item) => item.id === 'signals')?.readOnly).toBe(true)
-  })
-
-  it('expands the only establishment section when Cross is hidden', () => {
-    const sections = resolveScopedDesktopNavigation({
-      bootstrap: bootstrap([membership({ role: 'manager' })]),
-    })
-
-    expect(sections.map((section) => section.id)).toEqual(['establishment:est-1'])
-    expect(sections[0]?.defaultExpanded).toBe(true)
+    expect(navigation.items.map((item) => item.id)).not.toContain('chat')
+    expect(navigation.activeItemId).toBe('signals')
   })
 
   it('hides Cross when only one establishment is management-eligible', () => {
@@ -108,23 +108,16 @@ describe('scoped desktop navigation', () => {
       establishment_id: 'est-2',
       establishment_name: 'Spore Lyon',
     })
-    const sections = resolveScopedDesktopNavigation({
+    const navigation = resolveDesktopScopeNavigation({
+      route: establishmentRoute('est-1', 'signals'),
       bootstrap: bootstrap([paris, lyon], paris),
     })
 
-    expect(sections.map((section) => section.id)).toEqual([
-      'establishment:est-2',
-      'establishment:est-1',
-    ])
-    expect(sections.find((section) => section.id === 'establishment:est-1')?.defaultExpanded).toBe(
-      true,
-    )
-    expect(sections.find((section) => section.id === 'establishment:est-2')?.defaultExpanded).toBe(
-      false,
-    )
+    expect(navigation.options.map((option) => option.id)).toEqual(['est-2', 'est-1'])
+    expect(navigation.items.map((item) => item.id)).toContain('dashboard')
   })
 
-  it('expands the active membership establishment when Cross is hidden', () => {
+  it('follows the route establishment rather than the active session', () => {
     const paris = membership({
       role: 'manager',
       establishment_id: 'est-1',
@@ -134,27 +127,37 @@ describe('scoped desktop navigation', () => {
       role: 'staff',
       establishment_id: 'est-2',
       establishment_name: 'Spore Lyon',
+      chat_available: false,
     })
-    const sections = resolveScopedDesktopNavigation({
-      bootstrap: bootstrap([paris, lyon], lyon),
+    const navigation = resolveDesktopScopeNavigation({
+      route: establishmentRoute('est-2', 'execution'),
+      bootstrap: bootstrap([paris, lyon], paris),
     })
 
-    expect(sections.find((section) => section.id === 'establishment:est-2')?.defaultExpanded).toBe(
-      true,
-    )
-    expect(sections.find((section) => section.id === 'establishment:est-1')?.defaultExpanded).toBe(
-      false,
-    )
+    expect(navigation.scopeLabel).toBe('Spore Lyon')
+    expect(navigation.items.map((item) => item.id)).toEqual([
+      'reporting',
+      'signals',
+      'execution',
+      'general',
+    ])
+    expect(navigation.activeItemId).toBe('execution')
+    expect(
+      resolveDesktopScopeFooterContext({
+        scope: navigation.scope,
+        bootstrap: bootstrap([paris, lyon], paris),
+      }),
+    ).toBe('Équipe · Spore Lyon')
   })
 
-  it('hides Cross and Dashboard for staff-only users', () => {
-    const sections = resolveScopedDesktopNavigation({
+  it('hides Dashboard and Cross for staff-only users', () => {
+    const navigation = resolveDesktopScopeNavigation({
+      route: establishmentRoute('est-1', 'signals'),
       bootstrap: bootstrap([membership({ role: 'staff' })]),
     })
 
-    expect(sections.map((section) => section.id)).toEqual(['establishment:est-1'])
-    expect(sections[0]?.defaultExpanded).toBe(true)
-    expect(sections[0]?.items.map((item) => item.id)).toEqual([
+    expect(navigation.options.map((option) => option.id)).toEqual(['est-1'])
+    expect(navigation.items.map((item) => item.id)).toEqual([
       'reporting',
       'signals',
       'execution',
@@ -163,38 +166,19 @@ describe('scoped desktop navigation', () => {
     ])
   })
 
-  it('keeps operational config out of the sidebar for every role', () => {
+  it('keeps operational config out of the sidebar and marks library, team and config as Général', () => {
     const owner = membership({
       role: 'owner',
       establishment_id: 'est-owner',
       establishment_name: 'Owner Site',
     })
-    const director = membership({
-      role: 'director',
-      establishment_id: 'est-director',
-      establishment_name: 'Director Site',
-    })
-    const manager = membership({
-      role: 'manager',
-      establishment_id: 'est-manager',
-      establishment_name: 'Manager Site',
-    })
-    const sections = resolveScopedDesktopNavigation({
-      bootstrap: bootstrap([owner, director, manager], owner),
+    const data = bootstrap([owner], owner)
+    const ownerNav = resolveDesktopScopeNavigation({
+      route: establishmentRoute('est-owner', 'general'),
+      bootstrap: data,
     })
 
-    const ownerItems =
-      sections.find((section) => section.id === 'establishment:est-owner')?.items.map((item) => item.id) ??
-      []
-    const directorItems =
-      sections.find((section) => section.id === 'establishment:est-director')?.items.map((item) => item.id) ??
-      []
-    const managerItems =
-      sections.find((section) => section.id === 'establishment:est-manager')?.items.map((item) => item.id) ??
-      []
-    const crossItems = sections.find((section) => section.id === 'cross')?.items.map((item) => item.id)
-
-    expect(ownerItems).toEqual([
+    expect(ownerNav.items.map((item) => item.id)).toEqual([
       'dashboard',
       'settings',
       'reporting',
@@ -203,18 +187,36 @@ describe('scoped desktop navigation', () => {
       'chat',
       'general',
     ])
-    expect(directorItems).toEqual(ownerItems)
-    expect(managerItems).toEqual(ownerItems)
-    expect(ownerItems).not.toContain('operational-config')
-    expect(crossItems).toEqual(['dashboard', 'settings', 'reporting', 'signals', 'execution'])
+    expect(ownerNav.items.map((item) => item.id)).not.toContain('operational-config')
     expect(
-      sections
-        .find((section) => section.id === 'establishment:est-owner')
-        ?.items.find((item) => item.id === 'settings')?.label,
+      ownerNav.items.find((item) => item.id === 'settings')?.label,
     ).toBe('Paramètres Analytics')
+
+    expect(
+      resolveDesktopScopeNavigation({
+        route: {
+          kind: 'scoped-terrain',
+          scope: { type: 'establishment', establishmentId: 'est-owner' },
+          page: 'operational-config',
+        },
+        bootstrap: data,
+      }).activeItemId,
+    ).toBe('general')
+    expect(
+      resolveDesktopScopeNavigation({
+        route: { kind: 'static', path: '/action-plans' },
+        bootstrap: data,
+      }).activeItemId,
+    ).toBe('general')
+    expect(
+      resolveDesktopScopeNavigation({
+        route: { kind: 'static', path: '/team' },
+        bootstrap: data,
+      }).activeItemId,
+    ).toBe('general')
   })
 
-  it('shows establishment Chat from membership chat_available without a session', () => {
+  it('shows establishment Chat from membership chat_available', () => {
     const enabled = membership({
       role: 'manager',
       establishment_id: 'est-a',
@@ -227,18 +229,145 @@ describe('scoped desktop navigation', () => {
       establishment_name: 'Villa Mareva',
       chat_available: false,
     })
-    const sections = resolveScopedDesktopNavigation({
-      bootstrap: bootstrap([enabled, disabled], null),
+    const data = bootstrap([enabled, disabled], null)
+    const cross = resolveDesktopScopeNavigation({
+      route: { kind: 'scoped-terrain', scope: { type: 'cross' }, page: 'signals' },
+      bootstrap: data,
+    })
+    const enabledNav = resolveDesktopScopeNavigation({
+      route: establishmentRoute('est-a', 'signals'),
+      bootstrap: data,
+    })
+    const disabledNav = resolveDesktopScopeNavigation({
+      route: establishmentRoute('est-b', 'signals'),
+      bootstrap: data,
     })
 
-    const crossItems = sections.find((section) => section.id === 'cross')?.items ?? []
-    const enabledItems =
-      sections.find((section) => section.id === 'establishment:est-a')?.items ?? []
-    const disabledItems =
-      sections.find((section) => section.id === 'establishment:est-b')?.items ?? []
+    expect(cross.items.map((item) => item.id)).not.toContain('chat')
+    expect(enabledNav.items.find((item) => item.id === 'chat')?.href).toBe('/e/est-a/chat')
+    expect(disabledNav.items.map((item) => item.id)).not.toContain('chat')
+  })
 
-    expect(crossItems.map((item) => item.id)).not.toContain('chat')
-    expect(enabledItems.find((item) => item.id === 'chat')?.href).toBe('/e/est-a/chat')
-    expect(disabledItems.map((item) => item.id)).not.toContain('chat')
+  it('uses the active membership for chat, library and team routes', () => {
+    const paris = membership({
+      role: 'manager',
+      establishment_id: 'est-1',
+      establishment_name: 'Spore Paris',
+    })
+    const lyon = membership({
+      role: 'manager',
+      establishment_id: 'est-2',
+      establishment_name: 'Spore Lyon',
+    })
+    const data = bootstrap([paris, lyon], lyon)
+
+    expect(
+      resolveDesktopScopeNavigation({
+        route: { kind: 'chat-conversation-detail', conversationId: 'conversation-1' },
+        bootstrap: data,
+      }).scope,
+    ).toEqual({ type: 'establishment', establishmentId: 'est-2' })
+    expect(
+      resolveDesktopScopeNavigation({
+        route: { kind: 'chat-conversation-detail', conversationId: 'conversation-1' },
+        bootstrap: data,
+      }).activeItemId,
+    ).toBe('chat')
+    expect(
+      resolveDesktopScopeNavigation({
+        route: { kind: 'action-plan-template-detail', actionPlanId: 'plan-1' },
+        bootstrap: data,
+      }).scope,
+    ).toEqual({ type: 'establishment', establishmentId: 'est-2' })
+  })
+
+  it('keeps the hub function, sends a detail to its hub, and falls back to Observations', () => {
+    const paris = membership({
+      role: 'manager',
+      establishment_id: 'est-1',
+      establishment_name: 'Spore Paris',
+    })
+    const lyon = membership({
+      role: 'staff',
+      establishment_id: 'est-2',
+      establishment_name: 'Spore Lyon',
+      chat_available: false,
+    })
+    const data = bootstrap([paris, lyon], paris)
+    const cross: TerrainScope = { type: 'cross' }
+    const lyonScope: TerrainScope = { type: 'establishment', establishmentId: 'est-2' }
+
+    expect(
+      resolveDesktopScopeSwitchHref({
+        route: establishmentRoute('est-1', 'signals'),
+        bootstrap: data,
+        target: cross,
+      }),
+    ).toBe('/cross/signals')
+    expect(
+      resolveDesktopScopeSwitchHref({
+        route: {
+          kind: 'signal-detail',
+          signalId: SIGNAL_ID,
+          scope: { type: 'establishment', establishmentId: 'est-1' },
+        },
+        bootstrap: data,
+        target: cross,
+      }),
+    ).toBe('/cross/signals')
+    expect(
+      resolveDesktopScopeSwitchHref({
+        route: {
+          kind: 'action-plan-execution-detail',
+          executionId: SIGNAL_ID,
+          scope: { type: 'establishment', establishmentId: 'est-1' },
+        },
+        bootstrap: data,
+        target: lyonScope,
+      }),
+    ).toBe('/e/est-2/execution')
+    expect(
+      resolveDesktopScopeSwitchHref({
+        route: establishmentRoute('est-1', 'chat'),
+        bootstrap: data,
+        target: cross,
+      }),
+    ).toBe('/cross/signals')
+    expect(
+      resolveDesktopScopeSwitchHref({
+        route: establishmentRoute('est-1', 'general'),
+        bootstrap: data,
+        target: cross,
+      }),
+    ).toBe('/cross/signals')
+    expect(
+      resolveDesktopScopeSwitchHref({
+        route: establishmentRoute('est-1', 'dashboard'),
+        bootstrap: data,
+        target: lyonScope,
+      }),
+    ).toBe('/e/est-2/signals')
+  })
+
+  it('names the Cross footer without the session establishment', () => {
+    const paris = membership({
+      role: 'owner',
+      establishment_id: 'est-1',
+      establishment_name: 'Spore Paris',
+    })
+    const lyon = membership({
+      role: 'owner',
+      establishment_id: 'est-2',
+      establishment_name: 'Spore Lyon',
+    })
+    const data = bootstrap([paris, lyon], paris)
+    const navigation = resolveDesktopScopeNavigation({
+      route: { kind: 'scoped-terrain', scope: { type: 'cross' }, page: 'execution' },
+      bootstrap: data,
+    })
+
+    expect(resolveDesktopScopeFooterContext({ scope: navigation.scope, bootstrap: data })).toBe(
+      'Cross-établissement',
+    )
   })
 })

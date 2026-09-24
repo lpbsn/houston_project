@@ -10,7 +10,9 @@ import {
 } from '@/features/auth/lib/bootstrap-permission-hints'
 import { TerrainCard } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
+import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { notifySuccess } from '@/lib/success-toast'
+import { useLgViewport } from '@/lib/lg-viewport'
 import { terrain, terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -48,6 +50,7 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
   const { navigate } = useAppRoute()
   const navigateTo = onNavigate ?? navigate
   const { activeMembership, bootstrap, isBootstrapping, isReady } = useAuth()
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   const establishmentId = activeMembership?.establishment_id ?? null
   const membershipId = activeMembership?.id ?? null
   const role = activeMembership?.role ?? null
@@ -164,7 +167,10 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
   return (
     <div
       data-testid="action-plan-hub-frame"
-      className="space-y-4 px-3 pb-24 pt-2 lg:mx-auto lg:max-w-7xl lg:px-6 lg:pt-4 lg:pb-8"
+      className={cn(
+        'space-y-4 px-3 pb-24 pt-2',
+        isDesktopWeb && 'lg:mx-auto lg:max-w-7xl lg:px-6 lg:pt-4 lg:pb-8',
+      )}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -177,7 +183,8 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
           <Button
             type="button"
             className={cn(
-              'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white lg:w-auto lg:gap-2 lg:px-4',
+              'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white',
+              isDesktopWeb && 'lg:w-auto lg:gap-2 lg:px-4',
               terrainBrandAction.bg,
               terrainBrandAction.hover,
               terrainBrandAction.shadow,
@@ -186,7 +193,7 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
             onClick={() => navigateTo('/action-plans/new')}
           >
             <Plus className="h-5 w-5" aria-hidden />
-            <span className="hidden lg:inline" aria-hidden>
+            <span className={cn('hidden', isDesktopWeb && 'lg:inline')} aria-hidden>
               Créer un plan d’action
             </span>
           </Button>
@@ -224,7 +231,13 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
           </p>
         </TerrainCard>
       ) : (
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
+        <div
+          data-testid="action-plan-catalog-grid"
+          className={cn(
+            'grid grid-cols-1 gap-3',
+            isDesktopWeb && 'lg:grid-cols-2 xl:grid-cols-3',
+          )}
+        >
           {filteredItems.map((item) => (
             <ActionPlanCatalogCard
               key={item.id}

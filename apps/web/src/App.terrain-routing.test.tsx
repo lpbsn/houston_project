@@ -589,6 +589,8 @@ describe('App terrain active membership routing', () => {
       expect.stringMatching(/^\/select-establishment/),
       expect.anything(),
     )
+    expect(screen.getByTestId('terrain-establishment-switch-hold')).toBeTruthy()
+    expect(screen.queryByText('signals')).toBeNull()
   })
 
   it('does not switch when the scoped route already matches the session', async () => {

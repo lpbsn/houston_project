@@ -50,6 +50,8 @@ import {
   volumeSegmentLabelVisible,
 } from '@/features/analytics/lib/dashboard-chart-scale'
 import type { DashboardPeriodDays } from '@/features/analytics/lib/dashboard-url-state'
+import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
+import { useLgViewport } from '@/lib/lg-viewport'
 import { cn } from '@/lib/utils'
 
 const VOLUME_LABEL_LINES: Record<string, readonly [string, string]> = {
@@ -226,8 +228,14 @@ export function DashboardExportButton() {
 }
 
 export function DashboardFilterPlaceholders() {
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   return (
-    <div className="grid min-w-0 gap-3 rounded-2xl border border-[#E8E6DF] bg-white p-3 lg:grid-cols-3">
+    <div
+      className={cn(
+        'grid min-w-0 gap-3 rounded-2xl border border-[#E8E6DF] bg-white p-3',
+        isDesktopWeb && 'lg:grid-cols-3',
+      )}
+    >
       {(
         [
           ['Pôles d’activités', 'Tous les pôles'],

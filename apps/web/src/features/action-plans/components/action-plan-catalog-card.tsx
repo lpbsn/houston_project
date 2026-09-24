@@ -2,6 +2,8 @@ import { ChevronRight, Layers2 } from 'lucide-react'
 
 import { HoustonBadge, TerrainCard } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
+import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
+import { useLgViewport } from '@/lib/lg-viewport'
 import { terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -20,6 +22,7 @@ const catalogBadgeClassName =
 
 export function ActionPlanCatalogCard({ item, onOpen, onUse }: ActionPlanCatalogCardProps) {
   const showUse = canShowActionPlanUse(item.permission_hints)
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   const showInvolvedPoles = item.involved_pole_count > 1
   const isInactive = item.catalog_status === 'inactive'
 
@@ -75,7 +78,8 @@ export function ActionPlanCatalogCard({ item, onOpen, onUse }: ActionPlanCatalog
         <Button
           type="button"
           className={cn(
-            'mt-3 h-11 w-full rounded-full text-sm font-semibold text-white lg:h-9 lg:w-auto lg:self-end lg:px-4',
+            'mt-3 h-11 w-full rounded-full text-sm font-semibold text-white',
+            isDesktopWeb && 'lg:h-9 lg:w-auto lg:self-end lg:px-4',
             terrainBrandAction.bg,
             terrainBrandAction.hover,
           )}

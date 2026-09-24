@@ -110,6 +110,7 @@ describe('ActionPlanHubPage', () => {
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
+    vi.unstubAllEnvs()
   })
 
   it('renders the catalog heading and a catalog row', () => {
@@ -159,5 +160,34 @@ describe('ActionPlanHubPage', () => {
 
     expect(screen.getByText('Aucun modèle actif disponible pour votre pôle.')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Créer un plan d’action' })).toBeNull()
+  })
+
+  it('keeps a single catalog column and an iconic create action on wide native', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    })
+
+    render(createElement(ActionPlanHubPage))
+
+    expect(screen.getByTestId('action-plan-catalog-grid').className).not.toContain('lg:grid-cols-2')
+    expect(screen.getByTestId('action-plan-catalog-grid').className).not.toContain('xl:grid-cols-3')
+    const createButton = screen.getByRole('button', { name: 'Créer un plan d’action' })
+    expect(createButton.className).not.toContain('lg:w-auto')
+    expect(createButton.querySelector('span')?.className).not.toContain('lg:inline')
+    expect(screen.getByTestId('action-plan-hub-pole-filters').className).toContain('overflow-x-auto')
+    expect(screen.getByTestId('action-plan-hub-pole-filters').className).not.toContain('lg:flex-wrap')
+    expect(screen.getByRole('button', { name: 'Utiliser ce plan' }).className).not.toContain('lg:h-9')
   })
 })

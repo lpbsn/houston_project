@@ -6,7 +6,9 @@ import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
 import { TerrainFeedback } from '@/components/domain/terrain-feedback'
+import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { notifySuccess } from '@/lib/success-toast'
+import { useLgViewport } from '@/lib/lg-viewport'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -54,6 +56,7 @@ type ActionPlanTemplateDetailPageProps = {
 export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplateDetailPageProps) {
   const { navigate } = useAppRoute()
   const { activeMembership, bootstrap } = useAuth()
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   const establishmentId = activeMembership?.establishment_id ?? null
   const staffUseMode = isStaffActionPlanUsageRole(activeMembership?.role ?? null)
   const staffDisplayName = bootstrap?.user?.username ?? 'Moi'
@@ -256,8 +259,10 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
       >
         <div
           className={cn(
-            'flex flex-col gap-3 px-3 pt-2 lg:gap-4 lg:px-6 lg:pt-4',
-            showStickyFooter ? 'pb-40' : 'pb-4 lg:pb-6',
+            'flex flex-col gap-3 px-3 pt-2',
+            isDesktopWeb && 'lg:gap-4 lg:px-6 lg:pt-4',
+            showStickyFooter ? 'pb-40' : 'pb-4',
+            !showStickyFooter && isDesktopWeb && 'lg:pb-6',
           )}
         >
           {displayedFeedback ? (
@@ -328,7 +333,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
 
         {showStickyFooter ? (
           <ActionPlanTemplateDetailStickyFooter
-            className="lg:px-6"
+            className={isDesktopWeb ? 'lg:px-6' : undefined}
             hints={hints}
             executionPanelOpen={executionPanelOpen}
             canUse={canUse}
