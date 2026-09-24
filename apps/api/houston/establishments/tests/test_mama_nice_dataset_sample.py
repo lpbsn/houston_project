@@ -63,6 +63,8 @@ def test_export_mama_nice_sample_is_readable(tmp_path):
     }
     archetypes = (tmp_path / "00-archetypes.md").read_text(encoding="utf-8")
     assert "Appartenir à un Pattern ne suffit pas" in archetypes
+    assert "plan:anomalie-cloture-caisse" not in archetypes
+    assert "plan:anomalie-caisse" in archetypes
     interesting = (tmp_path / "01-interesting.md").read_text(encoding="utf-8")
     assert "Les départs du 3e mentionnent le bruit du couloir" in interesting
     assert "Bruit en chambre ou circulation" in interesting

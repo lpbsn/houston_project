@@ -1,10 +1,15 @@
+import uuid
 from datetime import datetime, timedelta
 
+import pytest
+
+from houston.chat.models import ChatConversation, ChatMessage
 from houston.establishments.mama_nice_dataset_acceptance import (
     TOTAL_EXECUTION_COUNT,
     authored_calendar_specs,
     runtime_calendar_elapsed_specs,
     runtime_calendar_remaining_specs,
+    validate_mama_nice_dataset,
 )
 from houston.establishments.mama_nice_dataset_constants import (
     FUTURE_BY_MONTH,
@@ -13,6 +18,7 @@ from houston.establishments.mama_nice_dataset_constants import (
     PARIS_TZ,
     SNAPSHOT,
 )
+from houston.testing.factories import build_membership
 
 
 def test_canonical_calendar_specs_are_independent_of_reference_clock():
@@ -56,3 +62,22 @@ def test_later_reference_does_not_change_canonical_180():
     later = SNAPSHOT + timedelta(hours=16)
     assert len(authored_calendar_specs()) == FUTURE_EXECUTION_COUNT
     assert len(runtime_calendar_remaining_specs(reference_at=later)) < FUTURE_EXECUTION_COUNT
+
+
+@pytest.mark.django_db
+def test_seeded_chat_rows_fail_acceptance():
+    membership = build_membership()
+    conversation = ChatConversation.objects.create(
+        establishment=membership.establishment,
+        type=ChatConversation.Type.GROUP,
+        title="Hors corpus",
+        created_by_membership=membership,
+    )
+    ChatMessage.objects.create(
+        conversation=conversation,
+        author_membership=membership,
+        body="hors corpus",
+        client_message_id=uuid.uuid4(),
+    )
+    errors = validate_mama_nice_dataset(establishment=membership.establishment)
+    assert "chat rows were seeded: 1 conversations, 1 messages" in errors
