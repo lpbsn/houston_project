@@ -1183,6 +1183,8 @@ function App() {
           navigate={navigate}
           showChatNav={showChatNav}
           chatHasUnread={chatHasUnread}
+          onSignOut={handleSignOut}
+          isLoggingOut={auth.isLoggingOut}
           topbar={
             <TerrainTopbar
               variant="hub"
@@ -1226,6 +1228,8 @@ function App() {
             navigate={navigate}
             showChatNav={showChatNav}
             chatHasUnread={chatHasUnread}
+            onSignOut={handleSignOut}
+            isLoggingOut={auth.isLoggingOut}
             topbar={
               topbarPlacement === 'mobile-only' && terrainTopbar ? (
                 <div className="lg:hidden">{terrainTopbar}</div>

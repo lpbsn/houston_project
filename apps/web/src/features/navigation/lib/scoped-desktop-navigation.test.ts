@@ -74,7 +74,16 @@ describe('scoped desktop navigation', () => {
     expect(sections[0]?.defaultExpanded).toBe(true)
     expect(sections[1]?.defaultExpanded).toBe(false)
     expect(sections[2]?.defaultExpanded).toBe(false)
-    expect(sections[0]?.items.map((item) => item.id)).toContain('dashboard')
+    expect(sections[0]?.items.map((item) => item.id)).toEqual([
+      'dashboard',
+      'settings',
+      'reporting',
+      'signals',
+      'execution',
+    ])
+    expect(sections[0]?.items.find((item) => item.id === 'settings')?.label).toBe(
+      'Paramètres Analytics',
+    )
     expect(sections[0]?.items.map((item) => item.id)).not.toContain('chat')
     expect(sections[0]?.items.find((item) => item.id === 'signals')?.readOnly).toBe(true)
   })
@@ -145,12 +154,16 @@ describe('scoped desktop navigation', () => {
 
     expect(sections.map((section) => section.id)).toEqual(['establishment:est-1'])
     expect(sections[0]?.defaultExpanded).toBe(true)
-    expect(sections[0]?.items.map((item) => item.id)).not.toContain('dashboard')
-    expect(sections[0]?.items.map((item) => item.id)).toContain('reporting')
-    expect(sections[0]?.items.map((item) => item.id)).not.toContain('operational-config')
+    expect(sections[0]?.items.map((item) => item.id)).toEqual([
+      'reporting',
+      'signals',
+      'execution',
+      'chat',
+      'general',
+    ])
   })
 
-  it('adds operational config for owner and director establishment sections only', () => {
+  it('keeps operational config out of the sidebar for every role', () => {
     const owner = membership({
       role: 'owner',
       establishment_id: 'est-owner',
@@ -181,15 +194,24 @@ describe('scoped desktop navigation', () => {
       []
     const crossItems = sections.find((section) => section.id === 'cross')?.items.map((item) => item.id)
 
-    expect(ownerItems).toContain('operational-config')
-    expect(directorItems).toContain('operational-config')
-    expect(managerItems).not.toContain('operational-config')
-    expect(crossItems).not.toContain('operational-config')
+    expect(ownerItems).toEqual([
+      'dashboard',
+      'settings',
+      'reporting',
+      'signals',
+      'execution',
+      'chat',
+      'general',
+    ])
+    expect(directorItems).toEqual(ownerItems)
+    expect(managerItems).toEqual(ownerItems)
+    expect(ownerItems).not.toContain('operational-config')
+    expect(crossItems).toEqual(['dashboard', 'settings', 'reporting', 'signals', 'execution'])
     expect(
       sections
         .find((section) => section.id === 'establishment:est-owner')
-        ?.items.find((item) => item.id === 'operational-config')?.href,
-    ).toBe('/e/est-owner/operational-config')
+        ?.items.find((item) => item.id === 'settings')?.label,
+    ).toBe('Paramètres Analytics')
   })
 
   it('shows establishment Chat from membership chat_available without a session', () => {

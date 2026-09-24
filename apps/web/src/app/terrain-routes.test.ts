@@ -87,7 +87,7 @@ describe('usesTerrainShell', () => {
       topbarVariant: 'hub',
       pageTitle: 'Configuration opérationnelle',
       showBottomNav: false,
-      desktopActivePath: '/e/11111111-1111-4111-8111-111111111111/operational-config',
+      desktopActivePath: '/e/11111111-1111-4111-8111-111111111111/general',
       mainScroll: 'auto',
     })
   })

@@ -12,7 +12,6 @@ export type ScopedDesktopNavItemId =
   | 'execution'
   | 'chat'
   | 'general'
-  | 'operational-config'
   | 'settings'
 
 export type ScopedDesktopNavItem = {
@@ -38,13 +37,6 @@ function isActiveMembership(membership: Membership): boolean {
 
 function canAccessAnalytics(membership: Membership): boolean {
   return isActiveMembership(membership) && ANALYTICS_ROLES.has(membership.role)
-}
-
-function canManageOperationalConfig(membership: Membership): boolean {
-  return (
-    isActiveMembership(membership) &&
-    (membership.role === 'owner' || membership.role === 'director')
-  )
 }
 
 function uniqueEstablishments(memberships: Membership[]): Membership[] {
@@ -75,6 +67,12 @@ function crossItems(): ScopedDesktopNavItem[] {
       placeholder: true,
     },
     {
+      id: 'settings',
+      label: 'Paramètres Analytics',
+      href: serializeScopedTerrainPath(scope, 'settings'),
+      placeholder: true,
+    },
+    {
       id: 'reporting',
       label: 'Nouvelle observation',
       href: serializeScopedTerrainPath(scope, 'reporting'),
@@ -94,12 +92,6 @@ function crossItems(): ScopedDesktopNavItem[] {
       placeholder: false,
       readOnly: true,
     },
-    {
-      id: 'settings',
-      label: 'Paramètres',
-      href: serializeScopedTerrainPath(scope, 'settings'),
-      placeholder: true,
-    },
   ]
 }
 
@@ -108,18 +100,25 @@ function establishmentItems(
   options: {
     showDashboard: boolean
     showChat: boolean
-    canManageOperationalConfig: boolean
   },
 ): ScopedDesktopNavItem[] {
   const scope: TerrainScope = { type: 'establishment', establishmentId }
   const items: ScopedDesktopNavItem[] = []
   if (options.showDashboard) {
-    items.push({
-      id: 'dashboard',
-      label: 'Dashboard',
-      href: serializeScopedTerrainPath(scope),
-      placeholder: false,
-    })
+    items.push(
+      {
+        id: 'dashboard',
+        label: 'Dashboard',
+        href: serializeScopedTerrainPath(scope),
+        placeholder: false,
+      },
+      {
+        id: 'settings',
+        label: 'Paramètres Analytics',
+        href: serializeScopedTerrainPath(scope, 'settings'),
+        placeholder: true,
+      },
+    )
   }
   items.push(
     {
@@ -155,22 +154,6 @@ function establishmentItems(
     href: serializeScopedTerrainPath(scope, 'general'),
     placeholder: false,
   })
-  if (options.canManageOperationalConfig) {
-    items.push({
-      id: 'operational-config',
-      label: 'Configuration opérationnelle',
-      href: serializeScopedTerrainPath(scope, 'operational-config'),
-      placeholder: false,
-    })
-  }
-  if (options.showDashboard) {
-    items.push({
-      id: 'settings',
-      label: 'Paramètres',
-      href: serializeScopedTerrainPath(scope, 'settings'),
-      placeholder: true,
-    })
-  }
   return items
 }
 
@@ -211,7 +194,6 @@ export function resolveScopedDesktopNavigation(options: {
       items: establishmentItems(membership.establishment_id, {
         showDashboard,
         showChat: membership.chat_available,
-        canManageOperationalConfig: canManageOperationalConfig(membership),
       }),
     })
   }

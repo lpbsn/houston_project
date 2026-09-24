@@ -8,6 +8,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DesktopTerrainSidebar } from '@/components/layout/desktop-terrain-sidebar'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
 
+const { lgViewportState } = vi.hoisted(() => ({
+  lgViewportState: { current: false },
+}))
+
+vi.mock('@/lib/lg-viewport', () => ({
+  useLgViewport: () => lgViewportState.current,
+}))
+
 function membership(overrides: Partial<Membership>): Membership {
   return {
     id: overrides.id ?? `membership-${overrides.role ?? 'staff'}`,
@@ -76,6 +84,8 @@ function renderSidebar(ui: ReactNode) {
 
 afterEach(() => {
   cleanup()
+  lgViewportState.current = false
+  vi.unstubAllEnvs()
 })
 
 describe('DesktopTerrainSidebar', () => {
@@ -212,5 +222,53 @@ describe('DesktopTerrainSidebar', () => {
 
     fireEvent.click(within(sidebar).getByText('Spore Lyon'))
     expect(within(sidebar).getAllByRole('link', { name: 'Chat' })).toHaveLength(1)
+  })
+
+  it('signs out from the footer on desktop web', () => {
+    lgViewportState.current = true
+    const onSignOut = vi.fn()
+    renderSidebar(
+      <DesktopTerrainSidebar
+        activePath="/e/est-1"
+        bootstrap={bootstrap([membership({ role: 'manager' })])}
+        navigate={vi.fn()}
+        onSignOut={onSignOut}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Déconnexion' }))
+    expect(onSignOut).toHaveBeenCalledTimes(1)
+  })
+
+  it('disables footer sign-out while logout is in progress', () => {
+    lgViewportState.current = true
+    renderSidebar(
+      <DesktopTerrainSidebar
+        activePath="/e/est-1"
+        bootstrap={bootstrap([membership({ role: 'manager' })])}
+        isLoggingOut
+        navigate={vi.fn()}
+        onSignOut={vi.fn()}
+      />,
+    )
+
+    expect(
+      (screen.getByRole('button', { name: 'Déconnexion...' }) as HTMLButtonElement).disabled,
+    ).toBe(true)
+  })
+
+  it('hides footer sign-out on native even at a large viewport', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    lgViewportState.current = true
+    renderSidebar(
+      <DesktopTerrainSidebar
+        activePath="/e/est-1"
+        bootstrap={bootstrap([membership({ role: 'manager' })])}
+        navigate={vi.fn()}
+        onSignOut={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByRole('button', { name: /Déconnexion/ })).toBeNull()
   })
 })
