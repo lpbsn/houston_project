@@ -4,6 +4,8 @@ import { ArrowLeft } from 'lucide-react'
 import type { TerrainDetailTitleLayout } from '@/app/terrain-routes'
 import { useTerrainHubTitleSlotValue } from '@/components/layout/terrain-hub-title-slot'
 import { Button } from '@/components/ui/button'
+import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
+import { useLgViewport } from '@/lib/lg-viewport'
 import { terrainBackButtonClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -46,6 +48,11 @@ export function TerrainTopbar({
 }: TerrainTopbarProps) {
   const slotAfterTitle = useTerrainHubTitleSlotValue()
   const titleAddon = afterTitle ?? slotAfterTitle
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const safeAreaClass = cn(
+    'pt-[max(0.75rem,var(--app-safe-top))]',
+    isDesktopWeb && 'pt-0 pb-0',
+  )
 
   if (variant === 'hub') {
     return (
@@ -53,7 +60,8 @@ export function TerrainTopbar({
         className={cn(
           'shrink-0 bg-white',
           showBottomBorder && 'border-b border-[#E8E6DF]',
-          'pt-[max(0.75rem,var(--app-safe-top))] pb-1.5 lg:pt-0 lg:pb-0',
+          safeAreaClass,
+          !isDesktopWeb && 'pb-1.5',
         )}
       >
         <div className="flex min-h-14 items-center justify-between gap-3 px-3 lg:min-h-16 lg:px-6">
@@ -81,7 +89,8 @@ export function TerrainTopbar({
         className={cn(
           'shrink-0 bg-white',
           showBottomBorder && 'border-b border-[#E8E6DF]',
-          'pt-[max(0.75rem,var(--app-safe-top))] pb-3 lg:pt-0 lg:pb-0',
+          safeAreaClass,
+          !isDesktopWeb && 'pb-3',
         )}
       >
         <div className="px-4 lg:px-6">
@@ -114,7 +123,8 @@ export function TerrainTopbar({
       className={cn(
           'shrink-0 bg-white',
           showBottomBorder && 'border-b border-[#E8E6DF]',
-          'pt-[max(0.75rem,var(--app-safe-top))] pb-3 lg:pt-0 lg:pb-0',
+          safeAreaClass,
+          !isDesktopWeb && 'pb-3',
         )}
     >
       <div className="flex items-center justify-between gap-3 px-4 lg:h-16 lg:px-6">

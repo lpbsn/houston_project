@@ -1,5 +1,7 @@
 import { Input } from '@/components/ui/input'
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
+import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
+import { useLgViewport } from '@/lib/lg-viewport'
 import { cn } from '@/lib/utils'
 
 type ActionPlanHubFiltersProps = {
@@ -30,6 +32,7 @@ export function ActionPlanHubFilters({
   onBusinessUnitIdChange,
   onCreatedByMeChange,
 }: ActionPlanHubFiltersProps) {
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   const businessUnitQuery = useBusinessUnitTreeQuery(establishmentId, { staleTime: 60_000 })
   const businessUnits = (businessUnitQuery.data?.business_units ?? []).map((unit) => ({
     id: unit.id,
@@ -45,7 +48,13 @@ export function ActionPlanHubFilters({
         aria-label="Rechercher par titre"
         className="h-9 rounded-full border-[#E8E6DF] bg-[#F5F4F0] shadow-sm"
       />
-      <div className="flex gap-2 overflow-x-auto lg:flex-wrap lg:overflow-visible">
+      <div
+        data-testid="action-plan-hub-pole-filters"
+        className={cn(
+          'flex gap-2 overflow-x-auto',
+          isDesktopWeb && 'lg:flex-wrap lg:overflow-visible',
+        )}
+      >
         <button
           type="button"
           className={cn(filterButtonClass(!businessUnitId), 'shrink-0')}

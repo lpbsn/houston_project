@@ -1,6 +1,7 @@
-import type { PropsWithChildren, ReactNode } from 'react'
+import { useState, type PropsWithChildren, type ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
+import type { AppRoute } from '@/app/app-routes'
 import { BottomMobileNav } from '@/components/layout/bottom-mobile-nav'
 import { DesktopTerrainSidebar } from '@/components/layout/desktop-terrain-sidebar'
 import { TerrainErrorBoundary } from '@/components/layout/terrain-error-boundary'
@@ -10,7 +11,9 @@ import { ObservationProcessingBanner } from '@/features/observations/components/
 import { OperationalReconnectBanner } from '@/features/realtime/components/operational-reconnect-banner'
 import { useOptionalOperationalRealtime } from '@/features/realtime/components/operational-realtime-provider'
 import type { TerrainMainScroll, TerrainNavPath } from '@/app/terrain-routes'
+import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import type { BootstrapResponse } from '@/features/auth/types'
+import { useLgViewport } from '@/lib/lg-viewport'
 import { useNativeKeyboardOpen } from '@/lib/native-keyboard'
 import { terrainPageMotionProps } from '@/lib/terrain-motion'
 import { useNetworkStatus } from '@/lib/network-status'
@@ -22,7 +25,7 @@ type TerrainShellProps = PropsWithChildren<{
   showBottomNav: boolean
   activeNavPath?: TerrainNavPath
   bootstrap?: BootstrapResponse | null
-  desktopActivePath?: string
+  route: AppRoute
   mainScroll?: TerrainMainScroll
   navigate: (pathname: string, options?: { replace?: boolean }) => void
   showChatNav?: boolean
@@ -37,7 +40,7 @@ export function TerrainShell({
   showBottomNav,
   activeNavPath,
   bootstrap,
-  desktopActivePath,
+  route,
   mainScroll = 'auto',
   navigate,
   showChatNav = true,
@@ -52,20 +55,28 @@ export function TerrainShell({
   const isNativeKeyboardOpen = useNativeKeyboardOpen()
   const operationalRealtime = useOptionalOperationalRealtime()
   const operationalConnectionStatus = operationalRealtime?.connectionStatus ?? 'idle'
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   return (
     <div
       data-terrain-shell-root
-      className="fixed inset-x-0 top-0 mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-[#F5F4F0] lg:inset-0 lg:max-w-none lg:flex-row"
+      className={cn(
+        'fixed inset-x-0 top-0 mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-[#F5F4F0]',
+        isDesktopWeb && 'inset-0 max-w-none flex-row',
+      )}
     >
-      <DesktopTerrainSidebar
-        activePath={desktopActivePath}
-        bootstrap={bootstrap}
-        className="lg:flex"
-        isLoggingOut={isLoggingOut}
-        navigate={navigate}
-        onSignOut={onSignOut}
-      />
+      {isDesktopWeb ? (
+        <DesktopTerrainSidebar
+          route={route}
+          bootstrap={bootstrap}
+          collapsed={sidebarCollapsed}
+          onCollapsedChange={setSidebarCollapsed}
+          isLoggingOut={isLoggingOut}
+          navigate={navigate}
+          onSignOut={onSignOut}
+        />
+      ) : null}
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[#F5F4F0]">
         <div className="pointer-events-none absolute inset-x-0 top-0 z-50 flex flex-col gap-2 px-2 pt-[max(0.5rem,var(--app-safe-top))]">
           <ObservationProcessingBanner navigate={navigate} />
@@ -79,7 +90,8 @@ export function TerrainShell({
         <main
           className={cn(
             'min-h-0 min-w-0 flex-1',
-            !topbar && 'pt-[var(--app-safe-top)] lg:pt-0',
+            !topbar && 'pt-[var(--app-safe-top)]',
+            !topbar && isDesktopWeb && 'pt-0',
             mainScroll === 'hidden'
               ? 'overflow-hidden'
               : 'overflow-y-auto overscroll-y-contain',
@@ -101,9 +113,9 @@ export function TerrainShell({
             </AnimatePresence>
           )}
         </main>
-        {showBottomNav && !isNativeKeyboardOpen ? (
+        {showBottomNav && !isNativeKeyboardOpen && !isDesktopWeb ? (
           <BottomMobileNav
-            className="shrink-0 lg:hidden"
+            className="shrink-0"
             activePath={activeNavPath}
             navigate={navigate}
             showChat={showChatNav}

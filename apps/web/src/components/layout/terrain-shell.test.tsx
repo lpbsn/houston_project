@@ -2,13 +2,22 @@
 
 import { createElement, type ComponentProps } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { AppRoute } from '@/app/app-routes'
 import { TerrainShell } from '@/components/layout/terrain-shell'
+import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
 
 const mockNativeKeyboardOpen = vi.hoisted(() => ({ current: false }))
+const { lgViewportState } = vi.hoisted(() => ({
+  lgViewportState: { current: false },
+}))
+
+vi.mock('@/lib/lg-viewport', () => ({
+  useLgViewport: () => lgViewportState.current,
+}))
 
 vi.mock('@/components/layout/network-status-banner', () => ({
   NetworkStatusBanner: () => null,
@@ -115,6 +124,7 @@ function renderTerrainShell(
           topbar: <div data-testid="terrain-topbar">Topbar</div>,
           showBottomNav: false,
           mainScroll,
+          route: { kind: 'static', path: '/general' } satisfies AppRoute,
           navigate: () => undefined,
           ...options,
         },
@@ -127,6 +137,8 @@ function renderTerrainShell(
 afterEach(() => {
   cleanup()
   mockNativeKeyboardOpen.current = false
+  lgViewportState.current = false
+  vi.unstubAllEnvs()
 })
 
 describe('TerrainShell', () => {
@@ -167,9 +179,9 @@ describe('TerrainShell', () => {
   })
 
   it('renders one shared topbar and a desktop sidebar from shared navigation', () => {
+    lgViewportState.current = true
     renderTerrainShell('auto', {
       bootstrap: bootstrap([membership({ role: 'manager' })]),
-      desktopActivePath: '/analytics',
       showChatNav: false,
     })
 
@@ -184,9 +196,9 @@ describe('TerrainShell', () => {
   })
 
   it('keeps Analytics out of the desktop sidebar for Staff-only users', () => {
+    lgViewportState.current = true
     renderTerrainShell('auto', {
       bootstrap: bootstrap([membership({ role: 'staff' })]),
-      desktopActivePath: '/general',
       showChatNav: true,
     })
 
@@ -195,14 +207,52 @@ describe('TerrainShell', () => {
     expect(within(sidebar).queryByRole('link', { name: 'Dashboard' })).toBeNull()
   })
 
-  it('keeps bottom navigation mobile-only when enabled', () => {
-    renderTerrainShell('auto', {
+  it('keeps bottom navigation on mobile web and hides it on desktop web', () => {
+    const { unmount } = renderTerrainShell('auto', {
       activeNavPath: '/signals',
       showBottomNav: true,
     })
 
     const bottomNav = screen.getByRole('navigation', { name: 'Navigation terrain' })
-    expect(bottomNav.className).toContain('lg:hidden')
+    expect(bottomNav.className).not.toContain('lg:hidden')
+    expect(screen.queryByLabelText('Navigation principale')).toBeNull()
+    const shell = screen.getByRole('main').closest('[data-terrain-shell-root]')
+    expect(shell?.className).toContain('max-w-md')
+    expect(shell?.className).not.toContain('max-w-none')
+    unmount()
+
+    lgViewportState.current = true
+    renderTerrainShell('auto', {
+      activeNavPath: '/signals',
+      showBottomNav: true,
+      bootstrap: bootstrap([membership({ role: 'staff' })]),
+    })
+    expect(screen.queryByRole('navigation', { name: 'Navigation terrain' })).toBeNull()
+    expect(screen.getByLabelText('Navigation principale')).toBeTruthy()
+    expect(screen.getByRole('main').closest('[data-terrain-shell-root]')?.className).toContain(
+      'max-w-none',
+    )
+  })
+
+  it('keeps the mobile shell on native at a large viewport', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    lgViewportState.current = true
+    renderTerrainShell('auto', {
+      activeNavPath: '/signals',
+      showBottomNav: true,
+      bootstrap: bootstrap([membership({ role: 'staff' })]),
+      topbar: <TerrainTopbar variant="hub" pageTitle="Observations" />,
+    })
+
+    expect(screen.queryByLabelText('Navigation principale')).toBeNull()
+    expect(screen.getByRole('navigation', { name: 'Navigation terrain' })).toBeTruthy()
+    const shell = screen.getByRole('main').closest('[data-terrain-shell-root]')
+    expect(shell?.className).toContain('max-w-md')
+    expect(shell?.className).toContain('flex-col')
+    expect(shell?.className).not.toContain('flex-row')
+    const topbar = screen.getByRole('banner')
+    expect(topbar.className).toContain('pt-[max(0.75rem,var(--app-safe-top))]')
+    expect(topbar.className).not.toContain('pt-0')
   })
 
   it('hides bottom navigation while the native keyboard is open', () => {
@@ -226,9 +276,9 @@ describe('TerrainShell', () => {
   })
 
   it('scopes toast and processing overlays to the content column beside the sidebar', () => {
+    lgViewportState.current = true
     renderTerrainShell('auto', {
       bootstrap: bootstrap([membership({ role: 'manager' })]),
-      desktopActivePath: '/analytics',
     })
 
     const shell = screen.getByRole('main').closest('[data-terrain-shell-root]')
@@ -244,5 +294,36 @@ describe('TerrainShell', () => {
     expect(shell?.contains(sidebar)).toBe(true)
     expect(contentColumn?.parentElement).toBe(shell)
     expect(sidebar.parentElement).toBe(shell)
+  })
+
+  it('keeps the sidebar collapsed across terrain page changes', () => {
+    lgViewportState.current = true
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    })
+    const tree = (contentKey: string) =>
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(
+          TerrainShell,
+          {
+            contentKey,
+            topbar: createElement('div'),
+            showBottomNav: false,
+            route: { kind: 'static', path: '/general' },
+            navigate: () => undefined,
+            bootstrap: bootstrap([membership({ role: 'manager' })]),
+          },
+          createElement('div', null, contentKey),
+        ),
+      )
+    const view = render(tree('signals'))
+    fireEvent.click(screen.getByRole('button', { name: 'Réduire la navigation' }))
+    view.rerender(tree('execution'))
+    expect(screen.getByLabelText('Navigation principale').getAttribute('data-collapsed')).toBe(
+      'true',
+    )
+    expect(screen.getByText('execution')).toBeTruthy()
   })
 })

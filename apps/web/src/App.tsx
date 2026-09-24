@@ -1173,12 +1173,12 @@ function App() {
   if (route.kind === 'unknown' && auth.hasOperationalAccess) {
     return wrapAuthenticated(wrapTerrainWithOperationalRealtime(
       wrapTerrainWithChatRealtime(
-        <TerrainShell
+          <TerrainShell
           contentKey="not-found"
           showBottomNav={true}
           activeNavPath="/reporting"
           bootstrap={auth.bootstrap}
-          desktopActivePath="/reporting"
+          route={route}
           mainScroll="auto"
           navigate={navigate}
           showChatNav={showChatNav}
@@ -1223,7 +1223,7 @@ function App() {
             showBottomNav={terrainConfig.showBottomNav}
             activeNavPath={terrainConfig.activeNavPath}
             bootstrap={auth.bootstrap}
-            desktopActivePath={terrainConfig.desktopActivePath ?? terrainConfig.activeNavPath}
+            route={route}
             mainScroll={terrainConfig.mainScroll}
             navigate={navigate}
             showChatNav={showChatNav}
@@ -1231,14 +1231,20 @@ function App() {
             onSignOut={handleSignOut}
             isLoggingOut={auth.isLoggingOut}
             topbar={
-              topbarPlacement === 'mobile-only' && terrainTopbar ? (
-                <div className="lg:hidden">{terrainTopbar}</div>
-              ) : (
-                terrainTopbar
-              )
+              topbarPlacement === 'mobile-only' && isDesktopWeb ? null : terrainTopbar
             }
           >
-            <Suspense fallback={<RoutePageLoading />}>{routeContent}</Suspense>
+            {establishmentRouteSessionMismatch ? (
+              <div
+                role="status"
+                data-testid="terrain-establishment-switch-hold"
+                className="flex min-h-[16rem] items-center justify-center px-4 text-sm text-muted-foreground"
+              >
+                Changement d’établissement…
+              </div>
+            ) : (
+              <Suspense fallback={<RoutePageLoading />}>{routeContent}</Suspense>
+            )}
           </TerrainShell>,
         ),
       ),

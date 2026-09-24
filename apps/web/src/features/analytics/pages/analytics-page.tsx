@@ -33,8 +33,10 @@ import {
   useDashboardPeriodDays,
   type DashboardPeriodDays,
 } from '@/features/analytics/lib/dashboard-url-state'
+import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { canShowAnalyticsNavigation } from '@/features/navigation/lib/shared-navigation'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { useLgViewport } from '@/lib/lg-viewport'
 import { cn } from '@/lib/utils'
 
 type AnalyticsPageProps = {
@@ -67,6 +69,7 @@ function isEstablishmentAuthorized(
 export function AnalyticsPage({ scope = { type: 'session' } }: AnalyticsPageProps) {
   const { navigate } = useAppRoute()
   const auth = useAuth()
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   const periodDays = useDashboardPeriodDays()
   const canRead = canShowAnalyticsNavigation(auth.bootstrap)
   const sessionEstablishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
@@ -125,15 +128,30 @@ export function AnalyticsPage({ scope = { type: 'session' } }: AnalyticsPageProp
 
   return (
     <div className="mx-auto flex w-full min-w-0 max-w-[96rem] flex-col gap-4 px-4 py-5 pb-28 lg:gap-5 lg:px-8 lg:py-6 lg:pb-12 xl:px-10">
-      <header className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <header
+        className={cn(
+          'flex min-w-0 flex-col gap-4',
+          isDesktopWeb && 'lg:flex-row lg:items-start lg:justify-between',
+        )}
+      >
         <div className="min-w-0">
           <h1 className="text-3xl font-bold tracking-tight text-[#1a1a1a]">Dashboard</h1>
           <p className="mt-1 text-sm text-[#7D7B75]">
             {establishmentName || 'Établissement'} · {periodDays} j
           </p>
         </div>
-        <div className="flex w-full min-w-0 flex-col gap-1.5 lg:w-auto lg:items-end">
-          <div className="flex w-full min-w-0 flex-wrap items-center gap-2 lg:w-auto lg:justify-end">
+        <div
+          className={cn(
+            'flex w-full min-w-0 flex-col gap-1.5',
+            isDesktopWeb && 'lg:w-auto lg:items-end',
+          )}
+        >
+          <div
+            className={cn(
+              'flex w-full min-w-0 flex-wrap items-center gap-2',
+              isDesktopWeb && 'lg:w-auto lg:justify-end',
+            )}
+          >
             <div className="flex min-w-0 flex-wrap gap-1 rounded-lg bg-white p-1 ring-1 ring-[#E8E6DF]">
               {DASHBOARD_PERIOD_DAYS.map((days) => (
                 <button
