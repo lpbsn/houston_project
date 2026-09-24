@@ -1387,6 +1387,10 @@ def _replay_executions(
                 writer=oneshot_writer,
                 target_exists=lambda object_id: ActionPlanExecution.objects.filter(id=object_id).exists(),
             )
+        _promote_started_public_oneshots(
+            establishment=establishment,
+            oneshots=corpus.oneshots,
+        )
         _close_past_schedule_executions(
             establishment=establishment,
             actor=director,
@@ -1578,6 +1582,27 @@ def _overlay_rooftop_closure_occurrence(*, establishment, schedules) -> None:
     for index, task in enumerate(tasks):
         task.task = overlay[index] if index < len(overlay) else overlay[-1]
         task.save(update_fields=["task", "updated_at"])
+
+
+def _promote_started_public_oneshots(*, establishment, oneshots) -> None:
+    now = operational_now()
+    for oneshot in oneshots:
+        if not oneshot.public or oneshot.start_at > now:
+            continue
+        record = MamaNiceSeedRecord.objects.filter(
+            establishment=establishment,
+            object_type=OBJECT_TYPE_EXECUTION,
+            seed_key=oneshot.seed_key,
+        ).first()
+        if record is None:
+            raise MamaNiceDatasetError(
+                [f"{oneshot.seed_key}: public oneshot seed record missing before promotion"]
+            )
+        with freeze_django_now(now):
+            promote_due_scheduled_executions(
+                establishment_id=establishment.id,
+                execution_id=record.object_id,
+            )
 
 
 def _close_past_schedule_executions(*, establishment, actor) -> None:

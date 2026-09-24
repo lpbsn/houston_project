@@ -288,9 +288,9 @@ def validate_mama_nice_dataset(*, establishment: Establishment) -> list[str]:
     ]
     if scheduled_or_progress_overdue:
         errors.append("scheduled or in-progress executions must not be overdue")
-    on_time_active = historical.filter(status__in={"in_progress", "pending_validation"}).exclude(
-        id__in=[item.id for item in overdue]
-    )
+    on_time_active = authored_historical.filter(
+        status__in={"in_progress", "pending_validation"}
+    ).exclude(id__in=[item.id for item in overdue])
     if on_time_active.filter(status="in_progress").count() != 10:
         errors.append("in-progress on-time historical count diverges")
     if on_time_active.filter(status="pending_validation").count() != 10:
