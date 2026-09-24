@@ -22,6 +22,7 @@ type SignalFeedClassificationFilterSheetProps = {
   appliedFilters: SignalFeedFilters
   onClose: () => void
   onApply: (filters: SignalFeedFilters) => void
+  surface?: 'sheet' | 'panel'
 }
 
 export function SignalFeedClassificationFilterSheet({
@@ -29,6 +30,7 @@ export function SignalFeedClassificationFilterSheet({
   appliedFilters,
   onClose,
   onApply,
+  surface = 'sheet',
 }: SignalFeedClassificationFilterSheetProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [draftSelection, setDraftSelection] = useState<ClassificationKeySelection>(() => ({
@@ -122,22 +124,28 @@ export function SignalFeedClassificationFilterSheet({
 
   const panelDisabled = treeQuery.isLoading || treeQuery.isError
 
+  const footer = (
+    <SignalFeedFilterPanelFooter
+      applyDisabled={panelDisabled}
+      selectAllDisabled={panelDisabled || filteredBusinessUnits.length === 0}
+      onSelectAll={handleSelectAll}
+      onClearAll={handleClearAll}
+      onCancel={onClose}
+      onApply={handleApply}
+    />
+  )
+
+  if (surface === 'panel') {
+    return (
+      <div className="flex max-h-[min(32rem,70vh)] w-[22rem] max-w-[calc(100vw-2rem)] flex-col">
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">{body}</div>
+        <div className="shrink-0 border-t border-[#E8E6DF] p-3">{footer}</div>
+      </div>
+    )
+  }
+
   return (
-    <SignalFeedBottomSheet
-      title="Pôle / Sujet"
-      open
-      onClose={onClose}
-      footer={
-        <SignalFeedFilterPanelFooter
-          applyDisabled={panelDisabled}
-          selectAllDisabled={panelDisabled || filteredBusinessUnits.length === 0}
-          onSelectAll={handleSelectAll}
-          onClearAll={handleClearAll}
-          onCancel={onClose}
-          onApply={handleApply}
-        />
-      }
-    >
+    <SignalFeedBottomSheet title="Pôle / Sujet" open onClose={onClose} footer={footer}>
       {body}
     </SignalFeedBottomSheet>
   )

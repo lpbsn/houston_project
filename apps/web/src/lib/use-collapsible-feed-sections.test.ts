@@ -70,6 +70,25 @@ describe('useCollapsibleFeedSections', () => {
     expect(result.current.isExpanded('in_progress')).toBe(true)
   })
 
+  it('applies a saved expansion once, then resets when the token changes', () => {
+    const { result, rerender } = renderHook(
+      ({ resetToken }: { resetToken: string }) =>
+        useCollapsibleFeedSections(['open', 'resolved'], {
+          defaultCollapsedKeys: ['resolved'],
+          resetToken,
+          initialExpandedByKey: { resolved: true },
+        }),
+      { initialProps: { resetToken: 'personal:{}' } },
+    )
+
+    expect(result.current.isExpanded('resolved')).toBe(true)
+    expect(result.current.expandedByKey.resolved).toBe(true)
+
+    rerender({ resetToken: 'general:{}' })
+
+    expect(result.current.isExpanded('resolved')).toBe(false)
+  })
+
   it('adds new section keys with defaults without resetting existing toggles', () => {
     const { result, rerender } = renderHook(
       ({ sectionKeys }: { sectionKeys: string[] }) =>

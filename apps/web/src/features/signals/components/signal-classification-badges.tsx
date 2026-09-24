@@ -12,16 +12,22 @@ type SignalClassificationBadgesProps = {
   className?: string
   /** Badges rendered on the same row as the primary chip (above `Concerné`). */
   leading?: ReactNode
+  /** Omits the stacked affected line when the caller places that pole elsewhere. */
+  hideAffectedLine?: boolean
+  /** Desktop feed shows the full pole and subject, wrapping instead of truncating. */
+  wrapLabel?: boolean
 }
 
 export function SignalClassificationBadges({
   signal,
   className,
   leading,
+  hideAffectedLine = false,
+  wrapLabel = false,
 }: SignalClassificationBadgesProps) {
   const classification = formatSignalClassification(signal)
   const hasPrimary = Boolean(classification.primaryLine)
-  const hasAffected = Boolean(classification.affectedLine)
+  const hasAffected = !hideAffectedLine && Boolean(classification.affectedLine)
   const hasLeading = Boolean(leading)
 
   if (!hasPrimary && !hasAffected && !hasLeading) {
@@ -29,12 +35,21 @@ export function SignalClassificationBadges({
   }
 
   return (
-    <span className={cn('inline-flex min-w-0 flex-col gap-0.5', className)}>
+    <span className={cn('inline-flex min-w-0 max-w-full flex-col gap-0.5', className)}>
       {hasLeading || hasPrimary ? (
-        <span className="inline-flex flex-wrap items-center gap-1">
+        <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
           {leading}
           {hasPrimary ? (
-            <HoustonBadge variant="gray">{classification.primaryLine}</HoustonBadge>
+            <HoustonBadge
+              variant="gray"
+              className={
+                wrapLabel
+                  ? 'block min-w-0 max-w-full whitespace-normal break-words text-left leading-snug'
+                  : undefined
+              }
+            >
+              {classification.primaryLine}
+            </HoustonBadge>
           ) : null}
         </span>
       ) : null}

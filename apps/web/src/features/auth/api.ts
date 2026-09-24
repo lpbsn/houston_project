@@ -4,6 +4,7 @@ import { apiClient, withAuthRetry } from '@/api/client'
 import { clearAllPlanningSubmissionIntents } from '@/features/action-plans/lib/action-plan-planning-submission-intent'
 import { clearChatOutbox } from '@/features/chat/lib/chat-outbox'
 import { clearObservationComposeDrafts } from '@/features/observations/lib/observation-compose-draft-store'
+import { clearSignalFeedReadingMemory } from '@/features/signals/lib/signal-feed-reading-memory'
 import { clearObservationProcessingTrackerOnLogout } from '@/features/observations/lib/observation-processing-tracker-store'
 import { runNativePushBeforeLogout } from '@/lib/native-push-session'
 import { clearPendingNativeDeepLink } from '@/lib/native-deep-link-session'
@@ -249,6 +250,7 @@ function clearVolatileAuthState(options?: { bumpInvalidation?: boolean }) {
   clearAccessToken()
   clearAllPlanningSubmissionIntents()
   clearObservationProcessingTrackerOnLogout()
+  clearSignalFeedReadingMemory()
   void clearChatOutbox()
   clearSuccessToasts()
   clearAuthenticatedQueryCache(queryClient)

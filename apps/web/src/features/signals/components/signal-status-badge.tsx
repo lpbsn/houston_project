@@ -58,7 +58,7 @@ export function SignalStatusBadge({
     return (
       <HoustonBadge
         variant={badgeVariant}
-        className={cn(DETAIL_BADGE_CLASS, INTERESTING_DETAIL_BADGE_CLASS)}
+        className={cn(DETAIL_BADGE_CLASS, INTERESTING_DETAIL_BADGE_CLASS, className)}
       >
         {label}
       </HoustonBadge>
@@ -66,7 +66,7 @@ export function SignalStatusBadge({
   }
 
   return (
-    <HoustonBadge variant={badgeVariant} className={DETAIL_BADGE_CLASS}>
+    <HoustonBadge variant={badgeVariant} className={cn(DETAIL_BADGE_CLASS, className)}>
       {label}
     </HoustonBadge>
   )

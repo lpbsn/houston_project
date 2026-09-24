@@ -83,6 +83,16 @@ function renderSidebar(ui: ReactNode) {
   return render(createElement(QueryClientProvider, { client }, ui))
 }
 
+function destinationOrder(destinations: HTMLElement): string[] {
+  return [...destinations.querySelectorAll('a, button')].map((node) => {
+    const label = node.getAttribute('aria-label')
+    if (label) {
+      return label
+    }
+    return node.textContent?.replace(/\s+/g, ' ').trim() ?? ''
+  })
+}
+
 function sidebarProps(
   overrides: Partial<ComponentProps<typeof DesktopTerrainSidebar>> = {},
 ): ComponentProps<typeof DesktopTerrainSidebar> {
@@ -171,6 +181,79 @@ describe('DesktopTerrainSidebar', () => {
     expect(navigate).toHaveBeenCalledWith('/cross/signals')
   })
 
+  it('keeps one destination list and an inert Spore Brain for an establishment owner', () => {
+    const navigate = vi.fn()
+    renderSidebar(
+      <DesktopTerrainSidebar
+        {...sidebarProps({
+          route: {
+            kind: 'scoped-terrain',
+            scope: { type: 'establishment', establishmentId: 'est-1' },
+            page: 'signals',
+          },
+          bootstrap: bootstrap([membership({ role: 'owner' })]),
+          navigate,
+        })}
+      />,
+    )
+
+    const destinations = screen.getByRole('navigation', { name: 'Destinations' })
+    expect(within(destinations).queryByRole('heading')).toBeNull()
+    expect(destinationOrder(destinations)).toEqual([
+      'Dashboard',
+      'Spore Brain - Bientôt disponible',
+      'Nouvelle observation',
+      'Observations',
+      'Exécution',
+      'Chat',
+      'Général',
+      'Paramètres Analytics',
+    ])
+    const brain = within(destinations).getByRole('button', {
+      name: 'Spore Brain - Bientôt disponible',
+    })
+    expect(brain).toHaveProperty('disabled', true)
+    expect(within(destinations).queryByRole('link', { name: /Spore Brain/ })).toBeNull()
+    fireEvent.click(brain)
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it('hides Spore Brain for managers, staff, and Cross', () => {
+    const manager = membership({
+      role: 'manager',
+      establishment_id: 'est-1',
+      establishment_name: 'Spore Paris',
+    })
+    const lyon = membership({
+      role: 'manager',
+      establishment_id: 'est-2',
+      establishment_name: 'Spore Lyon',
+    })
+    const { unmount } = renderSidebar(
+      <DesktopTerrainSidebar
+        {...sidebarProps({
+          bootstrap: bootstrap([manager]),
+        })}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: /Spore Brain/ })).toBeNull()
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Paramètres Analytics' })).toBeTruthy()
+    unmount()
+
+    renderSidebar(
+      <DesktopTerrainSidebar
+        {...sidebarProps({
+          route: crossSignalsRoute,
+          bootstrap: bootstrap([manager, lyon]),
+        })}
+      />,
+    )
+    const destinations = screen.getByRole('navigation', { name: 'Destinations' })
+    expect(within(destinations).queryByRole('button', { name: /Spore Brain/ })).toBeNull()
+    expect(destinationOrder(destinations)).toEqual(['Observations', 'Exécution'])
+  })
+
   it('hides Cross for Staff-only users', () => {
     renderSidebar(
       <DesktopTerrainSidebar
@@ -188,6 +271,7 @@ describe('DesktopTerrainSidebar', () => {
     const sidebar = screen.getByLabelText('Navigation principale')
     expect(within(sidebar).queryByText('Cross-établissement')).toBeNull()
     expect(within(sidebar).queryByRole('link', { name: 'Dashboard' })).toBeNull()
+    expect(within(sidebar).queryByRole('button', { name: /Spore Brain/ })).toBeNull()
     expect(within(sidebar).getByRole('link', { name: 'Observations' })).toBeTruthy()
   })
 
@@ -327,7 +411,7 @@ describe('DesktopTerrainSidebar', () => {
       <DesktopTerrainSidebar
         {...sidebarProps({
           collapsed: true,
-          bootstrap: bootstrap([membership({ role: 'manager' })]),
+          bootstrap: bootstrap([membership({ role: 'owner' })]),
           onSignOut: vi.fn(),
         })}
       />,
@@ -336,6 +420,9 @@ describe('DesktopTerrainSidebar', () => {
     const sidebar = screen.getByLabelText('Navigation principale')
     expect(sidebar.getAttribute('data-collapsed')).toBe('true')
     expect(within(sidebar).getByRole('link', { name: 'Observations' })).toBeTruthy()
+    expect(
+      within(sidebar).getByRole('button', { name: 'Spore Brain - Bientôt disponible' }),
+    ).toBeTruthy()
     expect(within(sidebar).getByRole('button', { name: 'Scope : Spore Paris' })).toBeTruthy()
     expect(within(sidebar).getByLabelText('Marie Renaud')).toBeTruthy()
     expect(within(sidebar).getByRole('button', { name: 'Déconnexion' })).toBeTruthy()

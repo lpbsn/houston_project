@@ -54,6 +54,7 @@ type CommentListProps =
       mode: 'signal'
       comments: CommentItem[]
       establishmentId?: string
+      documentFlow?: boolean
       onReportComment?: (contentId: string, membershipId: string) => void
     } & HighlightableListProps)
   | ({
@@ -134,10 +135,12 @@ function SignalCommentItem({
 function SignalCommentList({
   comments,
   highlightCommentId = null,
+  documentFlow = false,
   onReportComment,
 }: {
   comments: CommentItem[]
   highlightCommentId?: string | null
+  documentFlow?: boolean
   onReportComment?: (contentId: string, membershipId: string) => void
 }) {
   useScrollToHighlightedComment(highlightCommentId, comments)
@@ -145,7 +148,10 @@ function SignalCommentList({
   if (comments.length === 0) {
     return (
       <TerrainEmptyState
-        className="flex flex-1 flex-col items-center justify-center border-0 bg-transparent p-6"
+        className={cn(
+          'flex flex-col items-center justify-center border-0 bg-transparent p-6',
+          documentFlow ? 'py-10' : 'flex-1',
+        )}
         icon={<MessageCircle className="h-10 w-10" strokeWidth={1.5} />}
         title="Aucun commentaire pour l'instant."
         description="Soyez le premier à laisser un commentaire sur cette observation."
@@ -155,7 +161,10 @@ function SignalCommentList({
 
   return (
     <ul
-      className="mt-3 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto"
+      className={cn(
+        'mt-3 flex flex-col gap-4',
+        documentFlow ? '' : 'min-h-0 flex-1 gap-3 overflow-y-auto',
+      )}
       aria-label="Liste des commentaires"
     >
       {comments.map((comment) => (
@@ -249,6 +258,7 @@ export function CommentList(props: CommentListProps) {
       <SignalCommentList
         comments={props.comments}
         highlightCommentId={props.highlightCommentId}
+        documentFlow={props.documentFlow}
         onReportComment={props.onReportComment}
       />
     )
