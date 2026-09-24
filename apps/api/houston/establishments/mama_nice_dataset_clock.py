@@ -51,27 +51,13 @@ def establishment_timezone(establishment) -> datetime.tzinfo:
     return ZoneInfo(name)
 
 
-def first_frozen_public_event_start() -> datetime:
-    from houston.establishments.mama_nice_dataset_compiler import _expand_dated_oneshots
-    from houston.establishments.mama_nice_dataset_manifest import load_mama_nice_manifest
-
-    public = [
-        item
-        for item in _expand_dated_oneshots(load_mama_nice_manifest())
-        if item.public and item.start_at > SNAPSHOT
-    ]
-    if not public:
-        raise MamaNiceDatasetError(["no frozen public event remains after the snapshot"])
-    return min(item.start_at for item in public)
-
-
 def assert_reference_compatible(reference_at: datetime) -> None:
     instant = reference_at.astimezone(PARIS_TZ)
     if instant < SNAPSHOT:
         raise MamaNiceDatasetError(
             ["reference_at is before the authored snapshot; refusing to move historical data"]
         )
-    limit = first_frozen_public_event_start()
+    limit = datetime(2026, 9, 26, 0, 0, tzinfo=PARIS_TZ)
     if instant >= limit:
         raise MamaNiceDatasetError(
             [
