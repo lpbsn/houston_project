@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { SignalFeedQuickActionResult } from '../hooks/use-signal-feed-quick-actions'
 import type { SignalFeedItem } from '../types'
 
 import { SignalFeedDesktopRow } from './signal-feed-desktop-row'
@@ -136,5 +137,130 @@ describe('SignalFeedDesktopRow', () => {
       badge.compareDocumentPosition(affected) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
     expect(titleButton?.contains(aggregation)).toBe(false)
+  })
+
+  it('asks to close when onRunAction returns close', () => {
+    const onActionsOpenChange = vi.fn()
+    const onRunAction = vi.fn(() => 'close' as const)
+    const item = buildFeedItem({
+      permission_hints: {
+        ...buildFeedItem().permission_hints,
+        can_pin: true,
+      },
+    })
+
+    render(
+      <SignalFeedDesktopRow
+        item={item}
+        onSelect={() => undefined}
+        actionsOpen
+        onActionsOpenChange={onActionsOpenChange}
+        onRunAction={onRunAction}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Épingler' }))
+
+    expect(onRunAction).toHaveBeenCalledWith(item, 'pin')
+    expect(onActionsOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  it('does not close when onRunAction returns abort', () => {
+    const onActionsOpenChange = vi.fn()
+    const onRunAction = vi.fn(() => 'abort' as const)
+    const item = buildFeedItem({
+      permission_hints: {
+        ...buildFeedItem().permission_hints,
+        can_cancel: true,
+      },
+    })
+
+    render(
+      <SignalFeedDesktopRow
+        item={item}
+        onSelect={() => undefined}
+        actionsOpen
+        onActionsOpenChange={onActionsOpenChange}
+        onRunAction={onRunAction}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Annuler cette observation' }))
+
+    expect(onRunAction).toHaveBeenCalledWith(item, 'cancel')
+    expect(onActionsOpenChange).not.toHaveBeenCalled()
+  })
+
+  it('does not close when onRunAction returns stay-open', () => {
+    const onActionsOpenChange = vi.fn()
+    const onRunAction = vi.fn(() => 'stay-open' as const)
+    const item = buildFeedItem({
+      permission_hints: {
+        ...buildFeedItem().permission_hints,
+        can_resolve: true,
+      },
+    })
+
+    render(
+      <SignalFeedDesktopRow
+        item={item}
+        onSelect={() => undefined}
+        actionsOpen
+        onActionsOpenChange={onActionsOpenChange}
+        onRunAction={onRunAction}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Marquer comme résolue' }))
+
+    expect(onRunAction).toHaveBeenCalledWith(item, 'resolve')
+    expect(onActionsOpenChange).not.toHaveBeenCalled()
+  })
+
+  it('opens the menu from the trigger without selecting the row', () => {
+    const onSelect = vi.fn()
+    const onActionsOpenChange = vi.fn()
+    const onRunAction = vi.fn((): SignalFeedQuickActionResult => 'stay-open')
+    const item = buildFeedItem({
+      permission_hints: {
+        ...buildFeedItem().permission_hints,
+        can_pin: true,
+      },
+    })
+
+    render(
+      <SignalFeedDesktopRow
+        item={item}
+        onSelect={onSelect}
+        onActionsOpenChange={onActionsOpenChange}
+        onRunAction={onRunAction}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: "Actions de l'observation" }))
+
+    expect(onSelect).not.toHaveBeenCalled()
+    expect(onActionsOpenChange).toHaveBeenCalledWith(true)
+  })
+
+  it('shows the action error in the open menu', () => {
+    render(
+      <SignalFeedDesktopRow
+        item={buildFeedItem({
+          permission_hints: {
+            ...buildFeedItem().permission_hints,
+            can_resolve: true,
+          },
+        })}
+        onSelect={() => undefined}
+        actionsOpen
+        actionError="Impossible de résoudre cette observation."
+        onRunAction={vi.fn((): SignalFeedQuickActionResult => 'stay-open')}
+      />,
+    )
+
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Impossible de résoudre cette observation.',
+    )
   })
 })

@@ -28,6 +28,8 @@ type SignalFeedDesktopRowProps = {
   item: SignalFeedItem
   onSelect: (signalId: string) => void
   onRunAction?: (item: SignalFeedItem, actionId: SignalFeedCardActionId) => SignalFeedQuickActionResult
+  actionsOpen?: boolean
+  onActionsOpenChange?: (open: boolean) => void
   showEstablishment?: boolean
   pinned?: boolean
   actionsPending?: boolean
@@ -46,6 +48,8 @@ export function SignalFeedDesktopRow({
   item,
   onSelect,
   onRunAction,
+  actionsOpen = false,
+  onActionsOpenChange,
   showEstablishment = false,
   pinned = false,
   actionsPending = false,
@@ -81,7 +85,7 @@ export function SignalFeedDesktopRow({
           </h3>
         </button>
         {showActions ? (
-          <Popover.Root>
+          <Popover.Root open={actionsOpen} onOpenChange={onActionsOpenChange}>
             <Popover.Trigger
               type="button"
               aria-label="Actions de l'observation"
@@ -111,7 +115,10 @@ export function SignalFeedDesktopRow({
                       disabled={actionsPending}
                       onClick={(event) => {
                         stopRowActivation(event)
-                        onRunAction?.(item, option.id)
+                        const result = onRunAction?.(item, option.id)
+                        if (result === 'close') {
+                          onActionsOpenChange?.(false)
+                        }
                       }}
                     >
                       {option.label}

@@ -163,7 +163,27 @@ export function SignalFeedPage({
             onSelect={onOpenSignal}
             showEstablishment={isCross}
             actionsPending={quickActions.isPending}
-            actionError={quickActions.actionError}
+            actionsOpen={
+              !isCross &&
+              quickActions.actionsOpen &&
+              quickActions.activeItem?.id === item.id
+            }
+            actionError={
+              !isCross && quickActions.activeItem?.id === item.id
+                ? quickActions.actionError
+                : null
+            }
+            onActionsOpenChange={
+              isCross
+                ? undefined
+                : (open) => {
+                    if (open) {
+                      quickActions.openActions(item)
+                      return
+                    }
+                    quickActions.closeActions()
+                  }
+            }
             onRunAction={
               isCross
                 ? undefined
