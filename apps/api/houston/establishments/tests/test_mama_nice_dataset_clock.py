@@ -13,7 +13,6 @@ from houston.action_plans.constants import (
 from houston.establishments.mama_nice_dataset_clock import (
     REFERENCE_SEED_KEY,
     assert_reference_compatible,
-    first_frozen_public_event_start,
     in_progress_window,
     load_persisted_reference_at,
     non_terminal_runtime_errors,
@@ -22,7 +21,11 @@ from houston.establishments.mama_nice_dataset_clock import (
     resolve_seed_reference_at,
     use_reference_at,
 )
-from houston.establishments.mama_nice_dataset_constants import OBJECT_TYPE_CLOCK, SNAPSHOT
+from houston.establishments.mama_nice_dataset_constants import (
+    OBJECT_TYPE_CLOCK,
+    PARIS_TZ,
+    SNAPSHOT,
+)
 from houston.establishments.mama_nice_dataset_exceptions import MamaNiceDatasetError
 from houston.establishments.models import MamaNiceSeedRecord
 from houston.testing.factories import create_establishment
@@ -53,13 +56,24 @@ def test_injected_clock_windows_never_use_reference_as_end():
 
 
 def test_reference_outside_public_event_window_fails_without_moving_events():
-    limit = first_frozen_public_event_start()
-    assert limit == datetime(2026, 9, 24, 9, 0, tzinfo=SNAPSHOT.tzinfo)
+    from houston.establishments.mama_nice_dataset_compiler import compile_mama_nice_dataset
+
+    limit = datetime(2026, 9, 24, 9, 0, tzinfo=PARIS_TZ)
+    accepted = datetime(2026, 9, 23, 15, 0, tzinfo=PARIS_TZ)
+    tim = next(
+        item
+        for item in compile_mama_nice_dataset().oneshots
+        if item.seed_key == "oneshot:public:tim-lienderss"
+    )
+    assert limit == tim.start_at
     assert_reference_compatible(SNAPSHOT)
+    assert_reference_compatible(accepted)
     with pytest.raises(MamaNiceDatasetError, match="before the authored snapshot"):
         assert_reference_compatible(SNAPSHOT - timedelta(minutes=1))
     with pytest.raises(MamaNiceDatasetError, match="frozen public-event window"):
         assert_reference_compatible(limit)
+    with pytest.raises(MamaNiceDatasetError, match="frozen public-event window"):
+        assert_reference_compatible(datetime(2026, 9, 25, 12, 0, tzinfo=PARIS_TZ))
 
 
 @pytest.mark.django_db
