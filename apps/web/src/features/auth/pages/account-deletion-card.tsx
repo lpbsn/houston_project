@@ -1,7 +1,6 @@
 import { useState } from 'react'
 
 import { AuthApiError, deleteAccount, fetchAccountDeletionPreview } from '@/features/auth/api'
-import { TerrainCard } from '@/components/ui/terrain'
 import { cn } from '@/lib/utils'
 
 const PUBLIC_DELETION_URL = 'https://spore-os.com/supprimer-compte/'
@@ -104,10 +103,8 @@ export function AccountDeletionCard({ disabled = false, onDeleted }: AccountDele
     !previewReloadFailed &&
     (!preview.requires_organization_closure || closeOrganizations)
 
-  return (
-    <TerrainCard padding="sm" className="space-y-3">
-      {open ? (
-        <div className="space-y-3">
+  return open ? (
+        <div className="space-y-3 p-4">
           <p className="text-sm font-medium text-[#1a1a1a]">Supprimer mon compte</p>
           <p className="text-sm text-[#5c5a54]">
             Cette action retire votre identifiant et le contenu que vous avez soumis. Les
@@ -197,21 +194,19 @@ export function AccountDeletionCard({ disabled = false, onDeleted }: AccountDele
             </button>
           </div>
         </div>
-      ) : (
-        <button
-          type="button"
-          className={cn(
-            'flex min-h-11 w-full items-center justify-center text-sm font-medium text-[#E24B4A]',
-            disabled && 'opacity-60',
-          )}
-          disabled={disabled}
-          onClick={() => {
-            void openForm()
-          }}
-        >
-          Supprimer mon compte
-        </button>
+  ) : (
+    <button
+      type="button"
+      className={cn(
+        'flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-[#E24B4A]',
+        disabled && 'opacity-60',
       )}
-    </TerrainCard>
+      disabled={disabled}
+      onClick={() => {
+        void openForm()
+      }}
+    >
+      Supprimer mon compte
+    </button>
   )
 }

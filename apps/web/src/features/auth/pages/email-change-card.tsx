@@ -1,7 +1,6 @@
 import { useState } from 'react'
 
 import { AuthApiError, fetchBootstrap, requestEmailChange } from '@/features/auth/api'
-import { TerrainCard } from '@/components/ui/terrain'
 import { cn } from '@/lib/utils'
 
 type EmailChangeCardProps = {
@@ -58,10 +57,8 @@ export function EmailChangeCard({
     }
   }
 
-  return (
-    <TerrainCard padding="sm" className="space-y-3">
-      {open ? (
-        <div className="space-y-3">
+  return open ? (
+        <div className="space-y-3 p-4">
           <p className="text-sm font-medium text-[#1a1a1a]">Changer d’e-mail</p>
           <p className="text-sm text-[#5c5a54]">
             Un lien de confirmation sera envoyé à la nouvelle adresse. L’e-mail de connexion ne
@@ -114,29 +111,27 @@ export function EmailChangeCard({
             </button>
           </div>
         </div>
-      ) : (
-        <div className="space-y-2">
-          {displayedPending ? (
-            <p className="text-sm text-[#5c5a54]">
-              Confirmation en attente pour {displayedPending}.
-            </p>
-          ) : null}
-          <button
-            type="button"
-            className={cn(
-              'flex min-h-11 w-full items-center justify-center text-sm font-medium text-[#1a1a1a]',
-              disabled && 'opacity-60',
-            )}
-            disabled={disabled}
-            onClick={() => {
-              setError(null)
-              setOpen(true)
-            }}
-          >
-            Changer d’e-mail
-          </button>
-        </div>
-      )}
-    </TerrainCard>
+  ) : (
+    <div>
+      {displayedPending ? (
+        <p className="px-4 pt-3 text-sm text-[#5c5a54]">
+          Confirmation en attente pour {displayedPending}.
+        </p>
+      ) : null}
+      <button
+        type="button"
+        className={cn(
+          'flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-[#1a1a1a]',
+          disabled && 'opacity-60',
+        )}
+        disabled={disabled}
+        onClick={() => {
+          setError(null)
+          setOpen(true)
+        }}
+      >
+        Changer d’e-mail
+      </button>
+    </div>
   )
 }

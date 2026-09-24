@@ -237,7 +237,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-4 pt-3">
+    <div className="flex min-h-0 w-full flex-1 flex-col gap-3 px-3 pb-4 pt-3 lg:mx-auto lg:max-w-4xl">
       <GamificationScoreCard
         establishmentId={establishmentId}
         data={gamificationOverviewQuery.data}
@@ -456,6 +456,26 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
         </div>
       ) : null}
 
+      <div className="space-y-2">
+        <TerrainSectionLabel>Compte et sécurité</TerrainSectionLabel>
+        <TerrainCard className="divide-y divide-[#E8E6DF] p-0">
+          <EmailChangeCard
+            email={user?.email ?? null}
+            pendingEmail={user?.pending_email ?? null}
+            disabled={isLoggingOut}
+          />
+
+          <PasswordChangeCard disabled={isLoggingOut} />
+
+          <AccountDeletionCard
+            disabled={isLoggingOut}
+            onDeleted={async () => {
+              await onSignOut?.()
+            }}
+          />
+        </TerrainCard>
+      </div>
+
       {onSignOut ? (
         <TerrainCard padding="sm">
           <button
@@ -471,21 +491,6 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
           </button>
         </TerrainCard>
       ) : null}
-
-      <EmailChangeCard
-        email={user?.email ?? null}
-        pendingEmail={user?.pending_email ?? null}
-        disabled={isLoggingOut}
-      />
-
-      <PasswordChangeCard disabled={isLoggingOut} />
-
-      <AccountDeletionCard
-        disabled={isLoggingOut}
-        onDeleted={async () => {
-          await onSignOut?.()
-        }}
-      />
 
       <nav className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-1 pt-1">
         <a

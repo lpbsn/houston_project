@@ -7,7 +7,6 @@ import {
   evaluatePasswordCreation,
   passwordCreationBlockerMessage,
 } from '@/features/auth/lib/password-creation'
-import { TerrainCard } from '@/components/ui/terrain'
 import { cn } from '@/lib/utils'
 
 type PasswordChangeCardProps = {
@@ -63,10 +62,8 @@ export function PasswordChangeCard({ disabled = false }: PasswordChangeCardProps
     }
   }
 
-  return (
-    <TerrainCard padding="sm" className="space-y-3">
-      {open ? (
-        <div className="space-y-3">
+  return open ? (
+        <div className="space-y-3 p-4">
           <p className="text-sm font-medium text-[#1a1a1a]">Changer le mot de passe</p>
           <p className="text-sm text-[#5c5a54]">
             Les autres sessions seront déconnectées. Celle-ci reste active.
@@ -117,27 +114,25 @@ export function PasswordChangeCard({ disabled = false }: PasswordChangeCardProps
             </button>
           </div>
         </div>
-      ) : (
-        <div className="space-y-2">
-          {success ? (
-            <p className="text-sm text-[#5c5a54]">Mot de passe mis à jour.</p>
-          ) : null}
-          <button
-            type="button"
-            className={cn(
-              'flex min-h-11 w-full items-center justify-center text-sm font-medium text-[#1a1a1a]',
-              disabled && 'opacity-60',
-            )}
-            disabled={disabled}
-            onClick={() => {
-              setError(null)
-              setOpen(true)
-            }}
-          >
-            Changer le mot de passe
-          </button>
-        </div>
-      )}
-    </TerrainCard>
+  ) : (
+    <div>
+      {success ? (
+        <p className="px-4 pt-3 text-sm text-[#5c5a54]">Mot de passe mis à jour.</p>
+      ) : null}
+      <button
+        type="button"
+        className={cn(
+          'flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-[#1a1a1a]',
+          disabled && 'opacity-60',
+        )}
+        disabled={disabled}
+        onClick={() => {
+          setError(null)
+          setOpen(true)
+        }}
+      >
+        Changer le mot de passe
+      </button>
+    </div>
   )
 }
