@@ -45,10 +45,10 @@ export function ActionPlanHubFilters({
         aria-label="Rechercher par titre"
         className="h-9 rounded-full border-[#E8E6DF] bg-[#F5F4F0] shadow-sm"
       />
-      <div className="flex flex-wrap gap-2">
+      <div className="flex gap-2 overflow-x-auto lg:flex-wrap lg:overflow-visible">
         <button
           type="button"
-          className={filterButtonClass(!businessUnitId)}
+          className={cn(filterButtonClass(!businessUnitId), 'shrink-0')}
           onClick={() => onBusinessUnitIdChange('')}
         >
           Tous les pôles
@@ -57,7 +57,7 @@ export function ActionPlanHubFilters({
           <button
             key={unit.id}
             type="button"
-            className={filterButtonClass(businessUnitId === unit.id)}
+            className={cn(filterButtonClass(businessUnitId === unit.id), 'shrink-0')}
             onClick={() => onBusinessUnitIdChange(unit.id)}
           >
             {unit.label}

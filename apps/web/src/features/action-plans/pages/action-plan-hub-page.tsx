@@ -1,4 +1,4 @@
-import { Plus } from 'lucide-react'
+import { LoaderCircle, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 import { useAppRoute } from '@/app/app-routes'
@@ -14,7 +14,7 @@ import { notifySuccess } from '@/lib/success-toast'
 import { terrain, terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
-import { ActionPlanCatalogSectionView } from '../components/action-plan-catalog-section'
+import { ActionPlanCatalogCard } from '../components/action-plan-catalog-card'
 import { ActionPlanHubFilters } from '../components/action-plan-hub-filters'
 import { ActionPlanUseSheet } from '../components/action-plan-use-sheet'
 import {
@@ -26,7 +26,6 @@ import {
   canAccessActionPlanCatalog,
   isStaffActionPlanUsageRole,
 } from '../lib/action-plan-management-access'
-import { groupActionPlansByPilotBusinessUnit } from '../lib/action-plan-display'
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
 import { canShowActionPlanSchedule } from '../lib/action-plan-permission-hints'
 import type { CatalogPlanningSubmit } from '../lib/action-plan-catalog-planning-submit'
@@ -90,11 +89,6 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
     const items = catalogQuery.data ?? []
     return filterActionPlansByTitle(items, searchQuery)
   }, [catalogQuery.data, searchQuery])
-
-  const sections = useMemo(
-    () => groupActionPlansByPilotBusinessUnit(filteredItems),
-    [filteredItems],
-  )
 
   const usePlan = catalogQuery.data?.find((item) => item.id === usePlanId) ?? null
 
@@ -170,7 +164,7 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
   return (
     <div
       data-testid="action-plan-hub-frame"
-      className="space-y-4 px-3 pb-24 pt-2 lg:px-6 lg:pt-4 lg:pb-8"
+      className="space-y-4 px-3 pb-24 pt-2 lg:mx-auto lg:max-w-7xl lg:px-6 lg:pt-4 lg:pb-8"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -211,7 +205,16 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
 
       {useError ? <p className="text-sm text-destructive">{useError}</p> : null}
 
-      {sections.length === 0 ? (
+      {catalogQuery.isLoading ? (
+        <div className="flex items-center justify-center gap-2 py-6 text-sm text-[#7D7B75]">
+          <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
+          Chargement...
+        </div>
+      ) : catalogQuery.isError ? (
+        <TerrainCard className="py-4 text-sm text-[#E24B4A]">
+          Les plans n&apos;ont pas pu être chargés.
+        </TerrainCard>
+      ) : filteredItems.length === 0 ? (
         <TerrainCard className="space-y-2 py-6 text-center">
           <p className="text-sm font-semibold text-[#1a1a1a]">Aucun plan trouvé</p>
           <p className={cn('text-xs leading-5', terrain.muted)}>
@@ -221,15 +224,13 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
           </p>
         </TerrainCard>
       ) : (
-        <div className="space-y-6">
-          {sections.map((section) => (
-            <ActionPlanCatalogSectionView
-              key={section.businessUnitId}
-              section={section}
-              isLoading={catalogQuery.isLoading}
-              isError={catalogQuery.isError}
-              onOpenPlan={(id) => navigateTo(`/action-plans/${id}`)}
-              onUsePlan={setUsePlanId}
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
+          {filteredItems.map((item) => (
+            <ActionPlanCatalogCard
+              key={item.id}
+              item={item}
+              onOpen={(id) => navigateTo(`/action-plans/${id}`)}
+              onUse={setUsePlanId}
             />
           ))}
         </div>

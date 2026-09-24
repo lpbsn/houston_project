@@ -1,5 +1,5 @@
 import { type ComponentType, useEffect, useState } from 'react'
-import { ArrowLeftRight, BarChart3, Building2, ChevronRight, LayoutGrid, Library, Users } from 'lucide-react'
+import { ArrowLeftRight, BarChart3, Building2, ChevronRight, LayoutGrid, Library, SlidersHorizontal, Users } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import {
@@ -29,6 +29,8 @@ import {
 import { PUBLIC_PRIVACY_POLICY_URL, PUBLIC_TERMS_URL, readAiConsentStatus } from '@/lib/legal'
 import { toRoleEnum } from '@/features/auth/lib/role'
 import type { RoleEnum } from '@/features/auth/types'
+import { buildOperationalConfigPath } from '@/features/establishment-config/lib/operational-config-navigation'
+import { canManageOperationalConfigForEstablishment } from '@/features/establishment-config/lib/can-manage-operational-config'
 import { canShowAnalyticsNavigation } from '@/features/navigation/lib/shared-navigation'
 import {
   useNotificationPreferencesQuery,
@@ -193,11 +195,17 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   const pendingResumePath = resolvePendingLandingPath(pendingOnboardingMemberships)
   const isNativeRuntime = getAppRuntime() === 'native'
   const isLgViewport = useLgViewport()
+  const isDesktopWeb = isDesktopWebLanding(isLgViewport)
+  const showOperationalConfig =
+    isDesktopWeb &&
+    establishmentId !== null &&
+    canManageOperationalConfigForEstablishment({
+      memberships,
+      establishmentId,
+    })
   const showSwitchEstablishment =
-    canSwitchEstablishment(memberships, establishmentId) &&
-    !isDesktopWebLanding(isLgViewport)
-  const showPlatformEntry =
-    isPlatformOperatorActive(bootstrap) && isDesktopWebLanding(isLgViewport)
+    canSwitchEstablishment(memberships, establishmentId) && !isDesktopWeb
+  const showPlatformEntry = isPlatformOperatorActive(bootstrap) && isDesktopWeb
   const notificationPreferencesQuery = useNotificationPreferencesQuery(establishmentId, {
     enabled: isNativeRuntime,
   })
@@ -237,7 +245,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-4 pt-3">
+    <div className="flex min-h-0 w-full flex-1 flex-col gap-3 px-3 pb-4 pt-3 lg:mx-auto lg:max-w-4xl">
       <GamificationScoreCard
         establishmentId={establishmentId}
         data={gamificationOverviewQuery.data}
@@ -377,7 +385,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
         </div>
       ) : null}
 
-      {canShowAnalyticsNav ? (
+      {canShowAnalyticsNav && !isDesktopWeb ? (
         <div className="space-y-2">
           <TerrainSectionLabel>Analyse</TerrainSectionLabel>
           <ProfileManagementNavCard
@@ -452,11 +460,41 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
               subtitle="Gérer les membres et autorisations"
               onClick={() => onNavigate?.('/team')}
             />
+
+            {showOperationalConfig && establishmentId ? (
+              <ProfileManagementNavCard
+                icon={SlidersHorizontal}
+                iconClassName="bg-[#F3F0FF] text-[#6B4FD8]"
+                title="Configuration opérationnelle"
+                subtitle="Paramétrer l’organisation opérationnelle"
+                onClick={() => onNavigate?.(buildOperationalConfigPath(establishmentId))}
+              />
+            ) : null}
           </div>
         </div>
       ) : null}
 
-      {onSignOut ? (
+      <div className="space-y-2">
+        <TerrainSectionLabel>Compte et sécurité</TerrainSectionLabel>
+        <TerrainCard className="divide-y divide-[#E8E6DF] p-0">
+          <EmailChangeCard
+            email={user?.email ?? null}
+            pendingEmail={user?.pending_email ?? null}
+            disabled={isLoggingOut}
+          />
+
+          <PasswordChangeCard disabled={isLoggingOut} />
+
+          <AccountDeletionCard
+            disabled={isLoggingOut}
+            onDeleted={async () => {
+              await onSignOut?.()
+            }}
+          />
+        </TerrainCard>
+      </div>
+
+      {onSignOut && !isDesktopWeb ? (
         <TerrainCard padding="sm">
           <button
             type="button"
@@ -471,21 +509,6 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
           </button>
         </TerrainCard>
       ) : null}
-
-      <EmailChangeCard
-        email={user?.email ?? null}
-        pendingEmail={user?.pending_email ?? null}
-        disabled={isLoggingOut}
-      />
-
-      <PasswordChangeCard disabled={isLoggingOut} />
-
-      <AccountDeletionCard
-        disabled={isLoggingOut}
-        onDeleted={async () => {
-          await onSignOut?.()
-        }}
-      />
 
       <nav className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-1 pt-1">
         <a

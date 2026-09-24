@@ -1048,4 +1048,193 @@ describe('ProfilePage', () => {
 
     expect(screen.queryByRole('button', { name: /Changer d'établissement/i })).toBeNull()
   })
+
+  it('hides analytics and sign-out on desktop web', () => {
+    lgViewportState.current = true
+    authState.current = {
+      ...authState.current,
+      bootstrap: {
+        ...authState.current.bootstrap,
+        memberships: authState.current.memberships,
+      },
+    }
+
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    expect(screen.queryByRole('button', { name: /Analyse.*Indicateurs opérationnels/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Se déconnecter' })).toBeNull()
+  })
+
+  it('keeps sign-out on native at a large viewport', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    lgViewportState.current = true
+    authState.current = {
+      ...authState.current,
+      bootstrap: {
+        ...authState.current.bootstrap,
+        memberships: authState.current.memberships,
+      },
+    }
+
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    expect(screen.getByRole('button', { name: /Analyse.*Indicateurs opérationnels/i })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Se déconnecter' }))
+    expect(onSignOut).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: /Configuration opérationnelle/i })).toBeNull()
+  })
+
+  it('opens operational config under team for a desktop owner or director', () => {
+    lgViewportState.current = true
+    authState.current = {
+      ...authState.current,
+      activeMembership: {
+        ...authState.current.activeMembership,
+        role: 'director',
+        establishment_id: 'est-1',
+      },
+      memberships: [
+        {
+          ...authState.current.memberships[0],
+          role: 'director',
+          establishment_id: 'est-1',
+          status: 'active',
+        },
+      ],
+      bootstrap: {
+        ...authState.current.bootstrap,
+        permission_hints: {
+          chat_available: false,
+          can_create_action_plan: false,
+          can_create_catalog_action_plan: true,
+          can_view_action_plan_catalog: true,
+          can_invite: true,
+          can_manage_runtime_config: true,
+          can_view_team: true,
+          can_manage_organization: false,
+          platform_operator_active: false,
+        },
+      },
+    }
+
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    const team = screen.getByRole('button', { name: /Équipe.*Gérer les membres/i })
+    const config = screen.getByRole('button', { name: /Configuration opérationnelle/i })
+    expect(isDocumentFollowing(team, config)).toBe(true)
+    fireEvent.click(config)
+    expect(onNavigate).toHaveBeenCalledWith('/e/est-1/operational-config')
+  })
+
+  it('hides operational config for a manager and on mobile', () => {
+    authState.current = {
+      ...authState.current,
+      activeMembership: {
+        ...authState.current.activeMembership,
+        role: 'director',
+        establishment_id: 'est-1',
+      },
+      memberships: [
+        {
+          id: 'member-1',
+          establishment_id: 'est-1',
+          establishment_name: 'Le Palais Nancy',
+          organization_id: 'org-1',
+          organization_name: 'Org',
+          role: 'director',
+          status: 'active',
+          chat_available: true,
+          scopes: [],
+          scope_summary: { business_unit_count: 0 },
+        },
+      ],
+      bootstrap: {
+        ...authState.current.bootstrap,
+        permission_hints: {
+          chat_available: false,
+          can_create_action_plan: false,
+          can_create_catalog_action_plan: true,
+          can_view_action_plan_catalog: true,
+          can_invite: true,
+          can_manage_runtime_config: true,
+          can_view_team: true,
+          can_manage_organization: false,
+          platform_operator_active: false,
+        },
+      },
+    }
+
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+    expect(screen.queryByRole('button', { name: /Configuration opérationnelle/i })).toBeNull()
+
+    cleanup()
+    lgViewportState.current = true
+    authState.current = {
+      ...authState.current,
+      activeMembership: {
+        ...authState.current.activeMembership,
+        role: 'manager',
+      },
+      memberships: [
+        {
+          ...authState.current.memberships[0],
+          role: 'manager',
+        },
+      ],
+    }
+
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    expect(screen.getByRole('button', { name: /Équipe.*Gérer les membres/i })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Configuration opérationnelle/i })).toBeNull()
+
+    cleanup()
+    authState.current = {
+      ...authState.current,
+      activeMembership: {
+        ...authState.current.activeMembership,
+        role: 'staff',
+      },
+      memberships: [
+        {
+          ...authState.current.memberships[0],
+          role: 'staff',
+        },
+      ],
+    }
+
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    expect(screen.queryByRole('button', { name: /Configuration opérationnelle/i })).toBeNull()
+  })
 })

@@ -1,20 +1,25 @@
 import { useMemo, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 
+import { Button } from '@/components/ui/button'
 import {
   isScopedNavItemActive,
   resolveScopedDesktopNavigation,
   type ScopedDesktopNavSection,
 } from '@/features/navigation/lib/scoped-desktop-navigation'
+import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
 import { formatMembershipRoleDisplay } from '@/lib/display-names'
+import { useLgViewport } from '@/lib/lg-viewport'
 import { cn } from '@/lib/utils'
 
 type DesktopTerrainSidebarProps = {
   activePath?: string
   bootstrap?: BootstrapResponse | null
   className?: string
+  isLoggingOut?: boolean
   navigate: (pathname: string, options?: { replace?: boolean }) => void
+  onSignOut?: () => void
 }
 
 function buildUserInitials(user: BootstrapResponse['user'] | null | undefined): string {
@@ -73,7 +78,9 @@ export function DesktopTerrainSidebar({
   activePath,
   bootstrap,
   className,
+  isLoggingOut = false,
   navigate,
+  onSignOut,
 }: DesktopTerrainSidebarProps) {
   const sections = useMemo(
     () => resolveScopedDesktopNavigation({ bootstrap }),
@@ -85,6 +92,8 @@ export function DesktopTerrainSidebar({
   const [expansionSync, setExpansionSync] = useState({ activePath, sections })
   const user = bootstrap?.user ?? null
   const activeMembership = bootstrap?.active_membership ?? null
+  const isLgViewport = useLgViewport()
+  const showSignOut = Boolean(onSignOut) && isDesktopWebLanding(isLgViewport)
 
   if (activePath !== expansionSync.activePath || sections !== expansionSync.sections) {
     setExpansionSync({ activePath, sections })
@@ -194,6 +203,17 @@ export function DesktopTerrainSidebar({
             <p className="truncate text-xs text-white/45">{buildContextLabel(activeMembership)}</p>
           </div>
         </div>
+        {showSignOut ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-3 h-10 w-full border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
+            disabled={isLoggingOut}
+            onClick={onSignOut}
+          >
+            {isLoggingOut ? 'Déconnexion...' : 'Déconnexion'}
+          </Button>
+        ) : null}
       </div>
     </aside>
   )

@@ -27,6 +27,8 @@ type TerrainShellProps = PropsWithChildren<{
   navigate: (pathname: string, options?: { replace?: boolean }) => void
   showChatNav?: boolean
   chatHasUnread?: boolean
+  onSignOut?: () => void
+  isLoggingOut?: boolean
 }>
 
 export function TerrainShell({
@@ -40,6 +42,8 @@ export function TerrainShell({
   navigate,
   showChatNav = true,
   chatHasUnread = false,
+  onSignOut,
+  isLoggingOut = false,
   children,
 }: TerrainShellProps) {
   const shouldReduceMotion = useReducedMotion()
@@ -58,7 +62,9 @@ export function TerrainShell({
         activePath={desktopActivePath}
         bootstrap={bootstrap}
         className="lg:flex"
+        isLoggingOut={isLoggingOut}
         navigate={navigate}
+        onSignOut={onSignOut}
       />
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[#F5F4F0]">
         <div className="pointer-events-none absolute inset-x-0 top-0 z-50 flex flex-col gap-2 px-2 pt-[max(0.5rem,var(--app-safe-top))]">

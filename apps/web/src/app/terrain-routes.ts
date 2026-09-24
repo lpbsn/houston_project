@@ -190,7 +190,7 @@ function scopedPageTitle(page: string): string | undefined {
     case 'operational-config':
       return 'Configuration opérationnelle'
     case 'settings':
-      return 'Paramètres'
+      return 'Paramètres Analytics'
     default:
       return undefined
   }
@@ -205,7 +205,10 @@ function scopedHubConfig(
     topbarVariant: 'hub',
     pageTitle: scopedPageTitle(page),
     showBottomNav: isDashboard,
-    desktopActivePath: serializeScopedTerrainPath(scope, page),
+    desktopActivePath: serializeScopedTerrainPath(
+      scope,
+      page === 'operational-config' ? 'general' : page,
+    ),
     mainScroll:
       isDashboard ||
       page === 'general' ||
