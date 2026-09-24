@@ -57,7 +57,7 @@ def assert_reference_compatible(reference_at: datetime) -> None:
         raise MamaNiceDatasetError(
             ["reference_at is before the authored snapshot; refusing to move historical data"]
         )
-    limit = datetime(2026, 9, 26, 0, 0, tzinfo=PARIS_TZ)
+    limit = datetime(2026, 9, 24, 9, 0, tzinfo=PARIS_TZ)
     if instant >= limit:
         raise MamaNiceDatasetError(
             [

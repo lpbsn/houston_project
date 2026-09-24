@@ -56,14 +56,24 @@ def test_injected_clock_windows_never_use_reference_as_end():
 
 
 def test_reference_outside_public_event_window_fails_without_moving_events():
-    limit = datetime(2026, 9, 26, 0, 0, tzinfo=PARIS_TZ)
-    accepted = datetime(2026, 9, 25, 12, 0, tzinfo=PARIS_TZ)
+    from houston.establishments.mama_nice_dataset_compiler import compile_mama_nice_dataset
+
+    limit = datetime(2026, 9, 24, 9, 0, tzinfo=PARIS_TZ)
+    accepted = datetime(2026, 9, 23, 15, 0, tzinfo=PARIS_TZ)
+    tim = next(
+        item
+        for item in compile_mama_nice_dataset().oneshots
+        if item.seed_key == "oneshot:public:tim-lienderss"
+    )
+    assert limit == tim.start_at
     assert_reference_compatible(SNAPSHOT)
     assert_reference_compatible(accepted)
     with pytest.raises(MamaNiceDatasetError, match="before the authored snapshot"):
         assert_reference_compatible(SNAPSHOT - timedelta(minutes=1))
     with pytest.raises(MamaNiceDatasetError, match="frozen public-event window"):
         assert_reference_compatible(limit)
+    with pytest.raises(MamaNiceDatasetError, match="frozen public-event window"):
+        assert_reference_compatible(datetime(2026, 9, 25, 12, 0, tzinfo=PARIS_TZ))
 
 
 @pytest.mark.django_db
