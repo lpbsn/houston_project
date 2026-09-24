@@ -203,8 +203,15 @@ def validate_mama_nice_dataset(*, establishment: Establishment) -> list[str]:
             "director calendar remaining rows "
             f"{len(remaining_rows)} != {expected_remaining} authored remaining"
         )
-    sliding_statuses = {"in_progress", "pending_validation"}
-    if any(item.start_at <= reference_at and item.status not in sliding_statuses for item in rows):
+    allowed_started = {
+        "in_progress",
+        "pending_validation",
+        "done",
+        "canceled",
+    }
+    if any(
+        item.start_at <= reference_at and item.status not in allowed_started for item in rows
+    ):
         errors.append("calendar contains historical start_at")
     if ActionPlanSchedule.objects.filter(establishment=establishment).count() != 28:
         errors.append("schedule count diverges")
