@@ -1173,7 +1173,7 @@ function App() {
   if (route.kind === 'unknown' && auth.hasOperationalAccess) {
     return wrapAuthenticated(wrapTerrainWithOperationalRealtime(
       wrapTerrainWithChatRealtime(
-          <TerrainShell
+        <TerrainShell
           contentKey="not-found"
           showBottomNav={true}
           activeNavPath="/reporting"

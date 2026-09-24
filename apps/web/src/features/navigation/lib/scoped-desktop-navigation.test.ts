@@ -142,7 +142,12 @@ describe('scoped desktop navigation', () => {
       'general',
     ])
     expect(navigation.activeItemId).toBe('execution')
-    expect(resolveDesktopScopeFooterContext({ scope: navigation.scope, bootstrap: bootstrap([paris, lyon], paris) })    ).toBe('Équipe · Spore Lyon')
+    expect(
+      resolveDesktopScopeFooterContext({
+        scope: navigation.scope,
+        bootstrap: bootstrap([paris, lyon], paris),
+      }),
+    ).toBe('Équipe · Spore Lyon')
   })
 
   it('hides Dashboard and Cross for staff-only users', () => {
@@ -297,7 +302,6 @@ describe('scoped desktop navigation', () => {
         route: establishmentRoute('est-1', 'signals'),
         bootstrap: data,
         target: cross,
-        search: '?view=personal&status=open',
       }),
     ).toBe('/cross/signals')
     expect(
@@ -309,7 +313,6 @@ describe('scoped desktop navigation', () => {
         },
         bootstrap: data,
         target: cross,
-        search: '?from=feed',
       }),
     ).toBe('/cross/signals')
     expect(
@@ -342,7 +345,6 @@ describe('scoped desktop navigation', () => {
         route: establishmentRoute('est-1', 'dashboard'),
         bootstrap: data,
         target: lyonScope,
-        search: '?period=7d',
       }),
     ).toBe('/e/est-2/signals')
   })

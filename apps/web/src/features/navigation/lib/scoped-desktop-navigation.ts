@@ -179,7 +179,7 @@ function membershipForEstablishment(
   )
 }
 
-export function itemsForDesktopScope(
+function itemsForDesktopScope(
   scope: TerrainScope,
   bootstrap: BootstrapResponse | null | undefined,
 ): ScopedDesktopNavItem[] {
@@ -219,14 +219,14 @@ function activeMembershipScope(
   return { type: 'establishment', establishmentId }
 }
 
-export function resolveVisibleDesktopScope(
+function resolveVisibleDesktopScope(
   route: AppRoute,
   bootstrap: BootstrapResponse | null | undefined,
 ): TerrainScope | null {
   return explicitRouteScope(route) ?? activeMembershipScope(bootstrap)
 }
 
-export function resolveDesktopNavFunction(
+function resolveDesktopNavFunction(
   route: AppRoute,
 ): ScopedDesktopNavItemId | null {
   if (route.kind === 'scoped-terrain') {
@@ -322,7 +322,6 @@ export function resolveDesktopScopeSwitchHref(options: {
   route: AppRoute
   bootstrap?: BootstrapResponse | null
   target: TerrainScope
-  search?: string
 }): string {
   const items = itemsForDesktopScope(options.target, options.bootstrap)
   const navFunction = resolveDesktopNavFunction(options.route)

@@ -127,7 +127,13 @@ export function AnalyticsPage({ scope = { type: 'session' } }: AnalyticsPageProp
   }
 
   return (
-    <div className="mx-auto flex w-full min-w-0 max-w-[96rem] flex-col gap-4 px-4 py-5 pb-28 lg:gap-5 lg:px-8 lg:py-6 lg:pb-12 xl:px-10">
+    <div
+      data-testid="analytics-page-frame"
+      className={cn(
+        'mx-auto flex w-full min-w-0 max-w-[96rem] flex-col gap-4 px-4 py-5 pb-28',
+        isDesktopWeb && 'lg:gap-5 lg:px-8 lg:py-6 lg:pb-12 xl:px-10',
+      )}
+    >
       <header
         className={cn(
           'flex min-w-0 flex-col gap-4',

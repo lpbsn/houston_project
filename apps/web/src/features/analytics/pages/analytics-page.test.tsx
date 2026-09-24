@@ -83,10 +83,28 @@ function renderAnalyticsPage(href = '/e/est-1'): AppHistory {
   return history
 }
 
+function stubLgViewport(matches: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+}
+
 afterEach(() => {
   cleanup()
   dashboardQueryMock.mockReset()
   rankingsQueryMock.mockReset()
+  vi.unstubAllEnvs()
 })
 
 describe('AnalyticsPage', () => {
@@ -251,5 +269,28 @@ describe('AnalyticsPage', () => {
     expect(screen.getByText('Terminé en retard')).toBeTruthy()
     expect(screen.queryByText(/confiance/i)).toBeNull()
     expect(screen.queryByText(/taux de confiance/i)).toBeNull()
+  })
+
+  it('keeps the mobile dashboard frame on wide native', () => {
+    authState.current.bootstrap = managerBootstrap()
+    dashboardQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: dashboard(),
+      refetch: vi.fn(),
+    })
+    stubLgViewport(true)
+
+    renderAnalyticsPage()
+    expect(screen.getByTestId('analytics-page-frame').className).toContain('lg:px-8')
+    cleanup()
+
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    stubLgViewport(true)
+    renderAnalyticsPage()
+    const frame = screen.getByTestId('analytics-page-frame')
+    expect(frame.className).toContain('pb-28')
+    expect(frame.className).not.toContain('lg:px-8')
+    expect(frame.className).not.toContain('lg:pb-12')
   })
 })

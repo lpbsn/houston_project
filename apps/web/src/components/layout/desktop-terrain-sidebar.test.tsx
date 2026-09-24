@@ -277,6 +277,27 @@ describe('DesktopTerrainSidebar', () => {
     expect(navigate.mock.calls[0]?.[0]).not.toContain('?')
   })
 
+  it('keeps the current route when the selected scope is already active', () => {
+    const navigate = vi.fn()
+    renderSidebar(
+      <DesktopTerrainSidebar
+        {...sidebarProps({
+          route: {
+            kind: 'scoped-terrain',
+            scope: { type: 'establishment', establishmentId: 'est-1' },
+            page: 'signals',
+          },
+          bootstrap: bootstrap([membership({ role: 'manager' })]),
+          navigate,
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Spore Paris' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Spore Paris' }))
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
   it('marks Chat active on a conversation and Général active on the library', () => {
     const { unmount } = renderSidebar(
       <DesktopTerrainSidebar

@@ -37,7 +37,6 @@ type DesktopTerrainSidebarProps = {
   bootstrap?: BootstrapResponse | null
   collapsed: boolean
   onCollapsedChange: (collapsed: boolean) => void
-  className?: string
   isLoggingOut?: boolean
   navigate: (pathname: string, options?: { replace?: boolean }) => void
   onSignOut?: () => void
@@ -80,6 +79,16 @@ function buildUserName(user: BootstrapResponse['user'] | null | undefined): stri
   return fullName || user?.email || user?.username || 'Spore'
 }
 
+function isSameTerrainScope(left: TerrainScope | null, right: TerrainScope): boolean {
+  if (!left || left.type !== right.type) {
+    return false
+  }
+  if (left.type === 'establishment' && right.type === 'establishment') {
+    return left.establishmentId === right.establishmentId
+  }
+  return true
+}
+
 function filterScopeOptions(options: DesktopScopeOption[], query: string): DesktopScopeOption[] {
   const normalized = query.trim().toLocaleLowerCase('fr')
   if (!normalized) {
@@ -107,6 +116,7 @@ function ScopeSelector({
   const rootRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const listboxId = useId()
+  const activeOptionRef = useRef<HTMLButtonElement>(null)
   const filtered = useMemo(() => filterScopeOptions(options, query), [options, query])
   const currentId =
     scope?.type === 'cross' ? 'cross' : scope?.type === 'establishment' ? scope.establishmentId : null
@@ -124,6 +134,13 @@ function ScopeSelector({
     document.addEventListener('pointerdown', onPointerDown)
     return () => document.removeEventListener('pointerdown', onPointerDown)
   }, [open])
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    activeOptionRef.current?.scrollIntoView?.({ block: 'nearest' })
+  }, [activeIndex, open, query])
 
   function close() {
     setOpen(false)
@@ -201,6 +218,10 @@ function ScopeSelector({
               onKeyDown={onSearchKeyDown}
               placeholder="Rechercher"
               aria-label="Rechercher un scope"
+              aria-activedescendant={
+                filtered[activeIndex] ? `${listboxId}-option-${filtered[activeIndex].id}` : undefined
+              }
+              aria-controls={listboxId}
               className="h-9 w-full bg-transparent text-sm text-white outline-none placeholder:text-white/35"
             />
           </label>
@@ -220,6 +241,8 @@ function ScopeSelector({
                 return (
                   <button
                     key={option.id}
+                    ref={index === activeIndex ? activeOptionRef : undefined}
+                    id={`${listboxId}-option-${option.id}`}
                     type="button"
                     role="option"
                     aria-selected={selected}
@@ -282,7 +305,6 @@ export function DesktopTerrainSidebar({
   bootstrap,
   collapsed,
   onCollapsedChange,
-  className,
   isLoggingOut = false,
   navigate,
   onSignOut,
@@ -302,6 +324,9 @@ export function DesktopTerrainSidebar({
   const CollapseIcon = collapsed ? PanelLeftOpen : PanelLeftClose
 
   function selectScope(target: TerrainScope) {
+    if (isSameTerrainScope(navigation.scope, target)) {
+      return
+    }
     navigate(
       resolveDesktopScopeSwitchHref({
         route,
@@ -317,7 +342,6 @@ export function DesktopTerrainSidebar({
       className={cn(
         'flex h-full shrink-0 flex-col bg-[#1B1B1B] text-white',
         collapsed ? 'w-[4.5rem]' : 'w-64',
-        className,
       )}
       aria-label="Navigation principale"
     >
