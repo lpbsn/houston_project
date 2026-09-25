@@ -1,4 +1,11 @@
-import { forwardRef, useImperativeHandle, useRef, useState, type ChangeEvent } from 'react'
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from 'react'
 import { Paperclip, SendHorizonal, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -77,6 +84,8 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
     const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([])
     const [selectionError, setSelectionError] = useState<string | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const pendingAttachmentsRef = useRef(pendingAttachments)
+    pendingAttachmentsRef.current = pendingAttachments
     const isReply = variant === 'reply'
 
     const mentionQuery = getActiveMentionQuery(draft, cursorPosition) ?? ''
@@ -90,6 +99,12 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
         URL.revokeObjectURL(item.previewUrl)
       }
     }
+
+    useEffect(() => {
+      return () => {
+        pendingAttachmentsRef.current.forEach(revokeAttachmentPreview)
+      }
+    }, [])
 
     useImperativeHandle(ref, () => ({
       reset() {
