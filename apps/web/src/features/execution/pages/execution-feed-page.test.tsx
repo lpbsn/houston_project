@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { createElement } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -9,12 +9,49 @@ import type { ActionPlanExecutionFeedItemWrapper } from '@/features/action-plans
 import { useTerrainHubTitleSlotValue } from '@/components/layout/terrain-hub-title-slot'
 import { ActionPlansApiError } from '@/features/action-plans/api'
 
+import {
+  clearExecutionFeedReadingMemory,
+  executionFeedReadingScopeKey,
+  readExecutionFeedReading,
+} from '../lib/execution-feed-reading-memory'
 import { ExecutionFeedPage } from './execution-feed-page'
 
 const planFetchNextPage = vi.fn()
 const planFeedQueryMock = vi.fn()
 const calendarQueryMock = vi.fn()
 const executionNavigate = vi.fn()
+const permissionHintsHolder = vi.hoisted(() => ({
+  value: {} as {
+    can_create_action_plan?: boolean
+    can_view_action_plan_catalog?: boolean
+  },
+}))
+const pinControl = vi.hoisted(() => {
+  const control = {
+    failPin: false,
+    pin: vi.fn(
+      (
+        _id: string,
+        options?: { onSuccess?: () => void; onError?: (error: unknown) => void },
+      ) => {
+        if (control.failPin) {
+          options?.onError?.(new Error('Épinglage impossible.'))
+          return
+        }
+        options?.onSuccess?.()
+      },
+    ),
+    unpin: vi.fn(
+      (
+        _id: string,
+        options?: { onSuccess?: () => void; onError?: (error: unknown) => void },
+      ) => {
+        options?.onSuccess?.()
+      },
+    ),
+  }
+  return control
+})
 const executionRouteState = { search: '' }
 let serializeAppRouteMockPath = '/execution'
 
@@ -45,6 +82,7 @@ function buildPlanFeedWrapper(
       task_executions: [],
       last_activity_at: '2026-06-13T12:00:00Z',
       created_at: '2026-06-13T12:00:00Z',
+      created_by_display_name: 'Alice Martin',
       is_pinned: false,
       permission_hints: {
         can_mark_done: true,
@@ -88,12 +126,20 @@ vi.mock('@/app/auth-provider', () => ({
 }))
 
 vi.mock('@/features/auth/lib/bootstrap-permission-hints', () => ({
-  getBootstrapPermissionHints: () => ({}),
+  getBootstrapPermissionHints: () => permissionHintsHolder.value,
 }))
 
 vi.mock('@/features/action-plans/hooks', () => ({
   useActionPlanExecutionFeedQuery: () => planFeedQueryMock(),
   useActionPlanExecutionCalendarQuery: () => calendarQueryMock(),
+  usePinActionPlanExecutionMutation: () => ({
+    mutate: pinControl.pin,
+    isPending: false,
+  }),
+  useUnpinActionPlanExecutionMutation: () => ({
+    mutate: pinControl.unpin,
+    isPending: false,
+  }),
 }))
 
 vi.mock('@/app/app-routes', () => ({
@@ -103,17 +149,6 @@ vi.mock('@/app/app-routes', () => ({
     navigate: executionNavigate,
   }),
   serializeAppRoute: () => serializeAppRouteMockPath,
-}))
-
-vi.mock('@/features/action-plans/hooks/use-action-plan-execution-feed-quick-actions', () => ({
-  useActionPlanExecutionFeedQuickActions: () => ({
-    activeItem: null,
-    actionsOpen: false,
-    openActions: vi.fn(),
-    closeActions: vi.fn(),
-    runAction: vi.fn(),
-    isPending: false,
-  }),
 }))
 
 function buildCalendarQueryState(overrides: Record<string, unknown> = {}) {
@@ -195,12 +230,20 @@ describe('ExecutionFeedPage plan feed', () => {
     serializeAppRouteMockPath = '/execution'
     planFeedQueryMock.mockReturnValue(buildPlanFeedQueryState())
     calendarQueryMock.mockReturnValue(buildCalendarQueryState())
+    permissionHintsHolder.value = {}
+    pinControl.failPin = false
+    pinControl.pin.mockClear()
+    pinControl.unpin.mockClear()
+    clearExecutionFeedReadingMemory()
   })
 
   afterEach(() => {
     cleanup()
     vi.useRealTimers()
+    vi.unstubAllEnvs()
     Reflect.deleteProperty(window, 'matchMedia')
+    permissionHintsHolder.value = {}
+    clearExecutionFeedReadingMemory()
   })
 
   it('renders plan execution items', () => {
@@ -795,5 +838,183 @@ describe('ExecutionFeedPage plan feed', () => {
       expect.stringContaining('anchor=2026-09-09'),
       { replace: true },
     )
+  })
+})
+
+describe('ExecutionFeedPage desktop list', () => {
+  beforeEach(() => {
+    planFetchNextPage.mockClear()
+    executionNavigate.mockClear()
+    executionRouteState.search = ''
+    serializeAppRouteMockPath = '/execution'
+    permissionHintsHolder.value = {}
+    clearExecutionFeedReadingMemory()
+    calendarQueryMock.mockReturnValue(buildCalendarQueryState())
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.unstubAllEnvs()
+    Reflect.deleteProperty(window, 'matchMedia')
+    permissionHintsHolder.value = {}
+    clearExecutionFeedReadingMemory()
+  })
+
+  function showOperationalFeed() {
+    planFeedQueryMock.mockReturnValue(
+      buildPlanFeedQueryState({
+        data: {
+          pages: [
+            {
+              items: [
+                buildPlanFeedWrapper('plan-active', 'Plan actif', {
+                  task_count: 4,
+                  treated_task_count: 1,
+                }),
+                buildPlanFeedWrapper('plan-done', 'Plan terminé', { status: 'done' }),
+              ],
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+  }
+
+  it('opens an anchored menu without opening the detail on desktop web', () => {
+    stubLgViewport(true)
+    showOperationalFeed()
+    renderExecutionFeedPage()
+
+    const openControl = screen.getByRole('button', { name: /Plan actif/ })
+    const actions = screen.getByRole('button', { name: 'Actions du plan d’action' })
+    expect(openControl.contains(actions)).toBe(false)
+    fireEvent.click(actions)
+    expect(executionNavigate).not.toHaveBeenCalled()
+    expect(screen.getByRole('menu', { name: 'Actions du plan d’action' })).toBeTruthy()
+    expect(screen.queryByRole('dialog', { name: 'Actions' })).toBeNull()
+    expect(screen.queryByRole('progressbar')).toBeNull()
+    expect(screen.queryByText(/Tâches complétées/)).toBeNull()
+    expect(screen.getByText('Alice Martin')).toBeTruthy()
+  })
+
+  it('closes the desktop pin menu after a successful pin of the opened row', async () => {
+    stubLgViewport(true)
+    showOperationalFeed()
+    renderExecutionFeedPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions du plan d’action' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Épingler' }))
+
+    expect(pinControl.pin).toHaveBeenCalledWith('plan-active', expect.any(Object))
+    await waitFor(() => {
+      expect(screen.queryByRole('menu', { name: 'Actions du plan d’action' })).toBeNull()
+    })
+  })
+
+  it('keeps the desktop pin menu open with the error, then clears it on another row', () => {
+    stubLgViewport(true)
+    pinControl.failPin = true
+    planFeedQueryMock.mockReturnValue(
+      buildPlanFeedQueryState({
+        data: {
+          pages: [
+            {
+              items: [
+                buildPlanFeedWrapper('plan-active', 'Plan actif', {
+                  task_count: 4,
+                  treated_task_count: 1,
+                }),
+                buildPlanFeedWrapper('plan-other', 'Plan autre'),
+              ],
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+    renderExecutionFeedPage()
+
+    const [firstActions, secondActions] = screen.getAllByRole('button', {
+      name: 'Actions du plan d’action',
+    })
+    fireEvent.click(firstActions)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Épingler' }))
+
+    expect(screen.getByRole('alert').textContent).toBe('Épinglage impossible.')
+    expect(screen.getByRole('menu', { name: 'Actions du plan d’action' })).toBeTruthy()
+
+    fireEvent.click(secondActions)
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.getByRole('menu', { name: 'Actions du plan d’action' })).toBeTruthy()
+  })
+
+  it('keeps the card and the actions sheet on a large native viewport', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    stubLgViewport(true)
+    showOperationalFeed()
+    renderExecutionFeedPage()
+
+    const openControl = screen.getByRole('button', { name: /Plan actif/ })
+    const actions = screen.getByRole('button', { name: 'Actions du plan d’action' })
+    expect(openControl.contains(actions)).toBe(true)
+    fireEvent.click(actions)
+    expect(executionNavigate).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog', { name: 'Actions' })).toBeTruthy()
+    expect(screen.queryByRole('menu', { name: 'Actions du plan d’action' })).toBeNull()
+  })
+
+  it('opens the existing create choices in a dialog without creating a plan', () => {
+    stubLgViewport(true)
+    permissionHintsHolder.value = {
+      can_create_action_plan: true,
+      can_view_action_plan_catalog: true,
+    }
+    const onNavigate = vi.fn()
+    renderExecutionFeedPage({ onNavigate })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Créer' }))
+    expect(onNavigate).not.toHaveBeenCalled()
+    expect(screen.getByTestId('execution-create-menu-dialog')).toBeTruthy()
+    expect(screen.queryByTestId('execution-create-menu-sheet')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: "Créer un plan d'action" }))
+    expect(onNavigate).toHaveBeenCalledWith('/action-plans/new?from=execution')
+  })
+
+  it('restores the open section and scroll after an internal remount of the same scope', () => {
+    showOperationalFeed()
+    const scopeKey = executionFeedReadingScopeKey('establishment', 'est-1')
+    renderExecutionFeedPage({ establishmentId: 'est-1' })
+    fireEvent.click(screen.getByRole('button', { name: 'Déplier la section Terminés' }))
+    const scroller = screen.getByTestId('execution-feed-scroll')
+    scroller.scrollTop = 120
+    fireEvent.scroll(scroller)
+
+    expect(readExecutionFeedReading(scopeKey)?.expandedByKey.done).toBe(true)
+    expect(readExecutionFeedReading(scopeKey)?.scrollTop).toBe(120)
+
+    cleanup()
+    renderExecutionFeedPage({ establishmentId: 'est-1' })
+
+    expect(screen.getByText('Plan terminé')).toBeTruthy()
+    expect(screen.getByTestId('execution-feed-scroll').scrollTop).toBe(120)
+  })
+
+  it('starts another scope from its own reading state', () => {
+    showOperationalFeed()
+    renderExecutionFeedPage({ establishmentId: 'est-1' })
+    fireEvent.click(screen.getByRole('button', { name: 'Déplier la section Terminés' }))
+    const scroller = screen.getByTestId('execution-feed-scroll')
+    scroller.scrollTop = 120
+    fireEvent.scroll(scroller)
+
+    cleanup()
+    renderExecutionFeedPage({ establishmentId: 'est-2' })
+
+    expect(screen.queryByText('Plan terminé')).toBeNull()
+    expect(screen.getByTestId('execution-feed-scroll').scrollTop).toBe(0)
   })
 })

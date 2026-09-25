@@ -3068,6 +3068,7 @@ export interface components {
             last_activity_at: string;
             /** Format: date-time */
             created_at: string;
+            created_by_display_name: string;
             is_pinned: boolean;
             permission_hints: components["schemas"]["ActionPlanExecutionPermissionHints"];
             /** Format: uuid */

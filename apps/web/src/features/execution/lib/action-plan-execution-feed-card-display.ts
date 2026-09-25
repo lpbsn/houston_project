@@ -6,12 +6,6 @@ import type {
   ActionPlanExecutionFeedItem,
 } from '@/features/action-plans/types'
 
-type InvolvedPoleLike = {
-  business_unit?: {
-    specific_name?: string
-  }
-}
-
 type SignalSummaryLike = {
   affected_business_unit_id?: string | null
   affected_business_unit_key?: string | null
@@ -46,21 +40,6 @@ export function actionPlanFeedSignalClassificationInput(
     activity_subject_normalized_name: typed.activity_subject_normalized_name,
     activity_subject_label: typed.activity_subject_label,
   }
-}
-
-export function formatActionPlanFeedInvolvedPoleLabels(
-  involvedPoles: ActionPlanExecutionFeedItem['involved_poles'],
-): string | null {
-  if (involvedPoles.length <= 1) {
-    return null
-  }
-  const labels = involvedPoles
-    .map((pole) => (pole as InvolvedPoleLike).business_unit?.specific_name?.trim())
-    .filter((label): label is string => Boolean(label))
-  if (labels.length <= 1) {
-    return null
-  }
-  return labels.join(' · ')
 }
 
 export function formatActionPlanFeedAssigneeDisplay(
@@ -201,6 +180,49 @@ export function getActionPlanFeedSidebarState(
     prefix: 'DANS',
     value: formatActionPlanFeedDuration(Math.max(0, endMs - now)),
   }
+}
+
+export function formatExecutionFeedDelayLabel(state: ActionPlanFeedSidebarState): string | null {
+  if (state.variant !== 'overdue') {
+    return null
+  }
+  return `${state.prefix} ${state.value}`
+}
+
+export function formatExecutionFeedCreatedLabel(createdAt: string): string | null {
+  const date = new Date(createdAt)
+  if (Number.isNaN(date.getTime())) {
+    return null
+  }
+  return `Créé le ${date.toLocaleDateString('fr-FR')}`
+}
+
+function formatExecutionFeedStartDateLabel(startAt: string, allDay: boolean): string | null {
+  if (allDay) {
+    const date = new Date(startAt)
+    if (Number.isNaN(date.getTime())) {
+      return null
+    }
+    return date.toLocaleDateString('fr-FR')
+  }
+  return formatActionPlanEndAtLabel(startAt)
+}
+
+export function formatExecutionFeedTimingLabel(
+  item: Pick<ActionPlanExecutionFeedItem, 'status' | 'start_at' | 'end_at' | 'all_day'>,
+): string | null {
+  if (item.status === 'scheduled') {
+    if (!item.start_at) {
+      return null
+    }
+    const startLabel = formatExecutionFeedStartDateLabel(item.start_at, item.all_day)
+    return startLabel ? `Début : ${startLabel}` : null
+  }
+  if (item.all_day) {
+    return 'Échéance : Journée entière'
+  }
+  const endAtLabel = formatActionPlanEndAtLabel(item.end_at)
+  return endAtLabel ? `Échéance : ${endAtLabel}` : null
 }
 
 export type ActionPlanFeedProgressState = {

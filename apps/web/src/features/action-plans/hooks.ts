@@ -38,9 +38,11 @@ import {
 import type {
   ActionPlanCatalogListFilters,
   ActionPlanCreateRequest,
+  ActionPlanExecutionDetail,
   ActionPlanExecutionValidateRequest,
   ActionPlanPlanningSubmitRequest,
   ActionPlanTaskCreateObservationRequest,
+  ActionPlanTaskExecution,
   ActionPlanTaskSkipRequest,
   PatchedActionPlanExecutionUpdateRequest,
   PatchedActionPlanUpdateRequest,
@@ -436,6 +438,28 @@ export function useUnpinActionPlanExecutionMutation(
   })
 }
 
+function replaceTaskInExecutionDetailCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  establishmentId: string,
+  executionId: string,
+  task: ActionPlanTaskExecution,
+) {
+  queryClient.setQueryData<ActionPlanExecutionDetail>(
+    actionPlansQueryKeys.executionDetail(establishmentId, executionId),
+    (current) => {
+      if (!current?.task_executions.some((existing) => existing.id === task.id)) {
+        return current
+      }
+      return {
+        ...current,
+        task_executions: current.task_executions.map((existing) =>
+          existing.id === task.id ? task : existing,
+        ),
+      }
+    },
+  )
+}
+
 export function useMarkActionPlanTaskDoneMutation(
   establishmentId: string,
   executionId: string,
@@ -444,7 +468,8 @@ export function useMarkActionPlanTaskDoneMutation(
   return useMutation({
     mutationFn: (taskExecutionId: string) =>
       markActionPlanTaskDone(establishmentId, taskExecutionId),
-    onSuccess: () => {
+    onSuccess: (task) => {
+      replaceTaskInExecutionDetailCache(queryClient, establishmentId, executionId, task)
       invalidateActionPlanExecutionSurfaces(queryClient, establishmentId, executionId)
     },
   })
@@ -458,7 +483,8 @@ export function useMarkActionPlanTaskPendingMutation(
   return useMutation({
     mutationFn: (taskExecutionId: string) =>
       markActionPlanTaskPending(establishmentId, taskExecutionId),
-    onSuccess: () => {
+    onSuccess: (task) => {
+      replaceTaskInExecutionDetailCache(queryClient, establishmentId, executionId, task)
       invalidateActionPlanExecutionSurfaces(queryClient, establishmentId, executionId)
     },
   })

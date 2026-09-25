@@ -1,4 +1,11 @@
-import { forwardRef, useImperativeHandle, useRef, useState, type ChangeEvent } from 'react'
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from 'react'
 import { Paperclip, SendHorizonal, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -31,6 +38,7 @@ export type CommentComposerHandle = {
 type PendingAttachment = {
   localId: string
   file: File
+  previewUrl: string | null
   status: 'uploading' | 'ready' | 'failed'
   uploadId?: string
   error?: string
@@ -44,6 +52,7 @@ type CommentComposerProps = {
   variant?: 'default' | 'reply'
   compactOnLg?: boolean
   attachEnabled?: boolean
+  attachTrigger?: 'label' | 'icon'
   executionId?: string | null
   onSubmit: (payload: {
     body: string
@@ -62,6 +71,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
       variant = 'default',
       compactOnLg = false,
       attachEnabled = false,
+      attachTrigger = 'label',
       executionId = null,
       onSubmit,
     },
@@ -74,6 +84,8 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
     const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([])
     const [selectionError, setSelectionError] = useState<string | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const pendingAttachmentsRef = useRef(pendingAttachments)
+    pendingAttachmentsRef.current = pendingAttachments
     const isReply = variant === 'reply'
 
     const mentionQuery = getActiveMentionQuery(draft, cursorPosition) ?? ''
@@ -82,12 +94,27 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
       mentionQuery.length > 0 || draft.slice(0, cursorPosition).endsWith('@')
     const selectedMembershipIds = selectedMentions.map((mention) => mention.membershipId)
 
+    function revokeAttachmentPreview(item: PendingAttachment) {
+      if (item.previewUrl) {
+        URL.revokeObjectURL(item.previewUrl)
+      }
+    }
+
+    useEffect(() => {
+      return () => {
+        pendingAttachmentsRef.current.forEach(revokeAttachmentPreview)
+      }
+    }, [])
+
     useImperativeHandle(ref, () => ({
       reset() {
         setDraft('')
         setSelectedMentions([])
         setCursorPosition(0)
-        setPendingAttachments([])
+        setPendingAttachments((current) => {
+          current.forEach(revokeAttachmentPreview)
+          return []
+        })
         setSelectionError(null)
       },
     }))
@@ -193,6 +220,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
       const nextItems = accepted.map((file) => ({
         localId: `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`,
         file,
+        previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
         status: 'uploading' as const,
       }))
       setPendingAttachments((current) => [...current, ...nextItems])
@@ -233,9 +261,41 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
       disabled,
       'aria-label': 'Ajouter un commentaire',
     }
+    const attachDisabled =
+      disabled || pendingAttachments.length >= COMMENT_ATTACHMENTS_MAX_PER_COMMENT
+    const fileInput = attachEnabled ? (
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="sr-only"
+        accept={COMMENT_ATTACHMENT_ACCEPT}
+        multiple
+        onChange={(event) => {
+          handleSelectFiles(event.target.files)
+          event.target.value = ''
+        }}
+      />
+    ) : null
+    const attachIconButton = attachEnabled && attachTrigger === 'icon' ? (
+      <button
+        type="button"
+        className={cn(
+          'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#5F5A52]',
+          'hover:bg-[#F5F4F0] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30 focus-visible:outline-none',
+          'disabled:opacity-40',
+        )}
+        disabled={attachDisabled}
+        title={COMMENT_ATTACHMENT_LIMITS_LABEL}
+        aria-label="Joindre un fichier"
+        onClick={() => fileInputRef.current?.click()}
+      >
+        <Paperclip className="h-5 w-5" />
+      </button>
+    ) : null
 
     return (
       <div className={isReply || compactOnLg ? undefined : 'mt-4'}>
+        {fileInput}
         {isReply ? (
           <div
             className={cn(
@@ -255,6 +315,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
                 'focus-visible:outline-none',
               )}
             />
+            {attachIconButton}
             <button
               type="button"
               className={cn(
@@ -295,6 +356,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
                 </p>
               ) : null}
             </div>
+            {attachIconButton}
             <Button
               type="button"
               size="icon"
@@ -324,27 +386,20 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
 
         {attachEnabled ? (
           <div className="mt-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="sr-only"
-              accept={COMMENT_ATTACHMENT_ACCEPT}
-              multiple
-              onChange={(event) => {
-                handleSelectFiles(event.target.files)
-                event.target.value = ''
-              }}
-            />
-            <button
-              type="button"
-              className="inline-flex min-h-8 items-center gap-1 text-[12px] font-semibold text-[#1B4FD8]"
-              disabled={disabled || pendingAttachments.length >= COMMENT_ATTACHMENTS_MAX_PER_COMMENT}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Paperclip className="h-4 w-4" />
-              Joindre un fichier
-            </button>
-            <p className="mt-0.5 text-[10px] text-[#a3a19a]">{COMMENT_ATTACHMENT_LIMITS_LABEL}</p>
+            {attachTrigger === 'label' ? (
+              <>
+                <button
+                  type="button"
+                  className="inline-flex min-h-8 items-center gap-1 text-[12px] font-semibold text-[#1B4FD8]"
+                  disabled={attachDisabled}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Paperclip className="h-4 w-4" />
+                  Joindre un fichier
+                </button>
+                <p className="mt-0.5 text-[10px] text-[#a3a19a]">{COMMENT_ATTACHMENT_LIMITS_LABEL}</p>
+              </>
+            ) : null}
             {pendingAttachments.length > 0 ? (
               <ul className="mt-1.5 space-y-1">
                 {pendingAttachments.map((item) => (
@@ -352,10 +407,19 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
                     key={item.localId}
                     className="flex items-center justify-between gap-2 rounded-lg border border-[#E8E6DF] bg-white px-2 py-1"
                   >
-                    <span className="min-w-0 truncate text-[12px] text-[#1a1a1a]">
-                      {item.file.name}
-                      {item.status === 'uploading' ? ' · envoi…' : null}
-                      {item.status === 'failed' ? ` · ${item.error ?? 'échec'}` : null}
+                    <span className="flex min-w-0 items-center gap-2">
+                      {item.previewUrl ? (
+                        <img
+                          src={item.previewUrl}
+                          alt=""
+                          className="h-8 w-8 shrink-0 rounded object-cover"
+                        />
+                      ) : null}
+                      <span className="min-w-0 truncate text-[12px] text-[#1a1a1a]">
+                        {item.file.name}
+                        {item.status === 'uploading' ? ' · envoi…' : null}
+                        {item.status === 'failed' ? ` · ${item.error ?? 'échec'}` : null}
+                      </span>
                     </span>
                     <span className="flex shrink-0 items-center gap-1">
                       {item.status === 'failed' ? (
@@ -381,9 +445,14 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
                         className="text-[#65676B]"
                         aria-label={`Retirer ${item.file.name}`}
                         onClick={() =>
-                          setPendingAttachments((current) =>
-                            current.filter((entry) => entry.localId !== item.localId),
-                          )
+                          setPendingAttachments((current) => {
+                            const next = current.filter((entry) => entry.localId !== item.localId)
+                            const removed = current.find((entry) => entry.localId === item.localId)
+                            if (removed) {
+                              revokeAttachmentPreview(removed)
+                            }
+                            return next
+                          })
                         }
                       >
                         <X className="h-3.5 w-3.5" />

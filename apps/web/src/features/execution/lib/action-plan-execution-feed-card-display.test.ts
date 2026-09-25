@@ -6,10 +6,77 @@ import {
   formatActionPlanFeedTaskProgressLabel,
   getActionPlanFeedProgressState,
   getActionPlanFeedSidebarState,
+  formatExecutionFeedCreatedLabel,
+  formatExecutionFeedDelayLabel,
+  formatExecutionFeedTimingLabel,
   getActionPlanFeedStartCountdownState,
 } from './action-plan-execution-feed-card-display'
 
 const NOW = Date.parse('2026-07-10T12:00:00Z')
+
+describe('execution feed desktop row labels', () => {
+  it('keeps a delay label for an overdue deadline and omits it otherwise', () => {
+    expect(
+      formatExecutionFeedDelayLabel(
+        getActionPlanFeedSidebarState('2026-07-10T08:00:00Z', NOW, true),
+      ),
+    ).toMatch(/^RETARD /)
+    expect(
+      formatExecutionFeedDelayLabel(getActionPlanFeedSidebarState('2026-07-10T16:00:00Z', NOW)),
+    ).toBeNull()
+  })
+
+  it('formats the created date without a time', () => {
+    expect(formatExecutionFeedCreatedLabel('2026-06-30T08:00:00Z')).toMatch(/^Créé le /)
+    expect(formatExecutionFeedCreatedLabel('not-a-date')).toBeNull()
+  })
+
+  it('highlights the scheduled start date, including all-day plans', () => {
+    expect(
+      formatExecutionFeedTimingLabel({
+        status: 'scheduled',
+        start_at: '2026-07-13T12:00:00Z',
+        end_at: '2026-07-14T12:00:00Z',
+        all_day: false,
+      }),
+    ).toMatch(/^Début : /)
+    expect(
+      formatExecutionFeedTimingLabel({
+        status: 'scheduled',
+        start_at: '2026-07-13T00:00:00Z',
+        end_at: '2026-07-13T23:59:00Z',
+        all_day: true,
+      }),
+    ).toBe(`Début : ${new Date('2026-07-13T00:00:00Z').toLocaleDateString('fr-FR')}`)
+    expect(
+      formatExecutionFeedTimingLabel({
+        status: 'scheduled',
+        start_at: '2026-07-13T00:00:00Z',
+        end_at: '2026-07-13T23:59:00Z',
+        all_day: true,
+      }),
+    ).not.toMatch(/Journée entière/)
+  })
+
+  it('keeps the deadline label for non-scheduled desktop rows', () => {
+    expect(
+      formatExecutionFeedTimingLabel({
+        status: 'in_progress',
+        start_at: null,
+        end_at: '2026-07-06T18:30:00Z',
+        all_day: false,
+      }),
+    ).toMatch(/^Échéance : /)
+    expect(
+      formatExecutionFeedTimingLabel({
+        status: 'in_progress',
+        start_at: null,
+        end_at: null,
+        all_day: true,
+      }),
+    ).toBe('Échéance : Journée entière')
+  })
+})
 
 describe('getActionPlanFeedSidebarState', () => {
   it('returns countdown in hours when end_at is within 24 hours', () => {

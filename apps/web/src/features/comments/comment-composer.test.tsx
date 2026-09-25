@@ -129,4 +129,41 @@ describe('CommentComposer', () => {
     expect(screen.getByRole('button', { name: 'Joindre un fichier' })).toBeTruthy()
     expect(screen.getByText(/10 Mo max/)).toBeTruthy()
   })
+
+  it('revokes pending image preview URLs on unmount', () => {
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:preview-1')
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+
+    const { unmount } = render(
+      <CommentComposer establishmentId="est-1" attachEnabled onSubmit={vi.fn()} />,
+    )
+
+    const fileInput = document.querySelector('input[type="file"]')
+    expect(fileInput).toBeTruthy()
+    const file = new File(['png'], 'preview.png', { type: 'image/png' })
+    fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } })
+
+    expect(createObjectURL).toHaveBeenCalledWith(file)
+    expect(revokeObjectURL).not.toHaveBeenCalled()
+
+    unmount()
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:preview-1')
+
+    createObjectURL.mockRestore()
+    revokeObjectURL.mockRestore()
+  })
+
+  it('uses a paperclip control when attachTrigger is icon', () => {
+    render(
+      <CommentComposer
+        establishmentId="est-1"
+        executionId="exec-1"
+        attachEnabled
+        attachTrigger="icon"
+        onSubmit={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Joindre un fichier' })).toBeTruthy()
+    expect(screen.queryByText('Joindre un fichier')).toBeNull()
+  })
 })

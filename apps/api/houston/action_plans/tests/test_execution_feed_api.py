@@ -113,6 +113,7 @@ def test_action_plan_execution_feed_item_contract(
     assert payload["is_pinned"] is False
     assert payload["task_count"] == 1
     assert payload["treated_task_count"] == 0
+    assert payload["created_by_display_name"]
     assert "start_at" in payload
 
 

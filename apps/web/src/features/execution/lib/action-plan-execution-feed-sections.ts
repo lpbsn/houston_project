@@ -106,35 +106,3 @@ export function groupActionPlanExecutionsBySection(
     ]
   })
 }
-
-/** Insert scheduled preview items into section groups (feed `items` exclude scheduled). */
-export function mergeScheduledItemsIntoFeedSections(
-  groups: ActionPlanExecutionFeedSectionGroup[],
-  scheduledItems: ActionPlanExecutionFeedItem[],
-): ActionPlanExecutionFeedSectionGroup[] {
-  if (scheduledItems.length === 0) {
-    return groups
-  }
-
-  const scheduledGroup: ActionPlanExecutionFeedSectionGroup = {
-    section: 'scheduled',
-    ...SECTION_META.scheduled,
-    items: scheduledItems,
-  }
-
-  const withoutScheduled = groups.filter((group) => group.section !== 'scheduled')
-  const scheduledOrderIndex = SECTION_ORDER.indexOf('scheduled')
-  const insertAt = withoutScheduled.findIndex(
-    (group) => SECTION_ORDER.indexOf(group.section) > scheduledOrderIndex,
-  )
-
-  if (insertAt === -1) {
-    return [...withoutScheduled, scheduledGroup]
-  }
-
-  return [
-    ...withoutScheduled.slice(0, insertAt),
-    scheduledGroup,
-    ...withoutScheduled.slice(insertAt),
-  ]
-}

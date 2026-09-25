@@ -46,7 +46,9 @@ type ThreadedCommentListProps = {
   onUnresolve: (commentId: string) => void
   onOpenAttachment?: (attachment: CommentAttachment) => void
   attachEnabled?: boolean
+  attachTrigger?: 'label' | 'icon'
   executionId?: string
+  documentFlow?: boolean
 } & HighlightableListProps
 
 type CommentListProps =
@@ -193,14 +195,19 @@ function ExecutionCommentList({
   onUnresolve,
   onOpenAttachment,
   attachEnabled,
+  attachTrigger,
   executionId,
+  documentFlow = false,
 }: Extract<CommentListProps, { mode: 'execution' }>) {
   useScrollToHighlightedComment(highlightCommentId, comments)
 
   if (comments.length === 0) {
     return (
       <TerrainEmptyState
-        className="flex flex-1 flex-col items-center justify-center border-0 bg-transparent p-6"
+        className={cn(
+          'flex flex-col items-center justify-center border-0 bg-transparent p-6',
+          documentFlow ? 'py-10' : 'flex-1',
+        )}
         icon={<MessageCircle className="h-10 w-10" strokeWidth={1.5} />}
         title="Aucun commentaire pour l'instant."
         description="Soyez le premier à laisser un commentaire sur ce plan d'action."
@@ -210,7 +217,10 @@ function ExecutionCommentList({
 
   return (
     <ul
-      className="mt-4 flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto"
+      className={cn(
+        'mt-4 flex flex-col gap-5',
+        documentFlow ? '' : 'min-h-0 flex-1 overflow-y-auto',
+      )}
       aria-label="Liste des commentaires"
     >
       {comments.map((item) => {
@@ -242,6 +252,7 @@ function ExecutionCommentList({
               onUnresolve={onUnresolve}
               onOpenAttachment={onOpenAttachment}
               attachEnabled={attachEnabled}
+              attachTrigger={attachTrigger}
               executionId={executionId}
             />
           )

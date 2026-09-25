@@ -77,7 +77,7 @@ export function SignalFeedDesktopRow({
       <div className="flex items-center gap-1">
         <button
           type="button"
-          className="min-w-0 flex-1 rounded-lg px-1 py-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30"
+          className="min-w-0 flex-1 rounded-lg px-1 pt-0.5 pb-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30"
           onClick={() => onSelect(item.id)}
         >
           <h3 className="break-words text-[15px] font-semibold leading-snug text-[#1a1a1a]">
@@ -137,7 +137,7 @@ export function SignalFeedDesktopRow({
       </div>
       <button
         type="button"
-        className="-mt-2.5 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1 gap-y-1.5 rounded-lg py-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30"
+        className="-mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1 gap-y-1.5 rounded-lg py-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30"
         onClick={() => onSelect(item.id)}
       >
         <span className={cn(lineClassName, 'col-start-1 px-1')}>
@@ -186,7 +186,7 @@ export function SignalFeedDesktopRow({
             </span>
           ) : null}
         </span>
-        <span className="col-start-2 row-start-2 flex items-center justify-end gap-2 self-center">
+        <span className="col-start-2 row-start-1 flex items-center justify-end gap-2 self-center">
           <time
             className="whitespace-nowrap text-[12px] leading-snug text-[#888]"
             dateTime={item.last_activity_at}

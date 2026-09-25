@@ -9683,6 +9683,8 @@ components:
         created_at:
           type: string
           format: date-time
+        created_by_display_name:
+          type: string
         is_pinned:
           type: boolean
         permission_hints:
@@ -9696,6 +9698,7 @@ components:
       - all_day
       - assignees
       - created_at
+      - created_by_display_name
       - description_short
       - end_at
       - id

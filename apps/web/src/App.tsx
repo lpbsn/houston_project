@@ -4,7 +4,6 @@ import { ArrowLeft } from 'lucide-react'
 
 import { isHashTokenPublicRoute, parseAppRoute, serializeAppRoute, useAppRoute, type AppRoute } from '@/app/app-routes'
 import {
-  serializeScopedExecutionDetailPath,
   serializeScopedSignalDetailPath,
   serializeScopedTerrainPath,
 } from '@/app/scoped-terrain'
@@ -759,11 +758,6 @@ function App() {
           <LazyExecutionFeedPage
             establishmentId={establishmentIdForScope ?? null}
             source={source}
-            onOpenActionPlanExecution={
-              source === 'cross'
-                ? (id) => navigate(serializeScopedExecutionDetailPath(scope, id))
-                : undefined
-            }
             onNavigate={navigate}
           />
         )
@@ -1212,6 +1206,7 @@ function App() {
           title={terrainConfig.title}
           pageTitle={terrainConfig.pageTitle}
           detailTitleLayout={terrainConfig.detailTitleLayout}
+          hideTitle={isDesktopWeb && route.kind === 'action-plan-execution-detail'}
           showBottomBorder={resolveTerrainTopbarShowBottomBorder(route, terrainConfig)}
           onBack={terrainBackPath ? () => navigate(terrainBackPath) : undefined}
           trailing={terrainTopbarTrailing}
