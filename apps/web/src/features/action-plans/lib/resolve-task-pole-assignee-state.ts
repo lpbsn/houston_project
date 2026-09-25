@@ -102,6 +102,21 @@ export function resolveTaskPoleAssigneeState(options: {
   }
 }
 
+/** Display label only. An empty businessUnitId still falls back to the pilot pole. */
+export function resolveTaskDraftDisplayedPoleLabel(options: {
+  task: ActionPlanTaskDraft
+  pilotBusinessUnitId: string
+  businessUnits: BusinessUnitOption[]
+}): string | null {
+  const state = resolveTaskPoleAssigneeState(options)
+  if (!state.effectiveBusinessUnitId) {
+    return null
+  }
+  return (
+    options.businessUnits.find((unit) => unit.id === state.effectiveBusinessUnitId)?.label ?? null
+  )
+}
+
 export function applyAssigneeSelectionToTask(
   task: ActionPlanTaskDraft,
   selection: {

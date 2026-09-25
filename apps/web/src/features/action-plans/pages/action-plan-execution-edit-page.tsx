@@ -17,15 +17,25 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
+import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
+import { useLgViewport, useXlViewport } from '@/lib/lg-viewport'
 import { terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
+import { ActionPlanFormDesktopFrame } from '../components/action-plan-form-desktop-frame'
 import { ActionPlanEventPlanningForm } from '../components/action-plan-event-planning-form'
 import { ActionPlanTaskDraftEditor } from '../components/action-plan-task-draft-editor'
 import { ActionPlanTaskReadOnlyRow } from '../components/action-plan-task-read-only-row'
 import { PlanningOptionRow } from '../components/planning/planning-option-row'
 import { useActionPlanExecutionDetailQuery } from '../hooks'
 import { useActionPlanExecutionEditSubmit } from '../hooks/use-action-plan-execution-edit-submit'
+import {
+  ACTION_PLAN_DESKTOP_PILOT_LABEL,
+  ACTION_PLAN_DESKTOP_SAVE_LABEL,
+  actionPlanDesktopInputClassName,
+  actionPlanDesktopTextareaClassName,
+  resolveActionPlanDesktopJourneyTitle,
+} from '../lib/action-plan-desktop-form'
 import { formatActionPlanTaskStatusLabel } from '../lib/action-plan-display'
 import {
   hydrateActionPlanExecutionEditForm,
@@ -45,6 +55,8 @@ type ActionPlanExecutionEditPageProps = {
 
 export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecutionEditPageProps) {
   const { navigate, search } = useAppRoute()
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const placeFormColumns = useXlViewport()
   const auth = useAuth()
   const establishmentId = auth.activeMembership?.establishment_id ?? null
   const role = auth.activeMembership?.role ?? null
@@ -233,6 +245,159 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
   function handleFormSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     void submit(form)
+  }
+
+  if (isDesktopWeb) {
+    return (
+      <form
+        ref={formRootRef}
+        data-testid="action-plan-execution-edit-frame"
+        className="flex min-h-full min-w-0 w-full flex-col"
+        onSubmit={handleFormSubmit}
+      >
+        <ActionPlanFormDesktopFrame
+          title={resolveActionPlanDesktopJourneyTitle('execution-edit')}
+          onBack={() => navigate(detailBackPath)}
+          primaryLabel={ACTION_PLAN_DESKTOP_SAVE_LABEL}
+          primaryDisabled={isSubmitting}
+        >
+          {(() => {
+            const informationCard = (
+              <TerrainCard className="space-y-3">
+                <TerrainSectionLabel>Informations</TerrainSectionLabel>
+                <div data-testid="action-plan-desktop-title" data-action-plan-field="title">
+                  <TerrainFieldLabel>Titre</TerrainFieldLabel>
+                  <Input
+                    value={form.title}
+                    onChange={(event) => {
+                      clearApiFieldError('title')
+                      patchForm({ title: event.target.value })
+                    }}
+                    aria-invalid={fieldErrors.title ? true : undefined}
+                    className={cn(
+                      actionPlanDesktopInputClassName,
+                      fieldErrors.title && 'border-destructive',
+                    )}
+                  />
+                  {fieldErrors.title ? (
+                    <p className="mt-1 text-xs text-destructive">{fieldErrors.title}</p>
+                  ) : null}
+                </div>
+                <div data-testid="action-plan-desktop-description">
+                  <TerrainFieldLabel>Description</TerrainFieldLabel>
+                  <Textarea
+                    value={form.description}
+                    onChange={(event) => patchForm({ description: event.target.value })}
+                    className={actionPlanDesktopTextareaClassName}
+                  />
+                </div>
+              </TerrainCard>
+            )
+            const taskSection = (
+              <div data-testid="action-plan-desktop-tasks" className="flex min-w-0 flex-col gap-4">
+                {form.treatedTasks.length > 0 ? (
+                  <section className="space-y-2">
+                    <TerrainSectionLabel>Tâches traitées</TerrainSectionLabel>
+                    <div className="space-y-2">
+                      {form.treatedTasks.map((task) => (
+                        <ActionPlanTaskReadOnlyRow
+                          key={task.id}
+                          task={task}
+                          statusLabel={formatActionPlanTaskStatusLabel(task.status)}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+                <ActionPlanTaskDraftEditor
+                  tasks={form.pendingTasks}
+                  establishmentId={establishmentId}
+                  pilotBusinessUnitId={form.pilotBusinessUnitId}
+                  canDefineCrossPoleTasks={canCrossPole}
+                  staffMode={staffMode}
+                  businessUnits={visibleBusinessUnits}
+                  fieldErrors={fieldErrors}
+                  expandAdvancedNonce={guidanceNonce}
+                  expandAdvancedTaskIds={expandAdvancedTaskIds}
+                  density="compact"
+                  onTasksChange={setPendingTasks}
+                  onTaskFieldChange={clearApiFieldError}
+                />
+              </div>
+            )
+            const sideColumn = (
+              <div data-testid="action-plan-desktop-side" className="flex min-w-0 flex-col gap-4">
+                <section data-testid="action-plan-desktop-organization" className="space-y-2">
+                  <TerrainSectionLabel>Organisation</TerrainSectionLabel>
+                  <TerrainCard className="overflow-hidden p-0">
+                    <PlanningOptionRow
+                      rowId="pilot-business-unit"
+                      label={ACTION_PLAN_DESKTOP_PILOT_LABEL}
+                      inset
+                      wrapValue
+                      value={form.pilotBusinessUnitId}
+                      displayValue={form.pilotBusinessUnitLabel}
+                      options={[]}
+                      disabled
+                      openPicker={null}
+                      onOpenPickerChange={() => undefined}
+                      onChange={() => undefined}
+                      fieldKey="pilotBusinessUnitId"
+                    />
+                    {!staffMode ? (
+                      <TerrainSwitch
+                        variant="bordered"
+                        label="Validation requise"
+                        checked={form.requiresValidation}
+                        onCheckedChange={(requiresValidation) => patchForm({ requiresValidation })}
+                      />
+                    ) : null}
+                  </TerrainCard>
+                </section>
+                <ActionPlanEventPlanningForm
+                  draft={form.planningDraft}
+                  layout="split"
+                  config={{
+                    canEditAssignees: !staffMode,
+                    canSchedule: false,
+                    staffMode,
+                    showAdvancedChronology: false,
+                    lockChronologyMode: true,
+                    lockStart: true,
+                    hideAssignees: false,
+                    staffDisplayName: auth.bootstrap?.user?.username ?? 'Moi',
+                    assigneeActionsEnabled: false,
+                  }}
+                  establishmentId={establishmentId}
+                  pilotBusinessUnitId={form.pilotBusinessUnitId}
+                  fieldErrors={fieldErrors}
+                  onDraftChange={setPlanningDraft}
+                />
+              </div>
+            )
+            if (placeFormColumns) {
+              return (
+                <div className="grid min-w-0 items-start gap-4 grid-cols-[minmax(0,1fr)_20rem]">
+                  <div data-testid="action-plan-desktop-main" className="flex min-w-0 flex-col gap-4">
+                    {informationCard}
+                    {taskSection}
+                  </div>
+                  {sideColumn}
+                </div>
+              )
+            }
+            return (
+              <div className="flex min-w-0 flex-col gap-4">
+                {informationCard}
+                {sideColumn}
+                {taskSection}
+              </div>
+            )
+          })()}
+          {submitError ? <TerrainFeedback variant="error" message={submitError} /> : null}
+        </ActionPlanFormDesktopFrame>
+      </form>
+    )
   }
 
   return (

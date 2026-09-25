@@ -20,6 +20,7 @@ import {
   OBSERVATION_TEXT_MIN_LENGTH,
 } from '@/features/observations/types'
 import { resyncBootstrapAfterLegalError } from '@/features/auth/api'
+import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { useNativeKeyboardOpen } from '@/lib/native-keyboard'
 import {
@@ -27,12 +28,14 @@ import {
   PUBLIC_PRIVACY_POLICY_URL,
   readAiConsentStatus,
 } from '@/lib/legal'
+import { useLgViewport } from '@/lib/lg-viewport'
 import { useNetworkStatus } from '@/lib/network-status'
 import { terrain, terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 export function ReportPage({ establishmentId: establishmentIdProp }: { establishmentId?: string | null } = {}) {
   const shouldReduceMotion = useReducedMotion()
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   const isNativeKeyboardOpen = useNativeKeyboardOpen()
   const auth = useAuth()
   const { isOnline } = useNetworkStatus()
@@ -198,7 +201,13 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col" data-testid="report-page-root">
+    <div
+      className={cn(
+        'flex h-full min-h-0 flex-col',
+        isDesktopWeb && 'mx-auto w-full max-w-2xl',
+      )}
+      data-testid="report-page-root"
+    >
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pt-3">
         <div className="flex flex-col gap-5 pb-3">
           <header className="flex flex-col gap-1">
@@ -249,11 +258,15 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
       </div>
 
       {isNativeKeyboardOpen ? null : (
-        <TerrainStickyFooter variant="transparent">
+        <TerrainStickyFooter
+          variant="transparent"
+          className={isDesktopWeb ? 'flex justify-end' : undefined}
+        >
           <Button
             type="button"
             className={cn(
-              'h-12 w-full rounded-full text-[15px] font-bold text-white',
+              'text-[15px] font-bold text-white',
+              isDesktopWeb ? 'h-10 w-auto rounded-lg px-4' : 'h-12 w-full rounded-full',
               canSubmit
                 ? cn(terrainBrandAction.bg, terrainBrandAction.hover)
                 : 'bg-[#114660]/40 hover:bg-[#114660]/40',

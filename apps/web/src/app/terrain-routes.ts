@@ -242,6 +242,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       backPath: `/signals/${route.signalId}`,
       showBottomNav: false,
       mainScroll: 'auto',
+      hideTopbar: true,
     }
   }
 
@@ -252,6 +253,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       backPath: route.origin === 'execution' ? '/execution' : '/action-plans',
       showBottomNav: false,
       mainScroll: 'auto',
+      hideTopbar: true,
     }
   }
 
@@ -449,6 +451,12 @@ export function resolveTerrainTopbarPlacement(
   route: AppRoute,
   config: TerrainRouteConfig,
 ): TerrainTopbarPlacement {
+  if (
+    config.hideTopbar &&
+    (route.kind === 'action-plan-create' || route.kind === 'signal-action-create')
+  ) {
+    return 'mobile-only'
+  }
   if (!config.hideTopbar) {
     return 'all'
   }

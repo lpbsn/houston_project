@@ -5,12 +5,18 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import type { ActionPlanDetail } from '@/features/action-plans/types'
 
 import { notifySuccess } from '@/lib/success-toast'
 
 import { ActionPlanTemplateDetailPage } from './action-plan-template-detail-page'
 import * as catalogPlanningSubmit from '../lib/action-plan-catalog-planning-submit'
+import {
+  formatActionPlanCreatedAtLabel,
+  formatActionPlanTaskAssigneePoleLine,
+  formatActionPlanTaskDeadlineLabel,
+} from '../lib/action-plan-display'
 
 vi.mock('@/lib/success-toast', async () => {
   const actual = await vi.importActual<typeof import('@/lib/success-toast')>('@/lib/success-toast')
@@ -143,6 +149,8 @@ describe('ActionPlanTemplateDetailPage', () => {
     cleanup()
     vi.clearAllMocks()
     vi.restoreAllMocks()
+    vi.unstubAllEnvs()
+    Reflect.deleteProperty(window, 'matchMedia')
   })
 
   it('renders read-only template detail with execution action', () => {
@@ -412,5 +420,219 @@ describe('ActionPlanTemplateDetailPage', () => {
       message: '1 planification créée.',
       kind: 'created',
     })
+  })
+
+  it('offers use and schedule on the template detail without execution comments', () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query.includes('1024'),
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    })
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+
+    renderPage(
+      createElement(
+        'div',
+        null,
+        createElement(TerrainTopbar, {
+          variant: 'detail',
+          title: 'Plan',
+          hideTitle: true,
+          onBack: () => undefined,
+        }),
+        createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }),
+      ),
+    )
+
+    expect(screen.getByRole('heading', { name: 'Plan catalogue' })).toBeTruthy()
+    expect(screen.getByTestId('action-plan-desktop-description')).toBeTruthy()
+    expect(screen.getByText('Contrôler la température')).toBeTruthy()
+    expect(screen.getByText('Frigo')).toBeTruthy()
+    expect(
+      screen.getByText(
+        formatActionPlanTaskAssigneePoleLine({
+          assigneeDisplayName: 'Bob',
+          poleLabel: 'Restaurant',
+        }) ?? '',
+      ),
+    ).toBeTruthy()
+    expect(
+      screen.getByText(`Échéance : ${formatActionPlanTaskDeadlineLabel('2026-07-08T10:00:00Z')}`),
+    ).toBeTruthy()
+    expect(screen.queryByRole('checkbox')).toBeNull()
+    expect(screen.queryByRole('tab', { name: 'Commentaires' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Exécution' })).toBeNull()
+
+    const tasks = screen.getByTestId('action-plan-desktop-tasks')
+    const context = screen.getByTestId('action-plan-desktop-organization')
+    const useButton = screen.getByRole('button', { name: 'Utiliser' })
+    expect(useButton.compareDocumentPosition(tasks) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(context.compareDocumentPosition(tasks) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Programmer' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Retour' })).toBeTruthy()
+    expect(screen.getByText('Date de création')).toBeTruthy()
+    expect(screen.getByText('Dernière mise à jour')).toBeTruthy()
+    expect(screen.getByText(formatActionPlanCreatedAtLabel('2026-06-30T08:00:00Z') ?? '')).toBeTruthy()
+    expect(screen.getByText(formatActionPlanCreatedAtLabel('2026-06-30T10:00:00Z') ?? '')).toBeTruthy()
+    const validation = screen.getByText('Validation requise')
+    expect(validation.tagName).toBe('SPAN')
+    const creator = screen.getByText('Créateur')
+    const updated = screen.getByText('Dernière mise à jour')
+    const status = screen.getByText('État')
+    const statusValue = screen.getByText('Actif')
+    const deactivate = screen.getByRole('button', { name: 'Désactiver' })
+    expect(validation.compareDocumentPosition(creator) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(updated.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(statusValue.compareDocumentPosition(deactivate) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(validation.parentElement?.contains(deactivate)).toBe(false)
+
+    fireEvent.click(useButton)
+    expect(screen.getByRole('button', { name: 'Démarrer' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Utiliser' })).toBeNull()
+  })
+
+  it('shows the validation badge to a read-only viewer without action rights', () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query.includes('1024'),
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    })
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildPlan({
+        requires_validation: true,
+        permission_hints: {
+          can_update: false,
+          can_activate: false,
+          can_deactivate: false,
+          can_delete: false,
+          can_use: false,
+          can_schedule: false,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+
+    const context = screen.getByTestId('action-plan-desktop-organization')
+    const validation = screen.getByText('Validation requise')
+    expect(validation.tagName).toBe('SPAN')
+    expect(context.contains(validation)).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Activer' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Désactiver' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Utiliser' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Programmer' })).toBeNull()
+  })
+
+  it('places tasks beside context from 1280px', () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => {
+        const minWidth = /min-width:\s*(\d+)px/.exec(query)
+        return {
+          matches: minWidth ? 1280 >= Number(minWidth[1]) : false,
+          media: query,
+          onchange: null,
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          dispatchEvent: vi.fn(),
+        }
+      }),
+    })
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+
+    renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+
+    const main = screen.getByTestId('action-plan-desktop-main')
+    const tasks = screen.getByTestId('action-plan-desktop-tasks')
+    const context = screen.getByTestId('action-plan-desktop-organization')
+
+    expect(main.contains(screen.getByTestId('action-plan-desktop-title'))).toBe(true)
+    expect(main.contains(tasks)).toBe(true)
+    expect(main.contains(context)).toBe(false)
+    expect(screen.getByTestId('action-plan-desktop-side').contains(context)).toBe(true)
+  })
+
+  it('stacks title, description, context, then tasks in one column at 1024px', () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => {
+        const minWidth = /min-width:\s*(\d+)px/.exec(query)
+        return {
+          matches: minWidth ? 1024 >= Number(minWidth[1]) : false,
+          media: query,
+          onchange: null,
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          dispatchEvent: vi.fn(),
+        }
+      }),
+    })
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+
+    renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+
+    const title = screen.getByTestId('action-plan-desktop-title')
+    const description = screen.getByTestId('action-plan-desktop-description')
+    const context = screen.getByTestId('action-plan-desktop-organization')
+    const tasks = screen.getByTestId('action-plan-desktop-tasks')
+    const side = screen.getByTestId('action-plan-desktop-side')
+
+    expect(screen.queryByTestId('action-plan-desktop-main')).toBeNull()
+    expect(title.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(description.compareDocumentPosition(context) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(context.compareDocumentPosition(tasks) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(side.className).toContain('w-full')
+    expect(side.contains(context)).toBe(true)
+  })
+
+  it('keeps the execution footer on a large native template detail', () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockImplementation(() => ({
+        matches: true,
+        media: '',
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    })
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+
+    renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+
+    expect(screen.getByRole('button', { name: 'Exécution' }).closest('footer')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Utiliser' })).toBeNull()
   })
 })

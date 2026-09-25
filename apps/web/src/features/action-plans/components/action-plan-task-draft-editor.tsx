@@ -20,6 +20,7 @@ import type { ActionPlanTaskDraft } from '../lib/action-plan-form-validation'
 import {
   applyAssigneeSelectionToTask,
   isAdminAssigneeTask,
+  resolveTaskDraftDisplayedPoleLabel,
   resolveTaskPoleAssigneeState,
   shouldClearAssigneeOnPoleChange,
 } from '../lib/resolve-task-pole-assignee-state'
@@ -44,6 +45,7 @@ type ActionPlanTaskDraftEditorProps = {
   /** One-shot expand request for advanced options (nonce increments per invalid submit). */
   expandAdvancedNonce?: number
   expandAdvancedTaskIds?: ReadonlySet<string> | readonly string[]
+  density?: 'default' | 'compact'
   onTasksChange: (
     update: ActionPlanTaskDraft[] | ((previous: ActionPlanTaskDraft[]) => ActionPlanTaskDraft[]),
   ) => void
@@ -80,6 +82,7 @@ type ActionPlanTaskDraftCardProps = {
   fieldErrors: Record<string, string>
   expandAdvancedNonce: number
   shouldExpandAdvanced: boolean
+  density: 'default' | 'compact'
   onChange: (patch: TaskPatch) => void
   onDelete: () => void
   onTaskFieldChange?: (fieldKey: string) => void
@@ -95,11 +98,14 @@ function ActionPlanTaskDraftCard({
   fieldErrors,
   expandAdvancedNonce,
   shouldExpandAdvanced,
+  density,
   onChange,
   onDelete,
   onTaskFieldChange,
 }: ActionPlanTaskDraftCardProps) {
   const [advancedExpanded, setAdvancedExpanded] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const isCompact = density === 'compact'
   const lastExpandNonceRef = useRef(0)
   const [openPicker, setOpenPicker] = useState<PlanningPickerTarget>(null)
   const [openPolePicker, setOpenPolePicker] = useState<PlanningOptionPickerTarget>(null)
@@ -117,6 +123,7 @@ function ActionPlanTaskDraftCard({
     ) {
       lastExpandNonceRef.current = expandAdvancedNonce
       setAdvancedExpanded(true)
+      setDetailsOpen(true)
     }
   }, [expandAdvancedNonce, shouldExpandAdvanced])
 
@@ -132,6 +139,11 @@ function ActionPlanTaskDraftCard({
         )?.label
       : undefined
   const { date: deadlineDate, time: deadlineTime } = splitIsoToDateAndTime(task.deadlineAt)
+  const displayedPoleLabel = resolveTaskDraftDisplayedPoleLabel({
+    task,
+    pilotBusinessUnitId,
+    businessUnits,
+  })
   const metaLine = formatActionPlanTaskEditorMetaLine({
     assigneeDisplayName: task.assigneeDisplayName || null,
     deadlineAt: task.deadlineAt || null,
@@ -201,87 +213,132 @@ function ActionPlanTaskDraftCard({
     })
   }
 
+  const showDescription = !isCompact || detailsOpen
+  const showAdvanced = isCompact ? detailsOpen : advancedExpanded
+
+  const titleField = (
+    <div className="min-w-0 flex-1" {...{ [ACTION_PLAN_FIELD_ATTR]: titleKey }}>
+      <Input
+        value={task.task}
+        onChange={(event) => {
+          onTaskFieldChange?.(titleKey)
+          onChange({ task: event.target.value })
+        }}
+        placeholder="Ex. Contrôler la température"
+        aria-label="Titre de la tâche"
+        aria-invalid={titleError ? true : undefined}
+        className={cn(
+          isCompact
+            ? 'h-8 rounded-md border-transparent bg-transparent px-1 shadow-none focus-visible:border-[#E8E6DF] focus-visible:bg-white'
+            : 'h-10 border-[#E8E6DF]',
+          titleError && 'border-destructive',
+        )}
+      />
+      {titleError ? <p className="mt-1 text-xs text-destructive">{titleError}</p> : null}
+    </div>
+  )
+
+  const descriptionField = (
+    <div {...{ [ACTION_PLAN_FIELD_ATTR]: descriptionKey }}>
+      <Textarea
+        value={task.description}
+        onChange={(event) => {
+          onTaskFieldChange?.(descriptionKey)
+          onChange({ description: event.target.value })
+        }}
+        placeholder="Description (optionnelle)"
+        aria-label="Description de la tâche"
+        aria-invalid={descriptionError ? true : undefined}
+        className={cn(
+          isCompact
+            ? 'min-h-16 rounded-lg border-[#E8E6DF] bg-white shadow-none'
+            : 'min-h-16 border-[#E8E6DF]',
+          descriptionError && 'border-destructive',
+        )}
+      />
+      {descriptionError ? (
+        <p className="mt-1 text-xs text-destructive">{descriptionError}</p>
+      ) : null}
+    </div>
+  )
+
+  const deleteButton = (
+    <button
+      type="button"
+      className="rounded-lg p-2 text-[#E24B4A] disabled:opacity-40"
+      aria-label="Supprimer la tâche"
+      disabled={!canDelete}
+      onClick={onDelete}
+    >
+      <Trash2 className="h-4 w-4" />
+    </button>
+  )
+
   return (
-    <TerrainCard
+    <div
       className={cn(
-        'space-y-2 p-3',
+        isCompact
+          ? 'border-b border-[#E8E6DF] last:border-b-0'
+          : 'space-y-2 rounded-[14px] border border-[#E8E6DF] bg-white p-3',
         hasTaskError && 'border-destructive/60 ring-1 ring-destructive/30',
       )}
     >
-      <div className="flex items-start gap-2">
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 flex-1" {...{ [ACTION_PLAN_FIELD_ATTR]: titleKey }}>
-              <Input
-                value={task.task}
-                onChange={(event) => {
-                  onTaskFieldChange?.(titleKey)
-                  onChange({ task: event.target.value })
-                }}
-                placeholder="Ex. Contrôler la température"
-                aria-label="Titre de la tâche"
-                aria-invalid={titleError ? true : undefined}
-                className={cn(
-                  'h-10 border-[#E8E6DF]',
-                  titleError && 'border-destructive',
-                )}
-              />
-              {titleError ? (
-                <p className="mt-1 text-xs text-destructive">{titleError}</p>
+      {isCompact ? (
+        <div className="flex items-center gap-2 px-2 py-1.5">
+          {titleField}
+          <span className="max-w-[40%] shrink-0 break-words text-right text-xs text-[#7D7B75]">
+            {displayedPoleLabel ?? '—'}
+          </span>
+          <button
+            type="button"
+            className="rounded-lg p-1.5 text-[#1a1a1a]"
+            aria-expanded={detailsOpen}
+            aria-label="Détails de la tâche"
+            onClick={() => setDetailsOpen((value) => !value)}
+          >
+            <ChevronRight
+              className={cn('h-4 w-4 transition-transform', detailsOpen && 'rotate-90')}
+              aria-hidden
+            />
+          </button>
+          {deleteButton}
+        </div>
+      ) : (
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex items-start justify-between gap-2">
+              {titleField}
+              {metaLine ? (
+                <p className="max-w-[45%] shrink-0 pt-2.5 text-right text-xs text-[#7D7B75]">
+                  {metaLine}
+                </p>
               ) : null}
             </div>
-            {metaLine ? (
-              <p className="max-w-[45%] shrink-0 pt-2.5 text-right text-xs text-[#7D7B75]">
-                {metaLine}
-              </p>
-            ) : null}
+            {descriptionField}
           </div>
-          <div {...{ [ACTION_PLAN_FIELD_ATTR]: descriptionKey }}>
-            <Textarea
-              value={task.description}
-              onChange={(event) => {
-                onTaskFieldChange?.(descriptionKey)
-                onChange({ description: event.target.value })
-              }}
-              placeholder="Description (optionnelle)"
-              aria-label="Description de la tâche"
-              aria-invalid={descriptionError ? true : undefined}
-              className={cn(
-                'min-h-16 border-[#E8E6DF]',
-                descriptionError && 'border-destructive',
-              )}
-            />
-            {descriptionError ? (
-              <p className="mt-1 text-xs text-destructive">{descriptionError}</p>
-            ) : null}
-          </div>
+          {deleteButton}
         </div>
+      )}
+
+      {isCompact && showDescription ? <div className="px-3 pb-3">{descriptionField}</div> : null}
+
+      {isCompact ? null : (
         <button
           type="button"
-          className="rounded-lg p-2 text-[#E24B4A] disabled:opacity-40"
-          aria-label="Supprimer la tâche"
-          disabled={!canDelete}
-          onClick={onDelete}
+          className="flex w-full items-center gap-2 text-left text-sm text-[#1B4FD8]"
+          aria-expanded={advancedExpanded}
+          onClick={() => setAdvancedExpanded((value) => !value)}
         >
-          <Trash2 className="h-4 w-4" />
+          <ChevronRight
+            className={cn('h-4 w-4 transition-transform', advancedExpanded && 'rotate-90')}
+            aria-hidden
+          />
+          Options avancées
         </button>
-      </div>
+      )}
 
-      <button
-        type="button"
-        className="flex w-full items-center gap-2 text-left text-sm text-[#1B4FD8]"
-        aria-expanded={advancedExpanded}
-        onClick={() => setAdvancedExpanded((value) => !value)}
-      >
-        <ChevronRight
-          className={cn('h-4 w-4 transition-transform', advancedExpanded && 'rotate-90')}
-          aria-hidden
-        />
-        Options avancées
-      </button>
-
-      {advancedExpanded ? (
-        <TerrainCard className="overflow-hidden p-0">
+      {showAdvanced ? (
+        <div className={cn('overflow-hidden', isCompact ? 'border-t border-[#E8E6DF]' : 'rounded-[14px] border border-[#E8E6DF]')}>
           <div {...{ [ACTION_PLAN_FIELD_ATTR]: deadlineKey }}>
             <PlanningDateTimeRow
               rowId={`task-${task.id}-deadline`}
@@ -355,7 +412,7 @@ function ActionPlanTaskDraftCard({
               </p>
             ) : null}
           </div>
-        </TerrainCard>
+        </div>
       ) : null}
 
       <ActionPlanTaskAssigneeSheet
@@ -372,7 +429,7 @@ function ActionPlanTaskDraftCard({
         onClose={() => setAssigneeSheetOpen(false)}
         onConfirm={() => setAssigneeSheetOpen(false)}
       />
-    </TerrainCard>
+    </div>
   )
 }
 
@@ -386,6 +443,7 @@ export function ActionPlanTaskDraftEditor({
   fieldErrors = {},
   expandAdvancedNonce = 0,
   expandAdvancedTaskIds,
+  density = 'default',
   onTasksChange,
   onTaskFieldChange,
 }: ActionPlanTaskDraftEditorProps) {
@@ -394,61 +452,96 @@ export function ActionPlanTaskDraftEditor({
       ? expandAdvancedTaskIds
       : new Set(expandAdvancedTaskIds ?? [])
 
+  const isCompact = density === 'compact'
+
+  function addTask() {
+    onTasksChange((previousTasks) => [
+      ...previousTasks,
+      createActionPlanTaskDraftEditorItem(),
+    ])
+  }
+
+  function renderTask(task: ActionPlanTaskDraft) {
+    return (
+      <ActionPlanTaskDraftCard
+        key={task.id}
+        task={task}
+        establishmentId={establishmentId}
+        pilotBusinessUnitId={pilotBusinessUnitId}
+        canDefineCrossPoleTasks={canDefineCrossPoleTasks}
+        staffMode={staffMode}
+        businessUnits={businessUnits}
+        canDelete
+        fieldErrors={fieldErrors}
+        expandAdvancedNonce={expandAdvancedNonce}
+        shouldExpandAdvanced={expandIds.has(task.id)}
+        density={density}
+        onChange={(patch) =>
+          onTasksChange((previousTasks) =>
+            previousTasks.map((previousTask) => {
+              if (previousTask.id !== task.id) {
+                return previousTask
+              }
+              const resolvedPatch = typeof patch === 'function' ? patch(previousTask) : patch
+              return { ...previousTask, ...resolvedPatch }
+            }),
+          )
+        }
+        onDelete={() =>
+          onTasksChange((previousTasks) =>
+            previousTasks.filter((candidate) => candidate.id !== task.id),
+          )
+        }
+        onTaskFieldChange={onTaskFieldChange}
+      />
+    )
+  }
+
+  const taskRows = tasks.map((task) => renderTask(task))
+
   return (
     <section className="space-y-2" {...{ [ACTION_PLAN_FIELD_ATTR]: 'tasks' }}>
-      <TerrainSectionLabel>Tâches</TerrainSectionLabel>
-      <div className="space-y-2">
-        {tasks.map((task) => (
-          <ActionPlanTaskDraftCard
-            key={task.id}
-            task={task}
-            establishmentId={establishmentId}
-            pilotBusinessUnitId={pilotBusinessUnitId}
-            canDefineCrossPoleTasks={canDefineCrossPoleTasks}
-            staffMode={staffMode}
-            businessUnits={businessUnits}
-            canDelete
-            fieldErrors={fieldErrors}
-            expandAdvancedNonce={expandAdvancedNonce}
-            shouldExpandAdvanced={expandIds.has(task.id)}
-            onChange={(patch) =>
-              onTasksChange((previousTasks) =>
-                previousTasks.map((previousTask) => {
-                  if (previousTask.id !== task.id) {
-                    return previousTask
-                  }
-                  const resolvedPatch =
-                    typeof patch === 'function' ? patch(previousTask) : patch
-                  return { ...previousTask, ...resolvedPatch }
-                }),
-              )
-            }
-            onDelete={() =>
-              onTasksChange((previousTasks) =>
-                previousTasks.filter((candidate) => candidate.id !== task.id),
-              )
-            }
-            onTaskFieldChange={onTaskFieldChange}
-          />
-        ))}
-        <Button
-          type="button"
-          variant="outline"
-          className={cn(
-            'h-11 w-full rounded-xl border-dashed border-[#C8C6BF] bg-white text-[#1B4FD8]',
+      {isCompact ? (
+        <TerrainCard className="overflow-hidden p-0">
+          <div className="flex items-center gap-2 border-b border-[#E8E6DF] px-3 py-2">
+            <button
+              type="button"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[#E8E6DF] bg-white text-[#1B4FD8] disabled:opacity-40"
+              aria-label="Ajouter une tâche"
+              disabled={tasks.length >= 10}
+              onClick={addTask}
+            >
+              <Plus className="h-3.5 w-3.5" aria-hidden />
+            </button>
+            <TerrainSectionLabel>Tâches</TerrainSectionLabel>
+            <span className="ml-auto text-xs text-[#7D7B75]">Facultatives</span>
+          </div>
+          {tasks.length === 0 ? (
+            <p className="px-3 py-3 text-sm text-[#7D7B75]">Aucune tâche.</p>
+          ) : (
+            taskRows
           )}
-          disabled={tasks.length >= 10}
-          onClick={() =>
-            onTasksChange((previousTasks) => [
-              ...previousTasks,
-              createActionPlanTaskDraftEditorItem(),
-            ])
-          }
-        >
-          <Plus className="mr-2 h-4 w-4" aria-hidden />
-          Ajouter une tâche
-        </Button>
+        </TerrainCard>
+      ) : (
+        <>
+      <div className="flex items-center gap-2">
+        <TerrainSectionLabel>Tâches</TerrainSectionLabel>
       </div>
+        <div className="space-y-2">
+          {taskRows}
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 w-full rounded-xl border-dashed border-[#C8C6BF] bg-white text-[#1B4FD8]"
+            disabled={tasks.length >= 10}
+            onClick={addTask}
+          >
+            <Plus className="mr-2 h-4 w-4" aria-hidden />
+            Ajouter une tâche
+          </Button>
+        </div>
+        </>
+      )}
       {fieldErrors.tasks ? (
         <p className="text-xs text-destructive">{fieldErrors.tasks}</p>
       ) : null}

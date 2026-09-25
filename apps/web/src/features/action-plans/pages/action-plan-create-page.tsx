@@ -17,7 +17,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { ActionLinkedSignalCard } from '@/features/action-plans/components/action-linked-signal-card'
 import { ActionLinkedSignalStrip } from '@/features/action-plans/components/action-linked-signal-strip'
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
+import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { getBootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permission-hints'
+import { useLgViewport, useXlViewport } from '@/lib/lg-viewport'
 import { TerrainFeedback } from '@/components/domain/terrain-feedback'
 import { SignalsApiError } from '@/features/signals/api'
 import { SignalClassificationBadges } from '@/features/signals/components/signal-classification-badges'
@@ -26,6 +28,7 @@ import { resolveApiErrorMessage } from '@/lib/error-message'
 import { terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
+import { ActionPlanFormDesktopFrame } from '../components/action-plan-form-desktop-frame'
 import { ActionPlanEventPlanningForm } from '../components/action-plan-event-planning-form'
 import {
   PlanningOptionRow,
@@ -35,6 +38,17 @@ import { ActionPlanTaskDraftEditor } from '../components/action-plan-task-draft-
 import { useActionPlanCreateSubmit } from '../hooks/use-action-plan-create-submit'
 import { useActionPlanEditSubmit } from '../hooks/use-action-plan-edit-submit'
 import { useActionPlanDetailQuery } from '../hooks'
+import {
+  ACTION_PLAN_DESKTOP_PILOT_LABEL,
+  ACTION_PLAN_DESKTOP_SAVE_LABEL,
+  actionPlanDesktopInputClassName,
+  actionPlanDesktopTextareaClassName,
+  formatActionPlanSubmissionNotice,
+  resolveActionPlanDesktopJourneyTitle,
+  resolveDesktopLaunchLabel,
+  resolveDesktopLibraryPersistence,
+  summarizeDirectCreateLaunch,
+} from '../lib/action-plan-desktop-form'
 import {
   type ActionPlanCreateMode,
   resolveActionPlanCreateModeConfig,
@@ -79,6 +93,8 @@ export function ActionPlanCreatePage({
   actionPlanId,
 }: ActionPlanCreatePageProps) {
   const { navigate } = useAppRoute()
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const placeFormColumns = useXlViewport()
   const auth = useAuth()
   const { activeMembership, bootstrap } = auth
   const establishmentId = activeMembership?.establishment_id ?? null
@@ -136,6 +152,7 @@ export function ActionPlanCreatePage({
     modeConfig.defaultRequiresValidation,
   )
   const [saveToLibrary, setSaveToLibrary] = useState(modeConfig.defaultSaveToLibrary)
+  const persistedToLibrary = resolveDesktopLibraryPersistence(mode, saveToLibrary, isDesktopWeb)
   const [tasks, setTasks] = useState<ActionPlanTaskDraft[]>([])
   const [planningDraft, setPlanningDraft] = useState<ActionPlanEventPlanningDraft>(
     createActionPlanEventPlanningDraft,
@@ -310,7 +327,7 @@ export function ActionPlanCreatePage({
       description,
       pilotBusinessUnitId: resolvedPilotBusinessUnitId,
       requiresValidation,
-      saveToLibrary,
+      saveToLibrary: persistedToLibrary,
       useSharedChronology: planningSlice.useSharedChronology,
       sharedStartAt: planningSlice.sharedStartAt,
       sharedEndAt: planningSlice.sharedEndAt,
@@ -328,7 +345,7 @@ export function ActionPlanCreatePage({
       issueFocus,
       resolvedPilotBusinessUnitId,
       requiresValidation,
-      saveToLibrary,
+      persistedToLibrary,
       planningDraft,
       planningSlice,
       tasks,
@@ -557,7 +574,7 @@ export function ActionPlanCreatePage({
 
   const signalDetail = isSignalLinked ? signalDetailQuery.data : null
 
-  const showPlanningForm = !isTemplateEdit
+  const showPlanningForm = !isTemplateEdit && !(isDesktopWeb && mode === 'catalog')
   const showToggleSection = isTemplateEdit
     ? modeConfig.showValidationToggle
     : modeConfig.showLibraryToggle || modeConfig.showValidationToggle
@@ -578,6 +595,257 @@ export function ActionPlanCreatePage({
       return
     }
     void handlePrimarySubmit()
+  }
+
+  if (isDesktopWeb) {
+    const launchOutcome = summarizeDirectCreateLaunch(planningDraft, {
+      saveToLibrary: persistedToLibrary,
+      staffMode: modeConfig.showStaffSelfAssignee,
+    })
+    const desktopPrimaryLabel =
+      mode === 'catalog' || isTemplateEdit
+        ? ACTION_PLAN_DESKTOP_SAVE_LABEL
+        : resolveDesktopLaunchLabel(launchOutcome)
+    const executionNotice = !isTemplateEdit
+      ? formatActionPlanSubmissionNotice(launchOutcome)
+      : null
+
+    const pilotRow = (
+      <PlanningOptionRow
+        rowId="pilot-business-unit"
+        label={ACTION_PLAN_DESKTOP_PILOT_LABEL}
+        inset
+        wrapValue
+        value={
+          modeConfig.lockPilotBusinessUnit
+            ? resolvedPilotBusinessUnitId
+            : pilotBusinessUnitId || resolvedPilotBusinessUnitId
+        }
+        displayValue={
+          modeConfig.lockPilotBusinessUnit
+            ? (signalDetail?.responsible_business_unit_label ?? '—')
+            : pilotBusinessUnitOptions.find((option) => option.value === resolvedPilotBusinessUnitId)
+                ?.label
+        }
+        options={pilotBusinessUnitOptions}
+        disabled={modeConfig.lockPilotBusinessUnit}
+        openPicker={openPilotPicker}
+        onOpenPickerChange={setOpenPilotPicker}
+        onChange={(nextPilot) => {
+          handleFieldChange('pilotBusinessUnitId', () => setPilotBusinessUnitId(nextPilot))
+          revalidateAfterChange({ ...formValues, pilotBusinessUnitId: nextPilot })
+        }}
+        error={
+          resolvedFieldErrors.pilotBusinessUnitId ??
+          (isSignalLinked && !modeConfig.lockPilotBusinessUnit && pilotBusinessUnitOptions.length === 0
+            ? 'Aucun pôle autorisé pour créer un plan d’action.'
+            : undefined)
+        }
+        fieldKey="pilotBusinessUnitId"
+      />
+    )
+
+    const focusField = requireIssueFocus ? (
+      <div data-action-plan-field="issueFocus">
+        <TerrainFieldLabel>Focus opérationnel</TerrainFieldLabel>
+        <Input
+          value={issueFocus}
+          onChange={(event) => {
+            const nextFocus = event.target.value
+            handleFieldChange('issueFocus', () => setIssueFocus(nextFocus))
+            revalidateAfterChange({ ...formValues, issueFocus: nextFocus })
+          }}
+          aria-invalid={resolvedFieldErrors.issueFocus ? true : undefined}
+          className={cn(
+            actionPlanDesktopInputClassName,
+            resolvedFieldErrors.issueFocus && 'border-destructive',
+          )}
+        />
+        {resolvedFieldErrors.issueFocus ? (
+          <p className="mt-1 text-xs text-destructive">{resolvedFieldErrors.issueFocus}</p>
+        ) : (
+          <p className="mt-1 text-[11px] text-[#888]">
+            Requis pour classer complètement cette observation.
+          </p>
+        )}
+      </div>
+    ) : null
+
+    const taskEditor = (
+      <ActionPlanTaskDraftEditor
+        tasks={tasks}
+        establishmentId={establishmentId ?? ''}
+        pilotBusinessUnitId={resolvedPilotBusinessUnitId}
+        canDefineCrossPoleTasks={canCrossPole}
+        staffMode={modeConfig.showStaffSelfAssignee}
+        businessUnits={visibleBusinessUnits}
+        fieldErrors={resolvedFieldErrors}
+        expandAdvancedNonce={resolvedGuidanceNonce}
+        expandAdvancedTaskIds={expandAdvancedTaskIds}
+        density="compact"
+        onTasksChange={(update) => {
+          setTasks((previous) => (typeof update === 'function' ? update(previous) : update))
+        }}
+        onTaskFieldChange={(fieldKey) => {
+          if (isTemplateEdit) {
+            editSubmit.clearApiFieldError(fieldKey)
+          } else {
+            createSubmit.clearApiFieldError(fieldKey)
+          }
+        }}
+      />
+    )
+
+    const planningForm = showPlanningForm ? (
+      <ActionPlanEventPlanningForm
+        draft={{ ...planningDraft, assignees: effectiveAssignees }}
+        layout="split"
+        config={{
+          canEditAssignees: modeConfig.showAssigneeSheet,
+          canSchedule: modeConfig.showScheduleSection,
+          staffMode: modeConfig.showStaffSelfAssignee,
+          showAdvancedChronology: modeConfig.showAssigneeSheet,
+          hideAssignees: false,
+          staffDisplayName,
+          planningPersisted: persistedToLibrary ? false : undefined,
+          assigneeActionsEnabled: false,
+        }}
+        establishmentId={establishmentId}
+        pilotBusinessUnitId={resolvedPilotBusinessUnitId}
+        fieldErrors={resolvedFieldErrors}
+        onDraftChange={(update) => {
+          setPlanningDraft((previous) => {
+            const next = typeof update === 'function' ? update(previous) : update
+            return modeConfig.showStaffSelfAssignee ? { ...next, assignees: effectiveAssignees } : next
+          })
+        }}
+      />
+    ) : null
+
+    return (
+      <form
+        ref={formRootRef}
+        data-testid="action-plan-create-frame"
+        className="flex min-h-full min-w-0 w-full flex-1 flex-col"
+        onSubmit={handleFormSubmit}
+      >
+        <ActionPlanFormDesktopFrame
+          title={resolveActionPlanDesktopJourneyTitle(mode)}
+          onBack={() => navigate(isTemplateEdit ? templateEditBackPath : backPath)}
+          primaryLabel={desktopPrimaryLabel}
+          primaryDisabled={resolvedIsSubmitting}
+          notice={executionNotice}
+        >
+          {(() => {
+            const informationCard = (
+            <TerrainCard className="space-y-3">
+              <TerrainSectionLabel>Informations</TerrainSectionLabel>
+              <div data-testid="action-plan-desktop-title" data-action-plan-field="title">
+                <TerrainFieldLabel>Titre</TerrainFieldLabel>
+                <Input
+                  value={title}
+                  onChange={(event) => {
+                    const nextTitle = event.target.value
+                    handleFieldChange('title', () => setTitle(nextTitle))
+                    revalidateAfterChange({ ...formValues, title: nextTitle })
+                  }}
+                  aria-invalid={resolvedFieldErrors.title ? true : undefined}
+                  className={cn(
+                    actionPlanDesktopInputClassName,
+                    resolvedFieldErrors.title && 'border-destructive',
+                  )}
+                />
+                {resolvedFieldErrors.title ? (
+                  <p className="mt-1 text-xs text-destructive">{resolvedFieldErrors.title}</p>
+                ) : null}
+              </div>
+              <div data-testid="action-plan-desktop-description">
+                <TerrainFieldLabel>Description</TerrainFieldLabel>
+                <Textarea
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  className={actionPlanDesktopTextareaClassName}
+                />
+                {focusField}
+              </div>
+            </TerrainCard>
+            )
+            const taskSection = (
+            <div data-testid="action-plan-desktop-tasks" className="min-w-0">
+              {taskEditor}
+            </div>
+            )
+            const sideColumn = (
+            <div
+              data-testid="action-plan-desktop-side"
+              className="flex min-w-0 flex-col gap-4"
+            >
+              {signalDetail ? (
+                <div className="space-y-2">
+                  <ActionLinkedSignalCard
+                    title={signalDetail.title}
+                    locationText={signalDetail.location_text || null}
+                  />
+                  {signalDetail.resolution_request?.status === 'pending' ? (
+                    <TerrainFeedback
+                      variant="error"
+                      message="Une demande de résolution est actuellement en attente. La création de ce plan d’action annulera cette demande."
+                    />
+                  ) : null}
+                  <section data-testid="action-plan-desktop-classification" className="flex flex-col gap-1.5">
+                    <TerrainSectionLabel>Classification héritée de l’observation</TerrainSectionLabel>
+                    <TerrainCard className="px-3 py-2.5">
+                      <SignalClassificationBadges signal={signalDetail} />
+                    </TerrainCard>
+                  </section>
+                </div>
+              ) : null}
+
+              <section data-testid="action-plan-desktop-organization" className="space-y-2">
+                <TerrainSectionLabel>Organisation</TerrainSectionLabel>
+                <TerrainCard className="overflow-hidden p-0">
+                  {pilotRow}
+                  {modeConfig.showValidationToggle ? (
+                    <TerrainSwitch
+                      variant="bordered"
+                      label="Validation requise"
+                      checked={requiresValidation}
+                      onCheckedChange={(next) => {
+                        setRequiresValidation(next)
+                        revalidateAfterChange({ ...formValues, requiresValidation: next })
+                      }}
+                    />
+                  ) : null}
+                </TerrainCard>
+              </section>
+
+              {planningForm}
+            </div>
+            )
+            if (placeFormColumns) {
+              return (
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_20rem] items-start gap-4">
+                  <div data-testid="action-plan-desktop-main" className="flex min-w-0 flex-col gap-4">
+                    {informationCard}
+                    {taskSection}
+                  </div>
+                  {sideColumn}
+                </div>
+              )
+            }
+            return (
+              <div className="flex min-w-0 flex-col gap-4">
+                {informationCard}
+                {sideColumn}
+                {taskSection}
+              </div>
+            )
+          })()}
+
+          {resolvedSubmitError ? <TerrainFeedback variant="error" message={resolvedSubmitError} /> : null}
+        </ActionPlanFormDesktopFrame>
+      </form>
+    )
   }
 
   return (
@@ -767,7 +1035,7 @@ export function ActionPlanCreatePage({
                   showAdvancedChronology: modeConfig.showAssigneeSheet,
                   hideAssignees: false,
                   staffDisplayName,
-                  planningPersisted: saveToLibrary ? false : undefined,
+                  planningPersisted: persistedToLibrary ? false : undefined,
                   assigneeActionsEnabled: false,
                 }}
                 establishmentId={establishmentId}
