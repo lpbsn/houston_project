@@ -4,13 +4,11 @@ import {
   formatSignalAggregationBadge,
   formatSignalAggregationLabel,
   getPinnedSignalCardClassName,
-  getSignalCardLeftAccentClass,
   getSignalCardLeftAccentColor,
   getSignalStatusBadgeVariant,
   composeSignalFeedPresentation,
   partitionFeedPinnedItems,
   PINNED_SIGNAL_CARD_CLASS,
-  SIGNAL_CARD_LEFT_ACCENT,
   SIGNAL_CARD_LEFT_ACCENT_COLOR,
 } from './signal-display'
 import type { SignalFeedItem } from '../types'
@@ -143,45 +141,6 @@ describe('pinned signal card display helpers', () => {
     expect(className).toContain(PINNED_SIGNAL_CARD_CLASS)
     expect(className).toContain('rounded-[14px]')
     expect(PINNED_SIGNAL_CARD_CLASS).not.toContain('border-l-')
-  })
-})
-
-describe('getSignalCardLeftAccentClass', () => {
-  it('uses status accent when pinned flag is set but standard feed card is used', () => {
-    expect(
-      getSignalCardLeftAccentClass(
-        item({ id: '1', is_pinned: true, status: 'open' }),
-      ),
-    ).toBe(SIGNAL_CARD_LEFT_ACCENT.open)
-    expect(
-      getSignalCardLeftAccentClass(
-        item({ id: '2', is_pinned: true, status: 'in_progress' }),
-      ),
-    ).toBe(SIGNAL_CARD_LEFT_ACCENT.in_progress)
-  })
-
-  it('returns status colors for standard non-pinned items', () => {
-    expect(getSignalCardLeftAccentClass(item({ id: '1', status: 'open' }))).toBe(
-      SIGNAL_CARD_LEFT_ACCENT.open,
-    )
-    expect(
-      getSignalCardLeftAccentClass(item({ id: '2', status: 'in_progress' })),
-    ).toBe(SIGNAL_CARD_LEFT_ACCENT.in_progress)
-    expect(
-      getSignalCardLeftAccentClass(item({ id: '3', status: 'resolved' })),
-    ).toBe(SIGNAL_CARD_LEFT_ACCENT.resolved)
-  })
-
-  it('returns dedicated accent for resolved and neutral for canceled or unknown', () => {
-    expect(
-      getSignalCardLeftAccentClass(item({ id: '1', status: 'resolved' })),
-    ).toBe(SIGNAL_CARD_LEFT_ACCENT.resolved)
-    expect(
-      getSignalCardLeftAccentClass(item({ id: '2', status: 'canceled' })),
-    ).toBe(SIGNAL_CARD_LEFT_ACCENT.neutral)
-    expect(
-      getSignalCardLeftAccentClass(item({ id: '3', status: 'draft' })),
-    ).toBe(SIGNAL_CARD_LEFT_ACCENT.neutral)
   })
 })
 

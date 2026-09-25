@@ -129,16 +129,6 @@ export function composeSignalFeedPresentation(sections: SignalFeedSectionInput[]
   }
 }
 
-/** Left border accent classes for feed cards (terrain palette). */
-export const SIGNAL_CARD_LEFT_ACCENT = {
-  pinned: 'border-l-[#1a1a1a]',
-  open: 'border-l-[#EF9F27]',
-  in_progress: 'border-l-[#3A7A96]',
-  interesting: 'border-l-[#A4E5E0]',
-  resolved: 'border-l-[#1D9E75]',
-  neutral: 'border-l-[#7D7B75]',
-} as const
-
 /** Left border accent hex colors for feed cards (inline style; beats global border-color). */
 export const SIGNAL_CARD_LEFT_ACCENT_COLOR = {
   pinned: '#1a1a1a',
@@ -175,14 +165,6 @@ export const PINNED_SIGNAL_CARD_DETAIL_CTA = 'Voir le détail →'
 
 export function getPinnedSignalCardClassName(): string {
   return getSignalFeedCardBaseClassName(PINNED_SIGNAL_CARD_CLASS)
-}
-
-/**
- * Left border accent for standard feed cards.
- * Priority: status (canceled/unknown use a shared neutral).
- */
-export function getSignalCardLeftAccentClass(item: SignalFeedItem): string {
-  return SIGNAL_CARD_LEFT_ACCENT[getSignalCardLeftAccentColorKey(item)]
 }
 
 function getSignalCardLeftAccentColorKey(

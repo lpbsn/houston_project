@@ -25,8 +25,6 @@ export type ScopedDesktopNavItem = {
   id: ScopedDesktopNavItemId
   label: string
   href: string | null
-  placeholder: boolean
-  readOnly?: boolean
   group: ScopedDesktopNavGroup
 }
 
@@ -91,16 +89,12 @@ function crossItems(): ScopedDesktopNavItem[] {
       id: 'signals',
       label: 'Observations',
       href: serializeScopedTerrainPath(scope, 'signals'),
-      placeholder: false,
-      readOnly: true,
       group: 2,
     },
     {
       id: 'execution',
       label: 'Exécution',
       href: serializeScopedTerrainPath(scope, 'execution'),
-      placeholder: false,
-      readOnly: true,
       group: 2,
     },
   ]
@@ -121,7 +115,6 @@ function establishmentItems(
       id: 'dashboard',
       label: 'Dashboard',
       href: serializeScopedTerrainPath(scope),
-      placeholder: false,
       group: 1,
     })
   }
@@ -130,7 +123,6 @@ function establishmentItems(
       id: 'brain',
       label: 'Spore Brain',
       href: null,
-      placeholder: true,
       group: 1,
     })
   }
@@ -139,21 +131,18 @@ function establishmentItems(
       id: 'reporting',
       label: 'Nouvelle observation',
       href: serializeScopedTerrainPath(scope, 'reporting'),
-      placeholder: false,
       group: 2,
     },
     {
       id: 'signals',
       label: 'Observations',
       href: serializeScopedTerrainPath(scope, 'signals'),
-      placeholder: false,
       group: 2,
     },
     {
       id: 'execution',
       label: 'Exécution',
       href: serializeScopedTerrainPath(scope, 'execution'),
-      placeholder: false,
       group: 2,
     },
   )
@@ -162,7 +151,6 @@ function establishmentItems(
       id: 'chat',
       label: 'Chat',
       href: serializeScopedTerrainPath(scope, 'chat'),
-      placeholder: false,
       group: 2,
     })
   }
@@ -170,7 +158,6 @@ function establishmentItems(
     id: 'general',
     label: 'Général',
     href: serializeScopedTerrainPath(scope, 'general'),
-    placeholder: false,
     group: 3,
   })
   if (options.showDashboard) {
@@ -178,7 +165,6 @@ function establishmentItems(
       id: 'settings',
       label: 'Paramètres Analytics',
       href: serializeScopedTerrainPath(scope, 'settings'),
-      placeholder: true,
       group: 3,
     })
   }

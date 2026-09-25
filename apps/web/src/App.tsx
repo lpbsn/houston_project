@@ -57,6 +57,7 @@ import { LoginPage } from '@/features/auth/pages/login-page'
 import {
   allowsUnauthenticatedAccess,
   getAuthenticatedLandingPath,
+  isDesktopWebLanding,
   routeAllowsMissingActiveMembership,
   shouldRedirectAuthenticatedPublicRoute,
   shouldRedirectUnauthenticatedPublicRoute,
@@ -110,7 +111,6 @@ import {
   peekPendingNativeDeepLink,
 } from '@/lib/native-deep-link-session'
 import { setNativeSystemBackAuthGetter } from '@/lib/native-system-back'
-import { getAppRuntime } from '@/lib/runtime'
 
 function establishmentIdRequiringSwitch(route: AppRoute): string | null {
   if (route.kind === 'scoped-terrain' && route.scope.type === 'establishment') {
@@ -140,7 +140,7 @@ function App() {
   const auth = useAuth()
   const { route, navigate, search: locationSearch } = useAppRoute()
   const isLgViewport = useLgViewport()
-  const isDesktopWeb = getAppRuntime() === 'web' && isLgViewport
+  const isDesktopWeb = isDesktopWebLanding(isLgViewport)
   const applyingOpenRef = useRef(false)
   const authRoutingSession = resolveAuthRoutingSession(
     queryClient.getQueryData<BootstrapResponse>(bootstrapQueryKey),

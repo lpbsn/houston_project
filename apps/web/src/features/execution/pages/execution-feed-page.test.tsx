@@ -1017,4 +1017,26 @@ describe('ExecutionFeedPage desktop list', () => {
     expect(screen.queryByText('Plan terminé')).toBeNull()
     expect(screen.getByTestId('execution-feed-scroll').scrollTop).toBe(0)
   })
+
+  it('does not carry open sections into another establishment when the page stays mounted', () => {
+    showOperationalFeed()
+    const view = renderExecutionFeedPage({ establishmentId: 'est-1' })
+    fireEvent.click(screen.getByRole('button', { name: 'Déplier la section Terminés' }))
+    expect(
+      readExecutionFeedReading(executionFeedReadingScopeKey('establishment', 'est-1'))?.expandedByKey
+        .done,
+    ).toBe(true)
+
+    view.rerenderPage({ establishmentId: 'est-2' })
+
+    expect(screen.queryByText('Plan terminé')).toBeNull()
+    expect(
+      readExecutionFeedReading(executionFeedReadingScopeKey('establishment', 'est-1'))?.expandedByKey
+        .done,
+    ).toBe(true)
+    expect(
+      readExecutionFeedReading(executionFeedReadingScopeKey('establishment', 'est-2'))?.expandedByKey
+        .done,
+    ).not.toBe(true)
+  })
 })

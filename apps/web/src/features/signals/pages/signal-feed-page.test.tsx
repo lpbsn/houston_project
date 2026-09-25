@@ -439,6 +439,42 @@ describe('SignalFeedPage reading restoration', () => {
     expect(establishmentCall?.[2]).toMatchObject({ statuses: [] })
     expect(screen.getByTestId('signal-feed-scroll').scrollTop).toBe(0)
   })
+
+  it('does not carry filters into another establishment when the page stays mounted', () => {
+    openSectionsFeed()
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    const tree = (establishmentId: string) =>
+      createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(TerrainTopbar, { variant: 'hub', pageTitle: 'Observations' }),
+        createElement(SignalFeedPage, {
+          onOpenSignal: vi.fn(),
+          establishmentId,
+        }),
+      )
+
+    const view = render(tree('est-1'))
+    fireEvent.click(screen.getByRole('tab', { name: 'Vue globale' }))
+    expect(readSignalFeedReading(signalFeedReadingScopeKey('establishment', 'est-1'))?.viewMode).toBe(
+      'general',
+    )
+
+    feedQueryCalls.length = 0
+    view.rerender(tree('est-2'))
+
+    expect(screen.getByRole('tab', { name: 'Ma zone' }).getAttribute('aria-selected')).toBe('true')
+    const establishmentCall = feedQueryCalls.find((call) => call[0] === 'est-2')
+    expect(establishmentCall?.[1]).toBe('personal')
+    expect(readSignalFeedReading(signalFeedReadingScopeKey('establishment', 'est-1'))?.viewMode).toBe(
+      'general',
+    )
+    expect(readSignalFeedReading(signalFeedReadingScopeKey('establishment', 'est-2'))?.viewMode).toBe(
+      'personal',
+    )
+  })
 })
 
 describe('SignalFeedPage desktop actions', () => {
