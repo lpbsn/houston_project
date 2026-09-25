@@ -1,18 +1,10 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { LandingPage } from './landing-page'
 import { APP_LOGIN_URL } from '../content'
-
-vi.mock('framer-motion', async () => {
-  const actual = await vi.importActual<typeof import('framer-motion')>('framer-motion')
-  return {
-    ...actual,
-    useReducedMotion: () => true,
-  }
-})
 
 afterEach(() => {
   cleanup()
@@ -50,5 +42,19 @@ describe('LandingPage', () => {
       '/conditions-d-utilisation/',
     )
     expect(screen.getByRole('link', { name: 'Support' }).getAttribute('href')).toBe('/support/')
+  })
+
+  it('opens and closes the demo panel', () => {
+    render(<LandingPage />)
+
+    const demo = document.getElementById('sp-demo')
+    expect(demo?.hasAttribute('hidden')).toBe(true)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Voir Spore en action ↗' }))
+    expect(demo?.hasAttribute('hidden')).toBe(false)
+    expect(screen.getByText('Votre démonstration Spore')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer' }))
+    expect(demo?.hasAttribute('hidden')).toBe(true)
   })
 })
