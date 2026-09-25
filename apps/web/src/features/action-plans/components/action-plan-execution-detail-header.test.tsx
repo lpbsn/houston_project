@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { ActionPlanExecutionDetail } from '@/features/action-plans/types'
 
+import { ActionPlanExecutionDetailDeadlineSection } from './action-plan-execution-detail-deadline-section'
 import { ActionPlanExecutionDetailHeader } from './action-plan-execution-detail-header'
 
 function buildExecution(
@@ -202,5 +203,28 @@ describe('ActionPlanExecutionDetailHeader', () => {
     expect(screen.queryByText('Début')).toBeNull()
     expect(screen.getByText('Deadline')).toBeTruthy()
     expect(screen.getByText('02/07/2026 · Journée entière')).toBeTruthy()
+  })
+})
+
+describe('ActionPlanExecutionDetailDeadlineSection planification', () => {
+  it('groups start and end_at once without repeating Deadline', () => {
+    render(
+      <ActionPlanExecutionDetailDeadlineSection
+        execution={buildExecution({
+          status: 'in_progress',
+          start_at: '2026-06-30T08:00:00Z',
+          end_at: '2026-07-01T18:00:00Z',
+        })}
+        isOverdue={false}
+        isTerminal={false}
+        variant="planification"
+      />,
+    )
+
+    expect(screen.getByText('Planification')).toBeTruthy()
+    expect(screen.getByText('Début')).toBeTruthy()
+    expect(screen.getByText('Échéance')).toBeTruthy()
+    expect(screen.queryByText('Deadline')).toBeNull()
+    expect(screen.getAllByText(/01\/07\/2026/).length).toBe(1)
   })
 })

@@ -11,11 +11,13 @@ import {
   formatActionPlanEndAtLabel,
 } from '../lib/action-plan-display'
 import type { ActionPlanExecutionDetail } from '../types'
+import { ActionPlanExecutionDetailLabel } from './action-plan-execution-detail-label'
 
 type ActionPlanExecutionDetailDeadlineSectionProps = {
   execution: ActionPlanExecutionDetail
   isOverdue: boolean
   isTerminal: boolean
+  variant?: 'cards' | 'planification'
 }
 
 function DateSectionCard({ title, children }: { title: string; children: ReactNode }) {
@@ -33,6 +35,7 @@ export function ActionPlanExecutionDetailDeadlineSection({
   execution,
   isOverdue,
   isTerminal,
+  variant = 'cards',
 }: ActionPlanExecutionDetailDeadlineSectionProps) {
   if (!execution.start_at && !execution.end_at) {
     return null
@@ -53,6 +56,53 @@ export function ActionPlanExecutionDetailDeadlineSection({
     ? formatActionPlanAllDayInstantLabel(execution.end_at)
     : formatActionPlanEndAtLabel(execution.end_at)
   const showOverdue = isOverdue || Boolean(deadlineState?.isOverdue)
+
+  if (variant === 'planification') {
+    const delayLabel = showOverdue
+      ? (deadlineState?.remainingLabel ?? 'Échéance dépassée')
+      : null
+
+    return (
+      <TerrainCard className="space-y-3">
+        <ActionPlanExecutionDetailLabel>Planification</ActionPlanExecutionDetailLabel>
+        {execution.start_at ? (
+          <div className="space-y-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.04em] text-[#7D7B75]">
+              Début
+            </p>
+            <p className="text-[13px] leading-relaxed text-[#1a1a1a]">{startLabel}</p>
+          </div>
+        ) : null}
+        {execution.end_at ? (
+          <div className="space-y-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.04em] text-[#7D7B75]">
+              Échéance
+            </p>
+            <p className="text-[13px] leading-relaxed text-[#1a1a1a]">{endAtLabel}</p>
+          </div>
+        ) : null}
+        {delayLabel ? (
+          <p className="text-[12px] font-semibold leading-snug text-[#E24B4A]">{delayLabel}</p>
+        ) : null}
+        {deadlineState?.mode === 'progress' && deadlineState.progressPct != null ? (
+          <div className="h-1.5 overflow-hidden rounded-full bg-[#F0EFE9]">
+            <div
+              className={cn(
+                'h-full rounded-full transition-[width]',
+                showOverdue ? 'bg-[#E24B4A]' : actionPlanExecutionDetailNavyBgClassName,
+              )}
+              style={{ width: `${deadlineState.progressPct}%` }}
+              role="progressbar"
+              aria-valuenow={deadlineState.progressPct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Progression vers l'échéance"
+            />
+          </div>
+        ) : null}
+      </TerrainCard>
+    )
+  }
 
   return (
     <>

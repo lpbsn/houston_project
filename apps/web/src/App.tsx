@@ -1212,6 +1212,7 @@ function App() {
           title={terrainConfig.title}
           pageTitle={terrainConfig.pageTitle}
           detailTitleLayout={terrainConfig.detailTitleLayout}
+          hideTitle={isDesktopWeb && route.kind === 'action-plan-execution-detail'}
           showBottomBorder={resolveTerrainTopbarShowBottomBorder(route, terrainConfig)}
           onBack={terrainBackPath ? () => navigate(terrainBackPath) : undefined}
           trailing={terrainTopbarTrailing}

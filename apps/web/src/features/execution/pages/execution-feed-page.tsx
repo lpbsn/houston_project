@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, LoaderCircle, Plus } from 'lucide-react'
 
 import { serializeAppRoute, useAppRoute } from '@/app/app-routes'
 import { serializeScopedExecutionDetailPath } from '@/app/scoped-terrain'
 import { useAuth } from '@/app/auth-provider'
 import { getBootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permission-hints'
+import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
+import { useLgViewport } from '@/lib/lg-viewport'
 import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
 import { TerrainHubTitleSlot } from '@/components/layout/terrain-hub-title-slot'
 import { TerrainHubViewToolbar } from '@/components/layout/terrain-hub-view-toolbar'
@@ -27,6 +29,7 @@ import {
 import type { ActionPlanExecutionFeedResponse } from '@/features/action-plans/types'
 
 import { ActionPlanExecutionFeedCard } from '../components/action-plan-execution-feed-card'
+import { ActionPlanExecutionFeedDesktopRow } from '../components/action-plan-execution-feed-desktop-row'
 import { ExecutionCalendarView } from '../components/execution-calendar-view'
 import { ExecutionCreateMenuSheet } from '../components/execution-create-menu-sheet'
 import { ExecutionFeedTabs } from '../components/execution-feed-tabs'
@@ -45,6 +48,11 @@ import {
   partitionActionPlanExecutionFeedPinnedItems,
 } from '../lib/action-plan-execution-feed-sections'
 import { canOpenExecutionCreateMenu } from '../lib/execution-create-menu'
+import {
+  executionFeedReadingScopeKey,
+  readExecutionFeedReading,
+  writeExecutionFeedReading,
+} from '../lib/execution-feed-reading-memory'
 import { getEmptyFeedDescription } from '../lib/execution-feed-empty'
 import {
   calendarAnchorToday,
@@ -89,6 +97,11 @@ export function ExecutionFeedPage({
   const establishmentId =
     establishmentIdProp ?? auth.bootstrap?.active_membership?.establishment_id ?? null
   const isCross = source === 'cross'
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const readingScopeKey = executionFeedReadingScopeKey(source, establishmentId)
+  const [initialReading] = useState(() => readExecutionFeedReading(readingScopeKey))
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const restoredScrollRef = useRef(false)
   const feedUrlOptions = isCross
     ? { defaultViewMode: 'general' as const }
     : undefined
@@ -163,9 +176,11 @@ export function ExecutionFeedPage({
   const { pinnedItems, unpinnedItems } = partitionActionPlanExecutionFeedPinnedItems(planItems)
   const planGroups = groupActionPlanExecutionsBySection(unpinnedItems)
   const sectionKeys = planGroups.map((group) => group.section)
-  const { isExpanded, toggle } = useCollapsibleFeedSections(sectionKeys, {
+  const savedMatchesView = initialReading?.viewMode === viewMode
+  const { isExpanded, toggle, expandedByKey } = useCollapsibleFeedSections(sectionKeys, {
     defaultCollapsedKeys: EXECUTION_FEED_DEFAULT_COLLAPSED_SECTIONS,
     resetToken: viewMode,
+    initialExpandedByKey: savedMatchesView ? initialReading?.expandedByKey : undefined,
   })
 
   const permissionHints = auth.bootstrap
@@ -186,21 +201,66 @@ export function ExecutionFeedPage({
   const hasVisibleItems = pinnedItems.length > 0 || planGroups.length > 0
   const hasMore = planFeedQuery.hasNextPage
   const isFetchingMore = planFeedQuery.isFetchingNextPage
+  const canRememberReading = Boolean(establishmentId) || isCross
+  const savedScrollTop = savedMatchesView ? (initialReading?.scrollTop ?? 0) : 0
+
+  useLayoutEffect(() => {
+    if (restoredScrollRef.current || layout !== 'list') {
+      return
+    }
+    const scroller = scrollRef.current
+    if (!scroller) {
+      return
+    }
+    if (savedScrollTop > 0 && !planFeedQuery.isSuccess) {
+      return
+    }
+    scroller.scrollTop = savedScrollTop
+    restoredScrollRef.current = true
+  }, [layout, planFeedQuery.isSuccess, savedScrollTop])
+
+  useEffect(() => {
+    if (!canRememberReading) {
+      return
+    }
+    writeExecutionFeedReading(readingScopeKey, {
+      viewMode,
+      expandedByKey,
+      scrollTop:
+        layout === 'list' && restoredScrollRef.current
+          ? (scrollRef.current?.scrollTop ?? 0)
+          : savedScrollTop,
+    })
+  }, [canRememberReading, expandedByKey, layout, readingScopeKey, savedScrollTop, viewMode])
 
   const createAction = canCreate ? (
-    <Button
-      type="button"
-      size="icon"
-      className={cn(
-        'h-10 w-10 min-h-10 min-w-10 shrink-0 rounded-xl text-white',
-        terrainBrandAction.bg,
-        terrainBrandAction.hover,
-      )}
-      aria-label="Créer"
-      onClick={() => setIsCreateMenuOpen(true)}
-    >
-      <Plus className="h-5 w-5" />
-    </Button>
+    isDesktopWeb ? (
+      <Button
+        type="button"
+        className={cn(
+          'h-9 shrink-0 rounded-lg px-3 text-sm font-semibold text-white',
+          terrainBrandAction.bg,
+          terrainBrandAction.hover,
+        )}
+        onClick={() => setIsCreateMenuOpen(true)}
+      >
+        Créer
+      </Button>
+    ) : (
+      <Button
+        type="button"
+        size="icon"
+        className={cn(
+          'h-10 w-10 min-h-10 min-w-10 shrink-0 rounded-xl text-white',
+          terrainBrandAction.bg,
+          terrainBrandAction.hover,
+        )}
+        aria-label="Créer"
+        onClick={() => setIsCreateMenuOpen(true)}
+      >
+        <Plus className="h-5 w-5" />
+      </Button>
+    )
   ) : null
 
   function executionDetailPath(executionId: string): string {
@@ -219,6 +279,29 @@ export function ExecutionFeedPage({
     )
   }
 
+  function renderFeedItem(item: (typeof planItems)[number], keyPrefix: string) {
+    if (isDesktopWeb) {
+      return (
+        <ActionPlanExecutionFeedDesktopRow
+          key={`${keyPrefix}-${item.id}`}
+          item={item}
+          onSelect={openExecution}
+          actionsPending={quickActions.isPending}
+          onOpenActions={isCross ? undefined : quickActions.openActions}
+          onSelectAction={isCross ? undefined : quickActions.runAction}
+        />
+      )
+    }
+    return (
+      <ActionPlanExecutionFeedCard
+        key={`${keyPrefix}-${item.id}`}
+        item={item}
+        onSelect={openExecution}
+        onOpenActions={isCross ? undefined : quickActions.openActions}
+      />
+    )
+  }
+
   if (!establishmentId && !isCross) {
     return (
       <p className="px-3 py-4 text-sm text-[#6b5f52]">Établissement non sélectionné.</p>
@@ -229,6 +312,7 @@ export function ExecutionFeedPage({
     <div className="flex h-full min-h-0 flex-col">
       <ExecutionCreateMenuSheet
         open={isCreateMenuOpen}
+        presentation={isDesktopWeb ? 'dialog' : 'sheet'}
         permissionHints={permissionHints ?? undefined}
         onClose={() => setIsCreateMenuOpen(false)}
         onSelectActionPlan={() => onNavigate?.('/action-plans/new?from=execution')}
@@ -275,12 +359,23 @@ export function ExecutionFeedPage({
         </div>
       </TerrainHubSubheader>
       <div
+        ref={scrollRef}
+        data-testid="execution-feed-scroll"
         className={cn(
           'min-h-0 flex-1 px-3 pb-4',
           layout === 'calendar'
             ? 'flex flex-col overflow-hidden'
             : 'overflow-y-auto overscroll-y-contain',
         )}
+        onScroll={(event) => {
+          if (!canRememberReading || layout !== 'list' || !restoredScrollRef.current) {
+            return
+          }
+          writeExecutionFeedReading(readingScopeKey, {
+            viewMode,
+            scrollTop: event.currentTarget.scrollTop,
+          })
+        }}
       >
         {layout === 'calendar' ? (
           <div className="flex min-h-0 flex-1 flex-col pt-3">
@@ -328,15 +423,8 @@ export function ExecutionFeedPage({
             {planFeedQuery.isSuccess && hasVisibleItems ? (
               <>
                 {pinnedItems.length > 0 ? (
-                  <div className="flex flex-col gap-3">
-                    {pinnedItems.map((item) => (
-                      <ActionPlanExecutionFeedCard
-                        key={`plan-pinned-${item.id}`}
-                        item={item}
-                        onSelect={openExecution}
-                        onOpenActions={isCross ? undefined : quickActions.openActions}
-                      />
-                    ))}
+                  <div className={isDesktopWeb ? 'flex flex-col gap-1' : 'flex flex-col gap-3'}>
+                    {pinnedItems.map((item) => renderFeedItem(item, 'plan-pinned'))}
                   </div>
                 ) : null}
 
@@ -351,15 +439,8 @@ export function ExecutionFeedPage({
                         expanded={isExpanded(group.section)}
                         onToggle={() => toggle(group.section)}
                       >
-                        <div className="flex flex-col gap-3">
-                          {group.items.map((item) => (
-                            <ActionPlanExecutionFeedCard
-                              key={`plan-${item.id}`}
-                              item={item}
-                              onSelect={openExecution}
-                              onOpenActions={isCross ? undefined : quickActions.openActions}
-                            />
-                          ))}
+                        <div className={isDesktopWeb ? 'flex flex-col gap-1' : 'flex flex-col gap-3'}>
+                          {group.items.map((item) => renderFeedItem(item, 'plan'))}
                         </div>
                       </TerrainCollapsibleFeedSection>
                     ))}
@@ -397,7 +478,7 @@ export function ExecutionFeedPage({
         )}
       </div>
 
-      {quickActions.activeItem ? (
+      {!isDesktopWeb && quickActions.activeItem ? (
         <ActionPlanExecutionFeedCardActionsSheet
           item={quickActions.activeItem}
           open={quickActions.actionsOpen}
@@ -465,16 +546,23 @@ function CalendarPeriodToolbar({
     </div>
   )
 
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+
   return (
     <div className="px-3 pb-2">
-      <div className="flex flex-wrap items-center gap-2 lg:grid lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+      <div
+        className={cn(
+          'flex flex-wrap items-center gap-2',
+          isDesktopWeb && 'grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]',
+        )}
+      >
         <p className="min-w-0 flex-1 truncate text-sm font-semibold capitalize text-[#1a1a1a]">
           {periodLabel}
         </p>
-        <div className="order-3 w-full lg:order-none lg:w-auto lg:justify-self-center">
+        <div className={cn('order-3 w-full', isDesktopWeb && 'order-none w-auto justify-self-center')}>
           {granularityControl}
         </div>
-        <div className="ml-auto lg:ml-0 lg:justify-self-end">{nav}</div>
+        <div className={cn('ml-auto', isDesktopWeb && 'ml-0 justify-self-end')}>{nav}</div>
       </div>
     </div>
   )

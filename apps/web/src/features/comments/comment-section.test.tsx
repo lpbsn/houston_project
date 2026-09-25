@@ -197,6 +197,21 @@ describe('CommentSection', () => {
     expect(screen.queryByText('Commentaires')).toBeNull()
   })
 
+  it('keeps the composer under the thread without stretching a short list', () => {
+    render(
+      <CommentSection
+        establishmentId="est-1"
+        targetType="action-plan-execution"
+        targetId="exec-1"
+        documentFlow
+        pinComposer={false}
+      />,
+    )
+
+    const composer = screen.getByPlaceholderText('Ajouter un commentaire...')
+    expect(composer.closest('[class*="mt-auto"]')).toBeNull()
+  })
+
   it('renders empty state and disabled submit for empty draft on signal detail', () => {
     render(
       <CommentSection establishmentId="est-1" targetType="signal" targetId="signal-1" />,

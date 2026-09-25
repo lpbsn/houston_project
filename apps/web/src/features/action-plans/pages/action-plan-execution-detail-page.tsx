@@ -4,7 +4,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAppRoute } from '@/app/app-routes'
 import { serializeScopedSignalDetailPath } from '@/app/scoped-terrain'
 import { useAuth } from '@/app/auth-provider'
-import { TerrainEmptyState, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
+import { TerrainDetailTrailingSlot } from '@/components/layout/terrain-detail-trailing-slot'
+import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
+import { useLgViewport } from '@/lib/lg-viewport'
+import { TerrainCard, TerrainEmptyState, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
 import {
   ActionDetailTabs,
   type ActionDetailTab,
@@ -25,11 +28,14 @@ import { resolveApiErrorMessage } from '@/lib/error-message'
 import { OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE, readAiConsentStatus } from '@/lib/legal'
 import { useNetworkStatus } from '@/lib/network-status'
 import { notifySuccess } from '@/lib/success-toast'
-import { cn } from '@/lib/utils'
 
 import { ActionPlansApiError } from '../api'
+import { ActionPlanExecutionDetailContextCard } from '../components/action-plan-execution-detail-context-card'
+import { ActionPlanExecutionDetailDeadlineSection } from '../components/action-plan-execution-detail-deadline-section'
 import { ActionPlanExecutionDetailHeader } from '../components/action-plan-execution-detail-header'
+import { ActionPlanExecutionDetailLabel } from '../components/action-plan-execution-detail-label'
 import { ActionPlanExecutionDetailPoleSummarySection } from '../components/action-plan-execution-detail-pole-summary-section'
+import { ActionPlanExecutionDetailReviewSection } from '../components/action-plan-execution-detail-review-section'
 import { ActionPlanExecutionObservationSheet } from '../components/action-plan-execution-observation-sheet'
 import { ActionPlanExecutionSkipSheet } from '../components/action-plan-execution-skip-sheet'
 import {
@@ -37,6 +43,7 @@ import {
   type ActionPlanTaskActionId,
 } from '../components/action-plan-execution-task-actions-sheet'
 import { ActionPlanExecutionValidateRatingSheet } from '../components/action-plan-execution-validate-rating-sheet'
+import { ActionPlanExecutionLifecycleActions } from '../components/action-plan-execution-lifecycle-actions'
 import { ActionPlanExecutionStickyFooter } from '../components/action-plan-execution-sticky-footer'
 import { ActionPlanExecutionTaskFilters } from '../components/action-plan-execution-task-filters'
 import { ActionPlanExecutionTaskList } from '../components/action-plan-execution-task-list'
@@ -55,6 +62,7 @@ import {
   buildActionPlanPoleTaskSummaries,
   isActionPlanExecutionOverdue,
   isActionPlanExecutionTerminal,
+  isActionPlanTaskPending,
 } from '../lib/action-plan-display'
 import { filterActionPlanTasksByPole } from '../lib/filter-action-plan-tasks-by-pole'
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
@@ -85,6 +93,7 @@ function ActionPlanExecutionDetailPageContent({
 }: ActionPlanExecutionDetailPageContentProps) {
   const { navigate, search: locationSearch } = useAppRoute()
   const { activeMembership, user, bootstrap } = useAuth()
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   const aiConsentGranted = readAiConsentStatus(user ?? bootstrap?.user) === 'granted'
   const { isOnline } = useNetworkStatus()
   const markDoneMutation = useMarkActionPlanExecutionDoneMutation(establishmentId, executionId)
@@ -106,6 +115,9 @@ function ActionPlanExecutionDetailPageContent({
   )
   const [hasOpenedComments, setHasOpenedComments] = useState(initialDeepLink.tab === 'comments')
   const highlightCommentId = initialDeepLink.commentId
+  const commentsAnchorRef = useRef<HTMLElement>(null)
+  const shouldScrollToComments =
+    isDesktopWeb && (initialDeepLink.tab === 'comments' || highlightCommentId != null)
   const shouldFocusValidation = parseDetailDeepLink(locationSearch).focus === 'validation'
   const [dismissedFocusValidationSearch, setDismissedFocusValidationSearch] = useState<string | null>(
     null,
@@ -179,7 +191,8 @@ function ActionPlanExecutionDetailPageContent({
     permissionHints.can_validate ||
     permissionHints.can_reopen ||
     canShowActionPlanExecutionCancel(permissionHints, { isTerminal })
-  const showStickyFooter = resolvedActiveTab === 'details' && canShowLifecycleFooter
+  const showStickyFooter =
+    !isDesktopWeb && resolvedActiveTab === 'details' && canShowLifecycleFooter
   const shouldScrollToValidationActions =
     shouldFocusValidation && resolvedActiveTab === 'details' && permissionHints.can_validate
 
@@ -190,6 +203,13 @@ function ActionPlanExecutionDetailPageContent({
 
     validationActionsRef.current?.scrollIntoView({ block: 'end' })
   }, [shouldScrollToValidationActions])
+
+  useEffect(() => {
+    if (!shouldScrollToComments) {
+      return
+    }
+    commentsAnchorRef.current?.scrollIntoView({ block: 'start' })
+  }, [shouldScrollToComments])
 
   const mutationError =
     markDoneMutation.error ??
@@ -206,6 +226,13 @@ function ActionPlanExecutionDetailPageContent({
       setHasOpenedComments(true)
     }
     setActiveTab(tab)
+  }
+
+  function reportInlineSuccess(message: string) {
+    if (isDesktopWeb) {
+      return
+    }
+    setFeedback({ variant: 'success', message })
   }
 
   async function handleMarkDone() {
@@ -277,7 +304,7 @@ function ActionPlanExecutionDetailPageContent({
     setFeedback(null)
     try {
       await markTaskDoneMutation.mutateAsync(taskExecutionId)
-      setFeedback({ variant: 'success', message: 'Tâche terminée.' })
+      reportInlineSuccess('Tâche terminée.')
     } catch (error) {
       setFeedback({
         variant: 'error',
@@ -290,7 +317,7 @@ function ActionPlanExecutionDetailPageContent({
     setFeedback(null)
     try {
       await markTaskPendingMutation.mutateAsync(taskExecutionId)
-      setFeedback({ variant: 'success', message: 'Tâche remise en cours.' })
+      reportInlineSuccess('Tâche remise en cours.')
     } catch (error) {
       setFeedback({
         variant: 'error',
@@ -307,7 +334,7 @@ function ActionPlanExecutionDetailPageContent({
         body: {},
       })
       setSkipTaskId(null)
-      setFeedback({ variant: 'success', message: 'Tâche passée.' })
+      reportInlineSuccess('Tâche passée.')
     } catch (error) {
       setFeedback({
         variant: 'error',
@@ -349,7 +376,7 @@ function ActionPlanExecutionDetailPageContent({
       })
       observationDraft.clear()
       setObservationTaskId(null)
-      setFeedback({ variant: 'success', message: 'Observation créée.' })
+      reportInlineSuccess('Observation créée.')
     } catch (error) {
       const resynced = await resyncBootstrapAfterLegalError(error)
       setFeedback({
@@ -383,30 +410,191 @@ function ActionPlanExecutionDetailPageContent({
     setObservationTaskId(taskActionsTask.id)
   }
 
+  const linkedSignal = signalSummary ? (
+    <ActionLinkedSignalCard
+      title={signalSummary.title}
+      locationText={signalSummary.location_text || null}
+      onPress={() => signalSummaryPath && navigate(signalSummaryPath)}
+    />
+  ) : null
+  const commentSection = (
+    <CommentSection
+      establishmentId={establishmentId}
+      targetType="action-plan-execution"
+      targetId={executionId}
+      highlightCommentId={highlightCommentId}
+      readOnly={source === 'cross'}
+      documentFlow={isDesktopWeb}
+      documentFlowTitle={
+        isDesktopWeb ? (
+          <ActionPlanExecutionDetailLabel>Commentaires</ActionPlanExecutionDetailLabel>
+        ) : undefined
+      }
+      pinComposer={!isDesktopWeb}
+      attachTrigger={isDesktopWeb ? 'icon' : 'label'}
+      attachEnabled={
+        source !== 'cross' &&
+        (execution.status === 'in_progress' || execution.status === 'pending_validation')
+      }
+    />
+  )
+  const taskTotal = execution.task_executions.length
+  const taskTreated = execution.task_executions.filter(
+    (task) => !isActionPlanTaskPending(task),
+  ).length
+  const taskZoneBody = (
+    <>
+      {isDesktopWeb ? null : <ActionPlanExecutionDetailPoleSummarySection execution={execution} />}
+      {poleSummaries.length > 1 ? (
+        <ActionPlanExecutionTaskFilters
+          poles={poleSummaries}
+          selectedPoleId={selectedPoleId}
+          onSelectedPoleIdChange={setSelectedPoleId}
+        />
+      ) : null}
+      {filteredTasks.length === 0 ? (
+        <TerrainEmptyState title="Aucune tâche pour ce pôle." />
+      ) : (
+          <ActionPlanExecutionTaskList
+            tasks={filteredTasks}
+            isTerminal={isTerminal}
+            isMutationPending={isMutationPending}
+            density={isDesktopWeb ? 'compact' : 'default'}
+            onMarkDone={handleTaskMarkDone}
+            onUnmarkDone={handleTaskMarkPending}
+            onOpenTaskActions={setTaskActionsTask}
+          />
+      )}
+    </>
+  )
+  const taskZone =
+    taskTotal === 0 ? (
+      <TerrainEmptyState title="Aucune tâche dans cette exécution." />
+    ) : isDesktopWeb ? (
+      <section className="rounded-xl border border-[#E8E6DF] bg-[#FAFAF8] px-3 py-3">
+        <div className="mb-2 flex items-baseline justify-between gap-3">
+          <ActionPlanExecutionDetailLabel className="text-[#7D7B75]">
+            Tâches par pôle
+          </ActionPlanExecutionDetailLabel>
+          <span className="shrink-0 text-[12px] tabular-nums text-[#7D7B75]">
+            {taskTreated}/{taskTotal}
+          </span>
+        </div>
+        {taskZoneBody}
+      </section>
+    ) : (
+      <>
+        <TerrainSectionLabel>Tâches par pôle</TerrainSectionLabel>
+        {taskZoneBody}
+      </>
+    )
+  const executionHeader = (
+    <ActionPlanExecutionDetailHeader
+      execution={execution}
+      isOverdue={isOverdue}
+      currentMembershipId={activeMembership?.id ?? null}
+    />
+  )
+  const lifecycleActions = canShowLifecycleFooter ? (
+    <ActionPlanExecutionLifecycleActions
+      hints={permissionHints}
+      isTerminal={isTerminal}
+      isPending={isMutationPending}
+      layout="page"
+      onMarkDone={() => void handleMarkDone()}
+      onValidate={() => void handleValidate()}
+      onReopen={() => void handleReopen()}
+      onCancel={() => void handleCancel()}
+    />
+  ) : null
+
   return (
     <div className="flex min-h-full flex-col">
-      {signalSummary ? (
-        <ActionLinkedSignalStrip>
-          <ActionLinkedSignalCard
-            title={signalSummary.title}
-            locationText={signalSummary.location_text || null}
-            onPress={() => signalSummaryPath && navigate(signalSummaryPath)}
-          />
-        </ActionLinkedSignalStrip>
-      ) : null}
+      {isDesktopWeb || !signalSummary ? null : (
+        <ActionLinkedSignalStrip>{linkedSignal}</ActionLinkedSignalStrip>
+      )}
 
       <div
         data-testid="execution-detail-frame"
         className="flex w-full flex-1 flex-col"
       >
-      <div
-        data-testid="execution-detail-tab-bar"
-        className="px-3 pt-2 lg:sticky lg:top-0 lg:z-20 lg:border-b lg:border-[#E8E6DF] lg:bg-[#F5F4F0] lg:px-6 lg:py-3"
-      >
+      {isDesktopWeb ? (
+        <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-6 pt-4 pb-8">
+          <TerrainDetailTrailingSlot>
+            {canShowLifecycleFooter ? (
+              <div
+                ref={validationActionsRef}
+                data-testid="execution-detail-page-actions"
+                className="flex min-w-0 flex-wrap items-center justify-end gap-2"
+              >
+                {mutationError ? (
+                  <p className="text-sm text-destructive" role="alert">
+                    {resolveApiErrorMessage(mutationError, ActionPlansApiError, 'Action impossible.')}
+                  </p>
+                ) : null}
+                {lifecycleActions}
+              </div>
+            ) : null}
+          </TerrainDetailTrailingSlot>
+          {feedback && feedback.variant === 'error' ? (
+            <TerrainFeedback variant={feedback.variant} message={feedback.message} />
+          ) : null}
+          <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
+            <div
+              data-testid="execution-detail-main"
+              className="flex min-w-0 flex-col gap-4 xl:col-start-1 xl:row-start-1"
+            >
+              <TerrainCard>
+                <ActionPlanExecutionDetailLabel>Titre</ActionPlanExecutionDetailLabel>
+                <h1 className="mt-2 text-[13px] font-normal leading-relaxed text-[#1a1a1a]">
+                  {execution.title}
+                </h1>
+              </TerrainCard>
+              <TerrainCard>
+                <ActionPlanExecutionDetailLabel>Description</ActionPlanExecutionDetailLabel>
+                <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed text-[#1a1a1a]">
+                  {execution.description.trim() || 'Aucune description.'}
+                </p>
+              </TerrainCard>
+              {taskZone}
+            </div>
+            <div
+              data-testid="execution-detail-context"
+              className="flex min-w-0 flex-col gap-4 self-start xl:col-start-2 xl:row-start-1 xl:row-span-2"
+            >
+              <ActionPlanExecutionDetailContextCard
+                execution={execution}
+                currentMembershipId={activeMembership?.id ?? null}
+              />
+              <ActionPlanExecutionDetailDeadlineSection
+                execution={execution}
+                isOverdue={isOverdue}
+                isTerminal={isTerminal}
+                variant="planification"
+              />
+              {execution.active_review != null ? (
+                <ActionPlanExecutionDetailReviewSection activeReview={execution.active_review} />
+              ) : null}
+              {linkedSignal}
+            </div>
+            <section
+              ref={commentsAnchorRef}
+              id="execution-detail-comments"
+              aria-label="Commentaires"
+              data-testid="execution-detail-comments-section"
+              className="flex scroll-mt-4 flex-col xl:col-start-1 xl:row-start-2"
+            >
+              <TerrainCard>{commentSection}</TerrainCard>
+            </section>
+          </div>
+        </div>
+      ) : (
+        <>
+      <div data-testid="execution-detail-tab-bar" className="px-3 pt-2">
         <ActionDetailTabs activeTab={resolvedActiveTab} onChange={handleTabChange} />
       </div>
 
-      <div className="flex w-full flex-1 flex-col lg:px-6 lg:pt-4 lg:pb-6">
+      <div className="flex w-full flex-1 flex-col">
         <div
           role="tabpanel"
           id="execution-detail-panel-details"
@@ -416,54 +604,18 @@ function ActionPlanExecutionDetailPageContent({
         >
           <div
             data-testid="execution-detail-details-content"
-            className={cn(
-              'flex flex-col gap-2.5 px-3 pt-2',
-              showStickyFooter ? 'lg:pb-0' : 'pb-4',
-            )}
+            className="flex flex-col gap-2.5 px-3 pt-2 pb-4"
           >
-            <ActionPlanExecutionDetailHeader
-              execution={execution}
-              isOverdue={isOverdue}
-              currentMembershipId={activeMembership?.id ?? null}
-            />
-
+            {executionHeader}
             {feedback ? (
               <TerrainFeedback variant={feedback.variant} message={feedback.message} />
             ) : null}
-
-            {execution.task_executions.length === 0 ? (
-              <TerrainEmptyState title="Aucune tâche dans cette exécution." />
-            ) : (
-              <>
-                <TerrainSectionLabel>Tâches par pôle</TerrainSectionLabel>
-                <ActionPlanExecutionDetailPoleSummarySection execution={execution} />
-                {poleSummaries.length > 1 ? (
-                  <ActionPlanExecutionTaskFilters
-                    poles={poleSummaries}
-                    selectedPoleId={selectedPoleId}
-                    onSelectedPoleIdChange={setSelectedPoleId}
-                  />
-                ) : null}
-                {filteredTasks.length === 0 ? (
-                  <TerrainEmptyState title="Aucune tâche pour ce pôle." />
-                ) : (
-                  <ActionPlanExecutionTaskList
-                    tasks={filteredTasks}
-                    isTerminal={isTerminal}
-                    isMutationPending={isMutationPending}
-                    onMarkDone={handleTaskMarkDone}
-                    onUnmarkDone={handleTaskMarkPending}
-                    onOpenTaskActions={setTaskActionsTask}
-                  />
-                )}
-              </>
-            )}
+            {taskZone}
           </div>
 
           {showStickyFooter ? (
             <ActionPlanExecutionStickyFooter
               ref={validationActionsRef}
-              className="lg:mt-0 lg:rounded-2xl lg:border lg:border-[#E8E6DF] lg:bg-white lg:p-4 lg:shadow-none"
               data-testid="execution-validation-actions"
               hints={permissionHints}
               isTerminal={isTerminal}
@@ -489,24 +641,16 @@ function ActionPlanExecutionDetailPageContent({
             data-testid="execution-detail-comments-panel"
             className={
               resolvedActiveTab === 'comments'
-                ? 'flex min-h-0 flex-1 flex-col px-3 pt-2 pb-4 lg:px-0 lg:pt-0'
+                ? 'flex min-h-0 flex-1 flex-col px-3 pt-2 pb-4'
                 : 'hidden'
             }
           >
-            <CommentSection
-              establishmentId={establishmentId}
-              targetType="action-plan-execution"
-              targetId={executionId}
-              highlightCommentId={highlightCommentId}
-              readOnly={source === 'cross'}
-              attachEnabled={
-                source !== 'cross' &&
-                (execution.status === 'in_progress' || execution.status === 'pending_validation')
-              }
-            />
+            {commentSection}
           </div>
         ) : null}
       </div>
+        </>
+      )}
       </div>
 
       <ActionPlanExecutionTaskActionsSheet

@@ -18,6 +18,7 @@ type ActionPlanExecutionTaskRowProps = {
   canShowUnmarkDone: boolean
   canShowSecondaryActions: boolean
   isMutationPending: boolean
+  density?: 'default' | 'compact'
   onMarkDone: () => void
   onUnmarkDone: () => void
   onOpenActions: () => void
@@ -87,6 +88,7 @@ export function ActionPlanExecutionTaskRow({
   canShowUnmarkDone,
   canShowSecondaryActions,
   isMutationPending,
+  density = 'default',
   onMarkDone,
   onUnmarkDone,
   onOpenActions,
@@ -130,6 +132,47 @@ export function ActionPlanExecutionTaskRow({
     />
   )
 
+  const actions = showSecondaryActions ? (
+    <FeedCardActionsButton
+      ariaLabel="Actions sur la tâche"
+      disabled={isMutationPending}
+      onClick={onOpenActions}
+    />
+  ) : null
+
+  if (density === 'compact') {
+    return (
+      <div
+        className={cn(
+          'flex items-start gap-1 py-1.5',
+          isObservationCreated && 'rounded-lg px-1',
+        )}
+      >
+        {statusIndicator}
+        <div className="min-w-0 flex-1 self-center">
+          <p
+            className={cn(
+              'break-words text-[13px] font-normal leading-snug text-[#1a1a1a]',
+              isDone && 'text-[#7D7B75] line-through decoration-[#B8B6B0]',
+              isSkipped && 'text-[#7D7B75]',
+            )}
+          >
+            {task.task}
+          </p>
+          {poleLabel ? (
+            <p className="mt-0.5 break-words text-[11px] leading-snug text-[#9a958c]">{poleLabel}</p>
+          ) : null}
+          {task.description ? (
+            <p className="mt-0.5 break-words whitespace-pre-wrap text-[12px] leading-snug text-[#7D7B75]">
+              {task.description}
+            </p>
+          ) : null}
+        </div>
+        {actions ? <div className="shrink-0 self-center">{actions}</div> : null}
+      </div>
+    )
+  }
+
   return (
     <ActionPlanTaskDetailLayout
       className={cn(
@@ -149,15 +192,7 @@ export function ActionPlanExecutionTaskRow({
         </p>
       }
       meta={assigneePoleLine}
-      actions={
-        showSecondaryActions ? (
-          <FeedCardActionsButton
-            ariaLabel="Actions sur la tâche"
-            disabled={isMutationPending}
-            onClick={onOpenActions}
-          />
-        ) : null
-      }
+      actions={actions}
       deadline={deadlineLabel ? `Échéance : ${deadlineLabel}` : null}
       status={
         !isPending ? (

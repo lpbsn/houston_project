@@ -6,10 +6,30 @@ import {
   formatActionPlanFeedTaskProgressLabel,
   getActionPlanFeedProgressState,
   getActionPlanFeedSidebarState,
+  formatExecutionFeedCreatedLabel,
+  formatExecutionFeedDelayLabel,
   getActionPlanFeedStartCountdownState,
 } from './action-plan-execution-feed-card-display'
 
 const NOW = Date.parse('2026-07-10T12:00:00Z')
+
+describe('execution feed desktop row labels', () => {
+  it('keeps a delay label for an overdue deadline and omits it otherwise', () => {
+    expect(
+      formatExecutionFeedDelayLabel(
+        getActionPlanFeedSidebarState('2026-07-10T08:00:00Z', NOW, true),
+      ),
+    ).toMatch(/^RETARD /)
+    expect(
+      formatExecutionFeedDelayLabel(getActionPlanFeedSidebarState('2026-07-10T16:00:00Z', NOW)),
+    ).toBeNull()
+  })
+
+  it('formats the created date without a time', () => {
+    expect(formatExecutionFeedCreatedLabel('2026-06-30T08:00:00Z')).toMatch(/^Créé le /)
+    expect(formatExecutionFeedCreatedLabel('not-a-date')).toBeNull()
+  })
+})
 
 describe('getActionPlanFeedSidebarState', () => {
   it('returns countdown in hours when end_at is within 24 hours', () => {

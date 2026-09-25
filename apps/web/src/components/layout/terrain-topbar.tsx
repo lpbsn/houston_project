@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { ArrowLeft } from 'lucide-react'
 
 import type { TerrainDetailTitleLayout } from '@/app/terrain-routes'
+import { useTerrainDetailTrailingSlotValue } from '@/components/layout/terrain-detail-trailing-slot'
 import { useTerrainHubTitleSlotValue } from '@/components/layout/terrain-hub-title-slot'
 import { Button } from '@/components/ui/button'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
@@ -18,6 +19,7 @@ type TerrainTopbarProps = {
   showBottomBorder?: boolean
   trailing?: ReactNode
   afterTitle?: ReactNode
+  hideTitle?: boolean
 }
 
 function TrailingSlot({ trailing }: { trailing?: ReactNode }) {
@@ -29,11 +31,17 @@ function TrailingSlot({ trailing }: { trailing?: ReactNode }) {
 }
 
 function DetailTrailingSlot({ trailing }: { trailing?: ReactNode }) {
-  if (!trailing) {
+  const slotted = useTerrainDetailTrailingSlotValue()
+  if (!trailing && !slotted) {
     return <span className="w-16" aria-hidden />
   }
 
-  return <div className="flex min-w-16 justify-end">{trailing}</div>
+  return (
+    <div className="flex min-w-16 items-center justify-end gap-2">
+      {slotted}
+      {trailing}
+    </div>
+  )
 }
 
 export function TerrainTopbar({
@@ -45,6 +53,7 @@ export function TerrainTopbar({
   showBottomBorder = true,
   trailing,
   afterTitle,
+  hideTitle = false,
 }: TerrainTopbarProps) {
   const slotAfterTitle = useTerrainHubTitleSlotValue()
   const titleAddon = afterTitle ?? slotAfterTitle
@@ -156,7 +165,11 @@ export function TerrainTopbar({
         ) : (
           <span className="w-16" aria-hidden />
         )}
-        <span className="text-sm font-medium text-[#1a1a1a]">{title ?? 'Observation'}</span>
+        {hideTitle ? (
+          <span className="min-w-0 flex-1" aria-hidden />
+        ) : (
+          <span className="text-sm font-medium text-[#1a1a1a]">{title ?? 'Observation'}</span>
+        )}
         <DetailTrailingSlot trailing={trailing} />
       </div>
     </header>

@@ -24,6 +24,7 @@ type ActionPlanExecutionLifecycleActionsProps = {
   hints: ActionPlanExecutionPermissionHints
   isTerminal: boolean
   isPending: boolean
+  layout?: 'touch' | 'page'
   onMarkDone: () => void
   onValidate: () => void
   onReopen: () => void
@@ -56,6 +57,7 @@ export function ActionPlanExecutionLifecycleActions({
   hints,
   isTerminal,
   isPending,
+  layout = 'touch',
   onMarkDone,
   onValidate,
   onReopen,
@@ -77,7 +79,7 @@ export function ActionPlanExecutionLifecycleActions({
       key: 'mark-done',
       label: 'Marquer terminé',
       ariaLabel: 'Marquer terminé',
-      content: renderMarkDoneLabel(),
+      content: layout === 'page' ? 'Marquer terminé' : renderMarkDoneLabel(),
       onClick: onMarkDone,
       tone: 'markDone',
     })
@@ -121,7 +123,13 @@ export function ActionPlanExecutionLifecycleActions({
     tone: LifecycleTone,
     ariaLabel?: string,
   ) => {
-    const className = getLifecycleButtonClassName(tone)
+    const isSecondaryPageAction = layout === 'page' && (tone === 'reopen' || tone === 'cancel')
+    const className = cn(
+      getLifecycleButtonClassName(tone),
+      layout === 'page' && 'h-9 min-h-9 flex-none rounded-lg px-3 text-sm',
+      isSecondaryPageAction &&
+        'bg-transparent text-[#5F5A52] hover:bg-[#F5F4F0] hover:text-[#1a1a1a]',
+    )
 
     if (shouldReduceMotion || isPending) {
       return (
@@ -154,7 +162,7 @@ export function ActionPlanExecutionLifecycleActions({
   }
 
   return (
-    <div className="flex w-full gap-2">
+    <div className={layout === 'page' ? 'flex flex-wrap justify-end gap-2' : 'flex w-full gap-2'}>
       {buttons.map(({ key, content, onClick, tone, ariaLabel }) =>
         renderActionButton(content, onClick, key, tone, ariaLabel),
       )}

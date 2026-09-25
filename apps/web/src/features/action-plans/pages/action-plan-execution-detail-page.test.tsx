@@ -9,11 +9,14 @@ import type { ActionPlanExecutionDetail } from '@/features/action-plans/types'
 import { __resetObservationComposeDraftStoreForTests } from '@/features/observations/lib/observation-compose-draft-store'
 import { AI_CONSENT_REQUIRED_CODE, OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE } from '@/lib/legal'
 
+import { TerrainTopbar } from '@/components/layout/terrain-topbar'
+
 import { ActionPlanExecutionDetailPage } from './action-plan-execution-detail-page'
 
 const detailQueryMock = vi.fn()
 const navigateMock = vi.fn()
 const validateMutateAsyncMock = vi.fn()
+const markTaskDoneMutateAsyncMock = vi.fn()
 const observationMutateAsyncMock = vi.fn()
 
 const { CommentSectionMock, authUser, resyncBootstrapAfterLegalError } = vi.hoisted(() => ({
@@ -134,7 +137,7 @@ vi.mock('../hooks', () => ({
     error: null,
   }),
   useMarkActionPlanTaskDoneMutation: () => ({
-    mutateAsync: vi.fn(),
+    mutateAsync: markTaskDoneMutateAsyncMock,
     isPending: false,
     error: null,
   }),
@@ -207,8 +210,24 @@ function buildMultiPoleExecution(): ActionPlanExecutionDetail {
   })
 }
 
-function renderPage() {
-  return render(createElement(ActionPlanExecutionDetailPage, { executionId: 'exec-1' }))
+function renderPage(options: { onBack?: () => void; withDesktopTopbar?: boolean } = {}) {
+  const page = createElement(ActionPlanExecutionDetailPage, { executionId: 'exec-1' })
+  if (!options.withDesktopTopbar) {
+    return render(page)
+  }
+  return render(
+    createElement(
+      'div',
+      null,
+      createElement(TerrainTopbar, {
+        variant: 'detail',
+        title: "Plan d'action",
+        hideTitle: true,
+        onBack: options.onBack,
+      }),
+      page,
+    ),
+  )
 }
 
 function getDetailsTab() {
@@ -219,12 +238,31 @@ function getCommentsTab() {
   return screen.getByRole('tab', { name: 'Commentaires' })
 }
 
+function mockLgViewport(matches: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+}
+
 afterEach(() => {
   window.history.replaceState(null, '', '/')
   cleanup()
   __resetObservationComposeDraftStoreForTests()
   authUser.current.ai_consent_status = 'granted'
   vi.clearAllMocks()
+  vi.unstubAllEnvs()
+  Reflect.deleteProperty(window, 'matchMedia')
   resyncBootstrapAfterLegalError.mockResolvedValue(null)
 })
 
@@ -883,6 +921,39 @@ describe('ActionPlanExecutionDetailPage UI refonte', () => {
     expect(screen.getAllByText('Tâches par pôle')).toHaveLength(1)
   })
 
+  it('still shows the task success banner on touch after marking a task done', async () => {
+    markTaskDoneMutateAsyncMock.mockResolvedValue({})
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildExecution({
+        task_executions: [
+          buildTaskExecution({
+            id: 'task-1',
+            task: 'Contrôler la terrasse',
+            position: 1,
+            business_unit: {
+              id: 'bu-1',
+              specific_name: 'Restaurant',
+              instance_description: '',
+              active: true,
+              generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' },
+            },
+          }),
+        ],
+      }),
+      error: null,
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Marquer « Contrôler la terrasse » comme terminée' }),
+    )
+
+    expect(await screen.findByText('Tâche terminée.')).toBeTruthy()
+  })
+
   it('exposes Marquer terminé via aria-label despite two-line visual label', () => {
     renderPage()
 
@@ -1142,5 +1213,160 @@ describe('ActionPlanExecutionDetailPage observation compose', () => {
     })
     expect(screen.queryByText('Le traitement OpenAI n’est pas autorisé.')).toBeNull()
     expect(screen.queryByText('L’observation n’a pas pu être créée.')).toBeNull()
+  })
+})
+
+describe('ActionPlanExecutionDetailPage desktop composition', () => {
+  const restaurantUnit = {
+    id: 'bu-1',
+    specific_name: 'Restaurant',
+    instance_description: '',
+    active: true,
+    generic: {
+      key: 'restaurant',
+      label: 'Restaurant',
+      description: '',
+      unit_type: 'dedicated' as const,
+    },
+  }
+
+  beforeEach(() => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildExecution({
+        start_at: '2026-06-30T08:00:00Z',
+        end_at: '2026-07-01T18:00:00Z',
+        task_executions: [
+          buildTaskExecution({
+            id: 'task-1',
+            task: 'Contrôler la terrasse',
+            position: 1,
+            business_unit: restaurantUnit,
+          }),
+        ],
+        signal_summary: {
+          id: 'signal-42',
+          title: 'Fuite terrasse',
+          status: 'open',
+          affected_business_unit_id: null,
+          affected_business_unit_key: null,
+          affected_business_unit_label: null,
+          responsible_business_unit_id: null,
+          responsible_business_unit_key: null,
+          responsible_business_unit_label: null,
+          activity_subject_id: null,
+          activity_subject_normalized_name: null,
+          activity_subject_label: null,
+          location_text: 'Terrasse',
+        },
+      }),
+      error: null,
+      refetch: vi.fn(),
+    })
+  })
+
+  it('keeps tasks ahead of comments and leaves the context beside them', () => {
+    mockLgViewport(true)
+    const onBack = vi.fn()
+    renderPage({ onBack, withDesktopTopbar: true })
+
+    expect(screen.queryByRole('tablist', { name: "Sections du plan d'action" })).toBeNull()
+    expect(screen.queryByText("Plan d'action")).toBeNull()
+    const main = screen.getByTestId('execution-detail-main')
+    const context = screen.getByTestId('execution-detail-context')
+    const frame = screen.getByTestId('execution-detail-frame')
+    const title = screen.getByRole('heading', { level: 1, name: 'Plan nettoyage terrasse' })
+    expect(title.className).toContain('font-normal')
+    expect(main.contains(screen.getByText('Titre'))).toBe(true)
+    expect(main.contains(title)).toBe(true)
+    expect(main.contains(screen.getByText('Description'))).toBe(true)
+    const tasks = screen.getByText('Tâches par pôle')
+    const comments = screen.getByTestId('execution-detail-comments-section')
+    const task = screen.getByText('Contrôler la terrasse')
+    expect(main.contains(tasks)).toBe(true)
+    expect(main.contains(screen.getByText('0/1'))).toBe(true)
+    expect(main.contains(task)).toBe(true)
+    expect(main.contains(comments)).toBe(false)
+    expect(
+      screen.getByText('Description').compareDocumentPosition(tasks) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(tasks.compareDocumentPosition(context) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(context.compareDocumentPosition(comments) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(context.contains(screen.getByText('Contexte'))).toBe(true)
+    expect(context.contains(screen.getByText('Planification'))).toBe(true)
+    expect(screen.queryByText('Deadline')).toBeNull()
+    expect(
+      context.contains(screen.getByRole('button', { name: 'Voir l’observation liée' })),
+    ).toBe(true)
+    expect(main.contains(screen.getByText('Observation liée'))).toBe(false)
+    expect(frame.contains(screen.getByRole('button', { name: 'Retour' }))).toBe(false)
+    const actions = screen.getByTestId('execution-detail-page-actions')
+    expect(actions.contains(screen.getByRole('button', { name: 'Marquer terminé' }))).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Retour' }))
+    expect(onBack).toHaveBeenCalledOnce()
+    expect(screen.queryByTestId('execution-validation-actions')).toBeNull()
+    expect(CommentSectionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        documentFlow: true,
+        targetId: 'exec-1',
+        attachTrigger: 'icon',
+        pinComposer: false,
+        documentFlowTitle: expect.anything(),
+      }),
+      undefined,
+    )
+  })
+
+  it('does not keep a task success banner above the title card', async () => {
+    mockLgViewport(true)
+    markTaskDoneMutateAsyncMock.mockResolvedValue({})
+    renderPage()
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Marquer « Contrôler la terrasse » comme terminée' }),
+    )
+
+    await waitFor(() => {
+      expect(markTaskDoneMutateAsyncMock).toHaveBeenCalledWith('task-1')
+    })
+    expect(screen.queryByText('Tâche terminée.')).toBeNull()
+    expect(screen.queryByText('Tâche remise en cours.')).toBeNull()
+    expect(screen.queryByText('Tâche passée.')).toBeNull()
+    expect(screen.queryByText('Observation créée.')).toBeNull()
+    expect(screen.getByText('Titre')).toBeTruthy()
+  })
+
+  it('scrolls to comments and keeps the direct comment link on desktop', () => {
+    mockLgViewport(true)
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+    window.history.replaceState(
+      null,
+      '',
+      '/action-plans/executions/exec-1?tab=comments&commentId=comment-42',
+    )
+
+    renderPage()
+
+    expect(screen.getByTestId('execution-detail-comments-section')).toBeTruthy()
+    expect(CommentSectionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ highlightCommentId: 'comment-42' }),
+      undefined,
+    )
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' })
+  })
+
+  it('keeps tabs and the tactile footer on a large native viewport', () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    mockLgViewport(true)
+    renderPage()
+
+    expect(screen.getByRole('tablist', { name: "Sections du plan d'action" })).toBeTruthy()
+    expect(screen.queryByTestId('execution-detail-comments-section')).toBeNull()
+    expect(screen.queryByTestId('comment-section')).toBeNull()
+    expect(screen.getByTestId('execution-validation-actions').tagName).toBe('FOOTER')
+    expect(screen.queryByTestId('execution-detail-page-actions')).toBeNull()
   })
 })

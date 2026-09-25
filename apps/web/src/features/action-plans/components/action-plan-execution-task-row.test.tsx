@@ -110,6 +110,16 @@ describe('ActionPlanExecutionTaskRow', () => {
     expect(onOpenActions).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps a compact checkbox row with a discreet pole and the action menu', () => {
+    renderRow({ density: 'compact' })
+
+    const title = screen.getByText('Nettoyer la terrasse')
+    expect(title.className).toContain('font-normal')
+    expect(screen.getByText('Restaurant')).toBeTruthy()
+    const actions = screen.getByRole('button', { name: 'Actions sur la tâche' })
+    expect(title.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('shows distinct status labels for terminal states', () => {
     const { unmount } = render(
       createElement(ActionPlanExecutionTaskRow, {

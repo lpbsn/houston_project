@@ -203,6 +203,21 @@ export function getActionPlanFeedSidebarState(
   }
 }
 
+export function formatExecutionFeedDelayLabel(state: ActionPlanFeedSidebarState): string | null {
+  if (state.variant !== 'overdue') {
+    return null
+  }
+  return `${state.prefix} ${state.value}`
+}
+
+export function formatExecutionFeedCreatedLabel(createdAt: string): string | null {
+  const date = new Date(createdAt)
+  if (Number.isNaN(date.getTime())) {
+    return null
+  }
+  return `Créé le ${date.toLocaleDateString('fr-FR')}`
+}
+
 export type ActionPlanFeedProgressState = {
   total: number
   filled: number

@@ -47,6 +47,7 @@ type CommentThreadItemProps = {
   onUnresolve: (commentId: string) => void
   onOpenAttachment?: (attachment: CommentAttachment) => void
   attachEnabled?: boolean
+  attachTrigger?: 'label' | 'icon'
   executionId?: string
 }
 
@@ -294,6 +295,7 @@ export function ActionCommentThreadCard({
   onUnresolve,
   onOpenAttachment,
   attachEnabled = false,
+  attachTrigger = 'label',
   executionId,
 }: CommentThreadItemProps) {
   const isThread = isExecutionThreadItem(item)
@@ -356,6 +358,7 @@ export function ActionCommentThreadCard({
               errorMessage={replyErrorMessage}
               placeholder={`Répondre à ${item.author.display_name}…`}
               attachEnabled={attachEnabled}
+              attachTrigger={attachTrigger}
               executionId={executionId}
               onSubmit={({ body, mentionedMembershipIds, attachmentIds }) => {
                 onReply(

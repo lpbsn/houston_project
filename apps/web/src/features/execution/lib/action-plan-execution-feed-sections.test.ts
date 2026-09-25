@@ -30,6 +30,7 @@ function buildFeedItem(
     task_executions: [],
     last_activity_at: '2026-06-13T12:00:00Z',
     created_at: '2026-06-13T12:00:00Z',
+    created_by_display_name: 'Alice Martin',
     is_pinned: false,
     permission_hints: {
       can_mark_done: true,

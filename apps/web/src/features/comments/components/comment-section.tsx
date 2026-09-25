@@ -38,8 +38,11 @@ type CommentSectionProps = {
   highlightCommentId?: string | null
   readOnly?: boolean
   attachEnabled?: boolean
+  attachTrigger?: 'label' | 'icon'
+  documentFlowTitle?: ReactNode
   /** Page flow: the thread grows with its content. The panel layout keeps an internal scroller. */
   documentFlow?: boolean
+  pinComposer?: boolean
 }
 
 function CommentUnavailableMessage() {
@@ -57,16 +60,23 @@ function OperationalCommentsLayout({
   list,
   composer,
   documentFlow = false,
+  pinComposer = true,
 }: {
   list: ReactNode
   composer: ReactNode
   documentFlow?: boolean
+  pinComposer?: boolean
 }) {
   if (documentFlow) {
     return (
-      <div data-testid="comment-section" className="flex min-h-0 flex-1 flex-col">
+      <div
+        data-testid="comment-section"
+        className={cn('flex flex-col', pinComposer && 'min-h-0 flex-1')}
+      >
         <div className="flex flex-col">{list}</div>
-        {composer ? <div className="mt-auto shrink-0 pt-6">{composer}</div> : null}
+        {composer ? (
+          <div className={cn('shrink-0 pt-4', pinComposer && 'mt-auto pt-6')}>{composer}</div>
+        ) : null}
       </div>
     )
   }
@@ -111,7 +121,10 @@ export function CommentSection({
   highlightCommentId = null,
   readOnly = false,
   attachEnabled = false,
+  attachTrigger = 'label',
+  documentFlowTitle,
   documentFlow = false,
+  pinComposer = true,
 }: CommentSectionProps) {
   const composerRef = useRef<CommentComposerHandle>(null)
   const [replyErrorCommentId, setReplyErrorCommentId] = useState<string | null>(null)
@@ -203,24 +216,33 @@ export function CommentSection({
     setPreviewAttachment(attachment)
   }
 
+  const mediaAccessButton = isExecution ? (
+    <button
+      type="button"
+      className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-[#E8E6DF] bg-[#F5F4F0] px-2.5 py-1.5 text-xs font-semibold text-[#1a1a1a]"
+      data-testid="execution-plan-medias"
+      onClick={() => setInfoOpen(true)}
+    >
+      <Info className="h-3.5 w-3.5" aria-hidden="true" />
+      Médias
+    </button>
+  ) : null
+
   const list = (
     <>
-      <div className="flex items-center gap-2">
-        {isExecution ? (
-          <button
-            type="button"
-            className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-[#E8E6DF] bg-[#F5F4F0] px-2.5 py-1.5 text-xs font-semibold text-[#1a1a1a]"
-            data-testid="execution-plan-medias"
-            onClick={() => setInfoOpen(true)}
-          >
-            <Info className="h-3.5 w-3.5" aria-hidden="true" />
-            Médias
-          </button>
-        ) : null}
-        {documentFlow ? null : (
-          <TerrainFieldLabel className="lg:hidden">Commentaires</TerrainFieldLabel>
-        )}
-      </div>
+      {documentFlow && documentFlowTitle ? (
+        <div className="flex items-center justify-between gap-2">
+          {documentFlowTitle}
+          {mediaAccessButton}
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          {mediaAccessButton}
+          {documentFlow ? null : (
+            <TerrainFieldLabel className="lg:hidden">Commentaires</TerrainFieldLabel>
+          )}
+        </div>
+      )}
 
       {commentsQuery.isLoading ? (
         <div className="mt-4 flex items-center justify-center py-6 text-[#7D7B75]">
@@ -305,7 +327,9 @@ export function CommentSection({
           }}
           onOpenAttachment={handleOpenAttachment}
           attachEnabled={attachEnabled && !readOnly}
+          attachTrigger={attachTrigger}
           executionId={targetId}
+          documentFlow={documentFlow}
         />
       ) : null}
     </>
@@ -317,6 +341,7 @@ export function CommentSection({
       establishmentId={establishmentId}
       compactOnLg
       attachEnabled={isExecution && attachEnabled}
+      attachTrigger={attachTrigger}
       executionId={isExecution ? targetId : null}
       disabled={createMutation.isPending || commentsQuery.isLoading || commentsQuery.isError}
       errorMessage={
@@ -352,7 +377,12 @@ export function CommentSection({
 
   return (
     <>
-      <OperationalCommentsLayout list={list} composer={composer} documentFlow={documentFlow} />
+      <OperationalCommentsLayout
+        list={list}
+        composer={composer}
+        documentFlow={documentFlow}
+        pinComposer={pinComposer}
+      />
       {isExecution ? (
         <ExecutionPlanInfoSheet
           attachments={flattenAvailablePlanAttachments(executionQuery.data)}

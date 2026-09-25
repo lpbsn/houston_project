@@ -129,4 +129,18 @@ describe('CommentComposer', () => {
     expect(screen.getByRole('button', { name: 'Joindre un fichier' })).toBeTruthy()
     expect(screen.getByText(/10 Mo max/)).toBeTruthy()
   })
+
+  it('uses a paperclip control when attachTrigger is icon', () => {
+    render(
+      <CommentComposer
+        establishmentId="est-1"
+        executionId="exec-1"
+        attachEnabled
+        attachTrigger="icon"
+        onSubmit={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Joindre un fichier' })).toBeTruthy()
+    expect(screen.queryByText('Joindre un fichier')).toBeNull()
+  })
 })
