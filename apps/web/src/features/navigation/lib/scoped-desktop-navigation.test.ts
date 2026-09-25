@@ -90,9 +90,7 @@ describe('scoped desktop navigation', () => {
     expect(navigation.options.map((option) => option.id)).toEqual(['cross', 'est-a', 'est-b'])
     expect(navigation.scope).toEqual({ type: 'cross' })
     expect(navigation.items.map((item) => item.id)).toEqual(['signals', 'execution'])
-    expect(navigation.items.every((item) => item.placeholder === false && item.readOnly === true)).toBe(
-      true,
-    )
+    expect(navigation.items.every((item) => item.href != null)).toBe(true)
     expect(navigation.items.map((item) => item.id)).not.toContain('chat')
     expect(navigation.activeItemId).toBe('signals')
   })
@@ -192,7 +190,6 @@ describe('scoped desktop navigation', () => {
     expect(ownerNav.items.find((item) => item.id === 'brain')).toMatchObject({
       label: 'Spore Brain',
       href: null,
-      placeholder: true,
     })
     expect(ownerNav.items.map((item) => item.id)).not.toContain('operational-config')
     expect(

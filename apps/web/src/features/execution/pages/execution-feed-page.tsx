@@ -86,15 +86,40 @@ function readScheduledCountFromFeedPages(
   return pageWithScheduled?.scheduled_count ?? 0
 }
 
+/**
+ * Remount when the reading scope changes so list scroll/sections of establishment A
+ * cannot leak into B (or Cross) when `/execution` stays mounted across a switch.
+ */
 export function ExecutionFeedPage({
   onNavigate,
   establishmentId: establishmentIdProp,
   source = 'establishment',
 }: ExecutionFeedPageProps) {
   const auth = useAuth()
-  const { route, search, navigate } = useAppRoute()
   const establishmentId =
     establishmentIdProp ?? auth.bootstrap?.active_membership?.establishment_id ?? null
+  const readingScopeKey = executionFeedReadingScopeKey(source, establishmentId)
+  return (
+    <ExecutionFeedPageContent
+      key={readingScopeKey}
+      onNavigate={onNavigate}
+      establishmentId={establishmentId}
+      source={source}
+    />
+  )
+}
+
+function ExecutionFeedPageContent({
+  onNavigate,
+  establishmentId,
+  source,
+}: {
+  onNavigate?: (pathname: string) => void
+  establishmentId: string | null
+  source: 'establishment' | 'cross'
+}) {
+  const auth = useAuth()
+  const { route, search, navigate } = useAppRoute()
   const isCross = source === 'cross'
   const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   const readingScopeKey = executionFeedReadingScopeKey(source, establishmentId)

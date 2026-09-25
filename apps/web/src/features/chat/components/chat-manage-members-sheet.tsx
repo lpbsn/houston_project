@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { LoaderCircle, UserPlus, UserMinus, Shield } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -29,6 +29,7 @@ type ChatManageMembersSheetProps = {
   viewerMembershipId: string
   open: boolean
   onClose: () => void
+  presentation?: 'sheet' | 'dialog'
 }
 
 type SheetMode = 'members' | 'add'
@@ -58,6 +59,7 @@ export function ChatManageMembersSheet({
   viewerMembershipId,
   open,
   onClose,
+  presentation = 'sheet',
 }: ChatManageMembersSheetProps) {
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<SheetMode>('members')
@@ -109,6 +111,38 @@ export function ChatManageMembersSheet({
     resetTransientState()
     onClose()
   }
+
+  useEffect(() => {
+    if (!open || presentation !== 'dialog') {
+      return
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        if (isPending) {
+          return
+        }
+        setMode('members')
+        setSearch('')
+        setSelectedToAdd([])
+        setSelectedToRemove([])
+        setSummary(null)
+        addMutation.reset()
+        removeMutation.reset()
+        promoteMutation.reset()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [
+    addMutation,
+    isPending,
+    onClose,
+    open,
+    presentation,
+    promoteMutation,
+    removeMutation,
+  ])
 
   async function refreshConversation() {
     invalidateConversationStructureQueries(queryClient, establishmentId, conversation.id)
@@ -205,8 +239,7 @@ export function ChatManageMembersSheet({
     }
   }
 
-  return (
-    <TerrainBottomSheet title="Gérer les membres" open={open} onClose={handleClose}>
+  const body = (
       <div className="flex flex-col gap-3">
         {mode === 'members' ? (
           <>
@@ -380,6 +413,44 @@ export function ChatManageMembersSheet({
           </p>
         ) : null}
       </div>
+  )
+
+  if (!open) {
+    return null
+  }
+
+  if (presentation === 'dialog') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="chat-manage-members-title"
+          data-testid="chat-manage-members-dialog"
+          className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-[#E8E6DF] bg-white p-4 shadow-lg"
+        >
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 id="chat-manage-members-title" className="text-sm font-semibold text-[#1a1a1a]">
+              Gérer les membres
+            </h2>
+            <button
+              type="button"
+              className="rounded-md px-2 py-1 text-sm font-medium text-[#5c564e] hover:bg-[#F5F4F0] disabled:opacity-60"
+              disabled={isPending}
+              onClick={handleClose}
+            >
+              Fermer
+            </button>
+          </div>
+          {body}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <TerrainBottomSheet title="Gérer les membres" open={open} onClose={handleClose}>
+      {body}
     </TerrainBottomSheet>
   )
 }

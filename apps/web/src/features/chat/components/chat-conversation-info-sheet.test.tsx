@@ -101,11 +101,9 @@ describe('ChatConversationInfoSheet media', () => {
     })
     const onClose = vi.fn()
     const onSelectAttachment = vi.fn()
-    const onJumpToMessage = vi.fn()
     renderSheet({
       onClose,
       onSelectAttachment,
-      onJumpToMessage,
       knownMessageIds: new Set(['other-msg']),
     })
 
@@ -123,7 +121,6 @@ describe('ChatConversationInfoSheet media', () => {
       src: '/api/v1/chat/preview/original',
     })
     expect(onClose).not.toHaveBeenCalled()
-    expect(onJumpToMessage).not.toHaveBeenCalled()
   })
 
   it('downloads a PDF from Documents without closing the sheet', async () => {

@@ -57,6 +57,7 @@ import { LoginPage } from '@/features/auth/pages/login-page'
 import {
   allowsUnauthenticatedAccess,
   getAuthenticatedLandingPath,
+  isDesktopWebLanding,
   routeAllowsMissingActiveMembership,
   shouldRedirectAuthenticatedPublicRoute,
   shouldRedirectUnauthenticatedPublicRoute,
@@ -71,6 +72,10 @@ import { useChatAvailability, useChatConversationsQuery } from '@/features/chat/
 import { chatQueryKeys } from '@/features/chat/api'
 import { shouldRedirectFromUnavailableChat } from '@/features/chat/lib/chat-availability'
 import { purgeEstablishmentChatOperationalQueries } from '@/features/chat/lib/apply-chat-availability-cache'
+import {
+  desktopChatMountKey,
+  resolveDesktopChatPageProps,
+} from '@/features/chat/lib/chat-desktop-surface'
 import { OperationalRealtimeProvider } from '@/features/realtime/components/operational-realtime-provider'
 import type { ChatWsConversationAccessRevokedEvent, ChatWsGlobalAccessRevokedEvent } from '@/features/chat/types'
 import { getBootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permission-hints'
@@ -106,7 +111,6 @@ import {
   peekPendingNativeDeepLink,
 } from '@/lib/native-deep-link-session'
 import { setNativeSystemBackAuthGetter } from '@/lib/native-system-back'
-import { getAppRuntime } from '@/lib/runtime'
 
 function establishmentIdRequiringSwitch(route: AppRoute): string | null {
   if (route.kind === 'scoped-terrain' && route.scope.type === 'establishment') {
@@ -136,7 +140,7 @@ function App() {
   const auth = useAuth()
   const { route, navigate, search: locationSearch } = useAppRoute()
   const isLgViewport = useLgViewport()
-  const isDesktopWeb = getAppRuntime() === 'web' && isLgViewport
+  const isDesktopWeb = isDesktopWebLanding(isLgViewport)
   const applyingOpenRef = useRef(false)
   const authRoutingSession = resolveAuthRoutingSession(
     queryClient.getQueryData<BootstrapResponse>(bootstrapQueryKey),
@@ -636,6 +640,18 @@ function App() {
           backLabel={backLabel}
           onNavigate={navigate}
           className={auth.hasOperationalAccess ? 'mx-3 mt-6' : undefined}
+        />
+      )
+    }
+
+    const desktopChatPage = resolveDesktopChatPageProps(route, isDesktopWeb, establishmentId)
+    if (desktopChatPage) {
+      return (
+        <LazyChatPage
+          key={desktopChatMountKey(desktopChatPage.establishmentId)}
+          establishmentId={desktopChatPage.establishmentId}
+          selectedConversationId={desktopChatPage.selectedConversationId}
+          onOpenConversation={(conversationId) => navigate(`/chat/${conversationId}`)}
         />
       )
     }
@@ -1197,22 +1213,47 @@ function App() {
 
   if (usesTerrainShell(route)) {
     const terrainConfig = getTerrainRouteConfig(route)
-    const topbarPlacement = resolveTerrainTopbarPlacement(route, terrainConfig)
+    const desktopChatPageForShell = resolveDesktopChatPageProps(
+      route,
+      isDesktopWeb,
+      establishmentId,
+    )
+    const desktopChatShell = desktopChatPageForShell !== null
+    const shellConfig = desktopChatShell
+      ? {
+          ...terrainConfig,
+          topbarVariant: 'hub' as const,
+          pageTitle: 'Discussions',
+          title: undefined,
+          backPath: undefined,
+          showBottomNav: false,
+          mainScroll: 'hidden' as const,
+          activeNavPath: '/chat' as const,
+        }
+      : terrainConfig
+    const topbarPlacement = resolveTerrainTopbarPlacement(route, shellConfig)
     const desktopSignalDetail = isDesktopWeb && route.kind === 'signal-detail'
+    const terrainContentKey = desktopChatShell
+      ? desktopChatMountKey(desktopChatPageForShell?.establishmentId)
+      : getTerrainContentKey(route)
     const terrainTopbar =
       topbarPlacement === 'hidden' || desktopSignalDetail ? null : (
         <TerrainTopbar
-          variant={terrainConfig.topbarVariant}
-          title={terrainConfig.title}
-          pageTitle={terrainConfig.pageTitle}
-          detailTitleLayout={terrainConfig.detailTitleLayout}
+          variant={shellConfig.topbarVariant}
+          title={shellConfig.title}
+          pageTitle={shellConfig.pageTitle}
+          detailTitleLayout={shellConfig.detailTitleLayout}
           hideTitle={
             isDesktopWeb &&
             (route.kind === 'action-plan-execution-detail' ||
               route.kind === 'action-plan-template-detail')
           }
-          showBottomBorder={resolveTerrainTopbarShowBottomBorder(route, terrainConfig)}
-          onBack={terrainBackPath ? () => navigate(terrainBackPath) : undefined}
+          showBottomBorder={resolveTerrainTopbarShowBottomBorder(route, shellConfig)}
+          onBack={
+            desktopChatShell || !terrainBackPath
+              ? undefined
+              : () => navigate(terrainBackPath)
+          }
           trailing={terrainTopbarTrailing}
         />
       )
@@ -1220,12 +1261,12 @@ function App() {
       wrapTerrainWithOperationalRealtime(
         wrapTerrainWithChatRealtime(
           <TerrainShell
-            contentKey={getTerrainContentKey(route)}
-            showBottomNav={terrainConfig.showBottomNav}
-            activeNavPath={terrainConfig.activeNavPath}
+            contentKey={terrainContentKey}
+            showBottomNav={shellConfig.showBottomNav}
+            activeNavPath={shellConfig.activeNavPath}
             bootstrap={auth.bootstrap}
             route={route}
-            mainScroll={terrainConfig.mainScroll}
+            mainScroll={shellConfig.mainScroll}
             navigate={navigate}
             showChatNav={showChatNav}
             chatHasUnread={chatHasUnread}

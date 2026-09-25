@@ -439,6 +439,68 @@ describe('SignalFeedPage reading restoration', () => {
     expect(establishmentCall?.[2]).toMatchObject({ statuses: [] })
     expect(screen.getByTestId('signal-feed-scroll').scrollTop).toBe(0)
   })
+
+  it('keeps reading state per establishment across A → B → A without unmounting', () => {
+    openSectionsFeed()
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    const tree = (establishmentId: string) =>
+      createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(TerrainTopbar, { variant: 'hub', pageTitle: 'Observations' }),
+        createElement(SignalFeedPage, {
+          onOpenSignal: vi.fn(),
+          establishmentId,
+        }),
+      )
+
+    const view = render(tree('est-1'))
+    fireEvent.click(screen.getByRole('tab', { name: 'Vue globale' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Déplier la section Résolues' }))
+    const scrollerA = screen.getByTestId('signal-feed-scroll')
+    scrollerA.scrollTop = 140
+    fireEvent.scroll(scrollerA)
+
+    expect(readSignalFeedReading(signalFeedReadingScopeKey('establishment', 'est-1'))).toMatchObject({
+      viewMode: 'general',
+      expandedByKey: expect.objectContaining({ resolved: true }),
+      scrollTop: 140,
+    })
+
+    feedQueryCalls.length = 0
+    view.rerender(tree('est-2'))
+
+    expect(screen.getByRole('tab', { name: 'Ma zone' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.queryByRole('heading', { level: 3, name: 'Signal résolu' })).toBeNull()
+    expect(screen.getByTestId('signal-feed-scroll').scrollTop).toBe(0)
+    const establishmentBCall = feedQueryCalls.find((call) => call[0] === 'est-2')
+    expect(establishmentBCall?.[1]).toBe('personal')
+    expect(readSignalFeedReading(signalFeedReadingScopeKey('establishment', 'est-1'))).toMatchObject({
+      viewMode: 'general',
+      scrollTop: 140,
+    })
+    expect(readSignalFeedReading(signalFeedReadingScopeKey('establishment', 'est-2'))?.viewMode).toBe(
+      'personal',
+    )
+
+    feedQueryCalls.length = 0
+    view.rerender(tree('est-1'))
+
+    expect(screen.getByRole('tab', { name: 'Vue globale' }).getAttribute('aria-selected')).toBe(
+      'true',
+    )
+    expect(screen.getByRole('heading', { level: 3, name: 'Signal résolu' })).toBeTruthy()
+    expect(screen.getByTestId('signal-feed-scroll').scrollTop).toBe(140)
+    const establishmentACall = feedQueryCalls.find((call) => call[0] === 'est-1')
+    expect(establishmentACall?.[1]).toBe('general')
+    expect(readSignalFeedReading(signalFeedReadingScopeKey('establishment', 'est-1'))).toMatchObject({
+      viewMode: 'general',
+      expandedByKey: expect.objectContaining({ resolved: true }),
+      scrollTop: 140,
+    })
+  })
 })
 
 describe('SignalFeedPage desktop actions', () => {

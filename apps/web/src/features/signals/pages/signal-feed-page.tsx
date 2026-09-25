@@ -46,6 +46,10 @@ type SignalFeedPageProps = {
   source?: 'establishment' | 'cross'
 }
 
+/**
+ * Remount when the reading scope changes so filters/scroll of establishment A
+ * cannot leak into B (or Cross) when `/signals` stays mounted across a switch.
+ */
 export function SignalFeedPage({
   onOpenSignal,
   establishmentId: establishmentIdProp,
@@ -54,6 +58,27 @@ export function SignalFeedPage({
   const auth = useAuth()
   const establishmentId =
     establishmentIdProp ?? auth.bootstrap?.active_membership?.establishment_id ?? null
+  const readingScopeKey = signalFeedReadingScopeKey(source, establishmentId)
+  return (
+    <SignalFeedPageContent
+      key={readingScopeKey}
+      onOpenSignal={onOpenSignal}
+      establishmentId={establishmentId}
+      source={source}
+    />
+  )
+}
+
+function SignalFeedPageContent({
+  onOpenSignal,
+  establishmentId,
+  source,
+}: {
+  onOpenSignal: (signalId: string) => void
+  establishmentId: string | null
+  source: 'establishment' | 'cross'
+}) {
+  const auth = useAuth()
   const membershipRole = auth.bootstrap?.active_membership?.role ?? null
   const isCross = source === 'cross'
   const isDesktopWeb = isDesktopWebLanding(useLgViewport())

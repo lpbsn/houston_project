@@ -1017,4 +1017,46 @@ describe('ExecutionFeedPage desktop list', () => {
     expect(screen.queryByText('Plan terminé')).toBeNull()
     expect(screen.getByTestId('execution-feed-scroll').scrollTop).toBe(0)
   })
+
+  it('keeps reading state per establishment across A → B → A without unmounting', () => {
+    showOperationalFeed()
+    const view = renderExecutionFeedPage({ establishmentId: 'est-1' })
+    fireEvent.click(screen.getByRole('button', { name: 'Déplier la section Terminés' }))
+    const scrollerA = screen.getByTestId('execution-feed-scroll')
+    scrollerA.scrollTop = 120
+    fireEvent.scroll(scrollerA)
+
+    expect(
+      readExecutionFeedReading(executionFeedReadingScopeKey('establishment', 'est-1')),
+    ).toMatchObject({
+      expandedByKey: expect.objectContaining({ done: true }),
+      scrollTop: 120,
+    })
+
+    view.rerenderPage({ establishmentId: 'est-2' })
+
+    expect(screen.queryByText('Plan terminé')).toBeNull()
+    expect(screen.getByTestId('execution-feed-scroll').scrollTop).toBe(0)
+    expect(
+      readExecutionFeedReading(executionFeedReadingScopeKey('establishment', 'est-1')),
+    ).toMatchObject({
+      expandedByKey: expect.objectContaining({ done: true }),
+      scrollTop: 120,
+    })
+    expect(
+      readExecutionFeedReading(executionFeedReadingScopeKey('establishment', 'est-2'))?.expandedByKey
+        .done,
+    ).not.toBe(true)
+
+    view.rerenderPage({ establishmentId: 'est-1' })
+
+    expect(screen.getByText('Plan terminé')).toBeTruthy()
+    expect(screen.getByTestId('execution-feed-scroll').scrollTop).toBe(120)
+    expect(
+      readExecutionFeedReading(executionFeedReadingScopeKey('establishment', 'est-1')),
+    ).toMatchObject({
+      expandedByKey: expect.objectContaining({ done: true }),
+      scrollTop: 120,
+    })
+  })
 })

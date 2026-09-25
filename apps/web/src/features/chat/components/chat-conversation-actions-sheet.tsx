@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
-import { Flag, LoaderCircle, Pin, PinOff, LogOut, Trash2, Ban } from 'lucide-react'
+import { Flag, LoaderCircle, MoreHorizontal, Pin, PinOff, LogOut, Trash2, Ban } from 'lucide-react'
+import { Popover } from 'radix-ui'
 
 import { TerrainBottomSheet } from '@/components/ui/terrain'
+import { cn } from '@/lib/utils'
 
 import type { ChatConversationListItem } from '../types'
 
@@ -14,11 +15,7 @@ const LEAVE_GROUP_CONFIRM =
 const DELETE_GROUP_CONFIRM =
   'Supprimer définitivement ce groupe ? Tous les participants perdront immédiatement l’accès. Cette action est irréversible.'
 
-type ChatConversationActionsSheetProps = {
-  conversation: ChatConversationListItem | null
-  open: boolean
-  isPending: boolean
-  onClose: () => void
+export type ChatConversationActionsHandlers = {
   onPin: (conversationId: string) => void
   onUnpin: (conversationId: string) => void
   onHideDm: (conversationId: string) => void
@@ -28,11 +25,18 @@ type ChatConversationActionsSheetProps = {
   onReportPeer?: () => void
 }
 
-export function ChatConversationActionsSheet({
+type ChatConversationActionsMenuProps = ChatConversationActionsHandlers & {
+  conversation: ChatConversationListItem
+  isPending: boolean
+  compact?: boolean
+  errorMessage?: string | null
+}
+
+function ChatConversationActionsMenu({
   conversation,
-  open,
   isPending,
-  onClose,
+  compact = false,
+  errorMessage = null,
   onPin,
   onUnpin,
   onHideDm,
@@ -40,23 +44,12 @@ export function ChatConversationActionsSheet({
   onDeleteGroup,
   onBlockPeer,
   onReportPeer,
-}: ChatConversationActionsSheetProps) {
-  const title = useMemo(() => {
-    if (!conversation) {
-      return 'Actions'
-    }
-    return conversation.type === 'group' ? 'Actions du groupe' : 'Actions de la conversation'
-  }, [conversation])
-
-  if (!conversation) {
-    return (
-      <TerrainBottomSheet title={title} open={open} onClose={onClose}>
-        {null}
-      </TerrainBottomSheet>
-    )
-  }
-
+}: ChatConversationActionsMenuProps) {
   const isGroup = conversation.type === 'group'
+  const itemClassName = compact
+    ? 'flex w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-[#1a1a1a] hover:bg-[#F5F4F0] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30 focus-visible:outline-none disabled:opacity-50'
+    : 'flex w-full items-center gap-3 rounded-2xl border border-[#E8E6DF] bg-white px-4 py-3 text-left text-sm font-medium disabled:opacity-60'
+  const dangerClassName = cn(itemClassName, 'text-[#B42318]')
 
   function runConfirmed(message: string, action: () => void) {
     if (!window.confirm(message)) {
@@ -66,123 +59,239 @@ export function ChatConversationActionsSheet({
   }
 
   return (
-    <TerrainBottomSheet title={title} open={open} onClose={onClose}>
-      <ul className="flex flex-col gap-2">
-        <li>
-          <button
-            type="button"
-            disabled={isPending}
-            className="flex w-full items-center gap-3 rounded-2xl border border-[#E8E6DF] bg-white px-4 py-3 text-left text-sm font-medium text-[#1a1a1a] disabled:opacity-60"
-            onClick={() => {
-              if (conversation.pinned) {
-                onUnpin(conversation.id)
-              } else {
-                onPin(conversation.id)
-              }
-            }}
-          >
-            {conversation.pinned ? (
-              <PinOff className="h-4 w-4 shrink-0 text-[#7D7B75]" strokeWidth={2.25} />
-            ) : (
-              <Pin className="h-4 w-4 shrink-0 text-[#7D7B75]" strokeWidth={2.25} />
-            )}
-            <span>{conversation.pinned ? 'Désépingler' : 'Épingler'}</span>
-          </button>
-        </li>
+    <ul className={cn('flex flex-col', compact ? 'gap-0.5 p-1' : 'gap-2')} role="menu">
+      <li>
+        <button
+          type="button"
+          role="menuitem"
+          disabled={isPending}
+          className={compact ? itemClassName : cn(itemClassName, 'text-[#1a1a1a]')}
+          onClick={() => {
+            if (conversation.pinned) {
+              onUnpin(conversation.id)
+            } else {
+              onPin(conversation.id)
+            }
+          }}
+        >
+          {compact ? null : conversation.pinned ? (
+            <PinOff className="h-4 w-4 shrink-0 text-[#7D7B75]" strokeWidth={2.25} />
+          ) : (
+            <Pin className="h-4 w-4 shrink-0 text-[#7D7B75]" strokeWidth={2.25} />
+          )}
+          <span>{conversation.pinned ? 'Désépingler' : 'Épingler'}</span>
+        </button>
+      </li>
 
-        {!isGroup ? (
-          <>
-            {onBlockPeer ? (
-              <li>
-                <button
-                  type="button"
-                  disabled={isPending}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-[#E8E6DF] bg-white px-4 py-3 text-left text-sm font-medium text-[#B42318] disabled:opacity-60"
-                  onClick={() =>
-                    runConfirmed(
-                      'Bloquer ce membre ? Vous ne pourrez plus vous envoyer de nouveaux messages privés ni vous mentionner. L’historique reste lisible.',
-                      onBlockPeer,
-                    )
-                  }
-                >
-                  <Ban className="h-4 w-4 shrink-0" strokeWidth={2.25} />
-                  <span>Bloquer</span>
-                </button>
-              </li>
-            ) : null}
-            {onReportPeer ? (
-              <li>
-                <button
-                  type="button"
-                  disabled={isPending}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-[#E8E6DF] bg-white px-4 py-3 text-left text-sm font-medium text-[#1a1a1a] disabled:opacity-60"
-                  onClick={onReportPeer}
-                >
+      {!isGroup ? (
+        <>
+          {onBlockPeer ? (
+            <li>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={isPending}
+                className={dangerClassName}
+                onClick={() =>
+                  runConfirmed(
+                    'Bloquer ce membre ? Vous ne pourrez plus vous envoyer de nouveaux messages privés ni vous mentionner. L’historique reste lisible.',
+                    onBlockPeer,
+                  )
+                }
+              >
+                {compact ? null : <Ban className="h-4 w-4 shrink-0" strokeWidth={2.25} />}
+                <span>Bloquer</span>
+              </button>
+            </li>
+          ) : null}
+          {onReportPeer ? (
+            <li>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={isPending}
+                className={compact ? itemClassName : cn(itemClassName, 'text-[#1a1a1a]')}
+                onClick={onReportPeer}
+              >
+                {compact ? null : (
                   <Flag className="h-4 w-4 shrink-0 text-[#7D7B75]" strokeWidth={2.25} />
-                  <span>Signaler</span>
-                </button>
-              </li>
-            ) : null}
+                )}
+                <span>Signaler</span>
+              </button>
+            </li>
+          ) : null}
           <li>
             <button
               type="button"
+              role="menuitem"
               disabled={isPending}
-              className="flex w-full items-center gap-3 rounded-2xl border border-[#E8E6DF] bg-white px-4 py-3 text-left text-sm font-medium text-[#B42318] disabled:opacity-60"
+              className={dangerClassName}
               onClick={() =>
                 runConfirmed(HIDE_DM_CONFIRM, () => {
                   onHideDm(conversation.id)
                 })
               }
             >
-              <Trash2 className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+              {compact ? null : <Trash2 className="h-4 w-4 shrink-0" strokeWidth={2.25} />}
               <span>Supprimer la conversation</span>
             </button>
           </li>
-          </>
-        ) : null}
+        </>
+      ) : null}
 
-        {isGroup ? (
-          <li>
-            <button
-              type="button"
-              disabled={isPending}
-              className="flex w-full items-center gap-3 rounded-2xl border border-[#E8E6DF] bg-white px-4 py-3 text-left text-sm font-medium text-[#B42318] disabled:opacity-60"
-              onClick={() =>
-                runConfirmed(LEAVE_GROUP_CONFIRM, () => {
-                  onLeaveGroup(conversation.id)
-                })
-              }
-            >
-              <LogOut className="h-4 w-4 shrink-0" strokeWidth={2.25} />
-              <span>Quitter le groupe</span>
-            </button>
-          </li>
-        ) : null}
+      {isGroup ? (
+        <li>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={isPending}
+            className={dangerClassName}
+            onClick={() =>
+              runConfirmed(LEAVE_GROUP_CONFIRM, () => {
+                onLeaveGroup(conversation.id)
+              })
+            }
+          >
+            {compact ? null : <LogOut className="h-4 w-4 shrink-0" strokeWidth={2.25} />}
+            <span>Quitter le groupe</span>
+          </button>
+        </li>
+      ) : null}
 
-        {isGroup && conversation.can_delete ? (
-          <li>
-            <button
-              type="button"
-              disabled={isPending}
-              className="flex w-full items-center gap-3 rounded-2xl border border-[#E8E6DF] bg-white px-4 py-3 text-left text-sm font-medium text-[#B42318] disabled:opacity-60"
-              onClick={() =>
-                runConfirmed(DELETE_GROUP_CONFIRM, () => {
-                  onDeleteGroup(conversation.id)
-                })
-              }
-            >
-              <Trash2 className="h-4 w-4 shrink-0" strokeWidth={2.25} />
-              <span>Supprimer le groupe</span>
-            </button>
-          </li>
-        ) : null}
-      </ul>
+      {isGroup && conversation.can_delete ? (
+        <li>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={isPending}
+            className={dangerClassName}
+            onClick={() =>
+              runConfirmed(DELETE_GROUP_CONFIRM, () => {
+                onDeleteGroup(conversation.id)
+              })
+            }
+          >
+            {compact ? null : <Trash2 className="h-4 w-4 shrink-0" strokeWidth={2.25} />}
+            <span>Supprimer le groupe</span>
+          </button>
+        </li>
+      ) : null}
+
+      {errorMessage ? (
+        <li>
+          <p
+            className={cn('text-[#B42318]', compact ? 'px-3 py-2 text-xs' : 'px-1 py-1 text-sm')}
+            role="alert"
+          >
+            {errorMessage}
+          </p>
+        </li>
+      ) : null}
 
       {isPending ? (
-        <div className="mt-4 flex items-center justify-center text-[#7D7B75]">
+        <li className="flex items-center justify-center py-2 text-[#7D7B75]">
           <LoaderCircle className="h-5 w-5 animate-spin" />
-        </div>
+        </li>
       ) : null}
+    </ul>
+  )
+}
+
+type ChatConversationActionsSheetProps = ChatConversationActionsHandlers & {
+  conversation: ChatConversationListItem
+  open: boolean
+  isPending: boolean
+  onClose: () => void
+  errorMessage?: string | null
+}
+
+export function ChatConversationActionsSheet({
+  conversation,
+  open,
+  isPending,
+  onClose,
+  errorMessage = null,
+  onPin,
+  onUnpin,
+  onHideDm,
+  onLeaveGroup,
+  onDeleteGroup,
+  onBlockPeer,
+  onReportPeer,
+}: ChatConversationActionsSheetProps) {
+  const title =
+    conversation.type === 'group' ? 'Actions du groupe' : 'Actions de la conversation'
+
+  return (
+    <TerrainBottomSheet title={title} open={open} onClose={onClose}>
+      <ChatConversationActionsMenu
+        conversation={conversation}
+        isPending={isPending}
+        errorMessage={errorMessage}
+        onPin={onPin}
+        onUnpin={onUnpin}
+        onHideDm={onHideDm}
+        onLeaveGroup={onLeaveGroup}
+        onDeleteGroup={onDeleteGroup}
+        onBlockPeer={onBlockPeer}
+        onReportPeer={onReportPeer}
+      />
     </TerrainBottomSheet>
+  )
+}
+
+type ChatConversationActionsPopoverProps = ChatConversationActionsHandlers & {
+  conversation: ChatConversationListItem
+  open: boolean
+  isPending: boolean
+  onOpenChange: (open: boolean) => void
+  title: string
+  errorMessage?: string | null
+}
+
+export function ChatConversationActionsPopover({
+  conversation,
+  open,
+  isPending,
+  onOpenChange,
+  title,
+  errorMessage = null,
+  ...handlers
+}: ChatConversationActionsPopoverProps) {
+  function stopRowActivation(event: { stopPropagation: () => void }) {
+    event.stopPropagation()
+  }
+
+  return (
+    <Popover.Root open={open} onOpenChange={onOpenChange}>
+      <Popover.Trigger
+        type="button"
+        aria-label={`Actions pour ${title}`}
+        className={cn(
+          'flex h-7 w-7 items-center justify-center rounded-full text-[#7D7B75]',
+          'outline-none hover:bg-[#F5F4F0] focus-visible:ring-2 focus-visible:ring-[#114660]/30',
+        )}
+        onClick={stopRowActivation}
+      >
+        <MoreHorizontal className="h-4 w-4" strokeWidth={2.25} aria-hidden="true" />
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          align="end"
+          side="bottom"
+          sideOffset={6}
+          className="z-50 w-64 rounded-xl border border-[#E8E6DF] bg-white shadow-md outline-none"
+          onClick={stopRowActivation}
+        >
+          <ChatConversationActionsMenu
+            conversation={conversation}
+            isPending={isPending}
+            compact
+            errorMessage={errorMessage}
+            {...handlers}
+          />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   )
 }
