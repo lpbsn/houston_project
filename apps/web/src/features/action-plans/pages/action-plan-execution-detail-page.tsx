@@ -501,26 +501,6 @@ function ActionPlanExecutionDetailPageContent({
         {taskZoneBody}
       </>
     )
-  const executionHeader = (
-    <ActionPlanExecutionDetailHeader
-      execution={execution}
-      isOverdue={isOverdue}
-      currentMembershipId={activeMembership?.id ?? null}
-    />
-  )
-  const lifecycleActions = canShowLifecycleFooter ? (
-    <ActionPlanExecutionLifecycleActions
-      hints={permissionHints}
-      isTerminal={isTerminal}
-      isPending={isMutationPending}
-      layout="page"
-      onMarkDone={() => void handleMarkDone()}
-      onValidate={() => void handleValidate()}
-      onReopen={() => void handleReopen()}
-      onCancel={() => void handleCancel()}
-    />
-  ) : null
-
   return (
     <div className="flex min-h-full flex-col">
       {isDesktopWeb || !signalSummary ? null : (
@@ -545,7 +525,16 @@ function ActionPlanExecutionDetailPageContent({
                     {resolveApiErrorMessage(mutationError, ActionPlansApiError, 'Action impossible.')}
                   </p>
                 ) : null}
-                {lifecycleActions}
+                <ActionPlanExecutionLifecycleActions
+                  hints={permissionHints}
+                  isTerminal={isTerminal}
+                  isPending={isMutationPending}
+                  layout="page"
+                  onMarkDone={() => void handleMarkDone()}
+                  onValidate={() => void handleValidate()}
+                  onReopen={() => void handleReopen()}
+                  onCancel={() => void handleCancel()}
+                />
               </div>
             ) : null}
           </TerrainDetailTrailingSlot>
@@ -619,7 +608,11 @@ function ActionPlanExecutionDetailPageContent({
             data-testid="execution-detail-details-content"
             className="flex flex-col gap-2.5 px-3 pt-2 pb-4"
           >
-            {executionHeader}
+            <ActionPlanExecutionDetailHeader
+              execution={execution}
+              isOverdue={isOverdue}
+              currentMembershipId={activeMembership?.id ?? null}
+            />
             {feedback ? (
               <TerrainFeedback variant={feedback.variant} message={feedback.message} />
             ) : null}

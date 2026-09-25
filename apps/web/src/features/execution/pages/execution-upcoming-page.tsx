@@ -87,8 +87,25 @@ export function ExecutionUpcomingPage({
                       item={item}
                       onSelect={(id) => onOpenActionPlanExecution?.(id)}
                       actionsPending={quickActions.isPending}
-                      onOpenActions={quickActions.openActions}
-                      onSelectAction={quickActions.runAction}
+                      actionsOpen={
+                        quickActions.actionsOpen &&
+                        quickActions.activeItem?.id === item.id
+                      }
+                      actionError={
+                        quickActions.activeItem?.id === item.id
+                          ? quickActions.actionError
+                          : null
+                      }
+                      onActionsOpenChange={(open) => {
+                        if (open) {
+                          quickActions.openActions(item)
+                          return
+                        }
+                        quickActions.closeActions()
+                      }}
+                      onRunAction={(feedItem, actionId) =>
+                        quickActions.runAction(actionId, feedItem)
+                      }
                     />
                   ) : (
                     <ActionPlanExecutionFeedCard

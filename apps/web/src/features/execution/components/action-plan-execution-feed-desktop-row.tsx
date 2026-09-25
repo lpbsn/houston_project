@@ -24,8 +24,13 @@ import { useFeedCardNow } from '../lib/use-feed-card-now'
 type ActionPlanExecutionFeedDesktopRowProps = {
   item: ActionPlanExecutionFeedItem
   onSelect: (executionId: string) => void
-  onOpenActions?: (item: ActionPlanExecutionFeedItem) => void
-  onSelectAction?: (actionId: ActionPlanExecutionFeedCardActionId) => void
+  onRunAction?: (
+    item: ActionPlanExecutionFeedItem,
+    actionId: ActionPlanExecutionFeedCardActionId,
+  ) => void
+  actionsOpen?: boolean
+  onActionsOpenChange?: (open: boolean) => void
+  actionError?: string | null
   actionsPending?: boolean
 }
 
@@ -36,13 +41,15 @@ function stopRowActivation(event: { stopPropagation: () => void }) {
 export function ActionPlanExecutionFeedDesktopRow({
   item,
   onSelect,
-  onOpenActions,
-  onSelectAction,
+  onRunAction,
+  actionsOpen = false,
+  onActionsOpenChange,
+  actionError = null,
   actionsPending = false,
 }: ActionPlanExecutionFeedDesktopRowProps) {
   const now = useFeedCardNow()
   const showActions = Boolean(
-    onOpenActions && canOpenActionPlanExecutionFeedCardActions(item.permission_hints),
+    onRunAction && canOpenActionPlanExecutionFeedCardActions(item.permission_hints),
   )
   const actionOptions = showActions ? getActionPlanExecutionFeedCardActionOptions(item) : []
   const timingLabel = formatExecutionFeedTimingLabel(item)
@@ -68,13 +75,7 @@ export function ActionPlanExecutionFeedDesktopRow({
           </h3>
         </button>
         {showActions ? (
-          <Popover.Root
-            onOpenChange={(open) => {
-              if (open) {
-                onOpenActions?.(item)
-              }
-            }}
-          >
+          <Popover.Root open={actionsOpen} onOpenChange={onActionsOpenChange}>
             <Popover.Trigger
               type="button"
               aria-label="Actions du plan d’action"
@@ -104,13 +105,18 @@ export function ActionPlanExecutionFeedDesktopRow({
                       disabled={actionsPending}
                       onClick={(event) => {
                         stopRowActivation(event)
-                        onSelectAction?.(option.id)
+                        onRunAction?.(item, option.id)
                       }}
                     >
                       {option.label}
                     </button>
                   ))}
                 </div>
+                {actionError ? (
+                  <p className="px-3 py-2 text-sm text-destructive" role="alert">
+                    {actionError}
+                  </p>
+                ) : null}
               </Popover.Content>
             </Popover.Portal>
           </Popover.Root>

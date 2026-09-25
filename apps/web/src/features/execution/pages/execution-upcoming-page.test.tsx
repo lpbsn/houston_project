@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { createElement } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -11,6 +11,32 @@ import { ExecutionUpcomingPage } from './execution-upcoming-page'
 
 const upcomingQueryMock = vi.fn()
 const onOpenActionPlanExecution = vi.fn()
+const pinControl = vi.hoisted(() => {
+  const control = {
+    failPin: false,
+    pin: vi.fn(
+      (
+        _id: string,
+        options?: { onSuccess?: () => void; onError?: (error: unknown) => void },
+      ) => {
+        if (control.failPin) {
+          options?.onError?.(new Error('Épinglage impossible.'))
+          return
+        }
+        options?.onSuccess?.()
+      },
+    ),
+    unpin: vi.fn(
+      (
+        _id: string,
+        options?: { onSuccess?: () => void; onError?: (error: unknown) => void },
+      ) => {
+        options?.onSuccess?.()
+      },
+    ),
+  }
+  return control
+})
 
 function buildUpcomingWrapper(
   id: string,
@@ -96,33 +122,15 @@ vi.mock('@/app/auth-provider', () => ({
 
 vi.mock('@/features/action-plans/hooks', () => ({
   useActionPlanExecutionUpcomingQuery: () => upcomingQueryMock(),
+  usePinActionPlanExecutionMutation: () => ({
+    mutate: pinControl.pin,
+    isPending: false,
+  }),
+  useUnpinActionPlanExecutionMutation: () => ({
+    mutate: pinControl.unpin,
+    isPending: false,
+  }),
 }))
-
-vi.mock('@/features/action-plans/hooks/use-action-plan-execution-feed-quick-actions', () => {
-  const React = require('react') as typeof import('react')
-  return {
-    useActionPlanExecutionFeedQuickActions: () => {
-      const [activeItem, setActiveItem] = React.useState<
-        ActionPlanExecutionFeedItemWrapper['action_plan_execution'] | null
-      >(null)
-      const [actionsOpen, setActionsOpen] = React.useState(false)
-      return {
-        activeItem,
-        actionsOpen,
-        openActions: (item: ActionPlanExecutionFeedItemWrapper['action_plan_execution']) => {
-          setActiveItem(item)
-          setActionsOpen(true)
-        },
-        closeActions: () => {
-          setActionsOpen(false)
-          setActiveItem(null)
-        },
-        runAction: vi.fn(),
-        isPending: false,
-      }
-    },
-  }
-})
 
 function stubLgViewport(matches: boolean) {
   Object.defineProperty(window, 'matchMedia', {
@@ -158,6 +166,9 @@ describe('ExecutionUpcomingPage', () => {
   beforeEach(() => {
     onOpenActionPlanExecution.mockClear()
     upcomingQueryMock.mockReturnValue(buildUpcomingQueryState())
+    pinControl.failPin = false
+    pinControl.pin.mockClear()
+    pinControl.unpin.mockClear()
   })
 
   afterEach(() => {
@@ -204,6 +215,54 @@ describe('ExecutionUpcomingPage', () => {
 
     fireEvent.click(openControl)
     expect(onOpenActionPlanExecution).toHaveBeenCalledWith('plan-all-day')
+  })
+
+  it('closes the desktop pin menu after a successful pin of the opened row', async () => {
+    stubLgViewport(true)
+    renderUpcomingPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions du plan d’action' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Épingler' }))
+
+    expect(pinControl.pin).toHaveBeenCalledWith('plan-scheduled', expect.any(Object))
+    await waitFor(() => {
+      expect(screen.queryByRole('menu', { name: 'Actions du plan d’action' })).toBeNull()
+    })
+  })
+
+  it('keeps the desktop pin menu open with the error, then clears it on another row', () => {
+    stubLgViewport(true)
+    pinControl.failPin = true
+    upcomingQueryMock.mockReturnValue(
+      buildUpcomingQueryState({
+        data: {
+          pages: [
+            {
+              items: [
+                buildUpcomingWrapper('plan-scheduled', 'Plan programmé'),
+                buildUpcomingWrapper('plan-other', 'Plan autre'),
+              ],
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+    renderUpcomingPage()
+
+    const [firstActions, secondActions] = screen.getAllByRole('button', {
+      name: 'Actions du plan d’action',
+    })
+    fireEvent.click(firstActions)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Épingler' }))
+
+    expect(screen.getByRole('alert').textContent).toBe('Épinglage impossible.')
+    expect(screen.getByRole('menu', { name: 'Actions du plan d’action' })).toBeTruthy()
+
+    fireEvent.click(secondActions)
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.getByRole('menu', { name: 'Actions du plan d’action' })).toBeTruthy()
   })
 
   it('keeps the scheduled card and the actions sheet outside desktop web', () => {

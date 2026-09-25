@@ -68,7 +68,6 @@ import {
 const EXECUTION_FEED_DEFAULT_COLLAPSED_SECTIONS = ['done', 'canceled'] as const
 
 type ExecutionFeedPageProps = {
-  onOpenActionPlanExecution?: (executionId: string) => void
   onNavigate?: (pathname: string) => void
   establishmentId?: string | null
   source?: 'establishment' | 'cross'
@@ -287,8 +286,32 @@ export function ExecutionFeedPage({
           item={item}
           onSelect={openExecution}
           actionsPending={quickActions.isPending}
-          onOpenActions={isCross ? undefined : quickActions.openActions}
-          onSelectAction={isCross ? undefined : quickActions.runAction}
+          actionsOpen={
+            !isCross &&
+            quickActions.actionsOpen &&
+            quickActions.activeItem?.id === item.id
+          }
+          actionError={
+            !isCross && quickActions.activeItem?.id === item.id
+              ? quickActions.actionError
+              : null
+          }
+          onActionsOpenChange={
+            isCross
+              ? undefined
+              : (open) => {
+                  if (open) {
+                    quickActions.openActions(item)
+                    return
+                  }
+                  quickActions.closeActions()
+                }
+          }
+          onRunAction={
+            isCross
+              ? undefined
+              : (feedItem, actionId) => quickActions.runAction(actionId, feedItem)
+          }
         />
       )
     }

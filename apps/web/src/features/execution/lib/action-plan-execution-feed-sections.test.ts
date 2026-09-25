@@ -5,7 +5,6 @@ import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 import {
   getActionPlanExecutionFeedSection,
   groupActionPlanExecutionsBySection,
-  mergeScheduledItemsIntoFeedSections,
   partitionActionPlanExecutionFeedPinnedItems,
 } from './action-plan-execution-feed-sections'
 
@@ -123,61 +122,6 @@ describe('groupActionPlanExecutionsBySection', () => {
     expect(groups[1]?.dotVariant).toBe('teal')
     expect(groups[0]?.items.map((item) => item.id)).toEqual(['pending'])
     expect(groups[1]?.items.map((item) => item.id)).toEqual(['in-progress'])
-  })
-})
-
-describe('mergeScheduledItemsIntoFeedSections', () => {
-  it('inserts scheduled preview after in_progress and before done', () => {
-    const groups = groupActionPlanExecutionsBySection([
-      buildFeedItem({ id: 'in-progress', status: 'in_progress' }),
-      buildFeedItem({ id: 'done', status: 'done' }),
-    ])
-    const scheduled = [buildFeedItem({ id: 'sched-1', status: 'scheduled' })]
-
-    const merged = mergeScheduledItemsIntoFeedSections(groups, scheduled)
-
-    expect(merged.map((group) => group.section)).toEqual(['in_progress', 'scheduled', 'done'])
-    expect(merged[1]?.items.map((item) => item.id)).toEqual(['sched-1'])
-  })
-
-  it('places scheduled after pending_validation when in_progress is absent', () => {
-    const groups = groupActionPlanExecutionsBySection([
-      buildFeedItem({ id: 'pending', status: 'pending_validation' }),
-      buildFeedItem({ id: 'done', status: 'done' }),
-    ])
-    const scheduled = [buildFeedItem({ id: 'sched-1', status: 'scheduled' })]
-
-    const merged = mergeScheduledItemsIntoFeedSections(groups, scheduled)
-
-    expect(merged.map((group) => group.section)).toEqual([
-      'pending_validation',
-      'scheduled',
-      'done',
-    ])
-  })
-
-  it('places scheduled after in_progress when both in_progress and pending exist', () => {
-    const groups = groupActionPlanExecutionsBySection([
-      buildFeedItem({ id: 'pending', status: 'pending_validation' }),
-      buildFeedItem({ id: 'in-progress', status: 'in_progress' }),
-    ])
-    const scheduled = [buildFeedItem({ id: 'sched-1', status: 'scheduled' })]
-
-    const merged = mergeScheduledItemsIntoFeedSections(groups, scheduled)
-
-    expect(merged.map((group) => group.section)).toEqual([
-      'pending_validation',
-      'in_progress',
-      'scheduled',
-    ])
-  })
-
-  it('returns groups unchanged when scheduled preview is empty', () => {
-    const groups = groupActionPlanExecutionsBySection([
-      buildFeedItem({ id: 'in-progress', status: 'in_progress' }),
-    ])
-
-    expect(mergeScheduledItemsIntoFeedSections(groups, [])).toEqual(groups)
   })
 })
 

@@ -25,13 +25,7 @@ export function useTerrainDetailTrailingSlotValue(): ReactNode {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
-export function TerrainDetailTrailingSlot({
-  children,
-  enabled = true,
-}: {
-  children: ReactNode
-  enabled?: boolean
-}) {
+export function TerrainDetailTrailingSlot({ children }: { children: ReactNode }) {
   const ownerRef = useRef<SlotOwner | null>(null)
   if (ownerRef.current == null) {
     ownerRef.current = Symbol()
@@ -39,14 +33,6 @@ export function TerrainDetailTrailingSlot({
 
   useLayoutEffect(() => {
     const owner = ownerRef.current
-    if (!enabled) {
-      if (slotOwner === owner) {
-        slotNode = null
-        slotOwner = null
-        emit()
-      }
-      return
-    }
     slotOwner = owner
     slotNode = children
     emit()
@@ -57,7 +43,7 @@ export function TerrainDetailTrailingSlot({
         emit()
       }
     }
-  }, [children, enabled])
+  }, [children])
 
   return null
 }
