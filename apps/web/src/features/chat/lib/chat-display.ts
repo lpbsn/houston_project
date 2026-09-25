@@ -1,3 +1,5 @@
+import { getDisplayNameInitials } from '@/lib/display-names'
+
 import type { ChatConversationListItem, ChatMessage } from '../types'
 
 export function getConversationTitle(
@@ -17,6 +19,21 @@ export function getConversationTitle(
   }
 
   return 'Groupe'
+}
+
+/** Initials for list avatars: peer name for DMs, conversation title for groups. */
+export function getConversationAvatarInitials(
+  conversation: Pick<ChatConversationListItem, 'title' | 'type' | 'participants'>,
+  viewerMembershipId: string | null,
+): string {
+  const title = getConversationTitle(conversation, viewerMembershipId)
+  if (conversation.type === 'group') {
+    return getDisplayNameInitials(title)
+  }
+  const peer = conversation.participants.find(
+    (participant) => participant.membership_id !== viewerMembershipId,
+  )
+  return getDisplayNameInitials(peer?.display_name?.trim() || title)
 }
 
 export function formatChatAttachmentSize(bytes: number): string {

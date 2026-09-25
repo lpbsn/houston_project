@@ -4,6 +4,7 @@ import { Info, LoaderCircle, Users } from 'lucide-react'
 import { useAuth } from '@/app/auth-provider'
 import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { cn } from '@/lib/utils'
 
 import { ChatApiError } from '../api'
 import { ChatAttachmentPreviewDialog } from '../components/chat-attachment-preview-dialog'
@@ -18,6 +19,7 @@ import {
   getConversationTitle,
   isSameChatDay,
 } from '../lib/chat-display'
+import { chatDesktopColumnHeaderClassName } from '../lib/chat-desktop-surface'
 import { formatChatRetentionNotice } from '../lib/chat-limits'
 import {
   isChatImageAttachment,
@@ -35,9 +37,13 @@ import { useChatConversationPresence } from '../hooks/use-chat-conversation-pres
 
 type ChatConversationPageProps = {
   conversationId: string
+  embedded?: boolean
 }
 
-export function ChatConversationPage({ conversationId }: ChatConversationPageProps) {
+export function ChatConversationPage({
+  conversationId,
+  embedded = false,
+}: ChatConversationPageProps) {
   const auth = useAuth()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
   const viewerMembershipId = auth.bootstrap?.active_membership?.id ?? null
@@ -163,34 +169,53 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
     detailQuery.data.type === 'group' && detailQuery.data.can_manage === true
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <ChatReconnectBanner status={connectionStatus} />
+    <div
+      className="relative flex h-full min-h-0 flex-col"
+      data-testid="chat-conversation-page"
+      data-conversation-id={conversationId}
+    >
+      {embedded ? null : <ChatReconnectBanner status={connectionStatus} />}
 
-      <div className="border-b border-[#E8E6DF] bg-white px-3 py-2">
-        <div className="flex items-start justify-between gap-2">
+      <div
+        className={
+          embedded
+            ? chatDesktopColumnHeaderClassName
+            : 'border-b border-[#E8E6DF] bg-white px-3 py-2'
+        }
+      >
+        <div
+          className={cn(
+            'flex w-full justify-between gap-2',
+            embedded ? 'items-center' : 'items-start',
+          )}
+        >
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-[#1a1a1a]">{conversationTitle}</p>
-            <p className="text-[11px] text-[#7D7B75]">{formatChatRetentionNotice()}</p>
+            <p className="truncate text-sm font-semibold leading-tight text-[#1a1a1a]">
+              {conversationTitle}
+            </p>
+            <p className="truncate text-[11px] leading-tight text-[#7D7B75]">
+              {formatChatRetentionNotice()}
+            </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-[#E8E6DF] bg-[#F5F4F0] px-2.5 py-1.5 text-xs font-semibold text-[#1a1a1a]"
-            onClick={() => setInfoOpen(true)}
-          >
-            <Info className="h-3.5 w-3.5" aria-hidden="true" />
-            Infos
-          </button>
-          {canManageMembers ? (
             <button
               type="button"
               className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-[#E8E6DF] bg-[#F5F4F0] px-2.5 py-1.5 text-xs font-semibold text-[#1a1a1a]"
-              onClick={() => setManageMembersOpen(true)}
+              onClick={() => setInfoOpen(true)}
             >
-              <Users className="h-3.5 w-3.5" aria-hidden="true" />
-              Gérer les membres
+              <Info className="h-3.5 w-3.5" aria-hidden="true" />
+              Infos
             </button>
-          ) : null}
+            {canManageMembers ? (
+              <button
+                type="button"
+                className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-[#E8E6DF] bg-[#F5F4F0] px-2.5 py-1.5 text-xs font-semibold text-[#1a1a1a]"
+                onClick={() => setManageMembersOpen(true)}
+              >
+                <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                Gérer les membres
+              </button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -320,6 +345,7 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
         conversation={detailQuery.data}
         open={infoOpen}
         onClose={() => setInfoOpen(false)}
+        presentation={embedded ? 'panel' : 'sheet'}
         knownMessageIds={new Set(serverMessages.map((message) => message.id))}
         pdfAlert={pdfAlert}
         onSelectAttachment={(item) => {
@@ -338,6 +364,7 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
           viewerMembershipId={viewerMembershipId}
           open={manageMembersOpen}
           onClose={() => setManageMembersOpen(false)}
+          presentation={embedded ? 'dialog' : 'sheet'}
         />
       ) : null}
     </div>

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   filterConversationsByQuery,
   formatUnreadBadgeCount,
+  getConversationAvatarInitials,
   getConversationTitle,
   getUnreadCountAriaLabel,
   hasUnreadConversations,
@@ -44,6 +45,19 @@ const sampleConversation = (
 describe('chat-display', () => {
   it('derives dm title from peer display name', () => {
     expect(getConversationTitle(sampleConversation(), 'mbr-viewer')).toBe('Bob Martin')
+  })
+
+  it('derives dm avatar initials from the peer display name', () => {
+    expect(getConversationAvatarInitials(sampleConversation(), 'mbr-viewer')).toBe('BM')
+  })
+
+  it('derives group avatar initials from the conversation title', () => {
+    expect(
+      getConversationAvatarInitials(
+        sampleConversation({ type: 'group', title: 'Équipe cuisine' }),
+        'mbr-viewer',
+      ),
+    ).toBe('ÉC')
   })
 
   it('filters conversations by participant name', () => {

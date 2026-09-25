@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
+import { X } from 'lucide-react'
 
 import { TerrainBottomSheet } from '@/components/ui/terrain'
 
@@ -15,9 +16,9 @@ type ChatConversationInfoSheetProps = {
   open: boolean
   onClose: () => void
   knownMessageIds?: Set<string>
-  onJumpToMessage?: (messageId: string) => void
   onSelectAttachment?: (item: ChatAttachmentPreviewItem) => void
   pdfAlert?: string | null
+  presentation?: 'sheet' | 'panel'
 }
 
 export function ChatConversationInfoSheet({
@@ -28,6 +29,7 @@ export function ChatConversationInfoSheet({
   knownMessageIds,
   onSelectAttachment,
   pdfAlert,
+  presentation = 'sheet',
 }: ChatConversationInfoSheetProps) {
   const [tab, setTab] = useState<'participants' | 'media' | 'documents'>('participants')
   const kind = tab === 'media' ? 'image' : tab === 'documents' ? 'document' : null
@@ -43,6 +45,19 @@ export function ChatConversationInfoSheet({
     enabled: open && kind !== null,
   })
   const mediaItems = mediaQuery.data?.pages.flatMap((page) => page.items) ?? []
+
+  useEffect(() => {
+    if (!open || presentation !== 'panel') {
+      return
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose, open, presentation])
 
   function selectSharedItem(item: {
     id: string
@@ -64,8 +79,8 @@ export function ChatConversationInfoSheet({
     onSelectAttachment?.(previewItem)
   }
 
-  return (
-    <TerrainBottomSheet open={open} onClose={onClose} title="Conversation">
+  const body: ReactNode = (
+    <>
       <div className="flex flex-wrap gap-2 pb-3">
         <button
           type="button"
@@ -168,6 +183,39 @@ export function ChatConversationInfoSheet({
           Charger plus
         </button>
       ) : null}
+    </>
+  )
+
+  if (!open) {
+    return null
+  }
+
+  if (presentation === 'panel') {
+    return (
+      <aside
+        data-testid="chat-conversation-info-panel"
+        className="absolute inset-y-0 right-0 z-20 flex w-full max-w-sm flex-col border-l border-[#E8E6DF] bg-white shadow-lg"
+        aria-label="Infos conversation"
+      >
+        <div className="flex items-center justify-between border-b border-[#E8E6DF] px-3 py-2">
+          <h2 className="text-sm font-semibold text-[#1a1a1a]">Conversation</h2>
+          <button
+            type="button"
+            className="rounded-md p-1.5 text-[#5c564e] hover:bg-[#F5F4F0]"
+            aria-label="Fermer les infos"
+            onClick={onClose}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">{body}</div>
+      </aside>
+    )
+  }
+
+  return (
+    <TerrainBottomSheet open={open} onClose={onClose} title="Conversation">
+      {body}
     </TerrainBottomSheet>
   )
 }

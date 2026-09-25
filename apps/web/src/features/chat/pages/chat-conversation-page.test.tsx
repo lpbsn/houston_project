@@ -240,4 +240,27 @@ describe('ChatConversationPage', () => {
 
     expect(screen.queryByRole('button', { name: 'Gérer les membres' })).toBeNull()
   })
+
+  it('omits the reconnect banner when embedded', () => {
+    detailQueryMock.mockReturnValue(buildDetailQueryState())
+    messagesQueryMock.mockReturnValue(buildMessagesQueryState())
+    realtimeState.connectionStatus = 'reconnecting'
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(ChatConversationPage, {
+          conversationId: CONVERSATION_ID,
+          embedded: true,
+        }),
+      ),
+    )
+
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.getByTestId('chat-conversation-page')).toBeTruthy()
+  })
 })

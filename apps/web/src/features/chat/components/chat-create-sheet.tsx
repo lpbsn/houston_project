@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { User, Users } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -15,6 +15,7 @@ type ChatCreateSheetProps = {
   canCreateGroup: boolean
   onClose: () => void
   onConversationCreated: (conversationId: string) => void
+  presentation?: 'sheet' | 'dialog'
 }
 
 type CreateMode = 'menu' | 'dm' | 'group'
@@ -26,6 +27,7 @@ export function ChatCreateSheet({
   canCreateGroup,
   onClose,
   onConversationCreated,
+  presentation = 'sheet',
 }: ChatCreateSheetProps) {
   const [mode, setMode] = useState<CreateMode>('menu')
   const [search, setSearch] = useState('')
@@ -68,6 +70,25 @@ export function ChatCreateSheet({
     onClose()
   }
 
+  useEffect(() => {
+    if (!open || presentation !== 'dialog') {
+      return
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setMode('menu')
+        setSearch('')
+        setGroupTitle('')
+        setSelectedMembershipIds([])
+        createDmMutation.reset()
+        createGroupMutation.reset()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [createDmMutation, createGroupMutation, onClose, open, presentation])
+
   function toggleMembership(membership: ChatEligibleMembership) {
     setSelectedMembershipIds((current) =>
       current.includes(membership.membership_id)
@@ -91,8 +112,8 @@ export function ChatCreateSheet({
     handleClose()
   }
 
-  return (
-    <TerrainBottomSheet title={sheetTitle} open={open} onClose={handleClose}>
+  const body = (
+    <>
       {mode === 'menu' ? (
         <ul className="flex flex-col gap-2">
           {canCreateDm ? (
@@ -190,6 +211,46 @@ export function ChatCreateSheet({
           ) : null}
         </div>
       ) : null}
-    </TerrainBottomSheet>
+    </>
+  )
+
+  if (!open) {
+    return null
+  }
+
+  if (presentation === 'dialog') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="chat-create-dialog-title"
+          data-testid="chat-create-dialog"
+          className="w-full max-w-md rounded-xl border border-[#E8E6DF] bg-white p-4 shadow-lg"
+        >
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 id="chat-create-dialog-title" className="text-sm font-semibold text-[#1a1a1a]">
+              {sheetTitle}
+            </h2>
+            <button
+              type="button"
+              className="rounded-md px-2 py-1 text-sm font-medium text-[#5c564e] hover:bg-[#F5F4F0]"
+              onClick={handleClose}
+            >
+              Fermer
+            </button>
+          </div>
+          {body}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div data-testid="chat-create-sheet">
+      <TerrainBottomSheet title={sheetTitle} open={open} onClose={handleClose}>
+        {body}
+      </TerrainBottomSheet>
+    </div>
   )
 }

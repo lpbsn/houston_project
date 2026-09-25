@@ -66,8 +66,8 @@ describe('ConversationRow', () => {
     expect(screen.getByText('Sarah M.')).toBeTruthy()
   })
 
-  it('renders a group conversation with a users icon', () => {
-    const { container } = renderRow(
+  it('renders a group conversation with title initials', () => {
+    renderRow(
       buildConversation({
         type: 'group',
         title: 'Équipe Cuisine',
@@ -84,7 +84,7 @@ describe('ConversationRow', () => {
     )
 
     expect(screen.getByText('Équipe Cuisine')).toBeTruthy()
-    expect(container.querySelector('.lucide-users')).toBeTruthy()
+    expect(screen.getByText('ÉC')).toBeTruthy()
   })
 
   it('exposes unread count and accessible label', () => {
