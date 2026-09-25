@@ -171,6 +171,8 @@ afterEach(() => {
   __resetObservationComposeDraftStoreForTests()
   authUser.current.ai_consent_status = 'granted'
   vi.clearAllMocks()
+  vi.unstubAllEnvs()
+  Reflect.deleteProperty(window, 'matchMedia')
   resyncBootstrapAfterLegalError.mockResolvedValue(null)
 })
 
@@ -456,5 +458,34 @@ describe('ReportPage', () => {
     })
     expect(textarea.value).not.toContain('Première')
     expect(mockTranscribeAsync).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the send control in the footer on desktop web and on a large native viewport', () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockImplementation(() => ({
+        matches: true,
+        media: '',
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    })
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    renderPage()
+    expect(
+      screen.getByRole('button', { name: /Envoyer l’observation/ }).closest('footer'),
+    ).toBeTruthy()
+
+    cleanup()
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    renderPage()
+    expect(
+      screen.getByRole('button', { name: /Envoyer l’observation/ }).closest('footer'),
+    ).toBeTruthy()
   })
 })

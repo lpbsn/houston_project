@@ -20,6 +20,8 @@ type PlanningOptionRowProps = {
   error?: string
   fieldKey?: string
   className?: string
+  inset?: boolean
+  wrapValue?: boolean
 }
 
 export function PlanningOptionRow({
@@ -35,6 +37,8 @@ export function PlanningOptionRow({
   error,
   fieldKey,
   className,
+  inset = false,
+  wrapValue = false,
 }: PlanningOptionRowProps) {
   const pickerActive = !disabled && openPicker?.rowId === rowId
   const resolvedDisplayValue =
@@ -53,20 +57,34 @@ export function PlanningOptionRow({
 
   return (
     <div
-      className={cn(className)}
+      className={cn(inset && 'border-b border-[#E8E6DF] px-3 py-3 last:border-b-0', className)}
       {...(fieldKey ? { 'data-action-plan-field': fieldKey } : {})}
     >
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm text-[#1a1a1a]">{label}</span>
+      <div className={cn('flex justify-between gap-3', wrapValue ? 'items-start' : 'items-center')}>
+        <span className="shrink-0 text-sm text-[#1a1a1a]">{label}</span>
         {disabled ? (
-          <span className="max-w-[55%] truncate text-sm text-[#7D7B75]">{resolvedDisplayValue}</span>
+          <span
+            className={cn(
+              'text-sm text-[#7D7B75]',
+              wrapValue ? 'min-w-0 flex-1 break-words text-right' : 'max-w-[55%] truncate',
+            )}
+          >
+            {resolvedDisplayValue}
+          </span>
         ) : (
           <PlanningPill
             active={pickerActive}
             aria-label={label}
+            className={wrapValue ? 'min-w-0 max-w-[70%] shrink' : undefined}
             onClick={togglePicker}
           >
-            <span className="block max-w-[140px] truncate">{resolvedDisplayValue}</span>
+            <span
+              className={
+                wrapValue ? 'block whitespace-normal break-words text-right' : 'block max-w-[140px] truncate'
+              }
+            >
+              {resolvedDisplayValue}
+            </span>
           </PlanningPill>
         )}
       </div>

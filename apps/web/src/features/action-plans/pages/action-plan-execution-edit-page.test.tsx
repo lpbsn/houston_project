@@ -167,6 +167,8 @@ describe('ActionPlanExecutionEditPage guards', () => {
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
+    vi.unstubAllEnvs()
+    Reflect.deleteProperty(window, 'matchMedia')
   })
 
   it('blocks edit when can_update is false', () => {
@@ -285,5 +287,99 @@ describe('ActionPlanExecutionEditPage guards', () => {
         ),
       ).toBe(true)
     })
+  })
+
+  it('prefills an execution edit and keeps treated tasks read-only on desktop web', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query.includes('1024'),
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    })
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildExecution({
+        task_executions: [
+          {
+            id: 'task-done',
+            task: 'Done task',
+            description: '',
+            deadline_at: null,
+            assigned_membership_id: null,
+            assigned_display_name: null,
+            position: 1,
+            status: 'done',
+            observation_id: null,
+            skipped_reason: null,
+            completed_at: '2026-07-01T10:00:00.000Z',
+            skipped_at: null,
+            observation_created_at: null,
+            permission_hints: {
+              can_mark_done: false,
+              can_unmark_done: true,
+              can_skip: false,
+              can_create_observation: false,
+            },
+            business_unit: {
+              id: 'bu-1',
+              specific_name: 'Restaurant',
+              instance_description: '',
+              active: true,
+              generic: {
+                key: 'restaurant',
+                label: 'Restaurant',
+                description: '',
+                unit_type: 'dedicated',
+              },
+            },
+          },
+        ],
+      }),
+      refetch: vi.fn(),
+    })
+
+    render(createElement(ActionPlanExecutionEditPage, { executionId: 'exec-1' }))
+
+    expect(await screen.findByRole('heading', { name: 'Modifier l’exécution' })).toBeTruthy()
+    expect((screen.getByDisplayValue('Plan nettoyage') as HTMLInputElement).value).toBe(
+      'Plan nettoyage',
+    )
+    expect(screen.getByText('Done task')).toBeTruthy()
+    expect(screen.queryByDisplayValue('Done task')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeTruthy()
+    expect(screen.queryByRole('contentinfo')).toBeNull()
+  })
+
+  it('keeps the tactile edit footer on a large native viewport', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockImplementation(() => ({
+        matches: true,
+        media: '',
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    })
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+
+    render(createElement(ActionPlanExecutionEditPage, { executionId: 'exec-1' }))
+
+    const saveButton = await screen.findByRole('button', { name: 'Enregistrer les modifications' })
+    expect(saveButton.closest('footer')).toBeTruthy()
   })
 })

@@ -7,6 +7,7 @@ type PlanningPillProps = {
   onClick: () => void
   children: ReactNode
   disabled?: boolean
+  className?: string
   'aria-label'?: string
 }
 
@@ -15,6 +16,7 @@ export function PlanningPill({
   onClick,
   children,
   disabled = false,
+  className,
   'aria-label': ariaLabel,
 }: PlanningPillProps) {
   return (
@@ -29,6 +31,7 @@ export function PlanningPill({
           ? 'border border-[#1B4FD8] bg-[#EEF3FF] text-[#1B4FD8]'
           : 'border border-transparent bg-[#F5F4F0] text-[#1a1a1a]',
         disabled && 'cursor-default opacity-60',
+        className,
       )}
       onClick={onClick}
     >

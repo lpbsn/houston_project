@@ -25,6 +25,7 @@ import {
   type ActionPlanEventPlanningDraft,
 } from '../lib/action-plan-event-planning-form'
 import type { ActionPlanScheduleCreateRequest, ActionPlanUseRequest } from '../types'
+import { ACTION_PLAN_DESKTOP_END_LABEL } from '../lib/action-plan-desktop-form'
 import { ActionPlanAssigneesSheet } from './action-plan-assignees-sheet'
 import { PlanningDateRow } from './planning/planning-date-row'
 import {
@@ -39,6 +40,8 @@ type ActionPlanEventPlanningFormProps = {
   establishmentId: string
   pilotBusinessUnitId: string
   fieldErrors?: Record<string, string>
+  /** Desktop forms split assignment and planning into successive sections. */
+  layout?: 'combined' | 'split'
   onDraftChange: (
     update:
       | ActionPlanEventPlanningDraft
@@ -113,11 +116,13 @@ export function ActionPlanEventPlanningForm({
   establishmentId,
   pilotBusinessUnitId,
   fieldErrors = {},
+  layout = 'combined',
   onDraftChange,
   onAssigneeSchedule,
   onAssigneeLaunch,
 }: ActionPlanEventPlanningFormProps) {
   const showNowAction = config.planningPersisted !== false
+  const endAtLabel = layout === 'split' ? ACTION_PLAN_DESKTOP_END_LABEL : 'Fin'
   const [assigneeSheetOpen, setAssigneeSheetOpen] = useState(false)
   const [openPicker, setOpenPicker] = useState<PlanningPickerTarget>(null)
   const [assigneeActionErrors, setAssigneeActionErrors] = useState<Record<string, string>>({})
@@ -252,33 +257,42 @@ export function ActionPlanEventPlanningForm({
   const lockStart = config.lockStart === true
   const assigneeActionsEnabled = config.assigneeActionsEnabled !== false
   const mergedFieldErrors = { ...fieldErrors, ...assigneeActionErrors }
-  const chronologyModeLabel = draft.usePerAssigneeChronology
-    ? 'Chronologie par assigné'
-    : 'Chronologie commune'
+  const chronologyModeLabel = draft.usePerAssigneeChronology ? 'Chronologie par assigné' : null
+
+  const assigneeRow = showAssignees ? (
+    <PlanningFormRow
+      label="Assignés"
+      summary={assigneeSummary}
+      onClick={config.canEditAssignees ? () => setAssigneeSheetOpen(true) : undefined}
+      disabled={!config.canEditAssignees}
+      error={mergedFieldErrors.assignees}
+      fieldKey="assignees"
+    />
+  ) : null
 
   return (
     <>
-      <section className="space-y-2">
+      {layout === 'split' && assigneeRow ? (
+        <section data-testid="action-plan-desktop-assignment" className="space-y-2">
+          <TerrainSectionLabel>Assignation</TerrainSectionLabel>
+          <TerrainCard className="overflow-hidden p-0">{assigneeRow}</TerrainCard>
+        </section>
+      ) : null}
+      <section
+        className="space-y-2"
+        data-testid={layout === 'split' ? 'action-plan-desktop-planning' : undefined}
+      >
         <TerrainSectionLabel>Planification</TerrainSectionLabel>
-        <p className="px-0.5 text-xs text-[#7D7B75]">{chronologyModeLabel}</p>
+        {chronologyModeLabel ? (
+          <p className="px-0.5 text-xs text-[#7D7B75]">{chronologyModeLabel}</p>
+        ) : null}
         {config.planningPersisted === false ? (
           <p className="text-xs text-[#7D7B75]">
             La planification n&apos;est pas enregistrée avec le template.
           </p>
         ) : null}
         <TerrainCard className="overflow-hidden p-0">
-          {showAssignees ? (
-            <PlanningFormRow
-              label="Assignés"
-              summary={assigneeSummary}
-              onClick={
-                config.canEditAssignees ? () => setAssigneeSheetOpen(true) : undefined
-              }
-              disabled={!config.canEditAssignees}
-              error={mergedFieldErrors.assignees}
-              fieldKey="assignees"
-            />
-          ) : null}
+          {layout === 'split' ? null : assigneeRow}
 
           {canToggleChronology ? (
             <TerrainSwitch
@@ -528,7 +542,7 @@ export function ActionPlanEventPlanningForm({
                         />
                         <PlanningDateTimeRow
                           rowId={`assignee-${assignee.id}-end`}
-                          label="Fin"
+                          label={endAtLabel}
                           date={endParts.date}
                           time={endParts.time}
                           hideTime={assignee.allDay}
@@ -723,7 +737,7 @@ export function ActionPlanEventPlanningForm({
 
                 <PlanningDateTimeRow
                   rowId="shared-end"
-                  label="Fin"
+                  label={endAtLabel}
                   date={draft.endDate}
                   time={draft.endTime}
                   hideTime={isAllDayPlanningDraft(draft)}

@@ -4,6 +4,7 @@ import { createElement } from 'react'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { ACTION_PLAN_DESKTOP_END_LABEL } from '../lib/action-plan-desktop-form'
 import { ActionPlanEventPlanningForm } from './action-plan-event-planning-form'
 import { createActionPlanAssigneeDraft } from '../lib/action-plan-form-validation'
 import {
@@ -55,6 +56,11 @@ describe('ActionPlanEventPlanningForm', () => {
       staffDisplayName: 'Alice',
     })
     expect(screen.getByText('Alice')).toBeTruthy()
+  })
+
+  it('does not caption the shared chronology', () => {
+    renderForm()
+    expect(screen.queryByText('Chronologie commune')).toBeNull()
   })
 
   it('hides repeat toggle when scheduling is not allowed', () => {
@@ -130,5 +136,22 @@ describe('ActionPlanEventPlanningForm', () => {
     )
     expect(screen.queryByLabelText('Début — heure')).toBeNull()
     expect(screen.queryByLabelText('Fin — heure')).toBeNull()
+  })
+
+  it('names the desktop end instant Échéance', () => {
+    render(
+      createElement(ActionPlanEventPlanningForm, {
+        draft: createActionPlanEventPlanningDraft(),
+        config: baseConfig,
+        layout: 'split',
+        establishmentId: 'est-1',
+        pilotBusinessUnitId: 'bu-1',
+        onDraftChange: vi.fn(),
+      }),
+    )
+
+    expect(screen.getByText(ACTION_PLAN_DESKTOP_END_LABEL)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Fin — date' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Échéance — date' })).toBeTruthy()
   })
 })

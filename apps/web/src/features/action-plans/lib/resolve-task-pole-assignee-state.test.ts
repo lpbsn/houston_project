@@ -4,6 +4,7 @@ import { createActionPlanTaskDraft } from '@/features/action-plans/lib/action-pl
 import {
   applyAssigneeSelectionToTask,
   isAdminAssigneeTask,
+  resolveTaskDraftDisplayedPoleLabel,
   resolveTaskPoleAssigneeState,
   shouldClearAssigneeOnPoleChange,
 } from '@/features/action-plans/lib/resolve-task-pole-assignee-state'
@@ -124,6 +125,46 @@ describe('resolveTaskPoleAssigneeState', () => {
 
     expect(state.poleOptions).toEqual(businessUnits)
     expect(state.effectiveBusinessUnitId).toBe('bu-2')
+  })
+})
+
+describe('resolveTaskDraftDisplayedPoleLabel', () => {
+  it('shows the pilot pole when the task does not store one', () => {
+    const task = createActionPlanTaskDraft('')
+
+    expect(
+      resolveTaskDraftDisplayedPoleLabel({
+        task,
+        pilotBusinessUnitId: 'bu-1',
+        businessUnits,
+      }),
+    ).toBe('Restaurant')
+    expect(task.businessUnitId).toBe('')
+  })
+
+  it('shows the stored pole when one is set', () => {
+    expect(
+      resolveTaskDraftDisplayedPoleLabel({
+        task: createActionPlanTaskDraft('bu-2'),
+        pilotBusinessUnitId: 'bu-1',
+        businessUnits,
+      }),
+    ).toBe('Bar')
+  })
+
+  it('does not invent a pilot label when the assignee still needs a pole', () => {
+    expect(
+      resolveTaskDraftDisplayedPoleLabel({
+        task: {
+          ...createActionPlanTaskDraft(''),
+          assigneeMembershipId: 'member-1',
+          assigneeDisplayName: 'Director',
+          assigneeBusinessUnitIds: [],
+        },
+        pilotBusinessUnitId: 'bu-1',
+        businessUnits,
+      }),
+    ).toBeNull()
   })
 })
 

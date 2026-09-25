@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { notifySuccess } from '@/lib/success-toast'
 
+import { ACTION_PLAN_DESKTOP_PILOT_LABEL } from '../lib/action-plan-desktop-form'
 import { ActionPlanCreatePage } from './action-plan-create-page'
 
 vi.mock('@/lib/success-toast', async () => {
@@ -264,6 +265,27 @@ vi.mock('@/features/action-plans/components/action-linked-signal-card', () => ({
     createElement('div', { 'data-testid': 'linked-signal-card' }, title),
 }))
 
+function mockPlanFormViewport(width: number) {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => {
+      const minWidth = /min-width:\s*(\d+)px/.exec(query)
+      const matches = minWidth ? width >= Number(minWidth[1]) : false
+      return {
+        matches,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }
+    }),
+  })
+}
+
 function addTask() {
   fireEvent.click(screen.getByRole('button', { name: 'Ajouter une tâche' }))
 }
@@ -382,6 +404,8 @@ describe('ActionPlanCreatePage', () => {
 
   afterEach(() => {
     cleanup()
+    vi.unstubAllEnvs()
+    Reflect.deleteProperty(window, 'matchMedia')
   })
 
   it('renders Options section before tasks', () => {
@@ -1135,5 +1159,139 @@ describe('ActionPlanCreatePage', () => {
     renderPage({ mode: 'template-edit', actionPlanId: 'plan-1' })
 
     expect(await screen.findByRole('button', { name: 'Enregistrer les modifications' })).toBeTruthy()
+  })
+
+  it('saves a library template from the catalog route on desktop web', async () => {
+    mockPlanFormViewport(1280)
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    renderPage({ mode: 'catalog' })
+
+    expect(screen.getByRole('heading', { name: 'Créer un modèle' })).toBeTruthy()
+    expect(screen.queryByRole('switch', { name: 'Enregistrer dans la bibliothèque' })).toBeNull()
+    expect(screen.queryByTestId('event-planning-form')).toBeNull()
+
+    fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'Modèle desktop' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+    await waitFor(() => {
+      expect(createMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Modèle desktop',
+          is_reusable: true,
+          assignees: [],
+        }),
+      )
+    })
+  })
+
+  it('starts an execution from the execution route on desktop web', async () => {
+    mockPlanFormViewport(1280)
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    renderPage({ mode: 'execution', backPath: '/execution' })
+
+    expect(screen.getByRole('heading', { name: 'Créer une exécution' })).toBeTruthy()
+    expect(screen.queryByRole('switch', { name: 'Enregistrer dans la bibliothèque' })).toBeNull()
+    expect(screen.getByTestId('event-planning-form')).toBeTruthy()
+
+    fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'Exécution desktop' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Démarrer' }))
+
+    await waitFor(() => {
+      expect(createMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Exécution desktop',
+          is_reusable: false,
+        }),
+      )
+    })
+  })
+
+  it('keeps the library toggle on a large native viewport', () => {
+    mockPlanFormViewport(1280)
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    renderPage({ mode: 'catalog' })
+
+    expect(screen.getByRole('switch', { name: 'Enregistrer dans la bibliothèque' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Créer le plan d’action' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'Créer un modèle' })).toBeNull()
+  })
+
+  it('stacks organization before tasks and the action at 1024px', () => {
+    mockPlanFormViewport(1024)
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    renderPage({ mode: 'execution', backPath: '/execution' })
+
+    const title = screen.getByTestId('action-plan-desktop-title')
+    const description = screen.getByTestId('action-plan-desktop-description')
+    const organization = screen.getByTestId('action-plan-desktop-organization')
+    const planning = screen.getByTestId('event-planning-form')
+    const tasks = screen.getByTestId('action-plan-desktop-tasks')
+    const primary = screen.getByTestId('action-plan-form-desktop-primary')
+
+    expect(title.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(
+      description.compareDocumentPosition(organization) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(organization.compareDocumentPosition(planning) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(planning.compareDocumentPosition(tasks) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(tasks.compareDocumentPosition(primary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByRole('button', { name: ACTION_PLAN_DESKTOP_PILOT_LABEL })).toBeTruthy()
+    expect(screen.getByText('Aucune tâche.')).toBeTruthy()
+    expect(screen.queryByTestId('action-plan-desktop-main')).toBeNull()
+    expect(
+      screen.getByTestId('action-plan-desktop-title').parentElement,
+    ).toBe(screen.getByTestId('action-plan-desktop-description').parentElement)
+  })
+
+  it('keeps title and tasks in one column from 1280px', () => {
+    mockPlanFormViewport(1280)
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    renderPage({ mode: 'execution', backPath: '/execution' })
+
+    const main = screen.getByTestId('action-plan-desktop-main')
+    const side = screen.getByTestId('action-plan-desktop-side')
+    const tasks = screen.getByTestId('action-plan-desktop-tasks')
+
+    expect(main.contains(screen.getByTestId('action-plan-desktop-title'))).toBe(true)
+    expect(main.contains(screen.getByTestId('action-plan-desktop-description'))).toBe(true)
+    expect(main.contains(tasks)).toBe(true)
+    expect(side.contains(screen.getByTestId('action-plan-desktop-organization'))).toBe(true)
+    expect(main.contains(screen.getByTestId('action-plan-desktop-organization'))).toBe(false)
+    expect(tasks.contains(screen.getByRole('button', { name: 'Ajouter une tâche' }))).toBe(true)
+    expect(tasks.contains(screen.getByText('Aucune tâche.'))).toBe(true)
+  })
+
+  it('keeps linked classification and starts an observation execution on desktop web', () => {
+    mockPlanFormViewport(1100)
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    renderPage({
+      mode: 'signal-linked',
+      signalId: 'sig-1',
+      backPath: '/signals/sig-1',
+    })
+
+    expect(screen.getByRole('heading', { name: 'Exécution liée à l’observation' })).toBeTruthy()
+    expect(screen.getByTestId('linked-signal-card').textContent).toBe('Fuite d eau')
+    expect(screen.getByTestId('action-plan-desktop-classification')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Démarrer' })).toBeTruthy()
+    expect(screen.queryByRole('switch', { name: 'Enregistrer dans la bibliothèque' })).toBeNull()
+  })
+
+  it('prefills a template edit without execution planning on desktop web', async () => {
+    mockPlanFormViewport(1100)
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildTemplatePlan(),
+      refetch: vi.fn(),
+    })
+
+    renderPage({ mode: 'template-edit', actionPlanId: 'plan-1' })
+
+    expect(await screen.findByRole('heading', { name: 'Modifier le modèle' })).toBeTruthy()
+    expect((screen.getAllByRole('textbox')[0] as HTMLInputElement).value).toBe('Plan catalogue')
+    expect(screen.queryByTestId('event-planning-form')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeTruthy()
   })
 })

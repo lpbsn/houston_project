@@ -534,4 +534,42 @@ describe('ActionPlanTaskDraftEditor', () => {
       }),
     ])
   })
+
+  it('keeps a compact work list and shows the effective pole without storing it', () => {
+    const onTasksChange = vi.fn()
+    const task = { ...createActionPlanTaskDraft(''), task: 'Contrôler la température' }
+
+    render(
+      createElement(ActionPlanTaskDraftEditor, {
+        tasks: [
+          task,
+          { ...createActionPlanTaskDraft('bu-2'), id: 'task-2', task: 'Vérifier le stock' },
+        ],
+        establishmentId: 'est-1',
+        pilotBusinessUnitId: 'bu-1',
+        canDefineCrossPoleTasks: false,
+        businessUnits: [
+          { id: 'bu-1', label: 'Restaurant' },
+          { id: 'bu-2', label: 'Bar' },
+        ],
+        density: 'compact',
+        onTasksChange,
+      }),
+    )
+
+    expect(screen.getAllByRole('button', { name: 'Ajouter une tâche' })).toHaveLength(1)
+    expect(screen.queryByRole('checkbox')).toBeNull()
+    expect(screen.queryByText('Sans pôle')).toBeNull()
+    expect(screen.getByText('Restaurant')).toBeTruthy()
+    expect(screen.getByText('Bar')).toBeTruthy()
+    expect(screen.queryByLabelText('Description de la tâche')).toBeNull()
+    expect(onTasksChange).not.toHaveBeenCalled()
+    expect(task.businessUnitId).toBe('')
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Détails de la tâche' })[0])
+
+    expect(screen.getByLabelText('Description de la tâche')).toBeTruthy()
+    expect(screen.getByText('Assigné')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Options avancées' })).toBeNull()
+  })
 })

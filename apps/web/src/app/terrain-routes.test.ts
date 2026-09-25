@@ -203,6 +203,7 @@ describe('getTerrainRouteConfig', () => {
       backPath: '/action-plans',
       showBottomNav: false,
       mainScroll: 'auto',
+      hideTopbar: true,
     })
     expect(getTerrainRouteConfig({ kind: 'action-plan-create', origin: 'execution' })).toEqual({
       topbarVariant: 'detail',
@@ -210,6 +211,7 @@ describe('getTerrainRouteConfig', () => {
       backPath: '/execution',
       showBottomNav: false,
       mainScroll: 'auto',
+      hideTopbar: true,
     })
     expect(
       getTerrainRouteConfig({ kind: 'action-plan-template-detail', actionPlanId: 'plan-1' }),
@@ -300,6 +302,7 @@ describe('getTerrainRouteConfig', () => {
       backPath: '/signals/sig-1',
       showBottomNav: false,
       mainScroll: 'auto',
+      hideTopbar: true,
     })
   })
 
@@ -395,6 +398,19 @@ describe('resolveTerrainTopbarPlacement', () => {
     expect(resolveTerrainTopbarPlacement(establishment, getTerrainRouteConfig(establishment))).toBe(
       'mobile-only',
     )
+  })
+
+  it('keeps a mobile shell topbar on plan create routes', () => {
+    const library = { kind: 'action-plan-create' as const, origin: 'library' as const }
+    const execution = { kind: 'action-plan-create' as const, origin: 'execution' as const }
+    const signal = { kind: 'signal-action-create' as const, signalId: 'sig-1' }
+    expect(resolveTerrainTopbarPlacement(library, getTerrainRouteConfig(library))).toBe(
+      'mobile-only',
+    )
+    expect(resolveTerrainTopbarPlacement(execution, getTerrainRouteConfig(execution))).toBe(
+      'mobile-only',
+    )
+    expect(resolveTerrainTopbarPlacement(signal, getTerrainRouteConfig(signal))).toBe('mobile-only')
   })
 
   it('keeps a mobile-only shell topbar on /analytics', () => {
