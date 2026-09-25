@@ -6,7 +6,7 @@ type ActionLinkedSignalStripProps = {
 
 export function ActionLinkedSignalStrip({ children }: ActionLinkedSignalStripProps) {
   return (
-    <div className="shrink-0 border-b border-[#E8E6DF] bg-white px-4 pb-2 pt-1">
+    <div className="shrink-0 border-b border-[#E8E6DF] bg-white px-4 pb-2 pt-1 lg:px-6">
       {children}
     </div>
   )

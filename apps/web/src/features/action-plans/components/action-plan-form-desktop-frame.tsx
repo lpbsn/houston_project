@@ -11,8 +11,6 @@ type ActionPlanFormDesktopFrameProps = {
   onBack: () => void
   primaryLabel: string
   primaryDisabled?: boolean
-  primaryType?: 'submit' | 'button'
-  onPrimary?: () => void
   notice?: string | null
   children: ReactNode
 }
@@ -22,15 +20,13 @@ export function ActionPlanFormDesktopFrame({
   onBack,
   primaryLabel,
   primaryDisabled = false,
-  primaryType = 'submit',
-  onPrimary,
   notice = null,
   children,
 }: ActionPlanFormDesktopFrameProps) {
   const placePrimaryInBar = useXlViewport()
   const primary = (
     <Button
-      type={primaryType}
+      type="submit"
       data-testid="action-plan-form-desktop-primary"
       className={cn(
         'h-9 shrink-0 rounded-lg px-4 text-white',
@@ -38,7 +34,6 @@ export function ActionPlanFormDesktopFrame({
         terrainBrandAction.hover,
       )}
       disabled={primaryDisabled}
-      onClick={primaryType === 'button' ? onPrimary : undefined}
     >
       {primaryLabel}
     </Button>

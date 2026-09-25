@@ -41,7 +41,7 @@ import {
   resolveCatalogPlanningSubmitFallbackMessage,
   validateCatalogPlanningDraft,
 } from '../lib/action-plan-catalog-planning-submit'
-import { formatActionPlanCreatedAtLabel, formatCatalogStatusLabel } from '../lib/action-plan-display'
+import { formatActionPlanCreatedAtLabel, formatActionPlanTaskAssigneePoleLine, formatActionPlanTaskDeadlineLabel, formatCatalogStatusLabel } from '../lib/action-plan-display'
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
 import { guideToFirstActionPlanFieldError } from '../lib/action-plan-form-guidance'
 import {
@@ -263,70 +263,71 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   }
 
   const sortedTasks = [...plan.tasks].sort((left, right) => left.position - right.position)
-  const launchOutcome = summarizeCatalogPlanningLaunch(planningDraft, planningOptions)
-  const launchLabel = resolveDesktopLaunchLabel(launchOutcome)
-  const launchNotice = executionPanelOpen ? formatActionPlanSubmissionNotice(launchOutcome) : null
 
-  function openExecutionPanel(schedule: boolean) {
-    setPlanningDraft({
-      ...createActionPlanEventPlanningDraft(),
-      repeatEnabled: schedule && canSchedule,
-    })
-    setHasAttemptedPlanningSubmit(false)
-    setExecutionPanelOpen(true)
-  }
+  if (isDesktopWeb) {
+    const launchOutcome = summarizeCatalogPlanningLaunch(planningDraft, planningOptions)
+    const launchLabel = resolveDesktopLaunchLabel(launchOutcome)
+    const launchNotice = executionPanelOpen ? formatActionPlanSubmissionNotice(launchOutcome) : null
 
-  const desktopActions =
-    executionPanelOpen ? (
-      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-        {launchNotice ? (
-          <p data-testid="action-plan-form-desktop-notice" className="text-sm text-[#555]">
-            {launchNotice}
-          </p>
-        ) : null}
-        <Button
-          type="button"
-          variant="outline"
-          className="h-9 rounded-lg"
-          disabled={isPrimaryPending}
-          onClick={resetExecutionPanel}
-        >
-          Annuler
-        </Button>
-        <Button
-          type="button"
-          className={cn('h-9 rounded-lg px-4 text-white', terrainBrandAction.bg, terrainBrandAction.hover)}
-          disabled={primaryActionDisabled}
-          onClick={() => void handleLaunchExecution()}
-        >
-          {launchLabel}
-        </Button>
-      </div>
-    ) : canUse ? (
-      <div className="flex min-w-0 flex-wrap justify-end gap-2">
-        <Button
-          type="button"
-          className={cn('h-9 rounded-lg px-4 text-white', terrainBrandAction.bg, terrainBrandAction.hover)}
-          disabled={isBusy}
-          onClick={() => openExecutionPanel(false)}
-        >
-          {ACTION_PLAN_DESKTOP_USE_LABEL}
-        </Button>
-        {canSchedule ? (
+    function openExecutionPanel(schedule: boolean) {
+      setPlanningDraft({
+        ...createActionPlanEventPlanningDraft(),
+        repeatEnabled: schedule && canSchedule,
+      })
+      setHasAttemptedPlanningSubmit(false)
+      setExecutionPanelOpen(true)
+    }
+
+    const desktopActions =
+      executionPanelOpen ? (
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+          {launchNotice ? (
+            <p data-testid="action-plan-form-desktop-notice" className="text-sm text-[#555]">
+              {launchNotice}
+            </p>
+          ) : null}
           <Button
             type="button"
             variant="outline"
             className="h-9 rounded-lg"
-            disabled={isBusy}
-            onClick={() => openExecutionPanel(true)}
+            disabled={isPrimaryPending}
+            onClick={resetExecutionPanel}
           >
-            {ACTION_PLAN_DESKTOP_SCHEDULE_LABEL}
+            Annuler
           </Button>
-        ) : null}
-      </div>
-    ) : null
+          <Button
+            type="button"
+            className={cn('h-9 rounded-lg px-4 text-white', terrainBrandAction.bg, terrainBrandAction.hover)}
+            disabled={primaryActionDisabled}
+            onClick={() => void handleLaunchExecution()}
+          >
+            {launchLabel}
+          </Button>
+        </div>
+      ) : canUse ? (
+        <div className="flex min-w-0 flex-wrap justify-end gap-2">
+          <Button
+            type="button"
+            className={cn('h-9 rounded-lg px-4 text-white', terrainBrandAction.bg, terrainBrandAction.hover)}
+            disabled={isBusy}
+            onClick={() => openExecutionPanel(false)}
+          >
+            {ACTION_PLAN_DESKTOP_USE_LABEL}
+          </Button>
+          {canSchedule ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 rounded-lg"
+              disabled={isBusy}
+              onClick={() => openExecutionPanel(true)}
+            >
+              {ACTION_PLAN_DESKTOP_SCHEDULE_LABEL}
+            </Button>
+          ) : null}
+        </div>
+      ) : null
 
-  if (isDesktopWeb) {
     const catalogStatusLabel =
       plan.catalog_status === 'active' || plan.catalog_status === 'inactive'
         ? formatCatalogStatusLabel(plan.catalog_status)
@@ -387,16 +388,25 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
         ) : (
           <div className="divide-y divide-[#E8E6DF]">
             {sortedTasks.map((task) => {
-              const poleLabel = task.business_unit?.specific_name?.trim() ?? ''
+              const assigneePoleLine = formatActionPlanTaskAssigneePoleLine({
+                assigneeDisplayName: task.assigned_display_name,
+                poleLabel: task.business_unit?.specific_name?.trim() || null,
+              })
+              const deadlineLabel = formatActionPlanTaskDeadlineLabel(task.deadline_at)
               const taskDescription = task.description?.trim() ?? ''
               return (
                 <div key={task.id} className="py-1.5">
                   <p className="break-words text-[13px] font-normal leading-snug text-[#1a1a1a]">
                     {task.task}
                   </p>
-                  {poleLabel ? (
+                  {assigneePoleLine ? (
                     <p className="mt-0.5 break-words text-[11px] leading-snug text-[#9a958c]">
-                      {poleLabel}
+                      {assigneePoleLine}
+                    </p>
+                  ) : null}
+                  {deadlineLabel ? (
+                    <p className="mt-0.5 break-words text-[11px] leading-snug text-[#9a958c]">
+                      Échéance : {deadlineLabel}
                     </p>
                   ) : null}
                   {taskDescription ? (
@@ -412,8 +422,8 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
       </section>
     )
     const sideColumn = (
-      <div data-testid="action-plan-desktop-side" className="flex min-w-0 flex-col gap-4 self-start">
-        <div data-testid="action-plan-desktop-organization">
+      <div data-testid="action-plan-desktop-side" className="flex min-w-0 w-full flex-col gap-4">
+        <div data-testid="action-plan-desktop-organization" className="min-w-0 w-full">
         <TerrainCard className="space-y-3">
           <ActionPlanExecutionDetailLabel>Contexte</ActionPlanExecutionDetailLabel>
           {plan.requires_validation ? (
@@ -538,14 +548,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
         data-testid="action-plan-template-detail-frame"
         className="flex min-h-full w-full flex-1 flex-col"
       >
-        <div
-          className={cn(
-            'flex flex-col gap-3 px-3 pt-2',
-            isDesktopWeb && 'lg:gap-4 lg:px-6 lg:pt-4',
-            showStickyFooter ? 'pb-40' : 'pb-4',
-            !showStickyFooter && isDesktopWeb && 'lg:pb-6',
-          )}
-        >
+        <div className={cn('flex flex-col gap-3 px-3 pt-2', showStickyFooter ? 'pb-40' : 'pb-4')}>
           {displayedFeedback ? (
             <div>
               <TerrainFeedback
@@ -614,7 +617,6 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
 
         {showStickyFooter ? (
           <ActionPlanTemplateDetailStickyFooter
-            className={isDesktopWeb ? 'lg:px-6' : undefined}
             hints={hints}
             executionPanelOpen={executionPanelOpen}
             canUse={canUse}

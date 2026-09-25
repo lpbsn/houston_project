@@ -12,7 +12,11 @@ import { notifySuccess } from '@/lib/success-toast'
 
 import { ActionPlanTemplateDetailPage } from './action-plan-template-detail-page'
 import * as catalogPlanningSubmit from '../lib/action-plan-catalog-planning-submit'
-import { formatActionPlanCreatedAtLabel } from '../lib/action-plan-display'
+import {
+  formatActionPlanCreatedAtLabel,
+  formatActionPlanTaskAssigneePoleLine,
+  formatActionPlanTaskDeadlineLabel,
+} from '../lib/action-plan-display'
 
 vi.mock('@/lib/success-toast', async () => {
   const actual = await vi.importActual<typeof import('@/lib/success-toast')>('@/lib/success-toast')
@@ -453,6 +457,17 @@ describe('ActionPlanTemplateDetailPage', () => {
     expect(screen.getByTestId('action-plan-desktop-description')).toBeTruthy()
     expect(screen.getByText('Contrôler la température')).toBeTruthy()
     expect(screen.getByText('Frigo')).toBeTruthy()
+    expect(
+      screen.getByText(
+        formatActionPlanTaskAssigneePoleLine({
+          assigneeDisplayName: 'Bob',
+          poleLabel: 'Restaurant',
+        }) ?? '',
+      ),
+    ).toBeTruthy()
+    expect(
+      screen.getByText(`Échéance : ${formatActionPlanTaskDeadlineLabel('2026-07-08T10:00:00Z')}`),
+    ).toBeTruthy()
     expect(screen.queryByRole('checkbox')).toBeNull()
     expect(screen.queryByRole('tab', { name: 'Commentaires' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Exécution' })).toBeNull()
@@ -560,6 +575,42 @@ describe('ActionPlanTemplateDetailPage', () => {
     expect(main.contains(tasks)).toBe(true)
     expect(main.contains(context)).toBe(false)
     expect(screen.getByTestId('action-plan-desktop-side').contains(context)).toBe(true)
+  })
+
+  it('stacks title, description, context, then tasks in one column at 1024px', () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => {
+        const minWidth = /min-width:\s*(\d+)px/.exec(query)
+        return {
+          matches: minWidth ? 1024 >= Number(minWidth[1]) : false,
+          media: query,
+          onchange: null,
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          dispatchEvent: vi.fn(),
+        }
+      }),
+    })
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+
+    renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+
+    const title = screen.getByTestId('action-plan-desktop-title')
+    const description = screen.getByTestId('action-plan-desktop-description')
+    const context = screen.getByTestId('action-plan-desktop-organization')
+    const tasks = screen.getByTestId('action-plan-desktop-tasks')
+    const side = screen.getByTestId('action-plan-desktop-side')
+
+    expect(screen.queryByTestId('action-plan-desktop-main')).toBeNull()
+    expect(title.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(description.compareDocumentPosition(context) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(context.compareDocumentPosition(tasks) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(side.className).toContain('w-full')
+    expect(side.contains(context)).toBe(true)
   })
 
   it('keeps the execution footer on a large native template detail', () => {

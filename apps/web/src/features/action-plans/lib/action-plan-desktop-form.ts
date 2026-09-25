@@ -40,11 +40,11 @@ export function resolveActionPlanDesktopJourneyTitle(
  * Mobile keeps the toggle value.
  */
 export function resolveDesktopLibraryPersistence(
-  mode: ActionPlanCreateMode | 'execution-edit',
+  mode: ActionPlanCreateMode,
   saveToLibrary: boolean,
   isDesktopWeb: boolean,
 ): boolean {
-  if (!isDesktopWeb || mode === 'execution-edit') {
+  if (!isDesktopWeb) {
     return saveToLibrary
   }
   return mode === 'catalog'
@@ -53,7 +53,7 @@ export function resolveDesktopLibraryPersistence(
 /** Matches the 5-minute snap used by “Maintenant”, so that slot still starts now. */
 const IMMEDIATE_START_TOLERANCE_MS = 5 * 60 * 1000
 
-export type DesktopLaunchOutcome = {
+type DesktopLaunchOutcome = {
   executions: number
   schedules: number
   hasFutureStart: boolean

@@ -407,7 +407,7 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
       className="flex min-h-full w-full flex-col"
       onSubmit={handleFormSubmit}
     >
-      <div className="flex flex-col gap-3 px-3 pb-28 pt-2">
+      <div className="flex flex-col gap-3 px-3 pb-28 pt-2 lg:gap-4 lg:px-6 lg:pt-4">
         <TerrainCard className="space-y-3">
           <div data-action-plan-field="title">
             <TerrainFieldLabel>Titre</TerrainFieldLabel>
@@ -521,7 +521,7 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
         ) : null}
       </div>
 
-      <TerrainStickyFooter>
+      <TerrainStickyFooter className="lg:px-6">
         <div className="flex gap-2">
           <Button
             type="button"
