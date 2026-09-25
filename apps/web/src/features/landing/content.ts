@@ -2,32 +2,6 @@ export const APP_LOGIN_URL = 'https://app.spore-os.com/login' as const
 export const APP_PROFILE_URL = 'https://app.spore-os.com/general' as const
 export const ACCOUNT_DELETION_SUPPORT_EMAIL = 'leonard.p.boisson@gmail.com' as const
 
-export const landingSeo = {
-  home: {
-    title: 'Spore — Toute l’intelligence du terrain',
-    description:
-      'Comprenez vos établissements en quelques secondes. Application terrain, dashboards et agent IA. 590 € HT par mois et par établissement. Offre groupe sur devis.',
-    canonical: 'https://spore-os.com/',
-  },
-  legal: {
-    title: 'Mentions légales — Spore',
-    description:
-      'Mentions légales du site Spore : éditeur, responsable de publication, hébergeur et informations de conformité.',
-    canonical: 'https://spore-os.com/mentions-legales/',
-  },
-  accountDeletion: {
-    title: 'Supprimer un compte Spore',
-    description:
-      'Comment demander la suppression de votre compte Spore et des données personnelles associées.',
-    canonical: 'https://spore-os.com/supprimer-compte/',
-  },
-  support: {
-    title: 'Support — Spore',
-    description: 'Contacter le support Spore pour une question sur le compte ou l’application.',
-    canonical: 'https://spore-os.com/support/',
-  },
-} as const
-
 export const footerContent = {
   loginLabel: 'Se connecter',
   loginHref: APP_LOGIN_URL,
@@ -41,7 +15,6 @@ export const footerContent = {
   accountDeletionHref: '/supprimer-compte/',
   supportLabel: 'Support',
   supportHref: '/support/',
-  copyright: '© 2026 Spore. Tous droits réservés.',
 } as const
 
 export const legalContent = {
