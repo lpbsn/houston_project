@@ -147,6 +147,7 @@ function ActionPlanExecutionDetailPageContent({
   const [validationComment, setValidationComment] = useState('')
   const [isValidationSheetOpen, setIsValidationSheetOpen] = useState(false)
   const [selectedPoleId, setSelectedPoleId] = useState<string | null>(null)
+  const taskStatusCommandInFlightRef = useRef(false)
 
   const poleSummaries = useMemo(
     () => buildActionPlanPoleTaskSummaries(execution),
@@ -301,6 +302,10 @@ function ActionPlanExecutionDetailPageContent({
   }
 
   async function handleTaskMarkDone(taskExecutionId: string) {
+    if (taskStatusCommandInFlightRef.current) {
+      return
+    }
+    taskStatusCommandInFlightRef.current = true
     setFeedback(null)
     try {
       await markTaskDoneMutation.mutateAsync(taskExecutionId)
@@ -310,10 +315,16 @@ function ActionPlanExecutionDetailPageContent({
         variant: 'error',
         message: resolveActionPlanErrorMessage(error, 'La tâche n’a pas pu être terminée.'),
       })
+    } finally {
+      taskStatusCommandInFlightRef.current = false
     }
   }
 
   async function handleTaskMarkPending(taskExecutionId: string) {
+    if (taskStatusCommandInFlightRef.current) {
+      return
+    }
+    taskStatusCommandInFlightRef.current = true
     setFeedback(null)
     try {
       await markTaskPendingMutation.mutateAsync(taskExecutionId)
@@ -323,6 +334,8 @@ function ActionPlanExecutionDetailPageContent({
         variant: 'error',
         message: resolveActionPlanErrorMessage(error, 'La tâche n’a pas pu être remise en cours.'),
       })
+    } finally {
+      taskStatusCommandInFlightRef.current = false
     }
   }
 

@@ -954,6 +954,52 @@ describe('ActionPlanExecutionDetailPage UI refonte', () => {
     expect(await screen.findByText('Tâche terminée.')).toBeTruthy()
   })
 
+  it('does not start a second task mutation while the first request is in flight', async () => {
+    let resolveMarkDone: (value: unknown) => void = () => {}
+    markTaskDoneMutateAsyncMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveMarkDone = resolve
+        }),
+    )
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildExecution({
+        task_executions: [
+          buildTaskExecution({
+            id: 'task-1',
+            task: 'Contrôler la terrasse',
+            position: 1,
+            business_unit: {
+              id: 'bu-1',
+              specific_name: 'Restaurant',
+              instance_description: '',
+              active: true,
+              generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' },
+            },
+          }),
+        ],
+      }),
+      error: null,
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+    const checkbox = screen.getByRole('button', {
+      name: 'Marquer « Contrôler la terrasse » comme terminée',
+    })
+    fireEvent.click(checkbox)
+    fireEvent.click(checkbox)
+
+    expect(markTaskDoneMutateAsyncMock).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText('La tâche n’a pas pu être terminée.')).toBeNull()
+
+    resolveMarkDone({})
+    expect(await screen.findByText('Tâche terminée.')).toBeTruthy()
+    markTaskDoneMutateAsyncMock.mockReset()
+  })
+
   it('exposes Marquer terminé via aria-label despite two-line visual label', () => {
     renderPage()
 
