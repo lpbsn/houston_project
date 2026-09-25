@@ -14,9 +14,9 @@ import {
 import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 
 import {
-  formatActionPlanFeedMetaParts,
   formatExecutionFeedCreatedLabel,
   formatExecutionFeedDelayLabel,
+  formatExecutionFeedTimingLabel,
   getActionPlanFeedSidebarState,
 } from '../lib/action-plan-execution-feed-card-display'
 import { useFeedCardNow } from '../lib/use-feed-card-now'
@@ -45,7 +45,8 @@ export function ActionPlanExecutionFeedDesktopRow({
     onOpenActions && canOpenActionPlanExecutionFeedCardActions(item.permission_hints),
   )
   const actionOptions = showActions ? getActionPlanExecutionFeedCardActionOptions(item) : []
-  const { deadlineLabel } = formatActionPlanFeedMetaParts(item)
+  const timingLabel = formatExecutionFeedTimingLabel(item)
+  const isScheduled = item.status === 'scheduled'
   const delayLabel = formatExecutionFeedDelayLabel(
     getActionPlanFeedSidebarState(item.end_at, now, item.is_overdue, item.all_day),
   )
@@ -130,9 +131,14 @@ export function ActionPlanExecutionFeedDesktopRow({
               </HoustonBadge>
             ) : null}
           </span>
-          {deadlineLabel ? (
-            <span className="max-w-full break-words text-right text-[12px] leading-snug text-[#5c564e]">
-              {deadlineLabel}
+          {timingLabel ? (
+            <span
+              className={cn(
+                'max-w-full break-words text-right text-[12px] leading-snug',
+                isScheduled ? 'font-semibold text-[#8B6914]' : 'text-[#5c564e]',
+              )}
+            >
+              {timingLabel}
             </span>
           ) : null}
         </span>

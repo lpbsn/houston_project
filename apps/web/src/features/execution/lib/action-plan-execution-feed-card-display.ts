@@ -218,6 +218,34 @@ export function formatExecutionFeedCreatedLabel(createdAt: string): string | nul
   return `Créé le ${date.toLocaleDateString('fr-FR')}`
 }
 
+function formatExecutionFeedStartDateLabel(startAt: string, allDay: boolean): string | null {
+  if (allDay) {
+    const date = new Date(startAt)
+    if (Number.isNaN(date.getTime())) {
+      return null
+    }
+    return date.toLocaleDateString('fr-FR')
+  }
+  return formatActionPlanEndAtLabel(startAt)
+}
+
+export function formatExecutionFeedTimingLabel(
+  item: Pick<ActionPlanExecutionFeedItem, 'status' | 'start_at' | 'end_at' | 'all_day'>,
+): string | null {
+  if (item.status === 'scheduled') {
+    if (!item.start_at) {
+      return null
+    }
+    const startLabel = formatExecutionFeedStartDateLabel(item.start_at, item.all_day)
+    return startLabel ? `Début : ${startLabel}` : null
+  }
+  if (item.all_day) {
+    return 'Échéance : Journée entière'
+  }
+  const endAtLabel = formatActionPlanEndAtLabel(item.end_at)
+  return endAtLabel ? `Échéance : ${endAtLabel}` : null
+}
+
 export type ActionPlanFeedProgressState = {
   total: number
   filled: number

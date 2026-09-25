@@ -2,10 +2,12 @@ import { useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
+import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
 import { TerrainHubViewToolbar } from '@/components/layout/terrain-hub-view-toolbar'
 import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { useLgViewport } from '@/lib/lg-viewport'
 import { ActionPlansApiError, unwrapActionPlanExecutionFeedItems } from '@/features/action-plans/api'
 import { useActionPlanExecutionUpcomingQuery } from '@/features/action-plans/hooks'
 import { ActionPlanExecutionFeedCardActionsSheet } from '@/features/action-plans/components/action-plan-execution-feed-card-actions-sheet'
@@ -13,6 +15,7 @@ import { useActionPlanExecutionFeedQuickActions } from '@/features/action-plans/
 import type { ExecutionViewMode } from '@/features/execution/lib/types'
 
 import { ActionPlanExecutionFeedCard } from '../components/action-plan-execution-feed-card'
+import { ActionPlanExecutionFeedDesktopRow } from '../components/action-plan-execution-feed-desktop-row'
 import { ExecutionFeedTabs } from '../components/execution-feed-tabs'
 
 type ExecutionUpcomingPageProps = {
@@ -23,6 +26,7 @@ export function ExecutionUpcomingPage({
   onOpenActionPlanExecution,
 }: ExecutionUpcomingPageProps) {
   const auth = useAuth()
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
   const [viewMode, setViewMode] = useState<ExecutionViewMode>('personal')
 
@@ -75,15 +79,26 @@ export function ExecutionUpcomingPage({
             ) : null}
 
             {upcomingQuery.isSuccess && items.length > 0 ? (
-              <div className="flex flex-col gap-3">
-                {items.map((item) => (
-                  <ActionPlanExecutionFeedCard
-                    key={`upcoming-${item.id}`}
-                    item={item}
-                    onSelect={(id) => onOpenActionPlanExecution?.(id)}
-                    onOpenActions={quickActions.openActions}
-                  />
-                ))}
+              <div className={isDesktopWeb ? 'flex flex-col gap-1' : 'flex flex-col gap-3'}>
+                {items.map((item) =>
+                  isDesktopWeb ? (
+                    <ActionPlanExecutionFeedDesktopRow
+                      key={`upcoming-${item.id}`}
+                      item={item}
+                      onSelect={(id) => onOpenActionPlanExecution?.(id)}
+                      actionsPending={quickActions.isPending}
+                      onOpenActions={quickActions.openActions}
+                      onSelectAction={quickActions.runAction}
+                    />
+                  ) : (
+                    <ActionPlanExecutionFeedCard
+                      key={`upcoming-${item.id}`}
+                      item={item}
+                      onSelect={(id) => onOpenActionPlanExecution?.(id)}
+                      onOpenActions={quickActions.openActions}
+                    />
+                  ),
+                )}
               </div>
             ) : null}
 
@@ -111,7 +126,7 @@ export function ExecutionUpcomingPage({
         ) : null}
       </div>
 
-      {quickActions.activeItem ? (
+      {!isDesktopWeb && quickActions.activeItem ? (
         <ActionPlanExecutionFeedCardActionsSheet
           item={quickActions.activeItem}
           open={quickActions.actionsOpen}
