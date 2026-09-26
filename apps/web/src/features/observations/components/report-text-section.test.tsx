@@ -49,7 +49,49 @@ describe('ReportTextSection', () => {
     fireEvent.change(screen.getByLabelText('Décrivez l’observation'), {
       target: { value: 'nouveau texte' },
     })
-
     expect(onTextChange).toHaveBeenCalledWith('nouveau texte')
+  })
+
+  it('shows clear action when text is present on field and desktop layouts', () => {
+    const onTextChange = vi.fn()
+    const { rerender } = render(
+      <ReportTextSection {...baseProps} layout="field" onTextChange={onTextChange} />,
+    )
+    expect(screen.queryByRole('button', { name: 'Effacer le texte' })).toBeNull()
+
+    rerender(
+      <ReportTextSection
+        {...baseProps}
+        layout="field"
+        text="bonjour"
+        textLength={7}
+        onTextChange={onTextChange}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Effacer le texte' }))
+    expect(onTextChange).toHaveBeenCalledWith('')
+
+    onTextChange.mockClear()
+    rerender(
+      <ReportTextSection
+        {...baseProps}
+        layout="desktop"
+        text="desktop"
+        textLength={7}
+        onTextChange={onTextChange}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Effacer le texte' }))
+    expect(onTextChange).toHaveBeenCalledWith('')
+  })
+
+  it('exposes voice status while recording or transcribing', () => {
+    const { rerender } = render(
+      <ReportTextSection {...baseProps} layout="field" isRecording />,
+    )
+    expect(screen.getByRole('status').textContent).toContain('Enregistrement')
+
+    rerender(<ReportTextSection {...baseProps} layout="field" isTranscribing />)
+    expect(screen.getByRole('status').textContent).toContain('Transcription')
   })
 })

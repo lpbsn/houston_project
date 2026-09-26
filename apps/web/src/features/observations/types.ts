@@ -14,3 +14,5 @@ export type TranscriptionResponse =
 export const OBSERVATION_TEXT_MIN_LENGTH = 10
 export const OBSERVATION_TEXT_MAX_LENGTH = 1000
 export const MAX_OBSERVATION_PHOTOS = 3
+
+export type ReportComposeLayout = 'field' | 'desktop'

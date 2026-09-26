@@ -1,5 +1,5 @@
-import { OBSERVATION_TEXT_MAX_LENGTH } from '@/features/observations/types'
-import { terrain } from '@/lib/terrain-styles'
+import { OBSERVATION_TEXT_MAX_LENGTH, type ReportComposeLayout } from '@/features/observations/types'
+import { actionPlanFeedTealTextClassName, terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 import { ReportInlineMicButton } from './report-inline-mic-button'
@@ -7,6 +7,7 @@ import { ReportInlineMicButton } from './report-inline-mic-button'
 type ReportTextSectionProps = {
   text: string
   textLength: number
+  layout?: ReportComposeLayout
   shouldReduceMotion: boolean
   isRecording: boolean
   isTranscribing: boolean
@@ -19,6 +20,7 @@ type ReportTextSectionProps = {
 export function ReportTextSection({
   text,
   textLength,
+  layout = 'desktop',
   shouldReduceMotion,
   isRecording,
   isTranscribing,
@@ -27,22 +29,45 @@ export function ReportTextSection({
   onStartRecording,
   onStopRecording,
 }: ReportTextSectionProps) {
+  const isField = layout === 'field'
+  const voiceStatus =
+    isField && isRecording
+      ? 'Enregistrement en cours…'
+      : isField && isTranscribing
+        ? 'Transcription en cours…'
+        : null
+
   return (
     <section className="flex flex-col gap-2">
-      <label
-        htmlFor="observation-text"
-        className={cn('text-sm font-semibold', terrain.foreground)}
-      >
-        Décrivez l’observation
-      </label>
+      <div className="flex items-center justify-between gap-2">
+        <label
+          htmlFor="observation-text"
+          className={cn('text-sm font-semibold', terrain.foreground)}
+        >
+          Décrivez l’observation
+        </label>
+        {text.length > 0 ? (
+          <button
+            type="button"
+            className={cn(
+              'shrink-0 text-xs font-medium underline-offset-2 hover:underline',
+              terrain.muted,
+            )}
+            onClick={() => onTextChange('')}
+          >
+            Effacer le texte
+          </button>
+        ) : null}
+      </div>
       <div className="relative" data-testid="report-text-field">
         <textarea
           id="observation-text"
           className={cn(
             'min-h-[150px] w-full resize-none rounded-[24px] border border-[#E8E6DF] bg-white',
-            'px-4 pb-12 pt-3 pr-14 text-base leading-relaxed outline-none',
+            'px-4 pb-12 pt-3 pr-16 text-base leading-relaxed outline-none',
             terrain.foreground,
             'placeholder:text-[#aaa]',
+            isField && 'min-h-[180px]',
           )}
           value={text}
           onChange={(event) =>
@@ -61,9 +86,29 @@ export function ReportTextSection({
           />
         </div>
       </div>
-      <p className={cn('mt-1 px-1 text-xs', terrain.muted)}>
-        {textLength}/{OBSERVATION_TEXT_MAX_LENGTH}
-      </p>
+      <div className={cn('flex items-center gap-2 px-1', !isField && 'justify-end')}>
+        {voiceStatus ? (
+          <p
+            className={cn(
+              'text-xs font-medium',
+              isRecording ? terrain.danger : actionPlanFeedTealTextClassName,
+            )}
+            role="status"
+            aria-live="polite"
+          >
+            {voiceStatus}
+          </p>
+        ) : null}
+        <p
+          className={cn(
+            isField
+              ? cn('ms-auto text-[10px] tabular-nums', terrain.mutedLight)
+              : cn('text-xs', terrain.muted),
+          )}
+        >
+          {textLength}/{OBSERVATION_TEXT_MAX_LENGTH}
+        </p>
+      </div>
     </section>
   )
 }

@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { LoaderCircle, SendHorizonal } from 'lucide-react'
 import { useReducedMotion } from 'framer-motion'
 
 import { useAuth } from '@/app/auth-provider'
+import { useTerrainShellLayout } from '@/components/layout/terrain-shell-layout'
 import { TerrainCard, TerrainErrorState, TerrainStickyFooter } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { ReportPhotosSection } from '@/features/observations/components/report-photos-section'
@@ -13,6 +14,8 @@ import {
   useSubmitObservationComposeMutation,
   useTranscribeAudioMutation,
 } from '@/features/observations/hooks'
+import { appendObservationTranscription } from '@/features/observations/lib/append-observation-transcription'
+import { getReportingComposeDraft } from '@/features/observations/lib/observation-compose-draft-store'
 import { useReportingComposeDraft } from '@/features/observations/lib/use-observation-compose-draft'
 import {
   MAX_OBSERVATION_PHOTOS,
@@ -36,7 +39,9 @@ import { cn } from '@/lib/utils'
 export function ReportPage({ establishmentId: establishmentIdProp }: { establishmentId?: string | null } = {}) {
   const shouldReduceMotion = useReducedMotion()
   const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const composeLayout = isDesktopWeb ? 'desktop' : 'field'
   const isNativeKeyboardOpen = useNativeKeyboardOpen()
+  const { showBottomNav } = useTerrainShellLayout()
   const auth = useAuth()
   const { isOnline } = useNetworkStatus()
   const establishmentId =
@@ -58,6 +63,16 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
+  const mountedRef = useRef(true)
+  const activeEstablishmentIdRef = useRef(establishmentId)
+
+  useEffect(() => {
+    mountedRef.current = true
+    activeEstablishmentIdRef.current = establishmentId
+    return () => {
+      mountedRef.current = false
+    }
+  }, [establishmentId])
 
   const transcribeMutation = useTranscribeAudioMutation(establishmentId)
   const submitMutation = useSubmitObservationComposeMutation(establishmentId)
@@ -73,6 +88,10 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
     isOnline &&
     !isSubmitPending &&
     !isTranscribing
+
+  const horizontalSafePad = !isDesktopWeb
+    ? 'pl-[max(1rem,var(--app-safe-left))] pr-[max(1rem,var(--app-safe-right))]'
+    : 'px-4'
 
   const resolveReportError = (error: unknown) =>
     resolveApiErrorMessage(error, ObservationsApiError, 'Une erreur est survenue.')
@@ -93,6 +112,10 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
   }
 
   const handleStartRecording = async () => {
+    if (!establishmentId) {
+      return
+    }
+    const recordingEstablishmentId = establishmentId
     setFormError(null)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -107,25 +130,66 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
         stream.getTracks().forEach((track) => track.stop())
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
         if (blob.size === 0) {
-          setFormError('Enregistrement audio trop court.')
+          if (
+            mountedRef.current &&
+            activeEstablishmentIdRef.current === recordingEstablishmentId
+          ) {
+            setFormError('Enregistrement audio trop court.')
+          }
           return
         }
-        setIsTranscribing(true)
+        if (
+          mountedRef.current &&
+          activeEstablishmentIdRef.current === recordingEstablishmentId
+        ) {
+          setIsTranscribing(true)
+        }
         try {
           const result = await transcribeMutation.mutateAsync({
             blob,
             fileName: 'observation-audio.webm',
           })
-          setText(result.text.slice(0, OBSERVATION_TEXT_MAX_LENGTH))
+          const stillActive =
+            mountedRef.current &&
+            activeEstablishmentIdRef.current === recordingEstablishmentId
+          if (!stillActive) {
+            return
+          }
+          const currentText = getReportingComposeDraft(recordingEstablishmentId).text
+          setText(
+            appendObservationTranscription(
+              currentText,
+              result.text,
+              OBSERVATION_TEXT_MAX_LENGTH,
+            ),
+          )
         } catch (error) {
+          const stillActive =
+            mountedRef.current &&
+            activeEstablishmentIdRef.current === recordingEstablishmentId
+          if (!stillActive) {
+            return
+          }
           const bootstrap = await resyncBootstrapAfterLegalError(error)
+          if (
+            !mountedRef.current ||
+            activeEstablishmentIdRef.current !== recordingEstablishmentId
+          ) {
+            return
+          }
           setFormError(
-            readAiConsentStatus(bootstrap?.user ?? auth.user ?? auth.bootstrap?.user) === 'declined'
+            readAiConsentStatus(bootstrap?.user ?? auth.user ?? auth.bootstrap?.user) ===
+              'declined'
               ? OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE
               : resolveReportError(error),
           )
         } finally {
-          setIsTranscribing(false)
+          if (
+            mountedRef.current &&
+            activeEstablishmentIdRef.current === recordingEstablishmentId
+          ) {
+            setIsTranscribing(false)
+          }
         }
       }
       mediaRecorderRef.current = recorder
@@ -186,8 +250,35 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
     }
   }
 
+  const submitButton = (
+    <Button
+      type="button"
+      className={cn(
+        'text-[15px] font-bold text-white',
+        isDesktopWeb ? 'h-10 w-auto rounded-lg px-4' : 'h-12 w-full rounded-xl',
+        canSubmit
+          ? cn(terrainBrandAction.bg, terrainBrandAction.hover)
+          : 'bg-[#114660]/40 hover:bg-[#114660]/40',
+      )}
+      disabled={!canSubmit}
+      onClick={() => void handleSubmit()}
+    >
+      {isSubmitPending ? (
+        <>
+          <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+          Envoi...
+        </>
+      ) : (
+        <>
+          <SendHorizonal className="mr-2 h-4 w-4" />
+          Envoyer l’observation
+        </>
+      )}
+    </Button>
+  )
+
   const pageShell = (content: React.ReactNode) => (
-    <div className="flex flex-col gap-4 px-4 pb-4 pt-2">{content}</div>
+    <div className={cn('flex flex-col gap-4 pb-4 pt-2', horizontalSafePad)}>{content}</div>
   )
 
   if (!establishmentId) {
@@ -208,13 +299,16 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
       )}
       data-testid="report-page-root"
     >
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pt-3">
+      <div
+        className={cn(
+          'min-h-0 flex-1 overflow-y-auto overscroll-y-contain pt-3',
+          horizontalSafePad,
+        )}
+      >
         <div className="flex flex-col gap-5 pb-3">
           <header className="flex flex-col gap-1">
-            <h1 className="text-2xl font-bold text-[#1a1a1a]">Une observation ?</h1>
-            <p className={cn('text-sm', terrain.muted)}>
-              Soyez précis mais ne perdez pas de temps avec la forme. La transcription et
-              l’analyse envoient texte ou audio à OpenAI (
+            <p className={cn('text-xs', terrain.muted)}>
+              Texte ou vocal · traitement OpenAI (
               <a
                 href={PUBLIC_PRIVACY_POLICY_URL}
                 className="underline"
@@ -230,25 +324,31 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
           <ReportTextSection
             text={text}
             textLength={textLength}
+            layout={composeLayout}
             shouldReduceMotion={shouldReduceMotion ?? false}
             isRecording={isRecording}
             isTranscribing={isTranscribing}
             isSubmitPending={isSubmitPending}
             onTextChange={setText}
             onStartRecording={
-              aiConsentGranted ? () => void handleStartRecording() : () => {
-                setFormError(OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE)
-              }
+              aiConsentGranted
+                ? () => void handleStartRecording()
+                : () => {
+                    setFormError(OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE)
+                  }
             }
             onStopRecording={handleStopRecording}
           />
 
           <ReportPhotosSection
             photos={photos}
+            layout={composeLayout}
             disabled={isSubmitPending}
             onPhotoSelect={handlePhotoSelect}
             onRemovePhoto={(photo) => removePhoto(photo.localId)}
           />
+
+          {isDesktopWeb ? <div className="flex justify-end pt-1">{submitButton}</div> : null}
 
           {!aiConsentGranted ? (
             <TerrainErrorState message={OBSERVATION_REQUIRES_AI_CONSENT_MESSAGE} />
@@ -257,37 +357,17 @@ export function ReportPage({ establishmentId: establishmentIdProp }: { establish
         </div>
       </div>
 
-      {isNativeKeyboardOpen ? null : (
+      {!isDesktopWeb && !isNativeKeyboardOpen ? (
         <TerrainStickyFooter
           variant="transparent"
-          className={isDesktopWeb ? 'flex justify-end' : undefined}
+          className={cn(
+            'px-0 pl-[max(1rem,var(--app-safe-left))] pr-[max(1rem,var(--app-safe-right))]',
+            showBottomNav && 'pb-3',
+          )}
         >
-          <Button
-            type="button"
-            className={cn(
-              'text-[15px] font-bold text-white',
-              isDesktopWeb ? 'h-10 w-auto rounded-lg px-4' : 'h-12 w-full rounded-full',
-              canSubmit
-                ? cn(terrainBrandAction.bg, terrainBrandAction.hover)
-                : 'bg-[#114660]/40 hover:bg-[#114660]/40',
-            )}
-            disabled={!canSubmit}
-            onClick={() => void handleSubmit()}
-          >
-            {isSubmitPending ? (
-              <>
-                <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-                Envoi...
-              </>
-            ) : (
-              <>
-                <SendHorizonal className="mr-2 h-4 w-4" />
-                Envoyer l’observation
-              </>
-            )}
-          </Button>
+          {submitButton}
         </TerrainStickyFooter>
-      )}
+      ) : null}
     </div>
   )
 }
