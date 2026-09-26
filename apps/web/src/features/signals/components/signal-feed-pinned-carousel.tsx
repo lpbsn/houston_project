@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
@@ -35,8 +35,14 @@ function nearestSnapIndex(scroller: HTMLElement): number {
 /**
  * Mobile-only horizontal snap carousel for pinned observations.
  * Centered main card with peek of neighbors; arrows drive the same scroll/snap as swipe.
+ * Remounts when the pinned id set changes so active index and scroll position reset without an effect.
  */
-export function SignalFeedPinnedCarousel({
+export function SignalFeedPinnedCarousel(props: SignalFeedPinnedCarouselProps) {
+  const itemsKey = props.items.map((item) => item.id).join('\0')
+  return <PinnedCarouselView key={itemsKey} {...props} />
+}
+
+function PinnedCarouselView({
   items,
   onSelect,
   onOpenActions,
@@ -46,14 +52,6 @@ export function SignalFeedPinnedCarousel({
 }: SignalFeedPinnedCarouselProps) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const [activeIndex, setActiveIndex] = useState(0)
-
-  useEffect(() => {
-    setActiveIndex(0)
-    const scroller = scrollerRef.current
-    if (scroller) {
-      scroller.scrollLeft = 0
-    }
-  }, [items])
 
   if (items.length === 0) {
     return null

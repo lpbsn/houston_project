@@ -943,6 +943,7 @@ function App() {
     isDesktopWeb,
     navigate,
     route,
+    terrainBackPath,
   ])
 
   const handleChatGlobalAccessRevoked = useCallback(
