@@ -231,7 +231,8 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       title: 'Observation',
       backPath,
       showBottomNav: false,
-      mainScroll: 'auto',
+      // Page owns scroll (details flex-1 + pinned CTA); shell must not scroll.
+      mainScroll: 'hidden',
     }
   }
 

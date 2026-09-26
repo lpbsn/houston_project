@@ -12,6 +12,7 @@ import {
   invalidateSignalFeedViewModes,
   patchSignalInActiveFeedCache,
   refillSignalFeedToLoadedDepth,
+  relocateSignalInFeedCache,
   updateSignalDetailCache,
 } from './signal-feed-cache'
 
@@ -168,6 +169,68 @@ describe('patchSignalInActiveFeedCache', () => {
     expect(data?.sections[0]?.items[0]?.is_pinned).toBe(true)
     expect(data?.sections[0]?.items[1]?.is_pinned).toBe(false)
     expect(data?.sections[1]?.items[0]?.is_pinned).toBe(false)
+  })
+})
+
+describe('relocateSignalInFeedCache', () => {
+  it('moves the item into the target status section and clears pin', () => {
+    const queryClient = createTestQueryClient()
+    const queryKey = signalsQueryKeys.feed(EST, 'personal', EMPTY_SIGNAL_FEED_FILTERS)
+
+    queryClient.setQueryData(queryKey, {
+      sections: [
+        buildSection('open', ['signal-1'], null, false),
+        buildSection('resolved', ['resolved-1']),
+      ],
+      applied_filters: EMPTY_APPLIED_FILTERS,
+    })
+
+    // Pin the open item first so relocate must clear it.
+    patchSignalInActiveFeedCache(queryClient, {
+      establishmentId: EST,
+      viewMode: 'personal',
+      filters: EMPTY_SIGNAL_FEED_FILTERS,
+      signalId: 'signal-1',
+      patch: { is_pinned: true },
+    })
+
+    relocateSignalInFeedCache(queryClient, {
+      establishmentId: EST,
+      viewMode: 'personal',
+      filters: EMPTY_SIGNAL_FEED_FILTERS,
+      signalId: 'signal-1',
+      nextStatus: 'resolved',
+    })
+
+    const data = queryClient.getQueryData<SignalFeedResponse>(queryKey)
+    expect(data?.sections[0]?.items.map((item) => item.id)).toEqual([])
+    expect(data?.sections[1]?.items.map((item) => item.id)).toEqual([
+      'signal-1',
+      'resolved-1',
+    ])
+    expect(data?.sections[1]?.items[0]?.status).toBe('resolved')
+    expect(data?.sections[1]?.items[0]?.is_pinned).toBe(false)
+  })
+
+  it('removes the item when the target section is absent', () => {
+    const queryClient = createTestQueryClient()
+    const queryKey = signalsQueryKeys.feed(EST, 'personal', EMPTY_SIGNAL_FEED_FILTERS)
+
+    queryClient.setQueryData(queryKey, {
+      sections: [buildSection('open', ['signal-1'])],
+      applied_filters: EMPTY_APPLIED_FILTERS,
+    })
+
+    relocateSignalInFeedCache(queryClient, {
+      establishmentId: EST,
+      viewMode: 'personal',
+      filters: EMPTY_SIGNAL_FEED_FILTERS,
+      signalId: 'signal-1',
+      nextStatus: 'resolved',
+    })
+
+    const data = queryClient.getQueryData<SignalFeedResponse>(queryKey)
+    expect(data?.sections[0]?.items).toEqual([])
   })
 })
 
@@ -370,13 +433,25 @@ describe('updateSignalDetailCache', () => {
 })
 
 describe('applySignalQuickActionSuccess', () => {
-  it('invalidates feed view modes on pin without invalidating detail prefix', () => {
+  it('patches active feed and invalidates feed view modes without detail prefix', () => {
     const queryClient = createTestQueryClient()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
     const detailKey = signalsQueryKeys.detail(EST, SIGNAL_ID)
-    const detail = buildDetail({ is_pinned: true })
+    const feedKey = signalsQueryKeys.feed(EST, 'personal', EMPTY_SIGNAL_FEED_FILTERS)
+    const detail = buildDetail({ is_pinned: true, title: 'Pinned title' })
 
     queryClient.setQueryData(detailKey, buildDetail({ is_pinned: false }))
+    queryClient.setQueryData(feedKey, {
+      sections: [
+        {
+          status: 'open',
+          items: [buildFeedItem({ is_pinned: false, title: 'Old title' })],
+          next_cursor: null,
+          has_more: false,
+        },
+      ],
+      applied_filters: EMPTY_APPLIED_FILTERS,
+    })
 
     applySignalQuickActionSuccess(queryClient, {
       establishmentId: EST,
@@ -384,7 +459,6 @@ describe('applySignalQuickActionSuccess', () => {
       detail,
       viewMode: 'personal',
       filters: EMPTY_SIGNAL_FEED_FILTERS,
-      mutationKind: 'pin',
     })
 
     expect(invalidateSpy).toHaveBeenCalledWith({
@@ -397,5 +471,8 @@ describe('applySignalQuickActionSuccess', () => {
       queryKey: ['signals', 'detail', EST],
     })
     expect(queryClient.getQueryData(detailKey)).toEqual(detail)
+    const feed = queryClient.getQueryData<SignalFeedResponse>(feedKey)
+    expect(feed?.sections[0]?.items[0]?.is_pinned).toBe(true)
+    expect(feed?.sections[0]?.items[0]?.title).toBe('Pinned title')
   })
 })

@@ -2,7 +2,9 @@ import { useEffect } from 'react'
 
 import { MessageCircle } from 'lucide-react'
 
-import { HoustonBadge, TerrainEmptyState } from '@/components/ui/terrain'
+import { TerrainEmptyState } from '@/components/ui/terrain'
+import { getDisplayNameInitials } from '@/lib/display-names'
+import { commentThread } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 import { formatCommentRelativeTime } from '../lib/comment-display'
@@ -64,6 +66,14 @@ type CommentListProps =
       comments: ExecutionCommentListItem[]
     } & ThreadedCommentListProps)
 
+const AVATAR_BG_CLASSES = [
+  'bg-[#EEF2FF] text-[#1B4FD8]',
+  'bg-[#FFF4E6] text-[#C76B00]',
+  'bg-[#E8F5E9] text-[#2E7D32]',
+  'bg-[#FCE4EC] text-[#C2185B]',
+  'bg-[#F3E5F5] text-[#7B1FA2]',
+]
+
 function useScrollToHighlightedComment(
   highlightCommentId: string | null | undefined,
   comments: CommentItem[] | ExecutionCommentListItem[],
@@ -77,15 +87,31 @@ function useScrollToHighlightedComment(
   }, [comments, highlightCommentId])
 }
 
-function CommentOriginBadge({ origin }: { origin: CommentItem['origin'] }) {
-  if (origin !== 'signal') {
-    return null
+function getAvatarColorClass(seed: string): string {
+  let hash = 0
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash + seed.charCodeAt(index)) % AVATAR_BG_CLASSES.length
   }
+  return AVATAR_BG_CLASSES[hash] ?? AVATAR_BG_CLASSES[0]!
+}
 
+function SignalCommentAvatar({
+  displayName,
+  membershipId,
+}: {
+  displayName: string
+  membershipId: string
+}) {
   return (
-    <HoustonBadge variant="gray" className="text-[9px]">
-      Observation
-    </HoustonBadge>
+    <span
+      className={cn(
+        'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+        getAvatarColorClass(membershipId),
+      )}
+      aria-hidden
+    >
+      {getDisplayNameInitials(displayName)}
+    </span>
   )
 }
 
@@ -101,35 +127,49 @@ function SignalCommentItem({
   const showBadge = useMentionDeepLinkBadge(comment.id, highlightCommentId)
 
   return (
-    <li
-      id={commentDomId(comment.id)}
-      className={cn(
-        'relative rounded-[12px] border border-[#E8E6DF] bg-[#FAFAF8] px-3 py-3',
-        COMMENT_SCROLL_ANCHOR_CLASS,
-      )}
-    >
-      {showBadge ? <MentionDeepLinkBadge /> : null}
-      <div className="flex flex-wrap items-center gap-2">
-        <p className="text-[13px] font-semibold text-[#1a1a1a]">{comment.author.display_name}</p>
-        <span className="text-[11px] text-[#aaa]">{formatCommentRelativeTime(comment.created_at)}</span>
-        {onReportComment ? (
-          <button
-            type="button"
-            className="text-[11px] text-[#7D7B75] underline"
-            onClick={() => onReportComment(comment.id, comment.author.membership_id)}
-          >
-            Signaler
-          </button>
-        ) : null}
+    <li id={commentDomId(comment.id)} className={COMMENT_SCROLL_ANCHOR_CLASS}>
+      <div className="flex gap-2">
+        <SignalCommentAvatar
+          displayName={comment.author.display_name}
+          membershipId={comment.author.membership_id}
+        />
+        <div className="relative min-w-0 flex-1">
+          <div className={cn('rounded-2xl px-4 py-3', commentThread.bubbleBg)}>
+            <p className="text-[13px] font-semibold text-[#1a1a1a]">{comment.author.display_name}</p>
+            <p className="mt-0.5 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-[#1a1a1a]">
+              {comment.body}
+            </p>
+            {comment.mentions.length > 0 ? (
+              <p className="mt-1.5 text-[11px] text-[#7D7B75]">
+                Mentionné : {comment.mentions.map((mention) => mention.display_name).join(', ')}
+              </p>
+            ) : null}
+          </div>
+          {showBadge ? <MentionDeepLinkBadge /> : null}
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-1">
+            <span
+              className={cn(
+                'inline-flex min-h-8 items-center px-1 text-[12px] font-semibold',
+                commentThread.metaMuted,
+              )}
+            >
+              {formatCommentRelativeTime(comment.created_at)}
+            </span>
+            {onReportComment ? (
+              <button
+                type="button"
+                className={cn(
+                  'inline-flex min-h-8 items-center px-1.5 text-[12px] font-semibold',
+                  commentThread.metaMuted,
+                )}
+                onClick={() => onReportComment(comment.id, comment.author.membership_id)}
+              >
+                Signaler
+              </button>
+            ) : null}
+          </div>
+        </div>
       </div>
-      <p className="mt-2 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-[#444]">
-        {comment.body}
-      </p>
-      {comment.mentions.length > 0 ? (
-        <p className="mt-2 text-[11px] text-[#7D7B75]">
-          Mentionné : {comment.mentions.map((mention) => mention.display_name).join(', ')}
-        </p>
-      ) : null}
     </li>
   )
 }
@@ -277,5 +317,3 @@ export function CommentList(props: CommentListProps) {
 
   return <ExecutionCommentList {...props} />
 }
-
-export { CommentOriginBadge }

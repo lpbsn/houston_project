@@ -53,7 +53,7 @@ afterEach(() => {
 })
 
 describe('SignalFeedCardActionsSheet', () => {
-  it('renders available actions', () => {
+  it('renders available actions with observation context', () => {
     render(
       <SignalFeedCardActionsSheet
         item={buildFeedItem()}
@@ -64,9 +64,29 @@ describe('SignalFeedCardActionsSheet', () => {
       />,
     )
 
+    expect(screen.getByText('Client mécontent')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Épingler' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Marquer comme résolue' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Annuler cette observation' })).toBeTruthy()
+  })
+
+  it('includes Qualifier when can_qualify_routing', () => {
+    render(
+      <SignalFeedCardActionsSheet
+        item={buildFeedItem({
+          permission_hints: {
+            ...buildFeedItem().permission_hints,
+            can_qualify_routing: true,
+          },
+        })}
+        open
+        isPending={false}
+        onClose={vi.fn()}
+        onSelectAction={vi.fn((): SignalFeedQuickActionResult => 'close')}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: 'Qualifier' })).toBeTruthy()
   })
 
   it('closes sheet when onSelectAction returns close', () => {

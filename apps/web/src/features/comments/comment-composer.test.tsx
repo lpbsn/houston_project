@@ -112,6 +112,15 @@ describe('CommentComposer', () => {
     })
   })
 
+  it('renders default variant with send button integrated in the field', () => {
+    render(<CommentComposer establishmentId="est-1" onSubmit={vi.fn()} />)
+
+    const textarea = screen.getByLabelText('Ajouter un commentaire')
+    const send = screen.getByLabelText('Publier le commentaire')
+    expect(textarea.parentElement?.contains(send)).toBe(true)
+    expect(screen.getByText('0/2000')).toBeTruthy()
+  })
+
   it('does not show attach controls on Signal composer', () => {
     render(<CommentComposer establishmentId="est-1" onSubmit={vi.fn()} />)
     expect(screen.queryByRole('button', { name: 'Joindre un fichier' })).toBeNull()

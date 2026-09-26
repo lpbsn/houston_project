@@ -10,11 +10,14 @@ import type {
   SignalViewMode,
 } from '../types'
 
-export type SignalQuickActionMutationKind = 'pin' | 'unpin'
-
 export type SignalQuickActionCacheContext = {
   viewMode: SignalViewMode
   filters: SignalFeedFilters
+}
+
+export type SignalFeedOptimisticSnapshot = {
+  queryKey: ReturnType<typeof signalsQueryKeys.feed>
+  previous: SignalFeedResponse | undefined
 }
 
 const SIGNAL_FEED_VIEW_MODES: SignalViewMode[] = ['personal', 'general']
@@ -106,6 +109,108 @@ export function patchSignalInActiveFeedCache(
 
     return { ...current, sections }
   })
+}
+
+/**
+ * Moves a feed item into the target status section (prepend).
+ * If that section is absent from the cached response (filters), the item is removed.
+ */
+export function relocateSignalInFeedCache(
+  queryClient: QueryClient,
+  options: {
+    establishmentId: string
+    viewMode: SignalViewMode
+    filters: SignalFeedFilters
+    signalId: string
+    nextStatus: SignalFeedItem['status']
+    patch?: Partial<SignalFeedItem>
+  },
+): void {
+  const queryKey = signalsQueryKeys.feed(
+    options.establishmentId,
+    options.viewMode,
+    options.filters,
+  )
+
+  queryClient.setQueryData<SignalFeedResponse>(queryKey, (current) => {
+    if (!current) {
+      return current
+    }
+
+    let found: SignalFeedItem | undefined
+    const sectionsWithout = current.sections.map((section) => {
+      const index = section.items.findIndex((item) => item.id === options.signalId)
+      if (index < 0) {
+        return section
+      }
+      found = section.items[index]
+      return {
+        ...section,
+        items: [...section.items.slice(0, index), ...section.items.slice(index + 1)],
+      }
+    })
+
+    if (!found) {
+      return current
+    }
+
+    const moved: SignalFeedItem = {
+      ...found,
+      ...options.patch,
+      status: options.nextStatus,
+      // Pinned zone is derived from open-section items only.
+      is_pinned: false,
+    }
+
+    const targetIndex = sectionsWithout.findIndex(
+      (section) => section.status === options.nextStatus,
+    )
+    if (targetIndex < 0) {
+      return { ...current, sections: sectionsWithout }
+    }
+
+    const sections = sectionsWithout.map((section, index) => {
+      if (index !== targetIndex) {
+        return section
+      }
+      return {
+        ...section,
+        items: [moved, ...section.items],
+      }
+    })
+
+    return { ...current, sections }
+  })
+}
+
+export async function prepareSignalFeedOptimisticUpdate(
+  queryClient: QueryClient,
+  options: {
+    establishmentId: string
+    viewMode: SignalViewMode
+    filters: SignalFeedFilters
+  },
+): Promise<SignalFeedOptimisticSnapshot> {
+  const queryKey = signalsQueryKeys.feed(
+    options.establishmentId,
+    options.viewMode,
+    options.filters,
+  )
+  await queryClient.cancelQueries({ queryKey })
+  return {
+    queryKey,
+    previous: queryClient.getQueryData<SignalFeedResponse>(queryKey),
+  }
+}
+
+export function restoreSignalFeedOptimisticUpdate(
+  queryClient: QueryClient,
+  snapshot: SignalFeedOptimisticSnapshot | undefined,
+): void {
+  if (!snapshot || snapshot.previous === undefined) {
+    return
+  }
+  queryClient.setQueryData(snapshot.queryKey, snapshot.previous)
 }
 
 export async function refillSignalFeedToLoadedDepth(
@@ -260,11 +365,18 @@ export function applySignalQuickActionSuccess(
     detail: SignalDetail
     viewMode: SignalViewMode
     filters: SignalFeedFilters
-    mutationKind: SignalQuickActionMutationKind
   },
 ): void {
-  const { establishmentId, signalId, detail } = options
+  const { establishmentId, signalId, detail, viewMode, filters } = options
 
   updateSignalDetailCache(queryClient, establishmentId, signalId, detail)
+  // Immediate feed patch so the UI does not wait on invalidate/refetch.
+  patchSignalInActiveFeedCache(queryClient, {
+    establishmentId,
+    viewMode,
+    filters,
+    signalId,
+    patch: feedItemPatchFromDetail(detail),
+  })
   invalidateSignalFeedViewModes(queryClient, establishmentId)
 }

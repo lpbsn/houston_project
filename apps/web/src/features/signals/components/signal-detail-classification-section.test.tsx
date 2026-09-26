@@ -20,7 +20,6 @@ function buildSignal(overrides: Partial<ClassificationSignal> = {}): Classificat
     activity_subject_id: 'sub-1',
     activity_subject_normalized_name: 'electricite',
     activity_subject_label: 'Électricité',
-    location_text: '',
     ...overrides,
   }
 }
@@ -80,5 +79,43 @@ describe('SignalDetailClassificationSection qualify CTA', () => {
     expect(screen.getByRole('alert').textContent).toBe(
       'Impossible de charger l’observation.',
     )
+  })
+
+  it('orders poles before subject and never shows location in classification', () => {
+    renderSection({
+      context: {
+        status: 'open',
+        relativeTimeLabel: 'il y a 3 min',
+        reporterName: 'Marie R.',
+        aggregationLabel: null,
+      },
+    })
+
+    const responsible = screen.getByText('Pôle responsable')
+    const affected = screen.getByText('Pôle concerné')
+    const subject = screen.getByText('Sujet')
+
+    expect(
+      responsible.compareDocumentPosition(affected) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(
+      affected.compareDocumentPosition(subject) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(screen.queryByText('Lieu')).toBeNull()
+    expect(screen.queryByText('Localisation')).toBeNull()
+  })
+
+  it('shows reporter avatar initials next to Rapporté par in desktop context', () => {
+    renderSection({
+      context: {
+        status: 'open',
+        relativeTimeLabel: 'il y a 3 min',
+        reporterName: 'Marie R.',
+        aggregationLabel: null,
+      },
+    })
+
+    expect(screen.getByText(/Rapporté par Marie R\./)).toBeTruthy()
+    expect(screen.getByText('MR')).toBeTruthy()
   })
 })

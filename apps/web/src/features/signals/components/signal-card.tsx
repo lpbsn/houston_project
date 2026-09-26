@@ -1,42 +1,31 @@
 import { MapPin, Pin } from 'lucide-react'
 
-import { FeedCardActionsButton, FeedCardMetaRow } from '@/components/domain/feed-card-meta-row'
+import { FeedCardActionsButton } from '@/components/domain/feed-card-meta-row'
+import { HoustonBadge } from '@/components/ui/terrain'
 import { getDisplayNameInitials } from '@/lib/display-names'
 import { feedCardKeyDown } from '@/lib/feed-card-keyboard'
-import { terrainBrandAction, terrainFeedAvatar } from '@/lib/terrain-styles'
+import { terrain, terrainBrandAction, terrainFeedAvatar } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 import {
   formatSignalRelativeTime,
-  formatSignalAggregationBadge,
   formatSignalAggregationLabel,
+  formatSignalFeedAggregationBadge,
+  formatSignalFeedCardClassificationLine,
+  formatSignalFeedPinnedPoleLabel,
   getPinnedSignalCardClassName,
   getSignalFeedInteractiveCardClassName,
+  getSignalCardLeftAccentColor,
+  getSignalCardSurfaceClass,
   PINNED_SIGNAL_CARD_BANNER_LABEL,
   PINNED_SIGNAL_CARD_DETAIL_CTA,
   PINNED_SIGNAL_CARD_SEPARATOR_CLASS,
-  getSignalCardLeftAccentColor,
-  getSignalCardSurfaceClass,
 } from '../lib/signal-display'
 import { canOpenSignalFeedCardActions } from '../lib/signal-feed-card-actions'
 import { isSignalMissingResponsibleClassification } from '../lib/signal-unclassified'
-import type { SignalFeedItem } from '../types'
+import type { SignalFeedItem, SignalViewMode } from '../types'
 import { SignalStatusBadge } from './signal-status-badge'
 import { SignalUnclassifiedBadge } from './signal-unclassified-badge'
-import { SignalClassificationBadges } from './signal-classification-badges'
-
-function SignalCardClassificationBlock({ item }: { item: SignalFeedItem }) {
-  return (
-    <SignalClassificationBadges
-      signal={item}
-      leading={
-        isSignalMissingResponsibleClassification(item) ? (
-          <SignalUnclassifiedBadge signal={item} variant="feed" />
-        ) : undefined
-      }
-    />
-  )
-}
 
 type SignalCardProps = {
   item: SignalFeedItem
@@ -44,18 +33,21 @@ type SignalCardProps = {
   onOpenActions?: (item: SignalFeedItem) => void
   variant?: 'feed' | 'pinned'
   showEstablishment?: boolean
+  viewMode?: SignalViewMode
+  className?: string
 }
 
 function stopCardNavigation(event: { stopPropagation: () => void }) {
   event.stopPropagation()
 }
 
-type SignalCardActionsButtonProps = {
+function SignalCardActionsButton({
+  item,
+  onOpenActions,
+}: {
   item: SignalFeedItem
   onOpenActions: (item: SignalFeedItem) => void
-}
-
-function SignalCardActionsButton({ item, onOpenActions }: SignalCardActionsButtonProps) {
+}) {
   return (
     <FeedCardActionsButton
       ariaLabel="Actions de l'observation"
@@ -68,98 +60,83 @@ function SignalCardActionsButton({ item, onOpenActions }: SignalCardActionsButto
   )
 }
 
-type SignalAggregationBadgeProps = {
-  count: number
-}
-
-function SignalAggregationBadge({ count }: SignalAggregationBadgeProps) {
+/** Secondary aggregation chip — muted Spore meta, not a primary brand badge. */
+function SignalAggregationMeta({ count }: { count: number }) {
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white tabular-nums',
-        terrainBrandAction.bg,
+        'inline-flex shrink-0 tabular-nums text-[11px] font-medium',
+        terrain.textSecondary,
       )}
       aria-label={formatSignalAggregationLabel(count)}
     >
-      {formatSignalAggregationBadge(count)}
+      {formatSignalFeedAggregationBadge(count)}
     </span>
   )
 }
 
-function SignalLocationRow({
-  locationText,
-  aggregationCount,
-}: {
-  locationText: string
-  aggregationCount: number
-}) {
-  return (
-    <div className="mt-1.5 flex items-center justify-between gap-3">
-      <p className="flex min-w-0 flex-1 items-center gap-1 text-[12px] text-[#888]">
-        <MapPin className="h-3 w-3 shrink-0 text-[#E24B4A]" aria-hidden />
-        <span className="truncate">{locationText}</span>
-      </p>
-      {aggregationCount > 0 ? <SignalAggregationBadge count={aggregationCount} /> : null}
-    </div>
-  )
-}
-
-function SignalAggregationRow({ aggregationCount }: { aggregationCount: number }) {
-  return (
-    <div className="mt-1.5 flex justify-end">
-      <SignalAggregationBadge count={aggregationCount} />
-    </div>
-  )
-}
-
-function FeedSignalCard({ item, onSelect, onOpenActions, showEstablishment }: SignalCardProps) {
+function FeedSignalCard({
+  item,
+  onSelect,
+  onOpenActions,
+  showEstablishment = false,
+  viewMode = 'personal',
+  className,
+}: SignalCardProps) {
   const leftAccentColor = getSignalCardLeftAccentColor(item)
   const surfaceClass = getSignalCardSurfaceClass(item)
-  const reporterName = item.reporter_display_name?.trim() ?? ''
-  const reporterInitials = reporterName ? getDisplayNameInitials(reporterName) : null
   const showActions =
     onOpenActions && canOpenSignalFeedCardActions(item.permission_hints)
+  const classificationBadgeLabel = formatSignalFeedCardClassificationLine(item, viewMode)
+  const showUnclassified = isSignalMissingResponsibleClassification(item)
+  const location = item.location_text?.trim() ?? ''
+  const establishmentName = item.establishment_name?.trim() ?? ''
+  const validationRequested = item.resolution_request?.status === 'pending'
+  const reporterName = item.reporter_display_name?.trim() ?? ''
+  const reporterInitials = reporterName ? getDisplayNameInitials(reporterName) : null
 
   return (
     <article
-      className={getSignalFeedInteractiveCardClassName(surfaceClass)}
+      className={cn(getSignalFeedInteractiveCardClassName(surfaceClass), className)}
       style={{ borderLeftColor: leftAccentColor }}
       onClick={() => onSelect(item.id)}
       onKeyDown={(event) => feedCardKeyDown(event, onSelect, item.id)}
       role="button"
       tabIndex={0}
     >
-      <FeedCardMetaRow
-        timeLabel={formatSignalRelativeTime(item.last_activity_at)}
-        badges={<SignalCardClassificationBlock item={item} />}
-        actions={
-          showActions ? (
+      <div className="mb-0.5 flex items-start justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <SignalStatusBadge status={item.status} variant="feed" />
+          {showUnclassified ? <SignalUnclassifiedBadge signal={item} variant="feed" /> : null}
+          {!showUnclassified && classificationBadgeLabel ? (
+            <HoustonBadge variant="gray">{classificationBadgeLabel}</HoustonBadge>
+          ) : null}
+          {validationRequested ? (
+            <span className="rounded-full bg-[#EEF4FF] px-2 py-0.5 text-[10px] font-semibold text-[#355CA8]">
+              Validation demandée
+            </span>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <span className={cn('text-[11px] leading-none', terrain.textSecondary)}>
+            {formatSignalRelativeTime(item.last_activity_at)}
+          </span>
+          {showActions ? (
             <SignalCardActionsButton item={item} onOpenActions={onOpenActions} />
-          ) : null
-        }
-      />
+          ) : null}
+        </div>
+      </div>
 
-      <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
-      {showEstablishment && item.establishment_name ? (
-        <span className="mt-1 inline-flex rounded-full bg-[#F0EFE9] px-2 py-0.5 text-[10px] font-semibold text-[#7D7B75]">
-          {item.establishment_name}
-        </span>
-      ) : null}
-      {item.location_text ? (
-        <SignalLocationRow
-          locationText={item.location_text}
-          aggregationCount={item.aggregation_count}
-        />
-      ) : item.aggregation_count > 0 ? (
-        <SignalAggregationRow aggregationCount={item.aggregation_count} />
-      ) : null}
+      <h3 className="line-clamp-2 text-[15px] font-bold leading-snug text-[#1a1a1a]">
+        {item.title}
+      </h3>
 
-      <div className="mt-3 flex items-center justify-between gap-3 border-t border-[#F0EFE9] pt-3">
-        <div className="flex min-w-0 items-center gap-2">
+      {reporterName ? (
+        <div className="mt-1.5 flex min-w-0 items-center gap-1.5">
           {reporterInitials ? (
             <div
               className={cn(
-                'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold',
+                'flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold',
                 terrainFeedAvatar,
               )}
               aria-hidden
@@ -167,44 +144,78 @@ function FeedSignalCard({ item, onSelect, onOpenActions, showEstablishment }: Si
               {reporterInitials}
             </div>
           ) : null}
-          {reporterName ? (
-            <span className="truncate text-[11px] text-[#888]">{reporterName}</span>
+          <span className={cn('truncate text-[11px]', terrain.textSecondary)}>
+            Rapporté par {reporterName}
+          </span>
+        </div>
+      ) : null}
+
+      {showEstablishment && establishmentName ? (
+        <span className="mt-1 inline-flex rounded-full bg-[#F0EFE9] px-2 py-0.5 text-[10px] font-semibold text-[#7D7B75]">
+          {establishmentName}
+        </span>
+      ) : null}
+
+      {location || item.aggregation_count > 0 ? (
+        <div className="mt-1.5 flex items-center justify-between gap-3">
+          {location ? (
+            <p
+              className={cn(
+                'flex min-w-0 flex-1 items-center gap-1 text-[12px]',
+                terrain.textSecondary,
+              )}
+            >
+              <MapPin className="h-3 w-3 shrink-0 text-[#E24B4A]" aria-hidden />
+              <span className="truncate">{location}</span>
+            </p>
+          ) : (
+            <span />
+          )}
+          {item.aggregation_count > 0 ? (
+            <SignalAggregationMeta count={item.aggregation_count} />
           ) : null}
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {item.resolution_request?.status === 'pending' ? (
-            <span className="rounded-full bg-[#EEF4FF] px-2 py-1 text-[10px] font-semibold text-[#355CA8]">
-              Validation demandée
-            </span>
-          ) : null}
-          <SignalStatusBadge status={item.status} variant="feed" />
-        </div>
-      </div>
+      ) : null}
     </article>
   )
 }
 
-function PinnedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
+/** Highlight presentation for pinned items — importance marker, not a status card. */
+function PinnedSignalCard({
+  item,
+  onSelect,
+  onOpenActions,
+  showEstablishment = false,
+  className,
+}: SignalCardProps) {
   const showActions =
     onOpenActions && canOpenSignalFeedCardActions(item.permission_hints)
+  const poleLabel = formatSignalFeedPinnedPoleLabel(item)
+  const showUnclassified = isSignalMissingResponsibleClassification(item)
+  const location = item.location_text?.trim() ?? ''
+  const establishmentName = item.establishment_name?.trim() ?? ''
 
   return (
     <article
-      className={getPinnedSignalCardClassName()}
+      className={cn(getPinnedSignalCardClassName(), className)}
       onClick={() => onSelect(item.id)}
       onKeyDown={(event) => feedCardKeyDown(event, onSelect, item.id)}
       role="button"
       tabIndex={0}
     >
       <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <Pin className="h-4 w-4 shrink-0 text-[#7D7B75]" aria-hidden />
-          <span className={cn('truncate text-[13px] font-bold', terrainBrandAction.text)}>
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <Pin className={cn('h-3.5 w-3.5 shrink-0', terrain.muted)} aria-hidden />
+          <span className={cn('text-[12px] font-semibold', terrain.muted)}>
             {PINNED_SIGNAL_CARD_BANNER_LABEL}
           </span>
+          {showUnclassified ? <SignalUnclassifiedBadge signal={item} variant="feed" /> : null}
+          {!showUnclassified && poleLabel ? (
+            <HoustonBadge variant="gray">{poleLabel}</HoustonBadge>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
-          <span className="text-[11px] leading-none text-[#888]">
+          <span className={cn('text-[11px] leading-none', terrain.textSecondary)}>
             {formatSignalRelativeTime(item.last_activity_at)}
           </span>
           {showActions ? (
@@ -215,19 +226,33 @@ function PinnedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
 
       <div className={`my-2 ${PINNED_SIGNAL_CARD_SEPARATOR_CLASS}`} />
 
-      <div className="mb-1">
-        <SignalCardClassificationBlock item={item} />
-      </div>
-
       <h3 className="line-clamp-2 text-[15px] font-semibold leading-snug text-[#1a1a1a]">
         {item.title}
       </h3>
 
-      {item.location_text ? (
-        <SignalLocationRow locationText={item.location_text} aggregationCount={0} />
+      {showEstablishment && establishmentName ? (
+        <span className="mt-1 inline-flex rounded-full bg-[#F0EFE9] px-2 py-0.5 text-[10px] font-semibold text-[#7D7B75]">
+          {establishmentName}
+        </span>
       ) : null}
 
-      <div className="mt-3 flex items-center justify-end">
+      <div
+        data-testid="pinned-signal-card-footer"
+        className="mt-3 flex flex-nowrap items-center justify-between gap-2"
+      >
+        <div className="min-w-0 flex-1">
+          {location ? (
+            <p
+              className={cn(
+                'flex min-w-0 items-center gap-1 text-[12px]',
+                terrain.textSecondary,
+              )}
+            >
+              <MapPin className="h-3 w-3 shrink-0 text-[#E24B4A]" aria-hidden />
+              <span className="truncate">{location}</span>
+            </p>
+          ) : null}
+        </div>
         <span className={cn('shrink-0 text-[11px] font-semibold', terrainBrandAction.text)}>
           {PINNED_SIGNAL_CARD_DETAIL_CTA}
         </span>
@@ -242,6 +267,8 @@ export function SignalCard({
   onOpenActions,
   variant = 'feed',
   showEstablishment = false,
+  viewMode = 'personal',
+  className,
 }: SignalCardProps) {
   if (variant === 'pinned') {
     return (
@@ -250,15 +277,20 @@ export function SignalCard({
         onSelect={onSelect}
         onOpenActions={onOpenActions}
         showEstablishment={showEstablishment}
+        viewMode={viewMode}
+        className={className}
       />
     )
   }
+
   return (
     <FeedSignalCard
       item={item}
       onSelect={onSelect}
       onOpenActions={onOpenActions}
       showEstablishment={showEstablishment}
+      viewMode={viewMode}
+      className={className}
     />
   )
 }

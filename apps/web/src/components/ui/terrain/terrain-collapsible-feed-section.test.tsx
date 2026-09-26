@@ -62,4 +62,15 @@ describe('TerrainCollapsibleFeedSection', () => {
 
     expect(onToggle).toHaveBeenCalledTimes(1)
   })
+
+  it('omits count from the label when count is undefined', () => {
+    render(
+      <TerrainCollapsibleFeedSection label="En attente" expanded onToggle={vi.fn()}>
+        <p>Contenu</p>
+      </TerrainCollapsibleFeedSection>,
+    )
+
+    expect(screen.getByText('En attente')).toBeTruthy()
+    expect(screen.queryByText(/En attente ·/)).toBeNull()
+  })
 })

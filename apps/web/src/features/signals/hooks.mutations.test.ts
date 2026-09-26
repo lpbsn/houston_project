@@ -108,6 +108,47 @@ describe('usePinSignalMutation', () => {
     pinSignal.mockClear()
   })
 
+  it('optimistically pins the feed item before the request resolves', async () => {
+    let resolvePin: ((value: { id: string; is_pinned: boolean }) => void) | undefined
+    pinSignal.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolvePin = resolve
+        }),
+    )
+
+    const { result, queryClient } = renderMutationHook(() =>
+      usePinSignalMutation('est-1', cacheContext),
+    )
+    const feedKey = signalsQueryKeys.feed('est-1', 'personal', EMPTY_SIGNAL_FEED_FILTERS)
+    queryClient.setQueryData(feedKey, {
+      sections: [
+        {
+          status: 'open',
+          items: [{ id: 'signal-1', is_pinned: false, title: 'A' }],
+          next_cursor: null,
+          has_more: false,
+        },
+      ],
+      applied_filters: { statuses: [], business_unit_ids: [], activity_subject_ids: [] },
+    })
+
+    result.current.mutate('signal-1')
+
+    await waitFor(() => {
+      const data = queryClient.getQueryData<{
+        sections: Array<{ items: Array<{ is_pinned: boolean }> }>
+      }>(feedKey)
+      expect(data?.sections[0]?.items[0]?.is_pinned).toBe(true)
+    })
+
+    resolvePin?.({ id: 'signal-1', is_pinned: true })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+  })
+
   it('invalidates feed view modes without establishment-wide detail invalidation', async () => {
     const { result, queryClient } = renderMutationHook(() =>
       usePinSignalMutation('est-1', cacheContext),

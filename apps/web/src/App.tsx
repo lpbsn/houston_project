@@ -766,6 +766,7 @@ function App() {
             establishmentId={establishmentIdForScope ?? null}
             source={source}
             onOpenSignal={(id) => navigate(serializeScopedSignalDetailPath(scope, id))}
+            onNavigate={navigate}
           />
         )
       }
@@ -847,6 +848,7 @@ function App() {
       return (
         <LazySignalFeedPage
           onOpenSignal={(id) => navigate(`/signals/${id}`)}
+          onNavigate={navigate}
         />
       )
     }
@@ -941,6 +943,7 @@ function App() {
     isDesktopWeb,
     navigate,
     route,
+    terrainBackPath,
   ])
 
   const handleChatGlobalAccessRevoked = useCallback(

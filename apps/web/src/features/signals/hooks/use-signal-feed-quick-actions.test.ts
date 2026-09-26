@@ -172,7 +172,7 @@ describe('useSignalFeedQuickActions', () => {
     expect(pinSignal).not.toHaveBeenCalled()
   })
 
-  it('runs resolve mutation and returns stay-open', async () => {
+  it('runs resolve mutation and returns close', async () => {
     const { result } = renderQuickActionsHook()
 
     act(() => {
@@ -184,19 +184,19 @@ describe('useSignalFeedQuickActions', () => {
       actionResult = result.current.runAction('resolve')
     })
 
-    expect(actionResult).toBe('stay-open')
+    expect(actionResult).toBe('close')
+    expect(result.current.actionsOpen).toBe(false)
 
     await waitFor(() => {
       expect(resolveSignal).toHaveBeenCalledWith('est-1', 'signal-1')
     })
 
     await waitFor(() => {
-      expect(result.current.actionsOpen).toBe(false)
       expect(result.current.activeItem).toBeNull()
     })
   })
 
-  it('runs cancel mutation when confirm is accepted and returns stay-open', async () => {
+  it('runs cancel mutation when confirm is accepted and returns close', async () => {
     const { result } = renderQuickActionsHook()
 
     act(() => {
@@ -208,7 +208,8 @@ describe('useSignalFeedQuickActions', () => {
       actionResult = result.current.runAction('cancel')
     })
 
-    expect(actionResult).toBe('stay-open')
+    expect(actionResult).toBe('close')
+    expect(result.current.actionsOpen).toBe(false)
 
     await waitFor(() => {
       expect(cancelSignal).toHaveBeenCalledWith('est-1', 'signal-1')
@@ -238,7 +239,7 @@ describe('useSignalFeedQuickActions', () => {
     expect(result.current.activeItem).not.toBeNull()
   })
 
-  it('runs mark_interesting mutation when confirm is accepted and returns stay-open', async () => {
+  it('runs mark_interesting mutation when confirm is accepted and returns close', async () => {
     const { result } = renderQuickActionsHook()
 
     act(() => {
@@ -261,7 +262,8 @@ describe('useSignalFeedQuickActions', () => {
       actionResult = result.current.runAction('mark_interesting')
     })
 
-    expect(actionResult).toBe('stay-open')
+    expect(actionResult).toBe('close')
+    expect(result.current.actionsOpen).toBe(false)
 
     await waitFor(() => {
       expect(markSignalInteresting).toHaveBeenCalledWith('est-1', 'signal-1')
@@ -326,7 +328,8 @@ describe('useSignalFeedQuickActions', () => {
       actionResult = result.current.runAction('cancel')
     })
 
-    expect(actionResult).toBe('stay-open')
+    expect(actionResult).toBe('close')
+    expect(result.current.actionsOpen).toBe(false)
 
     await waitFor(() => {
       expect(cancelSignal).toHaveBeenCalledWith('est-1', 'signal-1')
@@ -368,7 +371,7 @@ describe('useSignalFeedQuickActions', () => {
     expect(result.current.activeItem).not.toBeNull()
   })
 
-  it('ignores closeActions immediately after runAction before rerender', () => {
+  it('closes menu immediately but keeps activeItem locked until mutation settles', () => {
     mockSlowResolve()
     const { result } = renderQuickActionsHook()
     const item = buildFeedItem({ id: 'signal-1' })
@@ -382,7 +385,7 @@ describe('useSignalFeedQuickActions', () => {
       result.current.closeActions()
     })
 
-    expect(result.current.actionsOpen).toBe(true)
+    expect(result.current.actionsOpen).toBe(false)
     expect(result.current.activeItem).toEqual(item)
   })
 
@@ -402,15 +405,15 @@ describe('useSignalFeedQuickActions', () => {
       pinResult = result.current.runAction('pin')
     })
 
-    expect(resolveResult).toBe('stay-open')
+    expect(resolveResult).toBe('close')
     expect(pinResult).toBe('abort')
     expect(pinSignal).not.toHaveBeenCalled()
     expect(unpinSignal).not.toHaveBeenCalled()
-    expect(result.current.actionsOpen).toBe(true)
+    expect(result.current.actionsOpen).toBe(false)
     expect(result.current.activeItem).toEqual(item)
 
     await waitFor(() => {
-      expect(result.current.actionsOpen).toBe(false)
+      expect(result.current.activeItem).toBeNull()
     })
   })
 
@@ -429,7 +432,7 @@ describe('useSignalFeedQuickActions', () => {
       secondResult = result.current.runAction('resolve')
     })
 
-    expect(firstResult).toBe('stay-open')
+    expect(firstResult).toBe('close')
     expect(secondResult).toBe('abort')
 
     await waitFor(() => {
@@ -441,7 +444,7 @@ describe('useSignalFeedQuickActions', () => {
     })
   })
 
-  it('keeps original card open when openActions is called during lifecycle pending', async () => {
+  it('ignores openActions on another card during lifecycle pending', async () => {
     mockSlowResolve()
     const { result } = renderQuickActionsHook()
     const signalOne = buildFeedItem({ id: 'signal-1' })
@@ -458,11 +461,10 @@ describe('useSignalFeedQuickActions', () => {
       result.current.openActions(buildFeedItem({ id: 'signal-2', title: 'Autre signal' }))
     })
 
-    expect(result.current.actionsOpen).toBe(true)
+    expect(result.current.actionsOpen).toBe(false)
     expect(result.current.activeItem?.id).toBe('signal-1')
 
     await waitFor(() => {
-      expect(result.current.actionsOpen).toBe(false)
       expect(result.current.activeItem).toBeNull()
     })
   })
@@ -484,11 +486,11 @@ describe('useSignalFeedQuickActions', () => {
       result.current.closeActions()
     })
 
-    expect(result.current.actionsOpen).toBe(true)
+    expect(result.current.actionsOpen).toBe(false)
     expect(result.current.activeItem).toEqual(item)
 
     await waitFor(() => {
-      expect(result.current.actionsOpen).toBe(false)
+      expect(result.current.activeItem).toBeNull()
     })
   })
 

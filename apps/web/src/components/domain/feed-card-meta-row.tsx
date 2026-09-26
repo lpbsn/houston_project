@@ -40,11 +40,11 @@ export function FeedCardActionsButton({
 }: FeedCardActionsButtonProps) {
   if (variant === 'prominent') {
     return (
-      <span className="relative h-6 w-6 shrink-0 overflow-visible">
+      <span className="relative h-5 w-5 shrink-0 overflow-visible">
         <button
           type="button"
           className={cn(
-            'absolute top-1/2 left-[calc(50%+2px)] flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-[#E8E6DF] bg-white text-[#5F5A52] shadow-sm transition hover:bg-[#F5F4F0] active:scale-95 disabled:pointer-events-none disabled:opacity-50',
+            'absolute top-1/2 left-1/2 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[#A3A19A] transition hover:text-[#7D7B75] hover:bg-black/[0.03] active:scale-95 disabled:pointer-events-none disabled:opacity-50',
             'focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30 focus-visible:outline-none',
           )}
           aria-label={ariaLabel}

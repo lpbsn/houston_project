@@ -13,6 +13,7 @@ import {
 import {
   SIGNAL_CANCEL_CONFIRM_MESSAGE,
   SIGNAL_MARK_INTERESTING_CONFIRM_MESSAGE,
+  isSignalFeedLifecycleActionId,
   type SignalFeedCardActionId,
 } from '../lib/signal-feed-card-actions'
 import type { SignalFeedFilters, SignalFeedItem, SignalViewMode } from '../types'
@@ -35,26 +36,27 @@ export function useSignalFeedQuickActions({
   const [actionsOpen, setActionsOpen] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const activeItemRef = useRef<SignalFeedItem | null>(null)
-  const lifecycleLockRef = useRef(false)
+  /** Blocks sheet dismiss / second actions until the in-flight mutation settles. */
+  const actionLockRef = useRef(false)
 
   const pinMutation = usePinSignalMutation(establishmentId, cacheContext)
   const unpinMutation = useUnpinSignalMutation(establishmentId, cacheContext)
-  const resolveMutation = useResolveSignalMutation(establishmentId)
-  const cancelMutation = useCancelSignalMutation(establishmentId)
-  const markInterestingMutation = useMarkSignalInterestingMutation(establishmentId)
-
-  const isLifecyclePending =
-    resolveMutation.isPending ||
-    cancelMutation.isPending ||
-    markInterestingMutation.isPending
+  const resolveMutation = useResolveSignalMutation(establishmentId, cacheContext)
+  const cancelMutation = useCancelSignalMutation(establishmentId, cacheContext)
+  const markInterestingMutation = useMarkSignalInterestingMutation(
+    establishmentId,
+    cacheContext,
+  )
 
   const isPending =
     pinMutation.isPending ||
     unpinMutation.isPending ||
-    isLifecyclePending
+    resolveMutation.isPending ||
+    cancelMutation.isPending ||
+    markInterestingMutation.isPending
 
-  function isLifecycleLocked() {
-    return lifecycleLockRef.current || isLifecyclePending
+  function isActionLocked() {
+    return actionLockRef.current || isPending
   }
 
   function syncActiveItem(item: SignalFeedItem | null) {
@@ -69,7 +71,7 @@ export function useSignalFeedQuickActions({
   }
 
   function openActions(item: SignalFeedItem) {
-    if (isLifecycleLocked()) {
+    if (isActionLocked()) {
       return
     }
     setActionError(null)
@@ -78,51 +80,44 @@ export function useSignalFeedQuickActions({
   }
 
   function closeActions() {
-    if (isLifecycleLocked()) {
+    if (isActionLocked()) {
       return
     }
     resetActionsSheet()
   }
 
-  function createLifecycleMutationCallbacks() {
+  function createMutationCallbacks() {
     return {
       onSuccess: () => {
         setActionError(null)
-        resetActionsSheet()
+        syncActiveItem(null)
       },
       onError: (error: unknown) => {
         setActionError(
           resolveApiErrorMessage(error, SignalsApiError, 'Une erreur est survenue.'),
         )
+        // Reopen so the user can see the error after the optimistic close.
+        setActionsOpen(true)
       },
       onSettled: () => {
-        lifecycleLockRef.current = false
+        actionLockRef.current = false
       },
     }
   }
 
-  function startLifecycleMutation(
-    mutate: (
-      signalId: string,
-      options: ReturnType<typeof createLifecycleMutationCallbacks>,
-    ) => void,
+  function startLockedMutation(
+    mutate: (signalId: string, options: ReturnType<typeof createMutationCallbacks>) => void,
     signalId: string,
   ): SignalFeedQuickActionResult {
-    if (isLifecycleLocked()) {
+    if (isActionLocked()) {
       return 'abort'
     }
     setActionError(null)
-    lifecycleLockRef.current = true
-    mutate(signalId, createLifecycleMutationCallbacks())
-    return 'stay-open'
-  }
-
-  function isLifecycleAction(actionId: SignalFeedCardActionId): boolean {
-    return (
-      actionId === 'resolve' ||
-      actionId === 'cancel' ||
-      actionId === 'mark_interesting'
-    )
+    actionLockRef.current = true
+    mutate(signalId, createMutationCallbacks())
+    // Close immediately; optimistic cache update makes the feed feel responsive.
+    setActionsOpen(false)
+    return 'close'
   }
 
   function runAction(
@@ -137,7 +132,11 @@ export function useSignalFeedQuickActions({
       syncActiveItem(item)
     }
 
-    if (!isLifecycleAction(actionId) && isLifecycleLocked()) {
+    if (!isSignalFeedLifecycleActionId(actionId)) {
+      return 'abort'
+    }
+
+    if (isActionLocked()) {
       return 'abort'
     }
 
@@ -145,22 +144,23 @@ export function useSignalFeedQuickActions({
 
     switch (actionId) {
       case 'pin':
-        if (target.is_pinned) {
-          void unpinMutation.mutate(signalId)
-        } else {
-          void pinMutation.mutate(signalId)
-        }
-        return 'close'
+        return startLockedMutation((id, options) => {
+          if (target.is_pinned) {
+            void unpinMutation.mutate(id, options)
+          } else {
+            void pinMutation.mutate(id, options)
+          }
+        }, signalId)
       case 'mark_interesting':
         if (!window.confirm(SIGNAL_MARK_INTERESTING_CONFIRM_MESSAGE)) {
           return 'abort'
         }
-        return startLifecycleMutation(
+        return startLockedMutation(
           (id, options) => void markInterestingMutation.mutate(id, options),
           signalId,
         )
       case 'resolve':
-        return startLifecycleMutation(
+        return startLockedMutation(
           (id, options) => void resolveMutation.mutate(id, options),
           signalId,
         )
@@ -168,7 +168,7 @@ export function useSignalFeedQuickActions({
         if (!window.confirm(SIGNAL_CANCEL_CONFIRM_MESSAGE)) {
           return 'abort'
         }
-        return startLifecycleMutation(
+        return startLockedMutation(
           (id, options) => void cancelMutation.mutate(id, options),
           signalId,
         )

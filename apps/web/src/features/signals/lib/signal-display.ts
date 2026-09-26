@@ -1,15 +1,25 @@
 import type { HoustonBadgeVariant, TerrainSectionDotVariant } from '@/lib/terrain-styles'
+import {
+  formatSignalClassification,
+  type SignalClassificationInput,
+} from '@/lib/signal-classification'
 import { terrainInProgress } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
-import type { SignalFeedItem } from '../types'
+import type { SignalFeedItem, SignalViewMode } from '../types'
 
-export function formatSignalAggregationBadge(count: number): string {
-  return `x${count}`
+/** Feed card aggregation chip (+N) — mobile and desktop non-pinned rows. */
+export function formatSignalFeedAggregationBadge(count: number): string {
+  return `+${count}`
 }
 
 export function formatSignalAggregationLabel(count: number): string {
   return count === 1 ? '1 agrégation' : `${count} agrégations`
+}
+
+/** Detail Observation — explicit similar-observations wording (mobile + desktop). */
+export function formatSignalSimilarObservationsLabel(count: number): string {
+  return count === 1 ? '+1 observation similaire' : `+${count} observations similaires`
 }
 
 export function formatSignalRelativeTime(iso: string): string {
@@ -131,7 +141,6 @@ export function composeSignalFeedPresentation(sections: SignalFeedSectionInput[]
 
 /** Left border accent hex colors for feed cards (inline style; beats global border-color). */
 export const SIGNAL_CARD_LEFT_ACCENT_COLOR = {
-  pinned: '#1a1a1a',
   open: '#EF9F27',
   in_progress: terrainInProgress.color,
   interesting: '#A4E5E0',
@@ -139,11 +148,11 @@ export const SIGNAL_CARD_LEFT_ACCENT_COLOR = {
   neutral: '#7D7B75',
 } as const
 
-/** Signal feed card shell — 14px radius (maquette); distinct from global 22px execution cards. */
+/** Signal feed card shell — compact mobile density. */
 export const SIGNAL_FEED_INTERACTIVE_CARD_CLASS =
-  'cursor-pointer rounded-[14px] border border-[#E8E6DF] bg-white p-4 border-l-4 transition hover:border-t-[#1B4FD8]/30 hover:border-r-[#1B4FD8]/30 hover:border-b-[#1B4FD8]/30'
+  'cursor-pointer rounded-[14px] border border-[#E8E6DF] bg-white p-3 border-l-4 transition hover:border-t-[#1B4FD8]/30 hover:border-r-[#1B4FD8]/30 hover:border-b-[#1B4FD8]/30'
 
-export const SIGNAL_FEED_CARD_BASE_CLASS = 'cursor-pointer rounded-[14px] p-4 transition'
+export const SIGNAL_FEED_CARD_BASE_CLASS = 'cursor-pointer rounded-[14px] p-3 transition'
 
 export function getSignalFeedInteractiveCardClassName(surfaceClass?: string): string {
   return cn(SIGNAL_FEED_INTERACTIVE_CARD_CLASS, surfaceClass)
@@ -153,18 +162,42 @@ export function getSignalFeedCardBaseClassName(shellClass: string): string {
   return cn(SIGNAL_FEED_CARD_BASE_CLASS, shellClass)
 }
 
-/** Shell for pinned feed cards (same family as execution pending-validation cards; neutral palette). */
+/** Pinned mobile card: same family as feed cards, subtle surface distinction. */
+export const PINNED_SIGNAL_CARD_BANNER_LABEL = 'Épinglée'
+
 export const PINNED_SIGNAL_CARD_CLASS =
   'border border-[#E8E6DF] bg-[#F0EFE9] p-3 hover:border-[#7D7B75]/60'
 
 export const PINNED_SIGNAL_CARD_SEPARATOR_CLASS = 'border-t border-[#E8E6DF]'
 
-export const PINNED_SIGNAL_CARD_BANNER_LABEL = 'Épinglée'
-
 export const PINNED_SIGNAL_CARD_DETAIL_CTA = 'Voir le détail →'
 
 export function getPinnedSignalCardClassName(): string {
   return getSignalFeedCardBaseClassName(PINNED_SIGNAL_CARD_CLASS)
+}
+
+/**
+ * Compact classification line for mobile feed cards.
+ * - personal (Ma zone): subject only (avoid repeating responsible pole)
+ * - general (Vue globale): responsible · subject
+ * Never includes the affected ("Concerné") line.
+ */
+export function formatSignalFeedCardClassificationLine(
+  signal: SignalClassificationInput,
+  viewMode: SignalViewMode,
+): string | null {
+  const classification = formatSignalClassification(signal)
+  if (viewMode === 'personal') {
+    return classification.subjectLabel
+  }
+  return classification.primaryLine
+}
+
+/** Pole-only badge label for pinned cards (subject omitted). */
+export function formatSignalFeedPinnedPoleLabel(
+  signal: SignalClassificationInput,
+): string | null {
+  return formatSignalClassification(signal).responsibleLabel
 }
 
 function getSignalCardLeftAccentColorKey(

@@ -15,8 +15,10 @@ import { resolveApiErrorMessage } from '@/lib/error-message'
 import { useLgViewport } from '@/lib/lg-viewport'
 import { useLocationSearch } from '@/lib/location-search'
 import { terrainBackButtonClassName } from '@/lib/terrain-styles'
+import { cn } from '@/lib/utils'
 import { CommentSection } from '@/features/comments/components/comment-section'
 
+import { SignalDetailMainBlock } from '../components/signal-detail-main-block'
 import { SignalDetailPhotoSection } from '../components/signal-detail-photo-section'
 import { SignalDetailStickyFooter } from '../components/signal-detail-sticky-footer'
 import {
@@ -24,9 +26,9 @@ import {
   type SignalDetailTab,
 } from '../components/signal-detail-tabs'
 import { SignalLinkedActionPlansSection } from '../components/signal-linked-action-plans-section'
-import { SignalStatusBadge } from '../components/signal-status-badge'
 import { SignalDetailClassificationSection } from '../components/signal-detail-classification-section'
 import { SignalDetailLabel } from '../components/signal-detail-label'
+import { SignalDetailLocationSection } from '../components/signal-detail-location-section'
 import { SignalQualifyRoutingSheet } from '../components/signal-qualify-routing-sheet'
 import {
   resolutionRequestEventsFromDetail,
@@ -43,8 +45,7 @@ import { useSignalQualifySheet } from '../hooks/use-signal-qualify-sheet'
 import { SignalsApiError } from '../api'
 import { shouldShowSignalQualifyRouting } from '../lib/signal-qualify-routing'
 import { shouldShowSignalCreateActionPlan } from '../lib/signal-create-action'
-import { formatSignalRelativeTime, formatSignalAggregationLabel } from '../lib/signal-display'
-import { SIGNAL_IN_PROGRESS_RESOLVE_VIA_ACTION_PLAN_HINT } from '../lib/signal-feed-card-actions'
+import { formatSignalRelativeTime, formatSignalSimilarObservationsLabel } from '../lib/signal-display'
 
 type SignalDetailPageProps = {
   signalId: string
@@ -126,7 +127,8 @@ export function SignalDetailPage({
   }
 
   const signal = detailQuery.data
-  const reporterName = signal.source_context.reporter_display_name?.trim()
+  const reporterName = signal.source_context.reporter_display_name?.trim() || null
+  const description = formatDescriptionContent(signal.structured_summary)
   const showCreateActionPlan = shouldShowSignalCreateActionPlan(signal.permission_hints)
   const canQualifyRouting = shouldShowSignalQualifyRouting(signal.permission_hints)
   const resolutionRequest = signal.resolution_request
@@ -204,36 +206,14 @@ export function SignalDetailPage({
           ? {
               status: signal.status,
               relativeTimeLabel: `il y a ${formatSignalRelativeTime(signal.last_activity_at)}`,
-              reporterName: reporterName || null,
+              reporterName,
               aggregationLabel:
                 signal.aggregation_count > 0
-                  ? formatSignalAggregationLabel(signal.aggregation_count)
+                  ? formatSignalSimilarObservationsLabel(signal.aggregation_count)
                   : null,
             }
           : undefined
       }
-    />
-  )
-  const descriptionCard = (
-    <TerrainCard>
-      <SignalDetailLabel>Description</SignalDetailLabel>
-      <p className="mt-2 text-[13px] leading-relaxed text-[#1a1a1a]">
-        {formatDescriptionContent(signal.structured_summary)}
-      </p>
-    </TerrainCard>
-  )
-  const progressHint =
-    signal.status === 'in_progress' ? (
-      <TerrainCard>
-        <p className="text-[13px] leading-relaxed text-[#7D7B75]">
-          {SIGNAL_IN_PROGRESS_RESOLVE_VIA_ACTION_PLAN_HINT}
-        </p>
-      </TerrainCard>
-    ) : null
-  const photoSection = (
-    <SignalDetailPhotoSection
-      mediaItems={signal.media_items ?? []}
-      tileSize={isDesktopWeb ? 'comfortable' : 'compact'}
     />
   )
   const linkedPlans = (
@@ -268,15 +248,15 @@ export function SignalDetailPage({
   const detailsVisible = isDesktopWeb || activeTab === 'details'
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col" data-testid="signal-detail-root">
       <div
         data-testid="signal-detail-frame"
-        className="flex min-h-full w-full flex-1 flex-col"
+        className="flex h-full min-h-0 w-full flex-1 flex-col"
       >
       {isDesktopWeb && (onBack || showPageCreateAction) ? (
         <header
           data-testid="signal-detail-desktop-header"
-          className="sticky top-0 z-20 border-b border-[#E8E6DF] bg-white px-6 py-3"
+          className="shrink-0 border-b border-[#E8E6DF] bg-white px-6 py-3"
         >
           <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3">
           {onBack ? (
@@ -307,7 +287,7 @@ export function SignalDetailPage({
       {isDesktopWeb ? null : (
       <div
         data-testid="signal-detail-tab-bar"
-        className="px-3 pt-2"
+        className="shrink-0 bg-[#F5F4F0] px-3 pt-1.5 pb-1"
       >
         <SignalDetailTabs
           activeTab={activeTab}
@@ -316,7 +296,12 @@ export function SignalDetailPage({
       </div>
       )}
 
-      <div className={isDesktopWeb ? 'mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 pt-4 pb-8' : 'flex w-full flex-1 flex-col gap-2.5 px-3 pt-2 pb-4'}>
+      <div
+        className={cn(
+          'flex min-h-0 flex-1 flex-col',
+          isDesktopWeb && 'mx-auto w-full max-w-6xl overflow-y-auto overscroll-y-contain px-6 pt-4 pb-8',
+        )}
+      >
         <div
           role={isDesktopWeb ? undefined : 'tabpanel'}
           id="signal-detail-panel-details"
@@ -325,8 +310,8 @@ export function SignalDetailPage({
           className={
             detailsVisible
               ? isDesktopWeb
-                ? 'grid grid-cols-1 items-start gap-4 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_18rem] xl:items-stretch'
-                : 'flex flex-col gap-2.5'
+                ? 'grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_18rem] xl:items-stretch'
+                : 'flex min-h-0 flex-1 flex-col'
               : 'hidden'
           }
         >
@@ -339,8 +324,14 @@ export function SignalDetailPage({
                     {signal.title}
                   </h1>
                 </TerrainCard>
-                {descriptionCard}
-                {photoSection}
+                <TerrainCard>
+                  <SignalDetailLabel>Description</SignalDetailLabel>
+                  <p className="mt-2 text-[13px] leading-relaxed text-[#1a1a1a]">{description}</p>
+                </TerrainCard>
+                <SignalDetailPhotoSection
+                  mediaItems={signal.media_items ?? []}
+                  tileSize="comfortable"
+                />
                 {resolutionSection}
                 {linkedPlans}
                 {signal.establishment_id ?? establishmentId ? (
@@ -370,45 +361,31 @@ export function SignalDetailPage({
                 className="flex min-w-0 flex-col gap-4 self-start xl:col-start-2 xl:row-start-1"
               >
                 {classificationSection}
+                <SignalDetailLocationSection locationText={signal.location_text} />
               </div>
             </>
           ) : (
             <>
-              <TerrainCard className="order-1">
-                <h2 className="text-[17px] font-semibold leading-snug text-[#1a1a1a]">
-                  {signal.title}
-                </h2>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  <SignalStatusBadge status={signal.status} variant="detail" />
+              <div
+                data-testid="signal-detail-details-content"
+                className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 pt-2 pb-4"
+              >
+                <div className="flex flex-col gap-2.5">
+                  <SignalDetailMainBlock
+                    signal={signal}
+                    reporterName={reporterName}
+                    description={description}
+                  />
+                  {classificationSection}
+                  {resolutionSection}
+                  {linkedPlans}
                 </div>
-                <p className="mt-2 text-[11px] text-[#aaa]">
-                  il y a {formatSignalRelativeTime(signal.last_activity_at)}
-                </p>
-                {(reporterName || signal.aggregation_count > 0) ? (
-                  <div className="mt-3 flex items-center justify-between gap-2 text-[11px] text-[#aaa]">
-                    <span className="min-w-0 truncate">
-                      {reporterName ? `Rapportée par ${reporterName}` : '\u00a0'}
-                    </span>
-                    {signal.aggregation_count > 0 ? (
-                      <span className="shrink-0">
-                        {formatSignalAggregationLabel(signal.aggregation_count)}
-                      </span>
-                    ) : null}
-                  </div>
-                ) : null}
-              </TerrainCard>
-              <div className="order-2 empty:hidden">{classificationSection}</div>
-              <div className="order-3">{descriptionCard}</div>
-              {progressHint ? <div className="order-6">{progressHint}</div> : null}
-              <div className="order-5 empty:hidden">{photoSection}</div>
-              <div className="order-7 empty:hidden">{linkedPlans}</div>
+              </div>
               {showPageCreateAction ? (
                 <SignalDetailStickyFooter
-                  className="order-8"
                   onCreateActionPlan={() => onNavigate(createActionPlanPath)}
                 />
               ) : null}
-              <div className="order-4 empty:hidden">{resolutionSection}</div>
             </>
           )}
         </div>
@@ -420,7 +397,10 @@ export function SignalDetailPage({
             aria-labelledby="signal-detail-tab-comments"
             data-testid="signal-detail-comments-panel"
             className={
-              activeTab === 'comments' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'
+              activeTab === 'comments'
+                ? // Match execution detail: CommentSection owns list scroll + pinned composer.
+                  'flex min-h-0 flex-1 flex-col px-3 pt-2 pb-4'
+                : 'hidden'
             }
           >
             <CommentSection

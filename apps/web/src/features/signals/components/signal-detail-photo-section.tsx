@@ -14,6 +14,8 @@ type SignalDetailMediaItem = SignalDetail['media_items'][number]
 type SignalDetailPhotoSectionProps = {
   mediaItems: SignalDetailMediaItem[]
   tileSize?: 'compact' | 'comfortable'
+  /** Skip outer card + label — for embedding inside the mobile main block. */
+  embedded?: boolean
 }
 
 const tileClassName =
@@ -131,6 +133,7 @@ function PhotoPreviewModal({
 export function SignalDetailPhotoSection({
   mediaItems,
   tileSize = 'compact',
+  embedded = false,
 }: SignalDetailPhotoSectionProps) {
   const [selectedItem, setSelectedItem] = useState<SignalDetailMediaItem | null>(null)
 
@@ -139,27 +142,35 @@ export function SignalDetailPhotoSection({
   }
 
   const visibleItems = mediaItems.slice(0, resolveVisiblePhotoTileCount(mediaItems.length))
+  const tiles = (
+    <div
+      className={cn(
+        'flex gap-2 pb-0.5',
+        tileSize === 'comfortable' ? 'flex-wrap' : 'overflow-x-auto',
+        !embedded && 'mt-2',
+      )}
+    >
+      {visibleItems.map((item) => (
+        <PhotoTile
+          key={`${item.id}:${item.thumbnail_url}:${item.preview_url}`}
+          item={item}
+          tileSize={tileSize}
+          onOpen={() => setSelectedItem(item)}
+        />
+      ))}
+    </div>
+  )
 
   return (
     <>
-      <TerrainCard>
-        <TerrainFieldLabel>Photo</TerrainFieldLabel>
-        <div
-          className={cn(
-            'mt-2 flex gap-2 pb-0.5',
-            tileSize === 'comfortable' ? 'flex-wrap' : 'overflow-x-auto',
-          )}
-        >
-          {visibleItems.map((item) => (
-            <PhotoTile
-              key={`${item.id}:${item.thumbnail_url}:${item.preview_url}`}
-              item={item}
-              tileSize={tileSize}
-              onOpen={() => setSelectedItem(item)}
-            />
-          ))}
-        </div>
-      </TerrainCard>
+      {embedded ? (
+        tiles
+      ) : (
+        <TerrainCard>
+          <TerrainFieldLabel>Photo</TerrainFieldLabel>
+          {tiles}
+        </TerrainCard>
+      )}
       {selectedItem ? (
         <PhotoPreviewModal item={selectedItem} onClose={() => setSelectedItem(null)} />
       ) : null}

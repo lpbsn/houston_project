@@ -31,8 +31,13 @@ import {
 import {
   appendSignalFeedSectionPage,
   applySignalQuickActionSuccess,
+  prepareSignalFeedOptimisticUpdate,
+  patchSignalInActiveFeedCache,
   refillSignalFeedToLoadedDepth,
+  relocateSignalInFeedCache,
+  restoreSignalFeedOptimisticUpdate,
   signalFeedQueryKey,
+  type SignalFeedOptimisticSnapshot,
   type SignalQuickActionCacheContext,
 } from './lib/signal-feed-cache'
 import type { SignalFeedStatusFilter } from './lib/signal-feed-filters'
@@ -210,6 +215,27 @@ export function usePinSignalMutation(
       }
       return pinSignal(establishmentId, signalId)
     },
+    onMutate: async (signalId): Promise<SignalFeedOptimisticSnapshot | undefined> => {
+      if (!establishmentId || !cacheContext) {
+        return undefined
+      }
+      const snapshot = await prepareSignalFeedOptimisticUpdate(queryClient, {
+        establishmentId,
+        viewMode: cacheContext.viewMode,
+        filters: cacheContext.filters,
+      })
+      patchSignalInActiveFeedCache(queryClient, {
+        establishmentId,
+        viewMode: cacheContext.viewMode,
+        filters: cacheContext.filters,
+        signalId,
+        patch: { is_pinned: true },
+      })
+      return snapshot
+    },
+    onError: (_error, _signalId, snapshot) => {
+      restoreSignalFeedOptimisticUpdate(queryClient, snapshot)
+    },
     onSuccess: (detail, signalId) => {
       if (!establishmentId || !cacheContext) {
         return
@@ -220,7 +246,6 @@ export function usePinSignalMutation(
         detail,
         viewMode: cacheContext.viewMode,
         filters: cacheContext.filters,
-        mutationKind: 'pin',
       })
     },
   })
@@ -238,6 +263,27 @@ export function useUnpinSignalMutation(
       }
       return unpinSignal(establishmentId, signalId)
     },
+    onMutate: async (signalId): Promise<SignalFeedOptimisticSnapshot | undefined> => {
+      if (!establishmentId || !cacheContext) {
+        return undefined
+      }
+      const snapshot = await prepareSignalFeedOptimisticUpdate(queryClient, {
+        establishmentId,
+        viewMode: cacheContext.viewMode,
+        filters: cacheContext.filters,
+      })
+      patchSignalInActiveFeedCache(queryClient, {
+        establishmentId,
+        viewMode: cacheContext.viewMode,
+        filters: cacheContext.filters,
+        signalId,
+        patch: { is_pinned: false },
+      })
+      return snapshot
+    },
+    onError: (_error, _signalId, snapshot) => {
+      restoreSignalFeedOptimisticUpdate(queryClient, snapshot)
+    },
     onSuccess: (detail, signalId) => {
       if (!establishmentId || !cacheContext) {
         return
@@ -248,13 +294,15 @@ export function useUnpinSignalMutation(
         detail,
         viewMode: cacheContext.viewMode,
         filters: cacheContext.filters,
-        mutationKind: 'unpin',
       })
     },
   })
 }
 
-export function useCancelSignalMutation(establishmentId: string | null) {
+export function useCancelSignalMutation(
+  establishmentId: string | null,
+  cacheContext?: SignalQuickActionCacheContext | null,
+) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (signalId: string) => {
@@ -262,6 +310,27 @@ export function useCancelSignalMutation(establishmentId: string | null) {
         throw new Error('Observation introuvable.')
       }
       return cancelSignal(establishmentId, signalId)
+    },
+    onMutate: async (signalId): Promise<SignalFeedOptimisticSnapshot | undefined> => {
+      if (!establishmentId || !cacheContext) {
+        return undefined
+      }
+      const snapshot = await prepareSignalFeedOptimisticUpdate(queryClient, {
+        establishmentId,
+        viewMode: cacheContext.viewMode,
+        filters: cacheContext.filters,
+      })
+      relocateSignalInFeedCache(queryClient, {
+        establishmentId,
+        viewMode: cacheContext.viewMode,
+        filters: cacheContext.filters,
+        signalId,
+        nextStatus: 'canceled',
+      })
+      return snapshot
+    },
+    onError: (_error, _signalId, snapshot) => {
+      restoreSignalFeedOptimisticUpdate(queryClient, snapshot)
     },
     onSuccess: (_data, signalId) => {
       if (establishmentId) {
@@ -276,7 +345,10 @@ export function useCancelSignalMutation(establishmentId: string | null) {
   })
 }
 
-export function useResolveSignalMutation(establishmentId: string | null) {
+export function useResolveSignalMutation(
+  establishmentId: string | null,
+  cacheContext?: SignalQuickActionCacheContext | null,
+) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (signalId: string) => {
@@ -284,6 +356,27 @@ export function useResolveSignalMutation(establishmentId: string | null) {
         throw new Error('Observation introuvable.')
       }
       return resolveSignal(establishmentId, signalId)
+    },
+    onMutate: async (signalId): Promise<SignalFeedOptimisticSnapshot | undefined> => {
+      if (!establishmentId || !cacheContext) {
+        return undefined
+      }
+      const snapshot = await prepareSignalFeedOptimisticUpdate(queryClient, {
+        establishmentId,
+        viewMode: cacheContext.viewMode,
+        filters: cacheContext.filters,
+      })
+      relocateSignalInFeedCache(queryClient, {
+        establishmentId,
+        viewMode: cacheContext.viewMode,
+        filters: cacheContext.filters,
+        signalId,
+        nextStatus: 'resolved',
+      })
+      return snapshot
+    },
+    onError: (_error, _signalId, snapshot) => {
+      restoreSignalFeedOptimisticUpdate(queryClient, snapshot)
     },
     onSuccess: (detail: SignalDetail, signalId) => {
       if (establishmentId) {
@@ -296,7 +389,10 @@ export function useResolveSignalMutation(establishmentId: string | null) {
   })
 }
 
-export function useMarkSignalInterestingMutation(establishmentId: string | null) {
+export function useMarkSignalInterestingMutation(
+  establishmentId: string | null,
+  cacheContext?: SignalQuickActionCacheContext | null,
+) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (signalId: string) => {
@@ -304,6 +400,27 @@ export function useMarkSignalInterestingMutation(establishmentId: string | null)
         throw new Error('Observation introuvable.')
       }
       return markSignalInteresting(establishmentId, signalId)
+    },
+    onMutate: async (signalId): Promise<SignalFeedOptimisticSnapshot | undefined> => {
+      if (!establishmentId || !cacheContext) {
+        return undefined
+      }
+      const snapshot = await prepareSignalFeedOptimisticUpdate(queryClient, {
+        establishmentId,
+        viewMode: cacheContext.viewMode,
+        filters: cacheContext.filters,
+      })
+      relocateSignalInFeedCache(queryClient, {
+        establishmentId,
+        viewMode: cacheContext.viewMode,
+        filters: cacheContext.filters,
+        signalId,
+        nextStatus: 'interesting',
+      })
+      return snapshot
+    },
+    onError: (_error, _signalId, snapshot) => {
+      restoreSignalFeedOptimisticUpdate(queryClient, snapshot)
     },
     onSuccess: (detail: SignalDetail, signalId) => {
       if (establishmentId) {

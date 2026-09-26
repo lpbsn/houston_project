@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
+import { RotateCcw } from 'lucide-react'
 import { Popover } from 'radix-ui'
 
-import { TerrainFilterSlot } from '@/components/ui/terrain'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { buildBusinessUnitScopeTree } from '@/features/auth/lib/business-unit-scope'
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
@@ -13,8 +13,10 @@ import {
 } from '../lib/signal-feed-classification-selection'
 import {
   EMPTY_SIGNAL_FEED_FILTERS,
+  formatClassificationFilterChipLabel,
   formatClassificationFilterSummary,
-  formatStatusFilterSummary,
+  formatStatusFilterChipLabel,
+  hasActiveSignalFeedFilters,
   normalizeSignalFeedFilters,
   SIGNAL_FEED_STATUS_OPTIONS,
   type SignalFeedFilters,
@@ -29,6 +31,11 @@ type SignalFeedFiltersBarProps = {
   filters: SignalFeedFilters
   onFiltersChange: (filters: SignalFeedFilters) => void
   membershipRole?: string | null
+  /** When true, render reset control inline (mobile chips row ownership). */
+  showReset?: boolean
+  onReset?: () => void
+  /** Horizontal inset for mobile chips (safe-area aware). */
+  contentClassName?: string
 }
 
 function toggleStatusFilter(
@@ -41,17 +48,30 @@ function toggleStatusFilter(
   return normalizeSignalFeedFilters({ ...filters, statuses })
 }
 
+function filterChipClassName(active: boolean): string {
+  return cn(
+    'inline-flex h-8 shrink-0 items-center rounded-full border px-3 text-xs font-semibold whitespace-nowrap focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30 focus-visible:outline-none',
+    active
+      ? 'border-[#1B4FD8] bg-[#EEF4FF] text-[#1B4FD8]'
+      : 'border-[#E8E6DF] bg-white text-[#5c564e]',
+  )
+}
+
 export function SignalFeedFiltersBar({
   establishmentId,
   filters,
   onFiltersChange,
   membershipRole = null,
+  showReset = false,
+  onReset,
+  contentClassName,
 }: SignalFeedFiltersBarProps) {
   const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   const [statusSheetOpen, setStatusSheetOpen] = useState(false)
   const [classificationSheetOpen, setClassificationSheetOpen] = useState(false)
   const [classificationPanelOpen, setClassificationPanelOpen] = useState(false)
   const normalizedFilters = normalizeSignalFeedFilters(filters)
+  const filtersActive = hasActiveSignalFeedFilters(normalizedFilters)
 
   const treeQuery = useBusinessUnitTreeQuery(establishmentId)
 
@@ -149,52 +169,77 @@ export function SignalFeedFiltersBar({
     )
   }
 
+  const statusActive = normalizedFilters.statuses.length > 0
+  const classificationActive =
+    normalizedFilters.businessUnitIds.length > 0 ||
+    normalizedFilters.activitySubjectIds.length > 0
+  const showResetControl = showReset && filtersActive && Boolean(onReset)
+
   return (
     <>
       <div
-        className="flex shrink-0 flex-col gap-2 border-t border-[#E8E6DF] bg-white px-3 py-2 pb-3"
+        className="flex shrink-0 bg-white py-2"
         aria-label="Filtres des observations"
       >
-        <div className="flex gap-2">
-          <div className="flex flex-1" data-filter-kind="status">
-            <TerrainFilterSlot
-              label="Statut"
-              value={formatStatusFilterSummary(normalizedFilters)}
-              disabled={false}
+        <div
+          className={cn(
+            'flex min-w-0 flex-1 items-center gap-2',
+            contentClassName ?? 'px-3',
+          )}
+        >
+          <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <button
+              type="button"
+              data-filter-kind="status"
+              aria-pressed={statusActive}
+              className={filterChipClassName(statusActive)}
               onClick={() => setStatusSheetOpen(true)}
-            />
-          </div>
-          <div className="flex flex-1" data-filter-kind="classification">
-            <TerrainFilterSlot
-              label="Pôle / Sujet"
-              value={formatClassificationFilterSummary(
+            >
+              {formatStatusFilterChipLabel(normalizedFilters)}
+            </button>
+            <button
+              type="button"
+              data-filter-kind="classification"
+              aria-pressed={classificationActive}
+              className={filterChipClassName(classificationActive)}
+              onClick={() => setClassificationSheetOpen(true)}
+            >
+              {formatClassificationFilterChipLabel(
                 normalizedFilters,
                 classificationLabels.labelByBusinessUnitId,
                 classificationLabels.labelByActivitySubjectId,
               )}
-              disabled={false}
-              onClick={() => setClassificationSheetOpen(true)}
-            />
+            </button>
+            {showNeedsQualification ? (
+              <button
+                type="button"
+                data-filter-kind="needs-qualification"
+                aria-pressed={normalizedFilters.needsQualification}
+                className={filterChipClassName(normalizedFilters.needsQualification)}
+                onClick={() =>
+                  onFiltersChange(
+                    normalizeSignalFeedFilters({
+                      ...normalizedFilters,
+                      needsQualification: !normalizedFilters.needsQualification,
+                    }),
+                  )
+                }
+              >
+                Non classifié
+              </button>
+            ) : null}
           </div>
+          {showResetControl ? (
+            <button
+              type="button"
+              onClick={onReset}
+              aria-label="Réinitialiser les filtres"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#1B4FD8] transition hover:bg-[#EEF4FF] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30 focus-visible:outline-none"
+            >
+              <RotateCcw className="h-4 w-4" aria-hidden />
+            </button>
+          ) : null}
         </div>
-        {showNeedsQualification ? (
-          <label className="flex min-h-10 items-center gap-2 text-[13px] text-[#1a1a1a]">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border-[#E8E6DF]"
-              checked={normalizedFilters.needsQualification}
-              onChange={(event) =>
-                onFiltersChange(
-                  normalizeSignalFeedFilters({
-                    ...normalizedFilters,
-                    needsQualification: event.target.checked,
-                  }),
-                )
-              }
-            />
-            Non classifié
-          </label>
-        ) : null}
       </div>
 
       {statusSheetOpen ? (
