@@ -122,7 +122,7 @@ describe('shared navigation', () => {
   })
 
   it('keeps Analytics out of the bottom mobile navigation', () => {
-    const itemIds = resolveBottomMobileNavigationItems({ showChat: true }).map((item) => item.id)
+    const itemIds = resolveBottomMobileNavigationItems().map((item) => item.id)
 
     expect(itemIds).toEqual([
       'observations',
@@ -132,6 +132,12 @@ describe('shared navigation', () => {
       'general',
     ])
     expect(itemIds).not.toContain('analytics')
+  })
+
+  it('always includes Chat in the bottom mobile navigation', () => {
+    expect(resolveBottomMobileNavigationItems().map((item) => item.id)).toContain('chat')
+    expect(resolveSharedNavigationItems({ bootstrap: null, showChat: false }).map((item) => item.id))
+      .not.toContain('chat')
   })
 
   it('separates the desktop primary action from sidebar navigation items', () => {

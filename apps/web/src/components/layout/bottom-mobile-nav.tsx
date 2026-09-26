@@ -10,7 +10,6 @@ type BottomMobileNavProps = {
   activePath?: TerrainNavPath
   navigate: (pathname: string, options?: { replace?: boolean }) => void
   className?: string
-  showChat?: boolean
   chatHasUnread?: boolean
 }
 
@@ -20,14 +19,12 @@ export function BottomMobileNav({
   activePath,
   navigate,
   className,
-  showChat = true,
   chatHasUnread = false,
 }: BottomMobileNavProps) {
   const shouldReduceMotion = useReducedMotion()
   const tapProps = terrainTapProps(shouldReduceMotion)
   const NavLink = shouldReduceMotion ? 'a' : MotionA
-  const visibleItems = resolveBottomMobileNavigationItems({ showChat })
-  const columnCount = visibleItems.length
+  const visibleItems = resolveBottomMobileNavigationItems()
 
   return (
     <nav
@@ -39,8 +36,10 @@ export function BottomMobileNav({
       )}
     >
       <ul
-        className="grid h-11 px-2"
-        style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
+        className={cn(
+          'grid h-12 grid-cols-5',
+          'pl-[max(0.5rem,var(--app-safe-left))] pr-[max(0.5rem,var(--app-safe-right))]',
+        )}
       >
         {visibleItems.map((item) => {
           const isActive = activePath != null && activePath === item.path
@@ -72,7 +71,7 @@ export function BottomMobileNav({
           }
 
           return (
-            <li key={item.path} className="flex h-11 items-center justify-center">
+            <li key={item.path} className="flex h-12 items-center justify-center">
               <NavLink
                 href={item.path}
                 aria-current={isActive ? 'page' : undefined}
@@ -81,7 +80,7 @@ export function BottomMobileNav({
                   navigate(item.path)
                 }}
                 className={cn(
-                  'relative flex min-h-11 min-w-11 w-full flex-col items-center justify-center gap-1 rounded-lg px-1 text-[#7D7B75]',
+                  'relative flex min-h-12 min-w-12 w-full flex-col items-center justify-center gap-1 rounded-lg px-1 text-[#7D7B75]',
                   isActive && 'text-[#1B4FD8]',
                 )}
                 {...tapProps}

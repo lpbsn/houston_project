@@ -94,6 +94,26 @@ describe('TerrainTopbar', () => {
     const backButton = screen.getByRole('button', { name: 'Retour' })
     expect(backButton.className).toContain('border-0')
     expect(backButton.className).toContain('focus-visible:ring-0')
+    expect(backButton.className).toContain('min-h-12')
+    expect(backButton.className).toContain('min-w-12')
+  })
+
+  it('applies horizontal safe-area padding on phone chrome only', () => {
+    stubLgViewport(false)
+    const { unmount } = render(
+      <TerrainTopbar variant="detail" title="Observation" onBack={() => undefined} />,
+    )
+    const detailRow = screen.getByRole('banner').firstElementChild
+    expect(detailRow?.className).toContain('pl-[max(1rem,var(--app-safe-left))]')
+    expect(detailRow?.className).toContain('pr-[max(1rem,var(--app-safe-right))]')
+    unmount()
+
+    stubLgViewport(true)
+    render(<TerrainTopbar variant="hub" pageTitle="Observations" />)
+    const hubRow = screen.getByRole('banner').firstElementChild
+    expect(hubRow?.className).toContain('px-3')
+    expect(hubRow?.className).toContain('lg:px-6')
+    expect(hubRow?.className).not.toContain('--app-safe-left')
   })
 
   it('applies desktop height, padding and alignment only on desktop web', () => {

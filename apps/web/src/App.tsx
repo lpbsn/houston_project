@@ -1192,7 +1192,6 @@ function App() {
           route={route}
           mainScroll="auto"
           navigate={navigate}
-          showChatNav={showChatNav}
           chatHasUnread={chatHasUnread}
           onSignOut={handleSignOut}
           isLoggingOut={auth.isLoggingOut}
@@ -1268,7 +1267,6 @@ function App() {
             route={route}
             mainScroll={shellConfig.mainScroll}
             navigate={navigate}
-            showChatNav={showChatNav}
             chatHasUnread={chatHasUnread}
             onSignOut={handleSignOut}
             isLoggingOut={auth.isLoggingOut}

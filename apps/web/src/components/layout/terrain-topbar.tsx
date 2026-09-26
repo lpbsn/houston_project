@@ -62,6 +62,9 @@ export function TerrainTopbar({
     'pt-[max(0.75rem,var(--app-safe-top))]',
     isDesktopWeb && 'pt-0 pb-0',
   )
+  const mobileBackHitboxClass = !isDesktopWeb
+    ? 'min-h-12 min-w-12 items-center justify-center'
+    : undefined
 
   if (variant === 'hub') {
     return (
@@ -75,8 +78,10 @@ export function TerrainTopbar({
       >
         <div
           className={cn(
-            'flex min-h-14 items-center justify-between gap-3 px-3',
-            isDesktopWeb && 'lg:min-h-16 lg:px-6',
+            'flex min-h-14 items-center justify-between gap-3',
+            isDesktopWeb
+              ? 'px-3 lg:min-h-16 lg:px-6'
+              : 'pl-[max(0.75rem,var(--app-safe-left))] pr-[max(0.75rem,var(--app-safe-right))]',
           )}
         >
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
@@ -107,7 +112,13 @@ export function TerrainTopbar({
           !isDesktopWeb && 'pb-3',
         )}
       >
-        <div className={cn('px-4', isDesktopWeb && 'lg:px-6')}>
+        <div
+          className={cn(
+            isDesktopWeb
+              ? 'px-4 lg:px-6'
+              : 'pl-[max(1rem,var(--app-safe-left))] pr-[max(1rem,var(--app-safe-right))]',
+          )}
+        >
           <div
             className={cn(
               'flex items-start justify-between gap-3',
@@ -119,7 +130,7 @@ export function TerrainTopbar({
                 <Button
                   type="button"
                   variant="ghost"
-                  className={terrainBackButtonClassName()}
+                  className={terrainBackButtonClassName(mobileBackHitboxClass)}
                   onClick={onBack}
                 >
                   <ArrowLeft className="mr-1 h-4 w-4" />
@@ -148,15 +159,17 @@ export function TerrainTopbar({
     >
       <div
         className={cn(
-          'flex items-center justify-between gap-3 px-4',
-          isDesktopWeb && 'lg:h-16 lg:px-6',
+          'flex items-center justify-between gap-3',
+          isDesktopWeb
+            ? 'px-4 lg:h-16 lg:px-6'
+            : 'pl-[max(1rem,var(--app-safe-left))] pr-[max(1rem,var(--app-safe-right))]',
         )}
       >
         {onBack ? (
           <Button
             type="button"
             variant="ghost"
-            className={terrainBackButtonClassName()}
+            className={terrainBackButtonClassName(mobileBackHitboxClass)}
             onClick={onBack}
           >
             <ArrowLeft className="mr-1 h-4 w-4" />

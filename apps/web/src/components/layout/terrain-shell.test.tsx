@@ -182,7 +182,6 @@ describe('TerrainShell', () => {
     lgViewportState.current = true
     renderTerrainShell('auto', {
       bootstrap: bootstrap([membership({ role: 'manager' })]),
-      showChatNav: false,
     })
 
     expect(screen.getAllByTestId('terrain-topbar')).toHaveLength(1)
@@ -199,12 +198,23 @@ describe('TerrainShell', () => {
     lgViewportState.current = true
     renderTerrainShell('auto', {
       bootstrap: bootstrap([membership({ role: 'staff' })]),
-      showChatNav: true,
     })
 
     const sidebar = screen.getByLabelText('Navigation principale')
     expect(within(sidebar).queryByRole('link', { name: 'Analyse' })).toBeNull()
     expect(within(sidebar).queryByRole('link', { name: 'Dashboard' })).toBeNull()
+  })
+
+  it('always shows Chat in the mobile bottom nav', () => {
+    renderTerrainShell('auto', {
+      activeNavPath: '/signals',
+      showBottomNav: true,
+    })
+
+    expect(screen.getByRole('link', { name: 'Chat' })).toBeTruthy()
+    const shell = screen.getByRole('main').closest('[data-terrain-shell-root]')
+    expect(shell?.className).not.toContain('app-safe-left')
+    expect(shell?.className).not.toContain('--app-safe-left')
   })
 
   it('keeps bottom navigation on mobile web and hides it on desktop web', () => {
