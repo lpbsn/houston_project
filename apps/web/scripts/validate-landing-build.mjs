@@ -50,16 +50,16 @@ for (const [relativePath, canonical] of Object.entries(expectedCanonicals)) {
   if (!html.includes('rel="canonical"') || !html.includes(needle)) {
     fail(`${relativePath} missing canonical ${canonical}`)
   }
-  if (!html.includes('href="/spore-icon-v3-192.png"')) {
-    fail(`${relativePath} missing href="/spore-icon-v3-192.png"`)
+  if (!html.includes('href="/spore-icon-v4-192.png"')) {
+    fail(`${relativePath} missing href="/spore-icon-v4-192.png"`)
   }
   if (html.includes('/favicon.png')) {
     fail(`${relativePath} must not reference /favicon.png`)
   }
 }
 
-if (!existsSync(resolve(distRoot, 'spore-icon-v3-192.png'))) {
-  fail('missing spore-icon-v3-192.png')
+if (!existsSync(resolve(distRoot, 'spore-icon-v4-192.png'))) {
+  fail('missing spore-icon-v4-192.png')
 }
 if (existsSync(resolve(distRoot, 'favicon.png'))) {
   fail('favicon.png must not exist in dist-landing')
