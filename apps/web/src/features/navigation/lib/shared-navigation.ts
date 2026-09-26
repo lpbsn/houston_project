@@ -151,10 +151,8 @@ export function resolveDesktopNavigation(options: {
   }
 }
 
-export function resolveBottomMobileNavigationItems(options: {
-  showChat: boolean
-}): BottomMobileNavigationItem[] {
-  return resolveSharedNavigationItems({ showChat: options.showChat, bootstrap: null }).filter(
+export function resolveBottomMobileNavigationItems(): BottomMobileNavigationItem[] {
+  return SHARED_NAVIGATION_ITEMS.filter(
     (item): item is BottomMobileNavigationItem =>
       item.mobileBottom && item.path !== '/analytics',
   )

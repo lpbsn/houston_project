@@ -97,7 +97,6 @@ function TerrainUnreadHarness({ queryClient }: { queryClient: QueryClient }) {
         <BottomMobileNav
           activePath="/signals"
           navigate={() => undefined}
-          showChat={true}
           chatHasUnread={chatHasUnread}
         />
       </ChatRealtimeProvider>
@@ -143,7 +142,6 @@ describe('chat terrain unread integration', () => {
       createElement(BottomMobileNav, {
         activePath: '/signals',
         navigate: () => undefined,
-        showChat: true,
         chatHasUnread: hasUnreadConversations(patched?.items ?? []),
       }),
     )

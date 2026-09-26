@@ -28,7 +28,6 @@ type TerrainShellProps = PropsWithChildren<{
   route: AppRoute
   mainScroll?: TerrainMainScroll
   navigate: (pathname: string, options?: { replace?: boolean }) => void
-  showChatNav?: boolean
   chatHasUnread?: boolean
   onSignOut?: () => void
   isLoggingOut?: boolean
@@ -43,7 +42,6 @@ export function TerrainShell({
   route,
   mainScroll = 'auto',
   navigate,
-  showChatNav = true,
   chatHasUnread = false,
   onSignOut,
   isLoggingOut = false,
@@ -118,7 +116,6 @@ export function TerrainShell({
             className="shrink-0"
             activePath={activeNavPath}
             navigate={navigate}
-            showChat={showChatNav}
             chatHasUnread={chatHasUnread}
           />
         ) : null}
