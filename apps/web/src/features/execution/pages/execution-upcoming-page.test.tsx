@@ -72,6 +72,9 @@ function buildUpcomingWrapper(
       last_activity_at: '2026-06-13T12:00:00Z',
       created_at: '2026-06-13T12:00:00Z',
       created_by_display_name: 'Alice Martin',
+      visible_from: null,
+      marked_done_at: null,
+      canceled_at: null,
       is_pinned: false,
       permission_hints: {
         can_mark_done: false,
@@ -177,7 +180,7 @@ describe('ExecutionUpcomingPage', () => {
     Reflect.deleteProperty(window, 'matchMedia')
   })
 
-  it('renders the desktop row with the start date on web lg', () => {
+  it('renders the desktop row with Début/Fin under badges on web lg', () => {
     stubLgViewport(true)
     upcomingQueryMock.mockReturnValue(
       buildUpcomingQueryState({
@@ -200,37 +203,36 @@ describe('ExecutionUpcomingPage', () => {
     renderUpcomingPage()
 
     const openControl = screen.getByRole('button', { name: /Brief journée/ })
-    const actions = screen.getByRole('button', { name: 'Actions du plan d’action' })
-    expect(openControl.contains(actions)).toBe(false)
-    expect(screen.getByText(/^Début : /)).toBeTruthy()
-    expect(screen.queryByText(/Journée entière/)).toBeNull()
-    expect(screen.queryByText('DÉBUT')).toBeNull()
+    const pin = screen.getByRole('button', { name: 'Épingler' })
+    expect(openControl.contains(pin)).toBe(false)
+    expect(screen.getByText('Début')).toBeTruthy()
+    expect(screen.queryByText(/^Début : /)).toBeNull()
+    expect(screen.queryByText(/Échéance/)).toBeNull()
     expect(screen.queryByRole('progressbar')).toBeNull()
     expect(screen.getByText('Alice Martin')).toBeTruthy()
 
-    fireEvent.click(actions)
+    fireEvent.click(pin)
     expect(onOpenActionPlanExecution).not.toHaveBeenCalled()
-    expect(screen.getByRole('menu', { name: 'Actions du plan d’action' })).toBeTruthy()
+    expect(pinControl.pin).toHaveBeenCalledWith('plan-all-day', expect.any(Object))
     expect(screen.queryByRole('dialog', { name: 'Actions' })).toBeNull()
 
     fireEvent.click(openControl)
     expect(onOpenActionPlanExecution).toHaveBeenCalledWith('plan-all-day')
   })
 
-  it('closes the desktop pin menu after a successful pin of the opened row', async () => {
+  it('pins successfully from the desktop upcoming row control', async () => {
     stubLgViewport(true)
     renderUpcomingPage()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Actions du plan d’action' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Épingler' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Épingler' }))
 
     expect(pinControl.pin).toHaveBeenCalledWith('plan-scheduled', expect.any(Object))
     await waitFor(() => {
-      expect(screen.queryByRole('menu', { name: 'Actions du plan d’action' })).toBeNull()
+      expect(screen.queryByText('Épinglage impossible.')).toBeNull()
     })
   })
 
-  it('keeps the desktop pin menu open with the error, then clears it on another row', () => {
+  it('shows a pin error on desktop upcoming, then clears it after a successful pin', () => {
     stubLgViewport(true)
     pinControl.failPin = true
     upcomingQueryMock.mockReturnValue(
@@ -251,18 +253,14 @@ describe('ExecutionUpcomingPage', () => {
     )
     renderUpcomingPage()
 
-    const [firstActions, secondActions] = screen.getAllByRole('button', {
-      name: 'Actions du plan d’action',
-    })
-    fireEvent.click(firstActions)
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Épingler' }))
+    const [firstPin, secondPin] = screen.getAllByRole('button', { name: 'Épingler' })
+    fireEvent.click(firstPin)
 
-    expect(screen.getByRole('alert').textContent).toBe('Épinglage impossible.')
-    expect(screen.getByRole('menu', { name: 'Actions du plan d’action' })).toBeTruthy()
+    expect(screen.getByText('Épinglage impossible.')).toBeTruthy()
 
-    fireEvent.click(secondActions)
-    expect(screen.queryByRole('alert')).toBeNull()
-    expect(screen.getByRole('menu', { name: 'Actions du plan d’action' })).toBeTruthy()
+    pinControl.failPin = false
+    fireEvent.click(secondPin)
+    expect(screen.queryByText('Épinglage impossible.')).toBeNull()
   })
 
   it('keeps the scheduled card and the actions sheet outside desktop web', () => {
@@ -270,15 +268,14 @@ describe('ExecutionUpcomingPage', () => {
     renderUpcomingPage()
 
     const openControl = screen.getByRole('button', { name: /Plan programmé/ })
-    const actions = screen.getByRole('button', { name: 'Actions du plan d’action' })
-    expect(openControl.contains(actions)).toBe(true)
-    expect(screen.getByText('DÉBUT')).toBeTruthy()
+    const pin = screen.getByRole('button', { name: 'Épingler' })
+    expect(openControl.contains(pin)).toBe(true)
+    expect(screen.getByText(/Début/)).toBeTruthy()
     expect(screen.queryByText(/^Début : /)).toBeNull()
 
-    fireEvent.click(actions)
+    fireEvent.click(pin)
     expect(onOpenActionPlanExecution).not.toHaveBeenCalled()
-    expect(screen.getByRole('dialog', { name: 'Actions' })).toBeTruthy()
-    expect(screen.queryByRole('menu', { name: 'Actions du plan d’action' })).toBeNull()
+    expect(screen.queryByRole('dialog', { name: 'Actions' })).toBeNull()
   })
 
   it('keeps the scheduled card on a large native viewport', () => {
@@ -287,11 +284,10 @@ describe('ExecutionUpcomingPage', () => {
     renderUpcomingPage()
 
     const openControl = screen.getByRole('button', { name: /Plan programmé/ })
-    const actions = screen.getByRole('button', { name: 'Actions du plan d’action' })
-    expect(openControl.contains(actions)).toBe(true)
-    expect(screen.getByText('DÉBUT')).toBeTruthy()
-    fireEvent.click(actions)
-    expect(screen.getByRole('dialog', { name: 'Actions' })).toBeTruthy()
-    expect(screen.queryByRole('menu', { name: 'Actions du plan d’action' })).toBeNull()
+    const pin = screen.getByRole('button', { name: 'Épingler' })
+    expect(openControl.contains(pin)).toBe(true)
+    expect(screen.getByText(/Début/)).toBeTruthy()
+    fireEvent.click(pin)
+    expect(screen.queryByRole('dialog', { name: 'Actions' })).toBeNull()
   })
 })

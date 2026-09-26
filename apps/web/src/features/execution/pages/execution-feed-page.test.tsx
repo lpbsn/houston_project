@@ -19,6 +19,7 @@ import { ExecutionFeedPage } from './execution-feed-page'
 const planFetchNextPage = vi.fn()
 const planFeedQueryMock = vi.fn()
 const calendarQueryMock = vi.fn()
+const upcomingQueryMock = vi.fn()
 const executionNavigate = vi.fn()
 const permissionHintsHolder = vi.hoisted(() => ({
   value: {} as {
@@ -69,6 +70,7 @@ function buildPlanFeedWrapper(
       status: 'in_progress',
       requires_validation: false,
       validated_at: null,
+      validated_by_display_name: null,
       pilot_business_unit: { id: 'bu-1', specific_name: 'Restaurant', instance_description: '', active: true, generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' } },
       involved_poles: [],
       signal_summary: null,
@@ -76,6 +78,7 @@ function buildPlanFeedWrapper(
       start_at: null,
       end_at: null,
       all_day: false,
+      visible_from: null,
       is_overdue: false,
       task_count: 0,
       treated_task_count: 0,
@@ -83,6 +86,10 @@ function buildPlanFeedWrapper(
       last_activity_at: '2026-06-13T12:00:00Z',
       created_at: '2026-06-13T12:00:00Z',
       created_by_display_name: 'Alice Martin',
+      marked_done_at: null,
+      marked_done_by_display_name: null,
+      canceled_at: null,
+      active_review: null,
       is_pinned: false,
       permission_hints: {
         can_mark_done: true,
@@ -98,8 +105,49 @@ function buildPlanFeedWrapper(
   }
 }
 
+function deriveSectionCountsFromWrappers(
+  items: ActionPlanExecutionFeedItemWrapper[],
+): {
+  pinned: number
+  pending_validation: number
+  overdue: number
+  in_progress: number
+  done: number
+  canceled: number
+} {
+  const counts = {
+    pinned: 0,
+    pending_validation: 0,
+    overdue: 0,
+    in_progress: 0,
+    done: 0,
+    canceled: 0,
+  }
+  for (const wrapper of items) {
+    const item = wrapper.action_plan_execution
+    if (item.is_pinned) {
+      counts.pinned += 1
+      continue
+    }
+    if (item.status === 'pending_validation') {
+      counts.pending_validation += 1
+    } else if (item.status === 'in_progress') {
+      if (item.is_overdue) {
+        counts.overdue += 1
+      } else {
+        counts.in_progress += 1
+      }
+    } else if (item.status === 'done') {
+      counts.done += 1
+    } else if (item.status === 'canceled') {
+      counts.canceled += 1
+    }
+  }
+  return counts
+}
+
 function buildPlanFeedQueryState(overrides: Record<string, unknown> = {}) {
-  return {
+  const base = {
     isLoading: false,
     isError: false,
     isSuccess: true,
@@ -108,10 +156,46 @@ function buildPlanFeedQueryState(overrides: Record<string, unknown> = {}) {
     fetchNextPage: planFetchNextPage,
     refetch: vi.fn(),
     data: {
-      pages: [{ items: [], next_cursor: null, has_more: false }],
+      pages: [
+        {
+          items: [],
+          scheduled_items: [],
+          scheduled_count: 0,
+          section_counts: {
+            pinned: 0,
+            pending_validation: 0,
+            overdue: 0,
+            in_progress: 0,
+            done: 0,
+            canceled: 0,
+          },
+          next_cursor: null,
+          has_more: false,
+        },
+      ],
     },
-    ...overrides,
   }
+  const merged = { ...base, ...overrides } as typeof base & Record<string, unknown>
+  const data = merged.data as
+    | {
+        pages?: Array<{
+          items?: ActionPlanExecutionFeedItemWrapper[]
+          section_counts?: ReturnType<typeof deriveSectionCountsFromWrappers>
+          [key: string]: unknown
+        }>
+      }
+    | undefined
+  if (data?.pages) {
+    merged.data = {
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        section_counts:
+          page.section_counts ?? deriveSectionCountsFromWrappers(page.items ?? []),
+      })),
+    }
+  }
+  return merged
 }
 
 vi.mock('@/app/auth-provider', () => ({
@@ -132,6 +216,11 @@ vi.mock('@/features/auth/lib/bootstrap-permission-hints', () => ({
 vi.mock('@/features/action-plans/hooks', () => ({
   useActionPlanExecutionFeedQuery: () => planFeedQueryMock(),
   useActionPlanExecutionCalendarQuery: () => calendarQueryMock(),
+  useActionPlanExecutionUpcomingQuery: (
+    _establishmentId: string | null | undefined,
+    _viewMode: string,
+    options?: { enabled?: boolean; pageSize?: number; source?: string },
+  ) => upcomingQueryMock(options),
   usePinActionPlanExecutionMutation: () => ({
     mutate: pinControl.pin,
     isPending: false,
@@ -230,10 +319,36 @@ describe('ExecutionFeedPage plan feed', () => {
     serializeAppRouteMockPath = '/execution'
     planFeedQueryMock.mockReturnValue(buildPlanFeedQueryState())
     calendarQueryMock.mockReturnValue(buildCalendarQueryState())
+    upcomingQueryMock.mockImplementation((options?: { enabled?: boolean; pageSize?: number }) => ({
+      isLoading: false,
+      isError: false,
+      isSuccess: Boolean(options?.enabled),
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+      refetch: vi.fn(),
+      data: options?.enabled
+        ? {
+            pages: [
+              {
+                items: [
+                  buildPlanFeedWrapper('plan-upcoming-1', 'Plan à venir lazy', {
+                    status: 'scheduled',
+                    start_at: '2026-07-13T12:00:00Z',
+                  }),
+                ],
+                next_cursor: null,
+                has_more: false,
+              },
+            ],
+          }
+        : undefined,
+    }))
     permissionHintsHolder.value = {}
     pinControl.failPin = false
     pinControl.pin.mockClear()
     pinControl.unpin.mockClear()
+    upcomingQueryMock.mockClear()
     clearExecutionFeedReadingMemory()
   })
 
@@ -301,7 +416,7 @@ describe('ExecutionFeedPage plan feed', () => {
 
     renderExecutionFeedPage()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Charger plus' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Afficher plus' }))
     expect(planFetchNextPage).toHaveBeenCalledTimes(1)
   })
 
@@ -335,6 +450,42 @@ describe('ExecutionFeedPage plan feed', () => {
     renderExecutionFeedPage()
 
     expect(screen.getByText('Aucune exécution')).toBeTruthy()
+  })
+
+  it('shows section headers from section_counts before matching items are loaded', () => {
+    planFeedQueryMock.mockReturnValue(
+      buildPlanFeedQueryState({
+        hasNextPage: true,
+        data: {
+          pages: [
+            {
+              items: [buildPlanFeedWrapper('plan-active', 'Plan actif')],
+              scheduled_items: [],
+              scheduled_count: 0,
+              section_counts: {
+                pinned: 0,
+                pending_validation: 0,
+                overdue: 0,
+                in_progress: 1,
+                done: 4,
+                canceled: 0,
+              },
+              next_cursor: 'cursor-1',
+              has_more: true,
+            },
+          ],
+        },
+      }),
+    )
+
+    renderExecutionFeedPage()
+
+    expect(screen.getByRole('button', { name: 'Replier la section En cours' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Déplier la section Terminés' })).toBeTruthy()
+    expect(screen.getByText('Plan actif')).toBeTruthy()
+    expect(screen.queryByText('Aucune exécution')).toBeNull()
+    expect(screen.queryByText(/aucun terminé/i)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Afficher plus' })).toBeTruthy()
   })
 
   it('renders pinned items before section labels', () => {
@@ -462,7 +613,7 @@ describe('ExecutionFeedPage plan feed', () => {
     expect(screen.getByRole('button', { name: 'Chargement…' })).toBeTruthy()
   })
 
-  it('renders À venir with scheduled_count and does not merge Planifiées into the list', () => {
+  it('renders Planifiés on mobile without À venir nav', () => {
     const onNavigate = vi.fn()
     planFeedQueryMock.mockReturnValue(
       buildPlanFeedQueryState({
@@ -496,16 +647,16 @@ describe('ExecutionFeedPage plan feed', () => {
 
     renderExecutionFeedPage({ onNavigate })
 
-    expect(screen.getByRole('button', { name: 'À venir, 4' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Replier la section Planifiées' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Déplier la section Planifiées' })).toBeNull()
-    expect(screen.queryByText('Plan programmé')).toBeNull()
-
-    fireEvent.click(screen.getByRole('button', { name: 'À venir, 4' }))
+    expect(screen.queryByRole('button', { name: 'À venir, 4' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /section Planifiées/ })).toBeNull()
+    const planifiees = screen.getByRole('button', { name: 'Planifiés, 4' })
+    expect(planifiees).toBeTruthy()
+    expect(screen.getByText(/Prochaine :/)).toBeTruthy()
+    fireEvent.click(planifiees)
     expect(onNavigate).toHaveBeenCalledWith('/execution/upcoming')
   })
 
-  it('keeps À venir nav with count 0 when feed and scheduled preview are empty', () => {
+  it('keeps empty state without À venir on mobile when nothing is scheduled', () => {
     const onNavigate = vi.fn()
     planFeedQueryMock.mockReturnValue(
       buildPlanFeedQueryState({
@@ -526,12 +677,8 @@ describe('ExecutionFeedPage plan feed', () => {
     renderExecutionFeedPage({ onNavigate })
 
     expect(screen.getByText('Aucune exécution')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'À venir, 0' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Replier la section Planifiées' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Déplier la section Planifiées' })).toBeNull()
-
-    fireEvent.click(screen.getByRole('button', { name: 'À venir, 0' }))
-    expect(onNavigate).toHaveBeenCalledWith('/execution/upcoming')
+    expect(screen.queryByRole('button', { name: /À venir/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Planifiés/ })).toBeNull()
   })
 
   it('switches from list to calendar via URL state', () => {
@@ -882,38 +1029,38 @@ describe('ExecutionFeedPage desktop list', () => {
     )
   }
 
-  it('opens an anchored menu without opening the detail on desktop web', () => {
+  it('pins from the direct control without opening the detail on desktop web', () => {
     stubLgViewport(true)
     showOperationalFeed()
     renderExecutionFeedPage()
 
     const openControl = screen.getByRole('button', { name: /Plan actif/ })
-    const actions = screen.getByRole('button', { name: 'Actions du plan d’action' })
-    expect(openControl.contains(actions)).toBe(false)
-    fireEvent.click(actions)
+    const pin = screen.getByRole('button', { name: 'Épingler' })
+    expect(openControl.contains(pin)).toBe(false)
+    fireEvent.click(pin)
     expect(executionNavigate).not.toHaveBeenCalled()
-    expect(screen.getByRole('menu', { name: 'Actions du plan d’action' })).toBeTruthy()
+    expect(pinControl.pin).toHaveBeenCalledWith('plan-active', expect.any(Object))
     expect(screen.queryByRole('dialog', { name: 'Actions' })).toBeNull()
+    expect(screen.queryByRole('menu', { name: 'Actions du plan d’action' })).toBeNull()
     expect(screen.queryByRole('progressbar')).toBeNull()
     expect(screen.queryByText(/Tâches complétées/)).toBeNull()
     expect(screen.getByText('Alice Martin')).toBeTruthy()
   })
 
-  it('closes the desktop pin menu after a successful pin of the opened row', async () => {
+  it('pins successfully from the desktop row control', async () => {
     stubLgViewport(true)
     showOperationalFeed()
     renderExecutionFeedPage()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Actions du plan d’action' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Épingler' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Épingler' }))
 
     expect(pinControl.pin).toHaveBeenCalledWith('plan-active', expect.any(Object))
     await waitFor(() => {
-      expect(screen.queryByRole('menu', { name: 'Actions du plan d’action' })).toBeNull()
+      expect(screen.queryByRole('alert')).toBeNull()
     })
   })
 
-  it('keeps the desktop pin menu open with the error, then clears it on another row', () => {
+  it('shows a pin error on desktop, then clears it after a successful pin on another row', () => {
     stubLgViewport(true)
     pinControl.failPin = true
     planFeedQueryMock.mockReturnValue(
@@ -937,32 +1084,28 @@ describe('ExecutionFeedPage desktop list', () => {
     )
     renderExecutionFeedPage()
 
-    const [firstActions, secondActions] = screen.getAllByRole('button', {
-      name: 'Actions du plan d’action',
-    })
-    fireEvent.click(firstActions)
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Épingler' }))
+    const [firstPin, secondPin] = screen.getAllByRole('button', { name: 'Épingler' })
+    fireEvent.click(firstPin)
 
-    expect(screen.getByRole('alert').textContent).toBe('Épinglage impossible.')
-    expect(screen.getByRole('menu', { name: 'Actions du plan d’action' })).toBeTruthy()
+    expect(screen.getByText('Épinglage impossible.')).toBeTruthy()
 
-    fireEvent.click(secondActions)
-    expect(screen.queryByRole('alert')).toBeNull()
-    expect(screen.getByRole('menu', { name: 'Actions du plan d’action' })).toBeTruthy()
+    pinControl.failPin = false
+    fireEvent.click(secondPin)
+    expect(screen.queryByText('Épinglage impossible.')).toBeNull()
   })
 
-  it('keeps the card and the actions sheet on a large native viewport', () => {
+  it('keeps the card and pin control on a large native viewport', () => {
     vi.stubEnv('VITE_APP_RUNTIME', 'native')
     stubLgViewport(true)
     showOperationalFeed()
     renderExecutionFeedPage()
 
     const openControl = screen.getByRole('button', { name: /Plan actif/ })
-    const actions = screen.getByRole('button', { name: 'Actions du plan d’action' })
-    expect(openControl.contains(actions)).toBe(true)
-    fireEvent.click(actions)
+    const pin = screen.getByRole('button', { name: 'Épingler' })
+    expect(openControl.contains(pin)).toBe(true)
+    fireEvent.click(pin)
     expect(executionNavigate).not.toHaveBeenCalled()
-    expect(screen.getByRole('dialog', { name: 'Actions' })).toBeTruthy()
+    expect(screen.queryByRole('dialog', { name: 'Actions' })).toBeNull()
     expect(screen.queryByRole('menu', { name: 'Actions du plan d’action' })).toBeNull()
   })
 
@@ -982,6 +1125,70 @@ describe('ExecutionFeedPage desktop list', () => {
 
     fireEvent.click(screen.getByRole('button', { name: "Créer un plan d'action" }))
     expect(onNavigate).toHaveBeenCalledWith('/action-plans/new?from=execution')
+  })
+
+  it('keeps a compact mobile create control and tight list/calendar toolbar padding', () => {
+    stubLgViewport(false)
+    permissionHintsHolder.value = {
+      can_create_action_plan: true,
+      can_view_action_plan_catalog: true,
+    }
+    renderExecutionFeedPage()
+
+    const createButton = screen.getByRole('button', { name: 'Créer' })
+    expect(createButton.className).toContain('size-11')
+    expect(createButton.className).toContain('-m-2')
+    expect(createButton.className).toContain('bg-transparent')
+    const visualDisc = createButton.querySelector('span')
+    expect(visualDisc?.className).toContain('size-7')
+    expect(visualDisc?.className).toContain('bg-[#114660]')
+    expect(createButton.querySelector('svg')?.classList.toString()).toContain('size-3.5')
+
+    const layoutTabs = screen.getByRole('tablist', { name: 'Disposition du feed' })
+    const toolbar = layoutTabs.parentElement?.parentElement
+    expect(toolbar?.className).toContain('pt-0')
+    expect(toolbar?.className).toContain('pb-0.5')
+    expect(toolbar?.className).not.toContain('pt-0.5')
+    expect(toolbar?.className).not.toContain('pb-1.5')
+  })
+
+  it('navigates from Planifiés compact row for the same scope', () => {
+    stubLgViewport(false)
+    const onNavigate = vi.fn()
+    const scopeKey = executionFeedReadingScopeKey('establishment', 'est-1')
+    planFeedQueryMock.mockReturnValue(
+      buildPlanFeedQueryState({
+        data: {
+          pages: [
+            {
+              items: [buildPlanFeedWrapper('plan-active', 'Plan actif')],
+              scheduled_items: [
+                buildPlanFeedWrapper('plan-scheduled', 'Plan programmé', {
+                  status: 'scheduled',
+                  start_at: '2026-07-13T12:00:00Z',
+                }),
+              ],
+              scheduled_count: 2,
+              section_counts: {
+                pinned: 0,
+                pending_validation: 0,
+                overdue: 0,
+                in_progress: 1,
+                done: 0,
+                canceled: 0,
+              },
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+
+    renderExecutionFeedPage({ establishmentId: 'est-1', onNavigate })
+    fireEvent.click(screen.getByRole('button', { name: 'Planifiés, 2' }))
+    expect(onNavigate).toHaveBeenCalledWith('/execution/upcoming')
+    expect(readExecutionFeedReading(scopeKey)).toBeTruthy()
   })
 
   it('restores the open section and scroll after an internal remount of the same scope', () => {

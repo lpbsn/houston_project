@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  formatActionPlanFeedCardStatusLabel,
   formatActionPlanFeedMetaParts,
+  formatActionPlanFeedOtherPolesCountLabel,
   formatActionPlanFeedStartCountdownValue,
   formatActionPlanFeedTaskProgressLabel,
   getActionPlanFeedProgressState,
@@ -282,5 +284,35 @@ describe('formatActionPlanFeedMetaParts', () => {
 
     expect(parts.deadlineLabel).toBeNull()
     expect(parts.taskProgressLabel).toBeNull()
+  })
+})
+
+describe('formatActionPlanFeedCardStatusLabel', () => {
+  it('uses masculine Validé and Planifié feed labels', () => {
+    expect(
+      formatActionPlanFeedCardStatusLabel({
+        status: 'done',
+        validated_at: '2026-07-09T10:00:00Z',
+      }),
+    ).toBe('Validé')
+    expect(formatActionPlanFeedCardStatusLabel({ status: 'done', validated_at: null })).toBe(
+      'Terminé',
+    )
+    expect(
+      formatActionPlanFeedCardStatusLabel({ status: 'scheduled', validated_at: null }),
+    ).toBe('Planifié')
+    expect(
+      formatActionPlanFeedCardStatusLabel({
+        status: 'pending_validation',
+        validated_at: null,
+      }),
+    ).toBe('À valider')
+  })
+})
+
+describe('formatActionPlanFeedOtherPolesCountLabel', () => {
+  it('singularizes one other pole and pluralizes the rest', () => {
+    expect(formatActionPlanFeedOtherPolesCountLabel(1)).toBe('+1 pôle')
+    expect(formatActionPlanFeedOtherPolesCountLabel(2)).toBe('+2 pôles')
   })
 })

@@ -100,6 +100,14 @@ def test_action_plan_execution_feed_item_contract(
     assert "scheduled_count" in body
     assert body["scheduled_count"] == 0
     assert body["scheduled_items"] == []
+    assert body["section_counts"] == {
+        "pinned": 0,
+        "pending_validation": 0,
+        "overdue": 0,
+        "in_progress": 1,
+        "done": 0,
+        "canceled": 0,
+    }
     item = body["items"][0]
     assert item["item_type"] == "action_plan_execution"
     payload = item["action_plan_execution"]
@@ -115,6 +123,96 @@ def test_action_plan_execution_feed_item_contract(
     assert payload["treated_task_count"] == 0
     assert payload["created_by_display_name"]
     assert "start_at" in payload
+    assert "visible_from" in payload
+    assert "marked_done_at" in payload
+    assert "marked_done_by_display_name" in payload
+    assert "validated_by_display_name" in payload
+    assert "active_review" in payload
+    assert "canceled_at" in payload
+
+
+def test_feed_section_counts_partition_pinned_and_overdue(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    from houston.action_plans.feed_pin_services import pin_action_plan_execution_for_membership
+    from houston.action_plans.models import ActionPlanExecutionReview
+
+    now = timezone.now()
+    pending = create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Pending",
+        status=EXECUTION_STATUS_PENDING_VALIDATION,
+        requires_validation=True,
+    )
+    pending.marked_done_at = now - timezone.timedelta(hours=1)
+    pending.marked_done_by_membership = owner_membership
+    pending.save(
+        update_fields=["marked_done_at", "marked_done_by_membership", "updated_at"],
+    )
+    overdue = create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Overdue",
+        status=EXECUTION_STATUS_IN_PROGRESS,
+        end_at=now - timezone.timedelta(hours=2),
+    )
+    active = create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Active",
+        status=EXECUTION_STATUS_IN_PROGRESS,
+        end_at=now + timezone.timedelta(hours=2),
+    )
+    done = create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Done validated",
+        status=EXECUTION_STATUS_DONE,
+    )
+    done.validated_at = now - timezone.timedelta(minutes=30)
+    done.validated_by_membership = owner_membership
+    done.save(
+        update_fields=["validated_at", "validated_by_membership", "updated_at"],
+    )
+    ActionPlanExecutionReview.objects.create(
+        action_plan_execution=done,
+        reviewer_membership=owner_membership,
+        stars=4,
+        comment="",
+        reviewed_at=now - timezone.timedelta(minutes=30),
+        is_active=True,
+    )
+    pin_action_plan_execution_for_membership(
+        membership=owner_membership,
+        execution_id=active.id,
+    )
+
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id) + feed_query("general"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["section_counts"] == {
+        "pinned": 1,
+        "pending_validation": 1,
+        "overdue": 1,
+        "in_progress": 0,
+        "done": 1,
+        "canceled": 0,
+    }
+    by_id = {
+        item["action_plan_execution"]["id"]: item["action_plan_execution"]
+        for item in body["items"]
+    }
+    assert by_id[str(pending.id)]["marked_done_by_display_name"]
+    assert by_id[str(done.id)]["validated_by_display_name"]
+    assert by_id[str(done.id)]["active_review"] == {"stars": 4, "comment": ""}
+    assert overdue.id  # used for overdue count
 
 
 def test_action_plan_execution_feed_item_task_counts(
@@ -1663,6 +1761,7 @@ def test_scheduled_preview_and_upcoming_ignore_cursor_saturation(
     ]
     assert scheduled_preview_ids == [
         str(visible_scheduled.id),
+        str(hidden_scheduled.id),
         str(null_visible_scheduled.id),
     ]
     assert feed_body["scheduled_items"][0]["action_plan_execution"]["permission_hints"][
@@ -1678,11 +1777,7 @@ def test_scheduled_preview_and_upcoming_ignore_cursor_saturation(
     upcoming_ids = [
         item["action_plan_execution"]["id"] for item in upcoming.json()["items"]
     ]
-    assert upcoming_ids == [
-        str(visible_scheduled.id),
-        str(hidden_scheduled.id),
-        str(null_visible_scheduled.id),
-    ]
+    assert upcoming_ids == scheduled_preview_ids
 
 
 def test_scheduled_visible_from_gates_feed_and_upcoming(
@@ -1752,8 +1847,10 @@ def test_scheduled_visible_from_gates_feed_and_upcoming(
     assert str(null_visible.id) not in feed_item_ids
     assert str(null_visible.id) in scheduled_preview_ids
     assert str(future_visible.id) not in feed_item_ids
-    assert str(future_visible.id) not in scheduled_preview_ids
+    assert str(future_visible.id) in scheduled_preview_ids
     assert str(reached.id) in scheduled_preview_ids
+    assert feed_body["scheduled_count"] == 3
+    assert feed_body["scheduled_items"][0]["action_plan_execution"]["id"] == str(reached.id)
 
     upcoming = api_client.get(
         action_plan_execution_upcoming_url(owner_membership.establishment_id)
@@ -1764,6 +1861,7 @@ def test_scheduled_visible_from_gates_feed_and_upcoming(
     upcoming_ids = {
         item["action_plan_execution"]["id"] for item in upcoming.json()["items"]
     }
+    assert upcoming_ids == scheduled_preview_ids
     assert str(null_visible.id) in upcoming_ids
     assert str(future_visible.id) in upcoming_ids
     assert str(reached.id) in upcoming_ids

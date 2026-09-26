@@ -1,11 +1,15 @@
 import type { TerrainSectionDotVariant } from '@/lib/terrain-styles'
 
-import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
+import type {
+  ActionPlanExecutionFeedItem,
+  ActionPlanExecutionFeedSectionCounts,
+} from '@/features/action-plans/types'
 
+/** UI section keys for the shared feed grouping (overdue is not a business status). */
 export type ActionPlanExecutionFeedSectionKey =
   | 'pending_validation'
+  | 'overdue'
   | 'in_progress'
-  | 'scheduled'
   | 'done'
   | 'canceled'
 
@@ -16,21 +20,27 @@ export type ActionPlanExecutionFeedSectionGroup = {
   items: ActionPlanExecutionFeedItem[]
 }
 
-const SECTION_ORDER: ActionPlanExecutionFeedSectionKey[] = [
+export const EXECUTION_FEED_PINNED_SECTION_KEY = 'pinned' as const
+
+export const EXECUTION_FEED_DEFAULT_COLLAPSED_SECTIONS = ['done', 'canceled'] as const
+
+export const EXECUTION_FEED_SECTION_ORDER: ActionPlanExecutionFeedSectionKey[] = [
   'pending_validation',
+  'overdue',
   'in_progress',
-  'scheduled',
   'done',
   'canceled',
 ]
+
+const SECTION_ORDER = EXECUTION_FEED_SECTION_ORDER
 
 const SECTION_META: Record<
   ActionPlanExecutionFeedSectionKey,
   { label: string; dotVariant: TerrainSectionDotVariant }
 > = {
   pending_validation: { label: 'À valider', dotVariant: 'warning' },
+  overdue: { label: 'En retard', dotVariant: 'warning' },
   in_progress: { label: 'En cours', dotVariant: 'teal' },
-  scheduled: { label: 'Planifiées', dotVariant: 'brown' },
   done: { label: 'Terminés', dotVariant: 'success' },
   canceled: { label: 'Annulés', dotVariant: 'muted' },
 }
@@ -42,9 +52,7 @@ export function getActionPlanExecutionFeedSection(
     case 'pending_validation':
       return 'pending_validation'
     case 'in_progress':
-      return 'in_progress'
-    case 'scheduled':
-      return 'scheduled'
+      return item.is_overdue ? 'overdue' : 'in_progress'
     case 'done':
       return 'done'
     case 'canceled':
@@ -74,8 +82,14 @@ export function partitionActionPlanExecutionFeedPinnedItems(
   return { pinnedItems, unpinnedItems }
 }
 
+/**
+ * Builds feed section groups. Section presence is driven only by server
+ * `section_counts` (> 0), not by how many matching items are already loaded.
+ * Loaded items fill each section; empty `items` means “not yet paginated in”.
+ */
 export function groupActionPlanExecutionsBySection(
   items: ActionPlanExecutionFeedItem[],
+  sectionCounts: Pick<ActionPlanExecutionFeedSectionCounts, ActionPlanExecutionFeedSectionKey>,
 ): ActionPlanExecutionFeedSectionGroup[] {
   const buckets = new Map<ActionPlanExecutionFeedSectionKey, ActionPlanExecutionFeedItem[]>()
 
@@ -93,16 +107,24 @@ export function groupActionPlanExecutionsBySection(
   }
 
   return SECTION_ORDER.flatMap((section) => {
-    const sectionItems = buckets.get(section)
-    if (!sectionItems || sectionItems.length === 0) {
+    if (sectionCounts[section] <= 0) {
       return []
     }
     return [
       {
         section,
         ...SECTION_META[section],
-        items: sectionItems,
+        items: buckets.get(section) ?? [],
       },
     ]
   })
+}
+
+export function hasActionPlanExecutionFeedSections(
+  sectionCounts: ActionPlanExecutionFeedSectionCounts,
+): boolean {
+  if (sectionCounts.pinned > 0) {
+    return true
+  }
+  return SECTION_ORDER.some((section) => sectionCounts[section] > 0)
 }

@@ -56,7 +56,10 @@ from houston.action_plans.exceptions import (
     PlanningSubmissionItemError,
     PlanningSubmissionPayloadConflict,
 )
-from houston.action_plans.execution_feed import build_action_plan_execution_feed_page
+from houston.action_plans.execution_feed import (
+    EMPTY_SECTION_COUNTS,
+    build_action_plan_execution_feed_page,
+)
 from houston.action_plans.execution_update import update_action_plan_execution
 from houston.action_plans.feed_cursor import (
     ActionPlanExecutionFeedCursorError,
@@ -1572,6 +1575,7 @@ class ActionPlanExecutionFeedView(EstablishmentScopedActionPlanMixin, APIView):
             as_of,
             scheduled_executions,
             scheduled_count,
+            section_counts,
         ) = build_action_plan_execution_feed_page(
             membership=membership,
             view_mode=view_mode,  # type: ignore[arg-type]
@@ -1608,6 +1612,7 @@ class ActionPlanExecutionFeedView(EstablishmentScopedActionPlanMixin, APIView):
             "items": serialized_items,
             "scheduled_items": serialized_scheduled,
             "scheduled_count": scheduled_count,
+            "section_counts": section_counts,
             "next_cursor": next_cursor,
             "has_more": has_more,
         }
@@ -1727,27 +1732,18 @@ class ActionPlanExecutionCalendarView(EstablishmentScopedActionPlanMixin, APIVie
 
 
 def _encode_upcoming_cursor(*, start_at, execution_id) -> str:
-    import base64
-    import json
+    from houston.action_plans.upcoming_feed import encode_upcoming_cursor
 
-    payload = {"start_at": start_at.isoformat(), "id": str(execution_id)}
-    return base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8")).decode("ascii")
+    return encode_upcoming_cursor(start_at=start_at, execution_id=execution_id)
 
 
 def _parse_upcoming_cursor(raw: str | None):
-    import base64
-    import json
-    from datetime import datetime
+    from houston.action_plans.upcoming_feed import parse_upcoming_cursor
 
-    if raw is None or raw == "":
-        return None, None
     try:
-        payload = json.loads(base64.urlsafe_b64decode(raw.encode("ascii")).decode("utf-8"))
-        start_at = datetime.fromisoformat(payload["start_at"])
-        execution_id = uuid.UUID(payload["id"])
-        return start_at, execution_id
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
-        raise ActionPlanExecutionFeedCursorError("Invalid cursor.") from None
+        return parse_upcoming_cursor(raw)
+    except ValueError as exc:
+        raise ActionPlanExecutionFeedCursorError("Invalid cursor.") from exc
 
 
 class ActionPlanExecutionUpcomingView(EstablishmentScopedActionPlanMixin, APIView):
@@ -1840,6 +1836,7 @@ class ActionPlanExecutionUpcomingView(EstablishmentScopedActionPlanMixin, APIVie
             "items": serialized_items,
             "scheduled_items": [],
             "scheduled_count": 0,
+            "section_counts": dict(EMPTY_SECTION_COUNTS),
             "next_cursor": next_cursor,
             "has_more": has_more,
         }

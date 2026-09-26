@@ -50,6 +50,8 @@ export type ActionPlanExecutionFeedItem = components['schemas']['ActionPlanExecu
 export type ActionPlanExecutionFeedItemWrapper =
   components['schemas']['ActionPlanExecutionFeedItemWrapper']
 export type ActionPlanExecutionFeedResponse = components['schemas']['ActionPlanExecutionFeedResponse']
+export type ActionPlanExecutionFeedSectionCounts =
+  components['schemas']['ActionPlanExecutionFeedSectionCounts']
 /** Upcoming list reuses the feed response envelope (items + cursor pagination). */
 export type ActionPlanExecutionUpcomingResponse = ActionPlanExecutionFeedResponse
 export type ActionPlanExecutionCalendarResponse =

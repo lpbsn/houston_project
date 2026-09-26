@@ -869,6 +869,15 @@ function App() {
       )
     }
 
+    if (route.path === '/cross/execution/upcoming') {
+      return (
+        <LazyExecutionUpcomingPage
+          source="cross"
+          onOpenActionPlanExecution={(id) => navigate(`/cross/execution/${id}`)}
+        />
+      )
+    }
+
     if (route.path === '/chat') {
       return (
         <LazyChatPage onOpenConversation={(conversationId) => navigate(`/chat/${conversationId}`)} />

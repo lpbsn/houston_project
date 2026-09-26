@@ -88,6 +88,7 @@ describe('usesTerrainShell', () => {
       pageTitle: 'Configuration opérationnelle',
       showBottomNav: false,
       mainScroll: 'auto',
+      showTopbarBottomBorder: false,
     })
   })
 
@@ -114,6 +115,7 @@ describe('getTerrainRouteConfig', () => {
       showBottomNav: true,
       activeNavPath: '/signals',
       mainScroll: 'hidden',
+      showTopbarBottomBorder: false,
     })
 
     expect(getTerrainRouteConfig({ kind: 'static', path: '/execution' })).toEqual({
@@ -122,11 +124,12 @@ describe('getTerrainRouteConfig', () => {
       showBottomNav: true,
       activeNavPath: '/execution',
       mainScroll: 'hidden',
+      showTopbarBottomBorder: false,
     })
 
     expect(getTerrainRouteConfig({ kind: 'static', path: '/execution/upcoming' })).toEqual({
       topbarVariant: 'detail',
-      title: 'À venir',
+      title: 'Planifiées',
       backPath: '/execution',
       showBottomNav: false,
       activeNavPath: '/execution',
@@ -443,6 +446,45 @@ describe('resolveTerrainTopbarShowBottomBorder', () => {
     for (const path of ['/reporting', '/signals', '/execution', '/chat', '/general'] as const) {
       const route = { kind: 'static' as const, path }
       expect(resolveTerrainTopbarShowBottomBorder(route, getTerrainRouteConfig(route))).toBe(false)
+    }
+  })
+
+  it('returns false for static Signals and Execution feed hubs via config', () => {
+    for (const path of ['/signals', '/execution'] as const) {
+      const route = { kind: 'static' as const, path }
+      const config = getTerrainRouteConfig(route)
+      expect(config.showTopbarBottomBorder).toBe(false)
+      expect(resolveTerrainTopbarShowBottomBorder(route, config)).toBe(false)
+    }
+  })
+
+  it('returns false for scoped Signals and Execution hubs (establishment and cross)', () => {
+    const cases = [
+      {
+        kind: 'scoped-terrain' as const,
+        scope: { type: 'establishment' as const, establishmentId: 'est-1' },
+        page: 'signals' as const,
+      },
+      {
+        kind: 'scoped-terrain' as const,
+        scope: { type: 'establishment' as const, establishmentId: 'est-1' },
+        page: 'execution' as const,
+      },
+      {
+        kind: 'scoped-terrain' as const,
+        scope: { type: 'cross' as const },
+        page: 'signals' as const,
+      },
+      {
+        kind: 'scoped-terrain' as const,
+        scope: { type: 'cross' as const },
+        page: 'execution' as const,
+      },
+    ]
+    for (const route of cases) {
+      const config = getTerrainRouteConfig(route)
+      expect(config.showTopbarBottomBorder).toBe(false)
+      expect(resolveTerrainTopbarShowBottomBorder(route, config)).toBe(false)
     }
   })
 

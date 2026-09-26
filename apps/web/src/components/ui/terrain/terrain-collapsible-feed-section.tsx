@@ -12,6 +12,8 @@ type TerrainCollapsibleFeedSectionProps = {
   label: string
   /** Omit when the real total is unknown (e.g. section still has more pages). */
   count?: number
+  /** Shown under the header when the section is collapsed. */
+  collapsedHint?: string | null
   dotVariant?: TerrainSectionDotVariant
   expanded: boolean
   onToggle: () => void
@@ -22,6 +24,7 @@ type TerrainCollapsibleFeedSectionProps = {
 export function TerrainCollapsibleFeedSection({
   label,
   count,
+  collapsedHint,
   dotVariant,
   expanded,
   onToggle,
@@ -59,6 +62,9 @@ export function TerrainCollapsibleFeedSection({
           <ChevronDown className="h-4 w-4 shrink-0 text-[#a3a19a]" aria-hidden />
         )}
       </button>
+      {!expanded && collapsedHint ? (
+        <p className="px-3 pb-1.5 text-xs text-[#7D7B75]">{collapsedHint}</p>
+      ) : null}
       {expanded ? children : null}
     </section>
   )

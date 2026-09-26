@@ -5,7 +5,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 
-from django.db.models import Exists, OuterRef, Prefetch, Q, QuerySet, Subquery
+from django.db.models import Count, Exists, OuterRef, Prefetch, Q, QuerySet, Subquery
 from django.utils import timezone
 
 from houston.action_plans.constants import (
@@ -14,6 +14,10 @@ from houston.action_plans.constants import (
     CONTRIBUTION_STATUS_IN_PROGRESS,
     EXECUTION_CALENDAR_CURSOR_STATUSES,
     EXECUTION_FEED_CURSOR_STATUSES,
+    EXECUTION_STATUS_CANCELED,
+    EXECUTION_STATUS_DONE,
+    EXECUTION_STATUS_IN_PROGRESS,
+    EXECUTION_STATUS_PENDING_VALIDATION,
     EXECUTION_STATUS_SCHEDULED,
     SCHEDULED_FEED_PREVIEW_LIMIT,
     TERMINAL_TASK_STATUSES,
@@ -352,6 +356,8 @@ _EXECUTION_FEED_SELECT_RELATED = (
     "source_signal__activity_subject",
     "source_signal__activity_subject__catalog_activity_subject",
     "created_by__user",
+    "marked_done_by_membership__user",
+    "validated_by_membership__user",
     "establishment",
 )
 _EXECUTION_FEED_TASK_PREFETCH = Prefetch(
@@ -369,9 +375,15 @@ _EXECUTION_FEED_ASSIGNEE_PREFETCH = Prefetch(
         "execution_team__business_unit__catalog_business_unit",
     ),
 )
+_EXECUTION_FEED_ACTIVE_REVIEW_PREFETCH = Prefetch(
+    "reviews",
+    queryset=ActionPlanExecutionReview.objects.filter(is_active=True),
+    to_attr="_prefetched_active_reviews",
+)
 _EXECUTION_FEED_PREFETCH = (
     _EXECUTION_FEED_ASSIGNEE_PREFETCH,
     _EXECUTION_FEED_TASK_PREFETCH,
+    _EXECUTION_FEED_ACTIVE_REVIEW_PREFETCH,
 )
 
 
@@ -517,18 +529,17 @@ def scheduled_executions_upcoming_queryset(
     )
 
 
-def scheduled_executions_visible_preview_queryset(
+def scheduled_executions_upcoming_preview_queryset(
     *,
     membership: EstablishmentMembership,
     view_mode: ExecutionFeedViewMode,
     limit: int = SCHEDULED_FEED_PREVIEW_LIMIT,
 ) -> QuerySet[ActionPlanExecution]:
-    now = timezone.now()
-    return (
-        scheduled_executions_base_queryset(membership=membership, view_mode=view_mode)
-        .filter(Q(visible_from__isnull=True) | Q(visible_from__lte=now))
-        .order_by("start_at", "id")[:limit]
-    )
+    """First upcoming rows — same filters/order as scheduled_executions_upcoming_queryset."""
+    return scheduled_executions_upcoming_queryset(
+        membership=membership,
+        view_mode=view_mode,
+    )[:limit]
 
 
 def action_plan_execution_feed_queryset(
@@ -659,6 +670,50 @@ def apply_action_plan_execution_feed_sorting(
         membership=membership,
         as_of=effective_as_of,
     ).order_by(*action_plan_execution_feed_order_by())
+
+
+def action_plan_execution_feed_section_counts(
+    queryset: QuerySet[ActionPlanExecution],
+    *,
+    membership: EstablishmentMembership,
+    as_of: datetime,
+) -> dict[str, int]:
+    """Server totals for feed UI sections (pinned excluded from status buckets)."""
+    annotated = annotate_action_plan_execution_feed_sort_keys(
+        queryset,
+        membership=membership,
+        as_of=as_of,
+    )
+    unpinned = Q(is_feed_pinned=False)
+    aggregates = annotated.aggregate(
+        pinned=Count("pk", filter=Q(is_feed_pinned=True)),
+        pending_validation=Count(
+            "pk",
+            filter=unpinned & Q(status=EXECUTION_STATUS_PENDING_VALIDATION),
+        ),
+        overdue=Count(
+            "pk",
+            filter=unpinned
+            & Q(status=EXECUTION_STATUS_IN_PROGRESS)
+            & Q(deadline_bucket=DEADLINE_BUCKET_OVERDUE),
+        ),
+        in_progress=Count(
+            "pk",
+            filter=unpinned
+            & Q(status=EXECUTION_STATUS_IN_PROGRESS)
+            & ~Q(deadline_bucket=DEADLINE_BUCKET_OVERDUE),
+        ),
+        done=Count("pk", filter=unpinned & Q(status=EXECUTION_STATUS_DONE)),
+        canceled=Count("pk", filter=unpinned & Q(status=EXECUTION_STATUS_CANCELED)),
+    )
+    return {
+        "pinned": int(aggregates["pinned"] or 0),
+        "pending_validation": int(aggregates["pending_validation"] or 0),
+        "overdue": int(aggregates["overdue"] or 0),
+        "in_progress": int(aggregates["in_progress"] or 0),
+        "done": int(aggregates["done"] or 0),
+        "canceled": int(aggregates["canceled"] or 0),
+    }
 
 
 def action_plan_execution_overdue(

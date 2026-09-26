@@ -224,6 +224,74 @@ def test_cross_execution_feed_defaults_to_general_view_mode(api_client):
     assert str(mentioned.id) in personal_ids
 
 
+def test_cross_execution_upcoming_unions_and_matches_feed_scheduled_meta(api_client):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from houston.action_plans.services import create_action_plan_with_execution
+
+    user = create_user(username="cross-upcoming-owner")
+    first = create_establishment(name="Alpha Upcoming")
+    second = create_establishment(name="Beta Upcoming")
+    membership_a = create_membership(
+        establishment=first,
+        user=user,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    membership_b = create_membership(
+        establishment=second,
+        user=user,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    bu_a = create_business_unit(establishment=first, key="salle")
+    bu_b = create_business_unit(establishment=second, key="salle")
+    now = timezone.now()
+    start_a = now + timedelta(hours=3)
+    start_b = now + timedelta(days=1)
+    _, exec_a = create_action_plan_with_execution(
+        establishment_id=first.id,
+        created_by=membership_a,
+        pilot_business_unit_id=bu_a.id,
+        title="Upcoming A",
+        tasks=[build_task_payload(task="a", business_unit=bu_a)],
+        assignees=[build_assignee_payload(membership=membership_a, business_unit=bu_a)],
+        start_at=start_a,
+        end_at=start_a + timedelta(hours=1),
+        visible_from=now - timedelta(minutes=1),
+    )
+    _, exec_b = create_action_plan_with_execution(
+        establishment_id=second.id,
+        created_by=membership_b,
+        pilot_business_unit_id=bu_b.id,
+        title="Upcoming B",
+        tasks=[build_task_payload(task="b", business_unit=bu_b)],
+        assignees=[build_assignee_payload(membership=membership_b, business_unit=bu_b)],
+        start_at=start_b,
+        end_at=start_b + timedelta(hours=1),
+        visible_from=start_b - timedelta(hours=1),
+    )
+
+    token = login(api_client, user=user)
+    feed = api_client.get(
+        "/api/v1/cross/action-plan-execution-feed/?view_mode=general",
+        **auth_headers(token),
+    )
+    upcoming = api_client.get(
+        "/api/v1/cross/action-plan-execution-upcoming/?view_mode=general",
+        **auth_headers(token),
+    )
+    assert feed.status_code == 200, feed.content
+    assert upcoming.status_code == 200, upcoming.content
+    feed_body = feed.json()
+    upcoming_ids = [item["action_plan_execution"]["id"] for item in upcoming.json()["items"]]
+    preview_ids = [item["action_plan_execution"]["id"] for item in feed_body["scheduled_items"]]
+    assert feed_body["scheduled_count"] == 2
+    assert upcoming_ids == [str(exec_a.id), str(exec_b.id)]
+    assert preview_ids == upcoming_ids
+    assert upcoming.json()["items"][0]["action_plan_execution"]["permission_hints"]["can_pin"] is False
+
+
 def test_cross_execution_calendar_unions_and_respects_per_membership_rbac(api_client):
     from datetime import timedelta
 

@@ -1,551 +1,455 @@
 import type { ReactNode } from 'react'
-import { Bell } from 'lucide-react'
+import { Bell, Pin } from 'lucide-react'
 
-import { FeedCardActionsButton, FeedCardMetaRow } from '@/components/domain/feed-card-meta-row'
 import { HoustonBadge } from '@/components/ui/terrain'
-import { feedCardKeyDown } from '@/lib/feed-card-keyboard'
 import { getDisplayNameInitials } from '@/lib/display-names'
-import {
-  actionPlanFeedPendingBgClassName,
-  actionPlanFeedScheduledBgClassName,
-  actionPlanFeedTealBgClassName,
-  terrain,
-  terrainActionPlanFeedCardClassName,
-  terrainFeedCardBaseClassName,
-  terrainFeedInteractiveCardClassName,
-} from '@/lib/terrain-styles'
-import { ActionPlanPinnedBadge } from '@/features/action-plans/components/action-plan-pinned-badge'
-import { ActionPlanStatusBadge } from '@/features/action-plans/components/action-plan-status-badge'
-import { canOpenActionPlanExecutionFeedCardActions } from '@/features/action-plans/lib/action-plan-execution-feed-card-actions'
+import { feedCardKeyDown } from '@/lib/feed-card-keyboard'
+import { terrainBrandAction, terrainFeedAvatar } from '@/lib/terrain-styles'
+import { cn } from '@/lib/utils'
+import { getActionPlanStatusBadgeVariant } from '@/features/action-plans/components/action-plan-status-badge'
+import { actionPlanBusinessUnitPrimaryLabel } from '@/features/action-plans/lib/action-plan-display'
 import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
-import { formatSignalRelativeTime } from '@/features/signals/lib/signal-display'
-import { formatSignalClassification } from '@/lib/signal-classification'
 
-import { ActionPlanFeedSidebar } from './action-plan-feed-sidebar'
-import { ActionPlanFeedTaskProgressBar } from './action-plan-feed-task-progress-bar'
-import type { ActionPlanFeedTaskProgressBarVariant } from './action-plan-feed-task-progress-bar'
-import {
-  actionPlanFeedSignalClassificationInput,
-  formatActionPlanFeedAssigneeDisplay,
-  formatActionPlanFeedMetaParts,
-  getActionPlanFeedProgressState,
-  getActionPlanFeedSidebarState,
-  getActionPlanFeedStartCountdownState,
-  isActionPlanFeedCanceledCard,
-  isActionPlanFeedDoneCard,
-  isActionPlanFeedInProgressCard,
-  isActionPlanFeedPendingValidationCard,
-  isActionPlanFeedScheduledCard,
-} from '../lib/action-plan-execution-feed-card-display'
 import { useFeedCardNow } from '../lib/use-feed-card-now'
+import {
+  computeTemporalProgressPercent,
+  formatActionPlanFeedCardAssigneeDisplay,
+  formatActionPlanFeedCardDateTimeLabel,
+  formatActionPlanFeedCardDelayLabel,
+  formatActionPlanFeedCardStatusLabel,
+  formatActionPlanFeedMarkedDoneLine,
+  formatActionPlanFeedOtherPolesCountLabel,
+  formatActionPlanFeedStartsInLabel,
+  formatActionPlanFeedTerminalDateLabel,
+  formatActionPlanFeedValidatedLine,
+  getActionPlanFeedOtherPoles,
+} from '../lib/action-plan-execution-feed-card-display'
+import {
+  ExecutionFeedDelayChip,
+  ExecutionFeedReviewStars,
+} from './execution-feed-status-bits'
 
 type ActionPlanExecutionFeedCardProps = {
   item: ActionPlanExecutionFeedItem
   onSelect: (executionId: string) => void
-  onOpenActions?: (item: ActionPlanExecutionFeedItem) => void
-}
-
-type ActionPlanFeedAssigneeRowProps = {
-  item: ActionPlanExecutionFeedItem
-  showStatusBadge?: boolean
-  showPinnedBadge?: boolean
-  avatarClassName?: string
+  onTogglePin?: (item: ActionPlanExecutionFeedItem) => void
+  className?: string
 }
 
 function stopCardNavigation(event: { stopPropagation: () => void }) {
   event.stopPropagation()
 }
 
-type ActionPlanFeedCardActionsButtonProps = {
+function FeedPinButton({
+  item,
+  onTogglePin,
+}: {
   item: ActionPlanExecutionFeedItem
-  onOpenActions: (item: ActionPlanExecutionFeedItem) => void
-}
-
-function ActionPlanFeedCardActionsButton({ item, onOpenActions }: ActionPlanFeedCardActionsButtonProps) {
+  onTogglePin: (item: ActionPlanExecutionFeedItem) => void
+}) {
+  if (!item.permission_hints.can_pin) {
+    return null
+  }
   return (
-    <FeedCardActionsButton
-      ariaLabel="Actions du plan d’action"
-      variant="prominent"
+    <button
+      type="button"
+      className="-my-2.5 -mr-1 inline-flex min-h-12 min-w-12 shrink-0 items-center justify-center rounded-lg text-[#7D7B75] transition active:opacity-80"
+      aria-label={item.is_pinned ? 'Désépingler' : 'Épingler'}
+      aria-pressed={item.is_pinned}
       onClick={(event) => {
         stopCardNavigation(event)
-        onOpenActions(item)
+        onTogglePin(item)
       }}
-    />
+    >
+      <Pin
+        className={cn('h-4 w-4', item.is_pinned && 'fill-current text-[#1a1a1a]')}
+        aria-hidden
+      />
+    </button>
   )
 }
 
-type ActionPlanFeedClassificationBlockProps = {
-  item: ActionPlanExecutionFeedItem
-  signalInput: ReturnType<typeof actionPlanFeedSignalClassificationInput>
-  children: (badges: ReactNode) => ReactNode
-}
-
-/** Flat pilot + primary badges; `Concerné` is rendered below the badges row (not inside it). */
-function ActionPlanFeedClassificationBlock({
-  item,
-  signalInput,
-  children,
-}: ActionPlanFeedClassificationBlockProps) {
-  const classification = signalInput ? formatSignalClassification(signalInput) : null
-  const badges = (
-    <>
-      <HoustonBadge variant="gray" className="shrink-0 leading-none">
-        {item.pilot_business_unit.specific_name}
-      </HoustonBadge>
-      {classification?.primaryLine ? (
-        <HoustonBadge variant="gray" className="min-w-0 truncate leading-none">
-          {classification.primaryLine}
-        </HoustonBadge>
-      ) : null}
-    </>
-  )
-
+function TemporalProgressBar({ percent }: { percent: number }) {
+  const clamped = Math.min(100, Math.max(0, percent))
+  const fillWidth = clamped + '%'
+  const knobLeft = 'calc(' + String(clamped) + '% - 5px)'
   return (
-    <>
-      {children(badges)}
-      {classification?.affectedLine ? (
-        <p className="mb-1 text-[11px] leading-none text-[#888]">{classification.affectedLine}</p>
-      ) : null}
-    </>
-  )
-}
-
-type ActionPlanFeedCardHeaderProps = {
-  item: ActionPlanExecutionFeedItem
-  signalInput: ReturnType<typeof actionPlanFeedSignalClassificationInput>
-  showActions: boolean
-  onOpenActions?: (item: ActionPlanExecutionFeedItem) => void
-}
-
-function ActionPlanFeedCardHeader({
-  item,
-  signalInput,
-  showActions,
-  onOpenActions,
-}: ActionPlanFeedCardHeaderProps) {
-  return (
-    <>
-      <ActionPlanFeedClassificationBlock item={item} signalInput={signalInput}>
-        {(badges) => (
-          <FeedCardMetaRow
-            timeLabel={formatSignalRelativeTime(item.last_activity_at)}
-            badges={badges}
-            actions={
-              showActions && onOpenActions ? (
-                <ActionPlanFeedCardActionsButton item={item} onOpenActions={onOpenActions} />
-              ) : null
-            }
-          />
+    <div
+      className="relative mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[#EFEDE7]"
+      role="progressbar"
+      aria-valuenow={clamped}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label="Progression temporelle"
+    >
+      <div className={cn('h-full rounded-full', terrainBrandAction.bg)} style={{ width: fillWidth }} />
+      <span
+        className={cn(
+          'absolute top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full border-2 border-white',
+          terrainBrandAction.bg,
         )}
-      </ActionPlanFeedClassificationBlock>
-      <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
-    </>
-  )
-}
-
-function ActionPlanFeedMetaRow({ item }: { item: ActionPlanExecutionFeedItem }) {
-  const { deadlineLabel, taskProgressLabel } = formatActionPlanFeedMetaParts(item)
-
-  if (!deadlineLabel && !taskProgressLabel) {
-    return null
-  }
-
-  return (
-    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[#888]">
-      {deadlineLabel ? (
-        <span className={item.is_overdue ? 'font-medium text-[#E24B4A]' : undefined}>
-          {deadlineLabel}
-        </span>
-      ) : null}
-      {deadlineLabel && taskProgressLabel ? <span aria-hidden> - </span> : null}
-      {taskProgressLabel ? (
-        <span className="font-medium tabular-nums text-[#555]">{taskProgressLabel}</span>
-      ) : null}
+        style={{ left: knobLeft }}
+        aria-hidden
+      />
     </div>
   )
 }
 
-function ActionPlanFeedAssigneeRow({
-  item,
-  showStatusBadge = true,
-  showPinnedBadge = showStatusBadge,
-  avatarClassName = 'bg-[#EEF2FF] text-[#1B4FD8]',
-}: ActionPlanFeedAssigneeRowProps) {
-  const { visible, overflow } = formatActionPlanFeedAssigneeDisplay(item.assignees)
-  if (visible.length === 0 && !showStatusBadge && !showPinnedBadge) {
-    return null
+function AssigneesRow({ item }: { item: ActionPlanExecutionFeedItem }) {
+  const { visible, overflow, empty } = formatActionPlanFeedCardAssigneeDisplay(item.assignees)
+  if (empty) {
+    return <p className="text-xs text-[#7D7B75]">Non assigné</p>
   }
-
-  const primaryInitials = getDisplayNameInitials(visible[0] ?? '')
-  const assigneeLabel =
-    overflow > 0 ? `${visible.join(', ')} +${overflow}` : visible.join(', ')
-
   return (
-    <div className="mt-3 flex items-center justify-between gap-3 border-t border-[#F0EFE9] pt-3">
-      {visible.length > 0 ? (
-        <div className="flex min-w-0 items-center gap-2">
-          <div
-            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${avatarClassName}`}
+    <div className="flex min-w-0 items-center gap-2">
+      <div className="flex shrink-0 -space-x-1.5">
+        {visible.map((name) => (
+          <span
+            key={name}
+            className={cn(
+              terrainFeedAvatar,
+              'inline-flex h-6 w-6 items-center justify-center rounded-full border border-white text-[10px] font-semibold',
+            )}
             aria-hidden
           >
-            {primaryInitials}
-          </div>
-          <span className="truncate text-[11px] text-[#888]">{assigneeLabel}</span>
-        </div>
-      ) : (
-        <span />
-      )}
-      {showStatusBadge ? (
-        <div className="flex shrink-0 items-center gap-1.5">
-          {showPinnedBadge && item.is_pinned ? <ActionPlanPinnedBadge /> : null}
-          <ActionPlanStatusBadge status={item.status} validatedAt={item.validated_at} />
-        </div>
-      ) : showPinnedBadge && item.is_pinned ? (
-        <div className="flex shrink-0 items-center">
-          <ActionPlanPinnedBadge />
-        </div>
-      ) : null}
+            {getDisplayNameInitials(name)}
+          </span>
+        ))}
+      </div>
+      <p className="min-w-0 truncate text-xs text-[#3d3d3d]">
+        {visible.join(', ')}
+        {overflow > 0 ? ` +${overflow}` : ''}
+      </p>
     </div>
   )
 }
 
-function PendingValidationActionPlanFeedCard({
+function CreatorLine({ name }: { name: string }) {
+  const trimmed = name.trim()
+  if (!trimmed) {
+    return null
+  }
+  return <p className="text-xs text-[#7D7B75]">Créé par {trimmed}</p>
+}
+
+function PoleHeader({
+  item,
+  statusTone,
+  showBell,
+  onTogglePin,
+}: {
+  item: ActionPlanExecutionFeedItem
+  statusTone?: string
+  showBell?: boolean
+  onTogglePin?: (item: ActionPlanExecutionFeedItem) => void
+}) {
+  const other = getActionPlanFeedOtherPoles(item)
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+        <HoustonBadge
+          variant={getActionPlanStatusBadgeVariant(item.status)}
+          className={cn('max-w-full truncate', statusTone)}
+          aria-label={formatActionPlanFeedCardStatusLabel(item)}
+        >
+          {showBell ? <Bell className="mr-1 h-3 w-3" aria-hidden /> : null}
+          {formatActionPlanFeedCardStatusLabel(item)}
+        </HoustonBadge>
+        <HoustonBadge variant="gray" className="max-w-[9rem] truncate">
+          {actionPlanBusinessUnitPrimaryLabel(item.pilot_business_unit)}
+        </HoustonBadge>
+        {other.otherCount > 0 ? (
+          <HoustonBadge variant="gray" className="shrink-0">
+            {formatActionPlanFeedOtherPolesCountLabel(other.otherCount)}
+          </HoustonBadge>
+        ) : null}
+      </div>
+      {onTogglePin ? <FeedPinButton item={item} onTogglePin={onTogglePin} /> : null}
+    </div>
+  )
+}
+
+function OtherPolesLine({ item }: { item: ActionPlanExecutionFeedItem }) {
+  const other = getActionPlanFeedOtherPoles(item)
+  if (other.otherCount === 0) {
+    return null
+  }
+  const named = other.names.join(' · ')
+  const suffix = other.overflow > 0 ? ` +${other.overflow}` : ''
+  return (
+    <p className="text-xs text-[#7D7B75]">
+      Avec {named}
+      {suffix}
+    </p>
+  )
+}
+
+function CardShell({
   item,
   onSelect,
-  onOpenActions,
-}: ActionPlanExecutionFeedCardProps) {
-  const signalInput = actionPlanFeedSignalClassificationInput(item.signal_summary)
-  const showActions =
-    onOpenActions && canOpenActionPlanExecutionFeedCardActions(item.permission_hints)
-
+  className,
+  surfaceClassName,
+  children,
+}: {
+  item: ActionPlanExecutionFeedItem
+  onSelect: (executionId: string) => void
+  className?: string
+  surfaceClassName?: string
+  children: ReactNode
+}) {
   return (
     <article
-      className={terrainFeedCardBaseClassName(actionPlanFeedPendingBgClassName)}
-      onClick={() => onSelect(item.id)}
-      onKeyDown={(event) => feedCardKeyDown(event, onSelect, item.id)}
       role="button"
       tabIndex={0}
+      className={cn(
+        'rounded-[14px] border border-[#E8E6DF] bg-white p-3 text-left transition active:opacity-95',
+        surfaceClassName,
+        className,
+      )}
+      onClick={() => onSelect(item.id)}
+      onKeyDown={(event) => feedCardKeyDown(event, onSelect, item.id)}
+      aria-label={item.title}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <Bell className="h-4 w-4 shrink-0 text-[#E69138]" aria-hidden />
-          <span className="truncate text-[13px] font-bold text-[#B45309]">
-            En attente de validation
-          </span>
-        </div>
-        <div className="flex shrink-0 items-center gap-0.5">
-          <span className="text-[11px] leading-none text-[#888]">
-            {formatSignalRelativeTime(item.last_activity_at)}
-          </span>
-          {showActions ? (
-            <ActionPlanFeedCardActionsButton item={item} onOpenActions={onOpenActions} />
+      {children}
+    </article>
+  )
+}
+
+function CardTitle({ title }: { title: string }) {
+  return (
+    <h3 className="mt-0.5 line-clamp-2 text-[15px] font-semibold leading-snug text-[#1a1a1a]">
+      {title}
+    </h3>
+  )
+}
+
+function InProgressCard({
+  item,
+  onSelect,
+  onTogglePin,
+  className,
+}: ActionPlanExecutionFeedCardProps) {
+  const now = useFeedCardNow()
+  const startLabel = formatActionPlanFeedCardDateTimeLabel(item.start_at, item.all_day)
+  const endLabel = formatActionPlanFeedCardDateTimeLabel(item.end_at, item.all_day)
+  const delayLabel = formatActionPlanFeedCardDelayLabel(item.end_at, now, item.is_overdue)
+  const progress =
+    item.all_day || !item.start_at || !item.end_at
+      ? null
+      : computeTemporalProgressPercent(item.start_at, item.end_at, now)
+
+  return (
+    <CardShell item={item} onSelect={onSelect} className={className}>
+      <PoleHeader item={item} onTogglePin={onTogglePin} />
+      <CardTitle title={item.title} />
+      <OtherPolesLine item={item} />
+      {(startLabel || endLabel || progress != null || item.all_day) && (
+        <div className="mt-2">
+          {(startLabel || endLabel) && (
+            <div className="flex items-baseline justify-between gap-2 text-xs text-[#3d3d3d]">
+              <span className="min-w-0 truncate">
+                {startLabel ? (
+                  <>
+                    <span className="text-[#7D7B75]">Début</span> {startLabel}
+                  </>
+                ) : null}
+              </span>
+              <span className="min-w-0 shrink-0 text-right">
+                {endLabel ? (
+                  <>
+                    <span className="text-[#7D7B75]">Fin</span> {endLabel}
+                  </>
+                ) : null}
+              </span>
+            </div>
+          )}
+          {item.all_day && progress == null ? (
+            <p className="text-xs text-[#7D7B75]">Journée entière</p>
+          ) : null}
+          {progress != null ? (
+            <TemporalProgressBar percent={item.is_overdue ? 100 : progress} />
           ) : null}
         </div>
-      </div>
-
-      <ActionPlanFeedClassificationBlock item={item} signalInput={signalInput}>
-        {(badges) => (
-          <div className="mb-1 mt-2 flex flex-wrap items-center gap-1">{badges}</div>
-        )}
-      </ActionPlanFeedClassificationBlock>
-
-      <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
-
-      <ActionPlanFeedMetaRow item={item} />
-
-      <ActionPlanFeedAssigneeRow item={item} showStatusBadge={false} showPinnedBadge={false} />
-    </article>
-  )
-}
-
-function InProgressActionPlanFeedCard({
-  item,
-  onSelect,
-  onOpenActions,
-}: ActionPlanExecutionFeedCardProps) {
-  const signalInput = actionPlanFeedSignalClassificationInput(item.signal_summary)
-  const showActions =
-    onOpenActions && canOpenActionPlanExecutionFeedCardActions(item.permission_hints)
-  const now = useFeedCardNow()
-  const sidebarState = getActionPlanFeedSidebarState(
-    item.end_at,
-    now,
-    item.is_overdue,
-    item.all_day,
-  )
-  const progressState = getActionPlanFeedProgressState(item)
-
-  return (
-    <article
-      className={terrainActionPlanFeedCardClassName()}
-      onClick={() => onSelect(item.id)}
-      onKeyDown={(event) => feedCardKeyDown(event, onSelect, item.id)}
-      role="button"
-      tabIndex={0}
-    >
-      <ActionPlanFeedSidebar state={sidebarState} />
-
-      <div className="min-w-0 flex-1 p-4">
-        <ActionPlanFeedClassificationBlock item={item} signalInput={signalInput}>
-          {(badges) => (
-            <FeedCardMetaRow
-              timeLabel={formatSignalRelativeTime(item.last_activity_at)}
-              badges={badges}
-              actions={
-                showActions && onOpenActions ? (
-                  <ActionPlanFeedCardActionsButton item={item} onOpenActions={onOpenActions} />
-                ) : null
-              }
-            />
-          )}
-        </ActionPlanFeedClassificationBlock>
-
-        <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
-
-        {progressState ? (
-          <ActionPlanFeedTaskProgressBar
-            total={progressState.total}
-            filled={progressState.filled}
-            fractionLabel={progressState.fractionLabel}
-          />
-        ) : null}
-
-        <ActionPlanFeedAssigneeRow
-          item={item}
-          showStatusBadge={false}
-          showPinnedBadge
-          avatarClassName={`${actionPlanFeedTealBgClassName} text-white`}
-        />
-      </div>
-    </article>
-  )
-}
-
-function ScheduledActionPlanFeedCardHeader({
-  item,
-  signalInput,
-  showActions,
-  onOpenActions,
-}: ActionPlanFeedCardHeaderProps) {
-  return (
-    <ActionPlanFeedClassificationBlock item={item} signalInput={signalInput}>
-      {(badges) => (
-        <div className="mb-1 flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-1">{badges}</div>
-          <div className="flex shrink-0 items-center gap-0.5">
-            <span className="text-[11px] leading-none text-[#888]">
-              {formatSignalRelativeTime(item.last_activity_at)}
-            </span>
-            {showActions && onOpenActions ? (
-              <ActionPlanFeedCardActionsButton item={item} onOpenActions={onOpenActions} />
-            ) : null}
-          </div>
-        </div>
       )}
-    </ActionPlanFeedClassificationBlock>
-  )
-}
-
-function ScheduledActionPlanFeedCard({
-  item,
-  onSelect,
-  onOpenActions,
-}: ActionPlanExecutionFeedCardProps) {
-  const signalInput = actionPlanFeedSignalClassificationInput(item.signal_summary)
-  const showActions =
-    onOpenActions && canOpenActionPlanExecutionFeedCardActions(item.permission_hints)
-  const now = useFeedCardNow()
-  const sidebarState = getActionPlanFeedStartCountdownState(item.start_at, now, item.all_day)
-
-  return (
-    <article
-      className={terrainActionPlanFeedCardClassName('hover:border-[#8B6914]/30')}
-      onClick={() => onSelect(item.id)}
-      onKeyDown={(event) => feedCardKeyDown(event, onSelect, item.id)}
-      role="button"
-      tabIndex={0}
-    >
-      <ActionPlanFeedSidebar state={sidebarState} />
-
-      <div className="min-w-0 flex-1 p-4">
-        <ScheduledActionPlanFeedCardHeader
-          item={item}
-          signalInput={signalInput}
-          showActions={Boolean(showActions)}
-          onOpenActions={onOpenActions}
-        />
-
-        <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
-
-        <ActionPlanFeedAssigneeRow
-          item={item}
-          showStatusBadge
-          showPinnedBadge={false}
-          avatarClassName={`${actionPlanFeedScheduledBgClassName} text-white`}
-        />
+      <div className="mt-3 space-y-1">
+        <AssigneesRow item={item} />
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <CreatorLine name={item.created_by_display_name} />
+          </div>
+          {delayLabel ? <ExecutionFeedDelayChip label={delayLabel} /> : null}
+        </div>
       </div>
-    </article>
+    </CardShell>
   )
 }
 
-function TerminalActionPlanFeedCard({
+function PendingValidationCard({
   item,
   onSelect,
-  onOpenActions,
-  sidebarVariant,
-  progressVariant,
-  avatarClassName,
-}: ActionPlanExecutionFeedCardProps & {
-  sidebarVariant: 'done' | 'canceled'
-  progressVariant: ActionPlanFeedTaskProgressBarVariant
-  avatarClassName: string
-}) {
-  const signalInput = actionPlanFeedSignalClassificationInput(item.signal_summary)
-  const showActions =
-    onOpenActions && canOpenActionPlanExecutionFeedCardActions(item.permission_hints)
-  const progressState = getActionPlanFeedProgressState(item)
-  const showStatusBadge = sidebarVariant === 'done'
-
-  return (
-    <article
-      className={terrainActionPlanFeedCardClassName()}
-      onClick={() => onSelect(item.id)}
-      onKeyDown={(event) => feedCardKeyDown(event, onSelect, item.id)}
-      role="button"
-      tabIndex={0}
-    >
-      <ActionPlanFeedSidebar
-        variant={sidebarVariant}
-        validatedAt={sidebarVariant === 'done' ? item.validated_at : null}
-      />
-
-      <div className="min-w-0 flex-1 p-4">
-        <ActionPlanFeedClassificationBlock item={item} signalInput={signalInput}>
-          {(badges) => (
-            <FeedCardMetaRow
-              timeLabel={formatSignalRelativeTime(item.last_activity_at)}
-              badges={badges}
-              actions={
-                showActions && onOpenActions ? (
-                  <ActionPlanFeedCardActionsButton item={item} onOpenActions={onOpenActions} />
-                ) : null
-              }
-            />
-          )}
-        </ActionPlanFeedClassificationBlock>
-
-        <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
-
-        {progressState ? (
-          <ActionPlanFeedTaskProgressBar
-            total={progressState.total}
-            filled={progressState.filled}
-            fractionLabel={progressState.fractionLabel}
-            variant={progressVariant}
-          />
-        ) : null}
-
-        <ActionPlanFeedAssigneeRow
-          item={item}
-          showStatusBadge={showStatusBadge}
-          showPinnedBadge
-          avatarClassName={avatarClassName}
-        />
-      </div>
-    </article>
-  )
-}
-
-function DoneActionPlanFeedCard(props: ActionPlanExecutionFeedCardProps) {
-  return (
-    <TerminalActionPlanFeedCard
-      {...props}
-      sidebarVariant="done"
-      progressVariant="success"
-      avatarClassName={`${terrain.successBg} text-white`}
-    />
-  )
-}
-
-function CanceledActionPlanFeedCard(props: ActionPlanExecutionFeedCardProps) {
-  return (
-    <TerminalActionPlanFeedCard
-      {...props}
-      sidebarVariant="canceled"
-      progressVariant="muted"
-      avatarClassName="bg-[#7D7B75] text-white"
-    />
-  )
-}
-
-function ClassicActionPlanFeedCard({
-  item,
-  onSelect,
-  onOpenActions,
+  onTogglePin,
+  className,
 }: ActionPlanExecutionFeedCardProps) {
-  const signalInput = actionPlanFeedSignalClassificationInput(item.signal_summary)
-  const showActions =
-    onOpenActions && canOpenActionPlanExecutionFeedCardActions(item.permission_hints)
-
+  const endLabel = formatActionPlanFeedCardDateTimeLabel(item.end_at, item.all_day)
+  const markedDoneLine = formatActionPlanFeedMarkedDoneLine(item)
   return (
-    <article
-      className={terrainFeedInteractiveCardClassName()}
-      style={{ borderLeftColor: '#1B4FD8' }}
-      onClick={() => onSelect(item.id)}
-      onKeyDown={(event) => feedCardKeyDown(event, onSelect, item.id)}
-      role="button"
-      tabIndex={0}
+    <CardShell
+      item={item}
+      onSelect={onSelect}
+      className={className}
+      surfaceClassName="border-[#F3E6D4] bg-[#FFFBF5]"
     >
-      <ActionPlanFeedCardHeader
+      <PoleHeader
         item={item}
-        signalInput={signalInput}
-        showActions={Boolean(showActions)}
-        onOpenActions={onOpenActions}
+        statusTone="bg-[#F5E6C8] text-[#8A5A12]"
+        showBell
+        onTogglePin={onTogglePin}
       />
+      <CardTitle title={item.title} />
+      <OtherPolesLine item={item} />
+      {endLabel ? (
+        <p className="mt-2 text-xs text-[#3d3d3d]">
+          <span className="text-[#7D7B75]">Fin prévue</span> {endLabel}
+        </p>
+      ) : null}
+      {markedDoneLine ? <p className="mt-1.5 text-xs text-[#7D7B75]">{markedDoneLine}</p> : null}
+      <div className="mt-3 space-y-1">
+        <AssigneesRow item={item} />
+        <CreatorLine name={item.created_by_display_name} />
+      </div>
+    </CardShell>
+  )
+}
 
-      <ActionPlanFeedMetaRow item={item} />
+function ScheduledCard({
+  item,
+  onSelect,
+  onTogglePin,
+  className,
+}: ActionPlanExecutionFeedCardProps) {
+  const now = useFeedCardNow()
+  const startLabel = formatActionPlanFeedCardDateTimeLabel(item.start_at, item.all_day)
+  const endLabel = formatActionPlanFeedCardDateTimeLabel(item.end_at, item.all_day)
+  const startsIn = formatActionPlanFeedStartsInLabel(item.start_at, now)
+  const progress =
+    item.all_day || !item.visible_from || !item.start_at
+      ? null
+      : computeTemporalProgressPercent(item.visible_from, item.start_at, now)
 
-      <ActionPlanFeedAssigneeRow item={item} />
-    </article>
+  return (
+    <CardShell item={item} onSelect={onSelect} className={className}>
+      <PoleHeader item={item} onTogglePin={onTogglePin} />
+      <CardTitle title={item.title} />
+      <OtherPolesLine item={item} />
+      <div className="mt-2 space-y-0.5 text-xs text-[#3d3d3d]">
+        {(startLabel || endLabel) && (
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="min-w-0 truncate">
+              {startLabel ? (
+                <>
+                  <span className="text-[#7D7B75]">Début</span> {startLabel}
+                </>
+              ) : null}
+            </span>
+            <span className="min-w-0 shrink-0 text-right">
+              {endLabel ? (
+                <>
+                  <span className="text-[#7D7B75]">Fin</span> {endLabel}
+                </>
+              ) : null}
+            </span>
+          </div>
+        )}
+        {startsIn ? <p className="text-[#7D7B75]">{startsIn}</p> : null}
+      </div>
+      {progress != null ? <TemporalProgressBar percent={progress} /> : null}
+      <div className="mt-3 space-y-1">
+        <AssigneesRow item={item} />
+        <CreatorLine name={item.created_by_display_name} />
+      </div>
+    </CardShell>
+  )
+}
+
+function TerminalCard({
+  item,
+  onSelect,
+  onTogglePin,
+  className,
+}: ActionPlanExecutionFeedCardProps) {
+  const validatedLine =
+    item.status === 'done' && item.validated_at
+      ? formatActionPlanFeedValidatedLine(item)
+      : null
+  const dateLabel =
+    validatedLine ?? formatActionPlanFeedTerminalDateLabel(item)
+  const reviewStars =
+    item.status === 'done' && item.validated_at != null && item.active_review != null
+      ? item.active_review.stars
+      : null
+  const muted = item.status === 'canceled'
+  return (
+    <CardShell
+      item={item}
+      onSelect={onSelect}
+      className={className}
+      surfaceClassName={muted ? 'bg-[#FAFAF8]' : undefined}
+    >
+      <PoleHeader item={item} onTogglePin={onTogglePin} />
+      <CardTitle title={item.title} />
+      {dateLabel ? <p className="mt-1.5 text-xs text-[#7D7B75]">{dateLabel}</p> : null}
+      {reviewStars != null ? <ExecutionFeedReviewStars stars={reviewStars} /> : null}
+      <div className="mt-2">
+        <AssigneesRow item={item} />
+      </div>
+    </CardShell>
   )
 }
 
 export function ActionPlanExecutionFeedCard({
   item,
   onSelect,
-  onOpenActions,
+  onTogglePin,
+  className,
 }: ActionPlanExecutionFeedCardProps) {
-  if (isActionPlanFeedPendingValidationCard(item)) {
-    return (
-      <PendingValidationActionPlanFeedCard
-        item={item}
-        onSelect={onSelect}
-        onOpenActions={onOpenActions}
-      />
-    )
+  switch (item.status) {
+    case 'pending_validation':
+      return (
+        <PendingValidationCard
+          item={item}
+          onSelect={onSelect}
+          onTogglePin={onTogglePin}
+          className={className}
+        />
+      )
+    case 'scheduled':
+      return (
+        <ScheduledCard
+          item={item}
+          onSelect={onSelect}
+          onTogglePin={onTogglePin}
+          className={className}
+        />
+      )
+    case 'done':
+    case 'canceled':
+      return (
+        <TerminalCard
+          item={item}
+          onSelect={onSelect}
+          onTogglePin={onTogglePin}
+          className={className}
+        />
+      )
+    case 'in_progress':
+    default:
+      return (
+        <InProgressCard
+          item={item}
+          onSelect={onSelect}
+          onTogglePin={onTogglePin}
+          className={className}
+        />
+      )
   }
-
-  if (isActionPlanFeedInProgressCard(item)) {
-    return (
-      <InProgressActionPlanFeedCard item={item} onSelect={onSelect} onOpenActions={onOpenActions} />
-    )
-  }
-
-  if (isActionPlanFeedScheduledCard(item)) {
-    return (
-      <ScheduledActionPlanFeedCard item={item} onSelect={onSelect} onOpenActions={onOpenActions} />
-    )
-  }
-
-  if (isActionPlanFeedDoneCard(item)) {
-    return <DoneActionPlanFeedCard item={item} onSelect={onSelect} onOpenActions={onOpenActions} />
-  }
-
-  if (isActionPlanFeedCanceledCard(item)) {
-    return (
-      <CanceledActionPlanFeedCard item={item} onSelect={onSelect} onOpenActions={onOpenActions} />
-    )
-  }
-
-  return <ClassicActionPlanFeedCard item={item} onSelect={onSelect} onOpenActions={onOpenActions} />
 }

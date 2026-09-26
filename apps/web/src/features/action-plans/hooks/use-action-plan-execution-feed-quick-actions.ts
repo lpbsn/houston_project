@@ -44,6 +44,10 @@ export function useActionPlanExecutionFeedQuickActions({
     syncActiveItem(null)
   }
 
+  function clearActionError() {
+    setActionError(null)
+  }
+
   function runAction(
     actionId: ActionPlanExecutionFeedCardActionId,
     item?: ActionPlanExecutionFeedItem,
@@ -86,6 +90,7 @@ export function useActionPlanExecutionFeedQuickActions({
     actionError,
     openActions,
     closeActions,
+    clearActionError,
     runAction,
     isPending,
   }

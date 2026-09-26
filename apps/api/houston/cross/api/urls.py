@@ -4,6 +4,7 @@ from houston.action_plans.api.cross_views import (
     CrossActionPlanExecutionCalendarView,
     CrossActionPlanExecutionDetailView,
     CrossActionPlanExecutionFeedView,
+    CrossActionPlanExecutionUpcomingView,
 )
 from houston.signals.api.cross_views import CrossSignalDetailView, CrossSignalFeedView
 
@@ -14,6 +15,11 @@ urlpatterns = [
         "action-plan-execution-feed/",
         CrossActionPlanExecutionFeedView.as_view(),
         name="cross-action-plan-execution-feed",
+    ),
+    path(
+        "action-plan-execution-upcoming/",
+        CrossActionPlanExecutionUpcomingView.as_view(),
+        name="cross-action-plan-execution-upcoming",
     ),
     path(
         "action-plan-execution-calendar/",

@@ -4,7 +4,9 @@ from rest_framework import serializers
 
 from houston.action_plans.api.serializers import (
     ActionPlanBusinessUnitSerializer,
+    ActionPlanExecutionActiveReviewSerializer,
     ActionPlanExecutionPermissionHintsSerializer,
+    _serialize_active_review,
     _serialize_business_unit,
     _serialize_involved_poles,
     _serialize_signal_summary,
@@ -41,6 +43,13 @@ def description_short(text: str) -> str:
     return _truncate_short(text, max_length=DESCRIPTION_SHORT_MAX_LENGTH)
 
 
+def _optional_membership_display_name(membership) -> str | None:
+    if membership is None:
+        return None
+    name = _membership_display_name(membership)
+    return name or None
+
+
 class ActionPlanExecutionFeedAssigneeSerializer(serializers.Serializer):
     membership_id = serializers.UUIDField()
     display_name = serializers.CharField()
@@ -53,6 +62,15 @@ class ActionPlanExecutionFeedTaskPreviewSerializer(serializers.Serializer):
     business_unit = ActionPlanBusinessUnitSerializer()
 
 
+class ActionPlanExecutionFeedSectionCountsSerializer(serializers.Serializer):
+    pinned = serializers.IntegerField()
+    pending_validation = serializers.IntegerField()
+    overdue = serializers.IntegerField()
+    in_progress = serializers.IntegerField()
+    done = serializers.IntegerField()
+    canceled = serializers.IntegerField()
+
+
 class ActionPlanExecutionFeedItemSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     title = serializers.CharField()
@@ -60,6 +78,7 @@ class ActionPlanExecutionFeedItemSerializer(serializers.Serializer):
     status = serializers.CharField()
     requires_validation = serializers.BooleanField()
     validated_at = serializers.DateTimeField(allow_null=True)
+    validated_by_display_name = serializers.CharField(allow_null=True)
     pilot_business_unit = ActionPlanBusinessUnitSerializer()
     involved_poles = serializers.ListField(child=serializers.DictField())
     signal_summary = serializers.DictField(allow_null=True)
@@ -67,6 +86,7 @@ class ActionPlanExecutionFeedItemSerializer(serializers.Serializer):
     start_at = serializers.DateTimeField(allow_null=True)
     end_at = serializers.DateTimeField(allow_null=True)
     all_day = serializers.BooleanField()
+    visible_from = serializers.DateTimeField(allow_null=True)
     is_overdue = serializers.BooleanField()
     task_count = serializers.IntegerField()
     treated_task_count = serializers.IntegerField()
@@ -74,6 +94,10 @@ class ActionPlanExecutionFeedItemSerializer(serializers.Serializer):
     last_activity_at = serializers.DateTimeField()
     created_at = serializers.DateTimeField()
     created_by_display_name = serializers.CharField()
+    marked_done_at = serializers.DateTimeField(allow_null=True)
+    marked_done_by_display_name = serializers.CharField(allow_null=True)
+    canceled_at = serializers.DateTimeField(allow_null=True)
+    active_review = ActionPlanExecutionActiveReviewSerializer(allow_null=True)
     is_pinned = serializers.BooleanField()
     permission_hints = ActionPlanExecutionPermissionHintsSerializer()
     establishment_id = serializers.UUIDField(required=False)
@@ -89,6 +113,7 @@ class ActionPlanExecutionFeedResponseSerializer(serializers.Serializer):
     items = ActionPlanExecutionFeedItemWrapperSerializer(many=True)
     scheduled_items = ActionPlanExecutionFeedItemWrapperSerializer(many=True)
     scheduled_count = serializers.IntegerField()
+    section_counts = ActionPlanExecutionFeedSectionCountsSerializer()
     next_cursor = serializers.CharField(allow_null=True)
     has_more = serializers.BooleanField()
 
@@ -129,6 +154,9 @@ def serialize_action_plan_execution_feed_item(
         "status": execution.status,
         "requires_validation": execution.requires_validation,
         "validated_at": execution.validated_at,
+        "validated_by_display_name": _optional_membership_display_name(
+            execution.validated_by_membership
+        ),
         "pilot_business_unit": _serialize_business_unit(execution.pilot_business_unit),
         "involved_poles": _serialize_involved_poles(execution),
         "signal_summary": _serialize_signal_summary(execution),
@@ -136,6 +164,7 @@ def serialize_action_plan_execution_feed_item(
         "start_at": execution.start_at,
         "end_at": execution.end_at,
         "all_day": execution.all_day,
+        "visible_from": execution.visible_from,
         "is_overdue": overdue,
         "task_count": task_count,
         "treated_task_count": treated_task_count,
@@ -153,6 +182,12 @@ def serialize_action_plan_execution_feed_item(
         "last_activity_at": execution.last_activity_at,
         "created_at": execution.created_at,
         "created_by_display_name": _membership_display_name(execution.created_by),
+        "marked_done_at": execution.marked_done_at,
+        "marked_done_by_display_name": _optional_membership_display_name(
+            execution.marked_done_by_membership
+        ),
+        "canceled_at": execution.canceled_at,
+        "active_review": _serialize_active_review(execution),
         "is_pinned": bool(getattr(execution, "is_feed_pinned", False)),
         "establishment_id": execution.establishment_id,
         "establishment_name": execution.establishment.name,

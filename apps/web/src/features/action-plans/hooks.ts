@@ -23,6 +23,7 @@ import {
   fetchActionPlanExecutionUpcoming,
   fetchActionPlanExecutionCalendar,
   fetchCrossActionPlanExecutionCalendar,
+  fetchCrossActionPlanExecutionUpcoming,
   markActionPlanExecutionDone,
   markActionPlanTaskDone,
   markActionPlanTaskPending,
@@ -51,7 +52,11 @@ import {
   isActionPlanExecutionDetail,
   isActionPlanPlanningSubmitResponse,
 } from './lib/action-plan-create-response'
-import { applyActionPlanExecutionPinSuccess } from './lib/action-plan-execution-feed-cache'
+import {
+  applyActionPlanExecutionPinSuccess,
+  prepareActionPlanExecutionPinOptimisticUpdate,
+  restoreActionPlanExecutionPinOptimisticUpdate,
+} from './lib/action-plan-execution-feed-cache'
 
 function invalidateCatalogSurfaces(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -137,18 +142,37 @@ export function useActionPlanExecutionFeedQuery(
 export function useActionPlanExecutionUpcomingQuery(
   establishmentId: string | null,
   viewMode: ActionPlanExecutionFeedViewMode,
+  options?: {
+    source?: 'establishment' | 'cross'
+    enabled?: boolean
+    pageSize?: number
+  },
 ) {
+  const source = options?.source ?? 'establishment'
+  const enabled =
+    options?.enabled !== false && (source === 'cross' || Boolean(establishmentId))
+  const pageSize = options?.pageSize
   return useInfiniteQuery({
-    queryKey: establishmentId
-      ? actionPlansQueryKeys.executionUpcoming(establishmentId, viewMode)
-      : ['action-plans', 'action-plan-execution-upcoming', 'none'],
+    queryKey:
+      source === 'cross'
+        ? [...actionPlansQueryKeys.crossExecutionUpcoming(viewMode), pageSize ?? 'default']
+        : establishmentId
+          ? [...actionPlansQueryKeys.executionUpcoming(establishmentId, viewMode), pageSize ?? 'default']
+          : ['action-plans', 'action-plan-execution-upcoming', 'none'],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) => {
+      if (source === 'cross') {
+        return fetchCrossActionPlanExecutionUpcoming(viewMode, {
+          cursor: pageParam,
+          pageSize,
+        })
+      }
       if (!establishmentId) {
         throw new Error('Établissement non sélectionné.')
       }
       return fetchActionPlanExecutionUpcoming(establishmentId, viewMode, {
         cursor: pageParam,
+        pageSize,
       })
     },
     getNextPageParam: (lastPage) => {
@@ -157,7 +181,7 @@ export function useActionPlanExecutionUpcomingQuery(
       }
       return lastPage.next_cursor
     },
-    enabled: Boolean(establishmentId),
+    enabled,
   })
 }
 
@@ -398,6 +422,19 @@ export function usePinActionPlanExecutionMutation(
       }
       return pinActionPlanExecution(establishmentId, executionId)
     },
+    onMutate: async (executionId) => {
+      if (!establishmentId) {
+        return undefined
+      }
+      return prepareActionPlanExecutionPinOptimisticUpdate(queryClient, {
+        establishmentId,
+        executionId,
+        isPinned: true,
+      })
+    },
+    onError: (_error, _executionId, snapshot) => {
+      restoreActionPlanExecutionPinOptimisticUpdate(queryClient, snapshot)
+    },
     onSuccess: (result, executionId) => {
       if (!establishmentId) {
         return
@@ -423,6 +460,19 @@ export function useUnpinActionPlanExecutionMutation(
         throw new Error('Plan d’action introuvable.')
       }
       return unpinActionPlanExecution(establishmentId, executionId)
+    },
+    onMutate: async (executionId) => {
+      if (!establishmentId) {
+        return undefined
+      }
+      return prepareActionPlanExecutionPinOptimisticUpdate(queryClient, {
+        establishmentId,
+        executionId,
+        isPinned: false,
+      })
+    },
+    onError: (_error, _executionId, snapshot) => {
+      restoreActionPlanExecutionPinOptimisticUpdate(queryClient, snapshot)
     },
     onSuccess: (result, executionId) => {
       if (!establishmentId) {

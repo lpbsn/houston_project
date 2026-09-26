@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, LoaderCircle, Plus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 
 import { serializeAppRoute, useAppRoute } from '@/app/app-routes'
 import { serializeScopedExecutionDetailPath } from '@/app/scoped-terrain'
@@ -10,6 +10,7 @@ import { useLgViewport } from '@/lib/lg-viewport'
 import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
 import { TerrainHubTitleSlot } from '@/components/layout/terrain-hub-title-slot'
 import { TerrainHubViewToolbar } from '@/components/layout/terrain-hub-view-toolbar'
+import { TerrainFeedback } from '@/components/domain/terrain-feedback'
 import { Button } from '@/components/ui/button'
 import {
   TerrainEmptyState,
@@ -21,19 +22,27 @@ import { useCollapsibleFeedSections } from '@/lib/use-collapsible-feed-sections'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
-import { ActionPlansApiError, unwrapActionPlanExecutionFeedItems } from '@/features/action-plans/api'
+import {
+  ActionPlansApiError,
+  unwrapActionPlanExecutionFeedItems,
+} from '@/features/action-plans/api'
 import {
   useActionPlanExecutionCalendarQuery,
   useActionPlanExecutionFeedQuery,
 } from '@/features/action-plans/hooks'
-import type { ActionPlanExecutionFeedResponse } from '@/features/action-plans/types'
+import type {
+  ActionPlanExecutionFeedResponse,
+  ActionPlanExecutionFeedSectionCounts,
+} from '@/features/action-plans/types'
+import { useActionPlanExecutionFeedQuickActions } from '@/features/action-plans/hooks/use-action-plan-execution-feed-quick-actions'
 
 import { ActionPlanExecutionFeedCard } from '../components/action-plan-execution-feed-card'
 import { ActionPlanExecutionFeedDesktopRow } from '../components/action-plan-execution-feed-desktop-row'
 import { ExecutionCalendarView } from '../components/execution-calendar-view'
 import { ExecutionCreateMenuSheet } from '../components/execution-create-menu-sheet'
 import { ExecutionFeedTabs } from '../components/execution-feed-tabs'
-import { ExecutionUpcomingNavRow } from '../components/execution-upcoming-nav-row'
+import { ExecutionFeedSkeletonList } from '../components/execution-feed-skeleton'
+import { ExecutionPlanifieesNavRow } from '../components/execution-planifiees-nav-row'
 import {
   appendExecutionFeedSearch,
   executionFeedHref,
@@ -41,12 +50,15 @@ import {
   type ExecutionCalendarGranularity,
   type ExecutionFeedLayout,
 } from '../lib/execution-feed-url-state'
-import { ActionPlanExecutionFeedCardActionsSheet } from '@/features/action-plans/components/action-plan-execution-feed-card-actions-sheet'
-import { useActionPlanExecutionFeedQuickActions } from '@/features/action-plans/hooks/use-action-plan-execution-feed-quick-actions'
 import {
+  EXECUTION_FEED_DEFAULT_COLLAPSED_SECTIONS,
+  EXECUTION_FEED_PINNED_SECTION_KEY,
   groupActionPlanExecutionsBySection,
+  hasActionPlanExecutionFeedSections,
   partitionActionPlanExecutionFeedPinnedItems,
+  type ActionPlanExecutionFeedSectionKey,
 } from '../lib/action-plan-execution-feed-sections'
+import { formatPlanifieesProchaineLabel } from '../lib/action-plan-execution-feed-card-display'
 import { canOpenExecutionCreateMenu } from '../lib/execution-create-menu'
 import {
   executionFeedReadingScopeKey,
@@ -65,12 +77,19 @@ import {
   type RememberedCalendarTimezone,
 } from '../lib/execution-calendar-window'
 
-const EXECUTION_FEED_DEFAULT_COLLAPSED_SECTIONS = ['done', 'canceled'] as const
-
 type ExecutionFeedPageProps = {
   onNavigate?: (pathname: string) => void
   establishmentId?: string | null
   source?: 'establishment' | 'cross'
+}
+
+const EMPTY_SECTION_COUNTS: ActionPlanExecutionFeedSectionCounts = {
+  pinned: 0,
+  pending_validation: 0,
+  overdue: 0,
+  in_progress: 0,
+  done: 0,
+  canceled: 0,
 }
 
 function readScheduledCountFromFeedPages(
@@ -79,11 +98,31 @@ function readScheduledCountFromFeedPages(
   if (!pages?.length) {
     return 0
   }
-
   const pageWithScheduled =
     pages.find((page) => typeof page.scheduled_count === 'number') ?? pages[0]
-
   return pageWithScheduled?.scheduled_count ?? 0
+}
+
+function readFirstScheduledItemFromFeedPages(
+  pages: ActionPlanExecutionFeedResponse[] | undefined,
+) {
+  if (!pages?.length) {
+    return null
+  }
+  const page =
+    pages.find((entry) => (entry.scheduled_items?.length ?? 0) > 0) ?? pages[0]
+  const wrapper = page?.scheduled_items?.[0]
+  return wrapper?.action_plan_execution ?? null
+}
+
+function readSectionCountsFromFeedPages(
+  pages: ActionPlanExecutionFeedResponse[] | undefined,
+): ActionPlanExecutionFeedSectionCounts {
+  if (!pages?.length) {
+    return EMPTY_SECTION_COUNTS
+  }
+  const page = pages.find((entry) => entry.section_counts) ?? pages[0]
+  return page?.section_counts ?? EMPTY_SECTION_COUNTS
 }
 
 /**
@@ -197,9 +236,28 @@ function ExecutionFeedPageContent({
   const scheduledCount = planFeedQuery.isSuccess
     ? readScheduledCountFromFeedPages(planFeedQuery.data.pages)
     : 0
+  const nextScheduledPreview = planFeedQuery.isSuccess
+    ? readFirstScheduledItemFromFeedPages(planFeedQuery.data.pages)
+    : null
+  const prochaineLabel = formatPlanifieesProchaineLabel(nextScheduledPreview)
+  const sectionCounts = planFeedQuery.isSuccess
+    ? readSectionCountsFromFeedPages(planFeedQuery.data.pages)
+    : EMPTY_SECTION_COUNTS
   const { pinnedItems, unpinnedItems } = partitionActionPlanExecutionFeedPinnedItems(planItems)
-  const planGroups = groupActionPlanExecutionsBySection(unpinnedItems)
-  const sectionKeys = planGroups.map((group) => group.section)
+  const planGroups = groupActionPlanExecutionsBySection(unpinnedItems, sectionCounts)
+  const hasVisibleSections = hasActionPlanExecutionFeedSections(sectionCounts)
+
+  const sectionKeys = useMemo((): string[] => {
+    const keys: string[] = []
+    if (sectionCounts.pinned > 0) {
+      keys.push(EXECUTION_FEED_PINNED_SECTION_KEY)
+    }
+    for (const group of planGroups) {
+      keys.push(group.section)
+    }
+    return keys
+  }, [sectionCounts.pinned, planGroups])
+
   const savedMatchesView = initialReading?.viewMode === viewMode
   const { isExpanded, toggle, expandedByKey } = useCollapsibleFeedSections(sectionKeys, {
     defaultCollapsedKeys: EXECUTION_FEED_DEFAULT_COLLAPSED_SECTIONS,
@@ -218,15 +276,22 @@ function ExecutionFeedPageContent({
 
   const isInitialLoading = planFeedQuery.isLoading
   const showGlobalEmpty =
-    planItems.length === 0 &&
+    !hasVisibleSections &&
     scheduledCount === 0 &&
     planFeedQuery.isSuccess &&
     !planFeedQuery.isLoading
-  const hasVisibleItems = pinnedItems.length > 0 || planGroups.length > 0
   const hasMore = planFeedQuery.hasNextPage
   const isFetchingMore = planFeedQuery.isFetchingNextPage
   const canRememberReading = Boolean(establishmentId) || isCross
   const savedScrollTop = savedMatchesView ? (initialReading?.scrollTop ?? 0) : 0
+
+  function sectionCountFor(
+    key: typeof EXECUTION_FEED_PINNED_SECTION_KEY | ActionPlanExecutionFeedSectionKey,
+  ): number {
+    return sectionCounts[key]
+  }
+
+  const planifieesHref = isCross ? '/cross/execution/upcoming' : '/execution/upcoming'
 
   useLayoutEffect(() => {
     if (restoredScrollRef.current || layout !== 'list') {
@@ -274,15 +339,25 @@ function ExecutionFeedPageContent({
       <Button
         type="button"
         size="icon"
+        variant="ghost"
         className={cn(
-          'h-10 w-10 min-h-10 min-w-10 shrink-0 rounded-xl text-white',
-          terrainBrandAction.bg,
-          terrainBrandAction.hover,
+          // Visual disc is size-7; -m-2 keeps a ~44px tap target without growing the toolbar row.
+          '-m-2 size-11 min-h-11 min-w-11 shrink-0 rounded-none border-0 bg-transparent p-0',
+          'text-white shadow-none hover:bg-transparent',
         )}
         aria-label="Créer"
         onClick={() => setIsCreateMenuOpen(true)}
       >
-        <Plus className="h-5 w-5" />
+        <span
+          className={cn(
+            'inline-flex size-7 items-center justify-center rounded-xl',
+            terrainBrandAction.bg,
+            'group-hover/button:bg-[#0f3d52]',
+          )}
+          aria-hidden
+        >
+          <Plus className="size-3.5" strokeWidth={1.75} />
+        </span>
       </Button>
     )
   ) : null
@@ -310,32 +385,13 @@ function ExecutionFeedPageContent({
           key={`${keyPrefix}-${item.id}`}
           item={item}
           onSelect={openExecution}
-          actionsPending={quickActions.isPending}
-          actionsOpen={
-            !isCross &&
-            quickActions.actionsOpen &&
-            quickActions.activeItem?.id === item.id
-          }
-          actionError={
-            !isCross && quickActions.activeItem?.id === item.id
-              ? quickActions.actionError
-              : null
-          }
-          onActionsOpenChange={
+          onTogglePin={
             isCross
               ? undefined
-              : (open) => {
-                  if (open) {
-                    quickActions.openActions(item)
-                    return
-                  }
-                  quickActions.closeActions()
+              : (feedItem) => {
+                  quickActions.clearActionError()
+                  quickActions.runAction('pin', feedItem)
                 }
-          }
-          onRunAction={
-            isCross
-              ? undefined
-              : (feedItem, actionId) => quickActions.runAction(actionId, feedItem)
           }
         />
       )
@@ -345,7 +401,14 @@ function ExecutionFeedPageContent({
         key={`${keyPrefix}-${item.id}`}
         item={item}
         onSelect={openExecution}
-        onOpenActions={isCross ? undefined : quickActions.openActions}
+        onTogglePin={
+          isCross
+            ? undefined
+            : (feedItem) => {
+                quickActions.clearActionError()
+                quickActions.runAction('pin', feedItem)
+              }
+        }
       />
     )
   }
@@ -355,6 +418,14 @@ function ExecutionFeedPageContent({
       <p className="px-3 py-4 text-sm text-[#6b5f52]">Établissement non sélectionné.</p>
     )
   }
+
+  const viewTabs = (
+    <ExecutionFeedTabs
+      viewMode={viewMode}
+      onChange={(next) => replaceFeedUrl({ viewMode: next })}
+      size={isDesktopWeb ? 'default' : 'compact'}
+    />
+  )
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -366,18 +437,17 @@ function ExecutionFeedPageContent({
         onSelectActionPlan={() => onNavigate?.('/action-plans/new?from=execution')}
         onSelectCatalog={() => onNavigate?.('/action-plans')}
       />
-      <TerrainHubTitleSlot>
-        <ExecutionFeedTabs
-          viewMode={viewMode}
-          onChange={(next) => replaceFeedUrl({ viewMode: next })}
-        />
-      </TerrainHubTitleSlot>
+      <TerrainHubTitleSlot>{viewTabs}</TerrainHubTitleSlot>
       <TerrainHubSubheader>
-        <div className="flex flex-col gap-2">
-          <TerrainHubViewToolbar className="pb-3 pt-3" trailing={createAction}>
+        <div className={cn('flex flex-col', isDesktopWeb ? 'gap-2' : 'gap-0')}>
+          <TerrainHubViewToolbar
+            className={isDesktopWeb ? 'pb-3 pt-3' : 'pb-0.5 pt-0'}
+            trailing={createAction}
+          >
             <TerrainSegmentedControl
               ariaLabel="Disposition du feed"
               className="w-fit"
+              size={isDesktopWeb ? 'default' : 'compact'}
               value={layout}
               onChange={(next) => replaceFeedUrl({ layout: next })}
               options={[
@@ -442,99 +512,106 @@ function ExecutionFeedPageContent({
           </div>
         ) : (
           <>
-        {isInitialLoading ? (
-          <div className="flex items-center justify-center py-16 text-[#7D7B75]">
-            <LoaderCircle className="h-6 w-6 animate-spin" />
-          </div>
-        ) : null}
+            {isInitialLoading ? <ExecutionFeedSkeletonList /> : null}
 
-        {!isInitialLoading ? (
-          <div className="flex flex-col gap-3 pt-5">
-            {planFeedQuery.isError ? (
-              <TerrainErrorState
-                message={resolveApiErrorMessage(
-                  planFeedQuery.error,
-                  ActionPlansApiError,
-                  'Impossible de charger les plans d’action.',
-                )}
-                onRetry={() => void planFeedQuery.refetch()}
-              />
-            ) : null}
-
-            {planFeedQuery.isSuccess && onNavigate && !isCross ? (
-              <ExecutionUpcomingNavRow
-                count={scheduledCount}
-                onNavigate={() => onNavigate('/execution/upcoming')}
-              />
-            ) : null}
-
-            {planFeedQuery.isSuccess && hasVisibleItems ? (
-              <>
-                {pinnedItems.length > 0 ? (
-                  <div className={isDesktopWeb ? 'flex flex-col gap-1' : 'flex flex-col gap-3'}>
-                    {pinnedItems.map((item) => renderFeedItem(item, 'plan-pinned'))}
-                  </div>
+            {!isInitialLoading ? (
+              <div className="flex flex-col gap-3 pt-5">
+                {!isCross && quickActions.actionError ? (
+                  <TerrainFeedback variant="error" message={quickActions.actionError} />
                 ) : null}
 
-                {planGroups.length > 0 ? (
-                  <div className="flex flex-col gap-2">
-                    {planGroups.map((group) => (
+                {planFeedQuery.isError ? (
+                  <TerrainErrorState
+                    message={resolveApiErrorMessage(
+                      planFeedQuery.error,
+                      ActionPlansApiError,
+                      'Impossible de charger les plans d’action.',
+                    )}
+                    onRetry={() => void planFeedQuery.refetch()}
+                  />
+                ) : null}
+
+                {planFeedQuery.isSuccess && onNavigate && scheduledCount > 0 ? (
+                  <ExecutionPlanifieesNavRow
+                    count={scheduledCount}
+                    prochaineLabel={prochaineLabel}
+                    onNavigate={() => onNavigate(planifieesHref)}
+                  />
+                ) : null}
+
+                {planFeedQuery.isSuccess && hasVisibleSections ? (
+                  <>
+                    {sectionCounts.pinned > 0 ? (
                       <TerrainCollapsibleFeedSection
-                        key={`plan-${group.section}`}
-                        label={group.label}
-                        count={group.items.length}
-                        dotVariant={group.dotVariant}
-                        expanded={isExpanded(group.section)}
-                        onToggle={() => toggle(group.section)}
+                        key="plan-pinned"
+                        label="Épinglés"
+                        count={sectionCountFor(EXECUTION_FEED_PINNED_SECTION_KEY)}
+                        expanded={isExpanded(EXECUTION_FEED_PINNED_SECTION_KEY)}
+                        onToggle={() => toggle(EXECUTION_FEED_PINNED_SECTION_KEY)}
                       >
-                        <div className={isDesktopWeb ? 'flex flex-col gap-1' : 'flex flex-col gap-3'}>
-                          {group.items.map((item) => renderFeedItem(item, 'plan'))}
+                        <div
+                          className={
+                            isDesktopWeb ? 'flex flex-col gap-1' : 'flex flex-col gap-3'
+                          }
+                        >
+                          {pinnedItems.map((item) => renderFeedItem(item, 'plan-pinned'))}
                         </div>
                       </TerrainCollapsibleFeedSection>
-                    ))}
+                    ) : null}
+
+                    <div className="flex flex-col gap-2">
+                      {planGroups.map((group) => (
+                        <TerrainCollapsibleFeedSection
+                          key={`plan-${group.section}`}
+                          label={group.label}
+                          count={sectionCountFor(group.section)}
+                          dotVariant={group.dotVariant}
+                          expanded={isExpanded(group.section)}
+                          onToggle={() => toggle(group.section)}
+                        >
+                          <div
+                            className={
+                              isDesktopWeb
+                                ? 'flex flex-col gap-1'
+                                : 'flex flex-col gap-3'
+                            }
+                          >
+                            {group.items.map((item) => renderFeedItem(item, 'plan'))}
+                          </div>
+                        </TerrainCollapsibleFeedSection>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+
+                {showGlobalEmpty ? (
+                  <TerrainEmptyState
+                    className="mx-3 mt-3"
+                    title="Aucune exécution"
+                    description={getEmptyFeedDescription(
+                      viewMode,
+                      auth.bootstrap?.active_membership?.role,
+                    )}
+                  />
+                ) : null}
+
+                {hasMore ? (
+                  <div className="flex justify-center py-4">
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-[#1B4FD8] disabled:opacity-60"
+                      onClick={() => void planFeedQuery.fetchNextPage()}
+                      disabled={isFetchingMore}
+                    >
+                      {isFetchingMore ? 'Chargement…' : 'Afficher plus'}
+                    </button>
                   </div>
                 ) : null}
-              </>
-            ) : null}
-
-            {showGlobalEmpty ? (
-              <TerrainEmptyState
-                className="mx-3 mt-3"
-                title="Aucune exécution"
-                description={getEmptyFeedDescription(
-                  viewMode,
-                  auth.bootstrap?.active_membership?.role,
-                )}
-              />
-            ) : null}
-
-            {hasMore ? (
-              <div className="flex justify-center py-4">
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-[#1B4FD8] disabled:opacity-60"
-                  onClick={() => void planFeedQuery.fetchNextPage()}
-                  disabled={isFetchingMore}
-                >
-                  {isFetchingMore ? 'Chargement…' : 'Charger plus'}
-                </button>
               </div>
             ) : null}
-          </div>
-        ) : null}
           </>
         )}
       </div>
-
-      {!isDesktopWeb && quickActions.activeItem ? (
-        <ActionPlanExecutionFeedCardActionsSheet
-          item={quickActions.activeItem}
-          open={quickActions.actionsOpen}
-          isPending={quickActions.isPending}
-          onClose={quickActions.closeActions}
-          onSelectAction={quickActions.runAction}
-        />
-      ) : null}
     </div>
   )
 }
