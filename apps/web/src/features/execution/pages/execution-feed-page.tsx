@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 
 import { serializeAppRoute, useAppRoute } from '@/app/app-routes'
@@ -173,10 +173,7 @@ function ExecutionFeedPageContent({
   const viewMode = feedUrl.viewMode
   const layout: ExecutionFeedLayout = feedUrl.layout
   const granularity = feedUrl.granularity
-  const calendarWindow = useMemo(
-    () => resolveCalendarWindow(granularity, feedUrl.anchor),
-    [granularity, feedUrl.anchor],
-  )
+  const calendarWindow = resolveCalendarWindow(granularity, feedUrl.anchor)
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false)
 
   function replaceFeedUrl(
