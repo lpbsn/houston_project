@@ -364,7 +364,10 @@ def test_cross_execution_upcoming_unions_and_matches_feed_scheduled_meta(api_cli
     assert feed_body["scheduled_count"] == 2
     assert upcoming_ids == [str(exec_a.id), str(exec_b.id)]
     assert preview_ids == upcoming_ids
-    assert upcoming.json()["items"][0]["action_plan_execution"]["permission_hints"]["can_pin"] is False
+    assert (
+        upcoming.json()["items"][0]["action_plan_execution"]["permission_hints"]["can_pin"]
+        is False
+    )
 
 
 def test_cross_feed_scheduled_items_global_sort_and_preview_cap(api_client, monkeypatch):

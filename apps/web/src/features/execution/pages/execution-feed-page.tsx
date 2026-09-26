@@ -247,16 +247,13 @@ function ExecutionFeedPageContent({
   const planGroups = groupActionPlanExecutionsBySection(unpinnedItems, sectionCounts)
   const hasVisibleSections = hasActionPlanExecutionFeedSections(sectionCounts)
 
-  const sectionKeys = useMemo((): string[] => {
-    const keys: string[] = []
-    if (sectionCounts.pinned > 0) {
-      keys.push(EXECUTION_FEED_PINNED_SECTION_KEY)
-    }
-    for (const group of planGroups) {
-      keys.push(group.section)
-    }
-    return keys
-  }, [sectionCounts.pinned, planGroups])
+  const sectionKeys: string[] = []
+  if (sectionCounts.pinned > 0) {
+    sectionKeys.push(EXECUTION_FEED_PINNED_SECTION_KEY)
+  }
+  for (const group of planGroups) {
+    sectionKeys.push(group.section)
+  }
 
   const savedMatchesView = initialReading?.viewMode === viewMode
   const { isExpanded, toggle, expandedByKey } = useCollapsibleFeedSections(sectionKeys, {
