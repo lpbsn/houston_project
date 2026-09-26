@@ -5,6 +5,7 @@ import type { PermissionHints, SignalFeedItem } from '../types'
 import {
   canOpenSignalFeedCardActions,
   getSignalFeedCardActionOptions,
+  isSignalFeedLifecycleActionId,
 } from './signal-feed-card-actions'
 
 function hints(overrides: Partial<PermissionHints> = {}): PermissionHints {
@@ -50,8 +51,8 @@ describe('canOpenSignalFeedCardActions', () => {
     expect(canOpenSignalFeedCardActions(hints({ can_cancel: true }))).toBe(true)
   })
 
-  it('returns false when only can_qualify_routing is true', () => {
-    expect(canOpenSignalFeedCardActions(hints({ can_qualify_routing: true }))).toBe(false)
+  it('returns true when only can_qualify_routing is true', () => {
+    expect(canOpenSignalFeedCardActions(hints({ can_qualify_routing: true }))).toBe(true)
   })
 })
 
@@ -89,12 +90,12 @@ describe('getSignalFeedCardActionOptions', () => {
     ])
   })
 
-  it('does not return qualify action when can_qualify_routing', () => {
+  it('returns qualify action when can_qualify_routing', () => {
     expect(
       getSignalFeedCardActionOptions(
         feedItem({ permission_hints: hints({ can_qualify_routing: true }) }),
       ),
-    ).toEqual([])
+    ).toEqual([{ id: 'qualify', label: 'Qualifier', tone: 'neutral' }])
   })
 
   it('returns resolve action when can_resolve', () => {
@@ -121,6 +122,7 @@ describe('getSignalFeedCardActionOptions', () => {
           permission_hints: hints({
             can_pin: true,
             can_mark_interesting: true,
+            can_qualify_routing: true,
             can_resolve: true,
             can_cancel: true,
           }),
@@ -129,8 +131,17 @@ describe('getSignalFeedCardActionOptions', () => {
     ).toEqual([
       { id: 'pin', label: 'Désépingler', tone: 'neutral' },
       { id: 'mark_interesting', label: 'Marquer comme intéressant', tone: 'neutral' },
+      { id: 'qualify', label: 'Qualifier', tone: 'neutral' },
       { id: 'resolve', label: 'Marquer comme résolue', tone: 'success' },
       { id: 'cancel', label: 'Annuler cette observation', tone: 'danger' },
     ])
+  })
+})
+
+describe('isSignalFeedLifecycleActionId', () => {
+  it('excludes qualify from lifecycle actions', () => {
+    expect(isSignalFeedLifecycleActionId('qualify')).toBe(false)
+    expect(isSignalFeedLifecycleActionId('pin')).toBe(true)
+    expect(isSignalFeedLifecycleActionId('resolve')).toBe(true)
   })
 })

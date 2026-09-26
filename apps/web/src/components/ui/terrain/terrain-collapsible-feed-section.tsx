@@ -10,7 +10,8 @@ import { cn } from '@/lib/utils'
 
 type TerrainCollapsibleFeedSectionProps = {
   label: string
-  count: number
+  /** Omit when the real total is unknown (e.g. section still has more pages). */
+  count?: number
   dotVariant?: TerrainSectionDotVariant
   expanded: boolean
   onToggle: () => void
@@ -30,6 +31,8 @@ export function TerrainCollapsibleFeedSection({
   const toggleLabel = expanded
     ? `Replier la section ${label}`
     : `Déplier la section ${label}`
+  const title =
+    typeof count === 'number' ? `${label} · ${count}` : label
 
   return (
     <section className={className}>
@@ -49,9 +52,7 @@ export function TerrainCollapsibleFeedSection({
             aria-hidden
           />
         ) : null}
-        <span className="truncate">
-          {label} · {count}
-        </span>
+        <span className="truncate">{title}</span>
         {expanded ? (
           <ChevronUp className="h-4 w-4 shrink-0 text-[#a3a19a]" aria-hidden />
         ) : (

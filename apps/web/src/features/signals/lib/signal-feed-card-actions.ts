@@ -13,6 +13,7 @@ export const SIGNAL_IN_PROGRESS_RESOLVE_VIA_ACTION_PLAN_HINT =
 export type SignalFeedCardActionId =
   | 'pin'
   | 'mark_interesting'
+  | 'qualify'
   | 'resolve'
   | 'cancel'
 
@@ -28,6 +29,7 @@ export function canOpenSignalFeedCardActions(hints: PermissionHints): boolean {
   return (
     hints.can_pin ||
     hints.can_mark_interesting ||
+    hints.can_qualify_routing ||
     hints.can_resolve ||
     hints.can_cancel
   )
@@ -55,6 +57,14 @@ export function getSignalFeedCardActionOptions(
     })
   }
 
+  if (hints.can_qualify_routing) {
+    options.push({
+      id: 'qualify',
+      label: 'Qualifier',
+      tone: 'neutral',
+    })
+  }
+
   if (hints.can_resolve) {
     options.push({
       id: 'resolve',
@@ -72,4 +82,11 @@ export function getSignalFeedCardActionOptions(
   }
 
   return options
+}
+
+/** Lifecycle actions handled by useSignalFeedQuickActions — exclude qualify. */
+export function isSignalFeedLifecycleActionId(
+  actionId: SignalFeedCardActionId,
+): actionId is Exclude<SignalFeedCardActionId, 'qualify'> {
+  return actionId !== 'qualify'
 }

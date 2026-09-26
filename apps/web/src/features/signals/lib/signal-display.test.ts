@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   formatSignalAggregationBadge,
   formatSignalAggregationLabel,
+  formatSignalFeedAggregationBadge,
+  formatSignalFeedCardClassificationLine,
+  formatSignalFeedPinnedPoleLabel,
   getPinnedSignalCardClassName,
   getSignalCardLeftAccentColor,
   getSignalStatusBadgeVariant,
@@ -183,10 +186,57 @@ describe('getSignalCardLeftAccentColor', () => {
   })
 })
 
+describe('formatSignalFeedCardClassificationLine', () => {
+  it('returns subject only in personal view', () => {
+    expect(
+      formatSignalFeedCardClassificationLine(
+        {
+          responsible_business_unit_id: 'bu-1',
+          responsible_business_unit_label: 'Maintenance',
+          activity_subject_label: 'Électricité',
+        },
+        'personal',
+      ),
+    ).toBe('Électricité')
+  })
+
+  it('returns responsible · subject in general view', () => {
+    expect(
+      formatSignalFeedCardClassificationLine(
+        {
+          responsible_business_unit_id: 'bu-1',
+          responsible_business_unit_label: 'Maintenance',
+          activity_subject_label: 'Électricité',
+        },
+        'general',
+      ),
+    ).toBe('Maintenance · Électricité')
+  })
+})
+
+describe('formatSignalFeedPinnedPoleLabel', () => {
+  it('returns responsible pole only', () => {
+    expect(
+      formatSignalFeedPinnedPoleLabel({
+        responsible_business_unit_id: 'bu-1',
+        responsible_business_unit_label: 'Maintenance',
+        activity_subject_label: 'Électricité',
+      }),
+    ).toBe('Maintenance')
+  })
+})
+
 describe('formatSignalAggregationBadge', () => {
   it('prefixes count with x', () => {
     expect(formatSignalAggregationBadge(1)).toBe('x1')
     expect(formatSignalAggregationBadge(2)).toBe('x2')
+  })
+})
+
+describe('formatSignalFeedAggregationBadge', () => {
+  it('prefixes count with + for mobile feed cards', () => {
+    expect(formatSignalFeedAggregationBadge(1)).toBe('+1')
+    expect(formatSignalFeedAggregationBadge(2)).toBe('+2')
   })
 })
 

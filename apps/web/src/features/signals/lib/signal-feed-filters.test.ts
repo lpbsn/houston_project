@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   EMPTY_SIGNAL_FEED_FILTERS,
   appendSignalFeedFiltersToSearchParams,
+  formatClassificationFilterChipLabel,
   formatClassificationFilterSummary,
-  formatStatusFilterSummary,
+  formatStatusFilterChipLabel,
   hasActiveSignalFeedFilters,
   normalizeSignalFeedFilters,
 } from './signal-feed-filters'
@@ -95,24 +96,6 @@ describe('appendSignalFeedFiltersToSearchParams', () => {
   })
 })
 
-describe('formatStatusFilterSummary', () => {
-  it('formats empty and single selections', () => {
-    expect(formatStatusFilterSummary(EMPTY_SIGNAL_FEED_FILTERS)).toBe('Tous ▾')
-    expect(
-      formatStatusFilterSummary({
-        ...EMPTY_SIGNAL_FEED_FILTERS,
-        statuses: ['open'],
-      }),
-    ).toBe('En attente ▾')
-    expect(
-      formatStatusFilterSummary({
-        ...EMPTY_SIGNAL_FEED_FILTERS,
-        statuses: ['canceled'],
-      }),
-    ).toBe('Annulée ▾')
-  })
-})
-
 describe('formatClassificationFilterSummary', () => {
   const businessUnitLabels = new Map([
     [BU_RESTAURANT, 'Restaurant'],
@@ -157,5 +140,45 @@ describe('formatClassificationFilterSummary', () => {
         subjectLabels,
       ),
     ).toBe('Restaurant +3 ▾')
+  })
+})
+
+describe('formatStatusFilterChipLabel', () => {
+  it('uses Statut when empty and concrete labels when selected', () => {
+    expect(formatStatusFilterChipLabel(EMPTY_SIGNAL_FEED_FILTERS)).toBe('Statut')
+    expect(
+      formatStatusFilterChipLabel({
+        ...EMPTY_SIGNAL_FEED_FILTERS,
+        statuses: ['open'],
+      }),
+    ).toBe('En attente')
+    expect(
+      formatStatusFilterChipLabel({
+        ...EMPTY_SIGNAL_FEED_FILTERS,
+        statuses: ['open', 'resolved'],
+      }),
+    ).toBe('Statut · 2')
+  })
+})
+
+describe('formatClassificationFilterChipLabel', () => {
+  const businessUnitLabels = new Map([[BU_RESTAURANT, 'Restaurant']])
+  const subjectLabels = new Map([[SAMPLE_SUBJECT_ID, 'Électricité']])
+
+  it('uses Pôle / Sujet when empty', () => {
+    expect(
+      formatClassificationFilterChipLabel(
+        EMPTY_SIGNAL_FEED_FILTERS,
+        businessUnitLabels,
+        subjectLabels,
+      ),
+    ).toBe('Pôle / Sujet')
+    expect(
+      formatClassificationFilterChipLabel(
+        { ...EMPTY_SIGNAL_FEED_FILTERS, businessUnitIds: [BU_RESTAURANT] },
+        businessUnitLabels,
+        subjectLabels,
+      ),
+    ).toBe('Restaurant')
   })
 })

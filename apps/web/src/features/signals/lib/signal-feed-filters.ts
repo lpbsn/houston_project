@@ -82,16 +82,18 @@ export function appendSignalFeedFiltersToSearchParams(
   }
 }
 
-export function formatStatusFilterSummary(filters: SignalFeedFilters): string {
+export function formatStatusFilterChipLabel(filters: SignalFeedFilters): string {
   const { statuses } = normalizeSignalFeedFilters(filters)
   if (statuses.length === 0) {
-    return 'Tous ▾'
+    return 'Statut'
   }
   if (statuses.length === 1) {
-    const label = SIGNAL_FEED_STATUS_OPTIONS.find((option) => option.value === statuses[0])?.label
-    return `${label ?? statuses[0]} ▾`
+    return (
+      SIGNAL_FEED_STATUS_OPTIONS.find((option) => option.value === statuses[0])?.label ??
+      statuses[0]
+    )
   }
-  return `${statuses.length} sélectionnés ▾`
+  return `Statut · ${statuses.length}`
 }
 
 export function countClassificationFilterSelections(filters: SignalFeedFilters): number {
@@ -123,4 +125,31 @@ export function formatClassificationFilterSummary(
     return `${count} sélections ▾`
   }
   return firstLabel ? `${firstLabel} +${count - 1} ▾` : `${count} sélections ▾`
+}
+
+/** Compact chip label without dropdown chevron (mobile filter chips). */
+export function formatClassificationFilterChipLabel(
+  filters: SignalFeedFilters,
+  labelByBusinessUnitId: Map<string, string>,
+  labelByActivitySubjectId: Map<string, string>,
+): string {
+  const normalized = normalizeSignalFeedFilters(filters)
+  const count = countClassificationFilterSelections(normalized)
+  if (count === 0) {
+    return 'Pôle / Sujet'
+  }
+
+  const orderedLabels = [
+    ...normalized.businessUnitIds.map((id) => labelByBusinessUnitId.get(id) ?? id),
+    ...normalized.activitySubjectIds.map((id) => labelByActivitySubjectId.get(id) ?? id),
+  ]
+  const firstLabel = orderedLabels[0]
+
+  if (count === 1) {
+    return firstLabel ?? '1 sélection'
+  }
+  if (count <= 3) {
+    return `Pôle / Sujet · ${count}`
+  }
+  return firstLabel ? `${firstLabel} +${count - 1}` : `Pôle / Sujet · ${count}`
 }

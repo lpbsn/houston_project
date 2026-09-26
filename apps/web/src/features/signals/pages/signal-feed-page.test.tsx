@@ -22,6 +22,10 @@ const feedLoadMoreMutate = vi.fn()
 const feedQueryMock = vi.fn()
 const loadMoreMock = vi.fn()
 const feedQueryCalls: unknown[][] = []
+const openForSignalMock = vi.fn()
+const runActionMock = vi.fn(() => 'close' as const)
+const closeActionsMock = vi.fn()
+const openActionsMock = vi.fn()
 
 function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem {
   return {
@@ -107,18 +111,34 @@ vi.mock('@/features/signals/hooks/use-signal-feed-quick-actions', () => ({
       activeItem,
       actionsOpen,
       openActions: (item: FeedItemForActions) => {
+        openActionsMock(item)
         setActiveItem(item)
         setActionsOpen(true)
       },
       closeActions: () => {
+        closeActionsMock()
         setActionsOpen(false)
         setActiveItem(null)
       },
-      runAction: vi.fn(() => 'close' as const),
+      runAction: (...args: unknown[]) => runActionMock(...args),
       isPending: false,
       actionError: null,
     }
   },
+}))
+
+vi.mock('@/features/signals/hooks/use-signal-qualify-sheet', () => ({
+  useSignalQualifySheet: () => ({
+    open: false,
+    opening: false,
+    signalId: null,
+    signal: null,
+    isPending: false,
+    errorMessage: null,
+    openForSignal: openForSignalMock,
+    close: vi.fn(),
+    submit: vi.fn(),
+  }),
 }))
 
 vi.mock('@/features/signals/components/signal-feed-filters-bar', () => ({
@@ -134,6 +154,7 @@ vi.mock('@/features/signals/components/signal-feed-filters-bar', () => ({
 function renderSignalFeedPage(
   props: {
     onOpenSignal?: (signalId: string) => void
+    onNavigate?: (pathname: string, options?: { replace?: boolean }) => void
     establishmentId?: string | null
     source?: 'establishment' | 'cross'
   } = {},
@@ -149,6 +170,7 @@ function renderSignalFeedPage(
       createElement(TerrainTopbar, { variant: 'hub', pageTitle: 'Observations' }),
       createElement(SignalFeedPage, {
         onOpenSignal: props.onOpenSignal ?? vi.fn(),
+        onNavigate: props.onNavigate ?? vi.fn(),
         establishmentId: props.establishmentId,
         source: props.source,
       }),
@@ -331,9 +353,48 @@ describe('SignalFeedPage collapsible sections', () => {
 
     expect(screen.getByRole('heading', { level: 3, name: 'Signal ouvert' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Déplier la section Résolues' })).toBeTruthy()
-    const loadMore = screen.getByRole('button', { name: 'Charger plus' })
+    const loadMore = screen.getByRole('button', { name: 'Afficher plus' })
     fireEvent.click(loadMore)
     expect(feedLoadMoreMutate).toHaveBeenCalledWith('open')
+  })
+
+  it('omits section count when has_more is true', () => {
+    feedQueryMock.mockReturnValue(
+      buildFeedQueryState({
+        data: {
+          sections: [
+            {
+              status: 'open',
+              items: [
+                buildFeedItem({ id: 'signal-open', title: 'Signal ouvert', status: 'open' }),
+              ],
+              next_cursor: 'open-cursor',
+              has_more: true,
+            },
+            {
+              status: 'resolved',
+              items: [
+                buildFeedItem({ id: 'signal-resolved', title: 'Signal résolu', status: 'resolved' }),
+              ],
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+
+    renderSignalFeedPage()
+
+    expect(screen.getByRole('button', { name: 'Replier la section En attente' }).textContent).toContain(
+      'En attente',
+    )
+    expect(screen.getByRole('button', { name: 'Replier la section En attente' }).textContent).not.toMatch(
+      /En attente ·/,
+    )
+    expect(screen.getByRole('button', { name: 'Déplier la section Résolues' }).textContent).toContain(
+      'Résolues · 1',
+    )
   })
 
   it('keeps open load more when every loaded open item is pinned', () => {
@@ -370,8 +431,9 @@ describe('SignalFeedPage collapsible sections', () => {
     renderSignalFeedPage()
 
     expect(screen.getByRole('heading', { level: 3, name: 'Épinglée ouverte' })).toBeTruthy()
+    expect(screen.getByTestId('signal-feed-pinned-carousel')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Replier la section En attente' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Charger plus' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Afficher plus' }))
     expect(feedLoadMoreMutate).toHaveBeenCalledWith('open')
   })
 })
@@ -452,6 +514,7 @@ describe('SignalFeedPage reading restoration', () => {
         createElement(TerrainTopbar, { variant: 'hub', pageTitle: 'Observations' }),
         createElement(SignalFeedPage, {
           onOpenSignal: vi.fn(),
+          onNavigate: vi.fn(),
           establishmentId,
         }),
       )
@@ -506,6 +569,11 @@ describe('SignalFeedPage reading restoration', () => {
 describe('SignalFeedPage desktop actions', () => {
   beforeEach(() => {
     clearSignalFeedReadingMemory()
+    openForSignalMock.mockReset()
+    openForSignalMock.mockResolvedValue({ ok: true })
+    runActionMock.mockClear()
+    closeActionsMock.mockClear()
+    openActionsMock.mockClear()
     loadMoreMock.mockReturnValue({
       mutate: feedLoadMoreMutate,
       isPending: false,
@@ -538,6 +606,47 @@ describe('SignalFeedPage desktop actions', () => {
     expect(screen.queryByRole('button', { name: 'Nouvelle observation' })).toBeNull()
   })
 
+  it('routes qualify to openForSignal and pin to runAction on desktop', () => {
+    mockLgViewport(true)
+    feedQueryMock.mockReturnValue(
+      buildFeedQueryState({
+        data: {
+          sections: [
+            {
+              status: 'open',
+              items: [
+                buildFeedItem({
+                  id: 'signal-open',
+                  title: 'Signal ouvert',
+                  status: 'open',
+                  permission_hints: {
+                    ...buildFeedItem().permission_hints,
+                    can_pin: true,
+                    can_qualify_routing: true,
+                    can_cancel: false,
+                    can_resolve: false,
+                  },
+                }),
+              ],
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+    renderSignalFeedPage({ establishmentId: 'est-1' })
+
+    fireEvent.click(screen.getByRole('button', { name: "Actions de l'observation" }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Qualifier' }))
+    expect(openForSignalMock).toHaveBeenCalledWith('signal-open')
+    expect(runActionMock).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: "Actions de l'observation" }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Épingler' }))
+    expect(runActionMock).toHaveBeenCalledWith('pin', expect.objectContaining({ id: 'signal-open' }))
+  })
+
   it('keeps the card and the actions sheet on a large native viewport', () => {
     vi.stubEnv('VITE_APP_RUNTIME', 'native')
     mockLgViewport(true)
@@ -552,6 +661,44 @@ describe('SignalFeedPage desktop actions', () => {
     expect(screen.getByRole('dialog', { name: 'Actions' })).toBeTruthy()
     expect(screen.queryByRole('menu', { name: "Actions de l'observation" })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Nouvelle observation' })).toBeNull()
+  })
+
+  it('routes qualify to openForSignal from the mobile actions sheet', () => {
+    mockLgViewport(false)
+    feedQueryMock.mockReturnValue(
+      buildFeedQueryState({
+        data: {
+          sections: [
+            {
+              status: 'open',
+              items: [
+                buildFeedItem({
+                  id: 'signal-open',
+                  title: 'Signal ouvert',
+                  status: 'open',
+                  permission_hints: {
+                    ...buildFeedItem().permission_hints,
+                    can_pin: true,
+                    can_qualify_routing: true,
+                    can_cancel: false,
+                    can_resolve: false,
+                  },
+                }),
+              ],
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+    renderSignalFeedPage({ establishmentId: 'est-1' })
+
+    fireEvent.click(screen.getByRole('button', { name: "Actions de l'observation" }))
+    expect(screen.getByRole('dialog', { name: 'Actions' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Qualifier' }))
+    expect(openForSignalMock).toHaveBeenCalledWith('signal-open')
+    expect(runActionMock).not.toHaveBeenCalled()
   })
 
   it('does not offer creation or card actions in Cross on desktop web', () => {

@@ -73,8 +73,13 @@ describe('SignalFeedDesktopRow', () => {
             reporter_display_name: 'Marie R.',
             aggregation_count: 3,
             ...classified,
+            permission_hints: {
+              ...buildFeedItem().permission_hints,
+              can_pin: true,
+            },
           })}
           onSelect={() => undefined}
+          onRunAction={vi.fn((): SignalFeedQuickActionResult => 'close')}
         />
         <SignalFeedDesktopRow
           item={buildFeedItem({
@@ -99,6 +104,8 @@ describe('SignalFeedDesktopRow', () => {
     const affected = screen.getByText('Pôle concerné : Communication')
     const location = screen.getByText(longLocation)
     const aggregation = screen.getByLabelText('3 agrégations')
+    expect(aggregation.textContent).toBe('+3')
+    expect(screen.queryByText('x3')).toBeNull()
     expect(badge.className).toContain('whitespace-normal')
     expect(location.className).toContain('break-words')
     expect(screen.getAllByText(/Pôle concerné :/)).toHaveLength(1)
@@ -108,27 +115,20 @@ describe('SignalFeedDesktopRow', () => {
 
     const author = screen.getByText('Marie R.')
     const statusLine = badge.parentElement
-    const metaLine = affected.parentElement
-    const timeGroup = aggregation.parentElement
+    const metaLine = aggregation.parentElement
     expect(statusLine?.contains(affected)).toBe(false)
     expect(metaLine?.contains(author)).toBe(true)
     expect(metaLine?.contains(location)).toBe(true)
-    expect(metaLine?.contains(aggregation)).toBe(false)
-    expect(metaLine?.className).toContain('justify-start')
-    expect(timeGroup?.className).toContain('justify-end')
+    expect(metaLine?.contains(affected)).toBe(true)
+    expect(metaLine?.className).toContain('justify-between')
     expect(
       author.compareDocumentPosition(location) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
-    const time = timeGroup?.querySelector('time')
     expect(
       location.compareDocumentPosition(affected) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
-    expect(time).toBeTruthy()
     expect(
-      affected.compareDocumentPosition(time as Node) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy()
-    expect(
-      (time as Node).compareDocumentPosition(aggregation) & Node.DOCUMENT_POSITION_FOLLOWING,
+      location.compareDocumentPosition(aggregation) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
     expect(
       title.compareDocumentPosition(badge) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -136,7 +136,21 @@ describe('SignalFeedDesktopRow', () => {
     expect(
       badge.compareDocumentPosition(affected) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
+
+    const time = document.querySelector('time')
+    const actions = screen.getByRole('button', { name: "Actions de l'observation" })
+    expect(time).toBeTruthy()
+    expect(titleButton?.contains(time as Node)).toBe(false)
     expect(titleButton?.contains(aggregation)).toBe(false)
+    expect(
+      title.compareDocumentPosition(time as Node) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(
+      (time as Node).compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(
+      (time as Node).compareDocumentPosition(badge) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
   })
 
   it('asks to close when onRunAction returns close', () => {
@@ -262,5 +276,46 @@ describe('SignalFeedDesktopRow', () => {
     expect(screen.getByRole('alert').textContent).toBe(
       'Impossible de résoudre cette observation.',
     )
+  })
+
+  it('renders pinned desktop closer to mobile pinned layout', () => {
+    render(
+      <SignalFeedDesktopRow
+        item={buildFeedItem({
+          is_pinned: true,
+          aggregation_count: 2,
+          location_text: 'Lobby',
+          ...classified,
+          permission_hints: {
+            ...buildFeedItem().permission_hints,
+            can_pin: true,
+          },
+        })}
+        pinned
+        onSelect={() => undefined}
+        onRunAction={vi.fn((): SignalFeedQuickActionResult => 'close')}
+      />,
+    )
+
+    expect(screen.getByText('Épinglée')).toBeTruthy()
+    expect(screen.getByText('Maintenance')).toBeTruthy()
+    expect(screen.queryByText('Maintenance · Électricité')).toBeNull()
+    expect(screen.queryByText('En attente')).toBeNull()
+    expect(screen.queryByText('+2')).toBeNull()
+    expect(screen.queryByLabelText('2 agrégations')).toBeNull()
+    const location = screen.getByText('Lobby')
+    const detailCta = screen.getByText('Voir le détail →')
+    expect(location).toBeTruthy()
+    expect(detailCta).toBeTruthy()
+    expect(
+      (location as Node).compareDocumentPosition(detailCta) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: "Actions de l'observation" })).toBeTruthy()
+    const time = document.querySelector('time')
+    const actions = screen.getByRole('button', { name: "Actions de l'observation" })
+    expect(time).toBeTruthy()
+    expect(
+      (time as Node).compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
   })
 })
