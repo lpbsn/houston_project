@@ -224,6 +224,81 @@ def test_cross_execution_feed_defaults_to_general_view_mode(api_client):
     assert str(mentioned.id) in personal_ids
 
 
+def test_cross_execution_feed_pins_use_per_establishment_membership_and_paginate(
+    api_client,
+):
+    from houston.action_plans.feed_pin_services import pin_action_plan_execution_for_membership
+    from houston.action_plans.tests.helpers import create_execution
+
+    user = create_user(username="cross-pin-paginate")
+    # Names ensure management-scope order: Alpha (A) before Beta (B).
+    first = create_establishment(name="Alpha Cross Pin")
+    second = create_establishment(name="Beta Cross Pin")
+    membership_a = create_membership(
+        establishment=first,
+        user=user,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    membership_b = create_membership(
+        establishment=second,
+        user=user,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    bu_a = create_business_unit(establishment=first, key="salle")
+    bu_b = create_business_unit(establishment=second, key="salle")
+
+    exec_a1 = create_execution(membership_a, business_unit=bu_a, title="A1")
+    exec_a2 = create_execution(membership_a, business_unit=bu_a, title="A2")
+    exec_b_pinned = create_execution(membership_b, business_unit=bu_b, title="B pinned")
+    exec_b2 = create_execution(membership_b, business_unit=bu_b, title="B2")
+    expected_ids = {
+        str(exec_a1.id),
+        str(exec_a2.id),
+        str(exec_b_pinned.id),
+        str(exec_b2.id),
+    }
+
+    pin_action_plan_execution_for_membership(
+        membership=membership_b,
+        execution_id=exec_b_pinned.id,
+    )
+
+    token = login(api_client, user=user)
+    page1 = api_client.get(
+        "/api/v1/cross/action-plan-execution-feed/?view_mode=general&page_size=2",
+        **auth_headers(token),
+    )
+    assert page1.status_code == 200, page1.content
+    body1 = page1.json()
+    assert body1["has_more"] is True
+    assert body1["next_cursor"]
+    assert body1["section_counts"]["pinned"] == 1
+    assert body1["section_counts"]["in_progress"] == 3
+
+    items1 = [row["action_plan_execution"] for row in body1["items"]]
+    assert len(items1) == 2
+    assert items1[0]["id"] == str(exec_b_pinned.id)
+    assert items1[0]["is_pinned"] is True
+    assert items1[0]["permission_hints"]["can_pin"] is False
+    assert all(item["is_pinned"] is False for item in items1[1:])
+
+    page2 = api_client.get(
+        "/api/v1/cross/action-plan-execution-feed/"
+        f"?view_mode=general&page_size=2&cursor={body1['next_cursor']}",
+        **auth_headers(token),
+    )
+    assert page2.status_code == 200, page2.content
+    body2 = page2.json()
+    assert body2["section_counts"] == body1["section_counts"]
+    items2 = [row["action_plan_execution"] for row in body2["items"]]
+    assert all(item["is_pinned"] is False for item in items2)
+    assert all(item["permission_hints"]["can_pin"] is False for item in items2)
+
+    seen_ids = [item["id"] for item in items1] + [item["id"] for item in items2]
+    assert len(seen_ids) == len(set(seen_ids))
+    assert set(seen_ids) == expected_ids
+
+
 def test_cross_execution_upcoming_unions_and_matches_feed_scheduled_meta(api_client):
     from datetime import timedelta
 

@@ -1,98 +1,12 @@
-import type { SignalClassificationInput } from '@/lib/signal-classification'
-
-import { formatActionPlanEndAtLabel } from '@/features/action-plans/lib/action-plan-display'
 import type {
   ActionPlanExecutionFeedAssignee,
   ActionPlanExecutionFeedItem,
 } from '@/features/action-plans/types'
 
-type SignalSummaryLike = {
-  affected_business_unit_id?: string | null
-  affected_business_unit_key?: string | null
-  affected_business_unit_label?: string | null
-  responsible_business_unit_id?: string | null
-  responsible_business_unit_key?: string | null
-  responsible_business_unit_label?: string | null
-  activity_subject_normalized_name?: string | null
-  activity_subject_label?: string | null
-}
-
-const MAX_VISIBLE_ASSIGNEES = 3
-
-export function isActionPlanFeedPendingValidationCard(item: ActionPlanExecutionFeedItem): boolean {
-  return item.status === 'pending_validation'
-}
-
-export function actionPlanFeedSignalClassificationInput(
-  signal: ActionPlanExecutionFeedItem['signal_summary'],
-): SignalClassificationInput | null {
-  if (!signal) {
-    return null
-  }
-  const typed = signal as SignalSummaryLike
-  return {
-    affected_business_unit_id: typed.affected_business_unit_id,
-    affected_business_unit_key: typed.affected_business_unit_key,
-    affected_business_unit_label: typed.affected_business_unit_label,
-    responsible_business_unit_id: typed.responsible_business_unit_id,
-    responsible_business_unit_key: typed.responsible_business_unit_key,
-    responsible_business_unit_label: typed.responsible_business_unit_label,
-    activity_subject_normalized_name: typed.activity_subject_normalized_name,
-    activity_subject_label: typed.activity_subject_label,
-  }
-}
-
-export function formatActionPlanFeedAssigneeDisplay(
-  assignees: ActionPlanExecutionFeedAssignee[],
-): { visible: string[]; overflow: number } {
-  const names = assignees
-    .map((assignee) => assignee.display_name.trim())
-    .filter((name) => name.length > 0)
-  return {
-    visible: names.slice(0, MAX_VISIBLE_ASSIGNEES),
-    overflow: Math.max(0, names.length - MAX_VISIBLE_ASSIGNEES),
-  }
-}
-
-export type ActionPlanFeedMetaParts = {
-  deadlineLabel: string | null
-  taskProgressLabel: string | null
-}
-
-export function formatActionPlanFeedTaskProgressLabel(
-  item: Pick<ActionPlanExecutionFeedItem, 'task_count' | 'treated_task_count'>,
-): string | null {
-  if (item.task_count <= 0) {
-    return null
-  }
-  return `Tâche ${item.treated_task_count}/${item.task_count}`
-}
-
-export function formatActionPlanFeedMetaParts(
-  item: Pick<
-    ActionPlanExecutionFeedItem,
-    'end_at' | 'task_count' | 'treated_task_count' | 'all_day'
-  >,
-): ActionPlanFeedMetaParts {
-  if (item.all_day) {
-    return {
-      deadlineLabel: 'Échéance : Journée entière',
-      taskProgressLabel: formatActionPlanFeedTaskProgressLabel(item),
-    }
-  }
-  const endAtLabel = formatActionPlanEndAtLabel(item.end_at)
-  return {
-    deadlineLabel: endAtLabel ? `Échéance : ${endAtLabel}` : null,
-    taskProgressLabel: formatActionPlanFeedTaskProgressLabel(item),
-  }
-}
-
 export type ActionPlanFeedSidebarState =
   | { variant: 'countdown'; prefix: 'DANS'; value: string }
-  | { variant: 'start_countdown'; prefix: 'DÉBUT'; value: string }
   | { variant: 'all_day' }
   | { variant: 'no_deadline' }
-  | { variant: 'no_start' }
   | { variant: 'overdue'; prefix: 'RETARD'; value: string }
 
 const MS_PER_HOUR = 60 * 60 * 1000
@@ -121,30 +35,6 @@ export function formatActionPlanFeedStartCountdownValue(remainingMs: number): st
   }
 
   return `${Math.ceil(remainingMs / MS_PER_HOUR)}h`
-}
-
-export function getActionPlanFeedStartCountdownState(
-  startAt: string | null | undefined,
-  now: number,
-  allDay = false,
-): ActionPlanFeedSidebarState {
-  if (allDay) {
-    return { variant: 'all_day' }
-  }
-  if (!startAt) {
-    return { variant: 'no_start' }
-  }
-
-  const startMs = Date.parse(startAt)
-  if (Number.isNaN(startMs)) {
-    return { variant: 'no_start' }
-  }
-
-  return {
-    variant: 'start_countdown',
-    prefix: 'DÉBUT',
-    value: formatActionPlanFeedStartCountdownValue(startMs - now),
-  }
 }
 
 export function getActionPlanFeedSidebarState(
@@ -182,86 +72,12 @@ export function getActionPlanFeedSidebarState(
   }
 }
 
-export function formatExecutionFeedDelayLabel(state: ActionPlanFeedSidebarState): string | null {
-  if (state.variant !== 'overdue') {
-    return null
-  }
-  return `${state.prefix} ${state.value}`
-}
-
 export function formatExecutionFeedCreatedLabel(createdAt: string): string | null {
   const date = new Date(createdAt)
   if (Number.isNaN(date.getTime())) {
     return null
   }
   return `Créé le ${date.toLocaleDateString('fr-FR')}`
-}
-
-function formatExecutionFeedStartDateLabel(startAt: string, allDay: boolean): string | null {
-  if (allDay) {
-    const date = new Date(startAt)
-    if (Number.isNaN(date.getTime())) {
-      return null
-    }
-    return date.toLocaleDateString('fr-FR')
-  }
-  return formatActionPlanEndAtLabel(startAt)
-}
-
-export function formatExecutionFeedTimingLabel(
-  item: Pick<ActionPlanExecutionFeedItem, 'status' | 'start_at' | 'end_at' | 'all_day'>,
-): string | null {
-  if (item.status === 'scheduled') {
-    if (!item.start_at) {
-      return null
-    }
-    const startLabel = formatExecutionFeedStartDateLabel(item.start_at, item.all_day)
-    return startLabel ? `Début : ${startLabel}` : null
-  }
-  if (item.all_day) {
-    return 'Échéance : Journée entière'
-  }
-  const endAtLabel = formatActionPlanEndAtLabel(item.end_at)
-  return endAtLabel ? `Échéance : ${endAtLabel}` : null
-}
-
-export type ActionPlanFeedProgressState = {
-  total: number
-  filled: number
-  fractionLabel: string
-}
-
-export function getActionPlanFeedProgressState(
-  item: Pick<ActionPlanExecutionFeedItem, 'task_count' | 'treated_task_count'>,
-): ActionPlanFeedProgressState | null {
-  const total = Math.max(0, item.task_count)
-  const filled = Math.min(total, Math.max(0, item.treated_task_count))
-
-  if (total === 0) {
-    return null
-  }
-
-  return {
-    total,
-    filled,
-    fractionLabel: `${filled}/${total}`,
-  }
-}
-
-export function isActionPlanFeedInProgressCard(item: ActionPlanExecutionFeedItem): boolean {
-  return item.status === 'in_progress'
-}
-
-export function isActionPlanFeedScheduledCard(item: ActionPlanExecutionFeedItem): boolean {
-  return item.status === 'scheduled'
-}
-
-export function isActionPlanFeedDoneCard(item: ActionPlanExecutionFeedItem): boolean {
-  return item.status === 'done'
-}
-
-export function isActionPlanFeedCanceledCard(item: ActionPlanExecutionFeedItem): boolean {
-  return item.status === 'canceled'
 }
 
 const MAX_CARD_VISIBLE_ASSIGNEES = 2
@@ -472,7 +288,7 @@ export function formatActionPlanFeedTerminalDateLabel(
 }
 
 /** Date first; optional actor only when present. Never hide a reliable date. */
-export function formatActionPlanFeedActorDateLine(
+function formatActionPlanFeedActorDateLine(
   prefix: string,
   at: string | null | undefined,
   byDisplayName: string | null | undefined,

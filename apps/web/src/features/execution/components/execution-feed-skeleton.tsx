@@ -4,7 +4,7 @@ type ExecutionFeedCardSkeletonProps = {
   className?: string
 }
 
-export function ExecutionFeedCardSkeleton({ className }: ExecutionFeedCardSkeletonProps) {
+function ExecutionFeedCardSkeleton({ className }: ExecutionFeedCardSkeletonProps) {
   return (
     <div
       className={cn('rounded-[14px] border border-[#E8E6DF] bg-white p-3', className)}

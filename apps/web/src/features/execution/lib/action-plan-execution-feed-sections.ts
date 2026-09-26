@@ -24,15 +24,13 @@ export const EXECUTION_FEED_PINNED_SECTION_KEY = 'pinned' as const
 
 export const EXECUTION_FEED_DEFAULT_COLLAPSED_SECTIONS = ['done', 'canceled'] as const
 
-export const EXECUTION_FEED_SECTION_ORDER: ActionPlanExecutionFeedSectionKey[] = [
+const SECTION_ORDER: ActionPlanExecutionFeedSectionKey[] = [
   'pending_validation',
   'overdue',
   'in_progress',
   'done',
   'canceled',
 ]
-
-const SECTION_ORDER = EXECUTION_FEED_SECTION_ORDER
 
 const SECTION_META: Record<
   ActionPlanExecutionFeedSectionKey,

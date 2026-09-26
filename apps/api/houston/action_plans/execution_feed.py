@@ -148,10 +148,12 @@ def build_cross_action_plan_execution_feed_page(
         return [], False, None, as_of, [], 0, dict(EMPTY_SECTION_COUNTS)
 
     combined = None
+    prepared_memberships: list[EstablishmentMembership] = []
     scheduled_by_id: dict = {}
     scheduled_count = 0
     for membership in memberships:
         prepared = _membership_for_action_plan_execution_feed(membership)
+        prepared_memberships.append(prepared)
         ensure_visible_action_plan_executions_materialized(
             membership=prepared,
             view_mode=view_mode,
@@ -173,25 +175,24 @@ def build_cross_action_plan_execution_feed_page(
         ):
             scheduled_by_id.setdefault(execution.id, execution)
 
-    sort_membership = _membership_for_action_plan_execution_feed(memberships[0])
     if cursor is not None:
         as_of = cursor.as_of
         sorted_qs = apply_action_plan_execution_feed_cursor(
             combined,
             cursor,
-            membership=sort_membership,
+            memberships=prepared_memberships,
         )
     else:
         as_of = timezone.now()
         sorted_qs = apply_action_plan_execution_feed_sorting(
             combined,
-            membership=sort_membership,
+            memberships=prepared_memberships,
             as_of=as_of,
         )
 
     section_counts = action_plan_execution_feed_section_counts(
         combined,
-        membership=sort_membership,
+        memberships=prepared_memberships,
         as_of=as_of,
     )
 

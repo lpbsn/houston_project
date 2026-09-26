@@ -639,19 +639,47 @@ def annotate_action_plan_execution_feed_pins(
     )
 
 
+def annotate_action_plan_execution_feed_pins_for_memberships(
+    queryset: QuerySet[ActionPlanExecution],
+    *,
+    memberships: list[EstablishmentMembership],
+) -> QuerySet[ActionPlanExecution]:
+    """Cross: pin of the actor membership belonging to the execution's establishment."""
+    membership_ids = [membership.id for membership in memberships]
+    pin_filter = ActionPlanExecutionFeedPin.objects.filter(
+        action_plan_execution_id=OuterRef("pk"),
+        membership_id__in=membership_ids,
+        membership__establishment_id=OuterRef("establishment_id"),
+    )
+    return queryset.annotate(
+        is_feed_pinned=Exists(pin_filter),
+        feed_pinned_at=Subquery(pin_filter.values("pinned_at")[:1]),
+    )
+
+
 def annotate_action_plan_execution_feed_sort_keys(
     queryset: QuerySet[ActionPlanExecution],
     *,
-    membership: EstablishmentMembership,
+    membership: EstablishmentMembership | None = None,
+    memberships: list[EstablishmentMembership] | None = None,
     as_of: datetime,
 ) -> QuerySet[ActionPlanExecution]:
     status_rank, deadline_bucket, feed_sort_end_at = (
         action_plan_execution_feed_sort_case_expressions(as_of)
     )
-    return annotate_action_plan_execution_feed_pins(
-        queryset,
-        membership=membership,
-    ).annotate(
+    if memberships is not None:
+        pinned_qs = annotate_action_plan_execution_feed_pins_for_memberships(
+            queryset,
+            memberships=memberships,
+        )
+    else:
+        if membership is None:
+            raise ValueError("membership or memberships is required")
+        pinned_qs = annotate_action_plan_execution_feed_pins(
+            queryset,
+            membership=membership,
+        )
+    return pinned_qs.annotate(
         status_rank=status_rank,
         deadline_bucket=deadline_bucket,
         feed_sort_end_at=feed_sort_end_at,
@@ -661,13 +689,15 @@ def annotate_action_plan_execution_feed_sort_keys(
 def apply_action_plan_execution_feed_sorting(
     queryset: QuerySet[ActionPlanExecution],
     *,
-    membership: EstablishmentMembership,
+    membership: EstablishmentMembership | None = None,
+    memberships: list[EstablishmentMembership] | None = None,
     as_of=None,
 ) -> QuerySet[ActionPlanExecution]:
     effective_as_of = as_of or timezone.now()
     return annotate_action_plan_execution_feed_sort_keys(
         queryset,
         membership=membership,
+        memberships=memberships,
         as_of=effective_as_of,
     ).order_by(*action_plan_execution_feed_order_by())
 
@@ -675,13 +705,15 @@ def apply_action_plan_execution_feed_sorting(
 def action_plan_execution_feed_section_counts(
     queryset: QuerySet[ActionPlanExecution],
     *,
-    membership: EstablishmentMembership,
+    membership: EstablishmentMembership | None = None,
+    memberships: list[EstablishmentMembership] | None = None,
     as_of: datetime,
 ) -> dict[str, int]:
     """Server totals for feed UI sections (pinned excluded from status buckets)."""
     annotated = annotate_action_plan_execution_feed_sort_keys(
         queryset,
         membership=membership,
+        memberships=memberships,
         as_of=as_of,
     )
     unpinned = Q(is_feed_pinned=False)

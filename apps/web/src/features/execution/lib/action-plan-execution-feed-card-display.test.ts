@@ -1,82 +1,20 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  formatActionPlanFeedCardDelayLabel,
   formatActionPlanFeedCardStatusLabel,
-  formatActionPlanFeedMetaParts,
   formatActionPlanFeedOtherPolesCountLabel,
   formatActionPlanFeedStartCountdownValue,
-  formatActionPlanFeedTaskProgressLabel,
-  getActionPlanFeedProgressState,
-  getActionPlanFeedSidebarState,
   formatExecutionFeedCreatedLabel,
-  formatExecutionFeedDelayLabel,
-  formatExecutionFeedTimingLabel,
-  getActionPlanFeedStartCountdownState,
+  getActionPlanFeedSidebarState,
 } from './action-plan-execution-feed-card-display'
 
 const NOW = Date.parse('2026-07-10T12:00:00Z')
 
-describe('execution feed desktop row labels', () => {
-  it('keeps a delay label for an overdue deadline and omits it otherwise', () => {
-    expect(
-      formatExecutionFeedDelayLabel(
-        getActionPlanFeedSidebarState('2026-07-10T08:00:00Z', NOW, true),
-      ),
-    ).toMatch(/^RETARD /)
-    expect(
-      formatExecutionFeedDelayLabel(getActionPlanFeedSidebarState('2026-07-10T16:00:00Z', NOW)),
-    ).toBeNull()
-  })
-
+describe('formatExecutionFeedCreatedLabel', () => {
   it('formats the created date without a time', () => {
     expect(formatExecutionFeedCreatedLabel('2026-06-30T08:00:00Z')).toMatch(/^Créé le /)
     expect(formatExecutionFeedCreatedLabel('not-a-date')).toBeNull()
-  })
-
-  it('highlights the scheduled start date, including all-day plans', () => {
-    expect(
-      formatExecutionFeedTimingLabel({
-        status: 'scheduled',
-        start_at: '2026-07-13T12:00:00Z',
-        end_at: '2026-07-14T12:00:00Z',
-        all_day: false,
-      }),
-    ).toMatch(/^Début : /)
-    expect(
-      formatExecutionFeedTimingLabel({
-        status: 'scheduled',
-        start_at: '2026-07-13T00:00:00Z',
-        end_at: '2026-07-13T23:59:00Z',
-        all_day: true,
-      }),
-    ).toBe(`Début : ${new Date('2026-07-13T00:00:00Z').toLocaleDateString('fr-FR')}`)
-    expect(
-      formatExecutionFeedTimingLabel({
-        status: 'scheduled',
-        start_at: '2026-07-13T00:00:00Z',
-        end_at: '2026-07-13T23:59:00Z',
-        all_day: true,
-      }),
-    ).not.toMatch(/Journée entière/)
-  })
-
-  it('keeps the deadline label for non-scheduled desktop rows', () => {
-    expect(
-      formatExecutionFeedTimingLabel({
-        status: 'in_progress',
-        start_at: null,
-        end_at: '2026-07-06T18:30:00Z',
-        all_day: false,
-      }),
-    ).toMatch(/^Échéance : /)
-    expect(
-      formatExecutionFeedTimingLabel({
-        status: 'in_progress',
-        start_at: null,
-        end_at: null,
-        all_day: true,
-      }),
-    ).toBe('Échéance : Journée entière')
   })
 })
 
@@ -149,6 +87,21 @@ describe('getActionPlanFeedSidebarState', () => {
       value: '1h',
     })
   })
+
+  it('returns all_day when allDay is set and not overdue', () => {
+    expect(getActionPlanFeedSidebarState('2026-09-08T21:59:00Z', NOW, false, true)).toEqual({
+      variant: 'all_day',
+    })
+  })
+})
+
+describe('formatActionPlanFeedCardDelayLabel', () => {
+  it('keeps a delay label for an overdue deadline and omits it otherwise', () => {
+    expect(formatActionPlanFeedCardDelayLabel('2026-07-10T08:00:00Z', NOW, true)).toMatch(
+      /^Retard /,
+    )
+    expect(formatActionPlanFeedCardDelayLabel('2026-07-10T16:00:00Z', NOW, false)).toBeNull()
+  })
 })
 
 describe('formatActionPlanFeedStartCountdownValue', () => {
@@ -160,130 +113,6 @@ describe('formatActionPlanFeedStartCountdownValue', () => {
     ['negative', -60_000, '<1h'],
   ])('formats %s remaining as %s', (_case, remainingMs, value) => {
     expect(formatActionPlanFeedStartCountdownValue(remainingMs)).toBe(value)
-  })
-})
-
-describe('getActionPlanFeedStartCountdownState', () => {
-  it('returns DÉBUT countdown from start_at', () => {
-    expect(getActionPlanFeedStartCountdownState('2026-07-13T12:00:00Z', NOW)).toEqual({
-      variant: 'start_countdown',
-      prefix: 'DÉBUT',
-      value: '3j',
-    })
-    expect(getActionPlanFeedStartCountdownState('2026-07-10T19:00:00Z', NOW)).toEqual({
-      variant: 'start_countdown',
-      prefix: 'DÉBUT',
-      value: '7h',
-    })
-    expect(getActionPlanFeedStartCountdownState('2026-07-10T12:30:00Z', NOW)).toEqual({
-      variant: 'start_countdown',
-      prefix: 'DÉBUT',
-      value: '<1h',
-    })
-  })
-
-  it('returns no_start when start_at is absent or invalid', () => {
-    expect(getActionPlanFeedStartCountdownState(null, NOW)).toEqual({ variant: 'no_start' })
-    expect(getActionPlanFeedStartCountdownState(undefined, NOW)).toEqual({ variant: 'no_start' })
-    expect(getActionPlanFeedStartCountdownState('not-a-date', NOW)).toEqual({ variant: 'no_start' })
-  })
-
-  it('returns all_day instead of a countdown to 23:59', () => {
-    expect(getActionPlanFeedSidebarState('2026-09-08T21:59:00Z', NOW, false, true)).toEqual({
-      variant: 'all_day',
-    })
-    expect(getActionPlanFeedStartCountdownState('2026-09-08T22:00:00Z', NOW, true)).toEqual({
-      variant: 'all_day',
-    })
-  })
-})
-
-describe('getActionPlanFeedProgressState', () => {
-  it('returns clamped progress state', () => {
-    expect(getActionPlanFeedProgressState({ task_count: 5, treated_task_count: 2 })).toEqual({
-      total: 5,
-      filled: 2,
-      fractionLabel: '2/5',
-    })
-  })
-
-  it('clamps filled when treated_task_count exceeds task_count', () => {
-    expect(getActionPlanFeedProgressState({ task_count: 4, treated_task_count: 9 })).toEqual({
-      total: 4,
-      filled: 4,
-      fractionLabel: '4/4',
-    })
-  })
-
-  it('clamps negative values to zero', () => {
-    expect(getActionPlanFeedProgressState({ task_count: -2, treated_task_count: -1 })).toBeNull()
-    expect(getActionPlanFeedProgressState({ task_count: 3, treated_task_count: -1 })).toEqual({
-      total: 3,
-      filled: 0,
-      fractionLabel: '0/3',
-    })
-  })
-
-  it('returns null when task_count is zero', () => {
-    expect(getActionPlanFeedProgressState({ task_count: 0, treated_task_count: 0 })).toBeNull()
-  })
-})
-
-describe('formatActionPlanFeedTaskProgressLabel', () => {
-  it('returns null when there are no tasks', () => {
-    expect(formatActionPlanFeedTaskProgressLabel({ task_count: 0, treated_task_count: 0 })).toBeNull()
-  })
-
-  it('formats treated and total counts', () => {
-    expect(formatActionPlanFeedTaskProgressLabel({ task_count: 4, treated_task_count: 1 })).toBe(
-      'Tâche 1/4',
-    )
-  })
-})
-
-describe('formatActionPlanFeedMetaParts', () => {
-  it('returns both labels when end_at and tasks are present', () => {
-    const parts = formatActionPlanFeedMetaParts({
-      end_at: '2026-07-06T18:30:00Z',
-      task_count: 4,
-      treated_task_count: 1,
-    })
-
-    expect(parts.deadlineLabel).toMatch(/^Échéance : /)
-    expect(parts.taskProgressLabel).toBe('Tâche 1/4')
-  })
-
-  it('returns deadline only when task_count is zero', () => {
-    const parts = formatActionPlanFeedMetaParts({
-      end_at: '2026-07-06T18:30:00Z',
-      task_count: 0,
-      treated_task_count: 0,
-    })
-
-    expect(parts.deadlineLabel).toMatch(/^Échéance : /)
-    expect(parts.taskProgressLabel).toBeNull()
-  })
-
-  it('returns task progress only when end_at is null', () => {
-    const parts = formatActionPlanFeedMetaParts({
-      end_at: null,
-      task_count: 4,
-      treated_task_count: 0,
-    })
-
-    expect(parts.deadlineLabel).toBeNull()
-    expect(parts.taskProgressLabel).toBe('Tâche 0/4')
-  })
-
-  it('returns null labels when neither end_at nor tasks are present', () => {
-    const parts = formatActionPlanFeedMetaParts({
-      end_at: null,
-      task_count: 0,
-      treated_task_count: 0,
-    })
-
-    expect(parts.deadlineLabel).toBeNull()
-    expect(parts.taskProgressLabel).toBeNull()
   })
 })
 

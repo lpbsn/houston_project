@@ -80,13 +80,20 @@ export function patchExecutionInFeedCache(
     let originKey: Exclude<ActionPlanExecutionFeedSectionCountKey, 'pinned'> | null = null
     let pinTarget: boolean | null = null
 
-    const pages = current.pages.map((page) => {
+    // Patch the matching item first. Pin section_counts must be applied in a second
+    // pass across every page: the UI reads counts from the first page that has them,
+    // which may not be the page that holds the execution.
+    const pagesWithItem = current.pages.map((page) => {
       const items = page.items.map((wrapper) => {
         if (wrapper.action_plan_execution.id !== options.executionId) {
           return wrapper
         }
         updated = true
-        if (options.adjustSectionCountsForPin && typeof options.patch.is_pinned === 'boolean') {
+        if (
+          options.adjustSectionCountsForPin &&
+          typeof options.patch.is_pinned === 'boolean' &&
+          wrapper.action_plan_execution.is_pinned !== options.patch.is_pinned
+        ) {
           originKey = originSectionCountKey(wrapper.action_plan_execution)
           pinTarget = options.patch.is_pinned
         }
@@ -98,23 +105,25 @@ export function patchExecutionInFeedCache(
           },
         }
       })
-      let nextPage = items === page.items ? page : { ...page, items }
-      if (
-        options.adjustSectionCountsForPin &&
-        pinTarget != null &&
-        page.section_counts
-      ) {
-        nextPage = {
-          ...nextPage,
-          section_counts: adjustSectionCounts(page.section_counts, {
-            isPinned: pinTarget,
-            originKey,
-          }),
-        }
-        updated = true
-      }
-      return nextPage
+      return items === page.items ? page : { ...page, items }
     })
+
+    const pages =
+      options.adjustSectionCountsForPin && pinTarget != null
+        ? pagesWithItem.map((page) => {
+            if (!page.section_counts) {
+              return page
+            }
+            updated = true
+            return {
+              ...page,
+              section_counts: adjustSectionCounts(page.section_counts, {
+                isPinned: pinTarget,
+                originKey,
+              }),
+            }
+          })
+        : pagesWithItem
 
     if (!updated) {
       return current

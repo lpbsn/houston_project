@@ -253,7 +253,8 @@ def apply_action_plan_execution_feed_cursor(
     queryset: QuerySet[ActionPlanExecution],
     cursor: ActionPlanExecutionFeedCursor,
     *,
-    membership,
+    membership=None,
+    memberships=None,
 ) -> QuerySet[ActionPlanExecution]:
     from houston.action_plans.selectors import (
         annotate_action_plan_execution_feed_sort_keys,
@@ -262,6 +263,7 @@ def apply_action_plan_execution_feed_cursor(
     return annotate_action_plan_execution_feed_sort_keys(
         queryset,
         membership=membership,
+        memberships=memberships,
         as_of=cursor.as_of,
     ).filter(_after_cursor_filter(cursor)).order_by(
         *action_plan_execution_feed_order_by(),
