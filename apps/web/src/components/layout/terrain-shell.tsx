@@ -5,6 +5,7 @@ import type { AppRoute } from '@/app/app-routes'
 import { BottomMobileNav } from '@/components/layout/bottom-mobile-nav'
 import { DesktopTerrainSidebar } from '@/components/layout/desktop-terrain-sidebar'
 import { TerrainErrorBoundary } from '@/components/layout/terrain-error-boundary'
+import { TerrainShellLayoutProvider } from '@/components/layout/terrain-shell-layout'
 import { NetworkStatusBanner } from '@/components/layout/network-status-banner'
 import { SuccessToastHost } from '@/components/domain/success-toast-host'
 import { ObservationProcessingBanner } from '@/features/observations/components/observation-processing-banner'
@@ -57,69 +58,71 @@ export function TerrainShell({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   return (
-    <div
-      data-terrain-shell-root
-      className={cn(
-        'fixed inset-x-0 top-0 mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-[#F5F4F0]',
-        isDesktopWeb && 'inset-0 max-w-none flex-row',
-      )}
-    >
-      {isDesktopWeb ? (
-        <DesktopTerrainSidebar
-          route={route}
-          bootstrap={bootstrap}
-          collapsed={sidebarCollapsed}
-          onCollapsedChange={setSidebarCollapsed}
-          isLoggingOut={isLoggingOut}
-          navigate={navigate}
-          onSignOut={onSignOut}
-        />
-      ) : null}
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[#F5F4F0]">
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-50 flex flex-col gap-2 px-2 pt-[max(0.5rem,var(--app-safe-top))]">
-          <ObservationProcessingBanner navigate={navigate} />
-          <SuccessToastHost />
-        </div>
-        <div className="shrink-0">{topbar}</div>
-        <NetworkStatusBanner isOnline={isOnline} />
-        {isOnline ? (
-          <OperationalReconnectBanner status={operationalConnectionStatus} />
+    <TerrainShellLayoutProvider showBottomNav={showBottomNav}>
+      <div
+        data-terrain-shell-root
+        className={cn(
+          'fixed inset-x-0 top-0 mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-[#F5F4F0]',
+          isDesktopWeb && 'inset-0 max-w-none flex-row',
+        )}
+      >
+        {isDesktopWeb ? (
+          <DesktopTerrainSidebar
+            route={route}
+            bootstrap={bootstrap}
+            collapsed={sidebarCollapsed}
+            onCollapsedChange={setSidebarCollapsed}
+            isLoggingOut={isLoggingOut}
+            navigate={navigate}
+            onSignOut={onSignOut}
+          />
         ) : null}
-        <main
-          className={cn(
-            'min-h-0 min-w-0 flex-1',
-            !topbar && 'pt-[var(--app-safe-top)]',
-            !topbar && isDesktopWeb && 'pt-0',
-            mainScroll === 'hidden'
-              ? 'overflow-hidden'
-              : 'overflow-y-auto overscroll-y-contain',
-          )}
-        >
-          {shouldReduceMotion ? (
-            <div className="h-full min-h-0 min-w-0">
-              <TerrainErrorBoundary resetKey={contentKey} navigate={navigate}>
-                {children}
-              </TerrainErrorBoundary>
-            </div>
-          ) : (
-            <AnimatePresence initial={false}>
-              <motion.div key={contentKey} className="h-full min-h-0 min-w-0" {...pageMotion}>
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[#F5F4F0]">
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-50 flex flex-col gap-2 px-2 pt-[max(0.5rem,var(--app-safe-top))]">
+            <ObservationProcessingBanner navigate={navigate} />
+            <SuccessToastHost />
+          </div>
+          <div className="shrink-0">{topbar}</div>
+          <NetworkStatusBanner isOnline={isOnline} />
+          {isOnline ? (
+            <OperationalReconnectBanner status={operationalConnectionStatus} />
+          ) : null}
+          <main
+            className={cn(
+              'min-h-0 min-w-0 flex-1',
+              !topbar && 'pt-[var(--app-safe-top)]',
+              !topbar && isDesktopWeb && 'pt-0',
+              mainScroll === 'hidden'
+                ? 'overflow-hidden'
+                : 'overflow-y-auto overscroll-y-contain',
+            )}
+          >
+            {shouldReduceMotion ? (
+              <div className="h-full min-h-0 min-w-0">
                 <TerrainErrorBoundary resetKey={contentKey} navigate={navigate}>
                   {children}
                 </TerrainErrorBoundary>
-              </motion.div>
-            </AnimatePresence>
-          )}
-        </main>
-        {showBottomNav && !isNativeKeyboardOpen && !isDesktopWeb ? (
-          <BottomMobileNav
-            className="shrink-0"
-            activePath={activeNavPath}
-            navigate={navigate}
-            chatHasUnread={chatHasUnread}
-          />
-        ) : null}
+              </div>
+            ) : (
+              <AnimatePresence initial={false}>
+                <motion.div key={contentKey} className="h-full min-h-0 min-w-0" {...pageMotion}>
+                  <TerrainErrorBoundary resetKey={contentKey} navigate={navigate}>
+                    {children}
+                  </TerrainErrorBoundary>
+                </motion.div>
+              </AnimatePresence>
+            )}
+          </main>
+          {showBottomNav && !isNativeKeyboardOpen && !isDesktopWeb ? (
+            <BottomMobileNav
+              className="shrink-0"
+              activePath={activeNavPath}
+              navigate={navigate}
+              chatHasUnread={chatHasUnread}
+            />
+          ) : null}
+        </div>
       </div>
-    </div>
+    </TerrainShellLayoutProvider>
   )
 }

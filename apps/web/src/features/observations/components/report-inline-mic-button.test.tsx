@@ -25,7 +25,11 @@ describe('ReportInlineMicButton', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Démarrer l’enregistrement vocal' }))
+    const button = screen.getByRole('button', { name: 'Démarrer l’enregistrement vocal' })
+    expect(button.className).toContain('min-h-12')
+    expect(button.className).toContain('min-w-12')
+    expect(button.getAttribute('data-mic-state')).toBe('idle')
+    fireEvent.click(button)
     expect(onStartRecording).toHaveBeenCalledTimes(1)
     expect(onStopRecording).not.toHaveBeenCalled()
   })
@@ -45,12 +49,14 @@ describe('ReportInlineMicButton', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Arrêter l’enregistrement' }))
+    const button = screen.getByRole('button', { name: 'Arrêter l’enregistrement' })
+    expect(button.getAttribute('data-mic-state')).toBe('recording')
+    fireEvent.click(button)
     expect(onStopRecording).toHaveBeenCalledTimes(1)
     expect(onStartRecording).not.toHaveBeenCalled()
   })
 
-  it('is disabled while transcribing', () => {
+  it('is disabled while transcribing with a distinct processing state', () => {
     render(
       <ReportInlineMicButton
         shouldReduceMotion={true}
@@ -62,9 +68,8 @@ describe('ReportInlineMicButton', () => {
       />,
     )
 
-    expect(
-      (screen.getByRole('button', { name: 'Démarrer l’enregistrement vocal' }) as HTMLButtonElement)
-        .disabled,
-    ).toBe(true)
+    const button = screen.getByRole('button', { name: 'Transcription en cours' })
+    expect((button as HTMLButtonElement).disabled).toBe(true)
+    expect(button.getAttribute('data-mic-state')).toBe('processing')
   })
 })

@@ -1,7 +1,10 @@
 import { Image, Trash2 } from 'lucide-react'
 
 import type { ObservationComposePhotoDraft } from '@/features/observations/lib/observation-compose-draft-store'
-import { MAX_OBSERVATION_PHOTOS } from '@/features/observations/types'
+import {
+  MAX_OBSERVATION_PHOTOS,
+  type ReportComposeLayout,
+} from '@/features/observations/types'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -9,6 +12,7 @@ export type ReportPhotoDraft = ObservationComposePhotoDraft
 
 type ReportPhotosSectionProps = {
   photos: ReportPhotoDraft[]
+  layout?: ReportComposeLayout
   disabled?: boolean
   onPhotoSelect: (event: React.ChangeEvent<HTMLInputElement>) => void
   onRemovePhoto: (photo: ReportPhotoDraft) => void
@@ -16,11 +20,77 @@ type ReportPhotosSectionProps = {
 
 export function ReportPhotosSection({
   photos,
+  layout = 'desktop',
   disabled = false,
   onPhotoSelect,
   onRemovePhoto,
 }: ReportPhotosSectionProps) {
   const canAddPhoto = photos.length < MAX_OBSERVATION_PHOTOS && !disabled
+  const isField = layout === 'field'
+
+  if (isField) {
+    return (
+      <section className="flex flex-col gap-2" aria-label="Photos de l’observation">
+        <div className="flex items-center justify-between gap-2 px-0.5">
+          <p className={cn('text-sm font-semibold', terrain.foreground)}>Photos</p>
+          <p className={cn('text-[10px] tabular-nums', terrain.muted)}>
+            Optionnel · {photos.length}/{MAX_OBSERVATION_PHOTOS}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {photos.map((photo) => (
+            <div
+              key={photo.localId}
+              className="relative h-16 w-16 overflow-hidden rounded-[12px] border border-[#E8E6DF]"
+            >
+              <img
+                src={photo.previewUrl}
+                alt={`Aperçu de ${photo.file.name}`}
+                className="h-full w-full object-cover"
+              />
+              <button
+                type="button"
+                className={cn(
+                  'absolute -top-1 -right-1 z-10',
+                  'flex h-12 w-12 min-h-12 min-w-12 items-center justify-center',
+                )}
+                disabled={disabled}
+                onClick={() => void onRemovePhoto(photo)}
+                aria-label={`Supprimer ${photo.file.name}`}
+              >
+                <span
+                  className={cn(
+                    'flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-white shadow-md',
+                    terrain.dangerBg,
+                  )}
+                >
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                </span>
+              </button>
+            </div>
+          ))}
+          {canAddPhoto ? (
+            <label
+              className={cn(
+                'flex h-16 w-16 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-[12px] border border-dashed border-[#ccc]',
+                terrain.photoTile,
+                'text-[#7d7b75]',
+              )}
+            >
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/heic,image/heif,.heic,.heif"
+                className="sr-only"
+                onChange={onPhotoSelect}
+              />
+              <Image className="h-5 w-5 stroke-[#aaa]" />
+              <span className="text-[10px] font-medium">Ajouter</span>
+            </label>
+          ) : null}
+        </div>
+      </section>
+    )
+  }
 
   return (
     <section
@@ -50,17 +120,22 @@ export function ReportPhotosSection({
             <button
               type="button"
               className={cn(
-                'absolute top-1 right-1 z-10',
-                'flex h-8 w-8 min-h-8 min-w-8 items-center justify-center rounded-full',
-                'border-2 border-white text-white shadow-md',
-                terrain.dangerBg,
-                'hover:bg-[#c93f3e]',
+                'absolute -top-1 -right-1 z-10',
+                'flex h-12 w-12 min-h-12 min-w-12 items-center justify-center',
               )}
               disabled={disabled}
               onClick={() => void onRemovePhoto(photo)}
               aria-label={`Supprimer ${photo.file.name}`}
             >
-              <Trash2 className="h-4 w-4" aria-hidden />
+              <span
+                className={cn(
+                  'flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-white shadow-md',
+                  terrain.dangerBg,
+                  'hover:bg-[#c93f3e]',
+                )}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden />
+              </span>
             </button>
           </div>
         ))}

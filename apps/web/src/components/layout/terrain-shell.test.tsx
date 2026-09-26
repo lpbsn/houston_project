@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AppRoute } from '@/app/app-routes'
 import { TerrainShell } from '@/components/layout/terrain-shell'
+import { useTerrainShellLayout } from '@/components/layout/terrain-shell-layout'
 import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import type { BootstrapResponse, Membership } from '@/features/auth/types'
 
@@ -335,5 +336,37 @@ describe('TerrainShell', () => {
       'true',
     )
     expect(screen.getByText('execution')).toBeTruthy()
+  })
+
+  it('publishes showBottomNav through the shell layout context', () => {
+    function Probe() {
+      const { showBottomNav } = useTerrainShellLayout()
+      return createElement('div', { 'data-testid': 'layout-probe' }, String(showBottomNav))
+    }
+
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    })
+
+    render(
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(
+          TerrainShell,
+          {
+            contentKey: 'test',
+            topbar: createElement('div', { 'data-testid': 'terrain-topbar' }, 'Topbar'),
+            showBottomNav: true,
+            mainScroll: 'auto',
+            route: { kind: 'static', path: '/general' } satisfies AppRoute,
+            navigate: () => undefined,
+          },
+          createElement(Probe),
+        ),
+      ),
+    )
+
+    expect(screen.getByTestId('layout-probe').textContent).toBe('true')
   })
 })

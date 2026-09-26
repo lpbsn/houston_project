@@ -290,6 +290,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
   if (route.kind === 'static' && route.path === '/reporting') {
     return {
       topbarVariant: 'hub',
+      pageTitle: 'Nouvelle observation',
       showBottomNav: true,
       activeNavPath: '/reporting',
       mainScroll: 'hidden',

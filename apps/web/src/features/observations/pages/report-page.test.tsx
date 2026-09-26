@@ -5,8 +5,12 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { TerrainShellLayoutProvider } from '@/components/layout/terrain-shell-layout'
 import { ObservationsApiError } from '@/features/observations/api'
-import { __resetObservationComposeDraftStoreForTests } from '@/features/observations/lib/observation-compose-draft-store'
+import {
+  __resetObservationComposeDraftStoreForTests,
+  getReportingComposeDraft,
+} from '@/features/observations/lib/observation-compose-draft-store'
 import { OBSERVATION_TEXT_MIN_LENGTH } from '@/features/observations/types'
 import {
   AI_CONSENT_REQUIRED_CODE,
@@ -141,7 +145,7 @@ async function recordAndStop() {
   fireEvent.click(screen.getByRole('button', { name: 'Arrêter l’enregistrement' }))
 }
 
-function renderPage() {
+function renderPage(options?: { showBottomNav?: boolean; establishmentId?: string | null }) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
@@ -150,7 +154,13 @@ function renderPage() {
     createElement(
       QueryClientProvider,
       { client: queryClient },
-      createElement(ReportPage, {}),
+      createElement(
+        TerrainShellLayoutProvider,
+        { showBottomNav: options?.showBottomNav ?? false },
+        createElement(ReportPage, {
+          establishmentId: options?.establishmentId,
+        }),
+      ),
     ),
   )
 }
@@ -247,17 +257,23 @@ describe('ReportPage', () => {
     expect(screen.queryByText('Le traitement OpenAI n’est pas autorisé.')).toBeNull()
   })
 
-  it('renders hero and initial counter', () => {
+  it('renders secondary intro without a page H1 and shows the counter', () => {
     renderPage()
 
-    expect(screen.getByRole('heading', { level: 1, name: /Une observation/ })).toBeTruthy()
-    expect(
-      screen.getByText(/Soyez précis mais ne perdez pas de temps avec la forme/),
-    ).toBeTruthy()
+    expect(screen.queryByRole('heading', { level: 1, name: /Une observation/ })).toBeNull()
+    expect(screen.getByText(/Texte ou vocal/)).toBeTruthy()
     expect(screen.getByRole('link', { name: 'confidentialité' }).getAttribute('href')).toBe(
       PUBLIC_PRIVACY_POLICY_URL,
     )
     expect(screen.getByText('0/1000')).toBeTruthy()
+  })
+
+  it('shows clear text only when the field has content', () => {
+    renderPage()
+    expect(screen.queryByRole('button', { name: 'Effacer le texte' })).toBeNull()
+    typeValidObservation()
+    fireEvent.click(screen.getByRole('button', { name: 'Effacer le texte' }))
+    expect((screen.getByLabelText('Décrivez l’observation') as HTMLTextAreaElement).value).toBe('')
   })
 
   it('renders submit button inside a transparent sticky footer', () => {
@@ -267,6 +283,21 @@ describe('ReportPage', () => {
     const footer = submitButton.closest('footer')
     expect(footer).toBeTruthy()
     expect(footer?.className).not.toContain('bg-[#F5F4F0]')
+  })
+
+  it('drops footer safe-bottom padding when coexisting with bottom nav', () => {
+    renderPage({ showBottomNav: true })
+
+    const footer = screen.getByRole('button', { name: /Envoyer l’observation/ }).closest('footer')
+    expect(footer?.className).toContain('pb-3')
+    expect(footer?.className).not.toContain('--app-safe-bottom')
+  })
+
+  it('keeps footer safe-bottom padding when bottom nav is absent', () => {
+    renderPage({ showBottomNav: false })
+
+    const footer = screen.getByRole('button', { name: /Envoyer l’observation/ }).closest('footer')
+    expect(footer?.className).toContain('--app-safe-bottom')
   })
 
   it('hides the submit footer while the native keyboard is open', () => {
@@ -434,9 +465,9 @@ describe('ReportPage', () => {
     expect(mockSubmitObservation).not.toHaveBeenCalled()
   })
 
-  it('replaces textarea content entirely on each new transcription', async () => {
+  it('appends each transcription to the current textarea content', async () => {
     const firstTranscription = 'Première transcription assez longue.'
-    const secondTranscription = 'Deuxième transcription qui remplace.'
+    const secondTranscription = 'Deuxième take.'
 
     mockTranscribeAsync
       .mockResolvedValueOnce({ text: firstTranscription })
@@ -454,13 +485,118 @@ describe('ReportPage', () => {
 
     await recordAndStop()
     await waitFor(() => {
-      expect(textarea.value).toBe(secondTranscription)
+      expect(textarea.value).toBe(`${firstTranscription} ${secondTranscription}`)
     })
-    expect(textarea.value).not.toContain('Première')
     expect(mockTranscribeAsync).toHaveBeenCalledTimes(2)
   })
 
-  it('keeps the send control in the footer on desktop web and on a large native viewport', () => {
+  it('preserves edits made during transcription and appends onto them', async () => {
+    let resolveTranscribe: (value: { text: string }) => void = () => undefined
+    mockTranscribeAsync.mockImplementation(
+      () =>
+        new Promise<{ text: string }>((resolve) => {
+          resolveTranscribe = resolve
+        }),
+    )
+
+    setupMediaRecorderMock()
+    renderPage()
+
+    const textarea = screen.getByLabelText('Décrivez l’observation') as HTMLTextAreaElement
+    fireEvent.change(textarea, { target: { value: 'Texte initial.' } })
+
+    await recordAndStop()
+    await waitFor(() => {
+      expect(mockTranscribeAsync).toHaveBeenCalledTimes(1)
+    })
+
+    fireEvent.change(textarea, { target: { value: 'Texte édité pendant.' } })
+    resolveTranscribe({ text: 'Résultat vocal.' })
+
+    await waitFor(() => {
+      expect(textarea.value).toBe('Texte édité pendant. Résultat vocal.')
+    })
+  })
+
+  it('ignores a late transcription after the page unmounts', async () => {
+    let resolveTranscribe: (value: { text: string }) => void = () => undefined
+    mockTranscribeAsync.mockImplementation(
+      () =>
+        new Promise<{ text: string }>((resolve) => {
+          resolveTranscribe = resolve
+        }),
+    )
+
+    setupMediaRecorderMock()
+    const view = renderPage()
+    const textarea = screen.getByLabelText('Décrivez l’observation') as HTMLTextAreaElement
+    fireEvent.change(textarea, { target: { value: 'Brouillon avant départ.' } })
+
+    await recordAndStop()
+    await waitFor(() => {
+      expect(mockTranscribeAsync).toHaveBeenCalledTimes(1)
+    })
+
+    view.unmount()
+    resolveTranscribe({ text: 'Trop tard.' })
+    await waitFor(() => {
+      expect(getReportingComposeDraft('est-1').text).toBe('Brouillon avant départ.')
+    })
+  })
+
+  it('ignores a late transcription after the establishment changes', async () => {
+    let resolveTranscribe: (value: { text: string }) => void = () => undefined
+    mockTranscribeAsync.mockImplementation(
+      () =>
+        new Promise<{ text: string }>((resolve) => {
+          resolveTranscribe = resolve
+        }),
+    )
+
+    setupMediaRecorderMock()
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    })
+    const view = render(
+      createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(
+          TerrainShellLayoutProvider,
+          { showBottomNav: false },
+          createElement(ReportPage, { establishmentId: 'est-1' }),
+        ),
+      ),
+    )
+
+    const textarea = screen.getByLabelText('Décrivez l’observation') as HTMLTextAreaElement
+    fireEvent.change(textarea, { target: { value: 'Draft est-1.' } })
+
+    await recordAndStop()
+    await waitFor(() => {
+      expect(mockTranscribeAsync).toHaveBeenCalledTimes(1)
+    })
+
+    view.rerender(
+      createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(
+          TerrainShellLayoutProvider,
+          { showBottomNav: false },
+          createElement(ReportPage, { establishmentId: 'est-2' }),
+        ),
+      ),
+    )
+
+    resolveTranscribe({ text: 'Ne doit pas s’appliquer.' })
+    await waitFor(() => {
+      expect(getReportingComposeDraft('est-1').text).toBe('Draft est-1.')
+    })
+    expect(getReportingComposeDraft('est-2').text).toBe('')
+  })
+
+  it('places the send control under photos on desktop web and keeps sticky footer on large native', () => {
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
       writable: true,
@@ -477,9 +613,16 @@ describe('ReportPage', () => {
     })
     vi.stubEnv('VITE_APP_RUNTIME', 'web')
     renderPage()
+    const desktopSubmit = screen.getByRole('button', { name: /Envoyer l’observation/ })
+    expect(desktopSubmit.closest('footer')).toBeNull()
+    const photos = screen.getByLabelText('Photos de l’observation')
     expect(
-      screen.getByRole('button', { name: /Envoyer l’observation/ }).closest('footer'),
+      photos.compareDocumentPosition(desktopSubmit) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
+    expect(screen.getByText(/Texte ou vocal · traitement OpenAI/)).toBeTruthy()
+    expect(
+      screen.queryByText(/Soyez précis mais ne perdez pas de temps avec la forme/),
+    ).toBeNull()
 
     cleanup()
     vi.stubEnv('VITE_APP_RUNTIME', 'native')

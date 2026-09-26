@@ -30,4 +30,21 @@ describe('ReportPhotosSection', () => {
     expect(screen.getByText('Optionnel · 1/3')).toBeTruthy()
     expect(screen.getByRole('img', { name: 'Aperçu de photo.jpg' })).toBeTruthy()
   })
+
+  it('uses a compact field layout without the dashed block header', () => {
+    render(
+      <ReportPhotosSection
+        layout="field"
+        photos={[photo]}
+        onPhotoSelect={vi.fn()}
+        onRemovePhoto={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('Photos')).toBeTruthy()
+    expect(screen.queryByText(/Ajouter des photos/)).toBeNull()
+    const remove = screen.getByRole('button', { name: 'Supprimer photo.jpg' })
+    expect(remove.className).toContain('min-h-12')
+    expect(remove.className).toContain('min-w-12')
+  })
 })
