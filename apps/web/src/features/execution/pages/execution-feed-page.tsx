@@ -45,6 +45,7 @@ import { ExecutionFeedSkeletonList } from '../components/execution-feed-skeleton
 import { ExecutionPlanifieesNavRow } from '../components/execution-planifiees-nav-row'
 import {
   appendExecutionFeedSearch,
+  defaultExecutionFeedUrlState,
   executionFeedHref,
   parseExecutionFeedSearch,
   type ExecutionCalendarGranularity,
@@ -288,7 +289,14 @@ function ExecutionFeedPageContent({
     return sectionCounts[key]
   }
 
-  const planifieesHref = isCross ? '/cross/execution/upcoming' : '/execution/upcoming'
+  const planifieesHref = executionFeedHref(
+    isCross ? '/cross/execution/upcoming' : '/execution/upcoming',
+    {
+      ...defaultExecutionFeedUrlState(),
+      viewMode,
+    },
+    feedUrlOptions,
+  )
 
   useLayoutEffect(() => {
     if (restoredScrollRef.current || layout !== 'list') {

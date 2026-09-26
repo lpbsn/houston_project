@@ -10,6 +10,10 @@ import type { ActionPlanExecutionFeedItemWrapper } from '@/features/action-plans
 import { ExecutionUpcomingPage } from './execution-upcoming-page'
 
 const upcomingQueryMock = vi.fn()
+const upcomingQueryArgs = vi.fn()
+const upcomingNavigate = vi.fn()
+const upcomingRouteState = { search: '' }
+let serializeAppRouteMockPath = '/execution/upcoming'
 const onOpenActionPlanExecution = vi.fn()
 const pinControl = vi.hoisted(() => {
   const control = {
@@ -124,7 +128,14 @@ vi.mock('@/app/auth-provider', () => ({
 }))
 
 vi.mock('@/features/action-plans/hooks', () => ({
-  useActionPlanExecutionUpcomingQuery: () => upcomingQueryMock(),
+  useActionPlanExecutionUpcomingQuery: (
+    establishmentId: string | null,
+    viewMode: string,
+    options?: { source?: string },
+  ) => {
+    upcomingQueryArgs(establishmentId, viewMode, options)
+    return upcomingQueryMock()
+  },
   usePinActionPlanExecutionMutation: () => ({
     mutate: pinControl.pin,
     isPending: false,
@@ -133,6 +144,15 @@ vi.mock('@/features/action-plans/hooks', () => ({
     mutate: pinControl.unpin,
     isPending: false,
   }),
+}))
+
+vi.mock('@/app/app-routes', () => ({
+  useAppRoute: () => ({
+    route: { kind: 'static', path: serializeAppRouteMockPath },
+    search: upcomingRouteState.search,
+    navigate: upcomingNavigate,
+  }),
+  serializeAppRoute: () => serializeAppRouteMockPath,
 }))
 
 function stubLgViewport(matches: boolean) {
@@ -152,7 +172,7 @@ function stubLgViewport(matches: boolean) {
   })
 }
 
-function renderUpcomingPage() {
+function renderUpcomingPage(props: { source?: 'establishment' | 'cross' } = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -160,7 +180,10 @@ function renderUpcomingPage() {
     createElement(
       QueryClientProvider,
       { client: queryClient },
-      createElement(ExecutionUpcomingPage, { onOpenActionPlanExecution }),
+      createElement(ExecutionUpcomingPage, {
+        onOpenActionPlanExecution,
+        ...props,
+      }),
     ),
   )
 }
@@ -169,6 +192,10 @@ describe('ExecutionUpcomingPage', () => {
   beforeEach(() => {
     onOpenActionPlanExecution.mockClear()
     upcomingQueryMock.mockReturnValue(buildUpcomingQueryState())
+    upcomingQueryArgs.mockClear()
+    upcomingNavigate.mockClear()
+    upcomingRouteState.search = ''
+    serializeAppRouteMockPath = '/execution/upcoming'
     pinControl.failPin = false
     pinControl.pin.mockClear()
     pinControl.unpin.mockClear()
@@ -276,6 +303,33 @@ describe('ExecutionUpcomingPage', () => {
     fireEvent.click(pin)
     expect(onOpenActionPlanExecution).not.toHaveBeenCalled()
     expect(screen.queryByRole('dialog', { name: 'Actions' })).toBeNull()
+  })
+
+  it('defaults cross upcoming to Vue globale without a view_mode query', () => {
+    serializeAppRouteMockPath = '/cross/execution/upcoming'
+    renderUpcomingPage({ source: 'cross' })
+
+    expect(upcomingQueryArgs).toHaveBeenCalledWith('est-1', 'general', { source: 'cross' })
+    expect(screen.getByRole('tab', { name: 'Vue globale' }).getAttribute('aria-selected')).toBe(
+      'true',
+    )
+  })
+
+  it('keeps an explicit personal view_mode on cross upcoming', () => {
+    serializeAppRouteMockPath = '/cross/execution/upcoming'
+    upcomingRouteState.search = '?view_mode=personal'
+    renderUpcomingPage({ source: 'cross' })
+
+    expect(upcomingQueryArgs).toHaveBeenCalledWith('est-1', 'personal', { source: 'cross' })
+    expect(screen.getByRole('tab', { name: 'Ma vue' }).getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('writes view_mode on the upcoming URL when the tab changes', () => {
+    renderUpcomingPage()
+    fireEvent.click(screen.getByRole('tab', { name: 'Vue globale' }))
+    expect(upcomingNavigate).toHaveBeenCalledWith('/execution/upcoming?view_mode=general', {
+      replace: true,
+    })
   })
 
   it('keeps the scheduled card on a large native viewport', () => {

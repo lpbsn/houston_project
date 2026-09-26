@@ -759,6 +759,55 @@ def test_manager_sees_scoped_execution_in_general_view(
     assert str(scoped.id) in personal_ids
 
 
+@pytest.mark.parametrize("view_mode", ["personal", "general"])
+def test_manager_section_counts_do_not_double_count_multi_team_execution(
+    api_client,
+    owner_membership,
+    manager_membership,
+    business_unit,
+    maintenance_business_unit,
+    view_mode,
+):
+    from houston.testing.taxonomy import create_membership_with_business_unit_scope
+
+    create_membership_with_business_unit_scope(
+        membership=manager_membership,
+        business_unit=maintenance_business_unit,
+    )
+    execution = create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Multi team counts",
+        tasks=[
+            build_task_payload(task="Restaurant task", business_unit=business_unit, position=1),
+            build_task_payload(
+                task="Maintenance task",
+                business_unit=maintenance_business_unit,
+                position=2,
+            ),
+        ],
+    )
+    assert execution.execution_teams.count() == 2
+
+    token = login(api_client, user=manager_membership.user)
+    response = api_client.get(
+        action_plan_execution_feed_url(manager_membership.establishment_id)
+        + feed_query(view_mode),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert feed_execution_ids(body) == [str(execution.id)]
+    assert body["section_counts"] == {
+        "pinned": 0,
+        "pending_validation": 0,
+        "overdue": 0,
+        "in_progress": 1,
+        "done": 0,
+        "canceled": 0,
+    }
+
+
 def test_pending_validation_execution_in_feed(
     api_client,
     owner_membership,

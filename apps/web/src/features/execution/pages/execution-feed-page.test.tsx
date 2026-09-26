@@ -656,6 +656,65 @@ describe('ExecutionFeedPage plan feed', () => {
     expect(onNavigate).toHaveBeenCalledWith('/execution/upcoming')
   })
 
+  it('navigates to cross Planifiés without view_mode when Vue globale is implicit', () => {
+    const onNavigate = vi.fn()
+    serializeAppRouteMockPath = '/cross/execution'
+    planFeedQueryMock.mockReturnValue(
+      buildPlanFeedQueryState({
+        data: {
+          pages: [
+            {
+              items: [buildPlanFeedWrapper('plan-active', 'Plan actif')],
+              scheduled_items: [
+                buildPlanFeedWrapper('plan-scheduled', 'Plan programmé', {
+                  status: 'scheduled',
+                  start_at: '2026-07-20T09:00:00Z',
+                }),
+              ],
+              scheduled_count: 1,
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+
+    renderExecutionFeedPage({ source: 'cross', onNavigate })
+    fireEvent.click(screen.getByRole('button', { name: 'Planifiés, 1' }))
+    expect(onNavigate).toHaveBeenCalledWith('/cross/execution/upcoming')
+  })
+
+  it('propagates explicit Ma vue from the cross feed to Planifiés', () => {
+    const onNavigate = vi.fn()
+    serializeAppRouteMockPath = '/cross/execution'
+    executionRouteState.search = '?view_mode=personal'
+    planFeedQueryMock.mockReturnValue(
+      buildPlanFeedQueryState({
+        data: {
+          pages: [
+            {
+              items: [buildPlanFeedWrapper('plan-active', 'Plan actif')],
+              scheduled_items: [
+                buildPlanFeedWrapper('plan-scheduled', 'Plan programmé', {
+                  status: 'scheduled',
+                  start_at: '2026-07-20T09:00:00Z',
+                }),
+              ],
+              scheduled_count: 1,
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+
+    renderExecutionFeedPage({ source: 'cross', onNavigate })
+    fireEvent.click(screen.getByRole('button', { name: 'Planifiés, 1' }))
+    expect(onNavigate).toHaveBeenCalledWith('/cross/execution/upcoming?view_mode=personal')
+  })
+
   it('keeps empty state without À venir on mobile when nothing is scheduled', () => {
     const onNavigate = vi.fn()
     planFeedQueryMock.mockReturnValue(

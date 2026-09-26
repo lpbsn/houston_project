@@ -1,6 +1,6 @@
-import { useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
+import { serializeAppRoute, useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
@@ -19,6 +19,7 @@ import { ActionPlanExecutionFeedCard } from '../components/action-plan-execution
 import { ActionPlanExecutionFeedDesktopRow } from '../components/action-plan-execution-feed-desktop-row'
 import { ExecutionFeedTabs } from '../components/execution-feed-tabs'
 import { groupScheduledItemsByStartDate } from '../lib/action-plan-execution-feed-card-display'
+import { executionFeedHref, parseExecutionFeedSearch } from '../lib/execution-feed-url-state'
 
 type ExecutionUpcomingPageProps = {
   onOpenActionPlanExecution?: (executionId: string) => void
@@ -30,10 +31,22 @@ export function ExecutionUpcomingPage({
   source = 'establishment',
 }: ExecutionUpcomingPageProps) {
   const auth = useAuth()
+  const { route, search, navigate } = useAppRoute()
   const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   const isCross = source === 'cross'
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
-  const [viewMode, setViewMode] = useState<ExecutionViewMode>('personal')
+  const feedUrlOptions = isCross ? { defaultViewMode: 'general' as const } : undefined
+  const feedUrl = parseExecutionFeedSearch(search, new Date(), feedUrlOptions)
+  const viewMode = feedUrl.viewMode
+
+  function replaceViewMode(next: ExecutionViewMode) {
+    const pathname =
+      serializeAppRoute(route).split('?')[0] ||
+      (isCross ? '/cross/execution/upcoming' : '/execution/upcoming')
+    navigate(executionFeedHref(pathname, { ...feedUrl, viewMode: next }, feedUrlOptions), {
+      replace: true,
+    })
+  }
 
   const upcomingQuery = useActionPlanExecutionUpcomingQuery(establishmentId, viewMode, {
     source,
@@ -65,7 +78,7 @@ export function ExecutionUpcomingPage({
         <TerrainHubViewToolbar>
           <ExecutionFeedTabs
             viewMode={viewMode}
-            onChange={setViewMode}
+            onChange={replaceViewMode}
             size={isDesktopWeb ? 'default' : 'compact'}
           />
         </TerrainHubViewToolbar>
