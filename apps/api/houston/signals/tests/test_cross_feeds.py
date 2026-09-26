@@ -367,6 +367,79 @@ def test_cross_execution_upcoming_unions_and_matches_feed_scheduled_meta(api_cli
     assert upcoming.json()["items"][0]["action_plan_execution"]["permission_hints"]["can_pin"] is False
 
 
+def test_cross_feed_scheduled_items_global_sort_and_preview_cap(api_client, monkeypatch):
+    """Preview merge is capped globally after (start_at, id) sort; count stays full."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from houston.action_plans.services import create_action_plan_with_execution
+
+    # Cap only the Cross builder slice — local per-membership preview stays at 50.
+    monkeypatch.setattr(
+        "houston.action_plans.execution_feed.SCHEDULED_FEED_PREVIEW_LIMIT",
+        2,
+    )
+
+    user = create_user(username="cross-preview-cap")
+    first = create_establishment(name="Alpha Preview Cap")
+    second = create_establishment(name="Beta Preview Cap")
+    membership_a = create_membership(
+        establishment=first,
+        user=user,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    membership_b = create_membership(
+        establishment=second,
+        user=user,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    bu_a = create_business_unit(establishment=first, key="salle")
+    bu_b = create_business_unit(establishment=second, key="salle")
+    now = timezone.now()
+
+    starts = [
+        (membership_a, bu_a, first.id, now + timedelta(hours=4), "A late"),
+        (membership_a, bu_a, first.id, now + timedelta(hours=1), "A soon"),
+        (membership_b, bu_b, second.id, now + timedelta(hours=2), "B mid"),
+        (membership_b, bu_b, second.id, now + timedelta(hours=3), "B later"),
+    ]
+    created = []
+    for membership, bu, establishment_id, start_at, title in starts:
+        _, execution = create_action_plan_with_execution(
+            establishment_id=establishment_id,
+            created_by=membership,
+            pilot_business_unit_id=bu.id,
+            title=title,
+            tasks=[build_task_payload(task=title, business_unit=bu)],
+            assignees=[build_assignee_payload(membership=membership, business_unit=bu)],
+            start_at=start_at,
+            end_at=start_at + timedelta(hours=1),
+            visible_from=now - timedelta(minutes=1),
+        )
+        created.append(execution)
+
+    by_title = {execution.title: execution for execution in created}
+    expected_first = by_title["A soon"]
+    expected_second = by_title["B mid"]
+
+    token = login(api_client, user=user)
+    feed = api_client.get(
+        "/api/v1/cross/action-plan-execution-feed/?view_mode=general",
+        **auth_headers(token),
+    )
+    assert feed.status_code == 200, feed.content
+    body = feed.json()
+
+    assert body["scheduled_count"] == 4
+    preview = body["scheduled_items"]
+    assert len(preview) == 2
+    preview_ids = [item["action_plan_execution"]["id"] for item in preview]
+    assert preview_ids == [str(expected_first.id), str(expected_second.id)]
+    preview_starts = [item["action_plan_execution"]["start_at"] for item in preview]
+    assert preview_starts == sorted(preview_starts)
+
+
 def test_cross_execution_calendar_unions_and_respects_per_membership_rbac(api_client):
     from datetime import timedelta
 

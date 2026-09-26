@@ -4,7 +4,10 @@ from datetime import datetime
 
 from django.utils import timezone
 
-from houston.action_plans.constants import ExecutionFeedViewMode
+from houston.action_plans.constants import (
+    SCHEDULED_FEED_PREVIEW_LIMIT,
+    ExecutionFeedViewMode,
+)
 from houston.action_plans.feed_cursor import (
     ActionPlanExecutionFeedCursor,
     apply_action_plan_execution_feed_cursor,
@@ -206,7 +209,7 @@ def build_cross_action_plan_execution_feed_page(
     scheduled_items = sorted(
         scheduled_by_id.values(),
         key=lambda execution: (execution.start_at, execution.id),
-    )
+    )[:SCHEDULED_FEED_PREVIEW_LIMIT]
     return (
         served,
         has_more,
