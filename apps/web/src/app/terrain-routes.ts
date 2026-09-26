@@ -38,6 +38,7 @@ const OPERATIONAL_STATIC_PATHS = new Set<string>([
   '/signals',
   '/execution',
   '/execution/upcoming',
+  '/cross/execution/upcoming',
   '/chat',
   '/general',
   '/team',
@@ -159,6 +160,9 @@ export function usesTerrainShell(route: AppRoute): boolean {
   if (route.kind === 'static' && route.path === '/execution/upcoming') {
     return true
   }
+  if (route.kind === 'static' && route.path === '/cross/execution/upcoming') {
+    return true
+  }
   if (route.kind === 'static' && ACTION_PLAN_TERRAIN_PATHS.has(route.path)) {
     return true
   }
@@ -200,6 +204,8 @@ function scopedHubConfig(page: ScopedTerrainPage): TerrainRouteConfig {
     topbarVariant: 'hub',
     pageTitle: scopedPageTitle(page),
     showBottomNav: isDashboard,
+    // Match static hub chrome: no separator between topbar title and feed subheader.
+    showTopbarBottomBorder: false,
     mainScroll:
       isDashboard ||
       page === 'general' ||
@@ -211,7 +217,6 @@ function scopedHubConfig(page: ScopedTerrainPage): TerrainRouteConfig {
     ...(isDashboard
       ? {
           hideTopbar: true,
-          showTopbarBottomBorder: false,
         }
       : {}),
   }
@@ -305,6 +310,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       showBottomNav: true,
       activeNavPath: '/signals',
       mainScroll: 'hidden',
+      showTopbarBottomBorder: false,
     }
   }
 
@@ -315,14 +321,27 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       showBottomNav: true,
       activeNavPath: '/execution',
       mainScroll: 'hidden',
+      showTopbarBottomBorder: false,
     }
   }
 
   if (route.kind === 'static' && route.path === '/execution/upcoming') {
     return {
       topbarVariant: 'detail',
-      title: 'À venir',
+      title: 'Planifiées',
       backPath: '/execution',
+      showBottomNav: false,
+      activeNavPath: '/execution',
+      mainScroll: 'hidden',
+      showTopbarBottomBorder: false,
+    }
+  }
+
+  if (route.kind === 'static' && route.path === '/cross/execution/upcoming') {
+    return {
+      topbarVariant: 'detail',
+      title: 'Planifiées',
+      backPath: '/cross/execution',
       showBottomNav: false,
       activeNavPath: '/execution',
       mainScroll: 'hidden',
@@ -483,6 +502,11 @@ export function resolveTerrainTopbarShowBottomBorder(
     return false
   }
 
+  // Establishment / Cross hub pages share the borderless topbar chrome of static hubs.
+  if (route.kind === 'scoped-terrain') {
+    return false
+  }
+
   return route.kind !== 'signal-action-create'
 }
 
@@ -545,6 +569,8 @@ export function getTerrainContentKey(route: AppRoute): string {
         return 'execution'
       case '/execution/upcoming':
         return 'execution-upcoming'
+      case '/cross/execution/upcoming':
+        return 'cross-execution-upcoming'
       case '/chat':
         return 'chat'
       case '/general':

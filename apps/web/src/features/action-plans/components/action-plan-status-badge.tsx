@@ -1,5 +1,5 @@
 import { HoustonBadge } from '@/components/ui/terrain'
-import { actionPlanExecutionDetailNavyBgClassName } from '@/lib/terrain-styles'
+import { actionPlanExecutionDetailNavyBgClassName, type HoustonBadgeVariant } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 import { formatActionPlanExecutionStatusLabel } from '../lib/action-plan-display'
@@ -13,7 +13,8 @@ type ActionPlanStatusBadgeProps = {
 const DETAIL_BADGE_CLASS = 'rounded-full px-2.5 py-1 text-[10px]'
 const EXECUTION_HEADER_BADGE_CLASS = 'rounded-full px-2.5 py-1 text-[10px]'
 
-function getBadgeVariant(status: string) {
+/** Shared HoustonBadge variant for action-plan execution status chips. */
+export function getActionPlanStatusBadgeVariant(status: string): HoustonBadgeVariant {
   if (status === 'done') {
     return 'green'
   }
@@ -37,7 +38,7 @@ export function ActionPlanStatusBadge({
   validatedAt = null,
   variant = 'default',
 }: ActionPlanStatusBadgeProps) {
-  const badgeVariant = getBadgeVariant(status)
+  const badgeVariant = getActionPlanStatusBadgeVariant(status)
   const isExecutionHeaderInProgress = variant === 'executionHeader' && status === 'in_progress'
 
   return (

@@ -1866,6 +1866,60 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/cross/action-plan-execution-upcoming/:
+    get:
+      operationId: v1_cross_action_plan_execution_upcoming_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque pagination cursor from a previous response next_cursor.
+      - in: query
+        name: establishment_id
+        schema:
+          type: string
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: view_mode
+        schema:
+          type: string
+          enum:
+          - general
+          - personal
+        description: Defaults to general.
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanExecutionFeedResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/cross/action-plan-executions/{execution_id}/:
     get:
       operationId: v1_cross_action_plan_execution_retrieve
@@ -9642,6 +9696,9 @@ components:
           type: string
           format: date-time
           nullable: true
+        validated_by_display_name:
+          type: string
+          nullable: true
         pilot_business_unit:
           $ref: '#/components/schemas/ActionPlanBusinessUnit'
         involved_poles:
@@ -9667,6 +9724,10 @@ components:
           nullable: true
         all_day:
           type: boolean
+        visible_from:
+          type: string
+          format: date-time
+          nullable: true
         is_overdue:
           type: boolean
         task_count:
@@ -9685,6 +9746,21 @@ components:
           format: date-time
         created_by_display_name:
           type: string
+        marked_done_at:
+          type: string
+          format: date-time
+          nullable: true
+        marked_done_by_display_name:
+          type: string
+          nullable: true
+        canceled_at:
+          type: string
+          format: date-time
+          nullable: true
+        active_review:
+          allOf:
+          - $ref: '#/components/schemas/ActionPlanExecutionActiveReview'
+          nullable: true
         is_pinned:
           type: boolean
         permission_hints:
@@ -9695,8 +9771,10 @@ components:
         establishment_name:
           type: string
       required:
+      - active_review
       - all_day
       - assignees
+      - canceled_at
       - created_at
       - created_by_display_name
       - description_short
@@ -9706,6 +9784,8 @@ components:
       - is_overdue
       - is_pinned
       - last_activity_at
+      - marked_done_at
+      - marked_done_by_display_name
       - permission_hints
       - pilot_business_unit
       - requires_validation
@@ -9717,6 +9797,8 @@ components:
       - title
       - treated_task_count
       - validated_at
+      - validated_by_display_name
+      - visible_from
     ActionPlanExecutionFeedItemWrapper:
       type: object
       properties:
@@ -9740,6 +9822,8 @@ components:
             $ref: '#/components/schemas/ActionPlanExecutionFeedItemWrapper'
         scheduled_count:
           type: integer
+        section_counts:
+          $ref: '#/components/schemas/ActionPlanExecutionFeedSectionCounts'
         next_cursor:
           type: string
           nullable: true
@@ -9751,6 +9835,29 @@ components:
       - next_cursor
       - scheduled_count
       - scheduled_items
+      - section_counts
+    ActionPlanExecutionFeedSectionCounts:
+      type: object
+      properties:
+        pinned:
+          type: integer
+        pending_validation:
+          type: integer
+        overdue:
+          type: integer
+        in_progress:
+          type: integer
+        done:
+          type: integer
+        canceled:
+          type: integer
+      required:
+      - canceled
+      - done
+      - in_progress
+      - overdue
+      - pending_validation
+      - pinned
     ActionPlanExecutionFeedTaskPreview:
       type: object
       properties:

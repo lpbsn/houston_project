@@ -294,7 +294,11 @@ function SignalFeedPageContent({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <TerrainHubTitleSlot enabled={!isCross}>
-        <SignalFeedTabs viewMode={viewMode} onChange={setViewMode} />
+        <SignalFeedTabs
+          viewMode={viewMode}
+          onChange={setViewMode}
+          size={isDesktopWeb ? 'default' : 'compact'}
+        />
       </TerrainHubTitleSlot>
       <TerrainHubSubheader>
         {isCross || !establishmentId ? null : (

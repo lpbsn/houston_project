@@ -1,10 +1,11 @@
-import { useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
+import { serializeAppRoute, useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
 import { TerrainHubViewToolbar } from '@/components/layout/terrain-hub-view-toolbar'
+import { TerrainFeedback } from '@/components/domain/terrain-feedback'
 import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { useLgViewport } from '@/lib/lg-viewport'
@@ -17,20 +18,39 @@ import type { ExecutionViewMode } from '@/features/execution/lib/types'
 import { ActionPlanExecutionFeedCard } from '../components/action-plan-execution-feed-card'
 import { ActionPlanExecutionFeedDesktopRow } from '../components/action-plan-execution-feed-desktop-row'
 import { ExecutionFeedTabs } from '../components/execution-feed-tabs'
+import { groupScheduledItemsByStartDate } from '../lib/action-plan-execution-feed-card-display'
+import { executionFeedHref, parseExecutionFeedSearch } from '../lib/execution-feed-url-state'
 
 type ExecutionUpcomingPageProps = {
   onOpenActionPlanExecution?: (executionId: string) => void
+  source?: 'establishment' | 'cross'
 }
 
 export function ExecutionUpcomingPage({
   onOpenActionPlanExecution,
+  source = 'establishment',
 }: ExecutionUpcomingPageProps) {
   const auth = useAuth()
+  const { route, search, navigate } = useAppRoute()
   const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const isCross = source === 'cross'
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
-  const [viewMode, setViewMode] = useState<ExecutionViewMode>('personal')
+  const feedUrlOptions = isCross ? { defaultViewMode: 'general' as const } : undefined
+  const feedUrl = parseExecutionFeedSearch(search, new Date(), feedUrlOptions)
+  const viewMode = feedUrl.viewMode
 
-  const upcomingQuery = useActionPlanExecutionUpcomingQuery(establishmentId, viewMode)
+  function replaceViewMode(next: ExecutionViewMode) {
+    const pathname =
+      serializeAppRoute(route).split('?')[0] ||
+      (isCross ? '/cross/execution/upcoming' : '/execution/upcoming')
+    navigate(executionFeedHref(pathname, { ...feedUrl, viewMode: next }, feedUrlOptions), {
+      replace: true,
+    })
+  }
+
+  const upcomingQuery = useActionPlanExecutionUpcomingQuery(establishmentId, viewMode, {
+    source,
+  })
   const quickActions = useActionPlanExecutionFeedQuickActions({
     establishmentId,
     viewMode,
@@ -39,13 +59,14 @@ export function ExecutionUpcomingPage({
   const items = upcomingQuery.isSuccess
     ? unwrapActionPlanExecutionFeedItems(upcomingQuery.data.pages.flatMap((page) => page.items))
     : []
+  const groups = groupScheduledItemsByStartDate(items)
 
   const isInitialLoading = upcomingQuery.isLoading
   const showEmpty = items.length === 0 && upcomingQuery.isSuccess && !upcomingQuery.isLoading
   const hasMore = upcomingQuery.hasNextPage
   const isFetchingMore = upcomingQuery.isFetchingNextPage
 
-  if (!establishmentId) {
+  if (!establishmentId && !isCross) {
     return (
       <p className="px-3 py-4 text-sm text-[#6b5f52]">Établissement non sélectionné.</p>
     )
@@ -53,9 +74,13 @@ export function ExecutionUpcomingPage({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <TerrainHubSubheader className="border-b-0">
+      <TerrainHubSubheader>
         <TerrainHubViewToolbar>
-          <ExecutionFeedTabs viewMode={viewMode} onChange={setViewMode} />
+          <ExecutionFeedTabs
+            viewMode={viewMode}
+            onChange={replaceViewMode}
+            size={isDesktopWeb ? 'default' : 'compact'}
+          />
         </TerrainHubViewToolbar>
       </TerrainHubSubheader>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 pb-4">
@@ -67,6 +92,10 @@ export function ExecutionUpcomingPage({
 
         {!isInitialLoading ? (
           <div className="flex flex-col gap-3 pt-5">
+            {!isCross && quickActions.actionError ? (
+              <TerrainFeedback variant="error" message={quickActions.actionError} />
+            ) : null}
+
             {upcomingQuery.isError ? (
               <TerrainErrorState
                 message={resolveApiErrorMessage(
@@ -78,46 +107,48 @@ export function ExecutionUpcomingPage({
               />
             ) : null}
 
-            {upcomingQuery.isSuccess && items.length > 0 ? (
-              <div className={isDesktopWeb ? 'flex flex-col gap-1' : 'flex flex-col gap-3'}>
-                {items.map((item) =>
-                  isDesktopWeb ? (
-                    <ActionPlanExecutionFeedDesktopRow
-                      key={`upcoming-${item.id}`}
-                      item={item}
-                      onSelect={(id) => onOpenActionPlanExecution?.(id)}
-                      actionsPending={quickActions.isPending}
-                      actionsOpen={
-                        quickActions.actionsOpen &&
-                        quickActions.activeItem?.id === item.id
-                      }
-                      actionError={
-                        quickActions.activeItem?.id === item.id
-                          ? quickActions.actionError
-                          : null
-                      }
-                      onActionsOpenChange={(open) => {
-                        if (open) {
-                          quickActions.openActions(item)
-                          return
+            {groups.map((group) => (
+              <div key={group.key} className="flex flex-col gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[#7D7B75]">
+                  {group.label}
+                </p>
+                <div
+                  className={isDesktopWeb ? 'flex flex-col gap-1' : 'flex flex-col gap-3'}
+                >
+                  {group.items.map((item) =>
+                    isDesktopWeb ? (
+                      <ActionPlanExecutionFeedDesktopRow
+                        key={`upcoming-${item.id}`}
+                        item={item}
+                        onSelect={(id) => onOpenActionPlanExecution?.(id)}
+                        onTogglePin={
+                          isCross
+                            ? undefined
+                            : (feedItem) => {
+                                quickActions.clearActionError()
+                                quickActions.runAction('pin', feedItem)
+                              }
                         }
-                        quickActions.closeActions()
-                      }}
-                      onRunAction={(feedItem, actionId) =>
-                        quickActions.runAction(actionId, feedItem)
-                      }
-                    />
-                  ) : (
-                    <ActionPlanExecutionFeedCard
-                      key={`upcoming-${item.id}`}
-                      item={item}
-                      onSelect={(id) => onOpenActionPlanExecution?.(id)}
-                      onOpenActions={quickActions.openActions}
-                    />
-                  ),
-                )}
+                      />
+                    ) : (
+                      <ActionPlanExecutionFeedCard
+                        key={`upcoming-${item.id}`}
+                        item={item}
+                        onSelect={(id) => onOpenActionPlanExecution?.(id)}
+                        onTogglePin={
+                          isCross
+                            ? undefined
+                            : (feedItem) => {
+                                quickActions.clearActionError()
+                                quickActions.runAction('pin', feedItem)
+                              }
+                        }
+                      />
+                    ),
+                  )}
+                </div>
               </div>
-            ) : null}
+            ))}
 
             {showEmpty ? (
               <TerrainEmptyState
@@ -135,7 +166,7 @@ export function ExecutionUpcomingPage({
                   onClick={() => void upcomingQuery.fetchNextPage()}
                   disabled={isFetchingMore}
                 >
-                  {isFetchingMore ? 'Chargement…' : 'Charger plus'}
+                  {isFetchingMore ? 'Chargement…' : 'Afficher plus'}
                 </button>
               </div>
             ) : null}
@@ -143,13 +174,13 @@ export function ExecutionUpcomingPage({
         ) : null}
       </div>
 
-      {!isDesktopWeb && quickActions.activeItem ? (
+      {!isDesktopWeb && !isCross && quickActions.activeItem ? (
         <ActionPlanExecutionFeedCardActionsSheet
-          item={quickActions.activeItem}
           open={quickActions.actionsOpen}
+          item={quickActions.activeItem}
           isPending={quickActions.isPending}
           onClose={quickActions.closeActions}
-          onSelectAction={quickActions.runAction}
+          onSelectAction={(actionId) => quickActions.runAction(actionId)}
         />
       ) : null}
     </div>

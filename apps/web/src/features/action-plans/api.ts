@@ -50,6 +50,8 @@ export const actionPlansQueryKeys = {
     ['action-plans', 'cross-action-plan-execution-feed', viewMode] as const,
   executionUpcoming: (establishmentId: string, viewMode: ActionPlanExecutionFeedViewMode) =>
     ['action-plans', 'action-plan-execution-upcoming', establishmentId, viewMode] as const,
+  crossExecutionUpcoming: (viewMode: ActionPlanExecutionFeedViewMode) =>
+    ['action-plans', 'cross-action-plan-execution-upcoming', viewMode] as const,
   executionCalendar: (
     establishmentId: string,
     viewMode: ActionPlanExecutionFeedViewMode,
@@ -234,6 +236,27 @@ export async function fetchActionPlanExecutionUpcoming(
           headers: getAuthHeaders(accessToken),
         },
       ),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanExecutionUpcomingResponse>(result)
+}
+
+export async function fetchCrossActionPlanExecutionUpcoming(
+  viewMode: ActionPlanExecutionFeedViewMode,
+  options: { cursor?: string; pageSize?: number } = {},
+): Promise<ActionPlanExecutionUpcomingResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/cross/action-plan-execution-upcoming/', {
+        params: {
+          query: {
+            view_mode: viewMode,
+            ...(options.cursor ? { cursor: options.cursor } : {}),
+            ...(options.pageSize ? { page_size: options.pageSize } : {}),
+          },
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
     { refreshable: true },
   )
   return assertActionPlanData<ActionPlanExecutionUpcomingResponse>(result)

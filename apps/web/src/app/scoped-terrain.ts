@@ -101,6 +101,11 @@ export function parseScopedTerrainRoute(pathname: string): AppRoute | null {
     }
   }
 
+  const crossExecutionUpcoming = pathname === '/cross/execution/upcoming'
+  if (crossExecutionUpcoming) {
+    return { kind: 'static', path: '/cross/execution/upcoming' }
+  }
+
   const crossExecutionDetail = pathname.match(/^\/cross\/execution\/([^/]+)$/)
   if (crossExecutionDetail?.[1] && isValidUuid(crossExecutionDetail[1])) {
     return {

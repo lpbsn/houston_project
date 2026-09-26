@@ -10,6 +10,10 @@ import type { ActionPlanExecutionFeedItemWrapper } from '@/features/action-plans
 import { ExecutionUpcomingPage } from './execution-upcoming-page'
 
 const upcomingQueryMock = vi.fn()
+const upcomingQueryArgs = vi.fn()
+const upcomingNavigate = vi.fn()
+const upcomingRouteState = { search: '' }
+let serializeAppRouteMockPath = '/execution/upcoming'
 const onOpenActionPlanExecution = vi.fn()
 const pinControl = vi.hoisted(() => {
   const control = {
@@ -72,6 +76,9 @@ function buildUpcomingWrapper(
       last_activity_at: '2026-06-13T12:00:00Z',
       created_at: '2026-06-13T12:00:00Z',
       created_by_display_name: 'Alice Martin',
+      visible_from: null,
+      marked_done_at: null,
+      canceled_at: null,
       is_pinned: false,
       permission_hints: {
         can_mark_done: false,
@@ -121,7 +128,14 @@ vi.mock('@/app/auth-provider', () => ({
 }))
 
 vi.mock('@/features/action-plans/hooks', () => ({
-  useActionPlanExecutionUpcomingQuery: () => upcomingQueryMock(),
+  useActionPlanExecutionUpcomingQuery: (
+    establishmentId: string | null,
+    viewMode: string,
+    options?: { source?: string },
+  ) => {
+    upcomingQueryArgs(establishmentId, viewMode, options)
+    return upcomingQueryMock()
+  },
   usePinActionPlanExecutionMutation: () => ({
     mutate: pinControl.pin,
     isPending: false,
@@ -130,6 +144,15 @@ vi.mock('@/features/action-plans/hooks', () => ({
     mutate: pinControl.unpin,
     isPending: false,
   }),
+}))
+
+vi.mock('@/app/app-routes', () => ({
+  useAppRoute: () => ({
+    route: { kind: 'static', path: serializeAppRouteMockPath },
+    search: upcomingRouteState.search,
+    navigate: upcomingNavigate,
+  }),
+  serializeAppRoute: () => serializeAppRouteMockPath,
 }))
 
 function stubLgViewport(matches: boolean) {
@@ -149,7 +172,7 @@ function stubLgViewport(matches: boolean) {
   })
 }
 
-function renderUpcomingPage() {
+function renderUpcomingPage(props: { source?: 'establishment' | 'cross' } = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -157,7 +180,10 @@ function renderUpcomingPage() {
     createElement(
       QueryClientProvider,
       { client: queryClient },
-      createElement(ExecutionUpcomingPage, { onOpenActionPlanExecution }),
+      createElement(ExecutionUpcomingPage, {
+        onOpenActionPlanExecution,
+        ...props,
+      }),
     ),
   )
 }
@@ -166,6 +192,10 @@ describe('ExecutionUpcomingPage', () => {
   beforeEach(() => {
     onOpenActionPlanExecution.mockClear()
     upcomingQueryMock.mockReturnValue(buildUpcomingQueryState())
+    upcomingQueryArgs.mockClear()
+    upcomingNavigate.mockClear()
+    upcomingRouteState.search = ''
+    serializeAppRouteMockPath = '/execution/upcoming'
     pinControl.failPin = false
     pinControl.pin.mockClear()
     pinControl.unpin.mockClear()
@@ -177,7 +207,7 @@ describe('ExecutionUpcomingPage', () => {
     Reflect.deleteProperty(window, 'matchMedia')
   })
 
-  it('renders the desktop row with the start date on web lg', () => {
+  it('renders the desktop row with Début/Fin under badges on web lg', () => {
     stubLgViewport(true)
     upcomingQueryMock.mockReturnValue(
       buildUpcomingQueryState({
@@ -200,37 +230,36 @@ describe('ExecutionUpcomingPage', () => {
     renderUpcomingPage()
 
     const openControl = screen.getByRole('button', { name: /Brief journée/ })
-    const actions = screen.getByRole('button', { name: 'Actions du plan d’action' })
-    expect(openControl.contains(actions)).toBe(false)
-    expect(screen.getByText(/^Début : /)).toBeTruthy()
-    expect(screen.queryByText(/Journée entière/)).toBeNull()
-    expect(screen.queryByText('DÉBUT')).toBeNull()
+    const pin = screen.getByRole('button', { name: 'Épingler' })
+    expect(openControl.contains(pin)).toBe(false)
+    expect(screen.getByText('Début')).toBeTruthy()
+    expect(screen.queryByText(/^Début : /)).toBeNull()
+    expect(screen.queryByText(/Échéance/)).toBeNull()
     expect(screen.queryByRole('progressbar')).toBeNull()
     expect(screen.getByText('Alice Martin')).toBeTruthy()
 
-    fireEvent.click(actions)
+    fireEvent.click(pin)
     expect(onOpenActionPlanExecution).not.toHaveBeenCalled()
-    expect(screen.getByRole('menu', { name: 'Actions du plan d’action' })).toBeTruthy()
+    expect(pinControl.pin).toHaveBeenCalledWith('plan-all-day', expect.any(Object))
     expect(screen.queryByRole('dialog', { name: 'Actions' })).toBeNull()
 
     fireEvent.click(openControl)
     expect(onOpenActionPlanExecution).toHaveBeenCalledWith('plan-all-day')
   })
 
-  it('closes the desktop pin menu after a successful pin of the opened row', async () => {
+  it('pins successfully from the desktop upcoming row control', async () => {
     stubLgViewport(true)
     renderUpcomingPage()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Actions du plan d’action' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Épingler' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Épingler' }))
 
     expect(pinControl.pin).toHaveBeenCalledWith('plan-scheduled', expect.any(Object))
     await waitFor(() => {
-      expect(screen.queryByRole('menu', { name: 'Actions du plan d’action' })).toBeNull()
+      expect(screen.queryByText('Épinglage impossible.')).toBeNull()
     })
   })
 
-  it('keeps the desktop pin menu open with the error, then clears it on another row', () => {
+  it('shows a pin error on desktop upcoming, then clears it after a successful pin', () => {
     stubLgViewport(true)
     pinControl.failPin = true
     upcomingQueryMock.mockReturnValue(
@@ -251,18 +280,14 @@ describe('ExecutionUpcomingPage', () => {
     )
     renderUpcomingPage()
 
-    const [firstActions, secondActions] = screen.getAllByRole('button', {
-      name: 'Actions du plan d’action',
-    })
-    fireEvent.click(firstActions)
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Épingler' }))
+    const [firstPin, secondPin] = screen.getAllByRole('button', { name: 'Épingler' })
+    fireEvent.click(firstPin)
 
-    expect(screen.getByRole('alert').textContent).toBe('Épinglage impossible.')
-    expect(screen.getByRole('menu', { name: 'Actions du plan d’action' })).toBeTruthy()
+    expect(screen.getByText('Épinglage impossible.')).toBeTruthy()
 
-    fireEvent.click(secondActions)
-    expect(screen.queryByRole('alert')).toBeNull()
-    expect(screen.getByRole('menu', { name: 'Actions du plan d’action' })).toBeTruthy()
+    pinControl.failPin = false
+    fireEvent.click(secondPin)
+    expect(screen.queryByText('Épinglage impossible.')).toBeNull()
   })
 
   it('keeps the scheduled card and the actions sheet outside desktop web', () => {
@@ -270,15 +295,41 @@ describe('ExecutionUpcomingPage', () => {
     renderUpcomingPage()
 
     const openControl = screen.getByRole('button', { name: /Plan programmé/ })
-    const actions = screen.getByRole('button', { name: 'Actions du plan d’action' })
-    expect(openControl.contains(actions)).toBe(true)
-    expect(screen.getByText('DÉBUT')).toBeTruthy()
+    const pin = screen.getByRole('button', { name: 'Épingler' })
+    expect(openControl.contains(pin)).toBe(true)
+    expect(screen.getByText(/Début/)).toBeTruthy()
     expect(screen.queryByText(/^Début : /)).toBeNull()
 
-    fireEvent.click(actions)
+    fireEvent.click(pin)
     expect(onOpenActionPlanExecution).not.toHaveBeenCalled()
-    expect(screen.getByRole('dialog', { name: 'Actions' })).toBeTruthy()
-    expect(screen.queryByRole('menu', { name: 'Actions du plan d’action' })).toBeNull()
+    expect(screen.queryByRole('dialog', { name: 'Actions' })).toBeNull()
+  })
+
+  it('defaults cross upcoming to Vue globale without a view_mode query', () => {
+    serializeAppRouteMockPath = '/cross/execution/upcoming'
+    renderUpcomingPage({ source: 'cross' })
+
+    expect(upcomingQueryArgs).toHaveBeenCalledWith('est-1', 'general', { source: 'cross' })
+    expect(screen.getByRole('tab', { name: 'Vue globale' }).getAttribute('aria-selected')).toBe(
+      'true',
+    )
+  })
+
+  it('keeps an explicit personal view_mode on cross upcoming', () => {
+    serializeAppRouteMockPath = '/cross/execution/upcoming'
+    upcomingRouteState.search = '?view_mode=personal'
+    renderUpcomingPage({ source: 'cross' })
+
+    expect(upcomingQueryArgs).toHaveBeenCalledWith('est-1', 'personal', { source: 'cross' })
+    expect(screen.getByRole('tab', { name: 'Ma vue' }).getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('writes view_mode on the upcoming URL when the tab changes', () => {
+    renderUpcomingPage()
+    fireEvent.click(screen.getByRole('tab', { name: 'Vue globale' }))
+    expect(upcomingNavigate).toHaveBeenCalledWith('/execution/upcoming?view_mode=general', {
+      replace: true,
+    })
   })
 
   it('keeps the scheduled card on a large native viewport', () => {
@@ -287,11 +338,10 @@ describe('ExecutionUpcomingPage', () => {
     renderUpcomingPage()
 
     const openControl = screen.getByRole('button', { name: /Plan programmé/ })
-    const actions = screen.getByRole('button', { name: 'Actions du plan d’action' })
-    expect(openControl.contains(actions)).toBe(true)
-    expect(screen.getByText('DÉBUT')).toBeTruthy()
-    fireEvent.click(actions)
-    expect(screen.getByRole('dialog', { name: 'Actions' })).toBeTruthy()
-    expect(screen.queryByRole('menu', { name: 'Actions du plan d’action' })).toBeNull()
+    const pin = screen.getByRole('button', { name: 'Épingler' })
+    expect(openControl.contains(pin)).toBe(true)
+    expect(screen.getByText(/Début/)).toBeTruthy()
+    fireEvent.click(pin)
+    expect(screen.queryByRole('dialog', { name: 'Actions' })).toBeNull()
   })
 })

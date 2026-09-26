@@ -361,7 +361,7 @@ export function ChatPage({
   const CollapseIcon = listCollapsed ? PanelLeftOpen : PanelLeftClose
 
   const searchHeader = (
-    <TerrainHubSubheader>
+    <TerrainHubSubheader className="border-b border-[#E8E6DF]">
       <div className="flex items-center gap-2 px-3 py-2">
         <Input
           value={search}

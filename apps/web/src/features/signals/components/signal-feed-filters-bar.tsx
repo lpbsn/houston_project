@@ -91,7 +91,7 @@ export function SignalFeedFiltersBar({
   if (isDesktopWeb) {
     return (
       <div
-        className="flex shrink-0 flex-wrap items-center gap-2 border-t border-[#E8E6DF] bg-white px-4 py-2"
+        className="flex shrink-0 flex-wrap items-center gap-2 bg-white px-4 py-2"
         aria-label="Filtres des observations"
       >
         {SIGNAL_FEED_STATUS_OPTIONS.map((option) => {

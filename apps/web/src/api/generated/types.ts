@@ -623,6 +623,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cross/action-plan-execution-upcoming/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_cross_action_plan_execution_upcoming_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cross/action-plan-executions/{execution_id}/": {
         parameters: {
             query?: never;
@@ -3047,6 +3063,7 @@ export interface components {
             requires_validation: boolean;
             /** Format: date-time */
             validated_at: string | null;
+            validated_by_display_name: string | null;
             pilot_business_unit: components["schemas"]["ActionPlanBusinessUnit"];
             involved_poles: {
                 [key: string]: unknown;
@@ -3060,6 +3077,8 @@ export interface components {
             /** Format: date-time */
             end_at: string | null;
             all_day: boolean;
+            /** Format: date-time */
+            visible_from: string | null;
             is_overdue: boolean;
             task_count: number;
             treated_task_count: number;
@@ -3069,6 +3088,12 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             created_by_display_name: string;
+            /** Format: date-time */
+            marked_done_at: string | null;
+            marked_done_by_display_name: string | null;
+            /** Format: date-time */
+            canceled_at: string | null;
+            active_review: components["schemas"]["ActionPlanExecutionActiveReview"] | null;
             is_pinned: boolean;
             permission_hints: components["schemas"]["ActionPlanExecutionPermissionHints"];
             /** Format: uuid */
@@ -3083,8 +3108,17 @@ export interface components {
             items: components["schemas"]["ActionPlanExecutionFeedItemWrapper"][];
             scheduled_items: components["schemas"]["ActionPlanExecutionFeedItemWrapper"][];
             scheduled_count: number;
+            section_counts: components["schemas"]["ActionPlanExecutionFeedSectionCounts"];
             next_cursor: string | null;
             has_more: boolean;
+        };
+        ActionPlanExecutionFeedSectionCounts: {
+            pinned: number;
+            pending_validation: number;
+            overdue: number;
+            in_progress: number;
+            done: number;
+            canceled: number;
         };
         ActionPlanExecutionFeedTaskPreview: {
             position: number;
@@ -7192,6 +7226,56 @@ export interface operations {
     v1_cross_action_plan_execution_feed_retrieve: {
         parameters: {
             query?: {
+                cursor?: string;
+                establishment_id?: string;
+                page_size?: number;
+                /** @description Defaults to general. */
+                view_mode?: "general" | "personal";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPlanExecutionFeedResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_cross_action_plan_execution_upcoming_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Opaque pagination cursor from a previous response next_cursor. */
                 cursor?: string;
                 establishment_id?: string;
                 page_size?: number;

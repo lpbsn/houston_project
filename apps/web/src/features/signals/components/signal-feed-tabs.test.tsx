@@ -18,9 +18,12 @@ afterEach(() => {
 
 describe('SignalFeedTabs', () => {
   it('renders Ma zone and Vue globale as segmented tabs', () => {
-    render(<SignalFeedTabs viewMode="personal" onChange={onChange} />)
+    render(<SignalFeedTabs viewMode="personal" onChange={onChange} size="compact" />)
 
-    expect(screen.getByRole('tablist', { name: 'Mode de vue' })).toBeTruthy()
+    const tablist = screen.getByRole('tablist', { name: 'Mode de vue' })
+    expect(tablist).toBeTruthy()
+    expect(tablist.className).toContain('rounded-md')
+    expect(screen.getByRole('tab', { name: 'Ma zone' }).className).toContain('min-h-7')
     expect(screen.getByRole('tab', { name: 'Ma zone' }).getAttribute('aria-selected')).toBe('true')
     expect(screen.getByRole('tab', { name: 'Vue globale' }).getAttribute('aria-selected')).toBe('false')
   })
