@@ -284,8 +284,9 @@ describe('SignalCard pinned variant', () => {
     expect(screen.queryByText(/Rapporté par/)).toBeNull()
     const location = screen.getByText('Cuisine')
     const detailCta = screen.getByText('Voir le détail →')
-    expect(location).toBeTruthy()
-    expect(detailCta).toBeTruthy()
+    const footer = screen.getByTestId('pinned-signal-card-footer')
+    expect(footer.contains(location)).toBe(true)
+    expect(footer.contains(detailCta)).toBe(true)
     expect(
       (location as Node).compareDocumentPosition(detailCta) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()

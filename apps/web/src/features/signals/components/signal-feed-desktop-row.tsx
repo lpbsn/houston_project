@@ -185,18 +185,18 @@ function PinnedDesktopRow({
           </span>
         ) : null}
 
-        <div className="mt-3 flex items-center justify-between gap-2">
+        <div className="mt-3 flex flex-nowrap items-center justify-between gap-2">
           <div className="min-w-0 flex-1">
             {location ? (
-              <span
+              <p
                 className={cn(
-                  'inline-flex max-w-full items-center gap-1 text-[12px] leading-snug',
+                  'flex min-w-0 items-center gap-1 text-[12px]',
                   terrain.textSecondary,
                 )}
               >
                 <MapPin className="h-3 w-3 shrink-0 text-[#E24B4A]" aria-hidden />
-                <span className="min-w-0 break-words">{location}</span>
-              </span>
+                <span className="truncate">{location}</span>
+              </p>
             ) : null}
           </div>
           <span className={cn('shrink-0 text-[11px] font-semibold', terrainBrandAction.text)}>

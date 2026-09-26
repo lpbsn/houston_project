@@ -6,10 +6,6 @@ export const SIGNAL_CANCEL_CONFIRM_MESSAGE =
 export const SIGNAL_MARK_INTERESTING_CONFIRM_MESSAGE =
   'Confirmer le marquage comme intéressant ? Cette action n’est pas réversible pour l’instant.'
 
-/** UX hint when resolve/cancel are unavailable because a linked action plan owns the lifecycle. */
-export const SIGNAL_IN_PROGRESS_RESOLVE_VIA_ACTION_PLAN_HINT =
-  'Cette observation sera résolue via son plan d’action.'
-
 export type SignalFeedCardActionId =
   | 'pin'
   | 'mark_interesting'

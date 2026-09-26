@@ -6,24 +6,34 @@ import { cn } from '@/lib/utils'
 type SignalDetailStickyFooterProps = {
   onCreateActionPlan: () => void
   className?: string
+  'data-testid'?: string
 }
 
+/** Flex-pinned footer: sits under a scrollable details pane (report-page pattern). */
 export function SignalDetailStickyFooter({
   className,
   onCreateActionPlan,
+  'data-testid': dataTestId = 'signal-detail-create-plan-footer',
 }: SignalDetailStickyFooterProps) {
   return (
-    <TerrainStickyFooter className={cn('flex flex-col gap-2', className)}>
+    <TerrainStickyFooter
+      data-testid={dataTestId}
+      className={cn(
+        // Override TerrainStickyFooter sticky/mt-auto — parent flex column owns bottom pin.
+        'relative mt-0 flex shrink-0 flex-col gap-2',
+        className,
+      )}
+    >
       <Button
         type="button"
         className={cn(
-          'h-11 w-full rounded-full text-[15px] font-semibold text-white',
+          'h-12 w-full rounded-xl text-[15px] font-semibold text-white',
           terrainBrandAction.bg,
           terrainBrandAction.hover,
         )}
         onClick={onCreateActionPlan}
       >
-        + Plan d&apos;action
+        + Créer un plan d&apos;action
       </Button>
     </TerrainStickyFooter>
   )

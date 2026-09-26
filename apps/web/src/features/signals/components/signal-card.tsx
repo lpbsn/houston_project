@@ -104,7 +104,7 @@ function FeedSignalCard({
       role="button"
       tabIndex={0}
     >
-      <div className="mb-1 flex items-start justify-between gap-2">
+      <div className="mb-0.5 flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           <SignalStatusBadge status={item.status} variant="feed" />
           {showUnclassified ? <SignalUnclassifiedBadge signal={item} variant="feed" /> : null}
@@ -236,19 +236,23 @@ function PinnedSignalCard({
         </span>
       ) : null}
 
-      {location ? (
-        <p
-          className={cn(
-            'mt-1.5 flex min-w-0 items-center gap-1 text-[12px]',
-            terrain.textSecondary,
-          )}
-        >
-          <MapPin className="h-3 w-3 shrink-0 text-[#E24B4A]" aria-hidden />
-          <span className="truncate">{location}</span>
-        </p>
-      ) : null}
-
-      <div className="mt-3 flex items-center justify-end">
+      <div
+        data-testid="pinned-signal-card-footer"
+        className="mt-3 flex flex-nowrap items-center justify-between gap-2"
+      >
+        <div className="min-w-0 flex-1">
+          {location ? (
+            <p
+              className={cn(
+                'flex min-w-0 items-center gap-1 text-[12px]',
+                terrain.textSecondary,
+              )}
+            >
+              <MapPin className="h-3 w-3 shrink-0 text-[#E24B4A]" aria-hidden />
+              <span className="truncate">{location}</span>
+            </p>
+          ) : null}
+        </div>
         <span className={cn('shrink-0 text-[11px] font-semibold', terrainBrandAction.text)}>
           {PINNED_SIGNAL_CARD_DETAIL_CTA}
         </span>

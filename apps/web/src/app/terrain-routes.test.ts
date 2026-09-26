@@ -290,7 +290,7 @@ describe('getTerrainRouteConfig', () => {
       title: 'Observation',
       backPath: '/signals',
       showBottomNav: false,
-      mainScroll: 'auto',
+      mainScroll: 'hidden',
     })
   })
 

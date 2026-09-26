@@ -41,7 +41,7 @@ describe('SignalLinkedActionPlansSection', () => {
     expect(container.firstChild).toBeNull()
   })
 
-  it('renders section label, title, status badge, and navigation chevron', () => {
+  it('renders section label, title, compact status badge, and clickable row', () => {
     render(
       createElement(SignalLinkedActionPlansSection, {
         executions: [buildLinkedExecution()],
@@ -49,14 +49,16 @@ describe('SignalLinkedActionPlansSection', () => {
       }),
     )
 
+    const row = screen.getByRole('button', { name: /Contrôle chaîne du froid/i })
     expect(screen.getByText("Plans d'action")).toBeTruthy()
-    expect(screen.getByText('Contrôle chaîne du froid')).toBeTruthy()
+    expect(row).toBeTruthy()
     expect(screen.getByText('En cours')).toBeTruthy()
     expect(screen.queryByText('Maintenance')).toBeNull()
-    expect(screen.getByText('>')).toBeTruthy()
+    expect(row.className).toContain('rounded-lg')
+    expect(row.className).toContain('bg-[#FAFAF8]')
   })
 
-  it('renders detail status badge with teal background for in_progress', () => {
+  it('uses the existing detail status badge language under the title', () => {
     const { container } = render(
       createElement(SignalLinkedActionPlansSection, {
         executions: [buildLinkedExecution()],
@@ -64,11 +66,12 @@ describe('SignalLinkedActionPlansSection', () => {
       }),
     )
 
+    const status = screen.getByText('En cours')
+    expect(status.className).toContain('text-[10px]')
     expect(container.querySelector('.bg-\\[\\#3A7A96\\]')).toBeTruthy()
-    expect(container.querySelector('.bg-\\[\\#16435B\\]')).toBeNull()
   })
 
-  it('calls onSelect with execution id on card click', () => {
+  it('calls onSelect with execution id on row click', () => {
     const onSelect = vi.fn()
 
     render(

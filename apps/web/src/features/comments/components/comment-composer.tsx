@@ -8,7 +8,6 @@ import {
 } from 'react'
 import { Paperclip, SendHorizonal, X } from 'lucide-react'
 
-import { Button } from '@/components/ui/button'
 import { commentThread, terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -319,8 +318,9 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
             <button
               type="button"
               className={cn(
-                'inline-flex h-11 w-11 shrink-0 items-center justify-center',
+                'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full',
                 terrainBrandAction.text,
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30',
                 'disabled:opacity-40',
               )}
               disabled={
@@ -335,54 +335,49 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
             </button>
           </div>
         ) : (
-          <div className="flex items-end gap-2">
-            <div className={cn('min-w-0 flex-1', compactOnLg && 'relative')}>
+          <div className="relative">
+            <div
+              className={cn(
+                'flex items-end gap-1 rounded-[22px] border border-[#E8E6DF] bg-[#F5F4F0] px-2.5 py-1.5 transition-shadow',
+                'focus-within:border-[#d1d9ff] focus-within:bg-white focus-within:shadow-[0_0_8px_#d1d9ff]',
+              )}
+            >
               <textarea
                 {...textareaProps}
-                rows={compactOnLg ? 2 : 3}
+                rows={compactOnLg ? 1 : 2}
                 className={cn(
-                  'w-full max-h-40 resize-y rounded-2xl border border-[#E8E6DF] bg-white px-3 py-3',
+                  'min-h-10 max-h-40 min-w-0 flex-1 resize-none border-0 bg-transparent px-1.5 py-2',
                   'text-base text-[#1a1a1a] placeholder:text-[#65676B] md:text-sm',
-                  'focus-visible:outline-none focus-visible:ring-2',
-                  terrainBrandAction.ring,
-                  compactOnLg
-                    ? 'min-h-16 lg:min-h-14 lg:py-2 lg:pb-7'
-                    : 'min-h-24',
+                  'focus-visible:outline-none',
+                  compactOnLg ? 'lg:min-h-9 lg:py-1.5' : null,
                 )}
               />
-              {compactOnLg ? (
-                <p className="mt-1 px-1 text-[10px] text-[#a3a19a] lg:pointer-events-none lg:absolute lg:bottom-1.5 lg:left-3 lg:mt-0">
-                  {draft.length}/{MAX_COMMENT_LENGTH}
-                </p>
-              ) : null}
+              {attachIconButton}
+              <button
+                type="button"
+                className={cn(
+                  'mb-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white',
+                  terrainBrandAction.bg,
+                  terrainBrandAction.hover,
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30',
+                  'disabled:opacity-40',
+                )}
+                disabled={
+                  disabled ||
+                  !draft.trim() ||
+                  pendingAttachments.some((item) => item.status === 'uploading')
+                }
+                onClick={handleSubmit}
+                aria-label="Publier le commentaire"
+              >
+                <SendHorizonal className="h-4 w-4" />
+              </button>
             </div>
-            {attachIconButton}
-            <Button
-              type="button"
-              size="icon"
-              className={cn(
-                'h-11 w-11 shrink-0 rounded-full text-white',
-                terrainBrandAction.bg,
-                terrainBrandAction.hover,
-              )}
-              disabled={
-                disabled ||
-                !draft.trim() ||
-                pendingAttachments.some((item) => item.status === 'uploading')
-              }
-              onClick={handleSubmit}
-              aria-label="Publier le commentaire"
-            >
-              <SendHorizonal className="h-5 w-5" />
-            </Button>
+            <p className="mt-1 px-2 text-right text-[10px] tabular-nums text-[#c4c2bb]">
+              {draft.length}/{MAX_COMMENT_LENGTH}
+            </p>
           </div>
         )}
-
-        {!isReply && !compactOnLg ? (
-          <p className="mt-1 px-1 text-[10px] text-[#a3a19a]">
-            {draft.length}/{MAX_COMMENT_LENGTH}
-          </p>
-        ) : null}
 
         {attachEnabled ? (
           <div className="mt-2">

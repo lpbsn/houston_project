@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  formatSignalAggregationBadge,
   formatSignalAggregationLabel,
   formatSignalFeedAggregationBadge,
   formatSignalFeedCardClassificationLine,
   formatSignalFeedPinnedPoleLabel,
+  formatSignalSimilarObservationsLabel,
   getPinnedSignalCardClassName,
   getSignalCardLeftAccentColor,
   getSignalStatusBadgeVariant,
@@ -226,13 +226,6 @@ describe('formatSignalFeedPinnedPoleLabel', () => {
   })
 })
 
-describe('formatSignalAggregationBadge', () => {
-  it('prefixes count with x', () => {
-    expect(formatSignalAggregationBadge(1)).toBe('x1')
-    expect(formatSignalAggregationBadge(2)).toBe('x2')
-  })
-})
-
 describe('formatSignalFeedAggregationBadge', () => {
   it('prefixes count with + for mobile feed cards', () => {
     expect(formatSignalFeedAggregationBadge(1)).toBe('+1')
@@ -248,6 +241,17 @@ describe('formatSignalAggregationLabel', () => {
   it('uses plural for multiple aggregations', () => {
     expect(formatSignalAggregationLabel(2)).toBe('2 agrégations')
     expect(formatSignalAggregationLabel(3)).toBe('3 agrégations')
+  })
+})
+
+describe('formatSignalSimilarObservationsLabel', () => {
+  it('uses singular for one similar observation', () => {
+    expect(formatSignalSimilarObservationsLabel(1)).toBe('+1 observation similaire')
+  })
+
+  it('uses plural for multiple similar observations', () => {
+    expect(formatSignalSimilarObservationsLabel(2)).toBe('+2 observations similaires')
+    expect(formatSignalSimilarObservationsLabel(3)).toBe('+3 observations similaires')
   })
 })
 

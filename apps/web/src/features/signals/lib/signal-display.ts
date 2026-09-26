@@ -8,10 +8,6 @@ import { cn } from '@/lib/utils'
 
 import type { SignalFeedItem, SignalViewMode } from '../types'
 
-export function formatSignalAggregationBadge(count: number): string {
-  return `x${count}`
-}
-
 /** Feed card aggregation chip (+N) — mobile and desktop non-pinned rows. */
 export function formatSignalFeedAggregationBadge(count: number): string {
   return `+${count}`
@@ -19,6 +15,11 @@ export function formatSignalFeedAggregationBadge(count: number): string {
 
 export function formatSignalAggregationLabel(count: number): string {
   return count === 1 ? '1 agrégation' : `${count} agrégations`
+}
+
+/** Detail Observation — explicit similar-observations wording (mobile + desktop). */
+export function formatSignalSimilarObservationsLabel(count: number): string {
+  return count === 1 ? '+1 observation similaire' : `+${count} observations similaires`
 }
 
 export function formatSignalRelativeTime(iso: string): string {

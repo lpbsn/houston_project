@@ -242,14 +242,15 @@ afterEach(() => {
 })
 
 describe('SignalDetailPage aggregation count', () => {
-  it('does not show aggregation label when aggregation_count is zero', () => {
+  it('does not show similar-observations label when aggregation_count is zero', () => {
     renderPage()
 
+    expect(screen.queryByText(/observation similaire/i)).toBeNull()
     expect(screen.queryByText(/agrégation/i)).toBeNull()
-    expect(screen.getByText(/Rapportée par Marie R\./)).toBeTruthy()
+    expect(screen.getByText(/Rapporté par Marie R\./)).toBeTruthy()
   })
 
-  it('shows singular aggregation label on reporter line', () => {
+  it('shows similar-observations label on the main block', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -259,11 +260,11 @@ describe('SignalDetailPage aggregation count', () => {
 
     renderPage()
 
-    expect(screen.getByText('1 agrégation')).toBeTruthy()
-    expect(screen.getByText(/Rapportée par Marie R\./)).toBeTruthy()
+    expect(screen.getByText('+1 observation similaire')).toBeTruthy()
+    expect(screen.getByText(/Rapporté par Marie R\./)).toBeTruthy()
   })
 
-  it('shows plural aggregation label on reporter line', () => {
+  it('shows plural similar-observations label on the main block', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -273,8 +274,8 @@ describe('SignalDetailPage aggregation count', () => {
 
     renderPage()
 
-    expect(screen.getByText('3 agrégations')).toBeTruthy()
-    expect(screen.getByText(/Rapportée par Marie R\./)).toBeTruthy()
+    expect(screen.getByText('+3 observations similaires')).toBeTruthy()
+    expect(screen.getByText(/Rapporté par Marie R\./)).toBeTruthy()
   })
 })
 
@@ -306,7 +307,7 @@ describe('SignalDetailPage tabs', () => {
     const frame = screen.getByTestId('signal-detail-frame')
     expect(frame.contains(screen.getByTestId('signal-detail-tab-bar'))).toBe(true)
     expect(frame.contains(detailsPanel)).toBe(true)
-    expect(screen.getAllByRole('button', { name: "+ Plan d'action" })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: "+ Créer un plan d'action" })).toHaveLength(1)
     expect(detailQueryMock).toHaveBeenCalledTimes(1)
     expect(CommentSectionMock).not.toHaveBeenCalled()
   })
@@ -370,15 +371,15 @@ describe('SignalDetailPage tabs', () => {
 
     renderPage()
 
-    expect(screen.getAllByRole('button', { name: "+ Plan d'action" })).toHaveLength(1)
-    fireEvent.click(screen.getByRole('button', { name: "+ Plan d'action" }))
+    expect(screen.getAllByRole('button', { name: "+ Créer un plan d'action" })).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: "+ Créer un plan d'action" }))
     expect(navigate).toHaveBeenCalledWith('/signals/signal-1/plan')
 
     fireEvent.click(getCommentsTab())
 
-    expect(screen.queryByRole('button', { name: "+ Plan d'action" })).toBeNull()
+    expect(screen.queryByRole('button', { name: "+ Créer un plan d'action" })).toBeNull()
     fireEvent.click(getDetailsTab())
-    expect(screen.getAllByRole('button', { name: "+ Plan d'action" })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: "+ Créer un plan d'action" })).toHaveLength(1)
   })
 
   it('does not write tab query params when clicking tabs', () => {
@@ -439,7 +440,7 @@ describe('SignalDetailPage tabs', () => {
       },
     })
 
-    fireEvent.click(screen.getByRole('button', { name: "+ Plan d'action" }))
+    fireEvent.click(screen.getByRole('button', { name: "+ Créer un plan d'action" }))
 
     expect(navigate).toHaveBeenCalledWith(
       '/signals/signal-1/plan?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&q=retard&recurrence=recurrent&analytics_pattern_id=44444444-4444-4444-8444-444444444444',
@@ -544,6 +545,21 @@ describe('SignalDetailPage tabs', () => {
     expect(screen.getByText('Pôle concerné')).toBeTruthy()
     expect(screen.getByText('Communication')).toBeTruthy()
     expect(screen.getByText('Non classifié')).toBeTruthy()
+    expect(screen.getAllByText('Non défini')).toHaveLength(2)
+  })
+
+  it('shows location on the main block outside classification', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({ location_text: 'Cuisine — Table 12' }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    expect(screen.getByText('Cuisine — Table 12')).toBeTruthy()
+    expect(screen.queryByText('Localisation')).toBeNull()
   })
 })
 
@@ -604,7 +620,7 @@ describe('SignalDetailPage lifecycle actions', () => {
     expect(screen.getByRole('button', { name: 'Demander la résolution' })).toBeTruthy()
   })
 
-  it('places resolution section after description', () => {
+  it('places resolution section after the main observation block', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -627,7 +643,7 @@ describe('SignalDetailPage lifecycle actions', () => {
 
     renderPage()
 
-    const description = screen.getByText('Description')
+    const description = screen.getByText('Description du signal.')
     const resolution = screen.getByText('Demande de résolution')
     expect(
       description.compareDocumentPosition(resolution) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -920,7 +936,7 @@ describe('SignalDetailPage linked action plans', () => {
     expect(screen.queryByText("Plans d'action")).toBeNull()
   })
 
-  it('shows resolve-via-action-plan hint when status is in_progress', () => {
+  it('does not show resolve-via-action-plan hint when status is in_progress', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -931,11 +947,11 @@ describe('SignalDetailPage linked action plans', () => {
     renderPage()
 
     expect(
-      screen.getByText('Cette observation sera résolue via son plan d’action.'),
-    ).toBeTruthy()
+      screen.queryByText('Cette observation sera résolue via son plan d’action.'),
+    ).toBeNull()
   })
 
-  it('keeps photos, linked plans, and create-plan action consecutive before resolution', () => {
+  it('orders main block, resolution, linked plans, then create-plan action', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -971,26 +987,62 @@ describe('SignalDetailPage linked action plans', () => {
 
     renderPage()
 
-    const description = screen.getByText('Description')
-    const hint = screen.getByText('Cette observation sera résolue via son plan d’action.')
-    const photo = screen.getByText('Photo')
-    const plans = screen.getByText("Plans d'action")
-    const createPlan = screen.getByRole('button', { name: "+ Plan d'action" })
+    const description = screen.getByText('Description du signal.')
+    const photo = screen.getByRole('button', { name: 'Agrandir la photo' })
     const resolution = screen.getByText('Demande de résolution')
-
-    expect(description.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(hint.compareDocumentPosition(photo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(photo.compareDocumentPosition(plans) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(plans.compareDocumentPosition(createPlan) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(createPlan.compareDocumentPosition(resolution) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-  })
-
-  it('does not show resolve-via-action-plan hint when status is open', () => {
-    renderPage()
+    const plans = screen.getByText("Plans d'action")
+    const createPlan = screen.getByRole('button', { name: "+ Créer un plan d'action" })
+    const content = screen.getByTestId('signal-detail-details-content')
+    const footer = screen.getByTestId('signal-detail-create-plan-footer')
+    const panel = screen.getByTestId('signal-detail-details-panel')
 
     expect(
-      screen.queryByText('Cette observation sera résolue via son plan d’action.'),
-    ).toBeNull()
+      description.compareDocumentPosition(photo) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(
+      photo.compareDocumentPosition(resolution) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(
+      resolution.compareDocumentPosition(plans) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(
+      plans.compareDocumentPosition(createPlan) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(content.contains(plans)).toBe(true)
+    expect(content.contains(createPlan)).toBe(false)
+    expect(footer.contains(createPlan)).toBe(true)
+    expect(content.className).toContain('overflow-y-auto')
+    expect(content.className).toContain('flex-1')
+    expect(panel.className).toContain('flex-1')
+    expect(footer.className).toContain('relative')
+    expect(footer.className).toContain('mt-0')
+    expect(footer.className).not.toContain('sticky')
+    expect(panel.contains(content)).toBe(true)
+    expect(panel.contains(footer)).toBe(true)
+    expect(content.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByTestId('signal-detail-root').className).toContain('h-full')
+  })
+
+  it('keeps the same flex-pinned create-plan footer without linked plans', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: signalWithCreatePlan(),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    const content = screen.getByTestId('signal-detail-details-content')
+    const footer = screen.getByTestId('signal-detail-create-plan-footer')
+    const panel = screen.getByTestId('signal-detail-details-panel')
+    expect(content.contains(footer)).toBe(false)
+    expect(panel.contains(content)).toBe(true)
+    expect(panel.contains(footer)).toBe(true)
+    expect(content.className).toContain('overflow-y-auto')
+    expect(footer.className).toContain('relative')
+    expect(footer.className).not.toContain('sticky')
+    expect(screen.getByRole('button', { name: "+ Créer un plan d'action" })).toBeTruthy()
   })
 
   it('shows linked execution card and navigates on click', () => {
@@ -1063,7 +1115,7 @@ describe('SignalDetailPage linked action plans', () => {
       ),
     )
 
-    expect(screen.queryByRole('button', { name: "+ Plan d'action" })).toBeNull()
+    expect(screen.queryByRole('button', { name: "+ Créer un plan d'action" })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Qualifier' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Demander la résolution' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Approuver' })).toBeNull()
@@ -1147,7 +1199,7 @@ describe('SignalDetailPage desktop actions', () => {
     expect(context.className).toContain('self-start')
     expect(comments.className).toContain('xl:flex-1')
     expect(context.textContent).toContain('En attente')
-    expect(context.textContent).toContain('Rapportée par Marie R.')
+    expect(context.textContent).toContain('Rapporté par Marie R.')
     expect(header.textContent).not.toContain('En attente')
     expect(header.textContent).not.toContain('Fuite d eau')
     expect(header.contains(title)).toBe(false)
@@ -1171,7 +1223,7 @@ describe('SignalDetailPage desktop actions', () => {
     ).toBeTruthy()
 
     expect(screen.getByRole('button', { name: 'Créer un plan' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: "+ Plan d'action" })).toBeNull()
+    expect(screen.queryByRole('button', { name: "+ Créer un plan d'action" })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Retour' }))
     expect(onBack).toHaveBeenCalledOnce()
     fireEvent.click(screen.getByRole('button', { name: 'Créer un plan' }))
@@ -1215,7 +1267,45 @@ describe('SignalDetailPage desktop actions', () => {
     expect(screen.getByTestId('signal-detail-context').contains(comments)).toBe(false)
   })
 
-  it('omits the resolve-via-plan hint on desktop and still shows the linked plan', () => {
+  it('shows a dedicated Lieu section under Classification on desktop', () => {
+    mockLgViewport(true)
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({ location_text: 'Cuisine — Table 12' }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    const context = screen.getByTestId('signal-detail-context')
+    const classification = screen.getByText('Classification')
+    const locationSection = screen.getByTestId('signal-detail-location-section')
+    expect(context.contains(locationSection)).toBe(true)
+    expect(
+      classification.compareDocumentPosition(locationSection) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(locationSection.textContent).toContain('Lieu')
+    expect(locationSection.textContent).toContain('Cuisine — Table 12')
+  })
+
+  it('shows similar-observations label in the desktop context panel', () => {
+    mockLgViewport(true)
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({ aggregation_count: 3 }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    const context = screen.getByTestId('signal-detail-context')
+    expect(context.textContent).toContain('+3 observations similaires')
+    expect(context.textContent).not.toMatch(/agrégation/i)
+  })
+
+  it('still shows the linked plan on desktop without a resolve-via-plan hint', () => {
     mockLgViewport(true)
     detailQueryMock.mockReturnValue({
       isLoading: false,
@@ -1246,7 +1336,7 @@ describe('SignalDetailPage desktop actions', () => {
     renderPage({ onBack: vi.fn() })
 
     expect(screen.getByRole('tablist', { name: "Sections de l'observation" })).toBeTruthy()
-    expect(screen.getByRole('button', { name: "+ Plan d'action" })).toBeTruthy()
+    expect(screen.getByRole('button', { name: "+ Créer un plan d'action" })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Créer un plan' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Retour' })).toBeNull()
     expect(screen.queryByTestId('signal-detail-comments-section')).toBeNull()

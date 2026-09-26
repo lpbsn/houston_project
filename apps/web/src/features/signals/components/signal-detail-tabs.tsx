@@ -17,7 +17,7 @@ export function SignalDetailTabs({ activeTab, onChange }: SignalDetailTabsProps)
     <div
       role="tablist"
       aria-label="Sections de l'observation"
-      className="grid w-full grid-cols-2 gap-1 rounded-xl bg-[#F5F4F0] p-1 lg:inline-grid lg:w-auto lg:max-w-sm"
+      className="grid w-full grid-cols-2 gap-0.5 rounded-lg bg-[#EFEDE8]/80 p-0.5"
     >
       {tabOptions.map(({ value, label }) => {
         const isActive = activeTab === value
@@ -31,8 +31,10 @@ export function SignalDetailTabs({ activeTab, onChange }: SignalDetailTabsProps)
             aria-selected={isActive}
             aria-controls={`signal-detail-panel-${value}`}
             className={cn(
-              'min-h-11 rounded-lg px-3 text-[14px] font-semibold transition',
-              isActive ? 'bg-white text-[#1a1a1a] shadow-sm' : 'bg-transparent text-[#888]',
+              'min-h-12 rounded-md px-3 text-[13px] font-medium transition-colors',
+              isActive
+                ? 'z-10 bg-white/90 text-[#1a1a1a]'
+                : 'z-0 bg-transparent text-[#8A8780]',
             )}
             onClick={() => onChange(value)}
           >
