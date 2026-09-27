@@ -1,5 +1,5 @@
 ---
-description: External API contract changes — OpenAPI chain and published contracts. Not a complete detector.
+description: Preserve Spore external contract semantics when changing API-facing code or published contracts.
 globs:
   - "apps/api/**/api/**/*.py"
   - "apps/api/schema.yml"
@@ -10,11 +10,22 @@ alwaysApply: false
 
 # API contracts
 
-This Rule attaches on high-probability contract files. It does **not** detect every semantic contract change.
+This Rule is a high-probability reminder, not a complete detector of contract changes.
 
-- If **external** HTTP request/response semantics changed: backend tests → `make schema` → `make web-api-generate` → update callers, query keys, and cache behavior.
-- Do not hand-edit generated OpenAPI client artifacts (`apps/web/src/api/generated/`).
-- Do not regenerate schema or frontend types when the external HTTP contract is unchanged.
-- `contracts/**` is a published non-OpenAPI contract. Treat it as its own external contract; do not run the OpenAPI regen chain for it unless the HTTP API also changed.
+Treat behavior as externally contract-relevant when it changes observable request or response semantics, including validation, status/errors, authorization or visibility, shape, filtering, ordering, pagination, cursor behavior, lifecycle meaning, or mutation effects.
 
-Services, models, permissions, or feature wrappers can still change external semantics. If they do, the same end-to-end chain applies even when this Rule did not attach.
+Reason through the complete affected chain:
+
+backend owner → owning tests → published contract → affected data-access/query owners → cache/state behavior → UI consumers
+
+When an HTTP change affects the OpenAPI contract, regenerate through the established workflow:
+
+`make schema` → `make web-api-generate`
+
+Do not hand-edit generated API artifacts, and do not regenerate them when the OpenAPI contract is unchanged.
+
+External semantics can change without an OpenAPI shape change. In that case, update the owning tests and affected consumers without forcing schema or client regeneration.
+
+Published contracts under `contracts/**` keep their own ownership and validation. Do not apply the OpenAPI generation chain unless the HTTP API also changed.
+
+Contract changes may originate outside `api/` files. Services, selectors, permissions, models, or client wrappers can change externally observable behavior even when this Rule did not attach.

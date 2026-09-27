@@ -2,77 +2,42 @@
 
 Applies to `apps/web/**`.
 
-## Stack
+Spore has one shared React product tree serving Native/Capacitor mobile and Web desktop surfaces. It is not a PWA.
 
-React, TypeScript, Vite, Tailwind, shadcn/ui, TanStack Query, Framer Motion.
+## Ownership and state
 
-One source tree, two Vite pipelines: Web and Native/Capacitor. Not a PWA — do not reintroduce a service worker or web app manifest.
+- React components own rendering, interaction, and composition.
+- TanStack Query owns server state, caching, refetching, and invalidation.
+- Backend remains authoritative for business rules, authorization, lifecycle, visibility, and validation.
+- Local UI state belongs to the narrowest client owner that matches its lifecycle.
+- Durable client persistence is explicit, scoped, and justified; it is not a default state-management tool.
 
-Do not upgrade frontend framework versions unless explicitly requested.
+Do not duplicate server-owned data into parallel client state without a demonstrated need.
 
-Architecture reference: [`docs/engineering/frontend_architecture.md`](../../docs/engineering/frontend_architecture.md).
+## Shared product, surface-specific presentation
 
-## Ownership
+Spore is one frontend product, not separate mobile and desktop applications.
 
-- React renders UI and user interactions.
-- Backend owns business rules, permissions, lifecycle, visibility, and validation.
-- OpenAPI/generated types own API data contracts.
-- TanStack Query owns server state.
-- React state owns local UI (drawers, tabs, modals). Do not persist server-owned data in client stores.
+Share behavior before markup. Data access, mutations, validation, navigation semantics, and reusable domain logic should remain shared when they own the same responsibility.
 
-Do not move business workflows to React. Frontend permission checks are UX only; unauthorized data must not be fetched and hidden locally.
+Do not duplicate an entire feature because its layout differs between mobile and desktop.
 
-## API flow
+When behavior is shared but presentation genuinely differs, prefer shared logic with separate surface-specific presentation components.
 
-generated client → API wrapper/hook → TanStack Query → component
+Factor shared responsibility, not shared appearance. Do not force reuse through components filled with runtime, viewport, or surface branches.
 
-Do not call `fetch` in feature components, duplicate or hand-edit generated API types, or use endpoints absent from OpenAPI. If generated types are wrong, fix the backend schema and regenerate.
+A feature change should ideally modify its owning logic once, then only the presentation layers that genuinely differ.
 
-HTTP and WebSocket hosts are resolved only in [`apps/web/src/lib/runtime.ts`](src/lib/runtime.ts).
+Desktop is not stretched mobile. Native is not desktop at a large viewport.
 
-## Surfaces
+Determine product behavior from the relevant runtime, route, shell, and viewport. Do not infer the product surface from viewport alone.
 
-Identify the actual product surface and shell from the repository before changing UI. Mobile-first is not mobile-only; do not force phone-style layouts onto desktop-oriented surfaces. Reuse existing shells. No hover-only critical actions.
+Use responsive CSS for visual adaptation. Use runtime or surface branching only when interaction or product behavior genuinely differs.
 
-Current operational patterns (not a closed taxonomy — inspect routing and shells):
+Do not scatter Native/Desktop/viewport checks across feature trees. Concentrate surface divergence at clear runtime, shell, navigation, or narrowly owned presentation boundaries.
 
-- Terrain operational (`TerrainShell`, bottom-nav hubs): mobile-primary, desktop-supported
-- Analytics (`TerrainShell`, not in mobile bottom nav): desktop-primary, remain coherent on small screens
-- Organization / admin / config / pending-onboarding / select-establishment / auth (`AppShell`): desktop-primary, existing shell conventions. Platform wizard is `/platform` (`Platform` shell), not AppShell.
+## Data flow and performance
 
-Public landing is a separate marketing tree and must not inherit Terrain phone-shell rules.
+Keep API access behind established feature or domain data-access owners. Generated contracts remain the source for API shapes; TanStack Query owns server-state orchestration.
 
-Native keyboard, safe-area, and Web vs Native auth diagnosis: Skill `native-runtime-debug`.
-
-## State and cache
-
-TanStack Query for reads, mutations, cache, invalidation, and server-derived loading/error. React state for local UI.
-
-`auth` is the only query root that may survive login, registration, or establishment switch. Never store operational or tenant-scoped data under `auth`. Logout clears the full query cache; login, registration, and establishment switch purge non-auth queries before hydrating bootstrap. Implementation: `@/lib/query-invalidation`.
-
-Do not casually cache authenticated operational data in durable client storage. No durable offline mutation queue unless explicitly implemented. Chat is the bounded exception: a durable outbox of send drafts and attachment bytes (IndexedDB on web, Capacitor `Directory.Data` on native), purged on success, cancel, TTL, logout, establishment switch, and `access.revoked`. Access tokens stay in memory; do not put refresh credentials in `localStorage` / `sessionStorage`.
-
-## Components and realtime
-
-Components may render UI, handle interactions, call focused hooks, and display loading/empty/error/unauthorized/offline states when relevant. They must not fetch directly, compute real permissions, encode lifecycle transitions, or duplicate backend state.
-
-Generic realtime is invalidation or a safe Query patch. Backend remains source of truth. Chat is the exception: HTTP is the only send path; a dedicated WebSocket fans out live events; REST remains source for history, structure, and permissions; the ws-ticket is REST-issued and not persisted.
-
-Use existing shadcn/ui and domain components first. Prefer readable Tailwind. Use Framer Motion sparingly.
-
-## Tests and commands
-
-Procedure: [`docs/engineering/testing.md`](../../docs/engineering/testing.md).
-
-Test product risk at the owning layer: lib (Node) → hooks/mutations with a real `QueryClient` → page tests only for wiring risk. Do not assert Tailwind/shadcn classes or French copy unless exported as a lib rule.
-
-Run from repo root unless needed:
-
-- `cd apps/web && npm run typecheck`
-- `cd apps/web && npm run lint`
-- `cd apps/web && npm test -- path/to/file.test.ts`
-- `cd apps/web && npm run build`
-- `cd apps/web && npm run build:native` (requires `VITE_API_BASE_URL` and `VITE_PUBLIC_APP_URL`)
-- `make web-cap-sync` / `make web-dev-native` (`web-dev-native` is a compile-time runtime pin, not authentication)
-- `make web-cap-sync-release` / `make android-bundle-release` — production Native bake + signed AAB; see [`docs/deploy/native_release.md`](../../docs/deploy/native_release.md)
-- `make web-api-generate` after `make schema`
+Do not hand-edit generated API artifacts or introduce feature-level ad hoc requests when an existing

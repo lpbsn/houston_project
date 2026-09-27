@@ -1,45 +1,72 @@
 ---
 name: native-runtime-debug
-description: Diagnose Spore Web vs Native/Capacitor runtime issues — iOS keyboard, visualViewport, safe areas, auth transport, compile-time runtime pin. Not a generic mobile frontend skill.
+description: Diagnose behavior that differs between Spore Web and Native/Capacitor runtimes by identifying the actual runtime boundary and owning layer before fixing it.
 ---
 
 # Native runtime debug
 
-Expertise only. Respect the active Command’s permissions and scope. Measure before patching. Do not expand into product-surface layout policy (`responsive-surfaces`).
+Provide Native-runtime diagnostic expertise. This skill does not expand the permissions or scope of the active workflow.
 
-## Purpose
+Read the applicable `AGENTS.md` and establish the expected behavior before diagnosing the divergence.
 
-Diagnose Web vs Native/Capacitor failures: iOS keyboard and `visualViewport`, safe areas, auth transport, compile-time runtime pin, host resolution.
+Native is a product runtime, not a responsive breakpoint. A large Native viewport does not become desktop Web.
 
-## Diagnostic order
+Establish the Web/Native difference from available evidence and reproduce it when the available runtime permits it. Never claim device reproduction or validation from code inspection, build success, simulator behavior, or runtime assumptions alone.
 
-1. Confirm runtime: `getAppRuntime()` in [`apps/web/src/lib/runtime.ts`](../../../apps/web/src/lib/runtime.ts) (`VITE_APP_RUNTIME`), plus `Capacitor.isNativePlatform()` when native plugins are involved.
-2. Identify the scroll owner (document vs `TerrainShell` `main`) before changing overflow or `position`.
-3. For keyboard/layout bugs: capture T0 (idle), T1 (focused / broken), T2 (blur restored) using `visualViewport` and shell/topbar `getBoundingClientRect`. Do not apply global `position: fixed`, overflow locks, or height hacks without that evidence.
-4. Preserve `h-dvh`, flex `min-h-0`, and `--app-safe-top` / `--app-safe-bottom` on topbar, bottom nav, composer, and sticky footers. Do not revert paddings to raw `env(safe-area-inset-*)`.
+First determine whether the failure is actually runtime-specific. If Web and Native fail the same way, investigate shared feature, state, navigation, data, or shell ownership before creating a runtime branch.
 
-## Spore traps
+When only Native is affected, identify the concrete runtime capability, lifecycle, OS, or bridge difference that explains the divergence.
 
-- **Not a PWA.** Boot unregisters leftover service workers. Do not add `sw.js`, workbox, or a web app manifest.
-- **Hosts** are resolved only in `runtime.ts`. Features must not compute API/WS URLs.
-- **`make web-dev-native` / `VITE_APP_RUNTIME=native` is a compile-time pin, not authentication.** Native Vite off-device does not configure Keychain.
-- **Auth transport:** Web = HttpOnly cookie + CSRF; Native = `refresh_token_transport: body` + injected secure store. Never `localStorage` / `sessionStorage` for refresh tokens. Native store configures only when runtime is `native` **and** `Capacitor.isNativePlatform()`.
-- Safe-area insets are real and widespread; do not invent a parallel shell.
+Consider the narrowest relevant owner:
 
-## Where to inspect
+- runtime or build configuration;
+- shell, viewport, safe area, keyboard, scrolling, or layout;
+- navigation, deep links, or system back;
+- auth or session transport;
+- network or foreground/background lifecycle;
+- native plugin or Capacitor bridge;
+- shared feature or data-access code.
 
-- [`apps/web/src/lib/runtime.ts`](../../../apps/web/src/lib/runtime.ts)
-- [`apps/web/src/features/auth/refresh-token-transport.ts`](../../../apps/web/src/features/auth/refresh-token-transport.ts)
-- [`apps/web/src/features/auth/native-refresh-token-store.ts`](../../../apps/web/src/features/auth/native-refresh-token-store.ts)
-- Terrain shell / topbar / bottom nav / chat composer / sticky footer
-- [`docs/engineering/frontend_architecture.md`](../../../docs/engineering/frontend_architecture.md)
+Confirm actual runtime state rather than inferring it from viewport or command name. Distinguish Web, a build pinned with `VITE_APP_RUNTIME=native`, and execution on a real Capacitor native platform.
 
-## Canonical commands
+Gather evidence appropriate to the failure before proposing a correction.
 
-- `make web-cap-sync` after native web build
-- `make web-dev-native` — compile-time pin only
-- `cd apps/web && npm run build:native` — requires `VITE_API_BASE_URL` and `VITE_PUBLIC_APP_URL`
+For layout, keyboard, or viewport failures, identify the actual scroll/layout owner and gather viewport or geometry evidence before changing global positioning, overflow, or height behavior.
 
-## Output
+For auth, network, lifecycle, deep-link, secure-storage, or plugin failures, inspect the owning transport or Native boundary rather than compensating in feature UI.
 
-Diagnosis · Evidence (T0/T1/T2 when layout) · Proposed fix (if any) · What still needs a physical device
+Runtime branching must correspond to a demonstrated runtime difference, not merely to platform identity.
+
+Keep runtime-specific logic concentrated at established runtime, shell, navigation, auth, or plugin boundaries. Do not scatter Native/Desktop checks through feature trees.
+
+Do not duplicate shared product behavior across Web desktop and Native/mobile when the responsibility remains common.
+
+Do not introduce a browser fallback as a substitute for a required Native capability unless the product explicitly supports that fallback.
+
+Spore is not a PWA. Do not introduce service-worker, web-manifest, or PWA behavior as a Native-runtime fix.
+
+API and WebSocket host resolution must remain owned by runtime configuration rather than feature code.
+
+Web and Native authentication may use different transports, but feature code must not own credential-storage details or create parallel authentication models.
+
+Fix or recommend the narrowest owner that explains the divergence. Avoid local workarounds when evidence points to a shared runtime, shell, navigation, or state defect.
+
+Validate on the runtime that actually matters. Explicitly report what still requires simulator, emulator, physical-device, OS-level, or external-service verification.
+
+Output:
+
+## Diagnosis
+
+State the owning layer and whether the defect is genuinely runtime-specific or shared.
+
+## Evidence
+
+Report only evidence actually observed.
+
+## Correction
+
+Describe or apply the narrowest correction allowed by the active workflow.
+
+## Validation gap
+
+State what remains unverified and which runtime or device is required.
