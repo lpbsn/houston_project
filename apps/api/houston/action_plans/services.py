@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from django.db import transaction
-from django.db.models import Prefetch
+from django.db.models import F, Prefetch, Value
+from django.db.models.functions import Greatest
 from django.utils import timezone
 
 from houston.accounts.legal_services import AiConsentRequiredError, TermsAcceptanceRequiredError
@@ -112,8 +113,14 @@ def _normalize_skipped_reason(skipped_reason: str | None) -> str | None:
 
 
 def touch_execution_activity(*, execution: ActionPlanExecution, at=None) -> None:
-    execution.last_activity_at = at or timezone.now()
-    execution.save(update_fields=["last_activity_at", "updated_at"])
+    activity_at = at or timezone.now()
+    updated_at = timezone.now()
+    ActionPlanExecution.objects.filter(pk=execution.pk).update(
+        last_activity_at=Greatest(F("last_activity_at"), Value(activity_at)),
+        updated_at=updated_at,
+    )
+    execution.last_activity_at = max(execution.last_activity_at, activity_at)
+    execution.updated_at = updated_at
     from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
 
     schedule_action_plan_execution_invalidation(
@@ -136,6 +143,9 @@ def sync_signal_after_execution_change(
     actor_membership: EstablishmentMembership | None = None,
     triggering_execution: ActionPlanExecution | None = None,
 ) -> Signal:
+    from houston.signals.services import _lock_signals_by_uuid_order
+
+    signal = _lock_signals_by_uuid_order(signal)[0]
     linked = ActionPlanExecution.objects.filter(source_signal_id=signal.id)
     if linked.filter(status__in=SIGNAL_BLOCKING_EXECUTION_STATUSES).exists():
         return signal
@@ -149,10 +159,7 @@ def sync_signal_after_execution_change(
             SIGNAL_LIFECYCLE_EVENT_MOVED_OPEN,
         )
         from houston.signals.lifecycle_events import record_signal_lifecycle_event
-        from houston.signals.services import (
-            _schedule_signal_invalidation,
-            touch_signal_activity,
-        )
+        from houston.signals.services import _schedule_signal_invalidation
 
         from_status = signal.status
         if from_status in CANCEL_RESOLVE_SIGNAL_STATUSES:
@@ -161,7 +168,7 @@ def sync_signal_after_execution_change(
             signal.is_pinned = False
             signal.pinned_at = None
             signal.pinned_by_membership = None
-            touch_signal_activity(signal=signal)
+            signal.last_activity_at = max(signal.last_activity_at, now)
             signal.save(
                 update_fields=[
                     "status",
@@ -257,7 +264,7 @@ def _cancel_linked_active_executions_for_signal_resolve(
         execution.canceled_at = now
         execution.canceled_by_membership = None
         execution.cancel_origin = CANCEL_ORIGIN_MANUAL
-        execution.last_activity_at = now
+        execution.last_activity_at = max(execution.last_activity_at, now)
         execution.save(
             update_fields=[
                 "status",
@@ -310,17 +317,14 @@ def _reopen_linked_signal_after_execution_reopen(
         return
     from houston.signals.constants import SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS
     from houston.signals.lifecycle_events import record_signal_lifecycle_event
-    from houston.signals.services import (
-        _schedule_signal_invalidation,
-        touch_signal_activity,
-    )
+    from houston.signals.services import _schedule_signal_invalidation
 
     now = timezone.now()
     signal.status = Signal.Status.IN_PROGRESS
     signal.resolved_by_membership = None
     signal.resolved_at = None
     signal.resolution_origin = None
-    touch_signal_activity(signal=signal)
+    signal.last_activity_at = max(signal.last_activity_at, now)
     signal.save(
         update_fields=[
             "status",
@@ -484,18 +488,13 @@ def _activate_linked_signal_on_execution_create(
 ) -> None:
     from houston.signals.constants import SIGNAL_LIFECYCLE_EVENT_MOVED_IN_PROGRESS
     from houston.signals.lifecycle_events import record_signal_lifecycle_event
-    from houston.signals.services import (
-        _schedule_signal_invalidation,
-        touch_signal_activity,
-    )
+    from houston.signals.services import _schedule_signal_invalidation
 
     status_changed = signal.status in {
         Signal.Status.OPEN,
         Signal.Status.INTERESTING,
     }
     unpin_changed = signal.is_pinned
-    if not status_changed and not unpin_changed:
-        return
 
     from_status = signal.status
     if status_changed and signal.status == Signal.Status.OPEN:
@@ -518,7 +517,7 @@ def _activate_linked_signal_on_execution_create(
         signal.pinned_at = None
         signal.pinned_by_membership = None
 
-    touch_signal_activity(signal=signal)
+    signal.last_activity_at = max(signal.last_activity_at, now)
     update_fields = ["last_activity_at", "updated_at"]
     if status_changed:
         update_fields.append("status")
@@ -1938,7 +1937,7 @@ def mark_action_plan_execution_done(
     now = timezone.now()
     execution.marked_done_at = now
     execution.marked_done_by_membership = actor_membership
-    execution.last_activity_at = now
+    execution.last_activity_at = max(execution.last_activity_at, now)
     if execution.requires_validation:
         execution.status = EXECUTION_STATUS_PENDING_VALIDATION
         execution.save(
@@ -2068,7 +2067,7 @@ def validate_action_plan_execution(
     execution.status = EXECUTION_STATUS_DONE
     execution.validated_at = now
     execution.validated_by_membership = actor_membership
-    execution.last_activity_at = now
+    execution.last_activity_at = max(execution.last_activity_at, now)
     execution.save(
         update_fields=[
             "status",
@@ -2149,7 +2148,7 @@ def reopen_action_plan_execution(
     execution.cancel_origin = None
     execution.reopened_at = now
     execution.reopened_by_membership = actor
-    execution.last_activity_at = now
+    execution.last_activity_at = max(execution.last_activity_at, now)
     execution.save(
         update_fields=[
             "status",
@@ -2217,7 +2216,7 @@ def cancel_action_plan_execution(
     execution.canceled_at = now
     execution.canceled_by_membership = actor
     execution.cancel_origin = CANCEL_ORIGIN_MANUAL
-    execution.last_activity_at = now
+    execution.last_activity_at = max(execution.last_activity_at, now)
     execution.save(
         update_fields=[
             "status",

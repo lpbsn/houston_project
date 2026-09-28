@@ -2,77 +2,84 @@
 
 Applies to `apps/api/**`.
 
-## Stack
-
-Python, Django, DRF, PostgreSQL, Redis, Celery, Django Channels, Daphne, Pydantic, OpenAPI.
-
-Do not upgrade backend framework versions unless explicitly requested.
+Spore's backend is a Django modular monolith. Business rules, authorization, lifecycle, tenant isolation, durable integrity, and external API semantics live here.
 
 ## Ownership
 
-- Domain **services** modules: writes, workflows, lifecycle transitions, event publication. Some domains split `*_services.py` rather than a single `services.py`.
-- **selectors**: reusable reads, feeds, permission-scoped lists.
-- **permissions**: authorization helpers and RBAC checks.
-- `api/` views: HTTP orchestration only.
-- `api/` serializers: request validation and response representation only.
-- **models**: fields, constraints, indexes, simple invariants.
-- `core/`: shared infrastructure only — no product workflows.
+- Domain `services*` own writes, workflows, lifecycle transitions, and the decision to trigger domain side effects.
+- `selectors*` own reusable reads, feeds, filtering, sorting, and scoped list behavior.
+- `permissions*` own authorization and RBAC decisions.
+- API views orchestrate HTTP concerns, membership resolution, lookups, and error mapping without becoming owners of business workflows.
+- Serializers validate and represent API data; they do not own workflows.
+- Models own schema, constraints, indexes, and simple invariants.
+- `core/` owns shared infrastructure and technical/local maintenance, not runtime product workflows.
 
-Do not put business workflows in views, serializers, models, Django signals, Celery tasks, or `core/`.
+Celery tasks, Django signals, realtime consumers, and infrastructure adapters execute or deliver work; they do not become owners of business workflows.
 
-### Observation → AI → Signal
+When a domain already has specialized service or selector modules, extend the narrowest existing owner before adding more responsibility to a large generic module. Do not split files mechanically when no clearer responsibility exists.
 
-App-level ownership (inspect current services and tasks before changing it):
+## Data, feeds and scale
 
-- `observations` — intake, processing status, enqueue after commit
-- `ai` — provider adapter, prompt/input, structured parse, usage metadata (not a public HTTP contract)
-- `signals` — pipeline orchestration, signal create/aggregate, recovery sweeps
+Design reads for realistic growth in establishments, users, observations, signals, action plans, executions, analytics, conversations, notifications, and history.
 
-Cross-app enqueue after submit is intentional. Exact function names belong in code.
+Any read whose cost grows with tenant history must have a bounded access strategy.
 
-## Business rules
+Use pagination, windows, limits, aggregation, or another bounded strategy justified by the domain contract. Do not force one pagination model everywhere.
 
-Backend owns permissions, establishment isolation, membership status/scope, lifecycle transitions, feed visibility/sorting, and API contracts. Frontend hints are UX only.
+For growth-sensitive reads, consider query count, indexes, payload size, and repeated work. Avoid N+1 access, naive full-history reads, unbounded fan-out, and unnecessarily large responses.
 
-## Events, async, realtime
+Feed behavior is a contract: ordering, inclusion/exclusion, visibility, filtering, pagination, and cursor semantics must remain coherent across selector, API response, realtime invalidation, and frontend consumption.
 
-Persist valid business state first. Side effects after commit. Consumers must be retry-safe and reasonably idempotent. Events are traces and triggers, not business truth. Do not invent a separate event bus.
+Do not solve frontend performance by returning unbounded or unnecessarily larger backend payloads.
 
-Celery: pass durable IDs, reload from the database, handle missing records, bound retries. Do not pass raw Observation text or other sensitive payloads as task arguments.
+## Transactions, async and realtime
 
-Redis: cache, rate limit, Channels, and Celery infra only — never business or authorization truth.
+Persist valid durable state before triggering side effects.
 
-Channels: consumers stay thin; validate user, membership, and establishment access. Generic realtime sends invalidation only. Chat uses a dedicated WebSocket protocol and a REST-issued ticket.
+Use transactional boundaries when workflows span related writes, lifecycle transitions, permission-relevant state, aggregation, or after-commit effects.
 
-AI output is untrusted external input. Keep business invariants in backend code. Minimize provider payloads. Distinguish provider failure, invalid output, and business validation failure.
+Run external or asynchronous side effects after commit when they depend on committed state.
 
-## Transactions and schema
+When correctness depends on current persisted state, reason about concurrent writes and retry behavior rather than assuming requests execute serially.
 
-Use `transaction.atomic` for multi-write workflows, lifecycle transitions with side effects, aggregation, permissions-relevant writes, and event publication. Do not wrap simple selectors.
+Celery tasks should receive durable identifiers, reload current state, tolerate retries, and handle missing or stale records safely.
 
-Design schema changes for integrity and realistic growth. Preserve existing data only when current data or deployment constraints require it; otherwise prefer the simplest direct migration compatible with actual constraints.
+Redis supports cache, rate limiting, Channels, and Celery infrastructure. It is not business or authorization truth.
 
-## API contracts
+Realtime consumers stay thin. Prefer invalidating and recomputing current truth from the database over encoding business truth inside realtime events.
 
-The HTTP `api/` package is the usual owner of external request/response shape. Services, models, or permissions can still change external semantics. If they do, consider the full contract chain regardless of which file triggered the change. Do not regenerate schema or frontend types when the external contract is unchanged. Do not invent missing generation commands.
+## Contracts, tenant integrity and AI
 
-Canonical: `make schema` then `make web-api-generate`.
+Establishment and organization scoping must be enforced at the owning read/write boundary, not only filtered at the HTTP edge.
 
-## Security
+Backend authorization remains authoritative. Permission hints exposed to the frontend are UX projections, not a second permission model.
 
-Never log or expose secrets/tokens, raw Observation text, comments content, photo/audio content, full AI prompts/outputs, or other sensitive business payloads.
+A compatible JSON shape can still be a breaking contract change when ordering, visibility, filtering, pagination, cursor, lifecycle, or error semantics change.
 
-## Tests and commands
+When external API semantics change, update the owning validation/tests and the published contract chain. Do not regenerate schema or frontend artifacts when the external contract is unchanged.
 
-Procedure: [`docs/engineering/testing.md`](../../docs/engineering/testing.md).
+Do not preserve hypothetical legacy behavior. Once production data exists, schema changes must explicitly account for existing rows and deployment safety.
 
-Test product risk at the owning layer. Check existing coverage before adding. Do not re-prove the same permission rule in unit and API tests. Shared helpers live in `houston/testing/` or domain `tests/helpers.py` — never import from `test_*.py`.
+Backfills, staged migrations, or compatibility paths are justified only by real persisted data, active consumers, deployment constraints, or an explicit requirement.
 
-Run from repo root via Make (Docker stack required):
+AI output is untrusted external input. AI may propose classification, extraction, summarization, or interpretation; deterministic backend code owns validation, authorization, lifecycle effects, and persistence decisions.
 
-- `make backend-test ARGS='path -q'`
-- `make backend-lint`
-- `make backend-migrations-check`
-- `make backend-check`
+Provider prompts, schemas, and model outputs are versioned integration surfaces. Do not hide business invariants inside prompts.
 
-Do not run `cd apps/api && uv run pytest` on the host — use Make targets or `docker compose exec api`.
+Minimize sensitive data sent to providers, tasks, logs, realtime payloads, or other infrastructure.
+
+## Validation
+
+Test product risk at the layer that owns it. Avoid proving the same invariant repeatedly across service, API, and integration tests unless each layer protects a distinct failure mode.
+
+Check existing coverage before adding new tests.
+
+Use targeted validation first, then expand according to the realistic blast radius.
+
+When testing details matter, consult the existing testing procedure rather than duplicating it here.
+
+Canonical local backend validation:
+
+- Targeted tests: `make backend-test ARGS='…'`
+- Backend validation: `make backend-check`
+- Never run `cd apps/api && uv run pytest` on the host.

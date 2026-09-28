@@ -4,6 +4,8 @@ import uuid
 from datetime import date, datetime, time
 
 from django.db import transaction
+from django.db.models import F, Value
+from django.db.models.functions import Greatest
 from django.utils import timezone
 
 from houston.action_plans.constants import (
@@ -187,7 +189,7 @@ def _cancel_schedule_future_execution(*, execution: ActionPlanExecution) -> None
     execution.canceled_at = now
     execution.canceled_by_membership = None
     execution.cancel_origin = CANCEL_ORIGIN_SCHEDULE_SYNC
-    execution.last_activity_at = now
+    execution.last_activity_at = Greatest(F("last_activity_at"), Value(now))
     execution.save(
         update_fields=[
             "status",
@@ -198,6 +200,7 @@ def _cancel_schedule_future_execution(*, execution: ActionPlanExecution) -> None
             "updated_at",
         ],
     )
+    execution.refresh_from_db(fields=["last_activity_at", "updated_at"])
     record_execution_lifecycle_event(
         execution=execution,
         event_type=EXECUTION_LIFECYCLE_EVENT_CANCELED,
@@ -304,7 +307,7 @@ def reactivate_schedule_future_execution(
     execution.end_at = occurrence_end
     execution.visible_from = visible_from
     execution.all_day = schedule.all_day
-    execution.last_activity_at = now
+    execution.last_activity_at = Greatest(F("last_activity_at"), Value(now))
     update_fields = [
         "status",
         "canceled_at",
@@ -322,6 +325,7 @@ def reactivate_schedule_future_execution(
     if new_status == EXECUTION_STATUS_SCHEDULED:
         update_fields.extend(["started_at", "started_by_membership"])
     execution.save(update_fields=update_fields)
+    execution.refresh_from_db(fields=["last_activity_at", "updated_at"])
     record_execution_lifecycle_event(
         execution=execution,
         event_type=EXECUTION_LIFECYCLE_EVENT_REACTIVATED,
@@ -354,7 +358,14 @@ def _prune_shared_execution_assignees(
     current_membership_ids: set[uuid.UUID],
 ) -> None:
     """Drop assignees removed from a shared schedule on future executions."""
-    execution.assignees.exclude(membership_id__in=current_membership_ids).delete()
+    deleted_count, _ = execution.assignees.exclude(
+        membership_id__in=current_membership_ids,
+    ).delete()
+    if deleted_count:
+        now = timezone.now()
+        execution.last_activity_at = Greatest(F("last_activity_at"), Value(now))
+        execution.save(update_fields=["last_activity_at", "updated_at"])
+        execution.refresh_from_db(fields=["last_activity_at", "updated_at"])
 
 
 def _sync_future_execution_window(
@@ -376,17 +387,13 @@ def _sync_future_execution_window(
     execution.end_at = occurrence_end
     execution.visible_from = visible_from
     execution.all_day = schedule.all_day
-    execution.last_activity_at = now
-    execution.save(
-        update_fields=[
-            "start_at",
-            "end_at",
-            "visible_from",
-            "all_day",
-            "last_activity_at",
-            "updated_at",
-        ],
-    )
+    update_fields = ["start_at", "end_at", "visible_from", "all_day", "updated_at"]
+    if previous_end_at != occurrence_end:
+        execution.last_activity_at = Greatest(F("last_activity_at"), Value(now))
+        update_fields.append("last_activity_at")
+    execution.save(update_fields=update_fields)
+    if previous_end_at != occurrence_end:
+        execution.refresh_from_db(fields=["last_activity_at", "updated_at"])
     from houston.action_plans.lifecycle_events import record_execution_deadline_changed
     from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
 

@@ -501,6 +501,7 @@ def test_update_syncs_future_execution_window_from_schedule_times(
 
 
 def test_update_shared_assignees_cancels_removed_member_future_executions(
+    monkeypatch,
     owner_membership,
     catalog_action_plan,
     business_unit,
@@ -541,8 +542,21 @@ def test_update_shared_assignees_cancels_removed_member_future_executions(
     execution.end_at = execution.start_at + timezone.timedelta(hours=1)
     execution.visible_from = execution.start_at - timezone.timedelta(hours=1)
     execution.status = EXECUTION_STATUS_SCHEDULED
+    previous_activity = timezone.now() - timezone.timedelta(days=1)
+    execution.last_activity_at = previous_activity
     execution.save(
-        update_fields=["start_at", "end_at", "visible_from", "status", "updated_at"],
+        update_fields=[
+            "start_at",
+            "end_at",
+            "visible_from",
+            "status",
+            "last_activity_at",
+            "updated_at",
+        ],
+    )
+    monkeypatch.setattr(
+        "houston.action_plans.schedule_services._sync_future_execution_window",
+        lambda **_kwargs: None,
     )
 
     update_action_plan_schedule(
@@ -557,6 +571,7 @@ def test_update_shared_assignees_cancels_removed_member_future_executions(
     assert execution.assignees.filter(membership_id=staff_b.id).exists() is False or (
         execution.status == EXECUTION_STATUS_CANCELED
     )
+    assert execution.last_activity_at > previous_activity
 
 
 def test_schedule_assignee_times_rejected(

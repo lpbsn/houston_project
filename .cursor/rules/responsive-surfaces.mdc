@@ -1,26 +1,26 @@
 ---
-description: Identify the product surface and shell before changing UI. Mobile-first is not mobile-only.
+description: Preserve Spore's shared-product and surface boundaries when changing frontend UI.
 globs:
+  - "apps/web/src/app/**/*.ts"
+  - "apps/web/src/app/**/*.tsx"
   - "apps/web/src/components/**/*.tsx"
   - "apps/web/src/features/**/*.tsx"
   - "apps/web/src/styles/**/*.css"
-  - "apps/web/src/App.tsx"
 alwaysApply: false
 ---
 
-# Product surfaces
+# Frontend surfaces
 
-1. Identify the **actual** product surface and shell from the repository (routing, `usesTerrainShell`, `TerrainShell` vs `AppShell`, feature tree). Do not assume a fixed enum.
-2. Reuse that surface’s existing shell and layout conventions. One codebase. No hover-only critical actions. List unvalidated viewports explicitly.
+Before changing surface behavior or layout, identify which runtime, route, shell, and viewport conditions actually own the affected experience.
 
-Current operational patterns (not a closed taxonomy):
+Do not infer product surface from viewport alone. Native remains Native at large viewport; Web desktop may intentionally differ in layout, navigation, density, or interaction.
 
-- **Terrain operational** (`TerrainShell`, bottom-nav hubs): mobile-primary, desktop-supported.
-- **Analytics** (`TerrainShell`, not in mobile bottom nav): desktop-primary; remain coherent on small screens.
-- **Organization / admin / config / onboarding / auth** (`AppShell`): desktop-primary; do not force `TerrainShell` or phone-column layouts.
+Keep shared product behavior and feature logic at their existing common owner. Split only presentation or interaction that genuinely differs by surface.
 
-Mobile-first must not become mobile-only, and must not force phone-style layouts onto desktop-oriented surfaces.
+Do not duplicate a feature for Web desktop and Native/mobile when its responsibility remains shared, and do not force sharing through components filled with runtime or breakpoint branches.
 
-Public landing (`features/landing`) is a separate marketing tree — follow its conventions; do not apply Terrain phone-shell rules.
+Keep surface divergence at clear shell, navigation, runtime, or presentation boundaries rather than scattering `isNative`, desktop, or breakpoint decisions through feature trees.
 
-Native keyboard / safe-area diagnosis is the `native-runtime-debug` Skill, not this Rule.
+Public or marketing surfaces follow their own layout ownership; do not impose application-shell or Native rules on them.
+
+When behavior depends on Capacitor, OS lifecycle, keyboard, safe areas, deep links, system back, secure storage, or another Native capability, use `native-runtime-debug` rather than treating it as a generic responsive issue.

@@ -204,8 +204,7 @@ GitHub Actions (`.github/workflows/ci.yml`):
 | `make local-check` | `backend-check` + `web-check` |
 | `make verify` | alias for `local-check` |
 | `make docs-check` | `scripts/docs_check.py` + `scripts/agent_config_check.py` |
-| `make agent-config-check` | `.cursor` / `.agents` structural invariants |
-| `make agent-config-sync` | copy canonical `.cursor` commands/rules/skills → `.agents` |
+| `make agent-config-check` | canonical `.agents/skills` and Cursor-specific `.cursor` structural invariants |
 
 Run `make verify` before merging when the Docker stack is up and you need full confidence. For day-to-day backend work, `make backend-test` or `make backend-lint` is enough.
 
@@ -237,5 +236,5 @@ Command: `report_issue_focus_aggregation_eval` (see `houston/signals/management/
 
 ## Agent workflow
 
-- Before adding or expanding tests: read this doc. For the current change, use [`test-review`](../../.cursor/commands/test-review.md).
+- Before adding or expanding tests: read this doc. For the current change, use [`test-review`](../../.agents/skills/test-review/SKILL.md).
 - Nested `AGENTS.md` files hold only short layer-ownership pointers; this document is the testing procedure.

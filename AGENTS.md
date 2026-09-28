@@ -2,76 +2,59 @@
 
 **Spore** is the product. **Houston** is the repository and backend technical name.
 
-Spore is a field-operations app with one integrated React frontend (Web and Native/Capacitor) and a Django modular monolith. It is not a PWA.
+Spore is a multi-tenant field-operations application with one shared React product tree serving Native/Capacitor mobile and Web desktop surfaces, backed by a Django modular monolith. It is not a PWA.
 
-## Core loop
+Core loop:
 
 Observation → Signal → Action Plan → Execution → Validation → Feed update
 
-Detailed statuses, permissions, and pipeline steps belong in owning backend code and tests — not here.
+Feature-specific lifecycle, permissions, statuses, contracts, and implementation details belong to their owning code, tests, and scoped documentation.
 
 ## Sources of truth
 
-Practical authority order:
+For current behavior, prefer:
 
 1. owning implementation
 2. owning tests
-3. generated contracts (OpenAPI / published contract files)
-4. stable agent policies in this tree
-5. living architecture and product docs
+3. generated or published contracts
+4. stable agent policies
+5. living architecture/product documentation
 6. Git history
 
-Docs and agent configuration must not replace inspection of the real implementation when behavior matters. If they conflict with code or tests, follow the implementation unless a stable human policy says otherwise.
+Do not substitute documentation or agent instructions for inspection of the implementation when behavior matters.
 
-## Exploration
+## Engineering principles
 
-Explore proportionally to blast radius. Follow ownership and dependencies, not directory breadth. Ask the human only when the remaining uncertainty is a real product or architectural decision that cannot be resolved from the repository.
+- Fix root causes at the owning layer instead of accumulating patches, exceptions, flags, or parallel paths around a broken concept.
+- Prefer the smallest **coherent** solution, not necessarily the smallest diff. Correct a directly affected abstraction when evidence shows it is the source of the problem; do not expand into unrelated cleanup.
+- Reuse code when it owns the same responsibility. Factor only when the current change demonstrates a stable shared responsibility; resemblance alone is not enough.
+- Design for realistic Spore growth in tenants, users, operational records, feeds, conversations, and history. Performance and bounded data access are part of design, not deferred cleanup.
+- Avoid speculative hyperscale, generic abstractions, compatibility layers, migration paths, dual behavior, rollout machinery, or infrastructure unless an existing consumer, persisted data, deployment constraint, public contract, or explicit task demonstrates the need.
+- Keep one owner for each truth. Backend owns business rules, authorization, lifecycle, visibility, and durable integrity. Client state, realtime, async work, caches, and AI outputs must not become competing business truth.
+- Existing code is evidence, not proof of correctness. Challenge patterns that create fragile ownership, unnecessary complexity, poor scalability, or maintenance cost.
+- Optimize for long-term maintainability: clear ownership, explicit data flow, bounded responsibilities, and as few special cases as reasonably possible.
+- Do not modify unrelated user work or weaken security, tenant isolation, data integrity, lifecycle guards, or meaningful tests to make a change easier.
+- AI output is untrusted derived input. Business invariants remain in deterministic application code.
 
-When modifying a shared abstraction, inspect its meaningful current consumers before proposing or implementing changes.
+## Exploration and decisions
 
-## Architecture
+Explore proportionally to the realistic blast radius. Follow ownership and dependencies rather than directory breadth.
 
-- Modular monolith: domain services own writes/workflows, selectors own reads, permissions own authorization; HTTP views orchestrate; serializers validate/represent.
-- Backend owns business rules, RBAC, lifecycle, feed visibility, and data integrity. Frontend permission logic is UX only.
-- One frontend codebase. Identify the product surface and shell from the repository before changing UI. Mobile-first is not mobile-only.
-- Side effects run after valid committed state. Events and realtime are traces and triggers, not a second business store. Do not invent an event bus.
-- Smallest change that fits the existing architecture. Introduce an abstraction only when the current change proves a stable shared responsibility.
-- Do not add compatibility layers, dual paths, backfills, or rollout machinery for hypothetical consumers or data. Preserve compatibility only when the repository or the task demonstrates an existing requirement.
-- Be scale-aware without speculative hyperscale: avoid N+1 queries, unbounded collections, missing pagination, oversized payloads, unbounded fan-out, and naive full-history loads. Do not introduce replicas, shards, extra caches, or new infrastructure without demonstrated need.
+Inspect meaningful consumers before changing a shared abstraction.
 
-## Security and integrity
+Resolve non-blocking technical ambiguity from repository evidence. Ask the human only when a genuine product or architectural decision cannot be resolved safely.
 
-Enforce authorization, tenant isolation, and data integrity on the backend. Minimize sensitive data across API, realtime, async jobs, uploads, and AI. Never leak secrets, tokens, raw Observation text, private media paths, or sensitive payloads in logs, broker messages, WebSocket payloads, or frontend persistent storage. Log identifiers and state transitions, not sensitive payloads.
+Validated product and architectural decisions are constraints unless new evidence makes them inconsistent or impossible.
 
-## API contracts
+## Scoped guidance
 
-If **external** request/response semantics change, consider the end-to-end chain regardless of which file triggered the change: backend owner → validation/tests → OpenAPI/schema → generated frontend artifacts → affected client/query/hooks → UI/cache. Do not hand-edit generated artifacts. Internal backend changes with an unchanged external contract must not trigger unnecessary schema or client regeneration.
+Read the closest applicable `AGENTS.md` before changing an area:
 
-## Change behavior
+- Backend: [`apps/api/AGENTS.md`](apps/api/AGENTS.md)
+- Frontend: [`apps/web/AGENTS.md`](apps/web/AGENTS.md)
 
-- Inspect existing code, tests, and patterns in the touched area before editing.
-- Smallest coherent patch; no unrelated refactor, format, or dependency changes.
-- Do not rename public fields, routes, enums, statuses, or events casually.
-- Do not weaken tests, RBAC, tenant isolation, or lifecycle guards.
-- Be critical where product, architecture, security, integrity, or scale consequences matter. Do not reopen validated decisions without new evidence from the repository.
+Use specialized documentation only when the task requires it. Documentation is supporting context, not a substitute for inspecting the owning implementation and tests.
 
-## Validation
+Explicit human workflows live under `.agents/skills/`. Cursor-specific scoped rules live under `.cursor/rules/`.
 
-- Backend: never `cd apps/api && uv run` on the host — use `make backend-*` or `docker compose exec api`.
-- Frontend: `cd apps/web && npm …` or `make web-*`.
-- Validate the changed behavior first, then the likely blast radius. `make backend-check` / `make verify` only when justified.
-- Report: Changed · Validated · Risks / not verified (including manual viewport or native behavior).
-
-## Where to look
-
-| Area | Read first |
-|------|------------|
-| Backend `apps/api/**` | [`apps/api/AGENTS.md`](apps/api/AGENTS.md) |
-| Frontend `apps/web/**` | [`apps/web/AGENTS.md`](apps/web/AGENTS.md) |
-| Local stack | [`docs/engineering/local_development.md`](docs/engineering/local_development.md) |
-| Testing procedure | [`docs/engineering/testing.md`](docs/engineering/testing.md) |
-| Product state | [`docs/product/current_state.md`](docs/product/current_state.md) |
-
-`.cursor` is the canonical agent configuration. `.agents` is a generated mirror of Commands, Rules, and Skills.
-
-Human workflow Commands: `create-plan` · `implement-changes` · `review-changes` · `hygiene-pass` · `test-review` · `docs-review`.
+Use the workflow requested by the human. Do not silently substitute another workflow.
