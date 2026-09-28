@@ -61,7 +61,7 @@ Inchangé. Le cadrage produit est supérieur à l’existant. Trois tensions ave
 
 ### Signals
 
-- Pagination par statut, première GET jusqu’à 5 × `page_size` ([`feed_pagination.py`](../../apps/api/houston/signals/feed_pagination.py)) ; refill client plafonné à 10 pages ([`signal-feed-cache.ts`](../../apps/web/src/features/signals/lib/signal-feed-cache.ts)).
+- Une page liste curseur (`build_signal_feed_page` dans [`signal_feed.py`](../../apps/api/houston/signals/signal_feed.py)) ; assemblage client dans [`signal-feed-cache.ts`](../../apps/web/src/features/signals/lib/signal-feed-cache.ts).
 - `resolved` / `canceled` dans le feed ([`constants.py`](../../apps/api/houston/signals/constants.py) L52–54). Aucun count métier API.
 - Pins = champs sur `Signal`, OPEN only, sans plafond, sans lock ([`pin_signal`](../../apps/api/houston/signals/services.py) L1277–1303).
 - `mark_signal_interesting` retire l’épingle (L1328–1330). Pin/unpin avancent `last_activity_at`.

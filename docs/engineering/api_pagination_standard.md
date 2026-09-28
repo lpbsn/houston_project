@@ -134,7 +134,7 @@ Signal Feed is the **existing reference** for Tier A (backend + frontend).
 |------|------|
 | [`apps/api/houston/signals/api/views.py`](../../apps/api/houston/signals/api/views.py) | `SignalFeedView` — sectioned `limit+1` per status, `cursor` only with one matching `statuses=` |
 | [`apps/api/houston/signals/feed_cursor.py`](../../apps/api/houston/signals/feed_cursor.py) | Encode/decode opaque cursor from stable sort keys |
-| [`apps/api/houston/signals/feed_pagination.py`](../../apps/api/houston/signals/feed_pagination.py) | Independent per-status pages from an already-authorized queryset |
+| [`apps/api/houston/signals/signal_feed.py`](../../apps/api/houston/signals/signal_feed.py) | One cursor page (`limit+1`) from an already-authorized queryset (`build_signal_feed_page`) |
 | [`apps/api/houston/signals/selectors.py`](../../apps/api/houston/signals/selectors.py) | `signal_feed_queryset`, `apply_feed_sorting` |
 | [`apps/api/houston/signals/api/serializers.py`](../../apps/api/houston/signals/api/serializers.py) | `SignalFeedResponseSerializer` |
 
