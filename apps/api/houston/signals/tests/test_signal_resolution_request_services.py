@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
+from django.utils import timezone
 
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.exceptions import SignalStateError, SignalValidationError
@@ -125,6 +128,8 @@ def test_manager_approve_staff_request_resolves_signal():
 def test_manager_reject_staff_request_keeps_signal_open():
     _owner, signal, manager, _director, staff = _setup_open_signal_with_responsible_pole()
     request = create_signal_resolution_request(signal=signal, actor_membership=staff)
+    previous_activity = timezone.now() - timedelta(days=1)
+    Signal.objects.filter(pk=signal.pk).update(last_activity_at=previous_activity)
 
     rejected = reject_signal_resolution_request(
         resolution_request=request,
@@ -134,6 +139,7 @@ def test_manager_reject_staff_request_keeps_signal_open():
     signal.refresh_from_db()
     assert rejected.status == SignalResolutionRequest.Status.REJECTED
     assert signal.status == Signal.Status.OPEN
+    assert signal.last_activity_at > previous_activity
 
 
 def test_director_approve_manager_request():
@@ -151,6 +157,8 @@ def test_director_approve_manager_request():
 def test_requester_can_cancel_own_pending_request():
     _owner, signal, manager, _director, _staff = _setup_open_signal_with_responsible_pole()
     request = create_signal_resolution_request(signal=signal, actor_membership=manager)
+    previous_activity = timezone.now() - timedelta(days=1)
+    Signal.objects.filter(pk=signal.pk).update(last_activity_at=previous_activity)
 
     canceled = cancel_signal_resolution_request_by_requester(
         resolution_request=request,
@@ -166,6 +174,7 @@ def test_requester_can_cancel_own_pending_request():
     )
     assert canceled.cancel_comment == "Finalement non"
     assert signal.status == Signal.Status.OPEN
+    assert signal.last_activity_at > previous_activity
     assert can_resolve_signal(manager, signal) is True
 
 

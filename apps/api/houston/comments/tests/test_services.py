@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import uuid
+from datetime import timedelta
 
 import pytest
+from django.utils import timezone
 
 from houston.accounts.models import User
+from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.services import create_action_plan_with_execution
 from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
 from houston.comments.constants import (
@@ -24,6 +27,7 @@ from houston.comments.services import (
 )
 from houston.comments.tests.conftest import build_api_membership
 from houston.establishments.models import EstablishmentMembership
+from houston.signals.models import Signal
 from houston.testing.auth import (
     assign_business_unit_scope,
     build_api_membership_on_establishment,
@@ -75,6 +79,23 @@ def test_create_signal_comment_dedupes_mentions():
     )
 
     assert comment.mention_links.count() == 1
+
+
+def test_create_signal_comment_advances_signal_activity():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = _signal(owner)
+    previous_activity = timezone.now() - timedelta(days=1)
+    Signal.objects.filter(pk=signal.pk).update(last_activity_at=previous_activity)
+    signal.refresh_from_db()
+
+    comment = create_signal_comment(
+        author_membership=owner,
+        signal=signal,
+        body="Nouvelle information",
+    )
+
+    signal.refresh_from_db()
+    assert signal.last_activity_at == comment.created_at
 
 
 def test_create_signal_comment_rejects_invalid_mention():
@@ -161,6 +182,29 @@ def test_create_execution_comment_rejects_reply_to_signal_comment():
             body="reply",
             parent_comment_id=signal_comment.id,
         )
+
+
+def test_create_execution_comment_advances_only_execution_activity():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff, signal, execution = _linked_execution(owner)
+    previous_activity = timezone.now() - timedelta(days=1)
+    Signal.objects.filter(pk=signal.pk).update(last_activity_at=previous_activity)
+    ActionPlanExecution.objects.filter(pk=execution.pk).update(
+        last_activity_at=previous_activity,
+    )
+    signal.refresh_from_db()
+    execution.refresh_from_db()
+
+    comment = create_action_plan_execution_comment(
+        author_membership=staff,
+        execution=execution,
+        body="Progression terrain",
+    )
+
+    signal.refresh_from_db()
+    execution.refresh_from_db()
+    assert execution.last_activity_at == comment.created_at
+    assert signal.last_activity_at == previous_activity
 
 
 def test_create_execution_comment_rejects_reply_to_reply():

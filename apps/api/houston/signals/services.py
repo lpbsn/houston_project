@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
+from django.db.models import F, Value
+from django.db.models.functions import Greatest
 from django.utils import timezone
 
 from houston.ai.observation_pipeline import (
@@ -207,8 +209,14 @@ def structured_summary_short(text: str) -> str:
 
 
 def touch_signal_activity(*, signal: Signal, at=None) -> None:
-    signal.last_activity_at = at or timezone.now()
-    signal.save(update_fields=["last_activity_at", "updated_at"])
+    activity_at = at or timezone.now()
+    updated_at = timezone.now()
+    Signal.objects.filter(pk=signal.pk).update(
+        last_activity_at=Greatest(F("last_activity_at"), Value(activity_at)),
+        updated_at=updated_at,
+    )
+    signal.last_activity_at = max(signal.last_activity_at, activity_at)
+    signal.updated_at = updated_at
 
 
 def record_source_observation_link(
@@ -335,13 +343,13 @@ def aggregate_candidate_into_signal(
     observation: Observation,
 ) -> Signal:
     now = timezone.now()
-    signal.last_activity_at = now
-    signal.save(update_fields=["last_activity_at", "updated_at"])
-    record_source_observation_link(
+    _link, created = SignalSourceObservation.objects.get_or_create(
         signal=signal,
         observation=observation,
         link_type=SignalSourceObservation.LinkType.AGGREGATED_FROM,
     )
+    if created:
+        touch_signal_activity(signal=signal, at=now)
     from houston.observations.media_services import delete_all_observation_media
 
     has_active_created_from = Signal.objects.filter(
@@ -1283,13 +1291,11 @@ def pin_signal(*, signal: Signal, membership: EstablishmentMembership) -> Signal
     signal.is_pinned = True
     signal.pinned_at = now
     signal.pinned_by_membership = membership
-    signal.last_activity_at = now
     signal.save(
         update_fields=[
             "is_pinned",
             "pinned_at",
             "pinned_by_membership",
-            "last_activity_at",
             "updated_at",
         ]
     )
@@ -1330,7 +1336,7 @@ def mark_signal_interesting(
     locked_self.pinned_by_membership = None
     locked_self.marked_interesting_by_membership = actor_membership
     locked_self.marked_interesting_at = now
-    touch_signal_activity(signal=locked_self)
+    locked_self.last_activity_at = max(locked_self.last_activity_at, now)
     locked_self.save(
         update_fields=[
             "status",
@@ -1362,13 +1368,11 @@ def unpin_signal(*, signal: Signal) -> Signal:
     signal.is_pinned = False
     signal.pinned_at = None
     signal.pinned_by_membership = None
-    touch_signal_activity(signal=signal)
     signal.save(
         update_fields=[
             "is_pinned",
             "pinned_at",
             "pinned_by_membership",
-            "last_activity_at",
             "updated_at",
         ]
     )
@@ -1617,7 +1621,7 @@ def _transition_active_signal_to_terminal(
         locked_self.canceled_by_membership = actor_membership
         locked_self.canceled_at = now
         update_fields.extend(["canceled_by_membership", "canceled_at"])
-    touch_signal_activity(signal=locked_self)
+    locked_self.last_activity_at = max(locked_self.last_activity_at, now)
     locked_self.save(update_fields=update_fields)
     lifecycle_event = record_signal_lifecycle_event(
         signal=locked_self,
@@ -2017,7 +2021,8 @@ def merge_signal_into_resolved(
                 "origin": "qualify_merge",
             },
         )
-    touch_signal_activity(signal=target)
+    now = timezone.now()
+    target.last_activity_at = max(target.last_activity_at, now)
     target_update_fields = ["last_activity_at", "updated_at"]
     if associated_times:
         target_update_fields.append("first_action_plan_associated_at")
@@ -2189,6 +2194,21 @@ def qualify_signal_routing(
     )
     source_signature_before = build_signal_pattern_signature(locked_source)
 
+    activity_changed = any(
+        (
+            locked_source.affected_business_unit_id
+            != getattr(resolution.affected_business_unit, "id", None),
+            locked_source.responsible_business_unit_id
+            != getattr(resolution.responsible_business_unit, "id", None),
+            locked_source.activity_subject_id
+            != getattr(resolution.activity_subject, "id", None),
+            locked_source.operational_unit_id
+            != getattr(resolution.operational_unit, "id", None),
+            locked_source.routing_status != resolution.routing_status,
+            locked_source.issue_focus != normalized_issue_focus,
+            (locked_source.expected_action or None) != (expected_action or None),
+        )
+    )
     locked_source.affected_business_unit = resolution.affected_business_unit
     locked_source.responsible_business_unit = resolution.responsible_business_unit
     locked_source.activity_subject = resolution.activity_subject
@@ -2197,18 +2217,23 @@ def qualify_signal_routing(
     locked_source.issue_focus = normalized_issue_focus
     try:
         with transaction.atomic():
-            touch_signal_activity(signal=locked_source)
+            update_fields = [
+                "affected_business_unit",
+                "responsible_business_unit",
+                "activity_subject",
+                "operational_unit",
+                "routing_status",
+                "issue_focus",
+                "updated_at",
+            ]
+            if activity_changed:
+                locked_source.last_activity_at = max(
+                    locked_source.last_activity_at,
+                    timezone.now(),
+                )
+                update_fields.append("last_activity_at")
             locked_source.save(
-                update_fields=[
-                    "affected_business_unit",
-                    "responsible_business_unit",
-                    "activity_subject",
-                    "operational_unit",
-                    "routing_status",
-                    "issue_focus",
-                    "last_activity_at",
-                    "updated_at",
-                ]
+                update_fields=update_fields
             )
     except IntegrityError as exc:
         if not _is_active_aggregation_unique_violation(exc):

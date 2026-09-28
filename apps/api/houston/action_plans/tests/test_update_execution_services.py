@@ -118,6 +118,7 @@ def test_update_title_and_reject_stale():
         role=EstablishmentMembership.Role.OWNER,
     )
     execution = _create_in_progress_execution(owner=owner, pilot_bu=pilot)
+    previous_activity = execution.last_activity_at
     updated = update_action_plan_execution(
         execution_id=execution.id,
         actor=owner,
@@ -125,6 +126,7 @@ def test_update_title_and_reject_stale():
         title="Updated title",
     )
     assert updated.title == "Updated title"
+    assert updated.last_activity_at == previous_activity
     with pytest.raises(ActionPlanStaleExecutionError):
         update_action_plan_execution(
             execution_id=execution.id,
@@ -132,6 +134,26 @@ def test_update_title_and_reject_stale():
             expected_updated_at=execution.updated_at,
             title="Again",
         )
+
+
+def test_update_deadline_advances_execution_activity():
+    establishment = create_establishment()
+    pilot = create_business_unit(establishment=establishment, key="pilot")
+    owner = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    execution = _create_in_progress_execution(owner=owner, pilot_bu=pilot)
+    previous_activity = execution.last_activity_at
+
+    updated = update_action_plan_execution(
+        execution_id=execution.id,
+        actor=owner,
+        expected_updated_at=execution.updated_at,
+        end_at=timezone.now() + timedelta(hours=2),
+    )
+
+    assert updated.last_activity_at > previous_activity
 
 
 def test_update_rejects_non_in_progress():

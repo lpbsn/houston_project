@@ -163,6 +163,10 @@ def create_signal_comment(
         author_membership=author_membership,
         body=normalized_body,
     )
+    from houston.signals.services import _schedule_signal_invalidation, touch_signal_activity
+
+    touch_signal_activity(signal=signal, at=comment.created_at)
+    _schedule_signal_invalidation(signal=signal, reason="signal.updated")
     _create_mentions(comment=comment, mentioned_memberships=mentioned_memberships)
     if mentioned_memberships:
         from houston.notifications.scheduling import schedule_comment_mention_created_notification
@@ -287,6 +291,9 @@ def create_action_plan_execution_comment(
         parent_comment=parent_comment,
         body=normalized_body,
     )
+    from houston.action_plans.services import touch_execution_activity
+
+    touch_execution_activity(execution=locked_execution, at=comment.created_at)
     if uploads:
         link_uploads_to_comment(comment=comment, uploads=uploads)
     _create_mentions(comment=comment, mentioned_memberships=mentioned_memberships)

@@ -92,7 +92,7 @@ def _promote_one_execution(*, execution_id: uuid.UUID) -> bool:
     execution.status = EXECUTION_STATUS_IN_PROGRESS
     execution.started_at = now
     execution.started_by_membership = None
-    execution.last_activity_at = now
+    execution.last_activity_at = max(execution.last_activity_at, now)
     execution.save(
         update_fields=[
             "status",

@@ -35,6 +35,7 @@ from houston.signals.services import (
     _lock_signal_created_from_set_or_self,
     _resolve_signal_after_lock,
     _schedule_signal_invalidation,
+    touch_signal_activity,
 )
 
 
@@ -294,6 +295,7 @@ def reject_signal_resolution_request(
             "updated_at",
         ],
     )
+    touch_signal_activity(signal=locked_self, at=now)
     _schedule_signal_invalidation(signal=locked_self, reason="signal.updated")
 
     from houston.notifications.scheduling import (
@@ -345,6 +347,7 @@ def cancel_signal_resolution_request_by_requester(
             "updated_at",
         ],
     )
+    touch_signal_activity(signal=locked_self, at=now)
     _schedule_signal_invalidation(signal=locked_self, reason="signal.updated")
     return locked_request
 

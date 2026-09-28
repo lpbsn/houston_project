@@ -92,6 +92,8 @@ class ExecutionUpdateDiff:
     reassigned_to_membership_ids: set[uuid.UUID] = field(default_factory=set)
     unassigned_from_membership_ids: set[uuid.UUID] = field(default_factory=set)
     deadline_changed_membership_ids: set[uuid.UUID] = field(default_factory=set)
+    activity_assignment_changed: bool = False
+    activity_deadline_changed: bool = False
 
 
 def _manager_can_manage_bu(
@@ -182,7 +184,7 @@ def update_action_plan_execution(
     ]
 
     diff = ExecutionUpdateDiff()
-    update_fields = ["last_activity_at", "updated_at"]
+    update_fields = ["updated_at"]
     now = timezone.now()
     previous_end_at = execution.end_at
 
@@ -216,6 +218,7 @@ def update_action_plan_execution(
             execution.end_at = end_at
             update_fields.append("end_at")
             diff.end_at_changed = True
+            diff.activity_deadline_changed = True
     if all_day is not None and all_day != execution.all_day:
         execution.all_day = all_day
         update_fields.append("all_day")
@@ -269,7 +272,9 @@ def update_action_plan_execution(
         diff=diff,
     )
 
-    execution.last_activity_at = now
+    if diff.activity_assignment_changed or diff.activity_deadline_changed:
+        execution.last_activity_at = max(execution.last_activity_at, now)
+        update_fields.append("last_activity_at")
     execution.save(update_fields=update_fields)
 
     if diff.end_at_changed:
@@ -385,6 +390,7 @@ def _resolve_final_assignees(
             _assert_end_after_start(start_at=existing.start_at, end_at=end_at)
             if end_at != existing.end_at:
                 diff.individual_end_changed_ids.add(membership.id)
+                diff.activity_deadline_changed = True
             final_rows.append(
                 {
                     "membership": membership,
@@ -409,6 +415,7 @@ def _resolve_final_assignees(
         end_at = item.get("end_at")
         _assert_end_after_start(start_at=start_at, end_at=end_at)
         diff.added_assignee_ids.add(membership.id)
+        diff.activity_assignment_changed = True
         final_rows.append(
             {
                 "membership": membership,
@@ -429,6 +436,7 @@ def _resolve_final_assignees(
                 "Not allowed to remove an assignee outside your scope."
             )
         diff.removed_assignee_ids.add(membership_id)
+        diff.activity_assignment_changed = True
 
     return final_rows
 
@@ -556,6 +564,9 @@ def _resolve_final_pending_tasks(
             diff.pending_structure_changed = True
             if assigned_membership_id is not None:
                 diff.newly_assigned_task_membership_ids.add(assigned_membership_id)
+                diff.activity_assignment_changed = True
+            if deadline_at is not None:
+                diff.activity_deadline_changed = True
             continue
 
         task_uuid = uuid.UUID(str(task_id))
@@ -597,6 +608,7 @@ def _resolve_final_pending_tasks(
             diff.pending_structure_changed = True
             old_assigned = existing.assigned_membership_id
             if old_assigned != assigned_membership_id:
+                diff.activity_assignment_changed = True
                 if old_assigned is not None and assigned_membership_id is not None:
                     diff.reassigned_from_membership_ids.add(old_assigned)
                     diff.reassigned_to_membership_ids.add(assigned_membership_id)
@@ -604,8 +616,10 @@ def _resolve_final_pending_tasks(
                     diff.unassigned_from_membership_ids.add(old_assigned)
                 elif assigned_membership_id is not None:
                     diff.newly_assigned_task_membership_ids.add(assigned_membership_id)
-            if existing.deadline_at != deadline_at and assigned_membership_id is not None:
-                diff.deadline_changed_membership_ids.add(assigned_membership_id)
+            if existing.deadline_at != deadline_at:
+                diff.activity_deadline_changed = True
+                if assigned_membership_id is not None:
+                    diff.deadline_changed_membership_ids.add(assigned_membership_id)
 
         specs.append(
             {
@@ -640,6 +654,10 @@ def _resolve_final_pending_tasks(
                 "Pending task cannot be deleted while linked to an observation."
             )
         diff.pending_structure_changed = True
+        if existing.assigned_membership_id is not None:
+            diff.activity_assignment_changed = True
+        if existing.deadline_at is not None:
+            diff.activity_deadline_changed = True
 
     return specs
 
