@@ -12,7 +12,7 @@ afterEach(() => {
 })
 
 describe('signal feed reading memory', () => {
-  it('keeps view, filters, sections and scroll for one scope', () => {
+  it('keeps view, filters and scroll for one scope', () => {
     const scopeKey = signalFeedReadingScopeKey('establishment', 'est-1')
     writeSignalFeedReading(scopeKey, {
       viewMode: 'general',
@@ -22,7 +22,6 @@ describe('signal feed reading memory', () => {
         activitySubjectIds: [],
         needsQualification: true,
       },
-      expandedByKey: { resolved: true },
       scrollTop: 180,
     })
 
@@ -34,7 +33,6 @@ describe('signal feed reading memory', () => {
         activitySubjectIds: [],
         needsQualification: true,
       },
-      expandedByKey: { resolved: true },
       scrollTop: 180,
       anchorId: null,
       neighborId: null,

@@ -405,7 +405,6 @@ describe('SignalFeedPage reading restoration', () => {
         activitySubjectIds: [],
         needsQualification: false,
       },
-      expandedByKey: { resolved: true },
       scrollTop: 90,
     })
 

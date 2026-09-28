@@ -8,7 +8,6 @@ import type { SignalViewMode } from '../types'
 export type SignalFeedReadingState = {
   viewMode: SignalViewMode
   filters: SignalFeedFilters
-  expandedByKey: Record<string, boolean>
   scrollTop: number
   anchorId: string | null
   neighborId: string | null
@@ -32,7 +31,6 @@ function emptyReadingState(): SignalFeedReadingState {
   return {
     viewMode: 'personal',
     filters: EMPTY_SIGNAL_FEED_FILTERS,
-    expandedByKey: {},
     scrollTop: 0,
     anchorId: null,
     neighborId: null,
@@ -53,7 +51,6 @@ export function writeSignalFeedReading(
   memory.set(scopeKey, {
     viewMode: patch.viewMode ?? current.viewMode,
     filters: patch.filters ? normalizeSignalFeedFilters(patch.filters) : current.filters,
-    expandedByKey: patch.expandedByKey ?? current.expandedByKey,
     scrollTop: patch.scrollTop ?? current.scrollTop,
     anchorId: patch.anchorId === undefined ? current.anchorId : patch.anchorId,
     neighborId: patch.neighborId === undefined ? current.neighborId : patch.neighborId,

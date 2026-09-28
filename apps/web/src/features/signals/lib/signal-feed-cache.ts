@@ -32,14 +32,21 @@ export type SignalQuickActionCacheContext = {
   filters: SignalFeedFilters
 }
 
-export type SignalFeedCacheState = SignalFeedResponse & {
+export type SignalFeedCacheState = {
+  readingWindow: FeedReadingWindow<SignalFeedItem>
+  pinWindow: FeedReadingWindow<SignalFeedItem>
+  counts: SignalFeedResponse['counts']
+  applied_filters: SignalFeedResponse['applied_filters']
+}
+
+export type SignalFeedReadState = SignalFeedResponse & {
   readingWindow: FeedReadingWindow<SignalFeedItem>
   pinWindow: FeedReadingWindow<SignalFeedItem>
 }
 
 export type SignalFeedOptimisticSnapshot = {
   queryKey: ReturnType<typeof signalsQueryKeys.feed> | ReturnType<typeof signalsQueryKeys.crossFeed>
-  previous: SignalFeedResponse | undefined
+  previous: SignalFeedCacheState | undefined
 }
 
 const SIGNAL_FEED_VIEW_MODES: SignalViewMode[] = ['personal', 'general']
@@ -49,13 +56,6 @@ const STATUS_RANK: Record<string, number> = {
   open: 0,
   in_progress: 1,
   interesting: 2,
-}
-
-export class SignalFeedContinuationStalled extends Error {
-  constructor() {
-    super('La suite du feed n’a pas pu être chargée.')
-    this.name = 'SignalFeedContinuationStalled'
-  }
 }
 
 export function signalFeedQueryKey(options: {
@@ -189,21 +189,20 @@ function shiftCounts(
   return updated
 }
 
-function isSignalFeedCacheState(feed: SignalFeedResponse): feed is SignalFeedCacheState {
-  return 'readingWindow' in feed && 'pinWindow' in feed
-}
-
-export function projectSignalFeedCache(state: SignalFeedCacheState): SignalFeedCacheState {
+export function readSignalFeedCache(state: SignalFeedCacheState): SignalFeedReadState {
   const head = windowHead(state.readingWindow)
   const pinHead = windowHead(state.pinWindow)
   return {
-    ...state,
     items: renderedItems(state.readingWindow, (item) => item.id),
     pins: renderedItems(state.pinWindow, (item) => item.id),
+    counts: state.counts,
     next_cursor: head?.nextCursor ?? null,
     has_more: Boolean(head?.hasMore),
     pins_next_cursor: pinHead?.nextCursor ?? null,
     pins_has_more: Boolean(pinHead?.hasMore),
+    applied_filters: state.applied_filters,
+    readingWindow: state.readingWindow,
+    pinWindow: state.pinWindow,
   }
 }
 
@@ -231,28 +230,12 @@ export function signalFeedCacheFromFirstPage(
     },
     generation,
   )
-  return projectSignalFeedCache({
-    ...page,
+  return {
+    counts: page.counts,
+    applied_filters: page.applied_filters,
     readingWindow,
     pinWindow,
-  })
-}
-
-export function ensureSignalFeedCache(feed: SignalFeedResponse): SignalFeedCacheState {
-  if (isSignalFeedCacheState(feed)) {
-    return feed
   }
-  return signalFeedCacheFromFirstPage(feed, 1)
-}
-
-export function continuationPageStalled(
-  requestedCursor: string,
-  page: { items: readonly unknown[]; next_cursor: string | null; has_more: boolean },
-): boolean {
-  if (page.items.length === 0 && page.has_more) {
-    return true
-  }
-  return page.has_more && page.next_cursor === requestedCursor
 }
 
 function withPageOneItems<TItem>(
@@ -269,12 +252,11 @@ function withPageOneItems<TItem>(
 }
 
 export function reconcileSignalFeedItem(
-  feed: SignalFeedResponse,
+  state: SignalFeedCacheState,
   filters: SignalFeedFilters,
   signalId: string,
   patch: Partial<SignalFeedItem>,
 ): SignalFeedCacheState {
-  const state = ensureSignalFeedCache(feed)
   const selection = selectedSignalFeedStatus(filters)
   const pins = hydratedItems(state.pinWindow)
   const list = hydratedItems(state.readingWindow)
@@ -289,19 +271,19 @@ export function reconcileSignalFeedItem(
   const structural = next.status !== found.status || next.is_pinned !== found.is_pinned
   if (!structural) {
     if (pinIndex >= 0) {
-      return projectSignalFeedCache({
+      return {
         ...state,
         pinWindow: mapHydratedItems(state.pinWindow, (item) =>
           item.id === signalId ? next : item,
         ),
-      })
+      }
     }
-    return projectSignalFeedCache({
+    return {
       ...state,
       readingWindow: mapHydratedItems(state.readingWindow, (item) =>
         item.id === signalId ? next : item,
       ),
-    })
+    }
   }
 
   const counts = shiftCounts(state.counts, found, next, selection)
@@ -320,31 +302,31 @@ export function reconcileSignalFeedItem(
   if (keepPinPosition && pinIndex >= 0) {
     const nextPins = [...(cleared.pinWindow.pageOne?.items ?? [])]
     nextPins.splice(Math.min(pinIndex, nextPins.length), 0, next)
-    return projectSignalFeedCache({
+    return {
       ...cleared,
       pinWindow: withPageOneItems(cleared.pinWindow, nextPins),
-    })
+    }
   }
   if (pinZoneIncludes(next, selection)) {
-    return projectSignalFeedCache({
+    return {
       ...cleared,
       pinWindow: withPageOneItems(cleared.pinWindow, [
         next,
         ...(cleared.pinWindow.pageOne?.items ?? []),
       ]),
-    })
+    }
   }
   if (listIncludes(next, selection)) {
     const pageOneItems = cleared.readingWindow.pageOne?.items ?? []
-    return projectSignalFeedCache({
+    return {
       ...cleared,
       readingWindow: withPageOneItems(
         cleared.readingWindow,
         [next, ...pageOneItems].sort(compareSignalFeedListItems),
       ),
-    })
+    }
   }
-  return projectSignalFeedCache(cleared)
+  return cleared
 }
 
 export function patchSignalInActiveFeedCache(
@@ -362,7 +344,7 @@ export function patchSignalInActiveFeedCache(
     options.viewMode,
     options.filters,
   )
-  queryClient.setQueryData<SignalFeedResponse>(queryKey, (current) => {
+  queryClient.setQueryData<SignalFeedCacheState>(queryKey, (current) => {
     if (!current) {
       return current
     }
@@ -371,16 +353,15 @@ export function patchSignalInActiveFeedCache(
 }
 
 export function appendSignalFeedPage(
-  current: SignalFeedResponse,
+  current: SignalFeedCacheState,
   page: SignalFeedResponse,
-  requestedCursor = windowHead(ensureSignalFeedCache(current).readingWindow)?.nextCursor,
+  requestedCursor = windowHead(current.readingWindow)?.nextCursor,
 ): { feed: SignalFeedCacheState; stalled: boolean } {
-  const state = ensureSignalFeedCache(current)
   if (!requestedCursor) {
-    return { feed: state, stalled: false }
+    return { feed: current, stalled: false }
   }
   const appended = appendForwardPage(
-    state.readingWindow,
+    current.readingWindow,
     requestedCursor,
     {
       items: page.items,
@@ -390,28 +371,27 @@ export function appendSignalFeedPage(
     (item) => item.id,
   )
   if (appended.ignored) {
-    return { feed: state, stalled: false }
+    return { feed: current, stalled: false }
   }
   return {
     stalled: appended.stalled,
-    feed: projectSignalFeedCache({
-      ...state,
+    feed: {
+      ...current,
       readingWindow: appended.window,
-    }),
+    },
   }
 }
 
 export function appendSignalFeedPinsPage(
-  current: SignalFeedResponse,
+  current: SignalFeedCacheState,
   page: SignalFeedPinsPage,
-  requestedCursor = windowHead(ensureSignalFeedCache(current).pinWindow)?.nextCursor,
+  requestedCursor = windowHead(current.pinWindow)?.nextCursor,
 ): { feed: SignalFeedCacheState; stalled: boolean } {
-  const state = ensureSignalFeedCache(current)
   if (!requestedCursor) {
-    return { feed: state, stalled: false }
+    return { feed: current, stalled: false }
   }
   const appended = appendForwardPage(
-    state.pinWindow,
+    current.pinWindow,
     requestedCursor,
     {
       items: page.items,
@@ -421,22 +401,21 @@ export function appendSignalFeedPinsPage(
     (item) => item.id,
   )
   if (appended.ignored) {
-    return { feed: state, stalled: false }
+    return { feed: current, stalled: false }
   }
   return {
     stalled: appended.stalled,
-    feed: projectSignalFeedCache({
-      ...state,
+    feed: {
+      ...current,
       pinWindow: appended.window,
-    }),
+    },
   }
 }
 
 export function removeSignalFromFeedCache(
-  feed: SignalFeedResponse,
+  state: SignalFeedCacheState,
   signalId: string,
 ): { feed: SignalFeedCacheState; neighborId: string | null } {
-  const state = ensureSignalFeedCache(feed)
   const listItem = hydratedItems(state.readingWindow).find((item) => item.id === signalId)
   const pinItem = hydratedItems(state.pinWindow).find((item) => item.id === signalId)
   const list = removeHydratedItem(state.readingWindow, signalId, (item) => item.id)
@@ -456,12 +435,12 @@ export function removeSignalFromFeedCache(
   }
   return {
     neighborId: list.neighborId ?? pins.neighborId,
-    feed: projectSignalFeedCache({
+    feed: {
       ...state,
       counts,
       readingWindow: list.window,
       pinWindow: pins.window,
-    }),
+    },
   }
 }
 
@@ -481,7 +460,7 @@ export async function prepareSignalFeedOptimisticUpdate(
   await queryClient.cancelQueries({ queryKey })
   return {
     queryKey,
-    previous: queryClient.getQueryData<SignalFeedResponse>(queryKey),
+    previous: queryClient.getQueryData<SignalFeedCacheState>(queryKey),
   }
 }
 

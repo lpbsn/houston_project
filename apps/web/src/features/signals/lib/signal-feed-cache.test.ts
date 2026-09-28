@@ -13,9 +13,12 @@ import {
   feedItemPatchFromDetail,
   invalidateSignalFeedViewModes,
   patchSignalInActiveFeedCache,
+  readSignalFeedCache,
   reconcileSignalFeedItem,
   removeSignalFromFeedCache,
+  signalFeedCacheFromFirstPage,
   updateSignalDetailCache,
+  type SignalFeedCacheState,
 } from './signal-feed-cache'
 
 const EST = 'est-1'
@@ -162,10 +165,12 @@ describe('patchSignalInActiveFeedCache', () => {
 
     queryClient.setQueryData(
       queryKey,
-      buildFeed({
-        items: [buildFeedItem(), otherItem],
-        counts: { open: 2, in_progress: 0, interesting: 0, pinned: 0 },
-      }),
+      signalFeedCacheFromFirstPage(
+        buildFeed({
+          items: [buildFeedItem(), otherItem],
+          counts: { open: 2, in_progress: 0, interesting: 0, pinned: 0 },
+        }),
+      ),
     )
 
     patchSignalInActiveFeedCache(queryClient, {
@@ -176,7 +181,8 @@ describe('patchSignalInActiveFeedCache', () => {
       patch: { is_pinned: true },
     })
 
-    const data = queryClient.getQueryData<SignalFeedResponse>(queryKey)
+    const cache = queryClient.getQueryData<SignalFeedCacheState>(queryKey)
+    const data = cache ? readSignalFeedCache(cache) : undefined
     expect(data?.items.map((item) => item.id)).toEqual(['signal-2'])
     expect(data?.pins?.map((item) => item.id)).toEqual([SIGNAL_ID])
     expect(data?.pins?.[0]?.is_pinned).toBe(true)
@@ -191,28 +197,31 @@ describe('patchSignalInActiveFeedCache', () => {
 
     queryClient.setQueryData(
       queryKey,
-      buildFeed({
-        items: [],
-        pins: [pinned, otherPin],
-        counts: { open: 0, in_progress: 0, interesting: 0, pinned: 2 },
-      }),
+      signalFeedCacheFromFirstPage(
+        buildFeed({
+          items: [],
+          pins: [pinned, otherPin],
+          counts: { open: 0, in_progress: 0, interesting: 0, pinned: 2 },
+        }),
+      ),
     )
 
-    const current = queryClient.getQueryData<SignalFeedResponse>(queryKey)
+    const current = queryClient.getQueryData<SignalFeedCacheState>(queryKey)
     const next = reconcileSignalFeedItem(current!, EMPTY_SIGNAL_FEED_FILTERS, SIGNAL_ID, {
       status: 'interesting',
     })
+    const projected = readSignalFeedCache(next)
 
-    expect(next.pins?.map((item) => item.id)).toEqual([SIGNAL_ID, 'pin-2'])
-    expect(next.pins?.[0]?.status).toBe('interesting')
-    expect(next.pins?.[0]?.is_pinned).toBe(true)
+    expect(projected.pins?.map((item) => item.id)).toEqual([SIGNAL_ID, 'pin-2'])
+    expect(projected.pins?.[0]?.status).toBe('interesting')
+    expect(projected.pins?.[0]?.is_pinned).toBe(true)
     expect(next.counts?.pinned).toBe(2)
   })
 
   it('removes a resolved signal from both collections', () => {
     const queryClient = createTestQueryClient()
     const queryKey = signalsQueryKeys.feed(EST, 'personal', EMPTY_SIGNAL_FEED_FILTERS)
-    queryClient.setQueryData(queryKey, buildFeed())
+    queryClient.setQueryData(queryKey, signalFeedCacheFromFirstPage(buildFeed()))
 
     patchSignalInActiveFeedCache(queryClient, {
       establishmentId: EST,
@@ -222,7 +231,8 @@ describe('patchSignalInActiveFeedCache', () => {
       patch: { status: 'resolved', is_pinned: false },
     })
 
-    const data = queryClient.getQueryData<SignalFeedResponse>(queryKey)
+    const cache = queryClient.getQueryData<SignalFeedCacheState>(queryKey)
+    const data = cache ? readSignalFeedCache(cache) : undefined
     expect(data?.items).toEqual([])
     expect(data?.pins).toEqual([])
     expect(data?.counts?.open).toBe(0)
@@ -249,12 +259,14 @@ describe('patchSignalInActiveFeedCache', () => {
       status: 'interesting',
       last_activity_at: '2026-06-30T07:00:00Z',
     })
-    const next = reconcileSignalFeedItem(
-      buildFeed({ items: [moved, open, inProgress, interesting] }),
+    const next = readSignalFeedCache(reconcileSignalFeedItem(
+      signalFeedCacheFromFirstPage(
+        buildFeed({ items: [moved, open, inProgress, interesting] }),
+      ),
       EMPTY_SIGNAL_FEED_FILTERS,
       SIGNAL_ID,
       { status: 'interesting' },
-    )
+    ))
 
     expect(next.items.map((item) => item.id)).toEqual([
       'open-1',
@@ -267,13 +279,15 @@ describe('patchSignalInActiveFeedCache', () => {
 
 describe('appendSignalFeedPage', () => {
   it('appends list items and keeps pins and counts from the first page', () => {
-    const current = buildFeed({
-      items: [buildFeedItem({ id: 'open-1' })],
-      pins: [buildFeedItem({ id: 'pin-1', is_pinned: true })],
-      counts: { open: 2, in_progress: 0, interesting: 0, pinned: 1 },
-      next_cursor: 'cursor-1',
-      has_more: true,
-    })
+    const current = signalFeedCacheFromFirstPage(
+      buildFeed({
+        items: [buildFeedItem({ id: 'open-1' })],
+        pins: [buildFeedItem({ id: 'pin-1', is_pinned: true })],
+        counts: { open: 2, in_progress: 0, interesting: 0, pinned: 1 },
+        next_cursor: 'cursor-1',
+        has_more: true,
+      }),
+    )
     const page = buildFeed({
       items: [buildFeedItem({ id: 'open-2', status: 'in_progress' })],
       pins: [],
@@ -283,49 +297,55 @@ describe('appendSignalFeedPage', () => {
     })
 
     const appended = appendSignalFeedPage(current, page)
+    const projected = readSignalFeedCache(appended.feed)
 
     expect(appended.stalled).toBe(false)
-    expect(appended.feed.items.map((item) => item.id)).toEqual(['open-1', 'open-2'])
-    expect(appended.feed.pins?.map((item) => item.id)).toEqual(['pin-1'])
+    expect(projected.items.map((item) => item.id)).toEqual(['open-1', 'open-2'])
+    expect(projected.pins?.map((item) => item.id)).toEqual(['pin-1'])
     expect(appended.feed.counts).toEqual(current.counts)
-    expect(appended.feed.next_cursor).toBe('cursor-2')
+    expect(projected.next_cursor).toBe('cursor-2')
   })
 })
 
 describe('appendSignalFeedPinsPage', () => {
   it('appends cross pins without replacing the list', () => {
-    const current = buildFeed({
-      items: [buildFeedItem({ id: 'open-1' })],
-      pins: [buildFeedItem({ id: 'pin-1', is_pinned: true })],
-      pins_next_cursor: 'pins-1',
-      pins_has_more: true,
-    })
+    const current = signalFeedCacheFromFirstPage(
+      buildFeed({
+        items: [buildFeedItem({ id: 'open-1' })],
+        pins: [buildFeedItem({ id: 'pin-1', is_pinned: true })],
+        pins_next_cursor: 'pins-1',
+        pins_has_more: true,
+      }),
+    )
     const appended = appendSignalFeedPinsPage(current, {
       items: [buildFeedItem({ id: 'pin-2', is_pinned: true })],
       next_cursor: null,
       has_more: false,
     })
 
-    expect(appended.feed.items.map((item) => item.id)).toEqual(['open-1'])
-    expect(appended.feed.pins?.map((item) => item.id)).toEqual(['pin-1', 'pin-2'])
-    expect(appended.feed.pins_has_more).toBe(false)
+    const projected = readSignalFeedCache(appended.feed)
+    expect(projected.items.map((item) => item.id)).toEqual(['open-1'])
+    expect(projected.pins?.map((item) => item.id)).toEqual(['pin-1', 'pin-2'])
+    expect(projected.pins_has_more).toBe(false)
   })
 })
 
 describe('removeSignalFromFeedCache', () => {
   it('decrements the list status count for a realtime terminal removal', () => {
     const removed = removeSignalFromFeedCache(
-      buildFeed({
-        items: [
-          buildFeedItem({ id: 'signal-1', status: 'open' }),
-          buildFeedItem({ id: 'signal-2', status: 'open' }),
-        ],
-        counts: { open: 2, in_progress: 0, interesting: 0, pinned: 0 },
-      }),
+      signalFeedCacheFromFirstPage(
+        buildFeed({
+          items: [
+            buildFeedItem({ id: 'signal-1', status: 'open' }),
+            buildFeedItem({ id: 'signal-2', status: 'open' }),
+          ],
+          counts: { open: 2, in_progress: 0, interesting: 0, pinned: 0 },
+        }),
+      ),
       'signal-1',
     )
 
-    expect(removed.feed.items.map((item) => item.id)).toEqual(['signal-2'])
+    expect(readSignalFeedCache(removed.feed).items.map((item) => item.id)).toEqual(['signal-2'])
     expect(removed.feed.counts).toEqual({
       open: 1,
       in_progress: 0,
@@ -336,15 +356,17 @@ describe('removeSignalFromFeedCache', () => {
 
   it('decrements only the pinned count when a pinned signal is removed', () => {
     const removed = removeSignalFromFeedCache(
-      buildFeed({
-        items: [],
-        pins: [buildFeedItem({ is_pinned: true })],
-        counts: { open: 4, in_progress: 2, interesting: 1, pinned: 1 },
-      }),
+      signalFeedCacheFromFirstPage(
+        buildFeed({
+          items: [],
+          pins: [buildFeedItem({ is_pinned: true })],
+          counts: { open: 4, in_progress: 2, interesting: 1, pinned: 1 },
+        }),
+      ),
       SIGNAL_ID,
     )
 
-    expect(removed.feed.pins).toEqual([])
+    expect(readSignalFeedCache(removed.feed).pins).toEqual([])
     expect(removed.feed.counts).toEqual({
       open: 4,
       in_progress: 2,
@@ -400,14 +422,16 @@ describe('applySignalQuickActionSuccess', () => {
     queryClient.setQueryData(detailKey, buildDetail({ is_pinned: false }))
     queryClient.setQueryData(
       feedKey,
-      buildFeed({
-        items: [
-          buildFeedItem({ is_pinned: false, title: 'Old title' }),
-          buildFeedItem({ id: 'loaded-page-2' }),
-        ],
-        next_cursor: 'cursor-after-page-2',
-        has_more: true,
-      }),
+      signalFeedCacheFromFirstPage(
+        buildFeed({
+          items: [
+            buildFeedItem({ is_pinned: false, title: 'Old title' }),
+            buildFeedItem({ id: 'loaded-page-2' }),
+          ],
+          next_cursor: 'cursor-after-page-2',
+          has_more: true,
+        }),
+      ),
     )
 
     applySignalQuickActionSuccess(queryClient, {
@@ -434,7 +458,8 @@ describe('applySignalQuickActionSuccess', () => {
       queryKey: ['signals', 'detail', EST],
     })
     expect(queryClient.getQueryData(detailKey)).toEqual(detail)
-    const feed = queryClient.getQueryData<SignalFeedResponse>(feedKey)
+    const cache = queryClient.getQueryData<SignalFeedCacheState>(feedKey)
+    const feed = cache ? readSignalFeedCache(cache) : undefined
     expect(feed?.pins?.[0]?.is_pinned).toBe(true)
     expect(feed?.pins?.[0]?.title).toBe('Pinned title')
     expect(feed?.items.map((item) => item.id)).toEqual(['loaded-page-2'])
