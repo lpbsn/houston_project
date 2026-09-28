@@ -167,12 +167,16 @@ def resolve_feed_baseline_profile(
         raise ValueError(f"Unknown feed baseline profile: {profile_name}") from exc
     profile = FeedBaselineProfile(
         name=base.name,
-        establishments=establishments or base.establishments,
+        establishments=base.establishments if establishments is None else establishments,
         signals_per_establishment=(
-            signals_per_establishment or base.signals_per_establishment
+            base.signals_per_establishment
+            if signals_per_establishment is None
+            else signals_per_establishment
         ),
         executions_per_establishment=(
-            executions_per_establishment or base.executions_per_establishment
+            base.executions_per_establishment
+            if executions_per_establishment is None
+            else executions_per_establishment
         ),
         warmups=base.warmups if warmups is None else warmups,
         timing_iterations=base.timing_iterations if iterations is None else iterations,
@@ -1501,9 +1505,6 @@ def _delete_feed_baseline_dataset() -> None:
     ActionPlan.objects.filter(establishment__organization_id__in=organization_ids).delete()
     Signal.objects.filter(establishment__organization_id__in=organization_ids).delete()
     Observation.objects.filter(establishment__organization_id__in=organization_ids).delete()
-    Notification.objects.filter(
-        establishment__organization_id__in=organization_ids
-    ).delete()
     organizations.delete()
     User.objects.filter(username__startswith="feed_baseline_").delete()
 
