@@ -1,4 +1,11 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useMemo, useState } from 'react'
+import {
+  type InfiniteData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 
 import {
   invalidateActionPlanExecutionSurfaces,
@@ -8,6 +15,7 @@ import {
 import {
   activateActionPlan,
   actionPlansQueryKeys,
+  type ActionPlanExecutionFeedCategory,
   type ActionPlanExecutionFeedViewMode,
   cancelActionPlanExecution,
   createActionPlan,
@@ -20,6 +28,7 @@ import {
   fetchCrossActionPlanExecutionDetail,
   fetchActionPlanExecutionFeed,
   fetchCrossActionPlanExecutionFeed,
+  fetchCrossActionPlanExecutionFeedPins,
   fetchActionPlanExecutionUpcoming,
   fetchActionPlanExecutionCalendar,
   fetchCrossActionPlanExecutionCalendar,
@@ -47,6 +56,8 @@ import type {
   ActionPlanTaskSkipRequest,
   PatchedActionPlanExecutionUpdateRequest,
   PatchedActionPlanUpdateRequest,
+  ActionPlanExecutionFeedPinsResponse,
+  ActionPlanExecutionFeedResponse,
 } from './types'
 import {
   isActionPlanExecutionDetail,
@@ -57,6 +68,54 @@ import {
   prepareActionPlanExecutionPinOptimisticUpdate,
   restoreActionPlanExecutionPinOptimisticUpdate,
 } from './lib/action-plan-execution-feed-cache'
+
+type ExecutionFeedPageContract = {
+  items: unknown[]
+  next_cursor: string | null
+  has_more: boolean
+}
+
+type ExecutionFeedContinuationControls = {
+  isRetryingStalledContinuation: boolean
+  retryStalledContinuation: () => Promise<void>
+}
+
+function useExecutionFeedContinuation<TPage extends ExecutionFeedPageContract>(options: {
+  queryKey: readonly unknown[]
+  fetchPage: (cursor: string) => Promise<TPage>
+}): ExecutionFeedContinuationControls {
+  const { fetchPage, queryKey } = options
+  const queryClient = useQueryClient()
+  const [isRetryingStalledContinuation, setIsRetryingStalledContinuation] = useState(false)
+
+  const retryStalledContinuation = useCallback(async () => {
+    const current = queryClient.getQueryData<InfiniteData<TPage, unknown>>(queryKey)
+    const lastPageIndex = (current?.pages.length ?? 0) - 1
+    const requestCursor = current?.pageParams[lastPageIndex]
+    if (!current || lastPageIndex < 1 || typeof requestCursor !== 'string') {
+      return
+    }
+    setIsRetryingStalledContinuation(true)
+    try {
+      const page = await fetchPage(requestCursor)
+      queryClient.setQueryData<InfiniteData<TPage, unknown>>(queryKey, {
+        pages: current.pages.map((existing, index) =>
+          index === lastPageIndex ? page : existing,
+        ),
+        pageParams: current.pageParams,
+      })
+    } catch {
+      // Keep the stalled page and its local retry visible.
+    } finally {
+      setIsRetryingStalledContinuation(false)
+    }
+  }, [fetchPage, queryClient, queryKey])
+
+  return {
+    isRetryingStalledContinuation,
+    retryStalledContinuation,
+  }
+}
 
 function invalidateCatalogSurfaces(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -106,37 +165,112 @@ export function useActionPlanDetailQuery(
 export function useActionPlanExecutionFeedQuery(
   establishmentId: string | null,
   viewMode: ActionPlanExecutionFeedViewMode,
-  options?: { source?: 'establishment' | 'cross' },
+  options?: { category?: ActionPlanExecutionFeedCategory; source?: 'establishment' | 'cross' },
 ) {
   const source = options?.source ?? 'establishment'
+  const category = options?.category ?? 'all'
   const enabled = source === 'cross' || Boolean(establishmentId)
-  return useInfiniteQuery({
-    queryKey:
+  const queryKey = useMemo(
+    () =>
       source === 'cross'
-        ? actionPlansQueryKeys.crossExecutionFeed(viewMode)
+        ? actionPlansQueryKeys.crossExecutionFeed(viewMode, category)
         : establishmentId
-          ? actionPlansQueryKeys.executionFeed(establishmentId, viewMode)
-          : ['action-plans', 'action-plan-execution-feed', 'none'],
+          ? actionPlansQueryKeys.executionFeed(establishmentId, viewMode, category)
+          : (['action-plans', 'action-plan-execution-feed', 'none'] as const),
+    [category, establishmentId, source, viewMode],
+  )
+  const fetchPage = useCallback(
+    (cursor: string) => {
+      if (source === 'cross') {
+        return fetchCrossActionPlanExecutionFeed(viewMode, { category, cursor })
+      }
+      if (!establishmentId) {
+        throw new Error('Établissement non sélectionné.')
+      }
+      return fetchActionPlanExecutionFeed(establishmentId, viewMode, { category, cursor })
+    },
+    [category, establishmentId, source, viewMode],
+  )
+  const query = useInfiniteQuery({
+    queryKey,
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) => {
       if (source === 'cross') {
-        return fetchCrossActionPlanExecutionFeed(viewMode, { cursor: pageParam })
+        return fetchCrossActionPlanExecutionFeed(viewMode, { category, cursor: pageParam })
       }
       if (!establishmentId) {
         throw new Error('Établissement non sélectionné.')
       }
       return fetchActionPlanExecutionFeed(establishmentId, viewMode, {
+        category,
         cursor: pageParam,
       })
     },
-    getNextPageParam: (lastPage) => {
-      if (!lastPage.has_more || !lastPage.next_cursor) {
+    getNextPageParam: (lastPage, _pages, lastPageParam) => {
+      if (
+        !lastPage.has_more ||
+        !lastPage.next_cursor ||
+        lastPage.items.length === 0 ||
+        lastPage.next_cursor === lastPageParam
+      ) {
         return undefined
       }
       return lastPage.next_cursor
     },
     enabled,
   })
+  const continuation = useExecutionFeedContinuation<ActionPlanExecutionFeedResponse>({
+    queryKey,
+    fetchPage,
+  })
+  return { ...query, ...continuation }
+}
+
+export function useCrossActionPlanExecutionFeedPinsQuery(
+  viewMode: ActionPlanExecutionFeedViewMode,
+  category: ActionPlanExecutionFeedCategory,
+  options?: { enabled?: boolean },
+) {
+  const queryKey = useMemo(
+    () => actionPlansQueryKeys.crossExecutionFeedPins(viewMode, category),
+    [category, viewMode],
+  )
+  const fetchPage = useCallback(
+    (cursor: string) =>
+      fetchCrossActionPlanExecutionFeedPins(viewMode, {
+        category,
+        cursor,
+        pageSize: 10,
+      }),
+    [category, viewMode],
+  )
+  const query = useInfiniteQuery({
+    queryKey,
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) =>
+      fetchCrossActionPlanExecutionFeedPins(viewMode, {
+        category,
+        cursor: pageParam,
+        pageSize: pageParam ? 10 : 3,
+      }),
+    getNextPageParam: (lastPage, _pages, lastPageParam) => {
+      if (
+        !lastPage.has_more ||
+        !lastPage.next_cursor ||
+        lastPage.items.length === 0 ||
+        lastPage.next_cursor === lastPageParam
+      ) {
+        return undefined
+      }
+      return lastPage.next_cursor
+    },
+    enabled: options?.enabled !== false,
+  })
+  const continuation = useExecutionFeedContinuation<ActionPlanExecutionFeedPinsResponse>({
+    queryKey,
+    fetchPage,
+  })
+  return { ...query, ...continuation }
 }
 
 export function useActionPlanExecutionUpcomingQuery(

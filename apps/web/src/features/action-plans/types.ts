@@ -50,10 +50,12 @@ export type ActionPlanExecutionFeedItem = components['schemas']['ActionPlanExecu
 export type ActionPlanExecutionFeedItemWrapper =
   components['schemas']['ActionPlanExecutionFeedItemWrapper']
 export type ActionPlanExecutionFeedResponse = components['schemas']['ActionPlanExecutionFeedResponse']
+export type ActionPlanExecutionFeedPinsResponse =
+  components['schemas']['ActionPlanExecutionFeedPinsResponse']
 export type ActionPlanExecutionFeedSectionCounts =
   components['schemas']['ActionPlanExecutionFeedSectionCounts']
-/** Upcoming list reuses the feed response envelope (items + cursor pagination). */
-export type ActionPlanExecutionUpcomingResponse = ActionPlanExecutionFeedResponse
+export type ActionPlanExecutionUpcomingResponse =
+  components['schemas']['ActionPlanExecutionUpcomingResponse']
 export type ActionPlanExecutionCalendarResponse =
   components['schemas']['ActionPlanExecutionCalendarResponse']
 export type ActionPlanExecutionPinState = components['schemas']['ActionPlanExecutionPinState']

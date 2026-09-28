@@ -306,8 +306,9 @@ def test_pin_is_personal(api_client, owner_membership, manager_membership, busin
     )
     assert owner_feed.status_code == 200
     assert manager_feed.status_code == 200
-    assert feed_execution_ids(owner_feed.json())[0] == str(execution.id)
-    assert str(execution.id) not in feed_execution_ids(manager_feed.json())[:1]
+    assert owner_feed.json()["pins"][0]["action_plan_execution"]["id"] == str(execution.id)
+    assert str(execution.id) not in feed_execution_ids(owner_feed.json())
+    assert manager_feed.json()["pins"] == []
     assert feed_execution_ids(manager_feed.json())[0] == str(pending.id)
 
 
@@ -336,7 +337,9 @@ def test_pinned_cross_status_at_top(api_client, owner_membership, business_unit)
         **auth_headers(token),
     )
     assert response.status_code == 200
-    assert feed_execution_ids(response.json())[:2] == [str(in_progress.id), str(pending.id)]
+    body = response.json()
+    assert body["pins"][0]["action_plan_execution"]["id"] == str(in_progress.id)
+    assert feed_execution_ids(body)[0] == str(pending.id)
 
 
 def test_pinned_fifo(api_client, owner_membership, business_unit):
@@ -365,11 +368,12 @@ def test_pinned_fifo(api_client, owner_membership, business_unit):
         **auth_headers(token),
     )
     assert response.status_code == 200
-    assert feed_execution_ids(response.json())[:3] == [
+    body = response.json()
+    assert [item["action_plan_execution"]["id"] for item in body["pins"]] == [
         str(first.id),
         str(second.id),
-        str(third.id),
     ]
+    assert feed_execution_ids(body)[0] == str(third.id)
 
 
 def test_pin_visible_in_personal_and_general(
@@ -399,9 +403,11 @@ def test_pin_visible_in_personal_and_general(
             **auth_headers(staff_token),
         )
         assert response.status_code == 200
-        payload = response.json()["items"][0]["action_plan_execution"]
+        body = response.json()
+        payload = body["pins"][0]["action_plan_execution"]
         assert payload["id"] == str(execution.id)
         assert payload["is_pinned"] is True
+        assert str(execution.id) not in feed_execution_ids(body)
 
 
 def test_pin_not_visible_returns_404(api_client, owner_membership, business_unit):
@@ -545,9 +551,11 @@ def test_feed_cursor_stable_with_pins(api_client, owner_membership, business_uni
     assert second.status_code == 200
     first_ids = feed_execution_ids(first_body)
     second_ids = feed_execution_ids(second.json())
+    pin_ids = [item["action_plan_execution"]["id"] for item in first_body["pins"]]
     assert len(first_ids) == 2
-    assert len(second_ids) == 2
-    assert first_ids[0] == str(executions[2].id)
+    assert len(second_ids) == 1
+    assert pin_ids == [str(executions[2].id)]
+    assert str(executions[2].id) not in first_ids
     assert not set(first_ids).intersection(second_ids)
 
 
@@ -571,6 +579,8 @@ def test_feed_item_contract_includes_is_pinned_and_can_pin(
         **auth_headers(token),
     )
     assert response.status_code == 200
-    payload = response.json()["items"][0]["action_plan_execution"]
+    body = response.json()
+    payload = body["pins"][0]["action_plan_execution"]
     assert payload["is_pinned"] is True
     assert payload["permission_hints"]["can_pin"] is True
+    assert str(execution.id) not in feed_execution_ids(body)

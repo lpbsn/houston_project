@@ -4,18 +4,15 @@ overview: "V2 du plan Feed contracts & pagination : contrats de lecture remplac�
 todos:
   - id: lot0-measure
     content: "Lot 0 : EXPLAIN + inventaire pins, dates terminales, events de cycle, orphelins"
-    status: pending
     State : IMPLEMENETED
   - id: lot1-activity
     content: "Lot 1 : last_activity_at monotone sous concurrence (SQL Greatest / lock), writers corrigés"
     State : IMPLEMENTED
-    status: pending
   - id: lot2-execution-pins
     content: "Lot 2 : pins Exécution seulement (plafond 3, replace, trim démo si inventaire) — pas les règles Signals visibles"
-    status: pending
+    State : IMPLEMENTED
   - id: lot3-execution-feed
     content: "Lot 3 : contrat feed Exécution P/L + category + scheduled slim + UI/hooks (même PR)"
-    State : IMPLEMENTED
     status: pending
   - id: lot4-signals-feed
     content: "Lot 4 : contrat Signals + pins OPEN/INTERESTING/cap 5 + carousel établissement/Cross + UI (même PR)"

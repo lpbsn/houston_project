@@ -1,4 +1,5 @@
 import { todayCivilDate } from '@/lib/business-timezone'
+import type { ActionPlanExecutionFeedCategory } from '@/features/action-plans/api'
 import type { ExecutionViewMode } from '@/features/execution/lib/types'
 
 export type ExecutionFeedLayout = 'list' | 'calendar'
@@ -9,6 +10,7 @@ export type ExecutionFeedUrlState = {
   granularity: ExecutionCalendarGranularity
   anchor: string
   viewMode: ExecutionViewMode
+  category: ActionPlanExecutionFeedCategory
 }
 
 export type ExecutionFeedUrlStateOptions = {
@@ -18,6 +20,12 @@ export type ExecutionFeedUrlStateOptions = {
 const LAYOUTS = new Set<ExecutionFeedLayout>(['list', 'calendar'])
 const GRANULARITIES = new Set<ExecutionCalendarGranularity>(['day', 'week', 'month'])
 const VIEW_MODES = new Set<ExecutionViewMode>(['personal', 'general'])
+const CATEGORIES = new Set<ActionPlanExecutionFeedCategory>([
+  'all',
+  'pending_validation',
+  'overdue',
+  'in_progress',
+])
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
 export const CROSS_EXECUTION_FEED_DEFAULT_VIEW_MODE: ExecutionViewMode = 'general'
@@ -36,6 +44,7 @@ export function defaultExecutionFeedUrlState(now: Date = new Date()): ExecutionF
     granularity: 'week',
     anchor: todayCivilDate(undefined, now),
     viewMode: 'personal',
+    category: 'all',
   }
 }
 
@@ -50,6 +59,7 @@ export function parseExecutionFeedSearch(
   const granularityRaw = params.get('granularity')
   const anchorRaw = params.get('anchor')
   const viewModeRaw = params.get('view_mode')
+  const categoryRaw = params.get('category')
   const defaultViewMode = resolveDefaultViewMode(options)
   return {
     layout: layoutRaw && LAYOUTS.has(layoutRaw as ExecutionFeedLayout)
@@ -64,6 +74,10 @@ export function parseExecutionFeedSearch(
       viewModeRaw && VIEW_MODES.has(viewModeRaw as ExecutionViewMode)
         ? (viewModeRaw as ExecutionViewMode)
         : defaultViewMode,
+    category:
+      categoryRaw && CATEGORIES.has(categoryRaw as ActionPlanExecutionFeedCategory)
+        ? (categoryRaw as ActionPlanExecutionFeedCategory)
+        : defaults.category,
   }
 }
 
@@ -83,6 +97,9 @@ export function serializeExecutionFeedSearch(
   if (state.viewMode !== defaultViewMode) {
     params.set('view_mode', state.viewMode)
   }
+  if (state.category && state.category !== 'all') {
+    params.set('category', state.category)
+  }
   const query = params.toString()
   return query ? `?${query}` : ''
 }
@@ -95,7 +112,7 @@ export function executionFeedHref(
   return `${pathname}${serializeExecutionFeedSearch(state, options)}`
 }
 
-const FEED_SEARCH_KEYS = new Set(['layout', 'granularity', 'anchor', 'view_mode'])
+const FEED_SEARCH_KEYS = new Set(['layout', 'granularity', 'anchor', 'view_mode', 'category'])
 
 export function appendExecutionFeedSearch(
   pathname: string,

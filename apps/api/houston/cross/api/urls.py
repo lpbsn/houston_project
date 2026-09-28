@@ -3,6 +3,7 @@ from django.urls import path
 from houston.action_plans.api.cross_views import (
     CrossActionPlanExecutionCalendarView,
     CrossActionPlanExecutionDetailView,
+    CrossActionPlanExecutionFeedPinsView,
     CrossActionPlanExecutionFeedView,
     CrossActionPlanExecutionUpcomingView,
 )
@@ -15,6 +16,11 @@ urlpatterns = [
         "action-plan-execution-feed/",
         CrossActionPlanExecutionFeedView.as_view(),
         name="cross-action-plan-execution-feed",
+    ),
+    path(
+        "action-plan-execution-feed-pins/",
+        CrossActionPlanExecutionFeedPinsView.as_view(),
+        name="cross-action-plan-execution-feed-pins",
     ),
     path(
         "action-plan-execution-upcoming/",

@@ -14,6 +14,7 @@ import type {
   ActionPlanDetail,
   ActionPlanExecutionDetail,
   ActionPlanExecutionFeedItem,
+  ActionPlanExecutionFeedPinsResponse,
   ActionPlanExecutionFeedPinReplacementCandidate,
   ActionPlanExecutionFeedItemWrapper,
   ActionPlanExecutionFeedResponse,
@@ -33,6 +34,11 @@ import type {
 } from './types'
 
 export type ActionPlanExecutionFeedViewMode = 'personal' | 'general'
+export type ActionPlanExecutionFeedCategory =
+  | 'all'
+  | 'pending_validation'
+  | 'overdue'
+  | 'in_progress'
 
 export const actionPlansQueryKeys = {
   all: ['action-plans'] as const,
@@ -45,10 +51,19 @@ export const actionPlansQueryKeys = {
     ] as const,
   detail: (establishmentId: string, actionPlanId: string) =>
     ['action-plans', 'detail', establishmentId, actionPlanId] as const,
-  executionFeed: (establishmentId: string, viewMode: ActionPlanExecutionFeedViewMode) =>
-    ['action-plans', 'action-plan-execution-feed', establishmentId, viewMode] as const,
-  crossExecutionFeed: (viewMode: ActionPlanExecutionFeedViewMode) =>
-    ['action-plans', 'cross-action-plan-execution-feed', viewMode] as const,
+  executionFeed: (
+    establishmentId: string,
+    viewMode: ActionPlanExecutionFeedViewMode,
+    category: ActionPlanExecutionFeedCategory = 'all',
+  ) => ['action-plans', 'action-plan-execution-feed', establishmentId, viewMode, category] as const,
+  crossExecutionFeed: (
+    viewMode: ActionPlanExecutionFeedViewMode,
+    category: ActionPlanExecutionFeedCategory = 'all',
+  ) => ['action-plans', 'cross-action-plan-execution-feed', viewMode, category] as const,
+  crossExecutionFeedPins: (
+    viewMode: ActionPlanExecutionFeedViewMode,
+    category: ActionPlanExecutionFeedCategory = 'all',
+  ) => ['action-plans', 'cross-action-plan-execution-feed-pins', viewMode, category] as const,
   executionUpcoming: (establishmentId: string, viewMode: ActionPlanExecutionFeedViewMode) =>
     ['action-plans', 'action-plan-execution-upcoming', establishmentId, viewMode] as const,
   crossExecutionUpcoming: (viewMode: ActionPlanExecutionFeedViewMode) =>
@@ -197,7 +212,7 @@ export function unwrapActionPlanExecutionFeedItems(
 export async function fetchActionPlanExecutionFeed(
   establishmentId: string,
   viewMode: ActionPlanExecutionFeedViewMode,
-  options: { cursor?: string; pageSize?: number } = {},
+  options: { category?: ActionPlanExecutionFeedCategory; cursor?: string; pageSize?: number } = {},
 ): Promise<ActionPlanExecutionFeedResponse> {
   const result = await withAuthRetry(
     (accessToken) =>
@@ -206,6 +221,9 @@ export async function fetchActionPlanExecutionFeed(
           ...establishmentPath(establishmentId),
           query: {
             view_mode: viewMode,
+            ...(options.category && options.category !== 'all'
+              ? { category: options.category }
+              : {}),
             ...(options.cursor ? { cursor: options.cursor } : {}),
             ...(options.pageSize ? { page_size: options.pageSize } : {}),
           },
@@ -219,7 +237,7 @@ export async function fetchActionPlanExecutionFeed(
 
 export async function fetchCrossActionPlanExecutionFeed(
   viewMode: ActionPlanExecutionFeedViewMode,
-  options: { cursor?: string; pageSize?: number } = {},
+  options: { category?: ActionPlanExecutionFeedCategory; cursor?: string; pageSize?: number } = {},
 ): Promise<ActionPlanExecutionFeedResponse> {
   const result = await withAuthRetry(
     (accessToken) =>
@@ -227,6 +245,9 @@ export async function fetchCrossActionPlanExecutionFeed(
         params: {
           query: {
             view_mode: viewMode,
+            ...(options.category && options.category !== 'all'
+              ? { category: options.category }
+              : {}),
             ...(options.cursor ? { cursor: options.cursor } : {}),
             ...(options.pageSize ? { page_size: options.pageSize } : {}),
           },
@@ -236,6 +257,30 @@ export async function fetchCrossActionPlanExecutionFeed(
     { refreshable: true },
   )
   return assertActionPlanData<ActionPlanExecutionFeedResponse>(result)
+}
+
+export async function fetchCrossActionPlanExecutionFeedPins(
+  viewMode: ActionPlanExecutionFeedViewMode,
+  options: { category?: ActionPlanExecutionFeedCategory; cursor?: string; pageSize?: number } = {},
+): Promise<ActionPlanExecutionFeedPinsResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/cross/action-plan-execution-feed-pins/', {
+        params: {
+          query: {
+            view_mode: viewMode,
+            ...(options.category && options.category !== 'all'
+              ? { category: options.category }
+              : {}),
+            ...(options.cursor ? { cursor: options.cursor } : {}),
+            ...(options.pageSize ? { page_size: options.pageSize } : {}),
+          },
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanExecutionFeedPinsResponse>(result)
 }
 
 export async function fetchActionPlanExecutionUpcoming(

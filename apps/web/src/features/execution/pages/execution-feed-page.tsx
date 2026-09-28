@@ -20,15 +20,21 @@ import {
 } from '@/components/ui/terrain'
 import { useCollapsibleFeedSections } from '@/lib/use-collapsible-feed-sections'
 import { resolveApiErrorMessage } from '@/lib/error-message'
-import { terrainBrandAction } from '@/lib/terrain-styles'
+import {
+  terrainBrandAction,
+  terrainSectionDotVariants,
+  terrainSectionLabelClassName,
+} from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 import {
   ActionPlansApiError,
   unwrapActionPlanExecutionFeedItems,
 } from '@/features/action-plans/api'
+import type { ActionPlanExecutionFeedCategory } from '@/features/action-plans/api'
 import {
   useActionPlanExecutionCalendarQuery,
   useActionPlanExecutionFeedQuery,
+  useCrossActionPlanExecutionFeedPinsQuery,
 } from '@/features/action-plans/hooks'
 import type {
   ActionPlanExecutionFeedResponse,
@@ -54,10 +60,10 @@ import {
 } from '../lib/execution-feed-url-state'
 import {
   EXECUTION_FEED_DEFAULT_COLLAPSED_SECTIONS,
+  EXECUTION_FEED_CATEGORY_LABELS,
   EXECUTION_FEED_PINNED_SECTION_KEY,
+  getActionPlanExecutionFeedSection,
   groupActionPlanExecutionsBySection,
-  hasActionPlanExecutionFeedSections,
-  partitionActionPlanExecutionFeedPinnedItems,
   type ActionPlanExecutionFeedSectionKey,
 } from '../lib/action-plan-execution-feed-sections'
 import { formatPlanifieesProchaineLabel } from '../lib/action-plan-execution-feed-card-display'
@@ -90,8 +96,6 @@ const EMPTY_SECTION_COUNTS: ActionPlanExecutionFeedSectionCounts = {
   pending_validation: 0,
   overdue: 0,
   in_progress: 0,
-  done: 0,
-  canceled: 0,
 }
 
 function readScheduledCountFromFeedPages(
@@ -101,8 +105,8 @@ function readScheduledCountFromFeedPages(
     return 0
   }
   const pageWithScheduled =
-    pages.find((page) => typeof page.scheduled_count === 'number') ?? pages[0]
-  return pageWithScheduled?.scheduled_count ?? 0
+    pages.find((page) => typeof page.scheduled?.count === 'number') ?? pages[0]
+  return pageWithScheduled?.scheduled?.count ?? 0
 }
 
 function readFirstScheduledItemFromFeedPages(
@@ -111,10 +115,8 @@ function readFirstScheduledItemFromFeedPages(
   if (!pages?.length) {
     return null
   }
-  const page =
-    pages.find((entry) => (entry.scheduled_items?.length ?? 0) > 0) ?? pages[0]
-  const wrapper = page?.scheduled_items?.[0]
-  return wrapper?.action_plan_execution ?? null
+  const page = pages.find((entry) => entry.scheduled?.next) ?? pages[0]
+  return page?.scheduled?.next ?? null
 }
 
 function readSectionCountsFromFeedPages(
@@ -125,6 +127,47 @@ function readSectionCountsFromFeedPages(
   }
   const page = pages.find((entry) => entry.section_counts) ?? pages[0]
   return page?.section_counts ?? EMPTY_SECTION_COUNTS
+}
+
+function readPinsFromFeedPages(
+  pages: ActionPlanExecutionFeedResponse[] | undefined,
+) {
+  if (!pages?.length) {
+    return []
+  }
+  const page = pages.find((entry) => Array.isArray(entry.pins)) ?? pages[0]
+  return unwrapActionPlanExecutionFeedItems(page?.pins ?? [])
+}
+
+function readUniqueFeedItems(
+  wrappers: ActionPlanExecutionFeedResponse['items'],
+) {
+  const byId = new Map(
+    unwrapActionPlanExecutionFeedItems(wrappers).map((item) => [item.id, item]),
+  )
+  return [...byId.values()]
+}
+
+type ExecutionFeedContinuationPage = Pick<
+  ActionPlanExecutionFeedResponse,
+  'has_more' | 'items' | 'next_cursor'
+>
+
+function hasStalledContinuation(
+  pages: readonly ExecutionFeedContinuationPage[] | undefined,
+  pageParams: readonly unknown[] | undefined,
+): boolean {
+  const lastPageIndex = (pages?.length ?? 0) - 1
+  const lastPage = pages?.[lastPageIndex]
+  if (!lastPage?.has_more) {
+    return false
+  }
+  const requestCursor = pageParams?.[lastPageIndex]
+  return (
+    !lastPage.next_cursor ||
+    lastPage.items.length === 0 ||
+    (typeof requestCursor === 'string' && lastPage.next_cursor === requestCursor)
+  )
 }
 
 /**
@@ -166,12 +209,14 @@ function ExecutionFeedPageContent({
   const readingScopeKey = executionFeedReadingScopeKey(source, establishmentId)
   const [initialReading] = useState(() => readExecutionFeedReading(readingScopeKey))
   const scrollRef = useRef<HTMLDivElement>(null)
+  const loadMoreRef = useRef<HTMLDivElement>(null)
   const restoredScrollRef = useRef(false)
   const feedUrlOptions = isCross
     ? { defaultViewMode: 'general' as const }
     : undefined
   const feedUrl = parseExecutionFeedSearch(search, new Date(), feedUrlOptions)
   const viewMode = feedUrl.viewMode
+  const category = feedUrl.category
   const layout: ExecutionFeedLayout = feedUrl.layout
   const granularity = feedUrl.granularity
   const calendarWindow = resolveCalendarWindow(granularity, feedUrl.anchor)
@@ -183,6 +228,7 @@ function ExecutionFeedPageContent({
       granularity: ExecutionCalendarGranularity
       anchor: string
       viewMode: typeof viewMode
+      category: ActionPlanExecutionFeedCategory
     }>,
   ) {
     const pathname = serializeAppRoute(route).split('?')[0] || '/execution'
@@ -199,7 +245,13 @@ function ExecutionFeedPageContent({
     )
   }
 
-  const planFeedQuery = useActionPlanExecutionFeedQuery(establishmentId, viewMode, { source })
+  const planFeedQuery = useActionPlanExecutionFeedQuery(establishmentId, viewMode, {
+    category,
+    source,
+  })
+  const crossPinsQuery = useCrossActionPlanExecutionFeedPinsQuery(viewMode, category, {
+    enabled: isCross && layout === 'list',
+  })
   const calendarQuery = useActionPlanExecutionCalendarQuery(
     establishmentId,
     viewMode,
@@ -229,35 +281,50 @@ function ExecutionFeedPageContent({
     viewMode,
   })
 
-  const planItems = planFeedQuery.isSuccess
-    ? unwrapActionPlanExecutionFeedItems(planFeedQuery.data.pages.flatMap((page) => page.items))
+  const planItems = planFeedQuery.data
+    ? readUniqueFeedItems(planFeedQuery.data.pages.flatMap((page) => page.items))
     : []
-  const scheduledCount = planFeedQuery.isSuccess
+  const scheduledCount = planFeedQuery.data
     ? readScheduledCountFromFeedPages(planFeedQuery.data.pages)
     : 0
-  const nextScheduledPreview = planFeedQuery.isSuccess
+  const nextScheduledPreview = planFeedQuery.data
     ? readFirstScheduledItemFromFeedPages(planFeedQuery.data.pages)
     : null
   const prochaineLabel = formatPlanifieesProchaineLabel(nextScheduledPreview)
-  const sectionCounts = planFeedQuery.isSuccess
+  const sectionCounts = planFeedQuery.data
     ? readSectionCountsFromFeedPages(planFeedQuery.data.pages)
     : EMPTY_SECTION_COUNTS
-  const { pinnedItems, unpinnedItems } = partitionActionPlanExecutionFeedPinnedItems(planItems)
-  const planGroups = groupActionPlanExecutionsBySection(unpinnedItems, sectionCounts)
-  const hasVisibleSections = hasActionPlanExecutionFeedSections(sectionCounts)
+  const pinnedItems = isCross
+    ? crossPinsQuery.data
+      ? readUniqueFeedItems(crossPinsQuery.data.pages.flatMap((page) => page.items))
+      : []
+    : planFeedQuery.data
+      ? readPinsFromFeedPages(planFeedQuery.data.pages)
+      : []
+  const isPlanContinuationStalled = planFeedQuery.data
+    ? hasStalledContinuation(planFeedQuery.data.pages, planFeedQuery.data.pageParams)
+    : false
+  const isCrossPinsContinuationStalled =
+    isCross && crossPinsQuery.data
+      ? hasStalledContinuation(crossPinsQuery.data.pages, crossPinsQuery.data.pageParams)
+      : false
+  const planGroups = groupActionPlanExecutionsBySection(planItems, sectionCounts, category)
+  const hasPinnedSection =
+    pinnedItems.length > 0 ||
+    sectionCounts.pinned > 0 ||
+    (isCross && crossPinsQuery.isError)
+  const hasVisibleSections = hasPinnedSection || planGroups.length > 0
 
   const sectionKeys: string[] = []
-  if (sectionCounts.pinned > 0) {
+  if (hasPinnedSection) {
     sectionKeys.push(EXECUTION_FEED_PINNED_SECTION_KEY)
   }
-  for (const group of planGroups) {
-    sectionKeys.push(group.section)
-  }
 
-  const savedMatchesView = initialReading?.viewMode === viewMode
+  const savedMatchesView =
+    initialReading?.viewMode === viewMode && initialReading.category === category
   const { isExpanded, toggle, expandedByKey } = useCollapsibleFeedSections(sectionKeys, {
     defaultCollapsedKeys: EXECUTION_FEED_DEFAULT_COLLAPSED_SECTIONS,
-    resetToken: viewMode,
+    resetToken: `${viewMode}:${category}`,
     initialExpandedByKey: savedMatchesView ? initialReading?.expandedByKey : undefined,
   })
 
@@ -284,7 +351,14 @@ function ExecutionFeedPageContent({
   function sectionCountFor(
     key: typeof EXECUTION_FEED_PINNED_SECTION_KEY | ActionPlanExecutionFeedSectionKey,
   ): number {
-    return sectionCounts[key]
+    if (key === EXECUTION_FEED_PINNED_SECTION_KEY) {
+      return Math.max(sectionCounts.pinned, pinnedItems.length)
+    }
+    const loadedCount = planGroups.find((group) => group.section === key)?.items.length ?? 0
+    const loadedPinnedCount = pinnedItems.filter(
+      (item) => getActionPlanExecutionFeedSection(item) === key,
+    ).length
+    return Math.max(sectionCounts[key], loadedCount + loadedPinnedCount)
   }
 
   const planifieesHref = executionFeedHref(
@@ -317,13 +391,39 @@ function ExecutionFeedPageContent({
     }
     writeExecutionFeedReading(readingScopeKey, {
       viewMode,
+      category,
       expandedByKey,
       scrollTop:
         layout === 'list' && restoredScrollRef.current
           ? (scrollRef.current?.scrollTop ?? 0)
           : savedScrollTop,
     })
-  }, [canRememberReading, expandedByKey, layout, readingScopeKey, savedScrollTop, viewMode])
+  }, [canRememberReading, category, expandedByKey, layout, readingScopeKey, savedScrollTop, viewMode])
+
+  useEffect(() => {
+    const target = loadMoreRef.current
+    const root = scrollRef.current
+    if (
+      layout !== 'list' ||
+      !target ||
+      !root ||
+      !hasMore ||
+      isFetchingMore ||
+      typeof IntersectionObserver === 'undefined'
+    ) {
+      return
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          void planFeedQuery.fetchNextPage()
+        }
+      },
+      { root, rootMargin: '400px 0px' },
+    )
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [hasMore, isFetchingMore, layout, planFeedQuery])
 
   const createAction = canCreate ? (
     isDesktopWeb ? (
@@ -429,6 +529,26 @@ function ExecutionFeedPageContent({
       size={isDesktopWeb ? 'default' : 'compact'}
     />
   )
+  const categoryTabs = (
+    <TerrainSegmentedControl
+      ariaLabel="Catégorie du feed"
+      className="w-fit"
+      size={isDesktopWeb ? 'default' : 'compact'}
+      value={category}
+      onChange={(next) =>
+        replaceFeedUrl({ category: next as ActionPlanExecutionFeedCategory })
+      }
+      options={[
+        { value: 'all', label: EXECUTION_FEED_CATEGORY_LABELS.all },
+        {
+          value: 'pending_validation',
+          label: EXECUTION_FEED_CATEGORY_LABELS.pending_validation,
+        },
+        { value: 'overdue', label: EXECUTION_FEED_CATEGORY_LABELS.overdue },
+        { value: 'in_progress', label: EXECUTION_FEED_CATEGORY_LABELS.in_progress },
+      ]}
+    />
+  )
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -457,17 +577,20 @@ function ExecutionFeedPageContent({
             className={isDesktopWeb ? 'pb-3 pt-3' : 'pb-0.5 pt-0'}
             trailing={createAction}
           >
-            <TerrainSegmentedControl
-              ariaLabel="Disposition du feed"
-              className="w-fit"
-              size={isDesktopWeb ? 'default' : 'compact'}
-              value={layout}
-              onChange={(next) => replaceFeedUrl({ layout: next })}
-              options={[
-                { value: 'list', label: 'Liste' },
-                { value: 'calendar', label: 'Calendrier' },
-              ]}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <TerrainSegmentedControl
+                ariaLabel="Disposition du feed"
+                className="w-fit"
+                size={isDesktopWeb ? 'default' : 'compact'}
+                value={layout}
+                onChange={(next) => replaceFeedUrl({ layout: next })}
+                options={[
+                  { value: 'list', label: 'Liste' },
+                  { value: 'calendar', label: 'Calendrier' },
+                ]}
+              />
+              {layout === 'list' ? categoryTabs : null}
+            </div>
           </TerrainHubViewToolbar>
           {layout === 'calendar' ? (
             <CalendarPeriodToolbar
@@ -504,6 +627,7 @@ function ExecutionFeedPageContent({
           }
           writeExecutionFeedReading(readingScopeKey, {
             viewMode,
+            category,
             scrollTop: event.currentTarget.scrollTop,
           })
         }}
@@ -540,7 +664,11 @@ function ExecutionFeedPageContent({
                       ActionPlansApiError,
                       'Impossible de charger les plans d’action.',
                     )}
-                    onRetry={() => void planFeedQuery.refetch()}
+                    onRetry={() =>
+                      void (planFeedQuery.data && planFeedQuery.hasNextPage
+                        ? planFeedQuery.fetchNextPage()
+                        : planFeedQuery.refetch())
+                    }
                   />
                 ) : null}
 
@@ -552,9 +680,9 @@ function ExecutionFeedPageContent({
                   />
                 ) : null}
 
-                {planFeedQuery.isSuccess && hasVisibleSections ? (
+                {hasVisibleSections ? (
                   <>
-                    {sectionCounts.pinned > 0 ? (
+                    {hasPinnedSection ? (
                       <TerrainCollapsibleFeedSection
                         key="plan-pinned"
                         label="Épinglés"
@@ -567,21 +695,71 @@ function ExecutionFeedPageContent({
                             isDesktopWeb ? 'flex flex-col gap-1' : 'flex flex-col gap-3'
                           }
                         >
+                          {isCross && crossPinsQuery.isLoading ? (
+                            <p className="px-3 py-2 text-xs text-[#7D7B75]">
+                              Chargement des épingles…
+                            </p>
+                          ) : null}
+                          {isCross && crossPinsQuery.isError ? (
+                            <TerrainErrorState
+                              message="Impossible de charger les épingles."
+                              onRetry={() =>
+                                void (crossPinsQuery.data && crossPinsQuery.hasNextPage
+                                  ? crossPinsQuery.fetchNextPage()
+                                  : crossPinsQuery.refetch())
+                              }
+                            />
+                          ) : null}
+                          {isCrossPinsContinuationStalled ? (
+                            <TerrainErrorState
+                              message="La suite des épingles n’a pas pu être chargée."
+                              onRetry={
+                                crossPinsQuery.isRetryingStalledContinuation
+                                  ? undefined
+                                  : () => void crossPinsQuery.retryStalledContinuation()
+                              }
+                            />
+                          ) : null}
                           {pinnedItems.map((item) => renderFeedItem(item, 'plan-pinned'))}
+                          {isCross && crossPinsQuery.hasNextPage ? (
+                            <div className="flex justify-center py-3">
+                              <button
+                                type="button"
+                                className="text-xs font-semibold text-[#1B4FD8] disabled:opacity-60"
+                                onClick={() => void crossPinsQuery.fetchNextPage()}
+                                disabled={crossPinsQuery.isFetchingNextPage}
+                              >
+                                {crossPinsQuery.isFetchingNextPage
+                                  ? 'Chargement…'
+                                  : sectionCountFor(EXECUTION_FEED_PINNED_SECTION_KEY) >
+                                      pinnedItems.length
+                                    ? `Afficher les ${
+                                        sectionCountFor(EXECUTION_FEED_PINNED_SECTION_KEY) -
+                                        pinnedItems.length
+                                      } autres épingles`
+                                    : 'Afficher d’autres épingles'}
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
                       </TerrainCollapsibleFeedSection>
                     ) : null}
 
                     <div className="flex flex-col gap-2">
                       {planGroups.map((group) => (
-                        <TerrainCollapsibleFeedSection
-                          key={`plan-${group.section}`}
-                          label={group.label}
-                          count={sectionCountFor(group.section)}
-                          dotVariant={group.dotVariant}
-                          expanded={isExpanded(group.section)}
-                          onToggle={() => toggle(group.section)}
-                        >
+                        <section key={`plan-${group.section}`}>
+                          <div className={cn(terrainSectionLabelClassName('px-3 py-1.5'))}>
+                            <span
+                              className={cn(
+                                'h-1.5 w-1.5 shrink-0 rounded-full',
+                                terrainSectionDotVariants[group.dotVariant],
+                              )}
+                              aria-hidden
+                            />
+                            <span className="truncate">
+                              {group.label} · {sectionCountFor(group.section)}
+                            </span>
+                          </div>
                           <div
                             className={
                               isDesktopWeb
@@ -591,7 +769,7 @@ function ExecutionFeedPageContent({
                           >
                             {group.items.map((item) => renderFeedItem(item, 'plan'))}
                           </div>
-                        </TerrainCollapsibleFeedSection>
+                        </section>
                       ))}
                     </div>
                   </>
@@ -608,8 +786,19 @@ function ExecutionFeedPageContent({
                   />
                 ) : null}
 
+                {isPlanContinuationStalled ? (
+                  <TerrainErrorState
+                    message="La suite du feed n’a pas pu être chargée."
+                    onRetry={
+                      planFeedQuery.isRetryingStalledContinuation
+                        ? undefined
+                        : () => void planFeedQuery.retryStalledContinuation()
+                    }
+                  />
+                ) : null}
+
                 {hasMore ? (
-                  <div className="flex justify-center py-4">
+                  <div ref={loadMoreRef} className="flex justify-center py-4">
                     <button
                       type="button"
                       className="text-xs font-semibold text-[#1B4FD8] disabled:opacity-60"

@@ -96,17 +96,13 @@ def test_action_plan_execution_feed_item_contract(
     )
     assert response.status_code == 200
     body = response.json()
-    assert "scheduled_items" in body
-    assert "scheduled_count" in body
-    assert body["scheduled_count"] == 0
-    assert body["scheduled_items"] == []
+    assert body["pins"] == []
+    assert body["scheduled"] == {"count": 0, "next": None}
     assert body["section_counts"] == {
         "pinned": 0,
         "pending_validation": 0,
         "overdue": 0,
         "in_progress": 1,
-        "done": 0,
-        "canceled": 0,
     }
     item = body["items"][0]
     assert item["item_type"] == "action_plan_execution"
@@ -201,17 +197,15 @@ def test_feed_section_counts_partition_pinned_and_overdue(
         "pinned": 1,
         "pending_validation": 1,
         "overdue": 1,
-        "in_progress": 0,
-        "done": 1,
-        "canceled": 0,
+        "in_progress": 1,
     }
     by_id = {
         item["action_plan_execution"]["id"]: item["action_plan_execution"]
         for item in body["items"]
     }
     assert by_id[str(pending.id)]["marked_done_by_display_name"]
-    assert by_id[str(done.id)]["validated_by_display_name"]
-    assert by_id[str(done.id)]["active_review"] == {"stars": 4, "comment": ""}
+    assert str(done.id) not in by_id
+    assert body["pins"][0]["action_plan_execution"]["id"] == str(active.id)
     assert overdue.id  # used for overdue count
 
 
@@ -301,7 +295,7 @@ def test_action_plan_execution_feed_item_task_counts_decrement_after_mark_pendin
     assert feed_after_pending.json()["items"][0]["action_plan_execution"]["treated_task_count"] == 0
 
 
-def test_terminal_executions_included_in_feed_ordered_after_actives(
+def test_terminal_executions_are_excluded_from_operational_feed(
     api_client,
     owner_membership,
     business_unit,
@@ -343,206 +337,13 @@ def test_terminal_executions_included_in_feed_ordered_after_actives(
         **auth_headers(token),
     )
     assert response.status_code == 200
-    assert feed_execution_ids(response.json()) == [
+    feed_ids = feed_execution_ids(response.json())
+    assert feed_ids == [
         str(pending.id),
         str(in_progress.id),
-        str(done.id),
-        str(canceled.id),
     ]
-
-
-def test_terminal_executions_sort_by_last_activity_desc_within_status(
-    api_client,
-    owner_membership,
-    business_unit,
-):
-    now = timezone.now()
-    older_done = create_execution(
-        owner_membership,
-        business_unit=business_unit,
-        title="Older done",
-        status=EXECUTION_STATUS_DONE,
-        last_activity_at=now - timezone.timedelta(days=2),
-    )
-    newer_done = create_execution(
-        owner_membership,
-        business_unit=business_unit,
-        title="Newer done",
-        status=EXECUTION_STATUS_DONE,
-        last_activity_at=now - timezone.timedelta(hours=1),
-    )
-    token = login(api_client, user=owner_membership.user)
-    response = api_client.get(
-        action_plan_execution_feed_url(owner_membership.establishment_id) + feed_query("general"),
-        **auth_headers(token),
-    )
-    assert response.status_code == 200
-    assert feed_execution_ids(response.json()) == [
-        str(newer_done.id),
-        str(older_done.id),
-    ]
-
-
-@pytest.mark.parametrize(
-    "terminal_status",
-    [EXECUTION_STATUS_DONE, EXECUTION_STATUS_CANCELED],
-    ids=["done", "canceled"],
-)
-def test_terminal_sort_by_last_activity_overrides_end_at(
-    api_client,
-    owner_membership,
-    business_unit,
-    terminal_status,
-):
-    now = timezone.now()
-    newer = create_execution(
-        owner_membership,
-        business_unit=business_unit,
-        title="Newer activity terminal",
-        status=terminal_status,
-        last_activity_at=now - timezone.timedelta(hours=1),
-        end_at=now + timezone.timedelta(days=2),
-    )
-    older = create_execution(
-        owner_membership,
-        business_unit=business_unit,
-        title="Older activity terminal",
-        status=terminal_status,
-        last_activity_at=now - timezone.timedelta(days=2),
-        end_at=now - timezone.timedelta(days=1),
-    )
-    token = login(api_client, user=owner_membership.user)
-    response = api_client.get(
-        action_plan_execution_feed_url(owner_membership.establishment_id) + feed_query("general"),
-        **auth_headers(token),
-    )
-    assert response.status_code == 200
-    assert feed_execution_ids(response.json()) == [
-        str(newer.id),
-        str(older.id),
-    ]
-
-
-@pytest.mark.parametrize(
-    "terminal_status",
-    [EXECUTION_STATUS_DONE, EXECUTION_STATUS_CANCELED],
-    ids=["done", "canceled"],
-)
-def test_terminal_pagination_respects_last_activity_order(
-    api_client,
-    owner_membership,
-    business_unit,
-    terminal_status,
-):
-    now = timezone.now()
-    newer = create_execution(
-        owner_membership,
-        business_unit=business_unit,
-        title="Newer terminal page",
-        status=terminal_status,
-        last_activity_at=now - timezone.timedelta(hours=1),
-        end_at=now + timezone.timedelta(days=2),
-    )
-    older = create_execution(
-        owner_membership,
-        business_unit=business_unit,
-        title="Older terminal page",
-        status=terminal_status,
-        last_activity_at=now - timezone.timedelta(days=2),
-        end_at=now - timezone.timedelta(days=1),
-    )
-    token = login(api_client, user=owner_membership.user)
-    first = api_client.get(
-        action_plan_execution_feed_url(owner_membership.establishment_id)
-        + feed_query("general")
-        + "&page_size=1",
-        **auth_headers(token),
-    )
-    second = api_client.get(
-        action_plan_execution_feed_url(owner_membership.establishment_id)
-        + feed_query("general")
-        + f"&page_size=1&cursor={first.json()['next_cursor']}",
-        **auth_headers(token),
-    )
-    assert first.status_code == 200
-    assert second.status_code == 200
-    assert feed_execution_ids(first.json()) == [str(newer.id)]
-    assert feed_execution_ids(second.json()) == [str(older.id)]
-
-
-def test_terminal_executions_are_not_marked_overdue_in_feed(
-    api_client,
-    owner_membership,
-    business_unit,
-):
-    now = timezone.now()
-    done = create_execution(
-        owner_membership,
-        business_unit=business_unit,
-        title="Done overdue",
-        status=EXECUTION_STATUS_DONE,
-        end_at=now - timezone.timedelta(days=1),
-    )
-    canceled = create_execution(
-        owner_membership,
-        business_unit=business_unit,
-        title="Canceled overdue",
-        status=EXECUTION_STATUS_CANCELED,
-        end_at=now - timezone.timedelta(days=1),
-    )
-    token = login(api_client, user=owner_membership.user)
-    response = api_client.get(
-        action_plan_execution_feed_url(owner_membership.establishment_id) + feed_query("general"),
-        **auth_headers(token),
-    )
-    assert response.status_code == 200
-    items_by_id = {
-        item["action_plan_execution"]["id"]: item["action_plan_execution"]
-        for item in response.json()["items"]
-    }
-    assert items_by_id[str(done.id)]["is_overdue"] is False
-    assert items_by_id[str(canceled.id)]["is_overdue"] is False
-
-
-def test_feed_pagination_includes_terminal_executions_after_actives(
-    api_client,
-    owner_membership,
-    business_unit,
-):
-    now = timezone.now()
-    actives = [
-        create_execution(
-            owner_membership,
-            business_unit=business_unit,
-            title=f"Active {index}",
-            end_at=now + timezone.timedelta(hours=index + 1),
-        )
-        for index in range(2)
-    ]
-    done = create_execution(
-        owner_membership,
-        business_unit=business_unit,
-        title="Done execution",
-        status=EXECUTION_STATUS_DONE,
-        last_activity_at=now - timezone.timedelta(hours=1),
-    )
-    token = login(api_client, user=owner_membership.user)
-    first = api_client.get(
-        action_plan_execution_feed_url(owner_membership.establishment_id)
-        + feed_query("general")
-        + "&page_size=2",
-        **auth_headers(token),
-    )
-    second = api_client.get(
-        action_plan_execution_feed_url(owner_membership.establishment_id)
-        + feed_query("general")
-        + f"&page_size=2&cursor={first.json()['next_cursor']}",
-        **auth_headers(token),
-    )
-    assert first.status_code == 200
-    assert second.status_code == 200
-    merged_ids = feed_execution_ids(first.json()) + feed_execution_ids(second.json())
-    assert merged_ids == [str(execution.id) for execution in actives] + [str(done.id)]
+    assert str(done.id) not in feed_ids
+    assert str(canceled.id) not in feed_ids
 
 
 def test_future_execution_visible_from_excluded(
@@ -803,8 +604,6 @@ def test_manager_section_counts_do_not_double_count_multi_team_execution(
         "pending_validation": 0,
         "overdue": 0,
         "in_progress": 1,
-        "done": 0,
-        "canceled": 0,
     }
 
 
@@ -1804,18 +1603,14 @@ def test_scheduled_preview_and_upcoming_ignore_cursor_saturation(
     assert str(visible_scheduled.id) not in feed_ids
     assert str(hidden_scheduled.id) not in feed_ids
     assert str(null_visible_scheduled.id) not in feed_ids
-    assert feed_body["scheduled_count"] == 3
-    scheduled_preview_ids = [
-        item["action_plan_execution"]["id"] for item in feed_body["scheduled_items"]
-    ]
-    assert scheduled_preview_ids == [
-        str(visible_scheduled.id),
-        str(hidden_scheduled.id),
-        str(null_visible_scheduled.id),
-    ]
-    assert feed_body["scheduled_items"][0]["action_plan_execution"]["permission_hints"][
-        "can_pin"
-    ] is False
+    assert feed_body["scheduled"] == {
+        "count": 3,
+        "next": {
+            "id": str(visible_scheduled.id),
+            "start_at": visible_scheduled.start_at.isoformat().replace("+00:00", "Z"),
+            "title": "Visible scheduled",
+        },
+    }
 
     upcoming = api_client.get(
         action_plan_execution_upcoming_url(owner_membership.establishment_id)
@@ -1826,7 +1621,11 @@ def test_scheduled_preview_and_upcoming_ignore_cursor_saturation(
     upcoming_ids = [
         item["action_plan_execution"]["id"] for item in upcoming.json()["items"]
     ]
-    assert upcoming_ids == scheduled_preview_ids
+    assert upcoming_ids == [
+        str(visible_scheduled.id),
+        str(hidden_scheduled.id),
+        str(null_visible_scheduled.id),
+    ]
 
 
 def test_scheduled_visible_from_gates_feed_and_upcoming(
@@ -1890,16 +1689,10 @@ def test_scheduled_visible_from_gates_feed_and_upcoming(
     assert feed.status_code == 200
     feed_body = feed.json()
     feed_item_ids = {item["action_plan_execution"]["id"] for item in feed_body["items"]}
-    scheduled_preview_ids = {
-        item["action_plan_execution"]["id"] for item in feed_body["scheduled_items"]
-    }
     assert str(null_visible.id) not in feed_item_ids
-    assert str(null_visible.id) in scheduled_preview_ids
     assert str(future_visible.id) not in feed_item_ids
-    assert str(future_visible.id) in scheduled_preview_ids
-    assert str(reached.id) in scheduled_preview_ids
-    assert feed_body["scheduled_count"] == 3
-    assert feed_body["scheduled_items"][0]["action_plan_execution"]["id"] == str(reached.id)
+    assert feed_body["scheduled"]["count"] == 3
+    assert feed_body["scheduled"]["next"]["id"] == str(reached.id)
 
     upcoming = api_client.get(
         action_plan_execution_upcoming_url(owner_membership.establishment_id)
@@ -1910,7 +1703,6 @@ def test_scheduled_visible_from_gates_feed_and_upcoming(
     upcoming_ids = {
         item["action_plan_execution"]["id"] for item in upcoming.json()["items"]
     }
-    assert upcoming_ids == scheduled_preview_ids
     assert str(null_visible.id) in upcoming_ids
     assert str(future_visible.id) in upcoming_ids
     assert str(reached.id) in upcoming_ids
