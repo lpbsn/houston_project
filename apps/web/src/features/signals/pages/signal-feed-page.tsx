@@ -204,6 +204,8 @@ function SignalFeedPageContent({
   const pinsHaveMore = isCross && feed?.pins_has_more === true
   const hasListContent = listItems.length > 0 || listHasMore
   const hasContent = pinnedItems.length > 0 || hasListContent
+  const showsPageOne =
+    !feed || !('readingWindow' in feed) || focusContinuesPageOne(feed.readingWindow)
   const preservedExpandedByKey = initialReading?.expandedByKey
   const canRememberReading = Boolean(establishmentId) || isCross
 
@@ -224,6 +226,20 @@ function SignalFeedPageContent({
     scroller.scrollTop = savedScrollTop
     restoredScrollRef.current = true
   }, [feedHasContent, savedScrollTop])
+
+  const setFeedReadingEdge = feedSession.setReadingEdge
+  useEffect(() => {
+    setFeedReadingEdge({
+      atTop: (scrollRef.current?.scrollTop ?? 0) <= 0 && showsPageOne,
+      interacting: loadMore.isPending || refreshFeed.isPending,
+    })
+  }, [
+    feedHasContent,
+    loadMore.isPending,
+    refreshFeed.isPending,
+    setFeedReadingEdge,
+    showsPageOne,
+  ])
 
   useEffect(() => {
     if (seenFingerprintRef.current === authorizationFingerprint) {
@@ -255,7 +271,10 @@ function SignalFeedPageContent({
         ?.querySelector(`[data-feed-item="${id}"]`)
         ?.scrollIntoView({ block: 'center' })
     }
-    if (feed.items.some((item) => item.id === anchorId)) {
+    if (
+      feed.items.some((item) => item.id === anchorId) ||
+      feed.pins?.some((item) => item.id === anchorId)
+    ) {
       anchorPhaseRef.current = 'done'
       scrollTo(anchorId)
       return
@@ -361,10 +380,12 @@ function SignalFeedPageContent({
   }
 
   function openSignal(signalId: string) {
-    const index = listItems.findIndex((item) => item.id === signalId)
-    const neighbor = listItems[index + 1] ?? listItems[index - 1]
+    const listIndex = listItems.findIndex((item) => item.id === signalId)
+    const sourceItems = listIndex >= 0 ? listItems : pinnedItems
+    const index = sourceItems.findIndex((item) => item.id === signalId)
+    const neighbor = sourceItems[index + 1] ?? sourceItems[index - 1]
     const resumeCursor =
-      feed && 'readingWindow' in feed
+      listIndex >= 0 && feed && 'readingWindow' in feed
         ? slotRequestCursorForItem(feed.readingWindow, signalId, (item) => item.id)
         : undefined
     if (canRememberReading) {
@@ -547,7 +568,7 @@ function SignalFeedPageContent({
         onScroll={(event) => {
           approachArmedRef.current = true
           feedSession.setReadingEdge({
-            atTop: event.currentTarget.scrollTop <= 0,
+            atTop: event.currentTarget.scrollTop <= 0 && showsPageOne,
             interacting: loadMore.isPending || refreshFeed.isPending,
           })
           if (!canRememberReading || !restoredScrollRef.current) {
@@ -670,7 +691,7 @@ function SignalFeedPageContent({
                 </TerrainSectionLabel>
                 <SignalFeedPinnedCarousel
                   items={pinnedItems}
-                  onSelect={onOpenSignal}
+                  onSelect={openSignal}
                   onOpenActions={isCross ? undefined : quickActions.openActions}
                   showEstablishment={isCross}
                   viewMode={viewMode}

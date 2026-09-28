@@ -104,6 +104,7 @@ export function useFeedPullToRefresh(options: {
 }) {
   const startY = useRef<number | null>(null)
   const pulling = useRef(false)
+  const distanceRef = useRef(0)
   const [distance, setDistance] = useState(0)
 
   function onPointerDown(event: ReactPointerEvent<HTMLElement>) {
@@ -116,6 +117,7 @@ export function useFeedPullToRefresh(options: {
     }
     startY.current = event.clientY
     pulling.current = true
+    distanceRef.current = 0
   }
 
   function onPointerMove(event: ReactPointerEvent<HTMLElement>) {
@@ -126,11 +128,14 @@ export function useFeedPullToRefresh(options: {
     if (!scroller || scroller.scrollTop > 0) {
       pulling.current = false
       startY.current = null
+      distanceRef.current = 0
       setDistance(0)
       return
     }
     const next = Math.max(0, event.clientY - startY.current)
-    setDistance(Math.min(next, PULL_THRESHOLD_PX * 1.4))
+    const effectiveDistance = Math.min(next, PULL_THRESHOLD_PX * 1.4)
+    distanceRef.current = effectiveDistance
+    setDistance(effectiveDistance)
   }
 
   function finish(event: ReactPointerEvent<HTMLElement>) {
@@ -139,7 +144,8 @@ export function useFeedPullToRefresh(options: {
     }
     pulling.current = false
     startY.current = null
-    const pulled = distance
+    const pulled = distanceRef.current
+    distanceRef.current = 0
     setDistance(0)
     if (pulled >= PULL_THRESHOLD_PX) {
       options.onRefresh()

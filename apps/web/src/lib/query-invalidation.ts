@@ -27,7 +27,7 @@ export type FeedListInvalidationOptions = {
   force?: boolean
 }
 
-function invalidateFeedListQuery(
+export function invalidateFeedListQuery(
   queryClient: QueryClient,
   queryKey: readonly unknown[],
   options?: FeedListInvalidationOptions,

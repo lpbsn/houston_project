@@ -437,12 +437,28 @@ export function removeSignalFromFeedCache(
   signalId: string,
 ): { feed: SignalFeedCacheState; neighborId: string | null } {
   const state = ensureSignalFeedCache(feed)
+  const listItem = hydratedItems(state.readingWindow).find((item) => item.id === signalId)
+  const pinItem = hydratedItems(state.pinWindow).find((item) => item.id === signalId)
   const list = removeHydratedItem(state.readingWindow, signalId, (item) => item.id)
   const pins = removeHydratedItem(state.pinWindow, signalId, (item) => item.id)
+  let counts = state.counts
+  if (counts && (listItem || pinItem)) {
+    counts = { ...counts }
+    if (pinItem) {
+      counts.pinned = Math.max(0, counts.pinned - 1)
+    } else if (
+      listItem?.status === 'open' ||
+      listItem?.status === 'in_progress' ||
+      listItem?.status === 'interesting'
+    ) {
+      counts[listItem.status] = Math.max(0, counts[listItem.status] - 1)
+    }
+  }
   return {
     neighborId: list.neighborId ?? pins.neighborId,
     feed: projectSignalFeedCache({
       ...state,
+      counts,
       readingWindow: list.window,
       pinWindow: pins.window,
     }),

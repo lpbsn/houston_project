@@ -288,9 +288,14 @@ export function useActionPlanExecutionFeedQuery(
     }
     const cursor = current.window.behindCursor
     const generation = current.window.generation
+    const ticket = ++continuationEpoch.current
     setIsLoadingMore(true)
+    setContinuationError(null)
     try {
       const page = await fetchPage(cursor)
+      if (ticket !== continuationEpoch.current) {
+        return
+      }
       const latest = queryClient.getQueryData<ExecutionFeedCacheState>(queryKey)
       if (!latest || latest.window.generation !== generation || latest.window.behindCursor !== cursor) {
         return
@@ -308,9 +313,13 @@ export function useActionPlanExecutionFeedQuery(
         setContinuationError(new Error('La suite du feed n’a pas pu être chargée.'))
       }
     } catch (error) {
-      setContinuationError(error)
+      if (ticket === continuationEpoch.current) {
+        setContinuationError(error)
+      }
     } finally {
-      setIsLoadingMore(false)
+      if (ticket === continuationEpoch.current) {
+        setIsLoadingMore(false)
+      }
     }
   }, [fetchPage, queryClient, queryKey])
 

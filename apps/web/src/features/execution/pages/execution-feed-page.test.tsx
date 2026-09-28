@@ -16,6 +16,7 @@ import {
   clearExecutionFeedReadingMemory,
   executionFeedReadingScopeKey,
   readExecutionFeedReading,
+  writeExecutionFeedReading,
 } from '../lib/execution-feed-reading-memory'
 import {
   appendExecutionFeedWindow,
@@ -455,6 +456,7 @@ describe('ExecutionFeedPage plan feed', () => {
     vi.unstubAllEnvs()
     vi.unstubAllGlobals()
     Reflect.deleteProperty(window, 'matchMedia')
+    Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
     permissionHintsHolder.value = {}
     clearExecutionFeedReadingMemory()
   })
@@ -733,6 +735,96 @@ describe('ExecutionFeedPage plan feed', () => {
 
     expect(pinned.compareDocumentPosition(sectionLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(sectionLabel.compareDocumentPosition(regular) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('stores and restores an anchor from the pinned collection', () => {
+    planFeedQueryMock.mockReturnValue(
+      buildPlanFeedQueryState({
+        data: {
+          pages: [
+            {
+              items: [buildPlanFeedWrapper('plan-regular', 'Plan normal')],
+              pins: [
+                buildPlanFeedWrapper('plan-pinned', 'Plan épinglé ancré', {
+                  is_pinned: true,
+                }),
+              ],
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+    renderExecutionFeedPage()
+    fireEvent.click(screen.getByRole('button', { name: /Plan épinglé ancré/ }))
+
+    expect(
+      readExecutionFeedReading(
+        executionFeedReadingScopeKey('establishment', 'est-1'),
+      )?.anchorId,
+    ).toBe('plan-pinned')
+
+    cleanup()
+    const scrollIntoView = vi.fn()
+    HTMLElement.prototype.scrollIntoView = scrollIntoView
+    renderExecutionFeedPage()
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' })
+    Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
+  })
+
+  it('waits for the independent Cross pin collection before resolving its anchor', () => {
+    writeExecutionFeedReading(executionFeedReadingScopeKey('cross', null), {
+      viewMode: 'general',
+      category: 'all',
+      anchorId: 'cross-pin',
+    })
+    planFeedQueryMock.mockReturnValue(
+      buildPlanFeedQueryState({
+        data: {
+          pages: [
+            {
+              items: [buildPlanFeedWrapper('plan-regular', 'Plan normal')],
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+    crossPinsQueryMock.mockReturnValue(
+      buildCrossPinsQueryState({
+        isLoading: true,
+        isSuccess: false,
+        data: undefined,
+      }),
+    )
+    const scrollIntoView = vi.fn()
+    HTMLElement.prototype.scrollIntoView = scrollIntoView
+    const view = renderExecutionFeedPage({ source: 'cross' })
+    expect(scrollIntoView).not.toHaveBeenCalled()
+
+    crossPinsQueryMock.mockReturnValue(
+      buildCrossPinsQueryState({
+        data: {
+          pages: [
+            {
+              items: [
+                buildPlanFeedWrapper('cross-pin', 'Épingle Cross', {
+                  is_pinned: true,
+                }),
+              ],
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+    view.rerenderPage({ source: 'cross' })
+
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' })
+    Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
   })
 
   it('renders business category separators as non-collapsible', () => {

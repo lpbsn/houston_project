@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
 
 import { QueryClient } from '@tanstack/react-query'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { actionPlansQueryKeys } from '../api'
 import type { ActionPlanExecutionFeedItem, ActionPlanExecutionFeedResponse } from '../types'
+import {
+  registerFeedReadingSession,
+  resetFeedReadingSessionsForTests,
+} from '@/lib/feed-external-updates'
 
 import {
   appendExecutionFeedWindow,
@@ -12,8 +16,13 @@ import {
   executionFeedCacheFromPage,
   patchExecutionInFeedCache,
   prepareActionPlanExecutionPinOptimisticUpdate,
+  removeExecutionFromFeedCache,
   type ExecutionFeedCacheState,
 } from './action-plan-execution-feed-cache'
+
+afterEach(() => {
+  resetFeedReadingSessionsForTests()
+})
 
 function feedItem(
   id: string,
@@ -282,5 +291,61 @@ describe('appendExecutionFeedWindow', () => {
     expect(stale.window.focus.flatMap((slot) => slot.items.map((item) => item.action_plan_execution.id))).toEqual([
       'page-2',
     ])
+  })
+})
+
+describe('removeExecutionFromFeedCache', () => {
+  it('reconciles pinned and business section counts after a realtime terminal removal', () => {
+    const counts = {
+      pinned: 1,
+      pending_validation: 0,
+      overdue: 1,
+      in_progress: 2,
+    }
+    const current = executionFeedCacheFromPage(
+      page(
+        [feedItem('regular')],
+        counts,
+        [feedItem('target', { is_pinned: true, is_overdue: true })],
+      ),
+    )
+
+    const removed = removeExecutionFromFeedCache(current, 'target')
+
+    expect(removed.pins).toEqual([])
+    expect(removed.sectionCounts).toEqual({
+      pinned: 0,
+      pending_validation: 0,
+      overdue: 0,
+      in_progress: 2,
+    })
+  })
+})
+
+describe('applyActionPlanExecutionPinSuccess invalidation', () => {
+  it('defers the successful pin invalidation while a feed is being read', () => {
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const onDefer = vi.fn()
+    registerFeedReadingSession({
+      matches: (queryKey) =>
+        queryKey[0] === 'action-plans' &&
+        queryKey[1] === 'action-plan-execution-feed' &&
+        queryKey[2] === 'est-1',
+      atTop: () => false,
+      interacting: () => false,
+      onDefer,
+      onRemove: vi.fn(),
+    })
+
+    applyActionPlanExecutionPinSuccess(queryClient, {
+      establishmentId: 'est-1',
+      executionId: 'target',
+      isPinned: true,
+      viewMode: 'personal',
+    })
+
+    expect(onDefer).toHaveBeenCalledTimes(2)
+    expect(invalidateSpy).not.toHaveBeenCalled()
   })
 })

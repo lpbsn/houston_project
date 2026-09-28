@@ -197,19 +197,8 @@ export function useRefreshSignalFeed(
   const queryClient = useQueryClient()
   const epoch = useRef(0)
   return useMutation({
-    onMutate: () => {
-      epoch.current += 1
-      return { ticket: epoch.current }
-    },
     mutationFn: async () => {
-      const ticket = epoch.current
-      const page = await fetchSignalFeedPage(source, establishmentId, viewMode, filters)
-      if (ticket !== epoch.current) {
-        throw new StaleFeedRefresh()
-      }
-      return page
-    },
-    onSuccess: (page) => {
+      const ticket = ++epoch.current
       const queryKey = signalFeedQueryKey({
         source,
         establishmentId,
@@ -217,8 +206,15 @@ export function useRefreshSignalFeed(
         filters,
       })
       if (queryKey == null) {
-        return
+        throw new Error('Établissement non sélectionné.')
       }
+      const page = await fetchSignalFeedPage(source, establishmentId, viewMode, filters)
+      if (ticket !== epoch.current) {
+        throw new StaleFeedRefresh()
+      }
+      return { page, queryKey }
+    },
+    onSuccess: ({ page, queryKey }) => {
       const previous = queryClient.getQueryData<SignalFeedCacheState>(queryKey)
       const generation = (previous?.readingWindow.generation ?? 0) + 1
       queryClient.setQueryData(queryKey, signalFeedCacheFromFirstPage(page, generation))

@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
 
 import { createElement, useState } from 'react'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import type { SignalFeedItem } from '@/features/signals/types'
+import {
+  deferFeedListInvalidation,
+  resetFeedReadingSessionsForTests,
+} from '@/lib/feed-external-updates'
 
 import {
   clearSignalFeedReadingMemory,
@@ -177,19 +181,37 @@ function renderSignalFeedPage(
     defaultOptions: { queries: { retry: false } },
   })
 
-  return render(
+  const tree = (
+    nextProps: {
+      onOpenSignal?: (signalId: string) => void
+      onNavigate?: (pathname: string, options?: { replace?: boolean }) => void
+      establishmentId?: string | null
+      source?: 'establishment' | 'cross'
+    } = props,
+  ) =>
     createElement(
       QueryClientProvider,
       { client: queryClient },
       createElement(TerrainTopbar, { variant: 'hub', pageTitle: 'Observations' }),
       createElement(SignalFeedPage, {
-        onOpenSignal: props.onOpenSignal ?? vi.fn(),
-        onNavigate: props.onNavigate ?? vi.fn(),
-        establishmentId: props.establishmentId,
-        source: props.source,
+        onOpenSignal: nextProps.onOpenSignal ?? vi.fn(),
+        onNavigate: nextProps.onNavigate ?? vi.fn(),
+        establishmentId: nextProps.establishmentId,
+        source: nextProps.source,
       }),
-    ),
-  )
+    )
+  const view = render(tree())
+  return {
+    ...view,
+    rerenderPage: (
+      nextProps: {
+        onOpenSignal?: (signalId: string) => void
+        onNavigate?: (pathname: string, options?: { replace?: boolean }) => void
+        establishmentId?: string | null
+        source?: 'establishment' | 'cross'
+      } = props,
+    ) => view.rerender(tree(nextProps)),
+  }
 }
 
 function mockLgViewport(matches: boolean) {
@@ -247,8 +269,10 @@ describe('SignalFeedPage collapsible sections', () => {
 
   afterEach(() => {
     cleanup()
+    resetFeedReadingSessionsForTests()
     clearSignalFeedReadingMemory()
     vi.unstubAllEnvs()
+    Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
   })
 
   it('shows non-collapsible separators only for loaded categories', () => {
@@ -345,8 +369,10 @@ describe('SignalFeedPage reading restoration', () => {
 
   afterEach(() => {
     cleanup()
+    resetFeedReadingSessionsForTests()
     clearSignalFeedReadingMemory()
     vi.unstubAllEnvs()
+    Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
   })
 
   it('restores view, filters, open section and scroll after an internal remount of the same scope', () => {
@@ -451,6 +477,123 @@ describe('SignalFeedPage reading restoration', () => {
       viewMode: 'general',
       scrollTop: 140,
     })
+  })
+
+  it('defers invalidation at scrollTop zero when page one is not displayed', () => {
+    const focusedItem = buildFeedItem({ id: 'focused', title: 'Fenêtre évincée' })
+    feedQueryMock.mockReturnValue(
+      buildFeedQueryState({
+        data: {
+          items: [focusedItem],
+          pins: [],
+          counts: { open: 2, in_progress: 0, interesting: 0, pinned: 0 },
+          next_cursor: null,
+          has_more: false,
+          applied_filters: {},
+          readingWindow: {
+            generation: 1,
+            pageOne: {
+              requestCursor: null,
+              nextCursor: 'cursor-1',
+              hasMore: true,
+              items: [buildFeedItem({ id: 'page-one' })],
+            },
+            focus: [
+              {
+                requestCursor: 'cursor-2',
+                nextCursor: null,
+                hasMore: false,
+                items: [focusedItem],
+              },
+            ],
+            behindCursor: 'cursor-1',
+            stalled: false,
+          },
+          pinWindow: {
+            generation: 1,
+            pageOne: {
+              requestCursor: null,
+              nextCursor: null,
+              hasMore: false,
+              items: [],
+            },
+            focus: [],
+            behindCursor: null,
+            stalled: false,
+          },
+        },
+      }),
+    )
+    renderSignalFeedPage()
+
+    let deferred = false
+    act(() => {
+      deferred = deferFeedListInvalidation(['signals', 'feed', 'est-1', 'personal'])
+    })
+
+    expect(screen.getByTestId('signal-feed-scroll').scrollTop).toBe(0)
+    expect(deferred).toBe(true)
+    expect(screen.getByText('Mises à jour disponibles')).toBeTruthy()
+  })
+
+  it('publishes the restored scroll edge when content arrives after mount', () => {
+    writeSignalFeedReading(signalFeedReadingScopeKey('establishment', 'est-1'), {
+      scrollTop: 140,
+    })
+    feedQueryMock.mockReturnValue(
+      buildFeedQueryState({
+        isLoading: true,
+        isSuccess: false,
+        data: undefined,
+      }),
+    )
+    const view = renderSignalFeedPage()
+    expect(screen.getByTestId('signal-feed-scroll').scrollTop).toBe(0)
+
+    openSectionsFeed()
+    view.rerenderPage()
+
+    let deferred = false
+    act(() => {
+      deferred = deferFeedListInvalidation(['signals', 'feed', 'est-1', 'personal'])
+    })
+    expect(screen.getByTestId('signal-feed-scroll').scrollTop).toBe(140)
+    expect(deferred).toBe(true)
+  })
+
+  it('stores and restores an anchor from the pinned collection', () => {
+    const pinned = buildFeedItem({
+      id: 'pinned-anchor',
+      title: 'Épingle ancrée',
+      is_pinned: true,
+    })
+    feedQueryMock.mockReturnValue(
+      buildFeedQueryState({
+        data: {
+          items: [],
+          pins: [pinned],
+          counts: { open: 0, in_progress: 0, interesting: 0, pinned: 1 },
+          next_cursor: null,
+          has_more: false,
+          applied_filters: {},
+        },
+      }),
+    )
+    const onOpenSignal = vi.fn()
+    renderSignalFeedPage({ onOpenSignal })
+    fireEvent.click(screen.getByRole('button', { name: /Épingle ancrée/ }))
+
+    expect(onOpenSignal).toHaveBeenCalledWith('pinned-anchor')
+    expect(
+      readSignalFeedReading(signalFeedReadingScopeKey('establishment', 'est-1'))?.anchorId,
+    ).toBe('pinned-anchor')
+
+    cleanup()
+    const scrollIntoView = vi.fn()
+    HTMLElement.prototype.scrollIntoView = scrollIntoView
+    renderSignalFeedPage({ onOpenSignal })
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' })
+    Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
   })
 })
 

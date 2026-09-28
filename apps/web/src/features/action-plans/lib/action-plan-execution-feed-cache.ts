@@ -10,6 +10,7 @@ import {
   windowHead,
   type FeedReadingWindow,
 } from '@/lib/feed-reading-window'
+import { invalidateFeedListQuery } from '@/lib/query-invalidation'
 
 import type { ActionPlanExecutionFeedViewMode } from '../api'
 import type {
@@ -131,6 +132,50 @@ function adjustSectionCounts(
   return next
 }
 
+function executionSectionCountKey(
+  item: ActionPlanExecutionFeedItem,
+): Exclude<ActionPlanExecutionFeedSectionCountKey, 'pinned'> | null {
+  if (item.status === 'pending_validation') {
+    return 'pending_validation'
+  }
+  if (item.status === 'in_progress') {
+    return item.is_overdue ? 'overdue' : 'in_progress'
+  }
+  return null
+}
+
+export function removeExecutionFromFeedCache(
+  current: ExecutionFeedCacheState,
+  executionId: string,
+): ExecutionFeedCacheState {
+  const list = hydratedItems(current.window)
+  const listItem = list.find((wrapper) => wrapperId(wrapper) === executionId)
+  const pinItem = current.pins.find((wrapper) => wrapperId(wrapper) === executionId)
+  const found = pinItem ?? listItem
+  if (!found) {
+    return current
+  }
+
+  let sectionCounts = current.sectionCounts
+  if (sectionCounts) {
+    sectionCounts = { ...sectionCounts }
+    if (pinItem) {
+      sectionCounts.pinned = Math.max(0, sectionCounts.pinned - 1)
+    }
+    const section = executionSectionCountKey(found.action_plan_execution)
+    if (section) {
+      sectionCounts[section] = Math.max(0, sectionCounts[section] - 1)
+    }
+  }
+
+  return {
+    ...current,
+    window: removeHydratedItem(current.window, executionId, wrapperId).window,
+    pins: current.pins.filter((wrapper) => wrapperId(wrapper) !== executionId),
+    sectionCounts,
+  }
+}
+
 export function patchExecutionInFeedCache(
   queryClient: QueryClient,
   options: {
@@ -216,14 +261,12 @@ export function invalidateActionPlanExecutionFeedViewModes(
   viewModes: ActionPlanExecutionFeedViewMode[] = EXECUTION_FEED_VIEW_MODES,
 ): void {
   for (const viewMode of viewModes) {
-    void queryClient.invalidateQueries({
-      queryKey: [
-        'action-plans',
-        'action-plan-execution-feed',
-        establishmentId,
-        viewMode,
-      ],
-    })
+    invalidateFeedListQuery(queryClient, [
+      'action-plans',
+      'action-plan-execution-feed',
+      establishmentId,
+      viewMode,
+    ])
   }
 }
 

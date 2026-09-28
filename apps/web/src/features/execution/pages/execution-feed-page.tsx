@@ -47,6 +47,7 @@ import type {
   ExecutionFeedCacheState,
   ExecutionPinsCacheState,
 } from '@/features/action-plans/lib/action-plan-execution-feed-cache'
+import { removeExecutionFromFeedCache } from '@/features/action-plans/lib/action-plan-execution-feed-cache'
 import {
   terrainBrandAction,
   terrainSectionDotVariants,
@@ -263,12 +264,7 @@ function ExecutionFeedPageContent({
         if (!current?.window) {
           return current
         }
-        const removed = removeHydratedItem(current.window, entityId, executionWrapperId)
-        return {
-          ...current,
-          window: removed.window,
-          pins: current.pins.filter((wrapper) => wrapper.action_plan_execution.id !== entityId),
-        }
+        return removeExecutionFromFeedCache(current, entityId)
       })
     },
     [feedQueryPrefix, queryClient],
@@ -565,7 +561,12 @@ function ExecutionFeedPageContent({
       return
     }
     const anchorId = initialReading?.anchorId
-    if (!anchorId || planItems.length === 0 || anchorPhaseRef.current === 'resuming') {
+    if (
+      !anchorId ||
+      (planItems.length === 0 && pinnedItems.length === 0) ||
+      (isCross && crossPinsQuery.isLoading) ||
+      anchorPhaseRef.current === 'resuming'
+    ) {
       return
     }
     const scrollTo = (id: string) => {
@@ -573,7 +574,10 @@ function ExecutionFeedPageContent({
         ?.querySelector(`[data-feed-item="${id}"]`)
         ?.scrollIntoView({ block: 'center' })
     }
-    if (planItems.some((item) => item.id === anchorId)) {
+    if (
+      planItems.some((item) => item.id === anchorId) ||
+      pinnedItems.some((item) => item.id === anchorId)
+    ) {
       anchorPhaseRef.current = 'done'
       scrollTo(anchorId)
       return
@@ -592,7 +596,17 @@ function ExecutionFeedPageContent({
       scrollTo(neighborId)
     }
     anchorPhaseRef.current = 'done'
-  }, [anchorTick, initialReading, layout, planFeedQuery, planItems, savedMatchesView])
+  }, [
+    anchorTick,
+    crossPinsQuery.isLoading,
+    initialReading,
+    isCross,
+    layout,
+    pinnedItems,
+    planFeedQuery,
+    planItems,
+    savedMatchesView,
+  ])
 
   useEffect(() => {
     const target = loadMoreRef.current
@@ -679,9 +693,11 @@ function ExecutionFeedPageContent({
   }
 
   function openExecution(executionId: string) {
-    const index = planItems.findIndex((item) => item.id === executionId)
-    const neighbor = planItems[index + 1] ?? planItems[index - 1]
-    const resumeCursor = planFeedQuery.data
+    const listIndex = planItems.findIndex((item) => item.id === executionId)
+    const sourceItems = listIndex >= 0 ? planItems : pinnedItems
+    const index = sourceItems.findIndex((item) => item.id === executionId)
+    const neighbor = sourceItems[index + 1] ?? sourceItems[index - 1]
+    const resumeCursor = listIndex >= 0 && planFeedQuery.data
       ? (planFeedQuery.data.window.focus.find((slot) =>
           slot.items.some((wrapper) => wrapper.action_plan_execution.id === executionId),
         )?.requestCursor ?? null)
