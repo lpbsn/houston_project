@@ -240,7 +240,10 @@ describe('ExecutionUpcomingPage', () => {
 
     fireEvent.click(pin)
     expect(onOpenActionPlanExecution).not.toHaveBeenCalled()
-    expect(pinControl.pin).toHaveBeenCalledWith('plan-all-day', expect.any(Object))
+    expect(pinControl.pin).toHaveBeenCalledWith(
+      { executionId: 'plan-all-day' },
+      expect.any(Object),
+    )
     expect(screen.queryByRole('dialog', { name: 'Actions' })).toBeNull()
 
     fireEvent.click(openControl)
@@ -253,7 +256,10 @@ describe('ExecutionUpcomingPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Épingler' }))
 
-    expect(pinControl.pin).toHaveBeenCalledWith('plan-scheduled', expect.any(Object))
+    expect(pinControl.pin).toHaveBeenCalledWith(
+      { executionId: 'plan-scheduled' },
+      expect.any(Object),
+    )
     await waitFor(() => {
       expect(screen.queryByText('Épinglage impossible.')).toBeNull()
     })
