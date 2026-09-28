@@ -5,8 +5,6 @@ import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 import {
   getActionPlanExecutionFeedSection,
   groupActionPlanExecutionsBySection,
-  hasActionPlanExecutionFeedSections,
-  partitionActionPlanExecutionFeedPinnedItems,
 } from './action-plan-execution-feed-sections'
 
 function buildFeedItem(
@@ -87,13 +85,11 @@ describe('getActionPlanExecutionFeedSection', () => {
     ).toBe('pending_validation')
   })
 
-  it('maps done and canceled; ignores scheduled in item grouping', () => {
-    expect(getActionPlanExecutionFeedSection(buildFeedItem({ id: '4', status: 'done' }))).toBe(
-      'done',
-    )
-    expect(getActionPlanExecutionFeedSection(buildFeedItem({ id: '5', status: 'canceled' }))).toBe(
-      'canceled',
-    )
+  it('ignores terminal and scheduled statuses in item grouping', () => {
+    expect(getActionPlanExecutionFeedSection(buildFeedItem({ id: '4', status: 'done' }))).toBeNull()
+    expect(
+      getActionPlanExecutionFeedSection(buildFeedItem({ id: '5', status: 'canceled' })),
+    ).toBeNull()
     expect(
       getActionPlanExecutionFeedSection(buildFeedItem({ id: 's', status: 'scheduled' })),
     ).toBeNull()
@@ -105,7 +101,7 @@ describe('getActionPlanExecutionFeedSection', () => {
 })
 
 describe('groupActionPlanExecutionsBySection', () => {
-  it('orders À valider → En retard → En cours → Terminés → Annulés', () => {
+  it('orders À valider → En retard → En cours', () => {
     const canceled = buildFeedItem({ id: 'canceled', status: 'canceled', title: 'Annulé' })
     const done = buildFeedItem({ id: 'done', status: 'done', title: 'Terminé' })
     const overdue = buildFeedItem({
@@ -127,8 +123,6 @@ describe('groupActionPlanExecutionsBySection', () => {
         pending_validation: 1,
         overdue: 1,
         in_progress: 1,
-        done: 1,
-        canceled: 1,
       },
     )
 
@@ -136,33 +130,21 @@ describe('groupActionPlanExecutionsBySection', () => {
       'pending_validation',
       'overdue',
       'in_progress',
-      'done',
-      'canceled',
     ])
-    expect(groups.map((group) => group.label)).toEqual([
-      'À valider',
-      'En retard',
-      'En cours',
-      'Terminés',
-      'Annulés',
-    ])
+    expect(groups.map((group) => group.label)).toEqual(['À valider', 'En retard', 'En cours'])
   })
 
-  it('includes sections from section_counts even when items are not loaded yet', () => {
+  it('does not create sections from counts when no matching item is loaded', () => {
     const groups = groupActionPlanExecutionsBySection([], {
       pending_validation: 0,
       overdue: 2,
       in_progress: 1,
-      done: 0,
-      canceled: 0,
     })
 
-    expect(groups.map((group) => group.section)).toEqual(['overdue', 'in_progress'])
-    expect(groups[0]?.items).toEqual([])
-    expect(groups[1]?.items).toEqual([])
+    expect(groups).toEqual([])
   })
 
-  it('omits zero-count sections and unknown statuses', () => {
+  it('keeps received items even when a count is stale at zero', () => {
     const inProgress = buildFeedItem({ id: 'in-progress', status: 'in_progress', title: 'En cours' })
     const pending = buildFeedItem({
       id: 'pending',
@@ -172,68 +154,13 @@ describe('groupActionPlanExecutionsBySection', () => {
     const unknown = buildFeedItem({ id: 'unknown', status: 'draft', title: 'Ignoré' })
 
     const groups = groupActionPlanExecutionsBySection([inProgress, pending, unknown], {
-      pending_validation: 1,
+      pending_validation: 0,
       overdue: 0,
-      in_progress: 1,
-      done: 0,
-      canceled: 0,
+      in_progress: 0,
     })
 
     expect(groups.map((group) => group.section)).toEqual(['pending_validation', 'in_progress'])
     expect(groups[0]?.items.map((item) => item.id)).toEqual(['pending'])
     expect(groups[1]?.items.map((item) => item.id)).toEqual(['in-progress'])
-  })
-})
-
-describe('hasActionPlanExecutionFeedSections', () => {
-  it('is true when any section count is positive', () => {
-    expect(
-      hasActionPlanExecutionFeedSections({
-        pinned: 0,
-        pending_validation: 0,
-        overdue: 0,
-        in_progress: 0,
-        done: 3,
-        canceled: 0,
-      }),
-    ).toBe(true)
-    expect(
-      hasActionPlanExecutionFeedSections({
-        pinned: 1,
-        pending_validation: 0,
-        overdue: 0,
-        in_progress: 0,
-        done: 0,
-        canceled: 0,
-      }),
-    ).toBe(true)
-  })
-
-  it('is false when every section count is zero', () => {
-    expect(
-      hasActionPlanExecutionFeedSections({
-        pinned: 0,
-        pending_validation: 0,
-        overdue: 0,
-        in_progress: 0,
-        done: 0,
-        canceled: 0,
-      }),
-    ).toBe(false)
-  })
-})
-
-describe('partitionActionPlanExecutionFeedPinnedItems', () => {
-  it('splits pinned and unpinned items preserving order', () => {
-    const pinned = buildFeedItem({ id: 'pinned', status: 'in_progress', is_pinned: true })
-    const unpinned = buildFeedItem({ id: 'unpinned', status: 'pending_validation' })
-
-    const { pinnedItems, unpinnedItems } = partitionActionPlanExecutionFeedPinnedItems([
-      pinned,
-      unpinned,
-    ])
-
-    expect(pinnedItems.map((item) => item.id)).toEqual(['pinned'])
-    expect(unpinnedItems.map((item) => item.id)).toEqual(['unpinned'])
   })
 })

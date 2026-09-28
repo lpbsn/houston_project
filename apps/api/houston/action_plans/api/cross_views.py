@@ -20,16 +20,19 @@ from houston.action_plans.calendar_feed import (
 )
 from houston.action_plans.constants import ExecutionFeedViewMode
 from houston.action_plans.execution_feed import (
-    EMPTY_SECTION_COUNTS,
     build_cross_action_plan_execution_feed_page,
+    build_cross_action_plan_execution_feed_pins_page,
 )
 from houston.action_plans.feed_cursor import (
     ActionPlanExecutionFeedCursorError,
     parse_action_plan_execution_feed_cursor,
+    parse_action_plan_execution_feed_pin_cursor,
 )
 from houston.action_plans.feed_serializers import (
     ActionPlanExecutionCalendarResponseSerializer,
+    ActionPlanExecutionFeedPinsResponseSerializer,
     ActionPlanExecutionFeedResponseSerializer,
+    ActionPlanExecutionUpcomingResponseSerializer,
     serialize_action_plan_execution_feed_item,
 )
 from houston.action_plans.lifecycle_promotion import ensure_execution_lifecycle_for_read
@@ -48,6 +51,7 @@ from houston.signals.api.cross_views import CanAccessCrossScope, _resolve_cross_
 
 DEFAULT_FEED_PAGE_SIZE = 25
 MAX_FEED_PAGE_SIZE = 50
+CROSS_EXECUTION_PIN_PREVIEW_SIZE = 3
 CROSS_EXECUTION_DEFAULT_VIEW_MODE: ExecutionFeedViewMode = "general"
 
 
@@ -74,6 +78,21 @@ def _parse_cross_execution_view_mode(raw: str | None):
             status=status.HTTP_400_BAD_REQUEST,
         )
     return view_mode, None
+
+
+def _parse_execution_feed_category(raw: str | None):
+    if raw is None or raw.strip() == "":
+        return "all", None
+    category = raw.strip().lower()
+    if category not in {"all", "pending_validation", "overdue", "in_progress"}:
+        return None, Response(
+            {
+                "code": "validation_error",
+                "detail": "category must be all, pending_validation, overdue or in_progress.",
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return category, None
 
 
 def _serialize_cross_calendar_bucket(executions, *, membership_by_execution_id, as_of):
@@ -114,6 +133,13 @@ class CrossActionPlanExecutionFeedView(APIView):
                 enum=["personal", "general"],
                 description="Defaults to general.",
             ),
+            OpenApiParameter(
+                name="category",
+                required=False,
+                type=str,
+                enum=["all", "pending_validation", "overdue", "in_progress"],
+                description="Defaults to all.",
+            ),
             OpenApiParameter(name="page_size", required=False, type=int),
             OpenApiParameter(name="cursor", required=False, type=str),
         ],
@@ -136,30 +162,34 @@ class CrossActionPlanExecutionFeedView(APIView):
             return view_mode_error
 
         page_size = _parse_feed_page_size(request.query_params.get("page_size"))
+        category, category_error = _parse_execution_feed_category(
+            request.query_params.get("category"),
+        )
+        if category_error is not None:
+            return category_error
         try:
             cursor = parse_action_plan_execution_feed_cursor(
                 request.query_params.get("cursor"),
             )
         except ActionPlanExecutionFeedCursorError as exc:
             return Response(
-                {"code": "validation_error", "detail": exc.detail},
+                {"code": exc.code, "detail": exc.detail},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        (
-            executions,
-            has_more,
-            next_cursor,
-            as_of,
-            scheduled_executions,
-            scheduled_count,
-            section_counts,
-        ) = build_cross_action_plan_execution_feed_page(
-            memberships=memberships,
-            view_mode=view_mode,
-            page_size=page_size,
-            cursor=cursor,
-        )
+        try:
+            page = build_cross_action_plan_execution_feed_page(
+                memberships=memberships,
+                view_mode=view_mode,
+                category=category,  # type: ignore[arg-type]
+                page_size=page_size,
+                cursor=cursor,
+            )
+        except ActionPlanExecutionFeedCursorError as exc:
+            return Response(
+                {"code": exc.code, "detail": exc.detail},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         actor = memberships[0]
         payload = {
             "items": [
@@ -170,31 +200,146 @@ class CrossActionPlanExecutionFeedView(APIView):
                         membership=actor,
                         is_overdue=action_plan_execution_overdue(
                             execution=execution,
-                            now=as_of,
+                            now=page.as_of,
                         ),
                         read_only=True,
                     ),
                 }
-                for execution in executions
+                for execution in page.items
             ],
-            "scheduled_items": [
+            "next_cursor": page.next_cursor,
+            "has_more": page.has_more,
+        }
+        if page.pins is not None:
+            payload["pins"] = [
                 {
                     "item_type": "action_plan_execution",
                     "action_plan_execution": serialize_action_plan_execution_feed_item(
                         execution=execution,
                         membership=actor,
-                        is_overdue=False,
+                        is_overdue=action_plan_execution_overdue(
+                            execution=execution,
+                            now=page.as_of,
+                        ),
                         read_only=True,
                     ),
                 }
-                for execution in scheduled_executions
-            ],
-            "scheduled_count": scheduled_count,
-            "section_counts": section_counts,
-            "next_cursor": next_cursor,
-            "has_more": has_more,
-        }
+                for execution in page.pins
+            ]
+        if page.scheduled_count is not None:
+            payload["scheduled"] = {
+                "count": page.scheduled_count,
+                "next": (
+                    {
+                        "id": page.scheduled_next.id,
+                        "start_at": page.scheduled_next.start_at,
+                        "title": page.scheduled_next.title,
+                    }
+                    if page.scheduled_next is not None
+                    else None
+                ),
+            }
+        if page.section_counts is not None:
+            payload["section_counts"] = page.section_counts
         return Response(ActionPlanExecutionFeedResponseSerializer(payload).data)
+
+
+class CrossActionPlanExecutionFeedPinsView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanAccessCrossScope,
+    ]
+
+    @extend_schema(
+        tags=["action-plans"],
+        operation_id="v1_cross_action_plan_execution_feed_pins_retrieve",
+        parameters=[
+            OpenApiParameter(name="establishment_id", required=False, type=str),
+            OpenApiParameter(
+                name="view_mode",
+                required=False,
+                type=str,
+                enum=["personal", "general"],
+                description="Defaults to general.",
+            ),
+            OpenApiParameter(
+                name="category",
+                required=False,
+                type=str,
+                enum=["all", "pending_validation", "overdue", "in_progress"],
+                description="Defaults to all.",
+            ),
+            OpenApiParameter(name="page_size", required=False, type=int),
+            OpenApiParameter(name="cursor", required=False, type=str),
+        ],
+        responses={
+            200: ActionPlanExecutionFeedPinsResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def get(self, request):
+        memberships, error = _resolve_cross_memberships(request)
+        if error is not None:
+            return error
+
+        view_mode, view_mode_error = _parse_cross_execution_view_mode(
+            request.query_params.get("view_mode"),
+        )
+        if view_mode_error is not None:
+            return view_mode_error
+        category, category_error = _parse_execution_feed_category(
+            request.query_params.get("category"),
+        )
+        if category_error is not None:
+            return category_error
+        raw_page_size = request.query_params.get("page_size")
+        page_size = (
+            CROSS_EXECUTION_PIN_PREVIEW_SIZE
+            if raw_page_size is None or raw_page_size == ""
+            else _parse_feed_page_size(raw_page_size)
+        )
+        try:
+            cursor = parse_action_plan_execution_feed_pin_cursor(
+                request.query_params.get("cursor"),
+            )
+            page = build_cross_action_plan_execution_feed_pins_page(
+                memberships=memberships,
+                view_mode=view_mode,
+                category=category,  # type: ignore[arg-type]
+                page_size=page_size,
+                cursor=cursor,
+            )
+        except ActionPlanExecutionFeedCursorError as exc:
+            return Response(
+                {"code": exc.code, "detail": exc.detail},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        actor = memberships[0]
+        payload = {
+            "items": [
+                {
+                    "item_type": "action_plan_execution",
+                    "action_plan_execution": serialize_action_plan_execution_feed_item(
+                        execution=execution,
+                        membership=actor,
+                        is_overdue=action_plan_execution_overdue(
+                            execution=execution,
+                            now=page.as_of,
+                        ),
+                        read_only=True,
+                    ),
+                }
+                for execution in page.items
+            ],
+            "next_cursor": page.next_cursor,
+            "has_more": page.has_more,
+        }
+        return Response(ActionPlanExecutionFeedPinsResponseSerializer(payload).data)
 
 
 class CrossActionPlanExecutionUpcomingView(APIView):
@@ -226,7 +371,7 @@ class CrossActionPlanExecutionUpcomingView(APIView):
             ),
         ],
         responses={
-            200: ActionPlanExecutionFeedResponseSerializer,
+            200: ActionPlanExecutionUpcomingResponseSerializer,
             400: OpenApiResponse(response=ApiErrorResponseSerializer),
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
@@ -284,13 +429,10 @@ class CrossActionPlanExecutionUpcomingView(APIView):
             )
         payload = {
             "items": serialized_items,
-            "scheduled_items": [],
-            "scheduled_count": 0,
-            "section_counts": dict(EMPTY_SECTION_COUNTS),
             "next_cursor": next_cursor,
             "has_more": has_more,
         }
-        return Response(ActionPlanExecutionFeedResponseSerializer(payload).data)
+        return Response(ActionPlanExecutionUpcomingResponseSerializer(payload).data)
 
 
 class CrossActionPlanExecutionCalendarView(APIView):

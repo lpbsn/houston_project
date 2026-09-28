@@ -5,7 +5,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { ActionPlanExecutionFeedItemWrapper } from '@/features/action-plans/types'
+import type {
+  ActionPlanExecutionFeedItemWrapper,
+  ActionPlanExecutionFeedResponse,
+} from '@/features/action-plans/types'
 import { useTerrainHubTitleSlotValue } from '@/components/layout/terrain-hub-title-slot'
 import { ActionPlansApiError } from '@/features/action-plans/api'
 
@@ -17,7 +20,11 @@ import {
 import { ExecutionFeedPage } from './execution-feed-page'
 
 const planFetchNextPage = vi.fn()
+const planRetryStalledContinuation = vi.fn()
+const crossPinsFetchNextPage = vi.fn()
+const crossPinsRetryStalledContinuation = vi.fn()
 const planFeedQueryMock = vi.fn()
+const crossPinsQueryMock = vi.fn()
 const calendarQueryMock = vi.fn()
 const upcomingQueryMock = vi.fn()
 const executionNavigate = vi.fn()
@@ -112,22 +119,17 @@ function deriveSectionCountsFromWrappers(
   pending_validation: number
   overdue: number
   in_progress: number
-  done: number
-  canceled: number
 } {
   const counts = {
     pinned: 0,
     pending_validation: 0,
     overdue: 0,
     in_progress: 0,
-    done: 0,
-    canceled: 0,
   }
   for (const wrapper of items) {
     const item = wrapper.action_plan_execution
     if (item.is_pinned) {
       counts.pinned += 1
-      continue
     }
     if (item.status === 'pending_validation') {
       counts.pending_validation += 1
@@ -137,13 +139,28 @@ function deriveSectionCountsFromWrappers(
       } else {
         counts.in_progress += 1
       }
-    } else if (item.status === 'done') {
-      counts.done += 1
-    } else if (item.status === 'canceled') {
-      counts.canceled += 1
     }
   }
   return counts
+}
+
+function buildScheduledSummary(
+  scheduledItems: ActionPlanExecutionFeedItemWrapper[] = [],
+  scheduledCount = scheduledItems.length,
+): NonNullable<ActionPlanExecutionFeedResponse['scheduled']> {
+  const nextItem = scheduledItems[0]?.action_plan_execution
+  return {
+    count: scheduledCount,
+    next: nextItem
+      ? {
+          id: nextItem.id,
+          title: nextItem.title,
+          start_at: nextItem.start_at,
+          end_at: nextItem.end_at,
+          all_day: nextItem.all_day,
+        }
+      : null,
+  }
 }
 
 function buildPlanFeedQueryState(overrides: Record<string, unknown> = {}) {
@@ -154,20 +171,20 @@ function buildPlanFeedQueryState(overrides: Record<string, unknown> = {}) {
     hasNextPage: false,
     isFetchingNextPage: false,
     fetchNextPage: planFetchNextPage,
+    isRetryingStalledContinuation: false,
+    retryStalledContinuation: planRetryStalledContinuation,
     refetch: vi.fn(),
     data: {
       pages: [
         {
           items: [],
-          scheduled_items: [],
-          scheduled_count: 0,
+          pins: [],
+          scheduled: { count: 0, next: null },
           section_counts: {
             pinned: 0,
             pending_validation: 0,
             overdue: 0,
             in_progress: 0,
-            done: 0,
-            canceled: 0,
           },
           next_cursor: null,
           has_more: false,
@@ -178,24 +195,65 @@ function buildPlanFeedQueryState(overrides: Record<string, unknown> = {}) {
   const merged = { ...base, ...overrides } as typeof base & Record<string, unknown>
   const data = merged.data as
     | {
-        pages?: Array<{
-          items?: ActionPlanExecutionFeedItemWrapper[]
-          section_counts?: ReturnType<typeof deriveSectionCountsFromWrappers>
-          [key: string]: unknown
-        }>
+      pages?: Array<{
+        items?: ActionPlanExecutionFeedItemWrapper[]
+        pins?: ActionPlanExecutionFeedItemWrapper[]
+        scheduled?: ActionPlanExecutionFeedScheduledSummary
+        section_counts?: ReturnType<typeof deriveSectionCountsFromWrappers>
+        [key: string]: unknown
+      }>
       }
     | undefined
   if (data?.pages) {
     merged.data = {
       ...data,
-      pages: data.pages.map((page) => ({
-        ...page,
-        section_counts:
-          page.section_counts ?? deriveSectionCountsFromWrappers(page.items ?? []),
-      })),
+      pages: data.pages.map((page, index): ActionPlanExecutionFeedResponse => {
+        const suppliedPins = page.pins
+        const rawItems = page.items ?? []
+        const pins =
+          suppliedPins ??
+          (index === 0
+            ? rawItems.filter((wrapper) => wrapper.action_plan_execution.is_pinned)
+            : [])
+        const items = suppliedPins
+          ? rawItems
+          : rawItems.filter((wrapper) => !wrapper.action_plan_execution.is_pinned)
+        const countItems = [...pins, ...items]
+        return {
+          ...page,
+          items,
+          pins: index === 0 ? pins : undefined,
+          scheduled:
+            index === 0
+              ? page.scheduled ?? { count: 0, next: null }
+              : undefined,
+          section_counts:
+            page.section_counts ?? deriveSectionCountsFromWrappers(countItems),
+          next_cursor: page.next_cursor ?? null,
+          has_more: Boolean(page.has_more),
+        }
+      }),
     }
   }
   return merged
+}
+
+function buildCrossPinsQueryState(overrides: Record<string, unknown> = {}) {
+  return {
+    isLoading: false,
+    isError: false,
+    isSuccess: true,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    fetchNextPage: crossPinsFetchNextPage,
+    isRetryingStalledContinuation: false,
+    retryStalledContinuation: crossPinsRetryStalledContinuation,
+    refetch: vi.fn(),
+    data: {
+      pages: [{ items: [], next_cursor: null, has_more: false }],
+    },
+    ...overrides,
+  }
 }
 
 vi.mock('@/app/auth-provider', () => ({
@@ -215,6 +273,7 @@ vi.mock('@/features/auth/lib/bootstrap-permission-hints', () => ({
 
 vi.mock('@/features/action-plans/hooks', () => ({
   useActionPlanExecutionFeedQuery: () => planFeedQueryMock(),
+  useCrossActionPlanExecutionFeedPinsQuery: () => crossPinsQueryMock(),
   useActionPlanExecutionCalendarQuery: () => calendarQueryMock(),
   useActionPlanExecutionUpcomingQuery: (
     _establishmentId: string | null | undefined,
@@ -314,10 +373,14 @@ function renderExecutionFeedPage(
 describe('ExecutionFeedPage plan feed', () => {
   beforeEach(() => {
     planFetchNextPage.mockClear()
+    planRetryStalledContinuation.mockClear()
+    crossPinsFetchNextPage.mockClear()
+    crossPinsRetryStalledContinuation.mockClear()
     executionNavigate.mockClear()
     executionRouteState.search = ''
     serializeAppRouteMockPath = '/execution'
     planFeedQueryMock.mockReturnValue(buildPlanFeedQueryState())
+    crossPinsQueryMock.mockReturnValue(buildCrossPinsQueryState())
     calendarQueryMock.mockReturnValue(buildCalendarQueryState())
     upcomingQueryMock.mockImplementation((options?: { enabled?: boolean; pageSize?: number }) => ({
       isLoading: false,
@@ -356,6 +419,7 @@ describe('ExecutionFeedPage plan feed', () => {
     cleanup()
     vi.useRealTimers()
     vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
     Reflect.deleteProperty(window, 'matchMedia')
     permissionHintsHolder.value = {}
     clearExecutionFeedReadingMemory()
@@ -398,6 +462,34 @@ describe('ExecutionFeedPage plan feed', () => {
     expect(screen.getByText('Impossible de charger les plans d’action.')).toBeTruthy()
   })
 
+  it('keeps loaded cards visible when a later feed request fails', () => {
+    planFeedQueryMock.mockReturnValue(
+      buildPlanFeedQueryState({
+        isSuccess: false,
+        isError: true,
+        error: new ActionPlansApiError({
+          status: 500,
+          detail: 'Suite indisponible.',
+        }),
+        data: {
+          pages: [
+            {
+              items: [buildPlanFeedWrapper('plan-1', 'Plan conservé après erreur')],
+              next_cursor: 'cursor-1',
+              has_more: true,
+            },
+          ],
+          pageParams: [undefined],
+        },
+      }),
+    )
+
+    renderExecutionFeedPage()
+
+    expect(screen.getByText('Plan conservé après erreur')).toBeTruthy()
+    expect(screen.getByText('Suite indisponible.')).toBeTruthy()
+  })
+
   it('shows load more button and calls fetchNextPage', () => {
     planFeedQueryMock.mockReturnValue(
       buildPlanFeedQueryState({
@@ -418,6 +510,44 @@ describe('ExecutionFeedPage plan feed', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Afficher plus' }))
     expect(planFetchNextPage).toHaveBeenCalledTimes(1)
+  })
+
+  it('loads the next L page automatically near the end of the scroll container', async () => {
+    class TestIntersectionObserver {
+      constructor(private readonly callback: IntersectionObserverCallback) {}
+
+      observe() {
+        this.callback([{ isIntersecting: true } as IntersectionObserverEntry], this as never)
+      }
+
+      disconnect() {}
+      unobserve() {}
+      takeRecords() {
+        return []
+      }
+      readonly root = null
+      readonly rootMargin = '400px 0px'
+      readonly thresholds = [0]
+    }
+    vi.stubGlobal('IntersectionObserver', TestIntersectionObserver)
+    planFeedQueryMock.mockReturnValue(
+      buildPlanFeedQueryState({
+        hasNextPage: true,
+        data: {
+          pages: [
+            {
+              items: [buildPlanFeedWrapper('plan-1', 'Plan opérationnel')],
+              next_cursor: 'plan-cursor',
+              has_more: true,
+            },
+          ],
+        },
+      }),
+    )
+
+    renderExecutionFeedPage()
+
+    await waitFor(() => expect(planFetchNextPage).toHaveBeenCalledTimes(1))
   })
 
   it('concatenates items across pages', () => {
@@ -446,13 +576,72 @@ describe('ExecutionFeedPage plan feed', () => {
     expect(screen.getByText('Plan deux')).toBeTruthy()
   })
 
+  it('renders a repeated execution once with the newest received payload', () => {
+    planFeedQueryMock.mockReturnValue(
+      buildPlanFeedQueryState({
+        data: {
+          pages: [
+            {
+              items: [buildPlanFeedWrapper('plan-1', 'Ancien titre')],
+              next_cursor: 'cursor-1',
+              has_more: true,
+            },
+            {
+              items: [buildPlanFeedWrapper('plan-1', 'Titre réconcilié')],
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+          pageParams: [undefined, 'cursor-1'],
+        },
+      }),
+    )
+
+    renderExecutionFeedPage()
+
+    expect(screen.queryByText('Ancien titre')).toBeNull()
+    expect(screen.getAllByText('Titre réconcilié')).toHaveLength(1)
+  })
+
+  it('keeps loaded cards and offers a local retry when L cannot progress', () => {
+    const refetch = vi.fn()
+    planFeedQueryMock.mockReturnValue(
+      buildPlanFeedQueryState({
+        refetch,
+        data: {
+          pages: [
+            {
+              items: [buildPlanFeedWrapper('plan-1', 'Plan conservé')],
+              next_cursor: 'cursor-1',
+              has_more: true,
+            },
+            {
+              items: [],
+              next_cursor: 'cursor-2',
+              has_more: true,
+            },
+          ],
+          pageParams: [undefined, 'cursor-1'],
+        },
+      }),
+    )
+
+    renderExecutionFeedPage()
+
+    expect(screen.getByText('Plan conservé')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
+    expect(planRetryStalledContinuation).toHaveBeenCalledTimes(1)
+    expect(refetch).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Afficher plus' })).toBeNull()
+  })
+
   it('keeps empty state when all pages are empty', () => {
     renderExecutionFeedPage()
 
     expect(screen.getByText('Aucune exécution')).toBeTruthy()
   })
 
-  it('shows section headers from section_counts before matching items are loaded', () => {
+  it('does not create empty section headers from counts alone', () => {
     planFeedQueryMock.mockReturnValue(
       buildPlanFeedQueryState({
         hasNextPage: true,
@@ -460,15 +649,12 @@ describe('ExecutionFeedPage plan feed', () => {
           pages: [
             {
               items: [buildPlanFeedWrapper('plan-active', 'Plan actif')],
-              scheduled_items: [],
-              scheduled_count: 0,
+              scheduled: { count: 0, next: null },
               section_counts: {
                 pinned: 0,
                 pending_validation: 0,
-                overdue: 0,
+                overdue: 4,
                 in_progress: 1,
-                done: 4,
-                canceled: 0,
               },
               next_cursor: 'cursor-1',
               has_more: true,
@@ -480,11 +666,10 @@ describe('ExecutionFeedPage plan feed', () => {
 
     renderExecutionFeedPage()
 
-    expect(screen.getByRole('button', { name: 'Replier la section En cours' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Déplier la section Terminés' })).toBeTruthy()
+    expect(screen.getByText('En cours · 1')).toBeTruthy()
+    expect(screen.queryByText('En retard · 4')).toBeNull()
     expect(screen.getByText('Plan actif')).toBeTruthy()
     expect(screen.queryByText('Aucune exécution')).toBeNull()
-    expect(screen.queryByText(/aucun terminé/i)).toBeNull()
     expect(screen.getByRole('button', { name: 'Afficher plus' })).toBeTruthy()
   })
 
@@ -509,64 +694,14 @@ describe('ExecutionFeedPage plan feed', () => {
     renderExecutionFeedPage()
 
     const pinned = screen.getByText('Plan épinglé')
-    const sectionToggle = screen.getByRole('button', { name: 'Replier la section En cours' })
+    const sectionLabel = screen.getByText('En cours · 2')
     const regular = screen.getByText('Plan normal')
 
-    expect(pinned.compareDocumentPosition(sectionToggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(sectionToggle.compareDocumentPosition(regular) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(pinned.compareDocumentPosition(sectionLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(sectionLabel.compareDocumentPosition(regular) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('keeps the done section collapsed by default', () => {
-    planFeedQueryMock.mockReturnValue(
-      buildPlanFeedQueryState({
-        data: {
-          pages: [
-            {
-              items: [
-                buildPlanFeedWrapper('plan-done', 'Plan terminé', { status: 'done' }),
-                buildPlanFeedWrapper('plan-active', 'Plan actif'),
-              ],
-              next_cursor: null,
-              has_more: false,
-            },
-          ],
-        },
-      }),
-    )
-
-    renderExecutionFeedPage()
-
-    expect(screen.getByRole('button', { name: 'Déplier la section Terminés' })).toBeTruthy()
-    expect(screen.queryByText('Plan terminé')).toBeNull()
-    expect(screen.getByText('Plan actif')).toBeTruthy()
-  })
-
-  it('keeps the canceled section collapsed by default', () => {
-    planFeedQueryMock.mockReturnValue(
-      buildPlanFeedQueryState({
-        data: {
-          pages: [
-            {
-              items: [
-                buildPlanFeedWrapper('plan-canceled', 'Plan annulé', { status: 'canceled' }),
-                buildPlanFeedWrapper('plan-active', 'Plan actif'),
-              ],
-              next_cursor: null,
-              has_more: false,
-            },
-          ],
-        },
-      }),
-    )
-
-    renderExecutionFeedPage()
-
-    expect(screen.getByRole('button', { name: 'Déplier la section Annulés' })).toBeTruthy()
-    expect(screen.queryByText('Plan annulé')).toBeNull()
-    expect(screen.getByText('Plan actif')).toBeTruthy()
-  })
-
-  it('collapses an expanded section when its header is toggled', () => {
+  it('renders business category separators as non-collapsible', () => {
     planFeedQueryMock.mockReturnValue(
       buildPlanFeedQueryState({
         data: {
@@ -584,11 +719,8 @@ describe('ExecutionFeedPage plan feed', () => {
     renderExecutionFeedPage()
 
     expect(screen.getByText('Plan actif')).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Replier la section En cours' }))
-
-    expect(screen.queryByText('Plan actif')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Déplier la section En cours' })).toBeTruthy()
+    expect(screen.getByText('En cours · 1')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Replier la section En cours' })).toBeNull()
   })
 
   it('shows loading more label while fetching next page', () => {
@@ -621,22 +753,24 @@ describe('ExecutionFeedPage plan feed', () => {
           pages: [
             {
               items: [buildPlanFeedWrapper('plan-active', 'Plan actif')],
-              scheduled_items: [
-                buildPlanFeedWrapper('plan-scheduled', 'Plan programmé', {
-                  status: 'scheduled',
-                  start_at: '2026-07-20T09:00:00Z',
-                  permission_hints: {
-                    can_mark_done: false,
-                    can_validate: false,
-                    can_reopen: false,
-                    can_cancel: true,
-                    can_update: false,
-                    is_pilot_pole_assignee: false,
-                    can_pin: false,
-                  },
-                }),
-              ],
-              scheduled_count: 4,
+              scheduled: buildScheduledSummary(
+                [
+                  buildPlanFeedWrapper('plan-scheduled', 'Plan programmé', {
+                    status: 'scheduled',
+                    start_at: '2026-07-20T09:00:00Z',
+                    permission_hints: {
+                      can_mark_done: false,
+                      can_validate: false,
+                      can_reopen: false,
+                      can_cancel: true,
+                      can_update: false,
+                      is_pilot_pole_assignee: false,
+                      can_pin: false,
+                    },
+                  }),
+                ],
+                4,
+              ),
               next_cursor: null,
               has_more: false,
             },
@@ -665,13 +799,12 @@ describe('ExecutionFeedPage plan feed', () => {
           pages: [
             {
               items: [buildPlanFeedWrapper('plan-active', 'Plan actif')],
-              scheduled_items: [
+              scheduled: buildScheduledSummary([
                 buildPlanFeedWrapper('plan-scheduled', 'Plan programmé', {
                   status: 'scheduled',
                   start_at: '2026-07-20T09:00:00Z',
                 }),
-              ],
-              scheduled_count: 1,
+              ]),
               next_cursor: null,
               has_more: false,
             },
@@ -685,6 +818,85 @@ describe('ExecutionFeedPage plan feed', () => {
     expect(onNavigate).toHaveBeenCalledWith('/cross/execution/upcoming')
   })
 
+  it('loads Cross pins independently and offers the bounded continuation in place', () => {
+    planFeedQueryMock.mockReturnValue(
+      buildPlanFeedQueryState({
+        data: {
+          pages: [
+            {
+              items: [],
+              section_counts: {
+                pinned: 5,
+                pending_validation: 0,
+                overdue: 0,
+                in_progress: 5,
+              },
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+    crossPinsQueryMock.mockReturnValue(
+      buildCrossPinsQueryState({
+        hasNextPage: true,
+        data: {
+          pages: [
+            {
+              items: [
+                buildPlanFeedWrapper('pin-1', 'Épingle 1', { is_pinned: true }),
+                buildPlanFeedWrapper('pin-2', 'Épingle 2', { is_pinned: true }),
+                buildPlanFeedWrapper('pin-3', 'Épingle 3', { is_pinned: true }),
+              ],
+              next_cursor: 'pins-cursor',
+              has_more: true,
+            },
+          ],
+        },
+      }),
+    )
+
+    renderExecutionFeedPage({ source: 'cross' })
+
+    expect(screen.getByText('Épingle 1')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Afficher les 2 autres épingles' }))
+    expect(crossPinsFetchNextPage).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText('Aucune exécution')).toBeNull()
+  })
+
+  it('keeps Cross pins and retries their stalled continuation locally', () => {
+    const refetch = vi.fn()
+    crossPinsQueryMock.mockReturnValue(
+      buildCrossPinsQueryState({
+        refetch,
+        data: {
+          pages: [
+            {
+              items: [buildPlanFeedWrapper('pin-1', 'Épingle conservée', { is_pinned: true })],
+              next_cursor: 'pins-cursor',
+              has_more: true,
+            },
+            {
+              items: [],
+              next_cursor: 'pins-cursor-2',
+              has_more: true,
+            },
+          ],
+          pageParams: [undefined, 'pins-cursor'],
+        },
+      }),
+    )
+
+    renderExecutionFeedPage({ source: 'cross' })
+
+    expect(screen.getByText('Épingle conservée')).toBeTruthy()
+    expect(screen.getByText('La suite des épingles n’a pas pu être chargée.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
+    expect(crossPinsRetryStalledContinuation).toHaveBeenCalledTimes(1)
+    expect(refetch).not.toHaveBeenCalled()
+  })
+
   it('propagates explicit Ma vue from the cross feed to Planifiés', () => {
     const onNavigate = vi.fn()
     serializeAppRouteMockPath = '/cross/execution'
@@ -695,13 +907,12 @@ describe('ExecutionFeedPage plan feed', () => {
           pages: [
             {
               items: [buildPlanFeedWrapper('plan-active', 'Plan actif')],
-              scheduled_items: [
+              scheduled: buildScheduledSummary([
                 buildPlanFeedWrapper('plan-scheduled', 'Plan programmé', {
                   status: 'scheduled',
                   start_at: '2026-07-20T09:00:00Z',
                 }),
-              ],
-              scheduled_count: 1,
+              ]),
               next_cursor: null,
               has_more: false,
             },
@@ -723,8 +934,7 @@ describe('ExecutionFeedPage plan feed', () => {
           pages: [
             {
               items: [],
-              scheduled_items: [],
-              scheduled_count: 0,
+              scheduled: { count: 0, next: null },
               next_cursor: null,
               has_more: false,
             },
@@ -1050,12 +1260,14 @@ describe('ExecutionFeedPage plan feed', () => {
 describe('ExecutionFeedPage desktop list', () => {
   beforeEach(() => {
     planFetchNextPage.mockClear()
+    crossPinsFetchNextPage.mockClear()
     executionNavigate.mockClear()
     executionRouteState.search = ''
     serializeAppRouteMockPath = '/execution'
     permissionHintsHolder.value = {}
     clearExecutionFeedReadingMemory()
     calendarQueryMock.mockReturnValue(buildCalendarQueryState())
+    crossPinsQueryMock.mockReturnValue(buildCrossPinsQueryState())
   })
 
   afterEach(() => {
@@ -1078,6 +1290,9 @@ describe('ExecutionFeedPage desktop list', () => {
                   treated_task_count: 1,
                 }),
                 buildPlanFeedWrapper('plan-done', 'Plan terminé', { status: 'done' }),
+              ],
+              pins: [
+                buildPlanFeedWrapper('plan-pinned', 'Plan épinglé', { is_pinned: true }),
               ],
               next_cursor: null,
               has_more: false,
@@ -1106,7 +1321,7 @@ describe('ExecutionFeedPage desktop list', () => {
     expect(screen.queryByRole('menu', { name: 'Actions du plan d’action' })).toBeNull()
     expect(screen.queryByRole('progressbar')).toBeNull()
     expect(screen.queryByText(/Tâches complétées/)).toBeNull()
-    expect(screen.getByText('Alice Martin')).toBeTruthy()
+    expect(screen.getAllByText('Alice Martin').length).toBeGreaterThan(0)
   })
 
   it('pins successfully from the desktop row control', async () => {
@@ -1210,7 +1425,7 @@ describe('ExecutionFeedPage desktop list', () => {
     expect(createButton.querySelector('svg')?.classList.toString()).toContain('size-3.5')
 
     const layoutTabs = screen.getByRole('tablist', { name: 'Disposition du feed' })
-    const toolbar = layoutTabs.parentElement?.parentElement
+    const toolbar = layoutTabs.parentElement?.parentElement?.parentElement
     expect(toolbar?.className).toContain('pt-0')
     expect(toolbar?.className).toContain('pb-0.5')
     expect(toolbar?.className).not.toContain('pt-0.5')
@@ -1227,20 +1442,20 @@ describe('ExecutionFeedPage desktop list', () => {
           pages: [
             {
               items: [buildPlanFeedWrapper('plan-active', 'Plan actif')],
-              scheduled_items: [
-                buildPlanFeedWrapper('plan-scheduled', 'Plan programmé', {
-                  status: 'scheduled',
-                  start_at: '2026-07-13T12:00:00Z',
-                }),
-              ],
-              scheduled_count: 2,
+              scheduled: buildScheduledSummary(
+                [
+                  buildPlanFeedWrapper('plan-scheduled', 'Plan programmé', {
+                    status: 'scheduled',
+                    start_at: '2026-07-13T12:00:00Z',
+                  }),
+                ],
+                2,
+              ),
               section_counts: {
                 pinned: 0,
                 pending_validation: 0,
                 overdue: 0,
                 in_progress: 1,
-                done: 0,
-                canceled: 0,
               },
               next_cursor: null,
               has_more: false,
@@ -1256,29 +1471,31 @@ describe('ExecutionFeedPage desktop list', () => {
     expect(readExecutionFeedReading(scopeKey)).toBeTruthy()
   })
 
-  it('restores the open section and scroll after an internal remount of the same scope', () => {
+  it('restores the collapsed pinned zone and scroll after an internal remount of the same scope', () => {
     showOperationalFeed()
     const scopeKey = executionFeedReadingScopeKey('establishment', 'est-1')
     renderExecutionFeedPage({ establishmentId: 'est-1' })
-    fireEvent.click(screen.getByRole('button', { name: 'Déplier la section Terminés' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Replier la section Épinglés' }))
     const scroller = screen.getByTestId('execution-feed-scroll')
     scroller.scrollTop = 120
     fireEvent.scroll(scroller)
 
-    expect(readExecutionFeedReading(scopeKey)?.expandedByKey.done).toBe(true)
+    expect(readExecutionFeedReading(scopeKey)?.expandedByKey.pinned).toBe(false)
     expect(readExecutionFeedReading(scopeKey)?.scrollTop).toBe(120)
 
     cleanup()
     renderExecutionFeedPage({ establishmentId: 'est-1' })
 
-    expect(screen.getByText('Plan terminé')).toBeTruthy()
+    expect(screen.queryByText('Plan épinglé')).toBeNull()
+    expect(screen.getByText('Plan actif')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Déplier la section Épinglés' })).toBeTruthy()
     expect(screen.getByTestId('execution-feed-scroll').scrollTop).toBe(120)
   })
 
   it('starts another scope from its own reading state', () => {
     showOperationalFeed()
     renderExecutionFeedPage({ establishmentId: 'est-1' })
-    fireEvent.click(screen.getByRole('button', { name: 'Déplier la section Terminés' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Replier la section Épinglés' }))
     const scroller = screen.getByTestId('execution-feed-scroll')
     scroller.scrollTop = 120
     fireEvent.scroll(scroller)
@@ -1287,13 +1504,15 @@ describe('ExecutionFeedPage desktop list', () => {
     renderExecutionFeedPage({ establishmentId: 'est-2' })
 
     expect(screen.queryByText('Plan terminé')).toBeNull()
+    expect(screen.getByText('Plan épinglé')).toBeTruthy()
+    expect(screen.getByText('Plan actif')).toBeTruthy()
     expect(screen.getByTestId('execution-feed-scroll').scrollTop).toBe(0)
   })
 
   it('keeps reading state per establishment across A → B → A without unmounting', () => {
     showOperationalFeed()
     const view = renderExecutionFeedPage({ establishmentId: 'est-1' })
-    fireEvent.click(screen.getByRole('button', { name: 'Déplier la section Terminés' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Replier la section Épinglés' }))
     const scrollerA = screen.getByTestId('execution-feed-scroll')
     scrollerA.scrollTop = 120
     fireEvent.scroll(scrollerA)
@@ -1301,7 +1520,7 @@ describe('ExecutionFeedPage desktop list', () => {
     expect(
       readExecutionFeedReading(executionFeedReadingScopeKey('establishment', 'est-1')),
     ).toMatchObject({
-      expandedByKey: expect.objectContaining({ done: true }),
+      expandedByKey: expect.objectContaining({ pinned: false }),
       scrollTop: 120,
     })
 
@@ -1312,22 +1531,24 @@ describe('ExecutionFeedPage desktop list', () => {
     expect(
       readExecutionFeedReading(executionFeedReadingScopeKey('establishment', 'est-1')),
     ).toMatchObject({
-      expandedByKey: expect.objectContaining({ done: true }),
+      expandedByKey: expect.objectContaining({ pinned: false }),
       scrollTop: 120,
     })
     expect(
       readExecutionFeedReading(executionFeedReadingScopeKey('establishment', 'est-2'))?.expandedByKey
-        .done,
-    ).not.toBe(true)
+        .pinned,
+    ).not.toBe(false)
 
     view.rerenderPage({ establishmentId: 'est-1' })
 
-    expect(screen.getByText('Plan terminé')).toBeTruthy()
+    expect(screen.queryByText('Plan épinglé')).toBeNull()
+    expect(screen.getByText('Plan actif')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Déplier la section Épinglés' })).toBeTruthy()
     expect(screen.getByTestId('execution-feed-scroll').scrollTop).toBe(120)
     expect(
       readExecutionFeedReading(executionFeedReadingScopeKey('establishment', 'est-1')),
     ).toMatchObject({
-      expandedByKey: expect.objectContaining({ done: true }),
+      expandedByKey: expect.objectContaining({ pinned: false }),
       scrollTop: 120,
     })
   })

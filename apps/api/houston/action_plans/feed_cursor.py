@@ -1,47 +1,77 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from django.db.models import Case, DateTimeField, F, IntegerField, OrderBy, Q, QuerySet, Value, When
+from django.db.models import (
+    Case,
+    DateTimeField,
+    F,
+    IntegerField,
+    OrderBy,
+    Q,
+    QuerySet,
+    UUIDField,
+    Value,
+    When,
+)
 from django.utils.dateparse import parse_datetime
 
 from houston.action_plans.constants import (
     ACTIVE_EXECUTION_STATUSES,
-    EXECUTION_STATUS_CANCELED,
-    EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
     EXECUTION_STATUS_PENDING_VALIDATION,
-    TERMINAL_EXECUTION_STATUSES,
+    ExecutionFeedCategory,
+    ExecutionFeedScope,
+    ExecutionFeedViewMode,
 )
 from houston.action_plans.models import ActionPlanExecution
+from houston.establishments.membership_scope import membership_business_unit_scope_ids
 
-CURSOR_PART_COUNT = 9
+FEED_CURSOR_VERSION = "v1"
+FEED_CURSOR_COLLECTION_LIST = "L"
+FEED_CURSOR_COLLECTION_PINS = "P"
 
 DEADLINE_BUCKET_OVERDUE = 0
 DEADLINE_BUCKET_UPCOMING = 1
 DEADLINE_BUCKET_NO_DEADLINE = 2
-DEADLINE_BUCKET_TERMINAL = 3
 
 
 class ActionPlanExecutionFeedCursorError(Exception):
-    def __init__(self, detail: str = "Invalid cursor.") -> None:
+    def __init__(self, detail: str = "Invalid cursor.", *, code: str = "validation_error") -> None:
         self.detail = detail
+        self.code = code
         super().__init__(detail)
 
 
 @dataclass(frozen=True)
 class ActionPlanExecutionFeedCursor:
     as_of: datetime
-    is_feed_pinned: bool
-    feed_pinned_at: datetime | None
-    status_rank: int
+    collection: str
+    view_mode: ExecutionFeedViewMode
+    category: ExecutionFeedCategory
+    auth_context_hash: str
+    category_rank: int
     deadline_bucket: int
+    marked_done_at: datetime | None
     end_at: datetime | None
     last_activity_at: datetime
     created_at: datetime
+    item_id: uuid.UUID
+
+
+@dataclass(frozen=True)
+class ActionPlanExecutionFeedPinCursor:
+    as_of: datetime
+    collection: str
+    view_mode: ExecutionFeedViewMode
+    category: ExecutionFeedCategory
+    auth_context_hash: str
+    pinned_at: datetime
     item_id: uuid.UUID
 
 
@@ -58,24 +88,38 @@ def execution_deadline_bucket(
     return DEADLINE_BUCKET_UPCOMING
 
 
-def status_rank_for_execution(status: str) -> int:
-    if status == EXECUTION_STATUS_PENDING_VALIDATION:
+def category_rank_for_execution(
+    execution: ActionPlanExecution,
+    as_of: datetime,
+) -> int:
+    if execution.status == EXECUTION_STATUS_PENDING_VALIDATION:
         return 0
-    if status == EXECUTION_STATUS_IN_PROGRESS:
-        return 1
-    if status == EXECUTION_STATUS_DONE:
-        return 2
-    if status == EXECUTION_STATUS_CANCELED:
+    if execution.status == EXECUTION_STATUS_IN_PROGRESS:
+        if execution.end_at is not None and execution.end_at < as_of:
+            return 1
+        if execution.end_at is not None:
+            return 2
         return 3
     return 4
+
+
+def execution_feed_category_for_execution(
+    execution: ActionPlanExecution,
+    as_of: datetime,
+) -> ExecutionFeedCategory | None:
+    if execution.status == EXECUTION_STATUS_PENDING_VALIDATION:
+        return "pending_validation"
+    if execution.status == EXECUTION_STATUS_IN_PROGRESS:
+        if execution.end_at is not None and execution.end_at < as_of:
+            return "overdue"
+        return "in_progress"
+    return None
 
 
 def deadline_bucket_for_execution(
     execution: ActionPlanExecution,
     as_of: datetime,
 ) -> int:
-    if execution.status in TERMINAL_EXECUTION_STATUSES:
-        return DEADLINE_BUCKET_TERMINAL
     return execution_deadline_bucket(
         end_at=execution.end_at,
         status=execution.status,
@@ -84,27 +128,33 @@ def deadline_bucket_for_execution(
 
 
 def sort_end_at_for_execution(execution: ActionPlanExecution) -> datetime | None:
-    if execution.status in TERMINAL_EXECUTION_STATUSES:
-        return None
     return execution.end_at
+
+
+def action_plan_execution_feed_category_rank_case(as_of: datetime) -> Case:
+    return Case(
+        When(status=EXECUTION_STATUS_PENDING_VALIDATION, then=Value(0)),
+        When(
+            status=EXECUTION_STATUS_IN_PROGRESS,
+            end_at__lt=as_of,
+            then=Value(1),
+        ),
+        When(
+            status=EXECUTION_STATUS_IN_PROGRESS,
+            end_at__isnull=False,
+            then=Value(2),
+        ),
+        When(status=EXECUTION_STATUS_IN_PROGRESS, end_at__isnull=True, then=Value(3)),
+        default=Value(4),
+        output_field=IntegerField(),
+    )
 
 
 def action_plan_execution_feed_sort_case_expressions(
     as_of: datetime,
-) -> tuple[Case, Case, Case]:
-    status_rank = Case(
-        When(status=EXECUTION_STATUS_PENDING_VALIDATION, then=Value(0)),
-        When(status=EXECUTION_STATUS_IN_PROGRESS, then=Value(1)),
-        When(status=EXECUTION_STATUS_DONE, then=Value(2)),
-        When(status=EXECUTION_STATUS_CANCELED, then=Value(3)),
-        default=Value(4),
-        output_field=IntegerField(),
-    )
+) -> tuple[Case, Case, Case, Case, Case]:
+    category_rank = action_plan_execution_feed_category_rank_case(as_of)
     deadline_bucket = Case(
-        When(
-            status__in=TERMINAL_EXECUTION_STATUSES,
-            then=Value(DEADLINE_BUCKET_TERMINAL),
-        ),
         When(end_at__isnull=True, then=Value(DEADLINE_BUCKET_NO_DEADLINE)),
         When(
             end_at__lt=as_of,
@@ -114,27 +164,56 @@ def action_plan_execution_feed_sort_case_expressions(
         default=Value(DEADLINE_BUCKET_UPCOMING),
         output_field=IntegerField(),
     )
+    feed_sort_marked_done_at = Case(
+        When(
+            status=EXECUTION_STATUS_PENDING_VALIDATION,
+            then=F("marked_done_at"),
+        ),
+        default=Value(None, output_field=DateTimeField()),
+        output_field=DateTimeField(),
+    )
+    feed_sort_pending_id = Case(
+        When(
+            status=EXECUTION_STATUS_PENDING_VALIDATION,
+            then=F("id"),
+        ),
+        default=Value(None, output_field=UUIDField()),
+        output_field=UUIDField(),
+    )
     feed_sort_end_at = Case(
         When(
-            status__in=TERMINAL_EXECUTION_STATUSES,
+            status=EXECUTION_STATUS_PENDING_VALIDATION,
             then=Value(None, output_field=DateTimeField()),
         ),
         default=F("end_at"),
         output_field=DateTimeField(),
     )
-    return status_rank, deadline_bucket, feed_sort_end_at
+    return (
+        category_rank,
+        deadline_bucket,
+        feed_sort_marked_done_at,
+        feed_sort_pending_id,
+        feed_sort_end_at,
+    )
 
 
 def action_plan_execution_feed_order_by() -> tuple[object, ...]:
     return (
-        "-is_feed_pinned",
-        OrderBy(F("feed_pinned_at"), nulls_last=True),
-        "status_rank",
+        "category_rank",
+        OrderBy(F("feed_sort_marked_done_at"), nulls_last=True),
+        OrderBy(F("feed_sort_pending_id"), nulls_last=True),
         "deadline_bucket",
         OrderBy(F("feed_sort_end_at"), nulls_last=True),
         "-last_activity_at",
         "-created_at",
         "-id",
+    )
+
+
+def action_plan_execution_feed_pin_order_by() -> tuple[object, ...]:
+    return (
+        OrderBy(F("feed_pinned_at"), nulls_last=True),
+        "id",
     )
 
 
@@ -150,30 +229,72 @@ def _decode_cursor_payload(raw: str) -> str:
         raise ActionPlanExecutionFeedCursorError() from exc
 
 
+def action_plan_execution_feed_auth_context_hash(
+    *,
+    memberships,
+    view_mode: ExecutionFeedViewMode,
+    category: ExecutionFeedCategory,
+    scope: ExecutionFeedScope,
+) -> str:
+    rows = []
+    for membership in sorted(memberships, key=lambda item: str(item.id)):
+        scope_ids = sorted(
+            str(scope_id) for scope_id in membership_business_unit_scope_ids(membership)
+        )
+        rows.append(
+            {
+                "membership_id": str(membership.id),
+                "establishment_id": str(membership.establishment_id),
+                "role": membership.role,
+                "status": membership.status,
+                "scope_business_unit_ids": scope_ids,
+            }
+        )
+    raw = json.dumps(
+        {
+            "category": category,
+            "memberships": rows,
+            "scope": scope,
+            "view_mode": view_mode,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
 def encode_action_plan_execution_feed_cursor(
     execution: ActionPlanExecution,
     *,
     as_of: datetime,
+    view_mode: ExecutionFeedViewMode,
+    category: ExecutionFeedCategory,
+    auth_context_hash: str,
 ) -> str:
-    is_feed_pinned = bool(getattr(execution, "is_feed_pinned", False))
-    feed_pinned_at = getattr(execution, "feed_pinned_at", None)
     sort_end_at = sort_end_at_for_execution(execution)
-    end_at_part = "" if sort_end_at is None else sort_end_at.isoformat()
-    pinned_at_part = "" if feed_pinned_at is None else feed_pinned_at.isoformat()
-    raw = "|".join(
-        [
-            as_of.isoformat(),
-            "1" if is_feed_pinned else "0",
-            pinned_at_part,
-            str(status_rank_for_execution(execution.status)),
-            str(deadline_bucket_for_execution(execution, as_of)),
-            end_at_part,
-            execution.last_activity_at.isoformat(),
-            execution.created_at.isoformat(),
-            str(execution.id),
-        ]
+    marked_done_at = (
+        execution.marked_done_at
+        if execution.status == EXECUTION_STATUS_PENDING_VALIDATION
+        else None
     )
-    return _encode_cursor_payload(raw)
+    payload = {
+        "v": FEED_CURSOR_VERSION,
+        "collection": FEED_CURSOR_COLLECTION_LIST,
+        "as_of": as_of.isoformat(),
+        "view_mode": view_mode,
+        "category": category,
+        "auth_context_hash": auth_context_hash,
+        "category_rank": category_rank_for_execution(execution, as_of),
+        "deadline_bucket": deadline_bucket_for_execution(execution, as_of),
+        "marked_done_at": marked_done_at.isoformat() if marked_done_at else None,
+        "end_at": sort_end_at.isoformat() if sort_end_at else None,
+        "last_activity_at": execution.last_activity_at.isoformat(),
+        "created_at": execution.created_at.isoformat(),
+        "item_id": str(execution.id),
+    }
+    return _encode_cursor_payload(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")),
+    )
 
 
 def parse_action_plan_execution_feed_cursor(
@@ -181,29 +302,47 @@ def parse_action_plan_execution_feed_cursor(
 ) -> ActionPlanExecutionFeedCursor | None:
     if not raw:
         return None
-    parts = _decode_cursor_payload(raw.strip()).split("|")
-    if len(parts) != CURSOR_PART_COUNT:
+    try:
+        payload = json.loads(_decode_cursor_payload(raw.strip()))
+    except json.JSONDecodeError as exc:
+        raise ActionPlanExecutionFeedCursorError() from exc
+    if not isinstance(payload, dict) or payload.get("v") != FEED_CURSOR_VERSION:
         raise ActionPlanExecutionFeedCursorError()
     try:
-        as_of = parse_datetime(parts[0])
-        is_feed_pinned = parts[1] == "1"
-        feed_pinned_at = parse_datetime(parts[2]) if parts[2] else None
-        status_rank = int(parts[3])
-        deadline_bucket = int(parts[4])
-        end_at = parse_datetime(parts[5]) if parts[5] else None
-        last_activity_at = parse_datetime(parts[6])
-        created_at = parse_datetime(parts[7])
-        item_id = uuid.UUID(parts[8])
-    except (TypeError, ValueError) as exc:
+        as_of = parse_datetime(payload["as_of"])
+        collection = str(payload["collection"])
+        view_mode = str(payload["view_mode"])
+        category = str(payload["category"])
+        auth_context_hash = str(payload["auth_context_hash"])
+        category_rank = int(payload["category_rank"])
+        deadline_bucket = int(payload["deadline_bucket"])
+        marked_done_raw = payload.get("marked_done_at")
+        marked_done_at = parse_datetime(marked_done_raw) if marked_done_raw else None
+        end_raw = payload.get("end_at")
+        end_at = parse_datetime(end_raw) if end_raw else None
+        last_activity_at = parse_datetime(payload["last_activity_at"])
+        created_at = parse_datetime(payload["created_at"])
+        item_id = uuid.UUID(payload["item_id"])
+    except (KeyError, TypeError, ValueError) as exc:
         raise ActionPlanExecutionFeedCursorError() from exc
-    if as_of is None or last_activity_at is None or created_at is None:
+    if (
+        as_of is None
+        or collection != FEED_CURSOR_COLLECTION_LIST
+        or view_mode not in {"personal", "general"}
+        or category not in {"all", "pending_validation", "overdue", "in_progress"}
+        or last_activity_at is None
+        or created_at is None
+    ):
         raise ActionPlanExecutionFeedCursorError()
     return ActionPlanExecutionFeedCursor(
         as_of=as_of,
-        is_feed_pinned=is_feed_pinned,
-        feed_pinned_at=feed_pinned_at,
-        status_rank=status_rank,
+        collection=collection,
+        view_mode=view_mode,  # type: ignore[arg-type]
+        category=category,  # type: ignore[arg-type]
+        auth_context_hash=auth_context_hash,
+        category_rank=category_rank,
         deadline_bucket=deadline_bucket,
+        marked_done_at=marked_done_at,
         end_at=end_at,
         created_at=created_at,
         item_id=item_id,
@@ -211,22 +350,110 @@ def parse_action_plan_execution_feed_cursor(
     )
 
 
+def encode_action_plan_execution_feed_pin_cursor(
+    execution: ActionPlanExecution,
+    *,
+    as_of: datetime,
+    view_mode: ExecutionFeedViewMode,
+    category: ExecutionFeedCategory,
+    auth_context_hash: str,
+) -> str:
+    pinned_at = getattr(execution, "feed_pinned_at", None)
+    if pinned_at is None:
+        raise ValueError("Pinned execution cursor requires feed_pinned_at.")
+    payload = {
+        "v": FEED_CURSOR_VERSION,
+        "collection": FEED_CURSOR_COLLECTION_PINS,
+        "as_of": as_of.isoformat(),
+        "view_mode": view_mode,
+        "category": category,
+        "auth_context_hash": auth_context_hash,
+        "pinned_at": pinned_at.isoformat(),
+        "item_id": str(execution.id),
+    }
+    return _encode_cursor_payload(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")),
+    )
+
+
+def parse_action_plan_execution_feed_pin_cursor(
+    raw: str | None,
+) -> ActionPlanExecutionFeedPinCursor | None:
+    if not raw:
+        return None
+    try:
+        payload = json.loads(_decode_cursor_payload(raw.strip()))
+    except json.JSONDecodeError as exc:
+        raise ActionPlanExecutionFeedCursorError() from exc
+    if not isinstance(payload, dict) or payload.get("v") != FEED_CURSOR_VERSION:
+        raise ActionPlanExecutionFeedCursorError()
+    try:
+        as_of = parse_datetime(payload["as_of"])
+        collection = str(payload["collection"])
+        view_mode = str(payload["view_mode"])
+        category = str(payload["category"])
+        auth_context_hash = str(payload["auth_context_hash"])
+        pinned_at = parse_datetime(payload["pinned_at"])
+        item_id = uuid.UUID(payload["item_id"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ActionPlanExecutionFeedCursorError() from exc
+    if (
+        as_of is None
+        or collection != FEED_CURSOR_COLLECTION_PINS
+        or view_mode not in {"personal", "general"}
+        or category not in {"all", "pending_validation", "overdue", "in_progress"}
+        or pinned_at is None
+    ):
+        raise ActionPlanExecutionFeedCursorError()
+    return ActionPlanExecutionFeedPinCursor(
+        as_of=as_of,
+        collection=collection,
+        view_mode=view_mode,  # type: ignore[arg-type]
+        category=category,  # type: ignore[arg-type]
+        auth_context_hash=auth_context_hash,
+        pinned_at=pinned_at,
+        item_id=item_id,
+    )
+
+
+def validate_action_plan_execution_feed_cursor_context(
+    cursor: ActionPlanExecutionFeedCursor | ActionPlanExecutionFeedPinCursor,
+    *,
+    view_mode: ExecutionFeedViewMode,
+    category: ExecutionFeedCategory,
+    auth_context_hash: str,
+) -> None:
+    if (
+        cursor.view_mode != view_mode
+        or cursor.category != category
+        or cursor.auth_context_hash != auth_context_hash
+    ):
+        raise ActionPlanExecutionFeedCursorError(
+            "cursor_context_mismatch",
+            code="cursor_context_mismatch",
+        )
+
+
 def _after_cursor_filter(cursor: ActionPlanExecutionFeedCursor) -> Q:
     q = Q()
     prefix = Q()
 
-    q |= prefix & Q(is_feed_pinned__lt=cursor.is_feed_pinned)
-    prefix &= Q(is_feed_pinned=cursor.is_feed_pinned)
+    q |= prefix & Q(category_rank__gt=cursor.category_rank)
+    prefix &= Q(category_rank=cursor.category_rank)
 
-    if cursor.is_feed_pinned:
-        if cursor.feed_pinned_at is not None:
-            q |= prefix & Q(feed_pinned_at__gt=cursor.feed_pinned_at)
-            prefix &= Q(feed_pinned_at=cursor.feed_pinned_at)
-        else:
-            prefix &= Q(feed_pinned_at__isnull=True)
+    if cursor.marked_done_at is not None:
+        q |= prefix & (
+            Q(feed_sort_marked_done_at__gt=cursor.marked_done_at)
+            | Q(feed_sort_marked_done_at__isnull=True)
+        )
+        prefix &= Q(feed_sort_marked_done_at=cursor.marked_done_at)
+    else:
+        prefix &= Q(feed_sort_marked_done_at__isnull=True)
 
-    q |= prefix & Q(status_rank__gt=cursor.status_rank)
-    prefix &= Q(status_rank=cursor.status_rank)
+    if cursor.category_rank == 0:
+        q |= prefix & Q(feed_sort_pending_id__gt=cursor.item_id)
+        return q
+    prefix &= Q(feed_sort_pending_id__isnull=True)
 
     q |= prefix & Q(deadline_bucket__gt=cursor.deadline_bucket)
     prefix &= Q(deadline_bucket=cursor.deadline_bucket)
@@ -268,3 +495,13 @@ def apply_action_plan_execution_feed_cursor(
     ).filter(_after_cursor_filter(cursor)).order_by(
         *action_plan_execution_feed_order_by(),
     )
+
+
+def apply_action_plan_execution_feed_pin_cursor(
+    queryset: QuerySet[ActionPlanExecution],
+    cursor: ActionPlanExecutionFeedPinCursor,
+) -> QuerySet[ActionPlanExecution]:
+    return queryset.filter(
+        Q(feed_pinned_at__gt=cursor.pinned_at)
+        | Q(feed_pinned_at=cursor.pinned_at, id__gt=cursor.item_id),
+    ).order_by(*action_plan_execution_feed_pin_order_by())

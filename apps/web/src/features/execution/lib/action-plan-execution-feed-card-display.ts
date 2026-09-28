@@ -243,13 +243,13 @@ function formatProchaineMoment(startAt: string, allDay: boolean, now: Date): str
 }
 
 export function formatPlanifieesProchaineLabel(
-  item: Pick<ActionPlanExecutionFeedItem, 'start_at' | 'all_day'> | null | undefined,
+  item: (Pick<ActionPlanExecutionFeedItem, 'start_at'> & { all_day?: boolean }) | null | undefined,
   now: Date = new Date(),
 ): string | null {
   if (!item?.start_at) {
     return null
   }
-  const moment = formatProchaineMoment(item.start_at, item.all_day, now)
+  const moment = formatProchaineMoment(item.start_at, item.all_day ?? false, now)
   return moment ? `Prochaine : ${moment}` : null
 }
 

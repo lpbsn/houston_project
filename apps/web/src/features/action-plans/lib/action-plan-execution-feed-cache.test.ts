@@ -9,6 +9,7 @@ import type { ActionPlanExecutionFeedItem, ActionPlanExecutionFeedResponse } fro
 import {
   applyActionPlanExecutionPinSuccess,
   patchExecutionInFeedCache,
+  prepareActionPlanExecutionPinOptimisticUpdate,
 } from './action-plan-execution-feed-cache'
 
 function feedItem(
@@ -63,14 +64,18 @@ function feedItem(
 function page(
   items: ActionPlanExecutionFeedItem[],
   section_counts: ActionPlanExecutionFeedResponse['section_counts'],
+  pins: ActionPlanExecutionFeedItem[] = [],
 ): ActionPlanExecutionFeedResponse {
   return {
     items: items.map((action_plan_execution) => ({
       item_type: 'action_plan_execution',
       action_plan_execution,
     })),
-    scheduled_items: [],
-    scheduled_count: 0,
+    pins: pins.map((action_plan_execution) => ({
+      item_type: 'action_plan_execution',
+      action_plan_execution,
+    })),
+    scheduled: { count: 0, next: null },
     section_counts,
     next_cursor: null,
     has_more: false,
@@ -87,8 +92,6 @@ describe('patchExecutionInFeedCache pin section_counts', () => {
       pending_validation: 0,
       overdue: 0,
       in_progress: 2,
-      done: 0,
-      canceled: 0,
     }
     queryClient.setQueryData(actionPlansQueryKeys.executionFeed(establishmentId, viewMode), {
       pages: [
@@ -114,12 +117,11 @@ describe('patchExecutionInFeedCache pin section_counts', () => {
       pinned: 1,
       pending_validation: 0,
       overdue: 0,
-      in_progress: 1,
-      done: 0,
-      canceled: 0,
+      in_progress: 2,
     })
     expect(data?.pages[1]?.section_counts).toEqual(data?.pages[0]?.section_counts)
-    expect(data?.pages[1]?.items[0]?.action_plan_execution.is_pinned).toBe(true)
+    expect(data?.pages[1]?.items).toEqual([])
+    expect(data?.pages[0]?.pins?.map((item) => item.action_plan_execution.id)).toEqual(['target'])
     expect(data?.pages[0]?.items[0]?.action_plan_execution.is_pinned).toBe(false)
   })
 
@@ -132,11 +134,9 @@ describe('patchExecutionInFeedCache pin section_counts', () => {
       pending_validation: 0,
       overdue: 0,
       in_progress: 0,
-      done: 0,
-      canceled: 0,
     }
     queryClient.setQueryData(actionPlansQueryKeys.executionFeed(establishmentId, viewMode), {
-      pages: [page([feedItem('already-pinned', { is_pinned: true })], counts)],
+        pages: [page([], counts, [feedItem('already-pinned', { is_pinned: true })])],
       pageParams: [undefined],
     })
 
@@ -155,6 +155,48 @@ describe('patchExecutionInFeedCache pin section_counts', () => {
     expect(data?.pages[0]?.section_counts).toEqual(counts)
   })
 
+  it('optimistically moves an unpinned execution from P to L', async () => {
+    const queryClient = new QueryClient()
+    const establishmentId = 'est-1'
+    const counts = {
+      pinned: 1,
+      pending_validation: 0,
+      overdue: 0,
+      in_progress: 2,
+    }
+    queryClient.setQueryData(
+      actionPlansQueryKeys.executionFeed(establishmentId, 'personal'),
+      {
+        pages: [
+          page(
+            [feedItem('existing-list-item')],
+            counts,
+            [feedItem('target', { is_pinned: true })],
+          ),
+        ],
+        pageParams: [undefined],
+      },
+    )
+
+    await prepareActionPlanExecutionPinOptimisticUpdate(queryClient, {
+      establishmentId,
+      executionId: 'target',
+      isPinned: false,
+    })
+
+    const data = queryClient.getQueryData<{
+      pages: ActionPlanExecutionFeedResponse[]
+    }>(actionPlansQueryKeys.executionFeed(establishmentId, 'personal'))
+
+    expect(data?.pages[0]?.pins).toEqual([])
+    expect(data?.pages[0]?.items.map((item) => item.action_plan_execution.id)).toEqual([
+      'target',
+      'existing-list-item',
+    ])
+    expect(data?.pages[0]?.items[0]?.action_plan_execution.is_pinned).toBe(false)
+    expect(data?.pages[0]?.section_counts.pinned).toBe(0)
+  })
+
   it('replaces a pin without changing the pinned count', () => {
     const queryClient = new QueryClient()
     const establishmentId = 'est-1'
@@ -163,18 +205,14 @@ describe('patchExecutionInFeedCache pin section_counts', () => {
       pending_validation: 0,
       overdue: 0,
       in_progress: 1,
-      done: 0,
-      canceled: 0,
     }
     for (const viewMode of ['personal', 'general'] as const) {
       queryClient.setQueryData(actionPlansQueryKeys.executionFeed(establishmentId, viewMode), {
         pages: [
           page(
-            [
-              feedItem('old-pin', { is_pinned: true }),
-              feedItem('new-pin'),
-            ],
+            [feedItem('new-pin')],
             counts,
+            [feedItem('old-pin', { is_pinned: true })],
           ),
         ],
         pageParams: [undefined],
@@ -194,8 +232,14 @@ describe('patchExecutionInFeedCache pin section_counts', () => {
         pages: ActionPlanExecutionFeedResponse[]
       }>(actionPlansQueryKeys.executionFeed(establishmentId, viewMode))
       expect(data?.pages[0]?.section_counts.pinned).toBe(3)
+      expect(data?.pages[0]?.items.map((item) => item.action_plan_execution.id)).toEqual([
+        'old-pin',
+      ])
       expect(data?.pages[0]?.items[0]?.action_plan_execution.is_pinned).toBe(false)
-      expect(data?.pages[0]?.items[1]?.action_plan_execution.is_pinned).toBe(true)
+      expect(data?.pages[0]?.pins?.map((item) => item.action_plan_execution.id)).toEqual([
+        'new-pin',
+      ])
+      expect(data?.pages[0]?.pins?.[0]?.action_plan_execution.is_pinned).toBe(true)
     }
   })
 })

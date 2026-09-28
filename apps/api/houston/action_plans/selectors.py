@@ -13,19 +13,18 @@ from houston.action_plans.constants import (
     CONTRIBUTION_STATUS_DONE,
     CONTRIBUTION_STATUS_IN_PROGRESS,
     EXECUTION_CALENDAR_CURSOR_STATUSES,
-    EXECUTION_FEED_CURSOR_STATUSES,
-    EXECUTION_STATUS_CANCELED,
-    EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
     EXECUTION_STATUS_PENDING_VALIDATION,
     EXECUTION_STATUS_SCHEDULED,
-    SCHEDULED_FEED_PREVIEW_LIMIT,
+    OPERATIONAL_EXECUTION_FEED_STATUSES,
     TERMINAL_TASK_STATUSES,
+    ExecutionFeedCategory,
     ExecutionFeedViewMode,
 )
 from houston.action_plans.feed_cursor import (
     DEADLINE_BUCKET_OVERDUE,
     action_plan_execution_feed_order_by,
+    action_plan_execution_feed_pin_order_by,
     action_plan_execution_feed_sort_case_expressions,
     execution_deadline_bucket,
 )
@@ -530,17 +529,16 @@ def scheduled_executions_upcoming_queryset(
     )
 
 
-def scheduled_executions_upcoming_preview_queryset(
+def scheduled_executions_next_queryset(
     *,
     membership: EstablishmentMembership,
     view_mode: ExecutionFeedViewMode,
-    limit: int = SCHEDULED_FEED_PREVIEW_LIMIT,
 ) -> QuerySet[ActionPlanExecution]:
-    """First upcoming rows — same filters/order as scheduled_executions_upcoming_queryset."""
+    """Next scheduled execution using the same filters/order as the upcoming feed."""
     return scheduled_executions_upcoming_queryset(
         membership=membership,
         view_mode=view_mode,
-    )[:limit]
+    )[:1]
 
 
 def action_plan_execution_feed_queryset(
@@ -552,7 +550,7 @@ def action_plan_execution_feed_queryset(
     return (
         ActionPlanExecution.objects.filter(
             _execution_feed_visibility_q(membership=membership, view_mode=view_mode),
-            status__in=EXECUTION_FEED_CURSOR_STATUSES,
+            status__in=OPERATIONAL_EXECUTION_FEED_STATUSES,
         )
         .filter(Q(visible_from__isnull=True) | Q(visible_from__lte=now))
         .select_related(*_EXECUTION_FEED_SELECT_RELATED)
@@ -670,9 +668,13 @@ def annotate_action_plan_execution_feed_sort_keys(
     memberships: list[EstablishmentMembership] | None = None,
     as_of: datetime,
 ) -> QuerySet[ActionPlanExecution]:
-    status_rank, deadline_bucket, feed_sort_end_at = (
-        action_plan_execution_feed_sort_case_expressions(as_of)
-    )
+    (
+        category_rank,
+        deadline_bucket,
+        feed_sort_marked_done_at,
+        feed_sort_pending_id,
+        feed_sort_end_at,
+    ) = action_plan_execution_feed_sort_case_expressions(as_of)
     if memberships is not None:
         pinned_qs = annotate_action_plan_execution_feed_pins_for_memberships(
             queryset,
@@ -686,25 +688,72 @@ def annotate_action_plan_execution_feed_sort_keys(
             membership=membership,
         )
     return pinned_qs.annotate(
-        status_rank=status_rank,
+        category_rank=category_rank,
         deadline_bucket=deadline_bucket,
+        feed_sort_marked_done_at=feed_sort_marked_done_at,
+        feed_sort_pending_id=feed_sort_pending_id,
         feed_sort_end_at=feed_sort_end_at,
     )
 
 
-def apply_action_plan_execution_feed_sorting(
+def filter_action_plan_execution_feed_category(
+    queryset: QuerySet[ActionPlanExecution],
+    *,
+    category: ExecutionFeedCategory,
+) -> QuerySet[ActionPlanExecution]:
+    if category == "all":
+        return queryset
+    if category == "pending_validation":
+        return queryset.filter(status=EXECUTION_STATUS_PENDING_VALIDATION)
+    if category == "overdue":
+        return queryset.filter(
+            status=EXECUTION_STATUS_IN_PROGRESS,
+            deadline_bucket=DEADLINE_BUCKET_OVERDUE,
+        )
+    if category == "in_progress":
+        return queryset.filter(status=EXECUTION_STATUS_IN_PROGRESS).exclude(
+            deadline_bucket=DEADLINE_BUCKET_OVERDUE,
+        )
+    raise ValueError(f"Unknown execution feed category: {category}")
+
+
+def action_plan_execution_feed_pins_queryset(
     queryset: QuerySet[ActionPlanExecution],
     *,
     membership: EstablishmentMembership | None = None,
     memberships: list[EstablishmentMembership] | None = None,
-    as_of=None,
+    as_of: datetime,
+    category: ExecutionFeedCategory,
 ) -> QuerySet[ActionPlanExecution]:
-    effective_as_of = as_of or timezone.now()
-    return annotate_action_plan_execution_feed_sort_keys(
+    annotated = annotate_action_plan_execution_feed_sort_keys(
         queryset,
         membership=membership,
         memberships=memberships,
-        as_of=effective_as_of,
+        as_of=as_of,
+    )
+    return filter_action_plan_execution_feed_category(
+        annotated.filter(is_feed_pinned=True),
+        category=category,
+    ).order_by(*action_plan_execution_feed_pin_order_by())
+
+
+def action_plan_execution_feed_list_queryset(
+    queryset: QuerySet[ActionPlanExecution],
+    *,
+    membership: EstablishmentMembership | None = None,
+    memberships: list[EstablishmentMembership] | None = None,
+    as_of: datetime,
+    category: ExecutionFeedCategory,
+) -> QuerySet[ActionPlanExecution]:
+    annotated = annotate_action_plan_execution_feed_sort_keys(
+        queryset,
+        membership=membership,
+        memberships=memberships,
+        as_of=as_of,
+    )
+    return filter_action_plan_execution_feed_category(
+        annotated.filter(is_feed_pinned=False),
+        category=category,
     ).order_by(*action_plan_execution_feed_order_by())
 
 
@@ -714,43 +763,40 @@ def action_plan_execution_feed_section_counts(
     membership: EstablishmentMembership | None = None,
     memberships: list[EstablishmentMembership] | None = None,
     as_of: datetime,
+    category: ExecutionFeedCategory = "all",
 ) -> dict[str, int]:
-    """Server totals for feed UI sections (pinned excluded from status buckets)."""
+    """Server totals for the operational feed, with business counts including pins."""
     annotated = annotate_action_plan_execution_feed_sort_keys(
         queryset,
         membership=membership,
         memberships=memberships,
         as_of=as_of,
     )
-    unpinned = Q(is_feed_pinned=False)
+    pinned_count = filter_action_plan_execution_feed_category(
+        annotated.filter(is_feed_pinned=True),
+        category=category,
+    ).count()
     aggregates = annotated.aggregate(
-        pinned=Count("pk", filter=Q(is_feed_pinned=True)),
         pending_validation=Count(
             "pk",
-            filter=unpinned & Q(status=EXECUTION_STATUS_PENDING_VALIDATION),
+            filter=Q(status=EXECUTION_STATUS_PENDING_VALIDATION),
         ),
         overdue=Count(
             "pk",
-            filter=unpinned
-            & Q(status=EXECUTION_STATUS_IN_PROGRESS)
+            filter=Q(status=EXECUTION_STATUS_IN_PROGRESS)
             & Q(deadline_bucket=DEADLINE_BUCKET_OVERDUE),
         ),
         in_progress=Count(
             "pk",
-            filter=unpinned
-            & Q(status=EXECUTION_STATUS_IN_PROGRESS)
+            filter=Q(status=EXECUTION_STATUS_IN_PROGRESS)
             & ~Q(deadline_bucket=DEADLINE_BUCKET_OVERDUE),
         ),
-        done=Count("pk", filter=unpinned & Q(status=EXECUTION_STATUS_DONE)),
-        canceled=Count("pk", filter=unpinned & Q(status=EXECUTION_STATUS_CANCELED)),
     )
     return {
-        "pinned": int(aggregates["pinned"] or 0),
+        "pinned": pinned_count,
         "pending_validation": int(aggregates["pending_validation"] or 0),
         "overdue": int(aggregates["overdue"] or 0),
         "in_progress": int(aggregates["in_progress"] or 0),
-        "done": int(aggregates["done"] or 0),
-        "canceled": int(aggregates["canceled"] or 0),
     }
 
 

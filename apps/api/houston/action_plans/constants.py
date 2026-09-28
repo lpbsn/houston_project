@@ -4,6 +4,8 @@ from datetime import time as dt_time
 from typing import Literal
 
 ExecutionFeedViewMode = Literal["personal", "general"]
+ExecutionFeedCategory = Literal["all", "pending_validation", "overdue", "in_progress"]
+ExecutionFeedScope = Literal["establishment", "cross"]
 
 ACTION_PLAN_TITLE_MAX_LENGTH = 200
 ACTION_PLAN_DESCRIPTION_MAX_LENGTH = 2000
@@ -81,22 +83,18 @@ SIGNAL_BLOCKING_EXECUTION_STATUSES = frozenset(
     }
 )
 
-# Cursor-paginated feed items exclude scheduled (preview via scheduled_items).
-EXECUTION_FEED_CURSOR_STATUSES = frozenset(
+# Cursor-paginated operational feed items exclude scheduled and terminal history.
+OPERATIONAL_EXECUTION_FEED_STATUSES = frozenset(
     {
         EXECUTION_STATUS_IN_PROGRESS,
         EXECUTION_STATUS_PENDING_VALIDATION,
-        EXECUTION_STATUS_DONE,
-        EXECUTION_STATUS_CANCELED,
     }
 )
 
-# Calendar grid + unplanned omit done and canceled; the list feed still uses the cursor set.
+# Calendar grid + unplanned have their own status contract, currently operational statuses.
 EXECUTION_CALENDAR_CURSOR_STATUSES = frozenset(
-    EXECUTION_FEED_CURSOR_STATUSES - {EXECUTION_STATUS_DONE, EXECUTION_STATUS_CANCELED}
+    OPERATIONAL_EXECUTION_FEED_STATUSES
 )
-
-EXECUTION_FEED_STATUSES = EXECUTION_STATUSES
 
 TERMINAL_EXECUTION_STATUSES = frozenset(
     {
@@ -105,7 +103,6 @@ TERMINAL_EXECUTION_STATUSES = frozenset(
     }
 )
 
-SCHEDULED_FEED_PREVIEW_LIMIT = 50
 CALENDAR_MAX_WINDOW_DAYS = 45
 SCHEDULE_ALL_DAY_START = dt_time(0, 0)
 SCHEDULE_ALL_DAY_END = dt_time(23, 59)

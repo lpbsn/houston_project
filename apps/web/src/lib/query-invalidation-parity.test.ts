@@ -119,6 +119,7 @@ describe('query-invalidation factory parity', () => {
       actionPlansQueryKeys.executionFeed(EST, 'personal').slice(0, 3),
       actionPlansQueryKeys.executionCalendar(EST, 'personal', '2026-01-01', '2026-01-02').slice(0, 3),
       actionPlansQueryKeys.crossExecutionFeed('general').slice(0, 2),
+      actionPlansQueryKeys.crossExecutionFeedPins('general').slice(0, 2),
       actionPlansQueryKeys.crossExecutionCalendar('general', '2026-01-01', '2026-01-02').slice(0, 2),
     ])
   })

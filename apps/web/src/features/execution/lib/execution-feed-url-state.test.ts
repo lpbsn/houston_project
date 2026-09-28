@@ -14,6 +14,7 @@ describe('execution-feed-url-state', () => {
         granularity: 'week',
         anchor: '2026-09-08',
         viewMode: 'personal',
+        category: 'all',
       }),
     ).toBe('')
     expect(
@@ -22,13 +23,23 @@ describe('execution-feed-url-state', () => {
         granularity: 'day',
         anchor: '2026-09-08',
         viewMode: 'general',
+        category: 'all',
       }),
     ).toBe('?layout=calendar&granularity=day&anchor=2026-09-08&view_mode=general')
+    expect(
+      serializeExecutionFeedSearch({
+        layout: 'list',
+        granularity: 'week',
+        anchor: '2026-09-08',
+        viewMode: 'personal',
+        category: 'overdue',
+      }),
+    ).toBe('?category=overdue')
   })
 
   it('parses calendar search and keeps defaults for unknown values', () => {
     const parsed = parseExecutionFeedSearch(
-      '?layout=calendar&granularity=week&anchor=2026-09-08&view_mode=general',
+      '?layout=calendar&granularity=week&anchor=2026-09-08&view_mode=general&category=pending_validation',
       new Date('2026-09-08T10:00:00.000Z'),
     )
     expect(parsed).toEqual({
@@ -36,6 +47,7 @@ describe('execution-feed-url-state', () => {
       granularity: 'week',
       anchor: '2026-09-08',
       viewMode: 'general',
+      category: 'pending_validation',
     })
   })
 
@@ -66,6 +78,7 @@ describe('execution-feed-url-state', () => {
           granularity: 'week',
           anchor: '2026-09-08',
           viewMode: 'general',
+          category: 'all',
         },
         { defaultViewMode: 'general' },
       ),
@@ -77,6 +90,7 @@ describe('execution-feed-url-state', () => {
           granularity: 'week',
           anchor: '2026-09-08',
           viewMode: 'personal',
+          category: 'all',
         },
         { defaultViewMode: 'general' },
       ),

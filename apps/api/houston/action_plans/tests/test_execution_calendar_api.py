@@ -577,7 +577,7 @@ def test_calendar_includes_dst_spring_forward_event_in_paris_window(
     assert payload["end_at"].replace("+00:00", "Z").startswith("2026-03-29T01:30:00")
 
 
-def test_calendar_excludes_done_and_canceled_from_items_and_unplanned_but_list_keeps_them(
+def test_calendar_and_operational_feed_exclude_done_and_canceled(
     api_client,
     owner_membership,
     business_unit,
@@ -662,10 +662,10 @@ def test_calendar_excludes_done_and_canceled_from_items_and_unplanned_but_list_k
     )
     assert feed_response.status_code == 200
     feed_ids = set(feed_execution_ids(feed_response.json()))
-    assert str(dated_canceled.id) in feed_ids
-    assert str(dated_done.id) in feed_ids
-    assert str(unplanned_canceled.id) in feed_ids
-    assert str(unplanned_done.id) in feed_ids
+    assert str(dated_canceled.id) not in feed_ids
+    assert str(dated_done.id) not in feed_ids
+    assert str(unplanned_canceled.id) not in feed_ids
+    assert str(unplanned_done.id) not in feed_ids
 
 
 def test_calendar_does_not_infer_all_day_from_sentinel_times(

@@ -623,6 +623,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cross/action-plan-execution-feed-pins/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_cross_action_plan_execution_feed_pins_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cross/action-plan-execution-upcoming/": {
         parameters: {
             query?: never;
@@ -3114,21 +3130,35 @@ export interface components {
             execution_id: string;
             title: string;
         };
-        ActionPlanExecutionFeedResponse: {
+        ActionPlanExecutionFeedPinsResponse: {
             items: components["schemas"]["ActionPlanExecutionFeedItemWrapper"][];
-            scheduled_items: components["schemas"]["ActionPlanExecutionFeedItemWrapper"][];
-            scheduled_count: number;
-            section_counts: components["schemas"]["ActionPlanExecutionFeedSectionCounts"];
             next_cursor: string | null;
             has_more: boolean;
+        };
+        ActionPlanExecutionFeedResponse: {
+            items: components["schemas"]["ActionPlanExecutionFeedItemWrapper"][];
+            pins?: components["schemas"]["ActionPlanExecutionFeedItemWrapper"][];
+            scheduled?: components["schemas"]["ActionPlanExecutionFeedScheduledSummary"];
+            section_counts?: components["schemas"]["ActionPlanExecutionFeedSectionCounts"];
+            next_cursor: string | null;
+            has_more: boolean;
+        };
+        ActionPlanExecutionFeedScheduledNext: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            start_at: string;
+            title: string;
+        };
+        ActionPlanExecutionFeedScheduledSummary: {
+            count: number;
+            next: components["schemas"]["ActionPlanExecutionFeedScheduledNext"] | null;
         };
         ActionPlanExecutionFeedSectionCounts: {
             pinned: number;
             pending_validation: number;
             overdue: number;
             in_progress: number;
-            done: number;
-            canceled: number;
         };
         ActionPlanExecutionFeedTaskPreview: {
             position: number;
@@ -3165,6 +3195,11 @@ export interface components {
         };
         ActionPlanExecutionPinState: {
             is_pinned: boolean;
+        };
+        ActionPlanExecutionUpcomingResponse: {
+            items: components["schemas"]["ActionPlanExecutionFeedItemWrapper"][];
+            next_cursor: string | null;
+            has_more: boolean;
         };
         ActionPlanExecutionValidateRequest: {
             stars: number;
@@ -7240,6 +7275,8 @@ export interface operations {
     v1_cross_action_plan_execution_feed_retrieve: {
         parameters: {
             query?: {
+                /** @description Defaults to all. */
+                category?: "all" | "in_progress" | "overdue" | "pending_validation";
                 cursor?: string;
                 establishment_id?: string;
                 page_size?: number;
@@ -7258,6 +7295,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActionPlanExecutionFeedResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_cross_action_plan_execution_feed_pins_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Defaults to all. */
+                category?: "all" | "in_progress" | "overdue" | "pending_validation";
+                cursor?: string;
+                establishment_id?: string;
+                page_size?: number;
+                /** @description Defaults to general. */
+                view_mode?: "general" | "personal";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPlanExecutionFeedPinsResponse"];
                 };
             };
             400: {
@@ -7307,7 +7395,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ActionPlanExecutionFeedResponse"];
+                    "application/json": components["schemas"]["ActionPlanExecutionUpcomingResponse"];
                 };
             };
             400: {
@@ -7532,6 +7620,8 @@ export interface operations {
     v1_establishments_action_plan_execution_feed_retrieve: {
         parameters: {
             query: {
+                /** @description Defaults to all. */
+                category?: "all" | "in_progress" | "overdue" | "pending_validation";
                 /** @description Opaque pagination cursor from a previous response next_cursor. */
                 cursor?: string;
                 page_size?: number;
@@ -7828,7 +7918,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ActionPlanExecutionFeedResponse"];
+                    "application/json": components["schemas"]["ActionPlanExecutionUpcomingResponse"];
                 };
             };
             400: {

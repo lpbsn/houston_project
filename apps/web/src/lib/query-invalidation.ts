@@ -131,6 +131,9 @@ export function invalidateActionPlanExecutionFeedQueries(
     queryKey: ['action-plans', 'cross-action-plan-execution-feed'],
   })
   void queryClient.invalidateQueries({
+    queryKey: ['action-plans', 'cross-action-plan-execution-feed-pins'],
+  })
+  void queryClient.invalidateQueries({
     queryKey: ['action-plans', 'cross-action-plan-execution-calendar'],
   })
 }

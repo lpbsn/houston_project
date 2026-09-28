@@ -16,12 +16,14 @@ describe('execution feed reading memory', () => {
     const scopeKey = executionFeedReadingScopeKey('establishment', 'est-1')
     writeExecutionFeedReading(scopeKey, {
       viewMode: 'personal',
+      category: 'all',
       expandedByKey: { done: true },
       scrollTop: 80,
     })
 
     expect(readExecutionFeedReading(scopeKey)).toEqual({
       viewMode: 'personal',
+      category: 'all',
       expandedByKey: { done: true },
       scrollTop: 80,
     })
@@ -32,6 +34,7 @@ describe('execution feed reading memory', () => {
   it('clears every scope', () => {
     writeExecutionFeedReading(executionFeedReadingScopeKey('cross', null), {
       viewMode: 'general',
+      category: 'pending_validation',
       expandedByKey: {},
       scrollTop: 12,
     })

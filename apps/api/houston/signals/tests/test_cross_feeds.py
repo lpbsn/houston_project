@@ -224,8 +224,42 @@ def test_cross_execution_feed_defaults_to_general_view_mode(api_client):
     assert str(mentioned.id) in personal_ids
 
 
+def test_establishment_execution_cursor_is_rejected_by_cross_feed(api_client):
+    from houston.action_plans.tests.helpers import create_execution
+
+    user = create_user(username="cross-cursor-surface")
+    establishment = create_establishment(name="Cursor Surface")
+    membership = create_membership(
+        establishment=establishment,
+        user=user,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    business_unit = create_business_unit(establishment=establishment, key="salle")
+    create_execution(membership, business_unit=business_unit, title="First")
+    create_execution(membership, business_unit=business_unit, title="Second")
+    token = login(api_client, user=user)
+
+    establishment_page = api_client.get(
+        f"/api/v1/establishments/{establishment.id}/action-plan-execution-feed/"
+        "?view_mode=general&page_size=1",
+        **auth_headers(token),
+    )
+    assert establishment_page.status_code == 200, establishment_page.content
+    cursor = establishment_page.json()["next_cursor"]
+    assert cursor
+
+    cross_page = api_client.get(
+        "/api/v1/cross/action-plan-execution-feed/"
+        f"?view_mode=general&page_size=1&cursor={cursor}",
+        **auth_headers(token),
+    )
+    assert cross_page.status_code == 400
+    assert cross_page.json()["code"] == "cursor_context_mismatch"
+
+
 def test_cross_execution_feed_pins_use_per_establishment_membership_and_paginate(
     api_client,
+    monkeypatch,
 ):
     from houston.action_plans.feed_pin_services import pin_action_plan_execution_for_membership
     from houston.action_plans.tests.helpers import create_execution
@@ -251,10 +285,9 @@ def test_cross_execution_feed_pins_use_per_establishment_membership_and_paginate
     exec_a2 = create_execution(membership_a, business_unit=bu_a, title="A2")
     exec_b_pinned = create_execution(membership_b, business_unit=bu_b, title="B pinned")
     exec_b2 = create_execution(membership_b, business_unit=bu_b, title="B2")
-    expected_ids = {
+    expected_list_ids = {
         str(exec_a1.id),
         str(exec_a2.id),
-        str(exec_b_pinned.id),
         str(exec_b2.id),
     }
 
@@ -273,14 +306,25 @@ def test_cross_execution_feed_pins_use_per_establishment_membership_and_paginate
     assert body1["has_more"] is True
     assert body1["next_cursor"]
     assert body1["section_counts"]["pinned"] == 1
-    assert body1["section_counts"]["in_progress"] == 3
+    assert body1["section_counts"]["in_progress"] == 4
+    assert "pins" not in body1
 
     items1 = [row["action_plan_execution"] for row in body1["items"]]
     assert len(items1) == 2
-    assert items1[0]["id"] == str(exec_b_pinned.id)
-    assert items1[0]["is_pinned"] is True
-    assert items1[0]["permission_hints"]["can_pin"] is False
-    assert all(item["is_pinned"] is False for item in items1[1:])
+    assert all(item["is_pinned"] is False for item in items1)
+    assert all(item["permission_hints"]["can_pin"] is False for item in items1)
+
+    def fail_scheduled_metadata(*args, **kwargs):
+        raise AssertionError("L continuation must not recalculate scheduled metadata")
+
+    monkeypatch.setattr(
+        "houston.action_plans.execution_feed.scheduled_executions_upcoming_queryset",
+        fail_scheduled_metadata,
+    )
+    monkeypatch.setattr(
+        "houston.action_plans.execution_feed.scheduled_executions_next_queryset",
+        fail_scheduled_metadata,
+    )
 
     page2 = api_client.get(
         "/api/v1/cross/action-plan-execution-feed/"
@@ -289,14 +333,103 @@ def test_cross_execution_feed_pins_use_per_establishment_membership_and_paginate
     )
     assert page2.status_code == 200, page2.content
     body2 = page2.json()
-    assert body2["section_counts"] == body1["section_counts"]
+    assert "section_counts" not in body2
+    assert "scheduled" not in body2
+    assert "pins" not in body2
     items2 = [row["action_plan_execution"] for row in body2["items"]]
     assert all(item["is_pinned"] is False for item in items2)
     assert all(item["permission_hints"]["can_pin"] is False for item in items2)
 
     seen_ids = [item["id"] for item in items1] + [item["id"] for item in items2]
     assert len(seen_ids) == len(set(seen_ids))
-    assert set(seen_ids) == expected_ids
+    assert set(seen_ids) == expected_list_ids
+
+    pins = api_client.get(
+        "/api/v1/cross/action-plan-execution-feed-pins/?view_mode=general",
+        **auth_headers(token),
+    )
+    assert pins.status_code == 200, pins.content
+    pins_body = pins.json()
+    assert pins_body["has_more"] is False
+    assert pins_body["next_cursor"] is None
+    assert [item["action_plan_execution"]["id"] for item in pins_body["items"]] == [
+        str(exec_b_pinned.id),
+    ]
+
+
+def test_cross_execution_pins_preview_and_bounded_continuation(api_client):
+    from houston.action_plans.feed_pin_services import pin_action_plan_execution_for_membership
+    from houston.action_plans.tests.helpers import create_execution
+
+    user = create_user(username="cross-pin-continuation")
+    memberships = []
+    executions = []
+    for establishment_name in ("Alpha Pins", "Beta Pins"):
+        establishment = create_establishment(name=establishment_name)
+        membership = create_membership(
+            establishment=establishment,
+            user=user,
+            role=EstablishmentMembership.Role.OWNER,
+        )
+        memberships.append(membership)
+        business_unit = create_business_unit(establishment=establishment, key="salle")
+        for index in range(3):
+            execution = create_execution(
+                membership,
+                business_unit=business_unit,
+                title=f"{establishment_name} {index}",
+            )
+            pin_action_plan_execution_for_membership(
+                membership=membership,
+                execution_id=execution.id,
+            )
+            executions.append(execution)
+
+    token = login(api_client, user=user)
+    feed = api_client.get(
+        "/api/v1/cross/action-plan-execution-feed/?view_mode=general",
+        **auth_headers(token),
+    )
+    assert feed.status_code == 200, feed.content
+    assert feed.json()["items"] == []
+    assert feed.json()["section_counts"]["pinned"] == 6
+    assert feed.json()["section_counts"]["in_progress"] == 6
+
+    first = api_client.get(
+        "/api/v1/cross/action-plan-execution-feed-pins/?view_mode=general",
+        **auth_headers(token),
+    )
+    assert first.status_code == 200, first.content
+    first_body = first.json()
+    assert len(first_body["items"]) == 3
+    assert first_body["has_more"] is True
+    assert first_body["next_cursor"]
+
+    wrong_category = api_client.get(
+        "/api/v1/cross/action-plan-execution-feed-pins/"
+        f"?view_mode=general&category=overdue&cursor={first_body['next_cursor']}",
+        **auth_headers(token),
+    )
+    assert wrong_category.status_code == 400
+    assert wrong_category.json()["code"] == "cursor_context_mismatch"
+
+    second = api_client.get(
+        "/api/v1/cross/action-plan-execution-feed-pins/"
+        f"?view_mode=general&page_size=10&cursor={first_body['next_cursor']}",
+        **auth_headers(token),
+    )
+    assert second.status_code == 200, second.content
+    second_body = second.json()
+    assert len(second_body["items"]) == 3
+    assert second_body["has_more"] is False
+    assert second_body["next_cursor"] is None
+
+    seen_ids = [
+        item["action_plan_execution"]["id"]
+        for item in first_body["items"] + second_body["items"]
+    ]
+    assert len(seen_ids) == len(set(seen_ids)) == 6
+    assert set(seen_ids) == {str(execution.id) for execution in executions}
 
 
 def test_cross_execution_upcoming_unions_and_matches_feed_scheduled_meta(api_client):
@@ -360,29 +493,23 @@ def test_cross_execution_upcoming_unions_and_matches_feed_scheduled_meta(api_cli
     assert upcoming.status_code == 200, upcoming.content
     feed_body = feed.json()
     upcoming_ids = [item["action_plan_execution"]["id"] for item in upcoming.json()["items"]]
-    preview_ids = [item["action_plan_execution"]["id"] for item in feed_body["scheduled_items"]]
-    assert feed_body["scheduled_count"] == 2
+    assert feed_body["scheduled"]["count"] == 2
+    preview_ids = [feed_body["scheduled"]["next"]["id"]]
     assert upcoming_ids == [str(exec_a.id), str(exec_b.id)]
-    assert preview_ids == upcoming_ids
+    assert preview_ids == upcoming_ids[:1]
     assert (
         upcoming.json()["items"][0]["action_plan_execution"]["permission_hints"]["can_pin"]
         is False
     )
 
 
-def test_cross_feed_scheduled_items_global_sort_and_preview_cap(api_client, monkeypatch):
-    """Preview merge is capped globally after (start_at, id) sort; count stays full."""
+def test_cross_feed_scheduled_summary_uses_global_next(api_client):
+    """Slim scheduled metadata keeps the full count and globally earliest occurrence."""
     from datetime import timedelta
 
     from django.utils import timezone
 
     from houston.action_plans.services import create_action_plan_with_execution
-
-    # Cap only the Cross builder slice — local per-membership preview stays at 50.
-    monkeypatch.setattr(
-        "houston.action_plans.execution_feed.SCHEDULED_FEED_PREVIEW_LIMIT",
-        2,
-    )
 
     user = create_user(username="cross-preview-cap")
     first = create_establishment(name="Alpha Preview Cap")
@@ -424,7 +551,6 @@ def test_cross_feed_scheduled_items_global_sort_and_preview_cap(api_client, monk
 
     by_title = {execution.title: execution for execution in created}
     expected_first = by_title["A soon"]
-    expected_second = by_title["B mid"]
 
     token = login(api_client, user=user)
     feed = api_client.get(
@@ -434,13 +560,8 @@ def test_cross_feed_scheduled_items_global_sort_and_preview_cap(api_client, monk
     assert feed.status_code == 200, feed.content
     body = feed.json()
 
-    assert body["scheduled_count"] == 4
-    preview = body["scheduled_items"]
-    assert len(preview) == 2
-    preview_ids = [item["action_plan_execution"]["id"] for item in preview]
-    assert preview_ids == [str(expected_first.id), str(expected_second.id)]
-    preview_starts = [item["action_plan_execution"]["start_at"] for item in preview]
-    assert preview_starts == sorted(preview_starts)
+    assert body["scheduled"]["count"] == 4
+    assert body["scheduled"]["next"]["id"] == str(expected_first.id)
 
 
 def test_cross_execution_calendar_unions_and_respects_per_membership_rbac(api_client):

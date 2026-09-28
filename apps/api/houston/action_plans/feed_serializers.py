@@ -67,8 +67,17 @@ class ActionPlanExecutionFeedSectionCountsSerializer(serializers.Serializer):
     pending_validation = serializers.IntegerField()
     overdue = serializers.IntegerField()
     in_progress = serializers.IntegerField()
-    done = serializers.IntegerField()
-    canceled = serializers.IntegerField()
+
+
+class ActionPlanExecutionFeedScheduledNextSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    start_at = serializers.DateTimeField()
+    title = serializers.CharField()
+
+
+class ActionPlanExecutionFeedScheduledSummarySerializer(serializers.Serializer):
+    count = serializers.IntegerField()
+    next = ActionPlanExecutionFeedScheduledNextSerializer(allow_null=True)
 
 
 class ActionPlanExecutionFeedItemSerializer(serializers.Serializer):
@@ -111,9 +120,21 @@ class ActionPlanExecutionFeedItemWrapperSerializer(serializers.Serializer):
 
 class ActionPlanExecutionFeedResponseSerializer(serializers.Serializer):
     items = ActionPlanExecutionFeedItemWrapperSerializer(many=True)
-    scheduled_items = ActionPlanExecutionFeedItemWrapperSerializer(many=True)
-    scheduled_count = serializers.IntegerField()
-    section_counts = ActionPlanExecutionFeedSectionCountsSerializer()
+    pins = ActionPlanExecutionFeedItemWrapperSerializer(many=True, required=False)
+    scheduled = ActionPlanExecutionFeedScheduledSummarySerializer(required=False)
+    section_counts = ActionPlanExecutionFeedSectionCountsSerializer(required=False)
+    next_cursor = serializers.CharField(allow_null=True)
+    has_more = serializers.BooleanField()
+
+
+class ActionPlanExecutionUpcomingResponseSerializer(serializers.Serializer):
+    items = ActionPlanExecutionFeedItemWrapperSerializer(many=True)
+    next_cursor = serializers.CharField(allow_null=True)
+    has_more = serializers.BooleanField()
+
+
+class ActionPlanExecutionFeedPinsResponseSerializer(serializers.Serializer):
+    items = ActionPlanExecutionFeedItemWrapperSerializer(many=True)
     next_cursor = serializers.CharField(allow_null=True)
     has_more = serializers.BooleanField()
 

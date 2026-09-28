@@ -223,15 +223,25 @@ def ensure_execution_lifecycle_for_read(
     *,
     establishment_id: uuid.UUID,
     execution_id: uuid.UUID | None = None,
-) -> None:
+) -> dict[str, int]:
     """Lazy filet: always establishment-scoped; optional single execution id."""
     if establishment_id is None:
         raise ValueError("establishment_id is required for read-path lifecycle.")
     try:
-        run_scheduled_execution_lifecycle_tick(
+        result = run_scheduled_execution_lifecycle_tick(
             establishment_id=establishment_id,
             execution_id=execution_id,
         )
+        if result["availability_emitted"] or result["promoted"]:
+            logger.info(
+                "action_plan_execution_lifecycle.read_catch_up",
+                extra={
+                    "establishment_id": str(establishment_id),
+                    "execution_id": str(execution_id) if execution_id else None,
+                    **result,
+                },
+            )
+        return result
     except Exception:
         logger.exception(
             "action_plan_execution_lifecycle_lazy_failed",
@@ -240,3 +250,4 @@ def ensure_execution_lifecycle_for_read(
                 "execution_id": str(execution_id) if execution_id else None,
             },
         )
+        return {"availability_emitted": 0, "promoted": 0}

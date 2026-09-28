@@ -1,7 +1,11 @@
-import type { ActionPlanExecutionFeedViewMode } from '@/features/action-plans/api'
+import type {
+  ActionPlanExecutionFeedCategory,
+  ActionPlanExecutionFeedViewMode,
+} from '@/features/action-plans/api'
 
 export type ExecutionFeedReadingState = {
   viewMode: ActionPlanExecutionFeedViewMode
+  category: ActionPlanExecutionFeedCategory
   expandedByKey: Record<string, boolean>
   scrollTop: number
 }
@@ -24,11 +28,13 @@ export function readExecutionFeedReading(scopeKey: string): ExecutionFeedReading
 
 export function writeExecutionFeedReading(
   scopeKey: string,
-  patch: Partial<ExecutionFeedReadingState> & Pick<ExecutionFeedReadingState, 'viewMode'>,
+  patch: Partial<ExecutionFeedReadingState> &
+    Pick<ExecutionFeedReadingState, 'category' | 'viewMode'>,
 ): void {
   const current = memory.get(scopeKey)
   memory.set(scopeKey, {
     viewMode: patch.viewMode,
+    category: patch.category,
     expandedByKey: patch.expandedByKey ?? current?.expandedByKey ?? {},
     scrollTop: patch.scrollTop ?? current?.scrollTop ?? 0,
   })
