@@ -5,8 +5,10 @@ todos:
   - id: lot0-measure
     content: "Lot 0 : EXPLAIN + inventaire pins, dates terminales, events de cycle, orphelins"
     status: pending
+    State : IMPLEMENETED
   - id: lot1-activity
     content: "Lot 1 : last_activity_at monotone sous concurrence (SQL Greatest / lock), writers corrigés"
+    State : IMPLEMENTED
     status: pending
   - id: lot2-execution-pins
     content: "Lot 2 : pins Exécution seulement (plafond 3, replace, trim démo si inventaire) — pas les règles Signals visibles"

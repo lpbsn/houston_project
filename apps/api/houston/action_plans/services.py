@@ -495,8 +495,6 @@ def _activate_linked_signal_on_execution_create(
         Signal.Status.INTERESTING,
     }
     unpin_changed = signal.is_pinned
-    if not status_changed and not unpin_changed:
-        return
 
     from_status = signal.status
     if status_changed and signal.status == Signal.Status.OPEN:

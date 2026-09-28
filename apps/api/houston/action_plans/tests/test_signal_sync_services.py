@@ -13,6 +13,7 @@ from houston.action_plans.services import (
     cancel_action_plan_execution,
     create_action_plan_with_execution,
     mark_action_plan_execution_done,
+    mark_execution_task_done,
     reopen_action_plan_execution,
     sync_signal_after_execution_change,
     validate_action_plan_execution,
@@ -54,6 +55,62 @@ def _create_linked_execution(
         use_shared_chronology=True,
     )
     return execution
+
+
+def test_second_linked_execution_advances_signal_activity(
+    owner_membership,
+    business_unit,
+    staff_membership,
+):
+    signal = create_minimal_v3_signal(
+        owner_membership,
+        title="Multiple linked executions",
+        status=Signal.Status.OPEN,
+    )
+    _create_linked_execution(
+        owner_membership=owner_membership,
+        signal=signal,
+        title="First execution",
+    )
+    previous_activity = timezone.now() - timezone.timedelta(days=1)
+    Signal.objects.filter(pk=signal.pk).update(last_activity_at=previous_activity)
+
+    _create_linked_execution(
+        owner_membership=owner_membership,
+        signal=signal,
+        title="Second execution",
+    )
+
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.IN_PROGRESS
+    assert signal.last_activity_at > previous_activity
+
+
+def test_linked_execution_task_does_not_advance_signal_activity(
+    owner_membership,
+    business_unit,
+    staff_membership,
+):
+    signal = create_minimal_v3_signal(
+        owner_membership,
+        title="Task activity isolation",
+        status=Signal.Status.OPEN,
+    )
+    execution = _create_linked_execution(
+        owner_membership=owner_membership,
+        signal=signal,
+        title="Linked task execution",
+    )
+    task = execution.task_executions.get()
+    signal.refresh_from_db()
+    previous_signal_activity = signal.last_activity_at
+
+    mark_execution_task_done(task_execution=task, actor=owner_membership)
+
+    signal.refresh_from_db()
+    execution.refresh_from_db()
+    assert execution.last_activity_at > previous_signal_activity
+    assert signal.last_activity_at == previous_signal_activity
 
 
 def test_cancel_single_linked_execution_reopens_signal_to_open(

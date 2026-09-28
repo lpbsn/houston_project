@@ -358,7 +358,14 @@ def _prune_shared_execution_assignees(
     current_membership_ids: set[uuid.UUID],
 ) -> None:
     """Drop assignees removed from a shared schedule on future executions."""
-    execution.assignees.exclude(membership_id__in=current_membership_ids).delete()
+    deleted_count, _ = execution.assignees.exclude(
+        membership_id__in=current_membership_ids,
+    ).delete()
+    if deleted_count:
+        now = timezone.now()
+        execution.last_activity_at = Greatest(F("last_activity_at"), Value(now))
+        execution.save(update_fields=["last_activity_at", "updated_at"])
+        execution.refresh_from_db(fields=["last_activity_at", "updated_at"])
 
 
 def _sync_future_execution_window(

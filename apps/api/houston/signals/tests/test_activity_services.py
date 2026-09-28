@@ -9,10 +9,11 @@ from django.db import close_old_connections, transaction
 from django.utils import timezone
 
 from houston.establishments.models import EstablishmentMembership
-from houston.signals.models import Signal
+from houston.signals.models import ExpectedAction, Signal
 from houston.signals.services import (
     aggregate_candidate_into_signal,
     pin_signal,
+    qualify_signal_routing,
     touch_signal_activity,
     unpin_signal,
 )
@@ -55,6 +56,24 @@ def test_pin_and_unpin_do_not_advance_signal_activity():
 
     unpin_signal(signal=signal)
     signal.refresh_from_db()
+    assert signal.last_activity_at == previous_activity
+
+
+def test_qualification_noop_does_not_advance_signal_activity():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = create_minimal_v3_signal(membership, title="Qualification no-op")
+    signal.expected_action = ExpectedAction.INSPECT
+    signal.save(update_fields=["expected_action", "updated_at"])
+    previous_activity = signal.last_activity_at
+
+    qualify_signal_routing(
+        signal=signal,
+        membership=membership,
+        patch={"expected_action": ExpectedAction.REPAIR},
+    )
+
+    signal.refresh_from_db()
+    assert signal.expected_action == ExpectedAction.INSPECT
     assert signal.last_activity_at == previous_activity
 
 

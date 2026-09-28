@@ -2193,6 +2193,10 @@ def qualify_signal_routing(
         survivor=None,
     )
     source_signature_before = build_signal_pattern_signature(locked_source)
+    effective_expected_action, _audit_block = _d3_expected_action_decision(
+        signal_expected_action=locked_source.expected_action or None,
+        candidate_expected_action=expected_action,
+    )
 
     activity_changed = any(
         (
@@ -2206,7 +2210,7 @@ def qualify_signal_routing(
             != getattr(resolution.operational_unit, "id", None),
             locked_source.routing_status != resolution.routing_status,
             locked_source.issue_focus != normalized_issue_focus,
-            (locked_source.expected_action or None) != (expected_action or None),
+            (locked_source.expected_action or None) != effective_expected_action,
         )
     )
     locked_source.affected_business_unit = resolution.affected_business_unit
