@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import {
   useMutation,
   useQuery,
@@ -5,6 +6,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query'
 
+import { placeResumePage } from '@/lib/feed-reading-window'
 import {
   invalidateEstablishmentDashboardQueries,
   invalidateEstablishmentSignalQueries,
@@ -37,14 +39,16 @@ import {
   patchSignalInActiveFeedCache,
   restoreSignalFeedOptimisticUpdate,
   SignalFeedContinuationStalled,
+  projectSignalFeedCache,
+  signalFeedCacheFromFirstPage,
   signalFeedQueryKey,
+  type SignalFeedCacheState,
   type SignalFeedOptimisticSnapshot,
   type SignalQuickActionCacheContext,
 } from './lib/signal-feed-cache'
 import type {
   SignalDetail,
   SignalFeedFilters,
-  SignalFeedResponse,
   SignalQualifyRoutingRequest,
   SignalQualifyRoutingResponse,
   SignalViewMode,
@@ -81,9 +85,15 @@ export function useSignalFeedQuery(
   const queryKey =
     signalFeedQueryKey({ source, establishmentId, viewMode, filters }) ??
     IDLE_SIGNAL_FEED_QUERY_KEY
+  const queryClient = useQueryClient()
   return useQuery({
     queryKey,
-    queryFn: () => fetchSignalFeedPage(source, establishmentId, viewMode, filters),
+    queryFn: async () => {
+      const page = await fetchSignalFeedPage(source, establishmentId, viewMode, filters)
+      const previous = queryClient.getQueryData<SignalFeedCacheState>(queryKey)
+      const generation = (previous?.readingWindow.generation ?? 0) + 1
+      return signalFeedCacheFromFirstPage(page, generation)
+    },
     enabled,
   })
 }
@@ -107,14 +117,20 @@ export function useLoadMoreSignalFeed(
       if (queryKey == null) {
         throw new Error('Établissement non sélectionné.')
       }
-      const current = queryClient.getQueryData<SignalFeedResponse>(queryKey)
+      const current = queryClient.getQueryData<SignalFeedCacheState>(queryKey)
       if (!current?.has_more || !current.next_cursor) {
         return current
       }
+      const generation = current.readingWindow.generation
+      const requestedCursor = current.next_cursor
       const page = await fetchSignalFeedPage(source, establishmentId, viewMode, filters, {
-        cursor: current.next_cursor,
+        cursor: requestedCursor,
       })
-      const appended = appendSignalFeedPage(current, page)
+      const latest = queryClient.getQueryData<SignalFeedCacheState>(queryKey)
+      if (!latest || latest.readingWindow.generation !== generation) {
+        return latest
+      }
+      const appended = appendSignalFeedPage(latest, page, requestedCursor)
       if (appended.stalled) {
         throw new SignalFeedContinuationStalled()
       }
@@ -137,19 +153,117 @@ export function useLoadMoreCrossSignalFeedPins(filters: SignalFeedFilters) {
       if (queryKey == null) {
         return undefined
       }
-      const current = queryClient.getQueryData<SignalFeedResponse>(queryKey)
+      const current = queryClient.getQueryData<SignalFeedCacheState>(queryKey)
       if (!current?.pins_has_more || !current.pins_next_cursor) {
         return current
       }
+      const generation = current.pinWindow.generation
+      const requestedCursor = current.pins_next_cursor
       const page = await fetchCrossSignalFeedPins(filters, {
-        cursor: current.pins_next_cursor,
+        cursor: requestedCursor,
       })
-      const appended = appendSignalFeedPinsPage(current, page)
+      const latest = queryClient.getQueryData<SignalFeedCacheState>(queryKey)
+      if (!latest || latest.pinWindow.generation !== generation) {
+        return latest
+      }
+      const appended = appendSignalFeedPinsPage(latest, page, requestedCursor)
       if (appended.stalled) {
         throw new SignalFeedContinuationStalled()
       }
       queryClient.setQueryData(queryKey, appended.feed)
       return appended.feed
+    },
+  })
+}
+
+class StaleFeedRefresh extends Error {
+  constructor() {
+    super('stale feed refresh')
+    this.name = 'StaleFeedRefresh'
+  }
+}
+
+export function isStaleFeedRefresh(error: unknown): boolean {
+  return error instanceof StaleFeedRefresh
+}
+
+export function useRefreshSignalFeed(
+  establishmentId: string | null,
+  viewMode: SignalViewMode,
+  filters: SignalFeedFilters,
+  options?: { source?: 'establishment' | 'cross' },
+) {
+  const source = options?.source ?? 'establishment'
+  const queryClient = useQueryClient()
+  const epoch = useRef(0)
+  return useMutation({
+    mutationFn: async () => {
+      const ticket = ++epoch.current
+      const queryKey = signalFeedQueryKey({
+        source,
+        establishmentId,
+        viewMode,
+        filters,
+      })
+      if (queryKey == null) {
+        throw new Error('Établissement non sélectionné.')
+      }
+      const page = await fetchSignalFeedPage(source, establishmentId, viewMode, filters)
+      if (ticket !== epoch.current) {
+        throw new StaleFeedRefresh()
+      }
+      return { page, queryKey }
+    },
+    onSuccess: ({ page, queryKey }) => {
+      const previous = queryClient.getQueryData<SignalFeedCacheState>(queryKey)
+      const generation = (previous?.readingWindow.generation ?? 0) + 1
+      queryClient.setQueryData(queryKey, signalFeedCacheFromFirstPage(page, generation))
+    },
+  })
+}
+
+export function useResumeSignalFeed(
+  establishmentId: string | null,
+  viewMode: SignalViewMode,
+  filters: SignalFeedFilters,
+  options?: { source?: 'establishment' | 'cross' },
+) {
+  const source = options?.source ?? 'establishment'
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (cursor: string) => {
+      const queryKey = signalFeedQueryKey({
+        source,
+        establishmentId,
+        viewMode,
+        filters,
+      })
+      if (queryKey == null) {
+        return
+      }
+      const current = queryClient.getQueryData<SignalFeedCacheState>(queryKey)
+      if (!current) {
+        return
+      }
+      const page = await fetchSignalFeedPage(source, establishmentId, viewMode, filters, {
+        cursor,
+      })
+      const latest = queryClient.getQueryData<SignalFeedCacheState>(queryKey)
+      if (!latest || latest.readingWindow.generation !== current.readingWindow.generation) {
+        return
+      }
+      queryClient.setQueryData(
+        queryKey,
+        projectSignalFeedCache({
+          ...latest,
+          readingWindow: placeResumePage(latest.readingWindow, {
+            requestCursor: cursor,
+            nextCursor: page.next_cursor,
+            hasMore: page.has_more,
+            items: page.items,
+          }),
+        }),
+      )
     },
   })
 }

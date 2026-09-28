@@ -116,6 +116,7 @@ function PinnedCarouselView({
         {items.map((item) => (
           <div
             key={item.id}
+            data-feed-item={item.id}
             className={cn('shrink-0 snap-center', multi ? 'w-[84%]' : 'w-full')}
           >
             <SignalCard

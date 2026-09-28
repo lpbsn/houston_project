@@ -99,8 +99,9 @@ export function applyRealtimeAccessEvent(
         })
       }
       if (event.membership_id && event.membership_id === activeMembershipId) {
-        invalidateEstablishmentSignalQueries(queryClient, establishmentId)
-        invalidateActionPlanExecutionFeedQueries(queryClient, establishmentId)
+        const force = { force: true } as const
+        invalidateEstablishmentSignalQueries(queryClient, establishmentId, force)
+        invalidateActionPlanExecutionFeedQueries(queryClient, establishmentId, force)
         invalidateEstablishmentActionPlanCatalogQueries(queryClient, establishmentId)
       }
       return

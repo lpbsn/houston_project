@@ -199,7 +199,7 @@ def test_detail_canceled_permission_hints_all_false(api_client):
     assert hints["can_create_linked_action_plan"] is False
 
 
-def test_feed_includes_scoped_canceled_after_detail_access(api_client):
+def test_feed_excludes_scoped_canceled_after_detail_access(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     manager = build_api_membership_on_establishment(
         owner,
@@ -221,12 +221,13 @@ def test_feed_includes_scoped_canceled_after_detail_access(api_client):
     )
 
     assert detail.status_code == 200
+    assert detail.json()["status"] == Signal.Status.CANCELED
     assert feed.status_code == 200
     feed_ids = {item["id"] for item in flatten_signal_feed_items(feed.json())}
-    assert str(signal.id) in feed_ids
+    assert str(signal.id) not in feed_ids
 
 
-def test_feed_general_view_excludes_canceled_out_of_pole_scope(api_client):
+def test_feed_general_view_excludes_canceled_in_and_out_of_pole_scope(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
     taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
@@ -247,7 +248,7 @@ def test_feed_general_view_excludes_canceled_out_of_pole_scope(api_client):
 
     assert response.status_code == 200
     feed_ids = {item["id"] for item in flatten_signal_feed_items(response.json())}
-    assert str(in_scope.id) in feed_ids
+    assert str(in_scope.id) not in feed_ids
     assert str(out_of_scope.id) not in feed_ids
 
 

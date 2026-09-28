@@ -1,6 +1,5 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import {
-  type InfiniteData,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -17,6 +16,7 @@ import {
   actionPlansQueryKeys,
   type ActionPlanExecutionFeedCategory,
   type ActionPlanExecutionFeedViewMode,
+  ActionPlansApiError,
   cancelActionPlanExecution,
   createActionPlan,
   createObservationFromActionPlanTask,
@@ -56,65 +56,38 @@ import type {
   ActionPlanTaskSkipRequest,
   PatchedActionPlanExecutionUpdateRequest,
   PatchedActionPlanUpdateRequest,
-  ActionPlanExecutionFeedPinsResponse,
-  ActionPlanExecutionFeedResponse,
 } from './types'
 import {
   isActionPlanExecutionDetail,
   isActionPlanPlanningSubmitResponse,
 } from './lib/action-plan-create-response'
 import {
+  placeResumePage,
+  prependBehindPage,
+  showRetainedPageOne,
+  windowHead,
+} from '@/lib/feed-reading-window'
+
+import {
+  appendExecutionFeedWindow,
   applyActionPlanExecutionPinSuccess,
+  executionFeedCacheFromPage,
+  executionPinsCacheFromPage,
   prepareActionPlanExecutionPinOptimisticUpdate,
   restoreActionPlanExecutionPinOptimisticUpdate,
+  type ExecutionFeedCacheState,
+  type ExecutionPinsCacheState,
 } from './lib/action-plan-execution-feed-cache'
 
-type ExecutionFeedPageContract = {
-  items: unknown[]
-  next_cursor: string | null
-  has_more: boolean
-}
-
-type ExecutionFeedContinuationControls = {
-  isRetryingStalledContinuation: boolean
-  retryStalledContinuation: () => Promise<void>
-}
-
-function useExecutionFeedContinuation<TPage extends ExecutionFeedPageContract>(options: {
-  queryKey: readonly unknown[]
-  fetchPage: (cursor: string) => Promise<TPage>
-}): ExecutionFeedContinuationControls {
-  const { fetchPage, queryKey } = options
-  const queryClient = useQueryClient()
-  const [isRetryingStalledContinuation, setIsRetryingStalledContinuation] = useState(false)
-
-  const retryStalledContinuation = useCallback(async () => {
-    const current = queryClient.getQueryData<InfiniteData<TPage, unknown>>(queryKey)
-    const lastPageIndex = (current?.pages.length ?? 0) - 1
-    const requestCursor = current?.pageParams[lastPageIndex]
-    if (!current || lastPageIndex < 1 || typeof requestCursor !== 'string') {
-      return
-    }
-    setIsRetryingStalledContinuation(true)
-    try {
-      const page = await fetchPage(requestCursor)
-      queryClient.setQueryData<InfiniteData<TPage, unknown>>(queryKey, {
-        pages: current.pages.map((existing, index) =>
-          index === lastPageIndex ? page : existing,
-        ),
-        pageParams: current.pageParams,
-      })
-    } catch {
-      // Keep the stalled page and its local retry visible.
-    } finally {
-      setIsRetryingStalledContinuation(false)
-    }
-  }, [fetchPage, queryClient, queryKey])
-
-  return {
-    isRetryingStalledContinuation,
-    retryStalledContinuation,
+class StaleExecutionFeedRefresh extends Error {
+  constructor() {
+    super('stale execution feed refresh')
+    this.name = 'StaleExecutionFeedRefresh'
   }
+}
+
+export function isStaleExecutionFeedRefresh(error: unknown): boolean {
+  return error instanceof StaleExecutionFeedRefresh
 }
 
 function invalidateCatalogSurfaces(
@@ -170,6 +143,13 @@ export function useActionPlanExecutionFeedQuery(
   const source = options?.source ?? 'establishment'
   const category = options?.category ?? 'all'
   const enabled = source === 'cross' || Boolean(establishmentId)
+  const queryClient = useQueryClient()
+  const refreshEpoch = useRef(0)
+  const continuationEpoch = useRef(0)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [continuationError, setContinuationError] = useState<unknown>(null)
+  const [refreshError, setRefreshError] = useState<unknown>(null)
   const queryKey = useMemo(
     () =>
       source === 'cross'
@@ -180,7 +160,7 @@ export function useActionPlanExecutionFeedQuery(
     [category, establishmentId, source, viewMode],
   )
   const fetchPage = useCallback(
-    (cursor: string) => {
+    (cursor?: string) => {
       if (source === 'cross') {
         return fetchCrossActionPlanExecutionFeed(viewMode, { category, cursor })
       }
@@ -191,39 +171,191 @@ export function useActionPlanExecutionFeedQuery(
     },
     [category, establishmentId, source, viewMode],
   )
-  const query = useInfiniteQuery({
+  const query = useQuery({
     queryKey,
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) => {
-      if (source === 'cross') {
-        return fetchCrossActionPlanExecutionFeed(viewMode, { category, cursor: pageParam })
-      }
-      if (!establishmentId) {
-        throw new Error('Établissement non sélectionné.')
-      }
-      return fetchActionPlanExecutionFeed(establishmentId, viewMode, {
-        category,
-        cursor: pageParam,
-      })
-    },
-    getNextPageParam: (lastPage, _pages, lastPageParam) => {
-      if (
-        !lastPage.has_more ||
-        !lastPage.next_cursor ||
-        lastPage.items.length === 0 ||
-        lastPage.next_cursor === lastPageParam
-      ) {
-        return undefined
-      }
-      return lastPage.next_cursor
+    queryFn: async () => {
+      const page = await fetchPage()
+      const previous = queryClient.getQueryData<ExecutionFeedCacheState>(queryKey)
+      const generation = (previous?.window.generation ?? 0) + 1
+      return executionFeedCacheFromPage(page, generation)
     },
     enabled,
   })
-  const continuation = useExecutionFeedContinuation<ActionPlanExecutionFeedResponse>({
-    queryKey,
-    fetchPage,
-  })
-  return { ...query, ...continuation }
+
+  const loadMore = useCallback(async () => {
+    const current = queryClient.getQueryData<ExecutionFeedCacheState>(queryKey)
+    const head = current ? windowHead(current.window) : null
+    if (!current || !head?.hasMore || !head.nextCursor || current.window.stalled) {
+      return
+    }
+    const generation = current.window.generation
+    const requestedCursor = head.nextCursor
+    const ticket = ++continuationEpoch.current
+    setIsLoadingMore(true)
+    setContinuationError(null)
+    try {
+      const page = await fetchPage(requestedCursor)
+      if (ticket !== continuationEpoch.current) {
+        return
+      }
+      const latest = queryClient.getQueryData<ExecutionFeedCacheState>(queryKey)
+      if (!latest || latest.window.generation !== generation) {
+        return
+      }
+      const appended = appendExecutionFeedWindow(latest.window, page, requestedCursor)
+      queryClient.setQueryData<ExecutionFeedCacheState>(queryKey, {
+        ...latest,
+        window: appended.window,
+      })
+      if (appended.stalled) {
+        setContinuationError(new Error('La suite du feed n’a pas pu être chargée.'))
+      }
+    } catch (error) {
+      if (ticket === continuationEpoch.current) {
+        setContinuationError(error)
+      }
+    } finally {
+      if (ticket === continuationEpoch.current) {
+        setIsLoadingMore(false)
+      }
+    }
+  }, [fetchPage, queryClient, queryKey])
+
+  const refresh = useCallback(async () => {
+    const ticket = ++refreshEpoch.current
+    continuationEpoch.current += 1
+    setIsRefreshing(true)
+    setRefreshError(null)
+    try {
+      const page = await fetchPage()
+      if (ticket !== refreshEpoch.current) {
+        throw new StaleExecutionFeedRefresh()
+      }
+      const previous = queryClient.getQueryData<ExecutionFeedCacheState>(queryKey)
+      queryClient.setQueryData(
+        queryKey,
+        executionFeedCacheFromPage(page, (previous?.window.generation ?? 0) + 1),
+      )
+      setContinuationError(null)
+      return true
+    } catch (error) {
+      if (ticket === refreshEpoch.current && !isStaleExecutionFeedRefresh(error)) {
+        setRefreshError(error)
+      }
+      return false
+    } finally {
+      if (ticket === refreshEpoch.current) {
+        setIsRefreshing(false)
+      }
+    }
+  }, [fetchPage, queryClient, queryKey])
+
+  const resumeAt = useCallback(
+    async (cursor: string) => {
+      const current = queryClient.getQueryData<ExecutionFeedCacheState>(queryKey)
+      if (!current) {
+        return
+      }
+      const generation = current.window.generation
+      const page = await fetchPage(cursor)
+      const latest = queryClient.getQueryData<ExecutionFeedCacheState>(queryKey)
+      if (!latest || latest.window.generation !== generation) {
+        return
+      }
+      queryClient.setQueryData<ExecutionFeedCacheState>(queryKey, {
+        ...latest,
+        window: placeResumePage(latest.window, {
+          requestCursor: cursor,
+          nextCursor: page.next_cursor,
+          hasMore: page.has_more,
+          items: page.items,
+        }),
+      })
+    },
+    [fetchPage, queryClient, queryKey],
+  )
+
+  const showPageOne = useCallback(() => {
+    queryClient.setQueryData<ExecutionFeedCacheState>(queryKey, (current) =>
+      current ? { ...current, window: showRetainedPageOne(current.window) } : current,
+    )
+  }, [queryClient, queryKey])
+
+  const loadBehind = useCallback(async () => {
+    const current = queryClient.getQueryData<ExecutionFeedCacheState>(queryKey)
+    if (!current?.window.behindCursor) {
+      return
+    }
+    const cursor = current.window.behindCursor
+    const generation = current.window.generation
+    const ticket = ++continuationEpoch.current
+    setIsLoadingMore(true)
+    setContinuationError(null)
+    try {
+      const page = await fetchPage(cursor)
+      if (ticket !== continuationEpoch.current) {
+        return
+      }
+      const latest = queryClient.getQueryData<ExecutionFeedCacheState>(queryKey)
+      if (!latest || latest.window.generation !== generation || latest.window.behindCursor !== cursor) {
+        return
+      }
+      const restored = prependBehindPage(latest.window, {
+        items: page.items,
+        nextCursor: page.next_cursor,
+        hasMore: page.has_more,
+      }, (wrapper) => wrapper.action_plan_execution.id)
+      queryClient.setQueryData<ExecutionFeedCacheState>(queryKey, {
+        ...latest,
+        window: restored.window,
+      })
+      if (restored.stalled) {
+        setContinuationError(new Error('La suite du feed n’a pas pu être chargée.'))
+      }
+    } catch (error) {
+      if (ticket === continuationEpoch.current) {
+        setContinuationError(error)
+      }
+    } finally {
+      if (ticket === continuationEpoch.current) {
+        setIsLoadingMore(false)
+      }
+    }
+  }, [fetchPage, queryClient, queryKey])
+
+  const retryStalledContinuation = useCallback(async () => {
+    if (
+      continuationError instanceof ActionPlansApiError &&
+      continuationError.code === 'cursor_context_mismatch'
+    ) {
+      await refresh()
+      return
+    }
+    queryClient.setQueryData<ExecutionFeedCacheState>(queryKey, (current) =>
+      current ? { ...current, window: { ...current.window, stalled: false } } : current,
+    )
+    setContinuationError(null)
+    await loadMore()
+  }, [continuationError, loadMore, queryClient, queryKey, refresh])
+
+  const head = query.data ? windowHead(query.data.window) : null
+  return {
+    ...query,
+    hasNextPage: Boolean(head?.hasMore) && !query.data?.window.stalled,
+    isFetchingNextPage: isLoadingMore,
+    fetchNextPage: loadMore,
+    loadMore,
+    isLoadingMore,
+    continuationError,
+    refresh,
+    isRefreshing,
+    refreshError,
+    isRetryingStalledContinuation: isLoadingMore,
+    retryStalledContinuation,
+    showPageOne,
+    loadBehind,
+    resumeAt,
+  }
 }
 
 export function useCrossActionPlanExecutionFeedPinsQuery(
@@ -231,46 +363,92 @@ export function useCrossActionPlanExecutionFeedPinsQuery(
   category: ActionPlanExecutionFeedCategory,
   options?: { enabled?: boolean },
 ) {
+  const queryClient = useQueryClient()
+  const continuationEpoch = useRef(0)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [continuationError, setContinuationError] = useState<unknown>(null)
   const queryKey = useMemo(
     () => actionPlansQueryKeys.crossExecutionFeedPins(viewMode, category),
     [category, viewMode],
   )
-  const fetchPage = useCallback(
-    (cursor: string) =>
-      fetchCrossActionPlanExecutionFeedPins(viewMode, {
-        category,
-        cursor,
-        pageSize: 10,
-      }),
-    [category, viewMode],
-  )
-  const query = useInfiniteQuery({
+  const query = useQuery({
     queryKey,
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) =>
-      fetchCrossActionPlanExecutionFeedPins(viewMode, {
+    queryFn: async () => {
+      const page = await fetchCrossActionPlanExecutionFeedPins(viewMode, {
         category,
-        cursor: pageParam,
-        pageSize: pageParam ? 10 : 3,
-      }),
-    getNextPageParam: (lastPage, _pages, lastPageParam) => {
-      if (
-        !lastPage.has_more ||
-        !lastPage.next_cursor ||
-        lastPage.items.length === 0 ||
-        lastPage.next_cursor === lastPageParam
-      ) {
-        return undefined
-      }
-      return lastPage.next_cursor
+        pageSize: 3,
+      })
+      const previous = queryClient.getQueryData<ExecutionPinsCacheState>(queryKey)
+      return executionPinsCacheFromPage(page, (previous?.window.generation ?? 0) + 1)
     },
     enabled: options?.enabled !== false,
   })
-  const continuation = useExecutionFeedContinuation<ActionPlanExecutionFeedPinsResponse>({
-    queryKey,
-    fetchPage,
-  })
-  return { ...query, ...continuation }
+  const loadMore = useCallback(async () => {
+    const current = queryClient.getQueryData<ExecutionPinsCacheState>(queryKey)
+    const head = current ? windowHead(current.window) : null
+    if (!current || !head?.hasMore || !head.nextCursor || current.window.stalled) {
+      return
+    }
+    const generation = current.window.generation
+    const requestedCursor = head.nextCursor
+    const ticket = ++continuationEpoch.current
+    setIsLoadingMore(true)
+    setContinuationError(null)
+    try {
+      const page = await fetchCrossActionPlanExecutionFeedPins(viewMode, {
+        category,
+        cursor: requestedCursor,
+        pageSize: 10,
+      })
+      if (ticket !== continuationEpoch.current) {
+        return
+      }
+      const latest = queryClient.getQueryData<ExecutionPinsCacheState>(queryKey)
+      if (!latest || latest.window.generation !== generation) {
+        return
+      }
+      const appended = appendExecutionFeedWindow(latest.window, page, requestedCursor)
+      queryClient.setQueryData<ExecutionPinsCacheState>(queryKey, { window: appended.window })
+      if (appended.stalled) {
+        setContinuationError(new Error('La suite des épingles n’a pas pu être chargée.'))
+      }
+    } catch (error) {
+      if (ticket === continuationEpoch.current) {
+        setContinuationError(error)
+      }
+    } finally {
+      if (ticket === continuationEpoch.current) {
+        setIsLoadingMore(false)
+      }
+    }
+  }, [category, queryClient, queryKey, viewMode])
+  const retryStalledContinuation = useCallback(async () => {
+    if (
+      continuationError instanceof ActionPlansApiError &&
+      continuationError.code === 'cursor_context_mismatch'
+    ) {
+      await queryClient.refetchQueries({ queryKey })
+      if (queryClient.getQueryState(queryKey)?.status === 'success') {
+        setContinuationError(null)
+      }
+      return
+    }
+    queryClient.setQueryData<ExecutionPinsCacheState>(queryKey, (current) =>
+      current ? { window: { ...current.window, stalled: false } } : current,
+    )
+    setContinuationError(null)
+    await loadMore()
+  }, [continuationError, loadMore, queryClient, queryKey])
+  const head = query.data ? windowHead(query.data.window) : null
+  return {
+    ...query,
+    hasNextPage: Boolean(head?.hasMore) && !query.data?.window.stalled,
+    isFetchingNextPage: isLoadingMore,
+    fetchNextPage: loadMore,
+    continuationError,
+    isRetryingStalledContinuation: isLoadingMore,
+    retryStalledContinuation,
+  }
 }
 
 export function useActionPlanExecutionUpcomingQuery(

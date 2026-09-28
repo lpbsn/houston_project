@@ -8,6 +8,16 @@
     },
     {
       "subject_type": "signal",
+      "reason": "signal.resolved",
+      "dispatch": "by_subject_type"
+    },
+    {
+      "subject_type": "signal",
+      "reason": "signal.canceled",
+      "dispatch": "by_subject_type"
+    },
+    {
+      "subject_type": "signal",
       "reason": "signal.created",
       "dispatch": "by_subject_type"
     },

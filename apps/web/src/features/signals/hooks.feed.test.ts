@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestQueryClient } from '@/test-utils'
 
 import { signalsQueryKeys } from './api'
-import { useLoadMoreSignalFeed, useSignalFeedQuery } from './hooks'
+import { useLoadMoreSignalFeed, useRefreshSignalFeed, useSignalFeedQuery } from './hooks'
 import { EMPTY_SIGNAL_FEED_FILTERS } from './lib/signal-feed-filters'
 import type { SignalFeedItem, SignalFeedResponse } from './types'
 
@@ -169,5 +169,59 @@ describe('useSignalFeedQuery', () => {
     expect(data?.counts?.pinned).toBe(1)
     expect(data?.next_cursor).toBe('cursor-2')
     expect(data?.has_more).toBe(false)
+  })
+})
+
+describe('useRefreshSignalFeed', () => {
+  beforeEach(() => {
+    fetchSignalFeed.mockReset()
+  })
+
+  it('writes the response under the query key captured when refresh starts', async () => {
+    let resolveRefresh: ((page: SignalFeedResponse) => void) | undefined
+    fetchSignalFeed.mockImplementation(
+      () =>
+        new Promise<SignalFeedResponse>((resolve) => {
+          resolveRefresh = resolve
+        }),
+    )
+    const queryClient = createTestQueryClient()
+    const openFilters = { ...EMPTY_SIGNAL_FEED_FILTERS, statuses: ['open'] as const }
+    const interestingFilters = {
+      ...EMPTY_SIGNAL_FEED_FILTERS,
+      statuses: ['interesting'] as const,
+    }
+    const hook = renderHook(
+      ({ filters }) => useRefreshSignalFeed(EST, 'personal', filters),
+      {
+        initialProps: { filters: openFilters },
+        wrapper: ({ children }) =>
+          createElement(QueryClientProvider, { client: queryClient }, children),
+      },
+    )
+
+    act(() => {
+      hook.result.current.mutate()
+    })
+    await waitFor(() => expect(fetchSignalFeed).toHaveBeenCalledTimes(1))
+    hook.rerender({ filters: interestingFilters })
+    await act(async () => {
+      resolveRefresh?.({
+        ...firstPage,
+        items: [buildFeedItem({ id: 'open-refresh' })],
+      })
+    })
+
+    await waitFor(() => expect(hook.result.current.isSuccess).toBe(true))
+    expect(
+      queryClient.getQueryData<SignalFeedResponse>(
+        signalsQueryKeys.feed(EST, 'personal', openFilters),
+      )?.items.map((item) => item.id),
+    ).toEqual(['open-refresh'])
+    expect(
+      queryClient.getQueryData(
+        signalsQueryKeys.feed(EST, 'personal', interestingFilters),
+      ),
+    ).toBeUndefined()
   })
 })

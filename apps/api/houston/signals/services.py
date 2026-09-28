@@ -1702,10 +1702,10 @@ def _transition_active_signal_to_terminal(
         from houston.gamification.services import award_signal_progress_points
 
         award_signal_progress_points(signal=locked_self, lifecycle_event=lifecycle_event)
-    _schedule_signal_invalidation(
-        signal=locked_self,
-        reason="signal.updated",
-    )
+    if target_status == Signal.Status.RESOLVED:
+        _schedule_signal_invalidation(signal=locked_self, reason="signal.resolved")
+    else:
+        _schedule_signal_invalidation(signal=locked_self, reason="signal.canceled")
     # Keep caller-side in-memory Signal up-to-date.
     # Some call sites (including unit tests) reuse the same Signal instance
     # right after a transition, without always re-fetching from the DB.

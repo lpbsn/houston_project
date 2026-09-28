@@ -15,6 +15,7 @@ import {
   invalidateSignalFeedViewModes,
   patchSignalInActiveFeedCache,
   reconcileSignalFeedItem,
+  removeSignalFromFeedCache,
   updateSignalDetailCache,
 } from './signal-feed-cache'
 
@@ -332,6 +333,48 @@ describe('appendSignalFeedPinsPage', () => {
     expect(appended.feed.items.map((item) => item.id)).toEqual(['open-1'])
     expect(appended.feed.pins?.map((item) => item.id)).toEqual(['pin-1', 'pin-2'])
     expect(appended.feed.pins_has_more).toBe(false)
+  })
+})
+
+describe('removeSignalFromFeedCache', () => {
+  it('decrements the list status count for a realtime terminal removal', () => {
+    const removed = removeSignalFromFeedCache(
+      buildFeed({
+        items: [
+          buildFeedItem({ id: 'signal-1', status: 'open' }),
+          buildFeedItem({ id: 'signal-2', status: 'open' }),
+        ],
+        counts: { open: 2, in_progress: 0, interesting: 0, pinned: 0 },
+      }),
+      'signal-1',
+    )
+
+    expect(removed.feed.items.map((item) => item.id)).toEqual(['signal-2'])
+    expect(removed.feed.counts).toEqual({
+      open: 1,
+      in_progress: 0,
+      interesting: 0,
+      pinned: 0,
+    })
+  })
+
+  it('decrements only the pinned count when a pinned signal is removed', () => {
+    const removed = removeSignalFromFeedCache(
+      buildFeed({
+        items: [],
+        pins: [buildFeedItem({ is_pinned: true })],
+        counts: { open: 4, in_progress: 2, interesting: 1, pinned: 1 },
+      }),
+      SIGNAL_ID,
+    )
+
+    expect(removed.feed.pins).toEqual([])
+    expect(removed.feed.counts).toEqual({
+      open: 4,
+      in_progress: 2,
+      interesting: 1,
+      pinned: 0,
+    })
   })
 })
 

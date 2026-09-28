@@ -10,6 +10,10 @@ export type SignalFeedReadingState = {
   filters: SignalFeedFilters
   expandedByKey: Record<string, boolean>
   scrollTop: number
+  anchorId: string | null
+  neighborId: string | null
+  resumeCursor: string | null
+  authorizationFingerprint: string | null
 }
 
 const memory = new Map<string, SignalFeedReadingState>()
@@ -30,6 +34,10 @@ function emptyReadingState(): SignalFeedReadingState {
     filters: EMPTY_SIGNAL_FEED_FILTERS,
     expandedByKey: {},
     scrollTop: 0,
+    anchorId: null,
+    neighborId: null,
+    resumeCursor: null,
+    authorizationFingerprint: null,
   }
 }
 
@@ -47,6 +55,13 @@ export function writeSignalFeedReading(
     filters: patch.filters ? normalizeSignalFeedFilters(patch.filters) : current.filters,
     expandedByKey: patch.expandedByKey ?? current.expandedByKey,
     scrollTop: patch.scrollTop ?? current.scrollTop,
+    anchorId: patch.anchorId === undefined ? current.anchorId : patch.anchorId,
+    neighborId: patch.neighborId === undefined ? current.neighborId : patch.neighborId,
+    resumeCursor: patch.resumeCursor === undefined ? current.resumeCursor : patch.resumeCursor,
+    authorizationFingerprint:
+      patch.authorizationFingerprint === undefined
+        ? current.authorizationFingerprint
+        : patch.authorizationFingerprint,
   })
 }
 

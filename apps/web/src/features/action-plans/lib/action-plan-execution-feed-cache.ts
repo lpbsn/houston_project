@@ -1,4 +1,16 @@
-import type { InfiniteData, QueryClient, QueryKey } from '@tanstack/react-query'
+import type { QueryClient, QueryKey } from '@tanstack/react-query'
+
+import {
+  appendForwardPage,
+  emptyFeedReadingWindow,
+  hydratedItems,
+  mapHydratedItems,
+  removeHydratedItem,
+  replaceWithFirstPage,
+  windowHead,
+  type FeedReadingWindow,
+} from '@/lib/feed-reading-window'
+import { invalidateFeedListQuery } from '@/lib/query-invalidation'
 
 import type { ActionPlanExecutionFeedViewMode } from '../api'
 import type {
@@ -15,11 +27,97 @@ export type ActionPlanExecutionFeedSectionCountKey =
   | 'overdue'
   | 'in_progress'
 
+export type ExecutionFeedCacheState = {
+  window: FeedReadingWindow<ActionPlanExecutionFeedItemWrapper>
+  pins: ActionPlanExecutionFeedItemWrapper[]
+  sectionCounts: ActionPlanExecutionFeedResponse['section_counts'] | null
+  scheduled: ActionPlanExecutionFeedResponse['scheduled'] | null
+}
+
+export type ExecutionPinsCacheState = {
+  window: FeedReadingWindow<ActionPlanExecutionFeedItemWrapper>
+}
+
 export type ActionPlanExecutionFeedOptimisticSnapshot = {
   snapshots: {
     queryKey: QueryKey
-    previous: InfiniteData<ActionPlanExecutionFeedResponse> | undefined
+    previous: ExecutionFeedCacheState | undefined
   }[]
+}
+
+function wrapperId(wrapper: ActionPlanExecutionFeedItemWrapper): string {
+  return wrapper.action_plan_execution.id
+}
+
+export function executionFeedCacheFromPage(
+  page: ActionPlanExecutionFeedResponse,
+  generation = 1,
+): ExecutionFeedCacheState {
+  return {
+    window: replaceWithFirstPage(
+      emptyFeedReadingWindow<ActionPlanExecutionFeedItemWrapper>(),
+      {
+        requestCursor: null,
+        nextCursor: page.next_cursor,
+        hasMore: page.has_more,
+        items: page.items,
+      },
+      generation,
+    ),
+    pins: page.pins ?? [],
+    sectionCounts: page.section_counts ?? null,
+    scheduled: page.scheduled ?? null,
+  }
+}
+
+export function executionPinsCacheFromPage(
+  page: { items: ActionPlanExecutionFeedItemWrapper[]; next_cursor: string | null; has_more: boolean },
+  generation = 1,
+): ExecutionPinsCacheState {
+  return {
+    window: replaceWithFirstPage(
+      emptyFeedReadingWindow<ActionPlanExecutionFeedItemWrapper>(),
+      {
+        requestCursor: null,
+        nextCursor: page.next_cursor,
+        hasMore: page.has_more,
+        items: page.items,
+      },
+      generation,
+    ),
+  }
+}
+
+export function appendExecutionFeedWindow<TPage extends {
+  items: ActionPlanExecutionFeedItemWrapper[]
+  next_cursor: string | null
+  has_more: boolean
+}>(
+  window: FeedReadingWindow<ActionPlanExecutionFeedItemWrapper>,
+  page: TPage,
+  requestedCursor = windowHead(window)?.nextCursor ?? null,
+) {
+  if (!requestedCursor) {
+    return { window, stalled: false as const, ignored: true as const }
+  }
+  return appendForwardPage(window, requestedCursor, {
+    items: page.items,
+    nextCursor: page.next_cursor,
+    hasMore: page.has_more,
+  }, wrapperId)
+}
+
+function patchWrapper(
+  wrapper: ActionPlanExecutionFeedItemWrapper,
+  patch: Partial<ActionPlanExecutionFeedItem>,
+): ActionPlanExecutionFeedItemWrapper {
+  return {
+    ...wrapper,
+    action_plan_execution: {
+      ...wrapper.action_plan_execution,
+      ...patch,
+    },
+  }
 }
 
 function adjustSectionCounts(
@@ -32,6 +130,50 @@ function adjustSectionCounts(
   const delta = options.isPinned ? 1 : -1
   next.pinned = Math.max(0, next.pinned + delta)
   return next
+}
+
+function executionSectionCountKey(
+  item: ActionPlanExecutionFeedItem,
+): Exclude<ActionPlanExecutionFeedSectionCountKey, 'pinned'> | null {
+  if (item.status === 'pending_validation') {
+    return 'pending_validation'
+  }
+  if (item.status === 'in_progress') {
+    return item.is_overdue ? 'overdue' : 'in_progress'
+  }
+  return null
+}
+
+export function removeExecutionFromFeedCache(
+  current: ExecutionFeedCacheState,
+  executionId: string,
+): ExecutionFeedCacheState {
+  const list = hydratedItems(current.window)
+  const listItem = list.find((wrapper) => wrapperId(wrapper) === executionId)
+  const pinItem = current.pins.find((wrapper) => wrapperId(wrapper) === executionId)
+  const found = pinItem ?? listItem
+  if (!found) {
+    return current
+  }
+
+  let sectionCounts = current.sectionCounts
+  if (sectionCounts) {
+    sectionCounts = { ...sectionCounts }
+    if (pinItem) {
+      sectionCounts.pinned = Math.max(0, sectionCounts.pinned - 1)
+    }
+    const section = executionSectionCountKey(found.action_plan_execution)
+    if (section) {
+      sectionCounts[section] = Math.max(0, sectionCounts[section] - 1)
+    }
+  }
+
+  return {
+    ...current,
+    window: removeHydratedItem(current.window, executionId, wrapperId).window,
+    pins: current.pins.filter((wrapper) => wrapperId(wrapper) !== executionId),
+    sectionCounts,
+  }
 }
 
 export function patchExecutionInFeedCache(
@@ -51,91 +193,65 @@ export function patchExecutionInFeedCache(
     options.viewMode,
   ] as const
 
-  queryClient.setQueriesData<InfiniteData<ActionPlanExecutionFeedResponse>>({ queryKey }, (current) => {
-    if (!current) {
+  queryClient.setQueriesData<ExecutionFeedCacheState>({ queryKey }, (current) => {
+    if (!current?.window) {
       return current
     }
 
-    let found: ActionPlanExecutionFeedItemWrapper | undefined
-    for (const page of current.pages) {
-      found = [...page.items, ...(page.pins ?? [])].find(
-        (wrapper) => wrapper.action_plan_execution.id === options.executionId,
-      )
-      if (found) {
-        break
-      }
-    }
+    const list = hydratedItems(current.window)
+    const pinIndex = current.pins.findIndex((wrapper) => wrapperId(wrapper) === options.executionId)
+    const listIndex = list.findIndex((wrapper) => wrapperId(wrapper) === options.executionId)
+    const found = pinIndex >= 0 ? current.pins[pinIndex] : listIndex >= 0 ? list[listIndex] : undefined
     if (!found) {
       return current
     }
 
-    const patched = {
-      ...found,
-      action_plan_execution: {
-        ...found.action_plan_execution,
-        ...options.patch,
-      },
-    }
+    const patched = patchWrapper(found, options.patch)
     const requestedPinState = options.patch.is_pinned
     const movesCollection =
       typeof requestedPinState === 'boolean' &&
       found.action_plan_execution.is_pinned !== requestedPinState
 
-    let pages = current.pages.map((page) => ({
-      ...page,
-      items: page.items
-        .filter((wrapper) => wrapper.action_plan_execution.id !== options.executionId)
-        .map((wrapper) =>
-          wrapper.action_plan_execution.id === options.executionId ? patched : wrapper,
-        ),
-      pins: page.pins?.filter(
-        (wrapper) => wrapper.action_plan_execution.id !== options.executionId,
-      ),
-    }))
-
     if (!movesCollection) {
-      pages = current.pages.map((page) => ({
-        ...page,
-        items: page.items.map((wrapper) =>
-          wrapper.action_plan_execution.id === options.executionId ? patched : wrapper,
+      return {
+        ...current,
+        pins: current.pins.map((wrapper) =>
+          wrapperId(wrapper) === options.executionId ? patched : wrapper,
         ),
-        pins: page.pins?.map((wrapper) =>
-          wrapper.action_plan_execution.id === options.executionId ? patched : wrapper,
+        window: mapHydratedItems(current.window, (wrapper) =>
+          wrapperId(wrapper) === options.executionId ? patched : wrapper,
         ),
-      }))
-    } else if (requestedPinState === true) {
-      const pinsPageIndex = pages.findIndex((page) => Array.isArray(page.pins))
-      if (pinsPageIndex >= 0) {
-        const pinsPage = pages[pinsPageIndex]!
-        pages[pinsPageIndex] = {
-          ...pinsPage,
-          pins: [...(pinsPage.pins ?? []), patched],
-        }
-      }
-    } else {
-      const listPageIndex = pages.findIndex((page) => Array.isArray(page.pins))
-      if (listPageIndex >= 0) {
-        const listPage = pages[listPageIndex]!
-        pages[listPageIndex] = {
-          ...listPage,
-          items: [patched, ...listPage.items],
-        }
       }
     }
 
-    if (options.adjustSectionCountsForPin && movesCollection) {
-      pages = pages.map((page) =>
-        page.section_counts
-          ? {
-              ...page,
-              section_counts: adjustSectionCounts(page.section_counts, {
-                isPinned: requestedPinState === true,
-              }),
-            }
-          : page,
-      )
+    const without = removeHydratedItem(current.window, options.executionId, wrapperId).window
+    const pins = current.pins.filter((wrapper) => wrapperId(wrapper) !== options.executionId)
+    let nextPins = pins
+    let nextWindow = without
+    if (requestedPinState === true) {
+      nextPins = [...pins, patched]
+    } else if (nextWindow.pageOne) {
+      nextWindow = {
+        ...nextWindow,
+        pageOne: {
+          ...nextWindow.pageOne,
+          items: [patched, ...nextWindow.pageOne.items],
+        },
+      }
     }
-    return { ...current, pages }
+
+    let sectionCounts = current.sectionCounts
+    if (options.adjustSectionCountsForPin && sectionCounts) {
+      sectionCounts = adjustSectionCounts(sectionCounts, {
+        isPinned: requestedPinState === true,
+      })
+    }
+    return {
+      ...current,
+      window: nextWindow,
+      pins: nextPins,
+      sectionCounts,
+    }
   })
 }
 
@@ -145,14 +261,12 @@ export function invalidateActionPlanExecutionFeedViewModes(
   viewModes: ActionPlanExecutionFeedViewMode[] = EXECUTION_FEED_VIEW_MODES,
 ): void {
   for (const viewMode of viewModes) {
-    void queryClient.invalidateQueries({
-      queryKey: [
-        'action-plans',
-        'action-plan-execution-feed',
-        establishmentId,
-        viewMode,
-      ],
-    })
+    invalidateFeedListQuery(queryClient, [
+      'action-plans',
+      'action-plan-execution-feed',
+      establishmentId,
+      viewMode,
+    ])
   }
 }
 
@@ -173,9 +287,9 @@ export async function prepareActionPlanExecutionPinOptimisticUpdate(
       viewMode,
     ] as const
     await queryClient.cancelQueries({ queryKey })
-    for (const [cachedQueryKey, previous] of queryClient.getQueriesData<
-      InfiniteData<ActionPlanExecutionFeedResponse>
-    >({ queryKey })) {
+    for (const [cachedQueryKey, previous] of queryClient.getQueriesData<ExecutionFeedCacheState>({
+      queryKey,
+    })) {
       snapshots.push({ queryKey: cachedQueryKey, previous })
     }
     patchExecutionInFeedCache(queryClient, {

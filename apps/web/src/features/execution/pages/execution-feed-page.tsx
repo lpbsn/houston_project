@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 
 import { serializeAppRoute, useAppRoute } from '@/app/app-routes'
@@ -11,6 +19,13 @@ import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
 import { TerrainHubTitleSlot } from '@/components/layout/terrain-hub-title-slot'
 import { TerrainHubViewToolbar } from '@/components/layout/terrain-hub-view-toolbar'
 import { TerrainFeedback } from '@/components/domain/terrain-feedback'
+import {
+  FeedContinuationFooter,
+  FeedPullIndicator,
+  FeedRefreshButton,
+  FeedUpdatesBanner,
+  useFeedPullToRefresh,
+} from '@/components/domain/feed-refresh-controls'
 import { Button } from '@/components/ui/button'
 import {
   TerrainEmptyState,
@@ -19,7 +34,20 @@ import {
   TerrainSegmentedControl,
 } from '@/components/ui/terrain'
 import { useCollapsibleFeedSections } from '@/lib/use-collapsible-feed-sections'
+import { feedAuthorizationFingerprint } from '@/lib/feed-authorization'
+import {
+  focusContinuesPageOne,
+  removeHydratedItem,
+  renderedItems,
+} from '@/lib/feed-reading-window'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { useFeedListSession } from '@/lib/use-feed-list-session'
+import { useQueryClient } from '@tanstack/react-query'
+import type {
+  ExecutionFeedCacheState,
+  ExecutionPinsCacheState,
+} from '@/features/action-plans/lib/action-plan-execution-feed-cache'
+import { removeExecutionFromFeedCache } from '@/features/action-plans/lib/action-plan-execution-feed-cache'
 import {
   terrainBrandAction,
   terrainSectionDotVariants,
@@ -98,76 +126,44 @@ const EMPTY_SECTION_COUNTS: ActionPlanExecutionFeedSectionCounts = {
   in_progress: 0,
 }
 
-function readScheduledCountFromFeedPages(
-  pages: ActionPlanExecutionFeedResponse[] | undefined,
-): number {
-  if (!pages?.length) {
-    return 0
-  }
-  const pageWithScheduled =
-    pages.find((page) => typeof page.scheduled?.count === 'number') ?? pages[0]
-  return pageWithScheduled?.scheduled?.count ?? 0
+function executionWrapperId(
+  wrapper: ActionPlanExecutionFeedResponse['items'][number],
+): string {
+  return wrapper.action_plan_execution.id
 }
 
-function readFirstScheduledItemFromFeedPages(
-  pages: ActionPlanExecutionFeedResponse[] | undefined,
-) {
-  if (!pages?.length) {
-    return null
+function readExecutionFeed(data: ExecutionFeedCacheState | undefined) {
+  if (!data?.window) {
+    return {
+      items: [] as ReturnType<typeof unwrapActionPlanExecutionFeedItems>,
+      pins: [] as ReturnType<typeof unwrapActionPlanExecutionFeedItems>,
+      scheduledCount: 0,
+      nextScheduled: null as NonNullable<ActionPlanExecutionFeedResponse['scheduled']>['next'] | null,
+      sectionCounts: EMPTY_SECTION_COUNTS,
+      stalled: false,
+      showsPageOne: true,
+      behindCursor: null as string | null,
+    }
   }
-  const page = pages.find((entry) => entry.scheduled?.next) ?? pages[0]
-  return page?.scheduled?.next ?? null
+  return {
+    items: unwrapActionPlanExecutionFeedItems(
+      renderedItems(data.window, executionWrapperId),
+    ),
+    pins: unwrapActionPlanExecutionFeedItems(data.pins),
+    scheduledCount: data.scheduled?.count ?? 0,
+    nextScheduled: data.scheduled?.next ?? null,
+    sectionCounts: data.sectionCounts ?? EMPTY_SECTION_COUNTS,
+    stalled: data.window.stalled,
+    showsPageOne: focusContinuesPageOne(data.window),
+    behindCursor: data.window.behindCursor,
+  }
 }
 
-function readSectionCountsFromFeedPages(
-  pages: ActionPlanExecutionFeedResponse[] | undefined,
-): ActionPlanExecutionFeedSectionCounts {
-  if (!pages?.length) {
-    return EMPTY_SECTION_COUNTS
-  }
-  const page = pages.find((entry) => entry.section_counts) ?? pages[0]
-  return page?.section_counts ?? EMPTY_SECTION_COUNTS
-}
-
-function readPinsFromFeedPages(
-  pages: ActionPlanExecutionFeedResponse[] | undefined,
-) {
-  if (!pages?.length) {
+function readExecutionPins(data: ExecutionPinsCacheState | undefined) {
+  if (!data?.window) {
     return []
   }
-  const page = pages.find((entry) => Array.isArray(entry.pins)) ?? pages[0]
-  return unwrapActionPlanExecutionFeedItems(page?.pins ?? [])
-}
-
-function readUniqueFeedItems(
-  wrappers: ActionPlanExecutionFeedResponse['items'],
-) {
-  const byId = new Map(
-    unwrapActionPlanExecutionFeedItems(wrappers).map((item) => [item.id, item]),
-  )
-  return [...byId.values()]
-}
-
-type ExecutionFeedContinuationPage = Pick<
-  ActionPlanExecutionFeedResponse,
-  'has_more' | 'items' | 'next_cursor'
->
-
-function hasStalledContinuation(
-  pages: readonly ExecutionFeedContinuationPage[] | undefined,
-  pageParams: readonly unknown[] | undefined,
-): boolean {
-  const lastPageIndex = (pages?.length ?? 0) - 1
-  const lastPage = pages?.[lastPageIndex]
-  if (!lastPage?.has_more) {
-    return false
-  }
-  const requestCursor = pageParams?.[lastPageIndex]
-  return (
-    !lastPage.next_cursor ||
-    lastPage.items.length === 0 ||
-    (typeof requestCursor === 'string' && lastPage.next_cursor === requestCursor)
-  )
+  return unwrapActionPlanExecutionFeedItems(renderedItems(data.window, executionWrapperId))
 }
 
 /**
@@ -249,6 +245,69 @@ function ExecutionFeedPageContent({
     category,
     source,
   })
+  const queryClient = useQueryClient()
+  const feedQueryPrefix = useMemo(
+    () =>
+      isCross
+        ? (['action-plans', 'cross-action-plan-execution-feed'] as const)
+        : establishmentId
+          ? (['action-plans', 'action-plan-execution-feed', establishmentId] as const)
+          : null,
+    [establishmentId, isCross],
+  )
+  const removeExecutionFromFeed = useCallback(
+    (entityId: string) => {
+      if (!feedQueryPrefix) {
+        return
+      }
+      queryClient.setQueriesData<ExecutionFeedCacheState>({ queryKey: feedQueryPrefix }, (current) => {
+        if (!current?.window) {
+          return current
+        }
+        return removeExecutionFromFeedCache(current, entityId)
+      })
+    },
+    [feedQueryPrefix, queryClient],
+  )
+  const feedSession = useFeedListSession({
+    queryKeyPrefix: feedQueryPrefix,
+    onRemove: removeExecutionFromFeed,
+  })
+  const crossPinsPrefix = useMemo(
+    () =>
+      isCross
+        ? (['action-plans', 'cross-action-plan-execution-feed-pins'] as const)
+        : null,
+    [isCross],
+  )
+  const removeCrossPin = useCallback(
+    (entityId: string) => {
+      if (!crossPinsPrefix) {
+        return
+      }
+      queryClient.setQueriesData<ExecutionPinsCacheState>(
+        { queryKey: crossPinsPrefix },
+        (current) => {
+          if (!current?.window) {
+            return current
+          }
+          return {
+            ...current,
+            window: removeHydratedItem(current.window, entityId, executionWrapperId).window,
+          }
+        },
+      )
+    },
+    [crossPinsPrefix, queryClient],
+  )
+  const pinsSession = useFeedListSession({
+    queryKeyPrefix: crossPinsPrefix,
+    onRemove: removeCrossPin,
+  })
+  const authorizationFingerprint = feedAuthorizationFingerprint(
+    auth.bootstrap?.memberships ?? auth.bootstrap?.active_membership,
+  )
+  const authorizationFingerprintRef = useRef(authorizationFingerprint)
   const crossPinsQuery = useCrossActionPlanExecutionFeedPinsQuery(viewMode, category, {
     enabled: isCross && layout === 'list',
   })
@@ -281,33 +340,15 @@ function ExecutionFeedPageContent({
     viewMode,
   })
 
-  const planItems = planFeedQuery.data
-    ? readUniqueFeedItems(planFeedQuery.data.pages.flatMap((page) => page.items))
-    : []
-  const scheduledCount = planFeedQuery.data
-    ? readScheduledCountFromFeedPages(planFeedQuery.data.pages)
-    : 0
-  const nextScheduledPreview = planFeedQuery.data
-    ? readFirstScheduledItemFromFeedPages(planFeedQuery.data.pages)
-    : null
-  const prochaineLabel = formatPlanifieesProchaineLabel(nextScheduledPreview)
-  const sectionCounts = planFeedQuery.data
-    ? readSectionCountsFromFeedPages(planFeedQuery.data.pages)
-    : EMPTY_SECTION_COUNTS
-  const pinnedItems = isCross
-    ? crossPinsQuery.data
-      ? readUniqueFeedItems(crossPinsQuery.data.pages.flatMap((page) => page.items))
-      : []
-    : planFeedQuery.data
-      ? readPinsFromFeedPages(planFeedQuery.data.pages)
-      : []
-  const isPlanContinuationStalled = planFeedQuery.data
-    ? hasStalledContinuation(planFeedQuery.data.pages, planFeedQuery.data.pageParams)
-    : false
+  const planFeed = readExecutionFeed(planFeedQuery.data)
+  const planItems = planFeed.items
+  const scheduledCount = planFeed.scheduledCount
+  const prochaineLabel = formatPlanifieesProchaineLabel(planFeed.nextScheduled)
+  const sectionCounts = planFeed.sectionCounts
+  const pinnedItems = isCross ? readExecutionPins(crossPinsQuery.data) : planFeed.pins
+  const isPlanContinuationStalled = planFeed.stalled || planFeedQuery.continuationError != null
   const isCrossPinsContinuationStalled =
-    isCross && crossPinsQuery.data
-      ? hasStalledContinuation(crossPinsQuery.data.pages, crossPinsQuery.data.pageParams)
-      : false
+    isCross && (crossPinsQuery.data?.window.stalled === true || crossPinsQuery.continuationError != null)
   const planGroups = groupActionPlanExecutionsBySection(planItems, sectionCounts, category)
   const hasPinnedSection =
     pinnedItems.length > 0 ||
@@ -400,6 +441,173 @@ function ExecutionFeedPageContent({
     })
   }, [canRememberReading, category, expandedByKey, layout, readingScopeKey, savedScrollTop, viewMode])
 
+  const approachArmedRef = useRef(true)
+
+  const refreshPlanFeed = planFeedQuery.refresh
+  const clearFeedUpdates = feedSession.clearUpdates
+  const clearPinsUpdates = pinsSession.clearUpdates
+  const refreshFeed = useCallback(() => {
+    if (crossPinsPrefix) {
+      void queryClient.invalidateQueries({ queryKey: crossPinsPrefix })
+    }
+    void refreshPlanFeed().then((refreshed) => {
+      if (!refreshed) {
+        return
+      }
+      clearFeedUpdates()
+      clearPinsUpdates()
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = 0
+      }
+    })
+  }, [
+    clearFeedUpdates,
+    clearPinsUpdates,
+    crossPinsPrefix,
+    queryClient,
+    refreshPlanFeed,
+  ])
+
+  useEffect(() => {
+    if (authorizationFingerprintRef.current === authorizationFingerprint) {
+      return
+    }
+    authorizationFingerprintRef.current = authorizationFingerprint
+    refreshFeed()
+  }, [authorizationFingerprint, refreshFeed])
+
+  useEffect(() => {
+    const edge = {
+      atTop: (scrollRef.current?.scrollTop ?? 0) <= 0 && planFeed.showsPageOne,
+      interacting: isFetchingMore || planFeedQuery.isRefreshing,
+    }
+    feedSession.setReadingEdge(edge)
+    pinsSession.setReadingEdge(edge)
+  }, [
+    feedSession,
+    isFetchingMore,
+    pinsSession,
+    planFeed.showsPageOne,
+    planFeedQuery.isRefreshing,
+  ])
+
+  const [overdueReferenceNow, setOverdueReferenceNow] = useState(() => Date.now())
+  let nextEndAt: number | null = null
+  for (const item of planItems) {
+    if (item.status !== 'in_progress' || item.is_overdue || !item.end_at) {
+      continue
+    }
+    const time = Date.parse(item.end_at)
+    if (Number.isNaN(time) || time <= overdueReferenceNow) {
+      continue
+    }
+    if (nextEndAt == null || time < nextEndAt) {
+      nextEndAt = time
+    }
+  }
+
+  const revalidateOverdue = useEffectEvent(() => {
+    const atTop = (scrollRef.current?.scrollTop ?? 0) <= 0 && planFeed.showsPageOne
+    if (atTop && !isFetchingMore && !planFeedQuery.isRefreshing) {
+      void planFeedQuery.refresh().then((refreshed) => {
+        if (refreshed) {
+          feedSession.clearUpdates()
+          pinsSession.clearUpdates()
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = 0
+          }
+          return
+        }
+        feedSession.markUpdates()
+      })
+      return
+    }
+    feedSession.markUpdates()
+  })
+
+  useEffect(() => {
+    if (nextEndAt == null) {
+      return
+    }
+    let timer = 0
+    const schedule = () => {
+      const remaining = nextEndAt - Date.now()
+      if (remaining <= 0) {
+        setOverdueReferenceNow(Date.now())
+        revalidateOverdue()
+        return
+      }
+      timer = window.setTimeout(schedule, Math.min(remaining, 60 * 60 * 1000))
+    }
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible') {
+        return
+      }
+      window.clearTimeout(timer)
+      schedule()
+    }
+    schedule()
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.clearTimeout(timer)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [nextEndAt])
+
+  const anchorPhaseRef = useRef<'idle' | 'resuming' | 'seek' | 'done'>('idle')
+  const [anchorTick, setAnchorTick] = useState(0)
+  useEffect(() => {
+    if (!savedMatchesView || layout !== 'list' || anchorPhaseRef.current === 'done') {
+      return
+    }
+    const anchorId = initialReading?.anchorId
+    if (
+      !anchorId ||
+      (planItems.length === 0 && pinnedItems.length === 0) ||
+      (isCross && crossPinsQuery.isLoading) ||
+      anchorPhaseRef.current === 'resuming'
+    ) {
+      return
+    }
+    const scrollTo = (id: string) => {
+      scrollRef.current
+        ?.querySelector(`[data-feed-item="${id}"]`)
+        ?.scrollIntoView({ block: 'center' })
+    }
+    if (
+      planItems.some((item) => item.id === anchorId) ||
+      pinnedItems.some((item) => item.id === anchorId)
+    ) {
+      anchorPhaseRef.current = 'done'
+      scrollTo(anchorId)
+      return
+    }
+    const resumeCursor = initialReading?.resumeCursor
+    if (resumeCursor && anchorPhaseRef.current === 'idle') {
+      anchorPhaseRef.current = 'resuming'
+      void planFeedQuery.resumeAt(resumeCursor).finally(() => {
+        anchorPhaseRef.current = 'seek'
+        setAnchorTick((tick) => tick + 1)
+      })
+      return
+    }
+    const neighborId = initialReading?.neighborId
+    if (neighborId && planItems.some((item) => item.id === neighborId)) {
+      scrollTo(neighborId)
+    }
+    anchorPhaseRef.current = 'done'
+  }, [
+    anchorTick,
+    crossPinsQuery.isLoading,
+    initialReading,
+    isCross,
+    layout,
+    pinnedItems,
+    planFeedQuery,
+    planItems,
+    savedMatchesView,
+  ])
+
   useEffect(() => {
     const target = loadMoreRef.current
     const root = scrollRef.current
@@ -409,21 +617,30 @@ function ExecutionFeedPageContent({
       !root ||
       !hasMore ||
       isFetchingMore ||
+      isPlanContinuationStalled ||
       typeof IntersectionObserver === 'undefined'
     ) {
       return
     }
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          void planFeedQuery.fetchNextPage()
+        if (!entries.some((entry) => entry.isIntersecting) || !approachArmedRef.current) {
+          return
         }
+        approachArmedRef.current = false
+        void planFeedQuery.fetchNextPage()
       },
       { root, rootMargin: '400px 0px' },
     )
     observer.observe(target)
     return () => observer.disconnect()
-  }, [hasMore, isFetchingMore, layout, planFeedQuery])
+  }, [hasMore, isFetchingMore, isPlanContinuationStalled, layout, planFeedQuery])
+
+  const pullToRefresh = useFeedPullToRefresh({
+    enabled: !isDesktopWeb && layout === 'list',
+    scrollerRef: scrollRef,
+    onRefresh: refreshFeed,
+  })
 
   const createAction = canCreate ? (
     isDesktopWeb ? (
@@ -476,16 +693,33 @@ function ExecutionFeedPageContent({
   }
 
   function openExecution(executionId: string) {
+    const listIndex = planItems.findIndex((item) => item.id === executionId)
+    const sourceItems = listIndex >= 0 ? planItems : pinnedItems
+    const index = sourceItems.findIndex((item) => item.id === executionId)
+    const neighbor = sourceItems[index + 1] ?? sourceItems[index - 1]
+    const resumeCursor = listIndex >= 0 && planFeedQuery.data
+      ? (planFeedQuery.data.window.focus.find((slot) =>
+          slot.items.some((wrapper) => wrapper.action_plan_execution.id === executionId),
+        )?.requestCursor ?? null)
+      : null
+    if (canRememberReading) {
+      writeExecutionFeedReading(readingScopeKey, {
+        viewMode,
+        category,
+        anchorId: executionId,
+        neighborId: neighbor?.id ?? null,
+        resumeCursor,
+        authorizationFingerprint,
+      })
+    }
     navigate(
       appendExecutionFeedSearch(executionDetailPath(executionId), search, feedUrlOptions),
     )
   }
 
   function renderFeedItem(item: (typeof planItems)[number], keyPrefix: string) {
-    if (isDesktopWeb) {
-      return (
+    const content = isDesktopWeb ? (
         <ActionPlanExecutionFeedDesktopRow
-          key={`${keyPrefix}-${item.id}`}
           item={item}
           onSelect={openExecution}
           onTogglePin={
@@ -497,11 +731,8 @@ function ExecutionFeedPageContent({
                 }
           }
         />
-      )
-    }
-    return (
+    ) : (
       <ActionPlanExecutionFeedCard
-        key={`${keyPrefix}-${item.id}`}
         item={item}
         onSelect={openExecution}
         onTogglePin={
@@ -513,6 +744,11 @@ function ExecutionFeedPageContent({
               }
         }
       />
+    )
+    return (
+      <div key={`${keyPrefix}-${item.id}`} data-feed-item={item.id}>
+        {content}
+      </div>
     )
   }
 
@@ -578,6 +814,12 @@ function ExecutionFeedPageContent({
             trailing={createAction}
           >
             <div className="flex flex-wrap items-center gap-2">
+              {isDesktopWeb && layout === 'list' ? (
+                <FeedRefreshButton
+                  onRefresh={refreshFeed}
+                  pending={planFeedQuery.isRefreshing}
+                />
+              ) : null}
               <TerrainSegmentedControl
                 ariaLabel="Disposition du feed"
                 className="w-fit"
@@ -622,6 +864,22 @@ function ExecutionFeedPageContent({
             : 'overflow-y-auto overscroll-y-contain',
         )}
         onScroll={(event) => {
+          approachArmedRef.current = true
+          const atTop = event.currentTarget.scrollTop <= 0
+          const edge = {
+            atTop: atTop && planFeed.showsPageOne,
+            interacting: isFetchingMore || planFeedQuery.isRefreshing,
+          }
+          feedSession.setReadingEdge(edge)
+          pinsSession.setReadingEdge(edge)
+          if (
+            atTop &&
+            !planFeed.showsPageOne &&
+            planFeed.behindCursor &&
+            !isFetchingMore
+          ) {
+            void planFeedQuery.loadBehind()
+          }
           if (!canRememberReading || layout !== 'list' || !restoredScrollRef.current) {
             return
           }
@@ -629,8 +887,10 @@ function ExecutionFeedPageContent({
             viewMode,
             category,
             scrollTop: event.currentTarget.scrollTop,
+            authorizationFingerprint,
           })
         }}
+        {...pullToRefresh.pointerProps}
       >
         {layout === 'calendar' ? (
           <div className="flex min-h-0 flex-1 flex-col pt-3">
@@ -649,6 +909,36 @@ function ExecutionFeedPageContent({
           </div>
         ) : (
           <>
+            <FeedPullIndicator
+              distance={pullToRefresh.pullDistance}
+              refreshing={planFeedQuery.isRefreshing}
+            />
+            {feedSession.updatesAvailable || pinsSession.updatesAvailable ? (
+              <FeedUpdatesBanner onRefresh={refreshFeed} />
+            ) : null}
+            {planFeedQuery.refreshError ? (
+              <TerrainErrorState
+                className="mx-3"
+                message="L’actualisation n’a pas abouti. Les données affichées sont inchangées."
+                onRetry={refreshFeed}
+              />
+            ) : null}
+            {!planFeed.showsPageOne ? (
+              <div className="flex justify-center px-3 pt-3">
+                <button
+                  type="button"
+                  className="min-h-11 text-sm font-semibold text-[#1B4FD8]"
+                  onClick={() => {
+                    planFeedQuery.showPageOne()
+                    if (scrollRef.current) {
+                      scrollRef.current.scrollTop = 0
+                    }
+                  }}
+                >
+                  Haut du feed
+                </button>
+              </div>
+            ) : null}
             {isInitialLoading ? <ExecutionFeedSkeletonList /> : null}
 
             {!isInitialLoading ? (
@@ -786,29 +1076,23 @@ function ExecutionFeedPageContent({
                   />
                 ) : null}
 
-                {isPlanContinuationStalled ? (
-                  <TerrainErrorState
-                    message="La suite du feed n’a pas pu être chargée."
-                    onRetry={
-                      planFeedQuery.isRetryingStalledContinuation
-                        ? undefined
-                        : () => void planFeedQuery.retryStalledContinuation()
+                <div ref={loadMoreRef}>
+                  <FeedContinuationFooter
+                    hasMore={hasMore && !isPlanContinuationStalled}
+                    isLoadingMore={isFetchingMore}
+                    hasItems={planItems.length > 0}
+                    errorMessage={
+                      isPlanContinuationStalled
+                        ? 'La suite du feed n’a pas pu être chargée.'
+                        : null
                     }
+                    onLoadMore={() => {
+                      approachArmedRef.current = false
+                      void planFeedQuery.fetchNextPage()
+                    }}
+                    onRetry={() => void planFeedQuery.retryStalledContinuation()}
                   />
-                ) : null}
-
-                {hasMore ? (
-                  <div ref={loadMoreRef} className="flex justify-center py-4">
-                    <button
-                      type="button"
-                      className="text-xs font-semibold text-[#1B4FD8] disabled:opacity-60"
-                      onClick={() => void planFeedQuery.fetchNextPage()}
-                      disabled={isFetchingMore}
-                    >
-                      {isFetchingMore ? 'Chargement…' : 'Afficher plus'}
-                    </button>
-                  </div>
-                ) : null}
+                </div>
               </div>
             ) : null}
           </>

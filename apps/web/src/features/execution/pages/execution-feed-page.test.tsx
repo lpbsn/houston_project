@@ -16,7 +16,14 @@ import {
   clearExecutionFeedReadingMemory,
   executionFeedReadingScopeKey,
   readExecutionFeedReading,
+  writeExecutionFeedReading,
 } from '../lib/execution-feed-reading-memory'
+import {
+  appendExecutionFeedWindow,
+  executionFeedCacheFromPage,
+  executionPinsCacheFromPage,
+} from '@/features/action-plans/lib/action-plan-execution-feed-cache'
+
 import { ExecutionFeedPage } from './execution-feed-page'
 
 const planFetchNextPage = vi.fn()
@@ -205,9 +212,7 @@ function buildPlanFeedQueryState(overrides: Record<string, unknown> = {}) {
       }
     | undefined
   if (data?.pages) {
-    merged.data = {
-      ...data,
-      pages: data.pages.map((page, index): ActionPlanExecutionFeedResponse => {
+    const pages = data.pages.map((page, index): ActionPlanExecutionFeedResponse => {
         const suppliedPins = page.pins
         const rawItems = page.items ?? []
         const pins =
@@ -232,14 +237,24 @@ function buildPlanFeedQueryState(overrides: Record<string, unknown> = {}) {
           next_cursor: page.next_cursor ?? null,
           has_more: Boolean(page.has_more),
         }
-      }),
+      })
+    const [first, ...rest] = pages
+    if (!first) {
+      merged.data = undefined
+    } else {
+      let cache = executionFeedCacheFromPage(first)
+      for (const nextPage of rest) {
+        const appended = appendExecutionFeedWindow(cache.window, nextPage)
+        cache = { ...cache, window: appended.window }
+      }
+      merged.data = cache
     }
   }
   return merged
 }
 
 function buildCrossPinsQueryState(overrides: Record<string, unknown> = {}) {
-  return {
+  const state = {
     isLoading: false,
     isError: false,
     isSuccess: true,
@@ -249,11 +264,31 @@ function buildCrossPinsQueryState(overrides: Record<string, unknown> = {}) {
     isRetryingStalledContinuation: false,
     retryStalledContinuation: crossPinsRetryStalledContinuation,
     refetch: vi.fn(),
+    continuationError: null,
     data: {
       pages: [{ items: [], next_cursor: null, has_more: false }],
     },
     ...overrides,
   }
+  const pages = (state.data as { pages?: Array<{ items?: ActionPlanExecutionFeedItemWrapper[]; next_cursor?: string | null; has_more?: boolean }> } | undefined)?.pages
+  if (pages) {
+    const [first, ...rest] = pages
+    let cache = executionPinsCacheFromPage({
+      items: first?.items ?? [],
+      next_cursor: first?.next_cursor ?? null,
+      has_more: Boolean(first?.has_more),
+    })
+    for (const nextPage of rest) {
+      const appended = appendExecutionFeedWindow(cache.window, {
+        items: nextPage.items ?? [],
+        next_cursor: nextPage.next_cursor ?? null,
+        has_more: Boolean(nextPage.has_more),
+      })
+      cache = { window: appended.window }
+    }
+    state.data = cache as never
+  }
+  return state
 }
 
 vi.mock('@/app/auth-provider', () => ({
@@ -421,6 +456,7 @@ describe('ExecutionFeedPage plan feed', () => {
     vi.unstubAllEnvs()
     vi.unstubAllGlobals()
     Reflect.deleteProperty(window, 'matchMedia')
+    Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
     permissionHintsHolder.value = {}
     clearExecutionFeedReadingMemory()
   })
@@ -508,7 +544,7 @@ describe('ExecutionFeedPage plan feed', () => {
 
     renderExecutionFeedPage()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Afficher plus' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Charger la suite' }))
     expect(planFetchNextPage).toHaveBeenCalledTimes(1)
   })
 
@@ -632,7 +668,7 @@ describe('ExecutionFeedPage plan feed', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
     expect(planRetryStalledContinuation).toHaveBeenCalledTimes(1)
     expect(refetch).not.toHaveBeenCalled()
-    expect(screen.queryByRole('button', { name: 'Afficher plus' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Charger la suite' })).toBeNull()
   })
 
   it('keeps empty state when all pages are empty', () => {
@@ -670,7 +706,7 @@ describe('ExecutionFeedPage plan feed', () => {
     expect(screen.queryByText('En retard · 4')).toBeNull()
     expect(screen.getByText('Plan actif')).toBeTruthy()
     expect(screen.queryByText('Aucune exécution')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Afficher plus' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Charger la suite' })).toBeTruthy()
   })
 
   it('renders pinned items before section labels', () => {
@@ -699,6 +735,96 @@ describe('ExecutionFeedPage plan feed', () => {
 
     expect(pinned.compareDocumentPosition(sectionLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(sectionLabel.compareDocumentPosition(regular) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('stores and restores an anchor from the pinned collection', () => {
+    planFeedQueryMock.mockReturnValue(
+      buildPlanFeedQueryState({
+        data: {
+          pages: [
+            {
+              items: [buildPlanFeedWrapper('plan-regular', 'Plan normal')],
+              pins: [
+                buildPlanFeedWrapper('plan-pinned', 'Plan épinglé ancré', {
+                  is_pinned: true,
+                }),
+              ],
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+    renderExecutionFeedPage()
+    fireEvent.click(screen.getByRole('button', { name: /Plan épinglé ancré/ }))
+
+    expect(
+      readExecutionFeedReading(
+        executionFeedReadingScopeKey('establishment', 'est-1'),
+      )?.anchorId,
+    ).toBe('plan-pinned')
+
+    cleanup()
+    const scrollIntoView = vi.fn()
+    HTMLElement.prototype.scrollIntoView = scrollIntoView
+    renderExecutionFeedPage()
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' })
+    Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
+  })
+
+  it('waits for the independent Cross pin collection before resolving its anchor', () => {
+    writeExecutionFeedReading(executionFeedReadingScopeKey('cross', null), {
+      viewMode: 'general',
+      category: 'all',
+      anchorId: 'cross-pin',
+    })
+    planFeedQueryMock.mockReturnValue(
+      buildPlanFeedQueryState({
+        data: {
+          pages: [
+            {
+              items: [buildPlanFeedWrapper('plan-regular', 'Plan normal')],
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+    crossPinsQueryMock.mockReturnValue(
+      buildCrossPinsQueryState({
+        isLoading: true,
+        isSuccess: false,
+        data: undefined,
+      }),
+    )
+    const scrollIntoView = vi.fn()
+    HTMLElement.prototype.scrollIntoView = scrollIntoView
+    const view = renderExecutionFeedPage({ source: 'cross' })
+    expect(scrollIntoView).not.toHaveBeenCalled()
+
+    crossPinsQueryMock.mockReturnValue(
+      buildCrossPinsQueryState({
+        data: {
+          pages: [
+            {
+              items: [
+                buildPlanFeedWrapper('cross-pin', 'Épingle Cross', {
+                  is_pinned: true,
+                }),
+              ],
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+    view.rerenderPage({ source: 'cross' })
+
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' })
+    Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
   })
 
   it('renders business category separators as non-collapsible', () => {
@@ -742,7 +868,7 @@ describe('ExecutionFeedPage plan feed', () => {
 
     renderExecutionFeedPage()
 
-    expect(screen.getByRole('button', { name: 'Chargement…' })).toBeTruthy()
+    expect(screen.getByText('Chargement de la suite')).toBeTruthy()
   })
 
   it('renders Planifiés on mobile without À venir nav', () => {

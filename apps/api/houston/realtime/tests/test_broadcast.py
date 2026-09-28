@@ -55,10 +55,11 @@ def test_invalidation_emitted_after_commit():
         )
 
 
-def _assert_signal_updated_invalidation_emitted_after_commit(
+def _assert_signal_invalidation_emitted_after_commit(
     *,
     signal: Signal,
     service_call,
+    reason: str,
 ) -> None:
     with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
         with transaction.atomic():
@@ -67,7 +68,7 @@ def _assert_signal_updated_invalidation_emitted_after_commit(
         mock_notify.assert_called_once_with(
             establishment_id=signal.establishment_id,
             subject_type="signal",
-            reason="signal.updated",
+            reason=reason,
             entity_id=signal.id,
         )
 
@@ -76,8 +77,9 @@ def test_cancel_signal_invalidation_emitted_after_commit():
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     signal = create_minimal_v3_signal(membership, title="Cancel invalidation")
 
-    _assert_signal_updated_invalidation_emitted_after_commit(
+    _assert_signal_invalidation_emitted_after_commit(
         signal=signal,
+        reason="signal.canceled",
         service_call=lambda: cancel_signal(signal=signal, actor_membership=membership),
     )
 
@@ -86,8 +88,9 @@ def test_resolve_signal_invalidation_emitted_after_commit():
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     signal = create_minimal_v3_signal(membership, title="Resolve invalidation")
 
-    _assert_signal_updated_invalidation_emitted_after_commit(
+    _assert_signal_invalidation_emitted_after_commit(
         signal=signal,
+        reason="signal.resolved",
         service_call=lambda: resolve_signal(signal=signal, actor_membership=membership),
     )
 
@@ -98,8 +101,9 @@ def test_unpin_signal_invalidation_emitted_after_commit():
     signal.is_pinned = True
     signal.save(update_fields=["is_pinned", "updated_at"])
 
-    _assert_signal_updated_invalidation_emitted_after_commit(
+    _assert_signal_invalidation_emitted_after_commit(
         signal=signal,
+        reason="signal.updated",
         service_call=lambda: unpin_signal(signal=signal),
     )
 
