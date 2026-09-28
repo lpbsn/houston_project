@@ -8,6 +8,7 @@ import { terrain, terrainBrandAction, terrainFeedAvatar } from '@/lib/terrain-st
 import { cn } from '@/lib/utils'
 
 import {
+  formatSignalPinnedByLine,
   formatSignalRelativeTime,
   formatSignalAggregationLabel,
   formatSignalFeedAggregationBadge,
@@ -194,6 +195,7 @@ function PinnedSignalCard({
   const showUnclassified = isSignalMissingResponsibleClassification(item)
   const location = item.location_text?.trim() ?? ''
   const establishmentName = item.establishment_name?.trim() ?? ''
+  const pinnedBy = formatSignalPinnedByLine(item)
 
   return (
     <article
@@ -223,6 +225,7 @@ function PinnedSignalCard({
           ) : null}
         </div>
       </div>
+      {pinnedBy ? <p className="mt-1 text-[11px] text-[#7D7B75]">{pinnedBy}</p> : null}
 
       <div className={`my-2 ${PINNED_SIGNAL_CARD_SEPARATOR_CLASS}`} />
 

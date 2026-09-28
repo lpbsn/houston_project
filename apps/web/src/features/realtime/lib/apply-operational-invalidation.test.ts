@@ -22,8 +22,17 @@ function signalEvent(reason: string, establishmentId = 'est-1'): OperationalReal
 }
 
 describe('applyOperationalInvalidation', () => {
+  let invalidateSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+  })
+
+  afterEach(() => {
+    invalidateSpy.mockRestore()
+  })
+
   it('invalidates signal queries for signal subject_type', () => {
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
     const event: OperationalRealtimeInvalidateEvent = {
       type: 'invalidate',
       subject_type: 'signal',
@@ -41,11 +50,9 @@ describe('applyOperationalInvalidation', () => {
       queryKey: ['action-plans', 'action-plan-execution-feed', 'est-1'],
     })
     expect(invalidateSpy).not.toHaveBeenCalledWith({ predicate: expect.any(Function) })
-    invalidateSpy.mockRestore()
   })
 
   it('invalidates action plan catalog queries for action_plan.updated', () => {
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
     const event: OperationalRealtimeInvalidateEvent = {
       type: 'invalidate',
       subject_type: 'action_plan',
@@ -62,7 +69,6 @@ describe('applyOperationalInvalidation', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ['action-plans', 'detail', 'est-1', 'plan-1'],
     })
-    invalidateSpy.mockRestore()
   })
 
   it.each([
@@ -72,7 +78,6 @@ describe('applyOperationalInvalidation', () => {
     'action_plan_execution.done',
     'action_plan_execution.pending_validation',
   ] as const)('invalidates action plan execution feed for %s', (reason) => {
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
     const event: OperationalRealtimeInvalidateEvent = {
       type: 'invalidate',
       subject_type: 'action_plan_execution',
@@ -91,11 +96,9 @@ describe('applyOperationalInvalidation', () => {
       queryKey: ['action-plans', 'execution-detail', 'est-1', 'ap-exec-1'],
     })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'feed', 'est-1'] })
-    invalidateSpy.mockRestore()
   })
 
   it('invalidates broad execution detail for action_plan_assignee without feed', () => {
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
     const event: OperationalRealtimeInvalidateEvent = {
       type: 'invalidate',
       subject_type: 'action_plan_assignee',
@@ -113,7 +116,6 @@ describe('applyOperationalInvalidation', () => {
     expect(invalidateSpy).not.toHaveBeenCalledWith({
       queryKey: ['action-plans', 'action-plan-execution-feed', 'est-1'],
     })
-    invalidateSpy.mockRestore()
   })
 
   it.each([
@@ -123,7 +125,6 @@ describe('applyOperationalInvalidation', () => {
     ['comment.execution.resolved', ['comments', 'action-plan-execution', 'est-1', 'exec-1'], true],
     ['comment.execution.unresolved', ['comments', 'action-plan-execution', 'est-1', 'exec-1'], true],
   ] as const)('invalidates comment queries for %s', (reason, queryKey, invalidatesExecutionFeed) => {
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
     const entityId = reason === 'comment.signal.created' ? 'sig-1' : 'exec-1'
     const event: OperationalRealtimeInvalidateEvent = {
       type: 'invalidate',
@@ -148,17 +149,18 @@ describe('applyOperationalInvalidation', () => {
         queryKey: ['action-plans', 'cross-action-plan-execution-feed'],
       })
       expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ['action-plans', 'cross-action-plan-execution-feed-pins'],
+      })
+      expect(invalidateSpy).toHaveBeenCalledWith({
         queryKey: ['action-plans', 'cross-action-plan-execution-calendar'],
       })
-      expect(invalidateSpy).toHaveBeenCalledTimes(5)
+      expect(invalidateSpy).toHaveBeenCalledTimes(6)
     } else {
       expect(invalidateSpy).toHaveBeenCalledOnce()
     }
-    invalidateSpy.mockRestore()
   })
 
   it('ignores unknown comment reason', () => {
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
     const event: OperationalRealtimeInvalidateEvent = {
       type: 'invalidate',
       subject_type: 'comment',
@@ -171,7 +173,6 @@ describe('applyOperationalInvalidation', () => {
     applyOperationalInvalidation(event, { queryClient, establishmentId: 'est-1' })
 
     expect(invalidateSpy).not.toHaveBeenCalled()
-    invalidateSpy.mockRestore()
   })
 
   it.each([
@@ -179,7 +180,6 @@ describe('applyOperationalInvalidation', () => {
     'notification.updated',
     'notification.bulk_updated',
   ] as const)('invalidates notification list queries for %s', (reason) => {
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
     const event: OperationalRealtimeInvalidateEvent = {
       type: 'invalidate',
       subject_type: 'notification',
@@ -193,11 +193,9 @@ describe('applyOperationalInvalidation', () => {
 
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['notifications', 'list', 'est-1'] })
     expect(invalidateSpy).toHaveBeenCalledOnce()
-    invalidateSpy.mockRestore()
   })
 
   it('ignores unknown notification reason', () => {
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
     const event: OperationalRealtimeInvalidateEvent = {
       type: 'invalidate',
       subject_type: 'notification',
@@ -210,7 +208,6 @@ describe('applyOperationalInvalidation', () => {
     applyOperationalInvalidation(event, { queryClient, establishmentId: 'est-1' })
 
     expect(invalidateSpy).not.toHaveBeenCalled()
-    invalidateSpy.mockRestore()
   })
 })
 

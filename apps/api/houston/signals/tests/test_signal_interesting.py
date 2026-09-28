@@ -40,20 +40,21 @@ from houston.testing.signal_feed import flatten_signal_feed_items
 pytestmark = pytest.mark.django_db
 
 
-def test_mark_signal_interesting_sets_status_and_unpins():
+def test_mark_signal_interesting_keeps_pin():
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     signal = create_minimal_v3_signal(membership, title="Useful note")
+    pinned_at = timezone.now()
     signal.is_pinned = True
-    signal.pinned_at = timezone.now()
+    signal.pinned_at = pinned_at
     signal.pinned_by_membership = membership
     signal.save(update_fields=["is_pinned", "pinned_at", "pinned_by_membership", "updated_at"])
 
     result = mark_signal_interesting(signal=signal)
 
     assert result.status == Signal.Status.INTERESTING
-    assert result.is_pinned is False
-    assert result.pinned_at is None
-    assert result.pinned_by_membership_id is None
+    assert result.is_pinned is True
+    assert result.pinned_at == pinned_at
+    assert result.pinned_by_membership_id == membership.id
 
 
 def test_mark_signal_interesting_rejects_non_open():
@@ -68,7 +69,7 @@ def test_mark_signal_interesting_rejects_non_open():
         mark_signal_interesting(signal=signal)
 
 
-def test_cannot_pin_interesting_signal():
+def test_can_pin_interesting_signal():
     membership = build_api_membership(role=EstablishmentMembership.Role.DIRECTOR)
     signal = create_minimal_v3_signal(
         membership,
@@ -76,9 +77,10 @@ def test_cannot_pin_interesting_signal():
         status=Signal.Status.INTERESTING,
     )
 
-    assert can_pin_signal(membership, signal) is False
-    with pytest.raises(SignalStateError):
-        pin_signal(signal=signal, membership=membership)
+    assert can_pin_signal(membership, signal) is True
+    pinned = pin_signal(signal=signal, membership=membership)
+    assert pinned.is_pinned is True
+    assert pinned.pinned_at is not None
 
 
 def test_can_cancel_but_not_resolve_interesting_signal():
@@ -130,7 +132,7 @@ def test_owner_can_mark_interesting_api(api_client):
     assert payload["status"] == Signal.Status.INTERESTING
     assert payload["is_pinned"] is False
     assert payload["permission_hints"]["can_mark_interesting"] is False
-    assert payload["permission_hints"]["can_pin"] is False
+    assert payload["permission_hints"]["can_pin"] is True
     assert payload["permission_hints"]["can_cancel"] is True
     assert payload["permission_hints"]["can_resolve"] is False
 
@@ -235,7 +237,8 @@ def test_interesting_before_resolved_in_feed_order(api_client):
     )
     assert response.status_code == 200
     ids = [item["id"] for item in flatten_signal_feed_items(response.json())]
-    assert ids.index(str(interesting.id)) < ids.index(str(resolved.id))
+    assert str(interesting.id) in ids
+    assert str(resolved.id) not in ids
 
 
 def test_create_from_interesting_signal_sets_in_progress():

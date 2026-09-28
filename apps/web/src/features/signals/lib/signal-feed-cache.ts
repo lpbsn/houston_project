@@ -1,11 +1,16 @@
-import type { QueryClient } from '@tanstack/react-query'
+import { hashKey, type QueryClient } from '@tanstack/react-query'
 
 import { signalsQueryKeys } from '../api'
-import type { SignalFeedStatusFilter } from './signal-feed-filters'
+import {
+  selectedSignalFeedStatus,
+  type SignalFeedStatusSelection,
+} from './signal-feed-filters'
 import type {
   SignalDetail,
+  SignalFeedCounts,
   SignalFeedFilters,
   SignalFeedItem,
+  SignalFeedPinsPage,
   SignalFeedResponse,
   SignalViewMode,
 } from '../types'
@@ -16,17 +21,24 @@ export type SignalQuickActionCacheContext = {
 }
 
 export type SignalFeedOptimisticSnapshot = {
-  queryKey: ReturnType<typeof signalsQueryKeys.feed>
+  queryKey: ReturnType<typeof signalsQueryKeys.feed> | ReturnType<typeof signalsQueryKeys.crossFeed>
   previous: SignalFeedResponse | undefined
 }
 
 const SIGNAL_FEED_VIEW_MODES: SignalViewMode[] = ['personal', 'general']
+const PINNABLE_STATUSES = new Set(['open', 'interesting'])
+const LIST_STATUSES = new Set(['open', 'in_progress', 'interesting'])
+const STATUS_RANK: Record<string, number> = {
+  open: 0,
+  in_progress: 1,
+  interesting: 2,
+}
 
-const SIGNAL_FEED_MAX_PAGE_SIZE = 50
-const SIGNAL_FEED_MAX_RESTORE_PAGES = 10
-
-function continuationPageSizeForRemainingDepth(remainingDepth: number): number {
-  return Math.min(SIGNAL_FEED_MAX_PAGE_SIZE, Math.max(0, remainingDepth))
+export class SignalFeedContinuationStalled extends Error {
+  constructor() {
+    super('La suite du feed n’a pas pu être chargée.')
+    this.name = 'SignalFeedContinuationStalled'
+  }
 }
 
 export function signalFeedQueryKey(options: {
@@ -50,6 +62,8 @@ export function feedItemPatchFromDetail(detail: SignalDetail): Partial<SignalFee
     structured_summary_short: detail.structured_summary_short,
     status: detail.status,
     is_pinned: detail.is_pinned,
+    pinned_at: detail.pinned_at ?? null,
+    pinned_by_display_name: detail.pinned_by_display_name ?? null,
     affected_business_unit_id: detail.affected_business_unit_id ?? null,
     affected_business_unit_key: detail.affected_business_unit_key ?? null,
     affected_business_unit_label: detail.affected_business_unit_label ?? null,
@@ -70,6 +84,159 @@ export function feedItemPatchFromDetail(detail: SignalDetail): Partial<SignalFee
   }
 }
 
+function isPinnableStatus(status: string): boolean {
+  return PINNABLE_STATUSES.has(status)
+}
+
+function isListStatus(status: string): boolean {
+  return LIST_STATUSES.has(status)
+}
+
+function compareSignalFeedListItems(left: SignalFeedItem, right: SignalFeedItem): number {
+  const rank = (STATUS_RANK[left.status] ?? 3) - (STATUS_RANK[right.status] ?? 3)
+  if (rank !== 0) {
+    return rank
+  }
+  const activity =
+    Date.parse(right.last_activity_at) - Date.parse(left.last_activity_at)
+  if (activity !== 0) {
+    return activity
+  }
+  const created = Date.parse(right.created_at) - Date.parse(left.created_at)
+  if (created !== 0) {
+    return created
+  }
+  return right.id.localeCompare(left.id)
+}
+
+function pinZoneIncludes(
+  item: Pick<SignalFeedItem, 'status' | 'is_pinned'>,
+  selection: SignalFeedStatusSelection,
+): boolean {
+  if (selection === 'in_progress' || !item.is_pinned || !isPinnableStatus(item.status)) {
+    return false
+  }
+  return selection === 'all' || item.status === selection
+}
+
+function listIncludes(
+  item: Pick<SignalFeedItem, 'status' | 'is_pinned'>,
+  selection: SignalFeedStatusSelection,
+): boolean {
+  if (!isListStatus(item.status)) {
+    return false
+  }
+  if (item.is_pinned && isPinnableStatus(item.status)) {
+    return false
+  }
+  return selection === 'all' || item.status === selection
+}
+
+function countBucket(
+  item: Pick<SignalFeedItem, 'status' | 'is_pinned'>,
+  selection: SignalFeedStatusSelection,
+): keyof SignalFeedCounts | null {
+  if (item.is_pinned && isPinnableStatus(item.status)) {
+    if (selection === 'in_progress') {
+      return null
+    }
+    if (selection !== 'all' && item.status !== selection) {
+      return null
+    }
+    return 'pinned'
+  }
+  if (item.status === 'open' || item.status === 'in_progress' || item.status === 'interesting') {
+    return item.status
+  }
+  return null
+}
+
+function shiftCounts(
+  counts: SignalFeedCounts | undefined,
+  previous: Pick<SignalFeedItem, 'status' | 'is_pinned'> | null,
+  next: Pick<SignalFeedItem, 'status' | 'is_pinned'> | null,
+  selection: SignalFeedStatusSelection,
+): SignalFeedCounts | undefined {
+  if (!counts || !previous) {
+    return counts
+  }
+  const updated = { ...counts }
+  const from = countBucket(previous, selection)
+  const to = next ? countBucket(next, selection) : null
+  if (from) {
+    updated[from] = Math.max(0, updated[from] - 1)
+  }
+  if (to) {
+    updated[to] += 1
+  }
+  return updated
+}
+
+export function continuationPageStalled(
+  requestedCursor: string,
+  page: { items: readonly unknown[]; next_cursor: string | null; has_more: boolean },
+): boolean {
+  if (page.items.length === 0 && page.has_more) {
+    return true
+  }
+  return page.has_more && page.next_cursor === requestedCursor
+}
+
+export function reconcileSignalFeedItem(
+  feed: SignalFeedResponse,
+  filters: SignalFeedFilters,
+  signalId: string,
+  patch: Partial<SignalFeedItem>,
+): SignalFeedResponse {
+  const selection = selectedSignalFeedStatus(filters)
+  const pins = feed.pins ?? []
+  const pinIndex = pins.findIndex((item) => item.id === signalId)
+  const itemIndex = feed.items.findIndex((item) => item.id === signalId)
+  const found = pinIndex >= 0 ? pins[pinIndex] : itemIndex >= 0 ? feed.items[itemIndex] : undefined
+  if (!found) {
+    return feed
+  }
+
+  const next: SignalFeedItem = { ...found, ...patch, id: found.id }
+  const structural =
+    next.status !== found.status || next.is_pinned !== found.is_pinned
+  if (!structural) {
+    if (pinIndex >= 0) {
+      const nextPins = pins.map((item) => (item.id === signalId ? next : item))
+      return { ...feed, pins: nextPins }
+    }
+    const nextItems = feed.items.map((item) => (item.id === signalId ? next : item))
+    return { ...feed, items: nextItems }
+  }
+
+  const pinsWithout = pins.filter((item) => item.id !== signalId)
+  const itemsWithout = feed.items.filter((item) => item.id !== signalId)
+  const counts = shiftCounts(feed.counts, found, next, selection)
+  const keepPinPosition =
+    found.is_pinned &&
+    next.is_pinned &&
+    pinZoneIncludes(found, selection) &&
+    pinZoneIncludes(next, selection)
+
+  if (keepPinPosition && pinIndex >= 0) {
+    const nextPins = [...pinsWithout]
+    nextPins.splice(Math.min(pinIndex, nextPins.length), 0, next)
+    return { ...feed, pins: nextPins, items: itemsWithout, counts }
+  }
+  if (pinZoneIncludes(next, selection)) {
+    return { ...feed, pins: [next, ...pinsWithout], items: itemsWithout, counts }
+  }
+  if (listIncludes(next, selection)) {
+    return {
+      ...feed,
+      pins: pinsWithout,
+      items: [next, ...itemsWithout].sort(compareSignalFeedListItems),
+      counts,
+    }
+  }
+  return { ...feed, pins: pinsWithout, items: itemsWithout, counts }
+}
+
 export function patchSignalInActiveFeedCache(
   queryClient: QueryClient,
   options: {
@@ -85,102 +252,61 @@ export function patchSignalInActiveFeedCache(
     options.viewMode,
     options.filters,
   )
-
   queryClient.setQueryData<SignalFeedResponse>(queryKey, (current) => {
     if (!current) {
       return current
     }
-
-    let updated = false
-    const sections = current.sections.map((section) => {
-      const items = section.items.map((item) => {
-        if (item.id !== options.signalId) {
-          return item
-        }
-        updated = true
-        return { ...item, ...options.patch }
-      })
-      return items === section.items ? section : { ...section, items }
-    })
-
-    if (!updated) {
-      return current
-    }
-
-    return { ...current, sections }
+    return reconcileSignalFeedItem(current, options.filters, options.signalId, options.patch)
   })
 }
 
-/**
- * Moves a feed item into the target status section (prepend).
- * If that section is absent from the cached response (filters), the item is removed.
- */
-export function relocateSignalInFeedCache(
-  queryClient: QueryClient,
-  options: {
-    establishmentId: string
-    viewMode: SignalViewMode
-    filters: SignalFeedFilters
-    signalId: string
-    nextStatus: SignalFeedItem['status']
-    patch?: Partial<SignalFeedItem>
-  },
-): void {
-  const queryKey = signalsQueryKeys.feed(
-    options.establishmentId,
-    options.viewMode,
-    options.filters,
-  )
+export function appendSignalFeedPage(
+  current: SignalFeedResponse,
+  page: SignalFeedResponse,
+): { feed: SignalFeedResponse; stalled: boolean } {
+  const requestedCursor = current.next_cursor
+  if (!requestedCursor) {
+    return { feed: current, stalled: false }
+  }
+  if (continuationPageStalled(requestedCursor, page)) {
+    return { feed: current, stalled: true }
+  }
+  const seen = new Set(current.items.map((item) => item.id))
+  const incoming = page.items.filter((item) => !seen.has(item.id))
+  return {
+    stalled: false,
+    feed: {
+      ...current,
+      items: [...current.items, ...incoming],
+      next_cursor: page.next_cursor,
+      has_more: page.has_more,
+    },
+  }
+}
 
-  queryClient.setQueryData<SignalFeedResponse>(queryKey, (current) => {
-    if (!current) {
-      return current
-    }
-
-    let found: SignalFeedItem | undefined
-    const sectionsWithout = current.sections.map((section) => {
-      const index = section.items.findIndex((item) => item.id === options.signalId)
-      if (index < 0) {
-        return section
-      }
-      found = section.items[index]
-      return {
-        ...section,
-        items: [...section.items.slice(0, index), ...section.items.slice(index + 1)],
-      }
-    })
-
-    if (!found) {
-      return current
-    }
-
-    const moved: SignalFeedItem = {
-      ...found,
-      ...options.patch,
-      status: options.nextStatus,
-      // Pinned zone is derived from open-section items only.
-      is_pinned: false,
-    }
-
-    const targetIndex = sectionsWithout.findIndex(
-      (section) => section.status === options.nextStatus,
-    )
-    if (targetIndex < 0) {
-      return { ...current, sections: sectionsWithout }
-    }
-
-    const sections = sectionsWithout.map((section, index) => {
-      if (index !== targetIndex) {
-        return section
-      }
-      return {
-        ...section,
-        items: [moved, ...section.items],
-      }
-    })
-
-    return { ...current, sections }
-  })
+export function appendSignalFeedPinsPage(
+  current: SignalFeedResponse,
+  page: SignalFeedPinsPage,
+): { feed: SignalFeedResponse; stalled: boolean } {
+  const requestedCursor = current.pins_next_cursor
+  if (!requestedCursor) {
+    return { feed: current, stalled: false }
+  }
+  if (continuationPageStalled(requestedCursor, page)) {
+    return { feed: current, stalled: true }
+  }
+  const pins = current.pins ?? []
+  const seen = new Set(pins.map((item) => item.id))
+  const incoming = page.items.filter((item) => !seen.has(item.id))
+  return {
+    stalled: false,
+    feed: {
+      ...current,
+      pins: [...pins, ...incoming],
+      pins_next_cursor: page.next_cursor,
+      pins_has_more: page.has_more,
+    },
+  }
 }
 
 export async function prepareSignalFeedOptimisticUpdate(
@@ -213,133 +339,27 @@ export function restoreSignalFeedOptimisticUpdate(
   queryClient.setQueryData(snapshot.queryKey, snapshot.previous)
 }
 
-export async function refillSignalFeedToLoadedDepth(
-  firstPage: SignalFeedResponse,
-  previous: SignalFeedResponse | undefined,
-  fetchSectionPage: (
-    status: SignalFeedStatusFilter,
-    cursor: string,
-    pageSize: number,
-  ) => Promise<SignalFeedResponse>,
-): Promise<SignalFeedResponse> {
-  if (!previous) {
-    return firstPage
-  }
-
-  const previousByStatus = new Map(
-    previous.sections.map((section) => [section.status, section]),
-  )
-
-  const sections = await Promise.all(
-    firstPage.sections.map(async (section) => {
-      const prior = previousByStatus.get(section.status)
-      const target = prior?.items.length ?? 0
-      if (!prior || target <= section.items.length) {
-        return section
-      }
-
-      const seen = new Set(section.items.map((item) => item.id))
-      const items = [...section.items]
-      let nextCursor = section.next_cursor
-      let hasMore = section.has_more
-      let extraPages = 0
-
-      while (
-        items.length < target &&
-        hasMore &&
-        nextCursor &&
-        extraPages < SIGNAL_FEED_MAX_RESTORE_PAGES
-      ) {
-        const pageSize = continuationPageSizeForRemainingDepth(target - items.length)
-        if (pageSize <= 0) {
-          break
-        }
-        extraPages += 1
-        const page = await fetchSectionPage(
-          section.status as SignalFeedStatusFilter,
-          nextCursor,
-          pageSize,
-        )
-        const incoming = page.sections.find((entry) => entry.status === section.status)
-        if (!incoming) {
-          break
-        }
-        for (const item of incoming.items) {
-          if (seen.has(item.id)) {
-            continue
-          }
-          seen.add(item.id)
-          items.push(item)
-          if (items.length >= target) {
-            break
-          }
-        }
-        nextCursor = incoming.next_cursor
-        hasMore = incoming.has_more
-      }
-
-      return {
-        ...section,
-        items,
-        next_cursor: nextCursor,
-        has_more: hasMore,
-      }
-    }),
-  )
-
-  return { ...firstPage, sections }
-}
-
-export function appendSignalFeedSectionPage(
-  queryClient: QueryClient,
-  options: {
-    establishmentId: string | null
-    viewMode: SignalViewMode
-    filters: SignalFeedFilters
-    source?: 'establishment' | 'cross'
-    status: string
-    page: SignalFeedResponse
-  },
-): void {
-  const queryKey = signalFeedQueryKey(options)
-  if (queryKey == null) {
-    return
-  }
-
-  const incoming = options.page.sections.find((section) => section.status === options.status)
-  if (!incoming) {
-    return
-  }
-
-  queryClient.setQueryData<SignalFeedResponse>(queryKey, (current) => {
-    if (!current) {
-      return current
-    }
-    return {
-      ...current,
-      sections: current.sections.map((section) => {
-        if (section.status !== options.status) {
-          return section
-        }
-        return {
-          ...section,
-          items: [...section.items, ...incoming.items],
-          next_cursor: incoming.next_cursor,
-          has_more: incoming.has_more,
-        }
-      }),
-    }
-  })
-}
-
 export function invalidateSignalFeedViewModes(
   queryClient: QueryClient,
   establishmentId: string,
   viewModes: SignalViewMode[] = SIGNAL_FEED_VIEW_MODES,
+  activeFeed?: SignalQuickActionCacheContext,
 ): void {
+  const activeQueryHash = activeFeed
+    ? hashKey(
+        signalsQueryKeys.feed(
+          establishmentId,
+          activeFeed.viewMode,
+          activeFeed.filters,
+        ),
+      )
+    : null
   for (const viewMode of viewModes) {
     void queryClient.invalidateQueries({
       queryKey: ['signals', 'feed', establishmentId, viewMode],
+      ...(activeQueryHash
+        ? { predicate: (query) => query.queryHash !== activeQueryHash }
+        : {}),
     })
   }
 }
@@ -370,7 +390,6 @@ export function applySignalQuickActionSuccess(
   const { establishmentId, signalId, detail, viewMode, filters } = options
 
   updateSignalDetailCache(queryClient, establishmentId, signalId, detail)
-  // Immediate feed patch so the UI does not wait on invalidate/refetch.
   patchSignalInActiveFeedCache(queryClient, {
     establishmentId,
     viewMode,
@@ -378,5 +397,8 @@ export function applySignalQuickActionSuccess(
     signalId,
     patch: feedItemPatchFromDetail(detail),
   })
-  invalidateSignalFeedViewModes(queryClient, establishmentId)
+  invalidateSignalFeedViewModes(queryClient, establishmentId, SIGNAL_FEED_VIEW_MODES, {
+    viewMode,
+    filters,
+  })
 }

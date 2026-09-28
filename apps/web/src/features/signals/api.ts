@@ -6,7 +6,9 @@ import { normalizeSignalFeedFilters } from './lib/signal-feed-filters'
 import type {
   SignalDetail,
   SignalFeedFilters,
+  SignalFeedPinsPage,
   SignalFeedResponse,
+  SignalPinReplacementCandidate,
   SignalQualifyRoutingRequest,
   SignalQualifyRoutingResponse,
   SignalViewMode,
@@ -34,12 +36,14 @@ export class SignalsApiError extends Error {
   detail: string
   code: string | null
   payload: unknown
+  replacementCandidates: SignalPinReplacementCandidate[]
 
   constructor(options: {
     status: number
     detail: string
     code?: string | null
     payload?: unknown
+    replacementCandidates?: SignalPinReplacementCandidate[]
   }) {
     super(options.detail)
     this.name = 'SignalsApiError'
@@ -47,6 +51,7 @@ export class SignalsApiError extends Error {
     this.detail = options.detail
     this.code = options.code ?? null
     this.payload = options.payload
+    this.replacementCandidates = options.replacementCandidates ?? []
   }
 }
 
@@ -58,9 +63,34 @@ function getAuthHeaders(accessToken: string | null) {
     : undefined
 }
 
+function parseReplacementCandidates(payload: unknown): SignalPinReplacementCandidate[] {
+  if (typeof payload !== 'object' || payload === null || !('replacement_candidates' in payload)) {
+    return []
+  }
+  const raw = payload.replacement_candidates
+  if (!Array.isArray(raw)) {
+    return []
+  }
+  return raw.filter(
+    (candidate): candidate is SignalPinReplacementCandidate =>
+      typeof candidate === 'object' &&
+      candidate !== null &&
+      'signal_id' in candidate &&
+      typeof candidate.signal_id === 'string' &&
+      'title' in candidate &&
+      typeof candidate.title === 'string',
+  )
+}
+
 function parseError(response: Response, payload: unknown): SignalsApiError {
   const { status, detail, code } = parseStandardApiError(response, payload)
-  return new SignalsApiError({ status, detail, code, payload })
+  return new SignalsApiError({
+    status,
+    detail,
+    code,
+    payload,
+    replacementCandidates: parseReplacementCandidates(payload),
+  })
 }
 
 function assertSignalData<T>(result: {
@@ -179,12 +209,35 @@ export async function fetchCrossSignalDetail(signalId: string): Promise<SignalDe
   return assertSignalData<SignalDetail>(result)
 }
 
-export async function pinSignal(establishmentId: string, signalId: string): Promise<SignalDetail> {
+export async function fetchCrossSignalFeedPins(
+  filters: SignalFeedFilters,
+  options: { cursor?: string; pageSize?: number } = {},
+): Promise<SignalFeedPinsPage> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/cross/signal-feed-pins/', {
+        params: {
+          query: buildSignalFeedQuery(null, filters, options),
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  return assertSignalData<SignalFeedPinsPage>(result)
+}
+
+export async function pinSignal(
+  establishmentId: string,
+  signalId: string,
+  options: { replacePinId?: string } = {},
+): Promise<SignalDetail> {
   const result = await withAuthRetry(
     (accessToken) =>
       apiClient.POST('/api/v1/establishments/{establishment_id}/signals/{signal_id}/pin/', {
         params: signalPathParams(establishmentId, signalId),
         headers: getAuthHeaders(accessToken),
+        ...(options.replacePinId ? { body: { replace_pin_id: options.replacePinId } } : {}),
       }),
     { refreshable: true },
   )

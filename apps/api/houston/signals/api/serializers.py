@@ -23,6 +23,7 @@ from houston.signals.models import Signal
 from houston.signals.reporter_display import (
     created_from_observation_media_items,
     created_from_source_observation_link,
+    format_reporter_display_name,
     media_count_for_signal,
     observation_media_count,
     reporter_display_name_for_signal,
@@ -115,6 +116,8 @@ class SignalFeedItemSerializer(serializers.Serializer):
     media_count = serializers.IntegerField()
     last_activity_at = serializers.DateTimeField()
     created_at = serializers.DateTimeField()
+    pinned_at = serializers.DateTimeField(allow_null=True, required=False)
+    pinned_by_display_name = serializers.CharField(allow_null=True, required=False)
     reporter_display_name = serializers.CharField(allow_null=True, required=False)
     aggregation_count = serializers.IntegerField()
     permission_hints = PermissionHintsSerializer()
@@ -123,16 +126,45 @@ class SignalFeedItemSerializer(serializers.Serializer):
     establishment_name = serializers.CharField(required=False)
 
 
-class SignalFeedSectionSerializer(serializers.Serializer):
-    status = serializers.CharField()
+class SignalFeedCountsSerializer(serializers.Serializer):
+    open = serializers.IntegerField()
+    in_progress = serializers.IntegerField()
+    interesting = serializers.IntegerField()
+    pinned = serializers.IntegerField()
+
+
+class SignalFeedResponseSerializer(serializers.Serializer):
+    items = SignalFeedItemSerializer(many=True)
+    pins = SignalFeedItemSerializer(many=True, required=False)
+    counts = SignalFeedCountsSerializer(required=False)
+    next_cursor = serializers.CharField(allow_null=True)
+    has_more = serializers.BooleanField()
+    pins_next_cursor = serializers.CharField(allow_null=True, required=False)
+    pins_has_more = serializers.BooleanField(required=False)
+    applied_filters = serializers.DictField(required=False)
+
+
+class SignalFeedPinsResponseSerializer(serializers.Serializer):
     items = SignalFeedItemSerializer(many=True)
     next_cursor = serializers.CharField(allow_null=True)
     has_more = serializers.BooleanField()
 
 
-class SignalFeedResponseSerializer(serializers.Serializer):
-    sections = SignalFeedSectionSerializer(many=True)
-    applied_filters = serializers.DictField()
+class SignalPinRequestSerializer(serializers.Serializer):
+    replace_pin_id = serializers.UUIDField(required=False)
+
+
+class SignalPinReplacementCandidateSerializer(serializers.Serializer):
+    signal_id = serializers.UUIDField()
+    title = serializers.CharField()
+    pinned_at = serializers.DateTimeField(allow_null=True)
+    pinned_by_display_name = serializers.CharField(allow_null=True)
+
+
+class SignalPinLimitConflictSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    detail = serializers.CharField()
+    replacement_candidates = SignalPinReplacementCandidateSerializer(many=True)
 
 
 class SourceContextSerializer(serializers.Serializer):
@@ -234,6 +266,16 @@ def _pending_resolution_request_for_serialize(signal: Signal):
     return get_pending_resolution_request_for_signal(signal)
 
 
+def _pinned_by_display_name(signal: Signal) -> str | None:
+    membership = signal.pinned_by_membership
+    if membership is None:
+        return None
+    user = getattr(membership, "user", None)
+    if user is None:
+        return None
+    return format_reporter_display_name(user)
+
+
 def serialize_signal_feed_item(*, signal: Signal, membership, read_only: bool = False) -> dict:
     from houston.action_plans.permissions import can_create_linked_action_plan
     from houston.signals.permissions import (
@@ -323,6 +365,8 @@ def serialize_signal_feed_item(*, signal: Signal, membership, read_only: bool = 
         "media_count": media_count_for_signal(signal),
         "last_activity_at": signal.last_activity_at,
         "created_at": signal.created_at,
+        "pinned_at": signal.pinned_at,
+        "pinned_by_display_name": _pinned_by_display_name(signal),
         "reporter_display_name": reporter_display_name_for_signal(signal),
         "aggregation_count": getattr(signal, "aggregation_count", 0) or 0,
         "resolution_request": serialize_resolution_request(pending),

@@ -1,9 +1,6 @@
-export type SignalFeedStatusFilter =
-  | 'open'
-  | 'in_progress'
-  | 'interesting'
-  | 'resolved'
-  | 'canceled'
+export type SignalFeedStatusFilter = 'open' | 'in_progress' | 'interesting'
+
+export type SignalFeedStatusSelection = 'all' | SignalFeedStatusFilter
 
 export type SignalFeedFilters = {
   statuses: SignalFeedStatusFilter[]
@@ -23,14 +20,13 @@ export const SIGNAL_FEED_STATUS_OPTIONS: ReadonlyArray<{
   value: SignalFeedStatusFilter
   label: string
 }> = [
-  { value: 'open', label: 'En attente' },
+  { value: 'open', label: 'Ouverts' },
   { value: 'in_progress', label: 'En cours' },
-  { value: 'interesting', label: 'Intéressant' },
-  { value: 'resolved', label: 'Résolue' },
-  { value: 'canceled', label: 'Annulée' },
+  { value: 'interesting', label: 'Intéressants' },
 ]
 
-const FEED_STATUS_SET = new Set<string>(SIGNAL_FEED_STATUS_OPTIONS.map((option) => option.value))
+const OPERATIONAL_STATUS_ORDER: SignalFeedStatusFilter[] = ['open', 'in_progress', 'interesting']
+
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -39,10 +35,9 @@ function dedupeSorted(values: string[]): string[] {
 }
 
 export function normalizeSignalFeedFilters(filters: SignalFeedFilters): SignalFeedFilters {
+  const operational = OPERATIONAL_STATUS_ORDER.filter((status) => filters.statuses.includes(status))
   return {
-    statuses: dedupeSorted(filters.statuses).filter((value): value is SignalFeedStatusFilter =>
-      FEED_STATUS_SET.has(value),
-    ),
+    statuses: operational.slice(0, 1),
     businessUnitIds: dedupeSorted(filters.businessUnitIds).filter((value) =>
       UUID_PATTERN.test(value),
     ),
@@ -82,18 +77,28 @@ export function appendSignalFeedFiltersToSearchParams(
   }
 }
 
+export function selectedSignalFeedStatus(
+  filters: SignalFeedFilters,
+): SignalFeedStatusSelection {
+  return normalizeSignalFeedFilters(filters).statuses[0] ?? 'all'
+}
+
+export function signalFeedFiltersForStatus(
+  filters: SignalFeedFilters,
+  status: SignalFeedStatusSelection,
+): SignalFeedFilters {
+  return normalizeSignalFeedFilters({
+    ...filters,
+    statuses: status === 'all' ? [] : [status],
+  })
+}
+
 export function formatStatusFilterChipLabel(filters: SignalFeedFilters): string {
-  const { statuses } = normalizeSignalFeedFilters(filters)
-  if (statuses.length === 0) {
-    return 'Statut'
+  const status = selectedSignalFeedStatus(filters)
+  if (status === 'all') {
+    return 'Tout'
   }
-  if (statuses.length === 1) {
-    return (
-      SIGNAL_FEED_STATUS_OPTIONS.find((option) => option.value === statuses[0])?.label ??
-      statuses[0]
-    )
-  }
-  return `Statut · ${statuses.length}`
+  return SIGNAL_FEED_STATUS_OPTIONS.find((option) => option.value === status)?.label ?? status
 }
 
 export function countClassificationFilterSelections(filters: SignalFeedFilters): number {

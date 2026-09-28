@@ -15,6 +15,8 @@ from houston.establishments.selectors import get_establishment_business_unit_tre
 from houston.signals.api.serializers import (
     SignalDetailSerializer,
     SignalFeedResponseSerializer,
+    SignalPinLimitConflictSerializer,
+    SignalPinRequestSerializer,
     SignalQualifyRoutingRequestSerializer,
     SignalQualifyRoutingResponseSerializer,
     SignalResolutionRequestCancelSerializer,
@@ -29,6 +31,7 @@ from houston.signals.constants import (
 )
 from houston.signals.exceptions import (
     SignalPermissionError,
+    SignalPinLimitError,
     SignalStateError,
     SignalValidationError,
 )
@@ -40,10 +43,6 @@ from houston.signals.feed_filters import (
     SignalFeedFilterValidationError,
     build_applied_filters_payload,
     parse_signal_feed_filters,
-)
-from houston.signals.feed_pagination import (
-    SignalFeedPaginationError,
-    paginate_signal_feed_sections,
 )
 from houston.signals.models import Signal
 from houston.signals.permissions import (
@@ -70,7 +69,6 @@ from houston.signals.selectors import (
     get_resolution_request_for_signal_command,
     get_signal_for_detail,
     get_signal_for_qualify_routing,
-    signal_feed_queryset,
 )
 from houston.signals.services import (
     cancel_signal,
@@ -80,6 +78,7 @@ from houston.signals.services import (
     resolve_signal,
     unpin_signal,
 )
+from houston.signals.signal_feed import build_signal_feed_page
 from houston.uploads.access import resolve_observation_actor_membership
 from houston.uploads.api.views import EstablishmentScopedObservationMixin
 
@@ -125,8 +124,8 @@ class SignalFeedView(EstablishmentScopedSignalMixin, APIView):
                 required=False,
                 type=str,
                 description=(
-                    "Opaque pagination cursor from a previous section next_cursor. "
-                    "Requires exactly one statuses value matching the cursor status."
+                    "Opaque list cursor from a previous next_cursor. "
+                    "Continuation returns items only."
                 ),
             ),
             OpenApiParameter(
@@ -134,8 +133,8 @@ class SignalFeedView(EstablishmentScopedSignalMixin, APIView):
                 required=False,
                 type=str,
                 description=(
-                    "Comma-separated feed statuses: open, in_progress, interesting, "
-                    "resolved, canceled (max 5)."
+                    "One operational status: open, in_progress, or interesting. "
+                    "Omit it to page open, then in progress, then interesting."
                 ),
             ),
             OpenApiParameter(
@@ -222,49 +221,25 @@ class SignalFeedView(EstablishmentScopedSignalMixin, APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        queryset = signal_feed_queryset(
-            membership=membership,
-            view_mode=view_mode,  # type: ignore[arg-type]
-            filters=feed_filters if feed_filters.has_any() else None,
-        )
+        active_filters = feed_filters if feed_filters.has_any() else None
         try:
-            sections = paginate_signal_feed_sections(
-                queryset,
+            page = build_signal_feed_page(
+                membership=membership,
+                view_mode=view_mode,
+                filters=active_filters,
                 page_size=page_size,
-                requested_statuses=feed_filters.statuses,
                 cursor=cursor,
             )
-        except SignalFeedPaginationError as exc:
-            return Response(
-                {"code": "validation_error", "detail": exc.detail},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
         except SignalFeedCursorError as exc:
-            return Response(
-                {"code": "validation_error", "detail": exc.detail},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return _cursor_error_response(exc)
 
-        payload = {
-            "sections": [
-                {
-                    "status": section.status,
-                    "items": [
-                        serialize_signal_feed_item(signal=signal, membership=membership)
-                        for signal in section.items
-                    ],
-                    "next_cursor": section.next_cursor,
-                    "has_more": section.has_more,
-                }
-                for section in sections
-            ],
-            "applied_filters": build_applied_filters_payload(
-                view_mode=view_mode,
-                filters=feed_filters,
-            ),
-        }
-        serializer = SignalFeedResponseSerializer(payload)
-        return Response(serializer.data)
+        payload = serialize_signal_feed_page(
+            page=page,
+            view_mode=view_mode,
+            filters=feed_filters,
+            membership=membership,
+        )
+        return Response(SignalFeedResponseSerializer(payload).data)
 
 
 class SignalDetailView(EstablishmentScopedSignalMixin, APIView):
@@ -313,19 +288,30 @@ class SignalPinView(EstablishmentScopedSignalMixin, APIView):
 
     @extend_schema(
         tags=["signals"],
-        request=None,
+        request=SignalPinRequestSerializer,
         responses={
             200: SignalDetailSerializer,
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=ApiErrorResponseSerializer),
+            409: OpenApiResponse(response=SignalPinLimitConflictSerializer),
         },
     )
     def post(self, request, establishment_id, signal_id):
+        replace_pin_id = None
+        if request.data not in (None, "", {}):
+            serializer = SignalPinRequestSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    {"code": "validation_error", "detail": "Invalid pin request."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            replace_pin_id = serializer.validated_data.get("replace_pin_id")
         return _signal_command_response(
             request=request,
             establishment_id=self.establishment_id,
             signal_id=signal_id,
             action="pin",
+            replace_pin_id=replace_pin_id,
         )
 
 
@@ -646,12 +632,52 @@ def _signal_lifecycle_command_response(
     return Response(SignalDetailSerializer(payload).data)
 
 
+def serialize_signal_feed_page(
+    *,
+    page,
+    view_mode: str,
+    filters,
+    membership,
+    read_only: bool = False,
+) -> dict:
+    def serialize(signal):
+        return serialize_signal_feed_item(
+            signal=signal,
+            membership=membership,
+            read_only=read_only,
+        )
+
+    payload = {
+        "items": [serialize(signal) for signal in page.items],
+        "next_cursor": page.next_cursor,
+        "has_more": page.has_more,
+    }
+    if page.pins is not None:
+        payload["pins"] = [serialize(signal) for signal in page.pins]
+        payload["counts"] = page.counts
+        payload["pins_next_cursor"] = page.pins_next_cursor
+        payload["pins_has_more"] = bool(page.pins_has_more)
+        payload["applied_filters"] = build_applied_filters_payload(
+            view_mode=view_mode,
+            filters=filters,
+        )
+    return payload
+
+
+def _cursor_error_response(exc: SignalFeedCursorError) -> Response:
+    return Response(
+        {"code": exc.code, "detail": exc.detail},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
 def _signal_command_response(
     *,
     request,
     establishment_id: uuid.UUID,
     signal_id: str,
     action: str,
+    replace_pin_id: uuid.UUID | None = None,
 ) -> Response:
     membership = resolve_observation_actor_membership(
         request,
@@ -675,10 +701,30 @@ def _signal_command_response(
 
     try:
         if action == "pin":
-            signal = pin_signal(signal=signal, membership=membership)
+            signal = pin_signal(
+                signal=signal,
+                membership=membership,
+                replace_pin_id=replace_pin_id,
+            )
         else:
             signal = unpin_signal(signal=signal)
+    except SignalPinLimitError as exc:
+        payload = SignalPinLimitConflictSerializer(
+            {
+                "code": exc.error_code,
+                "detail": str(exc),
+                "replacement_candidates": exc.replacement_candidates,
+            }
+        ).data
+        return Response(payload, status=status.HTTP_409_CONFLICT)
+    except SignalPermissionError as exc:
+        return Response(
+            {"code": exc.error_code, "detail": str(exc) or "Permission denied."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
     except SignalStateError as exc:
+        if exc.code == "replacement_pin_not_found":
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         return Response(
             {"code": exc.error_code, "detail": "Invalid signal state."},
             status=status.HTTP_400_BAD_REQUEST,

@@ -15,16 +15,12 @@ import {
   EMPTY_SIGNAL_FEED_FILTERS,
   formatClassificationFilterChipLabel,
   formatClassificationFilterSummary,
-  formatStatusFilterChipLabel,
   hasActiveSignalFeedFilters,
   normalizeSignalFeedFilters,
-  SIGNAL_FEED_STATUS_OPTIONS,
   type SignalFeedFilters,
-  type SignalFeedStatusFilter,
 } from '../lib/signal-feed-filters'
 import { canUseNeedsQualificationFeedFilter } from '../lib/signal-qualify-routing'
 import { SignalFeedClassificationFilterSheet } from './signal-feed-classification-filter-sheet'
-import { SignalFeedStatusFilterSheet } from './signal-feed-status-filter-sheet'
 
 type SignalFeedFiltersBarProps = {
   establishmentId: string
@@ -36,16 +32,6 @@ type SignalFeedFiltersBarProps = {
   onReset?: () => void
   /** Horizontal inset for mobile chips (safe-area aware). */
   contentClassName?: string
-}
-
-function toggleStatusFilter(
-  filters: SignalFeedFilters,
-  status: SignalFeedStatusFilter,
-): SignalFeedFilters {
-  const statuses = filters.statuses.includes(status)
-    ? filters.statuses.filter((value) => value !== status)
-    : [...filters.statuses, status]
-  return normalizeSignalFeedFilters({ ...filters, statuses })
 }
 
 function filterChipClassName(active: boolean): string {
@@ -67,7 +53,6 @@ export function SignalFeedFiltersBar({
   contentClassName,
 }: SignalFeedFiltersBarProps) {
   const isDesktopWeb = isDesktopWebLanding(useLgViewport())
-  const [statusSheetOpen, setStatusSheetOpen] = useState(false)
   const [classificationSheetOpen, setClassificationSheetOpen] = useState(false)
   const [classificationPanelOpen, setClassificationPanelOpen] = useState(false)
   const normalizedFilters = normalizeSignalFeedFilters(filters)
@@ -94,25 +79,6 @@ export function SignalFeedFiltersBar({
         className="flex shrink-0 flex-wrap items-center gap-2 bg-white px-4 py-2"
         aria-label="Filtres des observations"
       >
-        {SIGNAL_FEED_STATUS_OPTIONS.map((option) => {
-          const pressed = normalizedFilters.statuses.includes(option.value)
-          return (
-            <button
-              key={option.value}
-              type="button"
-              aria-pressed={pressed}
-              className={cn(
-                'rounded-full border px-2.5 py-1 text-xs font-semibold focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30 focus-visible:outline-none',
-                pressed
-                  ? 'border-[#1B4FD8] bg-[#EEF4FF] text-[#1B4FD8]'
-                  : 'border-[#E8E6DF] bg-white text-[#5c564e]',
-              )}
-              onClick={() => onFiltersChange(toggleStatusFilter(normalizedFilters, option.value))}
-            >
-              {option.label}
-            </button>
-          )
-        })}
         {showNeedsQualification ? (
           <label className="flex items-center gap-2 text-xs text-[#1a1a1a]">
             <input
@@ -169,7 +135,6 @@ export function SignalFeedFiltersBar({
     )
   }
 
-  const statusActive = normalizedFilters.statuses.length > 0
   const classificationActive =
     normalizedFilters.businessUnitIds.length > 0 ||
     normalizedFilters.activitySubjectIds.length > 0
@@ -188,15 +153,6 @@ export function SignalFeedFiltersBar({
           )}
         >
           <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <button
-              type="button"
-              data-filter-kind="status"
-              aria-pressed={statusActive}
-              className={filterChipClassName(statusActive)}
-              onClick={() => setStatusSheetOpen(true)}
-            >
-              {formatStatusFilterChipLabel(normalizedFilters)}
-            </button>
             <button
               type="button"
               data-filter-kind="classification"
@@ -241,22 +197,6 @@ export function SignalFeedFiltersBar({
           ) : null}
         </div>
       </div>
-
-      {statusSheetOpen ? (
-        <SignalFeedStatusFilterSheet
-          key={`status-${normalizedFilters.statuses.join(',')}`}
-          appliedFilters={normalizedFilters}
-          onClose={() => setStatusSheetOpen(false)}
-          onApply={(next) =>
-            onFiltersChange(
-              normalizeSignalFeedFilters({
-                ...normalizedFilters,
-                statuses: next.statuses,
-              }),
-            )
-          }
-        />
-      ) : null}
 
       {classificationSheetOpen ? (
         <SignalFeedClassificationFilterSheet

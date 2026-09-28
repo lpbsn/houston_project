@@ -7,11 +7,19 @@ from django.db.models import BooleanField, Count, Exists, OuterRef, Prefetch, Q,
 
 from houston.establishments.membership_scope import build_signal_feed_scope_q_v2
 from houston.establishments.models import EstablishmentMembership
-from houston.establishments.role_constants import ADMIN_ROLES
 from houston.observations.models import ObservationMedia
-from houston.signals.constants import ACTIVE_SIGNAL_STATUSES, FEED_SIGNAL_STATUSES
-from houston.signals.feed_cursor import feed_sort_case_expressions
-from houston.signals.feed_filters import SignalFeedFilters, apply_feed_filters
+from houston.signals.constants import (
+    ACTIVE_SIGNAL_STATUSES,
+    FEED_SIGNAL_STATUSES,
+    OPERATIONAL_SIGNAL_FEED_STATUSES,
+    PINNABLE_SIGNAL_STATUSES,
+)
+from houston.signals.feed_cursor import operational_status_rank_case
+from houston.signals.feed_filters import (
+    SignalFeedFilters,
+    apply_signal_feed_context_filters,
+    signal_feed_status_selection,
+)
 from houston.signals.models import Signal, SignalResolutionRequest, SignalSourceObservation
 from houston.signals.permissions import can_view_signal_detail
 
@@ -25,6 +33,7 @@ _SIGNAL_LIST_SELECT_RELATED = (
     "activity_subject",
     "activity_subject__catalog_activity_subject",
     "activity_subject__business_unit",
+    "pinned_by_membership__user",
 )
 _SIGNAL_CREATED_FROM_PREFETCH = Prefetch(
     "source_observation_links",
@@ -71,7 +80,6 @@ _TOTAL_UNCLASSIFIED_Q = Q(
     responsible_business_unit__isnull=True,
     activity_subject__isnull=True,
 )
-_UNASSIGNED_ROUTING_Q = Q(routing_status=Signal.RoutingStatus.UNASSIGNED)
 
 
 def _signal_blocking_execution_annotation() -> dict:
@@ -161,46 +169,54 @@ def feed_signals_for_establishment(*, establishment_id: uuid.UUID) -> QuerySet[S
     )
 
 
-def _apply_staff_total_unclassified_exclusion(
-    queryset: QuerySet[Signal],
-    *,
-    membership: EstablishmentMembership,
-) -> QuerySet[Signal]:
-    if membership.role != EstablishmentMembership.Role.STAFF:
-        return queryset
-    return queryset.exclude(_TOTAL_UNCLASSIFIED_Q)
-
-
-def _apply_canceled_feed_visibility_for_non_admin(
-    queryset: QuerySet[Signal],
-    *,
-    membership: EstablishmentMembership,
-) -> QuerySet[Signal]:
-    if membership.role in ADMIN_ROLES:
-        return queryset
-
-    scope_q = build_signal_feed_scope_q_v2(membership=membership)
-    # Managers may always see canceled unassigned (establishment triage).
-    if membership.role == EstablishmentMembership.Role.MANAGER:
-        canceled_visible = _UNASSIGNED_ROUTING_Q
-        if scope_q is not None:
-            canceled_visible = canceled_visible | scope_q
-        return queryset.filter(~Q(status=Signal.Status.CANCELED) | canceled_visible)
-
-    if scope_q is None:
-        return queryset.exclude(status=Signal.Status.CANCELED)
-    return queryset.filter(~Q(status=Signal.Status.CANCELED) | scope_q)
-
-
 def apply_feed_sorting(queryset: QuerySet[Signal]) -> QuerySet[Signal]:
-    status_group_rank, status_rank = feed_sort_case_expressions()
-    return queryset.order_by(
-        status_group_rank,
-        "-is_pinned",
-        status_rank,
+    return queryset.annotate(status_rank=operational_status_rank_case()).order_by(
+        "status_rank",
         "-last_activity_at",
         "-created_at",
         "-id",
+    )
+
+
+def signal_feed_visibility_q(
+    *,
+    membership: EstablishmentMembership,
+    view_mode: ViewMode,
+) -> Q:
+    """Rows this membership may see in the operational feed. No status selection."""
+    visible = Q(
+        establishment_id=membership.establishment_id,
+        status__in=OPERATIONAL_SIGNAL_FEED_STATUSES,
+    )
+    if membership.role == EstablishmentMembership.Role.STAFF:
+        visible &= ~_TOTAL_UNCLASSIFIED_Q
+
+    if view_mode == "general":
+        return visible
+
+    if membership.role in {
+        EstablishmentMembership.Role.OWNER,
+        EstablishmentMembership.Role.DIRECTOR,
+    }:
+        return visible
+
+    scope_q = build_signal_feed_scope_q_v2(membership=membership)
+    if membership.role == EstablishmentMembership.Role.MANAGER:
+        if scope_q is None:
+            return visible & _TOTAL_UNCLASSIFIED_Q
+        return visible & (scope_q | _TOTAL_UNCLASSIFIED_Q)
+
+    if scope_q is None:
+        return Q(pk__in=[])
+    return visible & scope_q
+
+
+def _operational_signal_feed_queryset(*, visibility: Q) -> QuerySet[Signal]:
+    return (
+        Signal.objects.filter(visibility)
+        .annotate(**_signal_list_annotations())
+        .select_related(*_SIGNAL_LIST_SELECT_RELATED)
+        .prefetch_related(*_SIGNAL_LIST_PREFETCH)
     )
 
 
@@ -210,46 +226,68 @@ def signal_feed_queryset(
     view_mode: ViewMode,
     filters: SignalFeedFilters | None = None,
 ) -> QuerySet[Signal]:
-    queryset = feed_signals_for_establishment(establishment_id=membership.establishment_id)
+    queryset = _operational_signal_feed_queryset(
+        visibility=signal_feed_visibility_q(membership=membership, view_mode=view_mode),
+    )
     queryset = annotate_has_eligible_resolution_reviewers(
         queryset,
         membership=membership,
     )
-    queryset = _apply_staff_total_unclassified_exclusion(queryset, membership=membership)
+    return apply_signal_feed_context_filters(queryset, filters=filters)
 
-    if view_mode == "general":
-        queryset = _apply_canceled_feed_visibility_for_non_admin(
-            queryset,
-            membership=membership,
-        )
-        queryset = apply_feed_filters(queryset, filters=filters)
-        return apply_feed_sorting(queryset)
 
-    if membership.role in {
-        EstablishmentMembership.Role.OWNER,
-        EstablishmentMembership.Role.DIRECTOR,
-    }:
-        queryset = apply_feed_filters(queryset, filters=filters)
-        return apply_feed_sorting(queryset)
+def signal_feed_list_queryset(
+    queryset: QuerySet[Signal],
+    *,
+    filters: SignalFeedFilters | None,
+) -> QuerySet[Signal]:
+    """Unpinned operational list for the active status selection."""
+    listed = queryset.exclude(is_pinned=True, status__in=PINNABLE_SIGNAL_STATUSES)
+    selection = signal_feed_status_selection(filters)
+    if selection != "all":
+        listed = listed.filter(status=selection)
+    return apply_feed_sorting(listed)
 
-    if membership.role == EstablishmentMembership.Role.MANAGER:
-        # Personal = MembershipScope poles OR totally unclassified (three nulls).
-        # Partial unassigned outside scope stays in general, not Ma zone.
-        scope_q = build_signal_feed_scope_q_v2(membership=membership)
-        if scope_q is None:
-            queryset = queryset.filter(_TOTAL_UNCLASSIFIED_Q)
-        else:
-            queryset = queryset.filter(scope_q | _TOTAL_UNCLASSIFIED_Q)
-        queryset = apply_feed_filters(queryset, filters=filters)
-        return apply_feed_sorting(queryset)
 
-    # Staff: Ma vue = BU scope only (total unclassified already excluded).
-    scope_q = build_signal_feed_scope_q_v2(membership=membership)
-    if scope_q is None:
-        return apply_feed_sorting(queryset.none())
-    queryset = queryset.filter(scope_q)
-    queryset = apply_feed_filters(queryset, filters=filters)
-    return apply_feed_sorting(queryset)
+def signal_feed_pins_queryset(
+    queryset: QuerySet[Signal],
+    *,
+    filters: SignalFeedFilters | None,
+) -> QuerySet[Signal]:
+    """Eligible pins for the active status selection. In progress has no pin zone."""
+    selection = signal_feed_status_selection(filters)
+    if selection == Signal.Status.IN_PROGRESS:
+        return queryset.none()
+    pinned = queryset.filter(
+        is_pinned=True,
+        status__in=PINNABLE_SIGNAL_STATUSES,
+        pinned_at__isnull=False,
+    )
+    if selection != "all":
+        pinned = pinned.filter(status=selection)
+    return pinned.order_by("-pinned_at", "-id")
+
+
+def signal_feed_counts(
+    queryset: QuerySet[Signal],
+    *,
+    filters: SignalFeedFilters | None,
+) -> dict[str, int]:
+    """Status totals are unpinned only and ignore the selected status."""
+    selection = signal_feed_status_selection(filters)
+    pin_filter = Q(is_pinned=True, status__in=PINNABLE_SIGNAL_STATUSES)
+    if selection not in {"all", Signal.Status.IN_PROGRESS}:
+        pin_filter &= Q(status=selection)
+    aggregated = queryset.aggregate(
+        open=Count("id", filter=Q(status=Signal.Status.OPEN, is_pinned=False)),
+        in_progress=Count("id", filter=Q(status=Signal.Status.IN_PROGRESS, is_pinned=False)),
+        interesting=Count("id", filter=Q(status=Signal.Status.INTERESTING, is_pinned=False)),
+        pinned=Count("id", filter=pin_filter),
+    )
+    counts = {key: aggregated[key] or 0 for key in ("open", "in_progress", "interesting", "pinned")}
+    if selection == Signal.Status.IN_PROGRESS:
+        counts["pinned"] = 0
+    return counts
 
 
 def get_signal_for_qualify_routing(
@@ -327,26 +365,15 @@ def cross_signal_feed_queryset(
     memberships: list[EstablishmentMembership],
     filters: SignalFeedFilters | None = None,
 ) -> QuerySet[Signal]:
-    signal_ids: list[uuid.UUID] = []
-    for membership in memberships:
-        signal_ids.extend(
-            signal_feed_queryset(
-                membership=membership,
-                view_mode="general",
-                filters=filters,
-            ).values_list("id", flat=True)
-        )
-    if not signal_ids:
+    if not memberships:
         return Signal.objects.none()
-    return apply_feed_sorting(
-        Signal.objects.filter(id__in=signal_ids)
-        .annotate(**_signal_list_annotations())
-        .annotate(
-            has_eligible_resolution_reviewers=Value(False, output_field=BooleanField()),
-        )
-        .select_related(*_SIGNAL_LIST_SELECT_RELATED, "establishment")
-        .prefetch_related(*_SIGNAL_LIST_PREFETCH)
+    visibility = Q()
+    for membership in memberships:
+        visibility |= signal_feed_visibility_q(membership=membership, view_mode="general")
+    queryset = _operational_signal_feed_queryset(visibility=visibility).annotate(
+        has_eligible_resolution_reviewers=Value(False, output_field=BooleanField()),
     )
+    return apply_signal_feed_context_filters(queryset, filters=filters)
 
 
 def get_cross_signal_for_detail(

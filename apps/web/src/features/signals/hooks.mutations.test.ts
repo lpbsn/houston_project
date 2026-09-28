@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { renderHook, waitFor } from '@testing-library/react'
-import { QueryClientProvider } from '@tanstack/react-query'
+import { hashKey, QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -122,14 +122,10 @@ describe('usePinSignalMutation', () => {
     )
     const feedKey = signalsQueryKeys.feed('est-1', 'personal', EMPTY_SIGNAL_FEED_FILTERS)
     queryClient.setQueryData(feedKey, {
-      sections: [
-        {
-          status: 'open',
-          items: [{ id: 'signal-1', is_pinned: false, title: 'A' }],
-          next_cursor: null,
-          has_more: false,
-        },
-      ],
+      items: [{ id: 'signal-1', is_pinned: false, status: 'open', title: 'A' }],
+      pins: [],
+      next_cursor: null,
+      has_more: false,
       applied_filters: { statuses: [], business_unit_ids: [], activity_subject_ids: [] },
     })
 
@@ -137,9 +133,11 @@ describe('usePinSignalMutation', () => {
 
     await waitFor(() => {
       const data = queryClient.getQueryData<{
-        sections: Array<{ items: Array<{ is_pinned: boolean }> }>
+        pins?: Array<{ is_pinned: boolean }>
+        items: Array<{ id: string }>
       }>(feedKey)
-      expect(data?.sections[0]?.items[0]?.is_pinned).toBe(true)
+      expect(data?.items).toEqual([])
+      expect(data?.pins?.[0]?.is_pinned).toBe(true)
     })
 
     resolvePin?.({ id: 'signal-1', is_pinned: true })
@@ -162,12 +160,20 @@ describe('usePinSignalMutation', () => {
     })
 
     expect(pinSignal).toHaveBeenCalledWith('est-1', 'signal-1')
-    expect(invalidateSpy).toHaveBeenCalledWith({
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({
       queryKey: ['signals', 'feed', 'est-1', 'personal'],
-    })
-    expect(invalidateSpy).toHaveBeenCalledWith({
+    }))
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({
       queryKey: ['signals', 'feed', 'est-1', 'general'],
-    })
+    }))
+    const personalInvalidation = invalidateSpy.mock.calls.find(
+      ([filters]) => filters.queryKey?.[3] === 'personal',
+    )?.[0]
+    expect(personalInvalidation?.predicate?.({
+      queryHash: hashKey(
+        signalsQueryKeys.feed('est-1', 'personal', EMPTY_SIGNAL_FEED_FILTERS),
+      ),
+    } as never)).toBe(false)
     expect(invalidateSpy).not.toHaveBeenCalledWith({
       queryKey: ['signals', 'detail', 'est-1'],
     })
@@ -192,12 +198,12 @@ describe('useUnpinSignalMutation', () => {
     })
 
     expect(unpinSignal).toHaveBeenCalledWith('est-1', 'signal-1')
-    expect(invalidateSpy).toHaveBeenCalledWith({
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({
       queryKey: ['signals', 'feed', 'est-1', 'personal'],
-    })
-    expect(invalidateSpy).toHaveBeenCalledWith({
+    }))
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({
       queryKey: ['signals', 'feed', 'est-1', 'general'],
-    })
+    }))
     expect(invalidateSpy).not.toHaveBeenCalledWith({
       queryKey: ['signals', 'detail', 'est-1'],
     })

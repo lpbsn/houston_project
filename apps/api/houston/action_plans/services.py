@@ -165,20 +165,18 @@ def sync_signal_after_execution_change(
         if from_status in CANCEL_RESOLVE_SIGNAL_STATUSES:
             now = timezone.now()
             signal.status = Signal.Status.OPEN
-            signal.is_pinned = False
-            signal.pinned_at = None
-            signal.pinned_by_membership = None
+            update_fields = ["status", "last_activity_at", "updated_at"]
+            # Returning from in progress does not restore a pin. An already open
+            # pin stays in place.
+            if from_status != Signal.Status.OPEN:
+                signal.is_pinned = False
+                signal.pinned_at = None
+                signal.pinned_by_membership = None
+                update_fields.extend(
+                    ["is_pinned", "pinned_at", "pinned_by_membership"]
+                )
             signal.last_activity_at = max(signal.last_activity_at, now)
-            signal.save(
-                update_fields=[
-                    "status",
-                    "is_pinned",
-                    "pinned_at",
-                    "pinned_by_membership",
-                    "last_activity_at",
-                    "updated_at",
-                ]
-            )
+            signal.save(update_fields=update_fields)
             if from_status != Signal.Status.OPEN:
                 metadata_safe: dict = {
                     "from_status": from_status,

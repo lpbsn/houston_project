@@ -11,6 +11,7 @@ from houston.signals.constants import (
     FEED_SIGNAL_STATUSES,
     MANUAL_CANCEL_SIGNAL_STATUSES,
     MANUAL_RESOLVE_SIGNAL_STATUSES,
+    PINNABLE_SIGNAL_STATUSES,
 )
 from houston.signals.models import Signal
 
@@ -170,7 +171,7 @@ def can_pin_signal(
     return _signal_commandable_by_membership(
         membership,
         signal,
-        statuses=frozenset({Signal.Status.OPEN}),
+        statuses=PINNABLE_SIGNAL_STATUSES,
     )
 
 
