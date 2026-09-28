@@ -194,6 +194,7 @@ export function applyActionPlanExecutionPinSuccess(
     executionId: string
     isPinned: boolean
     viewMode: ActionPlanExecutionFeedViewMode
+    replacedExecutionId?: string
   },
 ): void {
   for (const mode of EXECUTION_FEED_VIEW_MODES) {
@@ -203,6 +204,14 @@ export function applyActionPlanExecutionPinSuccess(
       executionId: options.executionId,
       patch: { is_pinned: options.isPinned },
     })
+    if (options.replacedExecutionId) {
+      patchExecutionInFeedCache(queryClient, {
+        establishmentId: options.establishmentId,
+        viewMode: mode,
+        executionId: options.replacedExecutionId,
+        patch: { is_pinned: false },
+      })
+    }
   }
   invalidateActionPlanExecutionFeedViewModes(queryClient, options.establishmentId)
 }

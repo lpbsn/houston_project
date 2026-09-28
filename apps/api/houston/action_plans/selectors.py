@@ -52,6 +52,7 @@ from houston.action_plans.permissions import (
 )
 from houston.comments.models import CommentMention
 from houston.establishments.models import EstablishmentMembership
+from houston.establishments.permissions import is_valid_membership
 from houston.establishments.role_constants import ADMIN_ROLES
 
 _PLAN_DETAIL_SELECT_RELATED = (
@@ -611,9 +612,14 @@ def action_plan_execution_pinnable_by_membership(
     membership: EstablishmentMembership,
     execution: ActionPlanExecution,
 ) -> bool:
+    if not is_valid_membership(membership):
+        return False
     if execution.establishment_id != membership.establishment_id:
         return False
-    if execution.status == EXECUTION_STATUS_SCHEDULED:
+    if execution.status not in {
+        EXECUTION_STATUS_IN_PROGRESS,
+        EXECUTION_STATUS_PENDING_VALIDATION,
+    }:
         return False
     for view_mode in ("personal", "general"):
         if action_plan_execution_feed_queryset(

@@ -15,6 +15,7 @@ todos:
     status: pending
   - id: lot3-execution-feed
     content: "Lot 3 : contrat feed Exécution P/L + category + scheduled slim + UI/hooks (même PR)"
+    State : IMPLEMENTED
     status: pending
   - id: lot4-signals-feed
     content: "Lot 4 : contrat Signals + pins OPEN/INTERESTING/cap 5 + carousel établissement/Cross + UI (même PR)"

@@ -416,14 +416,20 @@ export function usePinActionPlanExecutionMutation(
 ) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (executionId: string) => {
+    mutationFn: async ({
+      executionId,
+      replaceExecutionId,
+    }: {
+      executionId: string
+      replaceExecutionId?: string
+    }) => {
       if (!establishmentId) {
         throw new Error('Plan d’action introuvable.')
       }
-      return pinActionPlanExecution(establishmentId, executionId)
+      return pinActionPlanExecution(establishmentId, executionId, replaceExecutionId)
     },
-    onMutate: async (executionId) => {
-      if (!establishmentId) {
+    onMutate: async ({ executionId, replaceExecutionId }) => {
+      if (!establishmentId || replaceExecutionId) {
         return undefined
       }
       return prepareActionPlanExecutionPinOptimisticUpdate(queryClient, {
@@ -432,10 +438,10 @@ export function usePinActionPlanExecutionMutation(
         isPinned: true,
       })
     },
-    onError: (_error, _executionId, snapshot) => {
+    onError: (_error, _variables, snapshot) => {
       restoreActionPlanExecutionPinOptimisticUpdate(queryClient, snapshot)
     },
-    onSuccess: (result, executionId) => {
+    onSuccess: (result, { executionId, replaceExecutionId }) => {
       if (!establishmentId) {
         return
       }
@@ -444,6 +450,7 @@ export function usePinActionPlanExecutionMutation(
         executionId,
         isPinned: result.is_pinned,
         viewMode,
+        replacedExecutionId: replaceExecutionId,
       })
     },
   })

@@ -6,7 +6,10 @@ import { describe, expect, it } from 'vitest'
 import { actionPlansQueryKeys } from '../api'
 import type { ActionPlanExecutionFeedItem, ActionPlanExecutionFeedResponse } from '../types'
 
-import { patchExecutionInFeedCache } from './action-plan-execution-feed-cache'
+import {
+  applyActionPlanExecutionPinSuccess,
+  patchExecutionInFeedCache,
+} from './action-plan-execution-feed-cache'
 
 function feedItem(
   id: string,
@@ -150,5 +153,49 @@ describe('patchExecutionInFeedCache pin section_counts', () => {
     }>(actionPlansQueryKeys.executionFeed(establishmentId, viewMode))
 
     expect(data?.pages[0]?.section_counts).toEqual(counts)
+  })
+
+  it('replaces a pin without changing the pinned count', () => {
+    const queryClient = new QueryClient()
+    const establishmentId = 'est-1'
+    const counts = {
+      pinned: 3,
+      pending_validation: 0,
+      overdue: 0,
+      in_progress: 1,
+      done: 0,
+      canceled: 0,
+    }
+    for (const viewMode of ['personal', 'general'] as const) {
+      queryClient.setQueryData(actionPlansQueryKeys.executionFeed(establishmentId, viewMode), {
+        pages: [
+          page(
+            [
+              feedItem('old-pin', { is_pinned: true }),
+              feedItem('new-pin'),
+            ],
+            counts,
+          ),
+        ],
+        pageParams: [undefined],
+      })
+    }
+
+    applyActionPlanExecutionPinSuccess(queryClient, {
+      establishmentId,
+      executionId: 'new-pin',
+      isPinned: true,
+      viewMode: 'general',
+      replacedExecutionId: 'old-pin',
+    })
+
+    for (const viewMode of ['personal', 'general'] as const) {
+      const data = queryClient.getQueryData<{
+        pages: ActionPlanExecutionFeedResponse[]
+      }>(actionPlansQueryKeys.executionFeed(establishmentId, viewMode))
+      expect(data?.pages[0]?.section_counts.pinned).toBe(3)
+      expect(data?.pages[0]?.items[0]?.action_plan_execution.is_pinned).toBe(false)
+      expect(data?.pages[0]?.items[1]?.action_plan_execution.is_pinned).toBe(true)
+    }
   })
 })

@@ -102,7 +102,11 @@ describe('useActionPlanExecutionFeedQuickActions', () => {
     })
 
     await waitFor(() => {
-      expect(pinActionPlanExecution).toHaveBeenCalledWith('est-1', 'plan-open')
+      expect(pinActionPlanExecution).toHaveBeenCalledWith(
+        'est-1',
+        'plan-open',
+        undefined,
+      )
     })
     await waitFor(() => {
       expect(result.current.actionsOpen).toBe(false)
@@ -159,5 +163,47 @@ describe('useActionPlanExecutionFeedQuickActions', () => {
     expect(result.current.actionError).toBeNull()
     expect(result.current.activeItem?.id).toBe('plan-2')
     expect(result.current.actionsOpen).toBe(true)
+  })
+
+  it('offers an explicit replacement when the pin limit is reached', async () => {
+    pinActionPlanExecution.mockRejectedValueOnce(
+      new ActionPlansApiError({
+        status: 409,
+        code: 'action_plan_execution_feed_pin_limit_reached',
+        detail: 'Three executions are already pinned.',
+        replacementCandidates: [
+          { execution_id: 'pinned-1', title: 'Plan déjà épinglé' },
+        ],
+      }),
+    )
+    const { result } = renderQuickActionsHook()
+    const item = buildFeedItem({ id: 'plan-new' })
+
+    act(() => {
+      result.current.runAction('pin', item)
+    })
+
+    await waitFor(() => {
+      expect(result.current.pinReplacement?.target.id).toBe('plan-new')
+    })
+    expect(result.current.pinReplacement?.candidates).toEqual([
+      { execution_id: 'pinned-1', title: 'Plan déjà épinglé' },
+    ])
+    expect(result.current.actionError).toBeNull()
+
+    act(() => {
+      result.current.replacePin('pinned-1')
+    })
+
+    await waitFor(() => {
+      expect(pinActionPlanExecution).toHaveBeenLastCalledWith(
+        'est-1',
+        'plan-new',
+        'pinned-1',
+      )
+    })
+    await waitFor(() => {
+      expect(result.current.pinReplacement).toBeNull()
+    })
   })
 })

@@ -1098,7 +1098,10 @@ describe('ExecutionFeedPage desktop list', () => {
     expect(openControl.contains(pin)).toBe(false)
     fireEvent.click(pin)
     expect(executionNavigate).not.toHaveBeenCalled()
-    expect(pinControl.pin).toHaveBeenCalledWith('plan-active', expect.any(Object))
+    expect(pinControl.pin).toHaveBeenCalledWith(
+      { executionId: 'plan-active' },
+      expect.any(Object),
+    )
     expect(screen.queryByRole('dialog', { name: 'Actions' })).toBeNull()
     expect(screen.queryByRole('menu', { name: 'Actions du plan d’action' })).toBeNull()
     expect(screen.queryByRole('progressbar')).toBeNull()
@@ -1113,7 +1116,10 @@ describe('ExecutionFeedPage desktop list', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Épingler' }))
 
-    expect(pinControl.pin).toHaveBeenCalledWith('plan-active', expect.any(Object))
+    expect(pinControl.pin).toHaveBeenCalledWith(
+      { executionId: 'plan-active' },
+      expect.any(Object),
+    )
     await waitFor(() => {
       expect(screen.queryByRole('alert')).toBeNull()
     })

@@ -1,12 +1,23 @@
 from __future__ import annotations
 
 import time
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 
 import pytest
+from django.db import close_old_connections
 
 from houston.action_plans.constants import (
+    EXECUTION_STATUS_CANCELED,
+    EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
     EXECUTION_STATUS_PENDING_VALIDATION,
+    EXECUTION_STATUS_SCHEDULED,
+)
+from houston.action_plans.exceptions import (
+    ActionPlanExecutionFeedPinLimitError,
+    ActionPlanValidationError,
 )
 from houston.action_plans.feed_pin_services import pin_action_plan_execution_for_membership
 from houston.action_plans.models import ActionPlanExecutionFeedPin
@@ -22,8 +33,14 @@ from houston.action_plans.tests.helpers import (
     feed_execution_ids,
     feed_query,
 )
-from houston.testing.auth import auth_headers, login
-from houston.testing.auth import build_api_membership as build_foreign_membership
+from houston.establishments.models import EstablishmentMembership
+from houston.testing.auth import (
+    auth_headers,
+    login,
+)
+from houston.testing.auth import (
+    build_api_membership as build_foreign_membership,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -59,6 +76,201 @@ def test_pin_unpin_idempotent(api_client, owner_membership, business_unit):
     assert fourth.status_code == 200
     assert third.json()["is_pinned"] is False
     assert fourth.json()["is_pinned"] is False
+
+
+def test_fourth_pin_requires_explicit_replacement(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    executions = [
+        create_execution(
+            owner_membership,
+            business_unit=business_unit,
+            title=f"Pinned {index}",
+        )
+        for index in range(4)
+    ]
+    token = login(api_client, user=owner_membership.user)
+    for execution in executions[:3]:
+        response = api_client.post(
+            _pin_url(owner_membership.establishment_id, execution.id),
+            data={},
+            format="json",
+            **auth_headers(token),
+        )
+        assert response.status_code == 200
+
+    response = api_client.post(
+        _pin_url(owner_membership.establishment_id, executions[3].id),
+        data={},
+        format="json",
+        **auth_headers(token),
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "action_plan_execution_feed_pin_limit_reached",
+        "detail": "Three executions are already pinned.",
+        "replacement_candidates": [
+            {"execution_id": str(execution.id), "title": execution.title}
+            for execution in executions[:3]
+        ],
+    }
+    assert ActionPlanExecutionFeedPin.objects.filter(
+        membership=owner_membership,
+    ).count() == 3
+
+    already_pinned = api_client.post(
+        _pin_url(owner_membership.establishment_id, executions[0].id),
+        data={},
+        format="json",
+        **auth_headers(token),
+    )
+    assert already_pinned.status_code == 200
+    assert already_pinned.json() == {"is_pinned": True}
+
+
+def test_pin_replacement_is_explicit_and_atomic(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    executions = [
+        create_execution(
+            owner_membership,
+            business_unit=business_unit,
+            title=f"Replacement {index}",
+        )
+        for index in range(4)
+    ]
+    for execution in executions[:3]:
+        pin_action_plan_execution_for_membership(
+            membership=owner_membership,
+            execution_id=execution.id,
+        )
+    token = login(api_client, user=owner_membership.user)
+
+    response = api_client.post(
+        _pin_url(owner_membership.establishment_id, executions[3].id),
+        data={"replace_execution_id": str(executions[1].id)},
+        format="json",
+        **auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"is_pinned": True}
+    pinned_ids = set(
+        ActionPlanExecutionFeedPin.objects.filter(
+            membership=owner_membership,
+        ).values_list("action_plan_execution_id", flat=True)
+    )
+    assert pinned_ids == {executions[0].id, executions[2].id, executions[3].id}
+
+
+def test_invalid_pin_replacement_keeps_existing_pins(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    executions = [
+        create_execution(
+            owner_membership,
+            business_unit=business_unit,
+            title=f"Atomic {index}",
+        )
+        for index in range(4)
+    ]
+    for execution in executions[:3]:
+        pin_action_plan_execution_for_membership(
+            membership=owner_membership,
+            execution_id=execution.id,
+        )
+    token = login(api_client, user=owner_membership.user)
+
+    response = api_client.post(
+        _pin_url(owner_membership.establishment_id, executions[3].id),
+        data={"replace_execution_id": str(uuid.uuid4())},
+        format="json",
+        **auth_headers(token),
+    )
+
+    assert response.status_code == 404
+    pinned_ids = set(
+        ActionPlanExecutionFeedPin.objects.filter(
+            membership=owner_membership,
+        ).values_list("action_plan_execution_id", flat=True)
+    )
+    assert pinned_ids == {execution.id for execution in executions[:3]}
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_pins_at_limit_allow_only_one(
+    owner_membership,
+    business_unit,
+):
+    executions = [
+        create_execution(
+            owner_membership,
+            business_unit=business_unit,
+            title=f"Concurrent {index}",
+        )
+        for index in range(4)
+    ]
+    for execution in executions[:2]:
+        pin_action_plan_execution_for_membership(
+            membership=owner_membership,
+            execution_id=execution.id,
+        )
+    start = Barrier(2)
+
+    def pin(execution_id):
+        close_old_connections()
+        try:
+            membership = EstablishmentMembership.objects.get(pk=owner_membership.pk)
+            start.wait()
+            try:
+                pin_action_plan_execution_for_membership(
+                    membership=membership,
+                    execution_id=execution_id,
+                )
+            except ActionPlanExecutionFeedPinLimitError:
+                return "limit"
+            return "created"
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = list(executor.map(pin, [executions[2].id, executions[3].id]))
+
+    assert sorted(outcomes) == ["created", "limit"]
+    assert ActionPlanExecutionFeedPin.objects.filter(
+        membership_id=owner_membership.id,
+    ).count() == 3
+
+
+def test_pin_rejects_inactive_membership_at_write_time(
+    owner_membership,
+    business_unit,
+):
+    execution = create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Inactive membership",
+    )
+    owner_membership.status = EstablishmentMembership.Status.DEACTIVATED
+    owner_membership.save(update_fields=["status", "updated_at"])
+
+    with pytest.raises(ActionPlanValidationError, match="Execution not found"):
+        pin_action_plan_execution_for_membership(
+            membership=owner_membership,
+            execution_id=execution.id,
+        )
+
+    assert not ActionPlanExecutionFeedPin.objects.filter(
+        membership=owner_membership,
+        action_plan_execution=execution,
+    ).exists()
 
 
 def test_pin_is_personal(api_client, owner_membership, manager_membership, business_unit):
@@ -205,6 +417,38 @@ def test_pin_not_visible_returns_404(api_client, owner_membership, business_unit
         **auth_headers(foreign_token),
     )
     assert response.status_code == 404
+
+
+@pytest.mark.parametrize(
+    "execution_status",
+    [EXECUTION_STATUS_SCHEDULED, EXECUTION_STATUS_DONE, EXECUTION_STATUS_CANCELED],
+)
+def test_pin_rejects_execution_without_remaining_work(
+    api_client,
+    owner_membership,
+    business_unit,
+    execution_status,
+):
+    execution = create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Not pinnable",
+        status=execution_status,
+    )
+    token = login(api_client, user=owner_membership.user)
+
+    response = api_client.post(
+        _pin_url(owner_membership.establishment_id, execution.id),
+        data={},
+        format="json",
+        **auth_headers(token),
+    )
+
+    assert response.status_code == 404
+    assert not ActionPlanExecutionFeedPin.objects.filter(
+        membership=owner_membership,
+        action_plan_execution=execution,
+    ).exists()
 
 
 def test_staff_can_pin_for_self(api_client, owner_membership, staff_membership, business_unit):

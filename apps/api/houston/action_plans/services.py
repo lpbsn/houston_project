@@ -286,10 +286,15 @@ def _cancel_linked_active_executions_for_signal_resolve(
                 "end_at": execution.end_at,
             },
         )
+        from houston.action_plans.feed_pin_services import (
+            delete_action_plan_execution_feed_pins,
+        )
         from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
         from houston.notifications.scheduling import (
             schedule_action_plan_execution_canceled_notification,
         )
+
+        delete_action_plan_execution_feed_pins(execution_id=execution.id)
 
         schedule_action_plan_execution_invalidation(
             execution=execution,
