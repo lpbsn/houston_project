@@ -13,16 +13,13 @@ export function useFeedListSession(options: {
   const interactingRef = useRef(false)
   const onRemoveRef = useRef(options.onRemove)
   const [updatesAvailable, setUpdatesAvailable] = useState(false)
-  const prefixKey = options.queryKeyPrefix?.join('\0') ?? ''
-  const prefixRef = useRef(options.queryKeyPrefix)
-  prefixRef.current = options.queryKeyPrefix
 
   useEffect(() => {
     onRemoveRef.current = options.onRemove
   }, [options.onRemove])
 
   useEffect(() => {
-    const prefix = prefixRef.current
+    const prefix = options.queryKeyPrefix
     if (!prefix) {
       return
     }
@@ -33,7 +30,7 @@ export function useFeedListSession(options: {
       onDefer: () => setUpdatesAvailable(true),
       onRemove: (entityId) => onRemoveRef.current(entityId),
     })
-  }, [prefixKey])
+  }, [options.queryKeyPrefix])
 
   const clearUpdates = useCallback(() => setUpdatesAvailable(false), [])
   const markUpdates = useCallback(() => setUpdatesAvailable(true), [])

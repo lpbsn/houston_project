@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 
 import { serializeAppRoute, useAppRoute } from '@/app/app-routes'
@@ -439,21 +447,30 @@ function ExecutionFeedPageContent({
 
   const approachArmedRef = useRef(true)
 
-  function refreshFeed() {
+  const refreshPlanFeed = planFeedQuery.refresh
+  const clearFeedUpdates = feedSession.clearUpdates
+  const clearPinsUpdates = pinsSession.clearUpdates
+  const refreshFeed = useCallback(() => {
     if (crossPinsPrefix) {
       void queryClient.invalidateQueries({ queryKey: crossPinsPrefix })
     }
-    void planFeedQuery.refresh().then((refreshed) => {
+    void refreshPlanFeed().then((refreshed) => {
       if (!refreshed) {
         return
       }
-      feedSession.clearUpdates()
-      pinsSession.clearUpdates()
+      clearFeedUpdates()
+      clearPinsUpdates()
       if (scrollRef.current) {
         scrollRef.current.scrollTop = 0
       }
     })
-  }
+  }, [
+    clearFeedUpdates,
+    clearPinsUpdates,
+    crossPinsPrefix,
+    queryClient,
+    refreshPlanFeed,
+  ])
 
   useEffect(() => {
     if (authorizationFingerprintRef.current === authorizationFingerprint) {
@@ -461,7 +478,7 @@ function ExecutionFeedPageContent({
     }
     authorizationFingerprintRef.current = authorizationFingerprint
     refreshFeed()
-  }, [authorizationFingerprint])
+  }, [authorizationFingerprint, refreshFeed])
 
   useEffect(() => {
     const edge = {
@@ -478,25 +495,22 @@ function ExecutionFeedPageContent({
     planFeedQuery.isRefreshing,
   ])
 
-  const nextEndAt = useMemo(() => {
-    let next: number | null = null
-    for (const item of planItems) {
-      if (item.status !== 'in_progress' || item.is_overdue || !item.end_at) {
-        continue
-      }
-      const time = Date.parse(item.end_at)
-      if (Number.isNaN(time) || time <= Date.now()) {
-        continue
-      }
-      if (next == null || time < next) {
-        next = time
-      }
+  const [overdueReferenceNow, setOverdueReferenceNow] = useState(() => Date.now())
+  let nextEndAt: number | null = null
+  for (const item of planItems) {
+    if (item.status !== 'in_progress' || item.is_overdue || !item.end_at) {
+      continue
     }
-    return next
-  }, [planItems])
+    const time = Date.parse(item.end_at)
+    if (Number.isNaN(time) || time <= overdueReferenceNow) {
+      continue
+    }
+    if (nextEndAt == null || time < nextEndAt) {
+      nextEndAt = time
+    }
+  }
 
-  const revalidateOverdueRef = useRef<() => void>(() => {})
-  revalidateOverdueRef.current = () => {
+  const revalidateOverdue = useEffectEvent(() => {
     const atTop = (scrollRef.current?.scrollTop ?? 0) <= 0 && planFeed.showsPageOne
     if (atTop && !isFetchingMore && !planFeedQuery.isRefreshing) {
       void planFeedQuery.refresh().then((refreshed) => {
@@ -513,7 +527,7 @@ function ExecutionFeedPageContent({
       return
     }
     feedSession.markUpdates()
-  }
+  })
 
   useEffect(() => {
     if (nextEndAt == null) {
@@ -523,7 +537,8 @@ function ExecutionFeedPageContent({
     const schedule = () => {
       const remaining = nextEndAt - Date.now()
       if (remaining <= 0) {
-        revalidateOverdueRef.current()
+        setOverdueReferenceNow(Date.now())
+        revalidateOverdue()
         return
       }
       timer = window.setTimeout(schedule, Math.min(remaining, 60 * 60 * 1000))
