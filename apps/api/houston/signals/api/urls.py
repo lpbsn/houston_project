@@ -1,5 +1,6 @@
 from django.urls import path
 
+from houston.signals.api.history_views import SignalHistoryView
 from houston.signals.api.views import (
     SignalCancelView,
     SignalDetailView,
@@ -21,6 +22,11 @@ urlpatterns = [
         "establishments/<uuid:establishment_id>/signal-feed/",
         SignalFeedView.as_view(),
         name="signal-feed",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/history/signals/",
+        SignalHistoryView.as_view(),
+        name="signal-history",
     ),
     path(
         "establishments/<uuid:establishment_id>/signals/qualify-routing-options/",

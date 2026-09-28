@@ -67,6 +67,7 @@ const OPERATIONAL_ROUTE_KINDS = new Set<AppRoute['kind']>([
   'action-plan-execution-edit',
   'chat-conversation-detail',
   'team-member-detail',
+  'history',
 ])
 
 const ACTION_PLAN_TERRAIN_PATHS = new Set<string>(['/action-plans'])
@@ -116,6 +117,10 @@ export function requiresActiveMembership(route: AppRoute): boolean {
     return route.scope?.type !== 'cross'
   }
 
+  if (route.kind === 'history') {
+    return route.scope?.type === 'establishment'
+  }
+
   if (
     route.kind === 'signal-action-create' ||
     route.kind === 'action-plan-create' ||
@@ -147,7 +152,8 @@ export function usesTerrainShell(route: AppRoute): boolean {
     route.kind === 'action-plan-execution-edit' ||
     route.kind === 'chat-conversation-detail' ||
     route.kind === 'analytics-pattern-detail' ||
-    route.kind === 'team-member-detail'
+    route.kind === 'team-member-detail' ||
+    route.kind === 'history'
   ) {
     return true
   }
@@ -223,6 +229,23 @@ function scopedHubConfig(page: ScopedTerrainPage): TerrainRouteConfig {
 }
 
 export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
+  if (route.kind === 'history') {
+    const backPath =
+      route.scope?.type === 'cross'
+        ? '/cross/signals'
+        : route.scope?.type === 'establishment'
+          ? `/e/${route.scope.establishmentId}/general`
+          : '/general'
+    return {
+      topbarVariant: 'detail',
+      title: 'Historique',
+      backPath,
+      showBottomNav: false,
+      activeNavPath: '/general',
+      mainScroll: 'hidden',
+    }
+  }
+
   if (route.kind === 'scoped-terrain') {
     return scopedHubConfig(route.page)
   }
@@ -557,6 +580,16 @@ export function getTerrainContentKey(route: AppRoute): string {
 
   if (route.kind === 'team-member-detail') {
     return `team-member-detail-${route.membershipId}`
+  }
+
+  if (route.kind === 'history') {
+    if (route.scope?.type === 'cross') {
+      return 'history-cross'
+    }
+    if (route.scope?.type === 'establishment') {
+      return `history-est-${route.scope.establishmentId}`
+    }
+    return 'history'
   }
 
   if (route.kind === 'static') {

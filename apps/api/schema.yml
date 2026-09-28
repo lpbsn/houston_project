@@ -2032,6 +2032,166 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/cross/history/executions/:
+    get:
+      operationId: v1_cross_execution_history_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque continuation cursor. Continuation returns items only.
+      - in: query
+        name: from
+        schema:
+          type: string
+        description: Custom period start, YYYY-MM-DD.
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: period
+        schema:
+          type: string
+          enum:
+          - '30'
+          - '7'
+          - '90'
+          - all
+          - custom
+        description: Paris civil days. Defaults to 30, today included.
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - all
+          - canceled
+          - done
+        description: Defaults to all terminal statuses.
+      - in: query
+        name: to
+        schema:
+          type: string
+        description: Custom period end, YYYY-MM-DD, inclusive.
+      - in: query
+        name: view_mode
+        schema:
+          type: string
+          enum:
+          - general
+          - personal
+        required: true
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionHistoryResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/cross/history/signals/:
+    get:
+      operationId: v1_cross_signal_history_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque continuation cursor. Continuation returns items only.
+      - in: query
+        name: from
+        schema:
+          type: string
+        description: Custom period start, YYYY-MM-DD.
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: period
+        schema:
+          type: string
+          enum:
+          - '30'
+          - '7'
+          - '90'
+          - all
+          - custom
+        description: Paris civil days. Defaults to 30, today included.
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - all
+          - canceled
+          - resolved
+        description: Defaults to all terminal statuses.
+      - in: query
+        name: to
+        schema:
+          type: string
+        description: Custom period end, YYYY-MM-DD, inclusive.
+      - in: query
+        name: view_mode
+        schema:
+          type: string
+          enum:
+          - general
+          - personal
+        required: true
+      tags:
+      - signals
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalHistoryResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/cross/signal-feed/:
     get:
       operationId: v1_cross_signal_feed_retrieve
@@ -6401,6 +6561,184 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/history/executions/:
+    get:
+      operationId: v1_execution_history_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque continuation cursor. Continuation returns items only.
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: from
+        schema:
+          type: string
+        description: Custom period start, YYYY-MM-DD.
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: period
+        schema:
+          type: string
+          enum:
+          - '30'
+          - '7'
+          - '90'
+          - all
+          - custom
+        description: Paris civil days. Defaults to 30, today included.
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - all
+          - canceled
+          - done
+        description: Defaults to all terminal statuses.
+      - in: query
+        name: to
+        schema:
+          type: string
+        description: Custom period end, YYYY-MM-DD, inclusive.
+      - in: query
+        name: view_mode
+        schema:
+          type: string
+          enum:
+          - general
+          - personal
+        required: true
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionHistoryResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/history/signals/:
+    get:
+      operationId: v1_signal_history_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque continuation cursor. Continuation returns items only.
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: from
+        schema:
+          type: string
+        description: Custom period start, YYYY-MM-DD.
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: period
+        schema:
+          type: string
+          enum:
+          - '30'
+          - '7'
+          - '90'
+          - all
+          - custom
+        description: Paris civil days. Defaults to 30, today included.
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - all
+          - canceled
+          - resolved
+        description: Defaults to all terminal statuses.
+      - in: query
+        name: to
+        schema:
+          type: string
+        description: Custom period end, YYYY-MM-DD, inclusive.
+      - in: query
+        name: view_mode
+        schema:
+          type: string
+          enum:
+          - general
+          - personal
+        required: true
+      tags:
+      - signals
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalHistoryResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
   /api/v1/establishments/{establishment_id}/membership-invitations/:
     post:
@@ -13535,6 +13873,71 @@ components:
       - execution_thread
       type: string
       description: '* `execution_thread` - execution_thread'
+    ExecutionHistoryItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        status:
+          type: string
+        terminal_at:
+          type: string
+          format: date-time
+          nullable: true
+        terminal_date_source:
+          $ref: '#/components/schemas/TerminalDateSourceEnum'
+        termination_origin:
+          $ref: '#/components/schemas/ExecutionHistoryItemTerminationOriginEnum'
+        termination_actor_display_name:
+          type: string
+          nullable: true
+        establishment_id:
+          type: string
+          format: uuid
+        establishment_name:
+          type: string
+      required:
+      - establishment_id
+      - establishment_name
+      - id
+      - status
+      - terminal_at
+      - terminal_date_source
+      - termination_actor_display_name
+      - termination_origin
+      - title
+    ExecutionHistoryItemTerminationOriginEnum:
+      enum:
+      - manual
+      - schedule_sync
+      - unknown
+      type: string
+      description: |-
+        * `manual` - manual
+        * `schedule_sync` - schedule_sync
+        * `unknown` - unknown
+    ExecutionHistoryResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExecutionHistoryItem'
+        next_cursor:
+          type: string
+          nullable: true
+        has_more:
+          type: boolean
+        undated_count:
+          type: integer
+          nullable: true
+      required:
+      - has_more
+      - items
+      - next_cursor
     GamificationCurrentSummary:
       type: object
       properties:
@@ -15727,6 +16130,73 @@ components:
       - has_more
       - items
       - next_cursor
+    SignalHistoryItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        status:
+          type: string
+        terminal_at:
+          type: string
+          format: date-time
+          nullable: true
+        terminal_date_source:
+          $ref: '#/components/schemas/TerminalDateSourceEnum'
+        termination_origin:
+          $ref: '#/components/schemas/SignalHistoryItemTerminationOriginEnum'
+        termination_actor_display_name:
+          type: string
+          nullable: true
+        establishment_id:
+          type: string
+          format: uuid
+        establishment_name:
+          type: string
+      required:
+      - establishment_id
+      - establishment_name
+      - id
+      - status
+      - terminal_at
+      - terminal_date_source
+      - termination_actor_display_name
+      - termination_origin
+      - title
+    SignalHistoryItemTerminationOriginEnum:
+      enum:
+      - manual
+      - resolution_request
+      - action_plan
+      - unknown
+      type: string
+      description: |-
+        * `manual` - manual
+        * `resolution_request` - resolution_request
+        * `action_plan` - action_plan
+        * `unknown` - unknown
+    SignalHistoryResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignalHistoryItem'
+        next_cursor:
+          type: string
+          nullable: true
+        has_more:
+          type: boolean
+        undated_count:
+          type: integer
+          nullable: true
+      required:
+      - has_more
+      - items
+      - next_cursor
     SignalLinkedActionPlanExecution:
       type: object
       properties:
@@ -16124,6 +16594,16 @@ components:
       - expires_at
       - id
       - status
+    TerminalDateSourceEnum:
+      enum:
+      - field
+      - event
+      - unknown
+      type: string
+      description: |-
+        * `field` - field
+        * `event` - event
+        * `unknown` - unknown
     TranscriptionResponse:
       type: object
       properties:

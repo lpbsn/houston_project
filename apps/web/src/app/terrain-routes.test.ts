@@ -571,6 +571,13 @@ describe('getTerrainContentKey', () => {
       'getTerrainContentKey called for a non-terrain route',
     )
   })
+
+  it('keeps history out of the operational feed key', () => {
+    expect(getTerrainContentKey({ kind: 'history', scope: null })).toBe('history')
+    expect(getTerrainContentKey({ kind: 'history', scope: { type: 'cross' } })).toBe(
+      'history-cross',
+    )
+  })
 })
 
 describe('isProtectedRoute', () => {

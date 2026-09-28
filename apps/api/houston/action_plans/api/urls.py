@@ -1,5 +1,6 @@
 from django.urls import path
 
+from houston.action_plans.api.history_views import ExecutionHistoryView
 from houston.action_plans.api.views import (
     ActionPlanActivateView,
     ActionPlanDeactivateView,
@@ -77,6 +78,11 @@ urlpatterns = [
         "establishments/<uuid:establishment_id>/action-plan-execution-upcoming/",
         ActionPlanExecutionUpcomingView.as_view(),
         name="action-plan-execution-upcoming",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/history/executions/",
+        ExecutionHistoryView.as_view(),
+        name="execution-history",
     ),
     path(
         "establishments/<uuid:establishment_id>/action-plan-executions/<uuid:execution_id>/",

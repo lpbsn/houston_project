@@ -671,6 +671,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cross/history/executions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_cross_execution_history_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cross/history/signals/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_cross_signal_history_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cross/signal-feed/": {
         parameters: {
             query?: never;
@@ -1839,6 +1871,38 @@ export interface paths {
         };
         /** @description Lists point transactions for the authenticated membership. */
         get: operations["v1_establishments_gamification_me_transactions_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/history/executions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_execution_history_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/history/signals/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_signal_history_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4536,6 +4600,33 @@ export interface components {
          * @enum {string}
          */
         ExecutionCommentThreadItemItemTypeEnum: "execution_thread";
+        ExecutionHistoryItem: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            status: string;
+            /** Format: date-time */
+            terminal_at: string | null;
+            terminal_date_source: components["schemas"]["TerminalDateSourceEnum"];
+            termination_origin: components["schemas"]["ExecutionHistoryItemTerminationOriginEnum"];
+            termination_actor_display_name: string | null;
+            /** Format: uuid */
+            establishment_id: string;
+            establishment_name: string;
+        };
+        /**
+         * @description * `manual` - manual
+         *     * `schedule_sync` - schedule_sync
+         *     * `unknown` - unknown
+         * @enum {string}
+         */
+        ExecutionHistoryItemTerminationOriginEnum: "manual" | "schedule_sync" | "unknown";
+        ExecutionHistoryResponse: {
+            items: components["schemas"]["ExecutionHistoryItem"][];
+            next_cursor: string | null;
+            has_more: boolean;
+            undated_count?: number | null;
+        };
         GamificationCurrentSummary: {
             /** Format: uuid */
             season_id: string | null;
@@ -5427,6 +5518,34 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        SignalHistoryItem: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            status: string;
+            /** Format: date-time */
+            terminal_at: string | null;
+            terminal_date_source: components["schemas"]["TerminalDateSourceEnum"];
+            termination_origin: components["schemas"]["SignalHistoryItemTerminationOriginEnum"];
+            termination_actor_display_name: string | null;
+            /** Format: uuid */
+            establishment_id: string;
+            establishment_name: string;
+        };
+        /**
+         * @description * `manual` - manual
+         *     * `resolution_request` - resolution_request
+         *     * `action_plan` - action_plan
+         *     * `unknown` - unknown
+         * @enum {string}
+         */
+        SignalHistoryItemTerminationOriginEnum: "manual" | "resolution_request" | "action_plan" | "unknown";
+        SignalHistoryResponse: {
+            items: components["schemas"]["SignalHistoryItem"][];
+            next_cursor: string | null;
+            has_more: boolean;
+            undated_count?: number | null;
+        };
         SignalLinkedActionPlanExecution: {
             /** Format: uuid */
             id: string;
@@ -5589,6 +5708,13 @@ export interface components {
             /** Format: date-time */
             expires_at: string;
         };
+        /**
+         * @description * `field` - field
+         *     * `event` - event
+         *     * `unknown` - unknown
+         * @enum {string}
+         */
+        TerminalDateSourceEnum: "field" | "event" | "unknown";
         TranscriptionResponse: {
             text: string;
             language: string;
@@ -7513,6 +7639,118 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_cross_execution_history_retrieve: {
+        parameters: {
+            query: {
+                /** @description Opaque continuation cursor. Continuation returns items only. */
+                cursor?: string;
+                /** @description Custom period start, YYYY-MM-DD. */
+                from?: string;
+                page_size?: number;
+                /** @description Paris civil days. Defaults to 30, today included. */
+                period?: "30" | "7" | "90" | "all" | "custom";
+                /** @description Defaults to all terminal statuses. */
+                status?: "all" | "canceled" | "done";
+                /** @description Custom period end, YYYY-MM-DD, inclusive. */
+                to?: string;
+                view_mode: "general" | "personal";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionHistoryResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_cross_signal_history_retrieve: {
+        parameters: {
+            query: {
+                /** @description Opaque continuation cursor. Continuation returns items only. */
+                cursor?: string;
+                /** @description Custom period start, YYYY-MM-DD. */
+                from?: string;
+                page_size?: number;
+                /** @description Paris civil days. Defaults to 30, today included. */
+                period?: "30" | "7" | "90" | "all" | "custom";
+                /** @description Defaults to all terminal statuses. */
+                status?: "all" | "canceled" | "resolved";
+                /** @description Custom period end, YYYY-MM-DD, inclusive. */
+                to?: string;
+                view_mode: "general" | "personal";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalHistoryResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11905,6 +12143,130 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_execution_history_retrieve: {
+        parameters: {
+            query: {
+                /** @description Opaque continuation cursor. Continuation returns items only. */
+                cursor?: string;
+                /** @description Custom period start, YYYY-MM-DD. */
+                from?: string;
+                page_size?: number;
+                /** @description Paris civil days. Defaults to 30, today included. */
+                period?: "30" | "7" | "90" | "all" | "custom";
+                /** @description Defaults to all terminal statuses. */
+                status?: "all" | "canceled" | "done";
+                /** @description Custom period end, YYYY-MM-DD, inclusive. */
+                to?: string;
+                view_mode: "general" | "personal";
+            };
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionHistoryResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_signal_history_retrieve: {
+        parameters: {
+            query: {
+                /** @description Opaque continuation cursor. Continuation returns items only. */
+                cursor?: string;
+                /** @description Custom period start, YYYY-MM-DD. */
+                from?: string;
+                page_size?: number;
+                /** @description Paris civil days. Defaults to 30, today included. */
+                period?: "30" | "7" | "90" | "all" | "custom";
+                /** @description Defaults to all terminal statuses. */
+                status?: "all" | "canceled" | "resolved";
+                /** @description Custom period end, YYYY-MM-DD, inclusive. */
+                to?: string;
+                view_mode: "general" | "personal";
+            };
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalHistoryResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };

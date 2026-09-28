@@ -22,6 +22,7 @@ import {
   LazyChatRealtimeProvider,
   LazyExecutionFeedPage,
   LazyExecutionUpcomingPage,
+  LazyHistoryPage,
   LazyProfilePage,
   LazyNotificationsCenterPage,
   LazyTeamPage,
@@ -117,7 +118,9 @@ function establishmentIdRequiringSwitch(route: AppRoute): string | null {
     return route.scope.establishmentId
   }
   if (
-    (route.kind === 'signal-detail' || route.kind === 'action-plan-execution-detail') &&
+    (route.kind === 'signal-detail' ||
+      route.kind === 'action-plan-execution-detail' ||
+      route.kind === 'history') &&
     route.scope?.type === 'establishment'
   ) {
     return route.scope.establishmentId
@@ -743,6 +746,10 @@ function App() {
       )
     }
 
+    if (route.kind === 'history') {
+      return <LazyHistoryPage scope={route.scope} />
+    }
+
     if (route.kind === 'scoped-terrain') {
       const scope = route.scope
       const establishmentIdForScope =
@@ -807,8 +814,12 @@ function App() {
         )
       }
       if (route.page === 'general') {
+        if (scope.type === 'cross') {
+          return null
+        }
         return (
           <LazyProfilePage
+            historyPath={`/e/${scope.establishmentId}/general/history`}
             onNavigate={navigate}
             onSignOut={handleSignOut}
             isLoggingOut={auth.isLoggingOut}

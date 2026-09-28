@@ -502,3 +502,52 @@ def serialize_signal_detail(
         )
     ]
     return payload
+
+
+class SignalHistoryItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    title = serializers.CharField()
+    status = serializers.CharField()
+    terminal_at = serializers.DateTimeField(allow_null=True)
+    terminal_date_source = serializers.ChoiceField(choices=["field", "event", "unknown"])
+    termination_origin = serializers.ChoiceField(
+        choices=["manual", "resolution_request", "action_plan", "unknown"]
+    )
+    termination_actor_display_name = serializers.CharField(allow_null=True)
+    establishment_id = serializers.UUIDField()
+    establishment_name = serializers.CharField()
+
+
+class SignalHistoryResponseSerializer(serializers.Serializer):
+    items = SignalHistoryItemSerializer(many=True)
+    next_cursor = serializers.CharField(allow_null=True)
+    has_more = serializers.BooleanField()
+    undated_count = serializers.IntegerField(allow_null=True, required=False)
+
+
+def serialize_signal_history_item(signal) -> dict:
+    from houston.signals.history import signal_terminal_date_source, signal_termination
+
+    origin, actor = signal_termination(signal)
+    return {
+        "id": signal.id,
+        "title": signal.title,
+        "status": signal.status,
+        "terminal_at": getattr(signal, "terminal_at", None),
+        "terminal_date_source": signal_terminal_date_source(signal),
+        "termination_origin": origin,
+        "termination_actor_display_name": actor,
+        "establishment_id": signal.establishment_id,
+        "establishment_name": signal.establishment.name,
+    }
+
+
+def serialize_signal_history_page(page) -> dict:
+    payload = {
+        "items": [serialize_signal_history_item(signal) for signal in page.items],
+        "next_cursor": page.next_cursor,
+        "has_more": page.has_more,
+    }
+    if page.undated_count is not None:
+        payload["undated_count"] = page.undated_count
+    return payload

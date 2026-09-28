@@ -6,6 +6,7 @@ import {
   ChevronsUpDown,
   CirclePlay,
   Eye,
+  History,
   LogOut,
   MessageCircle,
   PanelLeftClose,
@@ -54,6 +55,7 @@ const ITEM_ICONS: Record<
   signals: Eye,
   execution: CirclePlay,
   chat: MessageCircle,
+  history: History,
   general: Settings,
 }
 

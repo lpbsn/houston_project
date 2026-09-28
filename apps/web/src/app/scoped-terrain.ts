@@ -115,6 +115,10 @@ export function parseScopedTerrainRoute(pathname: string): AppRoute | null {
     }
   }
 
+  if (pathname === '/cross/history') {
+    return { kind: 'history', scope: { type: 'cross' } }
+  }
+
   const crossPage = pathname.match(/^\/cross\/([^/]+)$/)
   if (crossPage?.[1]) {
     const page = parsePageSegment(crossPage[1], CROSS_PAGES)
@@ -147,6 +151,10 @@ export function parseScopedTerrainRoute(pathname: string): AppRoute | null {
       executionId: detailId,
       scope,
     }
+  }
+
+  if (pageSegment === 'general' && detailId === 'history') {
+    return { kind: 'history', scope }
   }
 
   if (detailId) {

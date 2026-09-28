@@ -7,14 +7,22 @@ from houston.action_plans.api.cross_views import (
     CrossActionPlanExecutionFeedView,
     CrossActionPlanExecutionUpcomingView,
 )
+from houston.action_plans.api.history_views import CrossExecutionHistoryView
 from houston.signals.api.cross_views import (
     CrossSignalDetailView,
     CrossSignalFeedPinsView,
     CrossSignalFeedView,
 )
+from houston.signals.api.history_views import CrossSignalHistoryView
 
 urlpatterns = [
     path("signal-feed/", CrossSignalFeedView.as_view(), name="cross-signal-feed"),
+    path("history/signals/", CrossSignalHistoryView.as_view(), name="cross-signal-history"),
+    path(
+        "history/executions/",
+        CrossExecutionHistoryView.as_view(),
+        name="cross-execution-history",
+    ),
     path(
         "signal-feed-pins/",
         CrossSignalFeedPinsView.as_view(),

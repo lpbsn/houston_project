@@ -251,7 +251,7 @@ describe('DesktopTerrainSidebar', () => {
     )
     const destinations = screen.getByRole('navigation', { name: 'Destinations' })
     expect(within(destinations).queryByRole('button', { name: /Spore Brain/ })).toBeNull()
-    expect(destinationOrder(destinations)).toEqual(['Observations', 'Exécution'])
+    expect(destinationOrder(destinations)).toEqual(['Observations', 'Exécution', 'Historique'])
   })
 
   it('hides Cross for Staff-only users', () => {

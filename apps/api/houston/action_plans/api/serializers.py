@@ -947,3 +947,55 @@ def serialize_schedule_detail(
             schedule=schedule,
         ),
     }
+
+
+class ExecutionHistoryItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    title = serializers.CharField()
+    status = serializers.CharField()
+    terminal_at = serializers.DateTimeField(allow_null=True)
+    terminal_date_source = serializers.ChoiceField(choices=["field", "event", "unknown"])
+    termination_origin = serializers.ChoiceField(
+        choices=["manual", "schedule_sync", "unknown"]
+    )
+    termination_actor_display_name = serializers.CharField(allow_null=True)
+    establishment_id = serializers.UUIDField()
+    establishment_name = serializers.CharField()
+
+
+class ExecutionHistoryResponseSerializer(serializers.Serializer):
+    items = ExecutionHistoryItemSerializer(many=True)
+    next_cursor = serializers.CharField(allow_null=True)
+    has_more = serializers.BooleanField()
+    undated_count = serializers.IntegerField(allow_null=True, required=False)
+
+
+def serialize_execution_history_item(execution) -> dict:
+    from houston.action_plans.execution_history import (
+        execution_terminal_date_source,
+        execution_termination,
+    )
+
+    origin, actor = execution_termination(execution)
+    return {
+        "id": execution.id,
+        "title": execution.title,
+        "status": execution.status,
+        "terminal_at": getattr(execution, "terminal_at", None),
+        "terminal_date_source": execution_terminal_date_source(execution),
+        "termination_origin": origin,
+        "termination_actor_display_name": actor,
+        "establishment_id": execution.establishment_id,
+        "establishment_name": execution.establishment.name,
+    }
+
+
+def serialize_execution_history_page(page) -> dict:
+    payload = {
+        "items": [serialize_execution_history_item(execution) for execution in page.items],
+        "next_cursor": page.next_cursor,
+        "has_more": page.has_more,
+    }
+    if page.undated_count is not None:
+        payload["undated_count"] = page.undated_count
+    return payload

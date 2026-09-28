@@ -1,5 +1,5 @@
 import { type ComponentType, useEffect, useState } from 'react'
-import { ArrowLeftRight, BarChart3, Building2, ChevronRight, LayoutGrid, Library, SlidersHorizontal, Users } from 'lucide-react'
+import { ArrowLeftRight, BarChart3, Building2, ChevronRight, History, LayoutGrid, Library, SlidersHorizontal, Users } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import {
@@ -57,6 +57,7 @@ const ROLE_DISPLAY_LABELS: Record<RoleEnum, string> = {
 }
 
 type ProfilePageProps = {
+  historyPath?: string
   onNavigate?: (pathname: string) => void
   onSignOut?: () => void
   isLoggingOut?: boolean
@@ -161,7 +162,12 @@ function ProfileManagementNavCard({
   )
 }
 
-export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: ProfilePageProps) {
+export function ProfilePage({
+  historyPath = '/general/history',
+  onNavigate,
+  onSignOut,
+  isLoggingOut = false,
+}: ProfilePageProps) {
   const {
     activeMembership,
     bootstrap,
@@ -283,6 +289,17 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
 
       <div className="space-y-2">
         <TerrainSectionLabel>Mon compte</TerrainSectionLabel>
+        <ProfileManagementNavCard
+          icon={History}
+          iconClassName="bg-[#F4F1EA] text-[#6b5f52]"
+          title="Historique"
+          subtitle={
+            historyPath.startsWith('/cross/')
+              ? 'Cross-établissement'
+              : 'Observations et exécutions terminées'
+          }
+          onClick={() => onNavigate?.(historyPath)}
+        />
         {showSwitchEstablishment ? (
           <ProfileManagementNavCard
             icon={ArrowLeftRight}
