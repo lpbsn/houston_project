@@ -2048,8 +2048,75 @@ paths:
         name: cursor
         schema:
           type: string
-        description: Opaque pagination cursor from a previous section next_cursor.
-          Requires exactly one statuses value matching the cursor status.
+        description: Opaque list cursor. Continuation returns items only.
+      - in: query
+        name: establishment_id
+        schema:
+          type: string
+      - in: query
+        name: needs_qualification
+        schema:
+          type: boolean
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: pins_page_size
+        schema:
+          type: integer
+        description: First page of cross pins. Default 10, maximum 50.
+      - in: query
+        name: statuses
+        schema:
+          type: string
+        description: One of open, in_progress, interesting. Omit for the full operational
+          order.
+      tags:
+      - signals
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalFeedResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/cross/signal-feed-pins/:
+    get:
+      operationId: v1_cross_signal_feed_pins_retrieve
+      parameters:
+      - in: query
+        name: activity_subject_ids
+        schema:
+          type: string
+      - in: query
+        name: business_unit_ids
+        schema:
+          type: string
+      - in: query
+        name: cursor
+        schema:
+          type: string
       - in: query
         name: establishment_id
         schema:
@@ -2075,7 +2142,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SignalFeedResponse'
+                $ref: '#/components/schemas/SignalFeedPinsResponse'
           description: ''
         '400':
           content:
@@ -7228,8 +7295,8 @@ paths:
         name: cursor
         schema:
           type: string
-        description: Opaque pagination cursor from a previous section next_cursor.
-          Requires exactly one statuses value matching the cursor status.
+        description: Opaque list cursor from a previous next_cursor. Continuation
+          returns items only.
       - in: path
         name: establishment_id
         schema:
@@ -7251,8 +7318,8 @@ paths:
         name: statuses
         schema:
           type: string
-        description: 'Comma-separated feed statuses: open, in_progress, interesting,
-          resolved, canceled (max 5).'
+        description: 'One operational status: open, in_progress, or interesting. Omit
+          it to page open, then in progress, then interesting.'
       - in: query
         name: view_mode
         schema:
@@ -7548,6 +7615,17 @@ paths:
         required: true
       tags:
       - signals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignalPinRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SignalPinRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SignalPinRequest'
       security:
       - BearerAccessToken: []
       responses:
@@ -7568,6 +7646,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalPinLimitConflict'
           description: ''
   /api/v1/establishments/{establishment_id}/signals/{signal_id}/qualify-routing/:
     post:
@@ -15357,6 +15441,13 @@ components:
         created_at:
           type: string
           format: date-time
+        pinned_at:
+          type: string
+          format: date-time
+          nullable: true
+        pinned_by_display_name:
+          type: string
+          nullable: true
         reporter_display_name:
           type: string
           nullable: true
@@ -15477,6 +15568,22 @@ components:
       - preview_url
       - size_bytes
       - thumbnail_url
+    SignalFeedCounts:
+      type: object
+      properties:
+        open:
+          type: integer
+        in_progress:
+          type: integer
+        interesting:
+          type: integer
+        pinned:
+          type: integer
+      required:
+      - in_progress
+      - interesting
+      - open
+      - pinned
     SignalFeedItem:
       type: object
       properties:
@@ -15536,6 +15643,13 @@ components:
         created_at:
           type: string
           format: date-time
+        pinned_at:
+          type: string
+          format: date-time
+          nullable: true
+        pinned_by_display_name:
+          type: string
+          nullable: true
         reporter_display_name:
           type: string
           nullable: true
@@ -15567,24 +15681,9 @@ components:
       - status
       - structured_summary_short
       - title
-    SignalFeedResponse:
+    SignalFeedPinsResponse:
       type: object
       properties:
-        sections:
-          type: array
-          items:
-            $ref: '#/components/schemas/SignalFeedSection'
-        applied_filters:
-          type: object
-          additionalProperties: {}
-      required:
-      - applied_filters
-      - sections
-    SignalFeedSection:
-      type: object
-      properties:
-        status:
-          type: string
         items:
           type: array
           items:
@@ -15598,7 +15697,36 @@ components:
       - has_more
       - items
       - next_cursor
-      - status
+    SignalFeedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignalFeedItem'
+        pins:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignalFeedItem'
+        counts:
+          $ref: '#/components/schemas/SignalFeedCounts'
+        next_cursor:
+          type: string
+          nullable: true
+        has_more:
+          type: boolean
+        pins_next_cursor:
+          type: string
+          nullable: true
+        pins_has_more:
+          type: boolean
+        applied_filters:
+          type: object
+          additionalProperties: {}
+      required:
+      - has_more
+      - items
+      - next_cursor
     SignalLinkedActionPlanExecution:
       type: object
       properties:
@@ -15632,6 +15760,47 @@ components:
       - status
       - title
       - validated_at
+    SignalPinLimitConflict:
+      type: object
+      properties:
+        code:
+          type: string
+        detail:
+          type: string
+        replacement_candidates:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignalPinReplacementCandidate'
+      required:
+      - code
+      - detail
+      - replacement_candidates
+    SignalPinReplacementCandidate:
+      type: object
+      properties:
+        signal_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        pinned_at:
+          type: string
+          format: date-time
+          nullable: true
+        pinned_by_display_name:
+          type: string
+          nullable: true
+      required:
+      - pinned_at
+      - pinned_by_display_name
+      - signal_id
+      - title
+    SignalPinRequest:
+      type: object
+      properties:
+        replace_pin_id:
+          type: string
+          format: uuid
     SignalQualifyRoutingRequest:
       type: object
       properties:
@@ -15718,6 +15887,13 @@ components:
         created_at:
           type: string
           format: date-time
+        pinned_at:
+          type: string
+          format: date-time
+          nullable: true
+        pinned_by_display_name:
+          type: string
+          nullable: true
         reporter_display_name:
           type: string
           nullable: true

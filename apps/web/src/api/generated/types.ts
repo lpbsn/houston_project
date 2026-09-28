@@ -687,6 +687,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cross/signal-feed-pins/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_cross_signal_feed_pins_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cross/signals/{signal_id}/": {
         parameters: {
             query?: never;
@@ -5307,6 +5323,9 @@ export interface components {
             last_activity_at: string;
             /** Format: date-time */
             created_at: string;
+            /** Format: date-time */
+            pinned_at?: string | null;
+            pinned_by_display_name?: string | null;
             reporter_display_name?: string | null;
             aggregation_count: number;
             permission_hints: components["schemas"]["PermissionHints"];
@@ -5347,6 +5366,12 @@ export interface components {
             /** Format: uuid */
             observation_id: string;
         };
+        SignalFeedCounts: {
+            open: number;
+            in_progress: number;
+            interesting: number;
+            pinned: number;
+        };
         SignalFeedItem: {
             /** Format: uuid */
             id: string;
@@ -5374,6 +5399,9 @@ export interface components {
             last_activity_at: string;
             /** Format: date-time */
             created_at: string;
+            /** Format: date-time */
+            pinned_at?: string | null;
+            pinned_by_display_name?: string | null;
             reporter_display_name?: string | null;
             aggregation_count: number;
             permission_hints: components["schemas"]["PermissionHints"];
@@ -5382,17 +5410,22 @@ export interface components {
             establishment_id?: string;
             establishment_name?: string;
         };
-        SignalFeedResponse: {
-            sections: components["schemas"]["SignalFeedSection"][];
-            applied_filters: {
-                [key: string]: unknown;
-            };
-        };
-        SignalFeedSection: {
-            status: string;
+        SignalFeedPinsResponse: {
             items: components["schemas"]["SignalFeedItem"][];
             next_cursor: string | null;
             has_more: boolean;
+        };
+        SignalFeedResponse: {
+            items: components["schemas"]["SignalFeedItem"][];
+            pins?: components["schemas"]["SignalFeedItem"][];
+            counts?: components["schemas"]["SignalFeedCounts"];
+            next_cursor: string | null;
+            has_more: boolean;
+            pins_next_cursor?: string | null;
+            pins_has_more?: boolean;
+            applied_filters?: {
+                [key: string]: unknown;
+            };
         };
         SignalLinkedActionPlanExecution: {
             /** Format: uuid */
@@ -5407,6 +5440,23 @@ export interface components {
             last_activity_at: string;
             /** Format: date-time */
             created_at: string;
+        };
+        SignalPinLimitConflict: {
+            code: string;
+            detail: string;
+            replacement_candidates: components["schemas"]["SignalPinReplacementCandidate"][];
+        };
+        SignalPinReplacementCandidate: {
+            /** Format: uuid */
+            signal_id: string;
+            title: string;
+            /** Format: date-time */
+            pinned_at: string | null;
+            pinned_by_display_name: string | null;
+        };
+        SignalPinRequest: {
+            /** Format: uuid */
+            replace_pin_id?: string;
         };
         SignalQualifyRoutingRequest: {
             /** Format: uuid */
@@ -5447,6 +5497,9 @@ export interface components {
             last_activity_at: string;
             /** Format: date-time */
             created_at: string;
+            /** Format: date-time */
+            pinned_at?: string | null;
+            pinned_by_display_name?: string | null;
             reporter_display_name?: string | null;
             aggregation_count: number;
             permission_hints: components["schemas"]["PermissionHints"];
@@ -7474,7 +7527,61 @@ export interface operations {
             query?: {
                 activity_subject_ids?: string;
                 business_unit_ids?: string;
-                /** @description Opaque pagination cursor from a previous section next_cursor. Requires exactly one statuses value matching the cursor status. */
+                /** @description Opaque list cursor. Continuation returns items only. */
+                cursor?: string;
+                establishment_id?: string;
+                needs_qualification?: boolean;
+                page_size?: number;
+                /** @description First page of cross pins. Default 10, maximum 50. */
+                pins_page_size?: number;
+                /** @description One of open, in_progress, interesting. Omit for the full operational order. */
+                statuses?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalFeedResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_cross_signal_feed_pins_retrieve: {
+        parameters: {
+            query?: {
+                activity_subject_ids?: string;
+                business_unit_ids?: string;
                 cursor?: string;
                 establishment_id?: string;
                 needs_qualification?: boolean;
@@ -7492,7 +7599,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SignalFeedResponse"];
+                    "application/json": components["schemas"]["SignalFeedPinsResponse"];
                 };
             };
             400: {
@@ -12689,12 +12796,12 @@ export interface operations {
                 activity_subject_ids?: string;
                 /** @description Comma-separated BusinessUnit UUIDs (max 20). Matches affected_business_unit OR responsible_business_unit. */
                 business_unit_ids?: string;
-                /** @description Opaque pagination cursor from a previous section next_cursor. Requires exactly one statuses value matching the cursor status. */
+                /** @description Opaque list cursor from a previous next_cursor. Continuation returns items only. */
                 cursor?: string;
                 /** @description When true, restrict to signals with no responsible business unit (affected and activity_subject ignored) among active lifecycle statuses. Owner/Director/Manager only; Staff receives 403. */
                 needs_qualification?: boolean;
                 page_size?: number;
-                /** @description Comma-separated feed statuses: open, in_progress, interesting, resolved, canceled (max 5). */
+                /** @description One operational status: open, in_progress, or interesting. Omit it to page open, then in progress, then interesting. */
                 statuses?: string;
                 view_mode: "general" | "personal";
             };
@@ -12986,7 +13093,13 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SignalPinRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SignalPinRequest"];
+                "multipart/form-data": components["schemas"]["SignalPinRequest"];
+            };
+        };
         responses: {
             200: {
                 headers: {
@@ -13010,6 +13123,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalPinLimitConflict"];
                 };
             };
         };

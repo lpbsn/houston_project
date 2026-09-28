@@ -7,10 +7,19 @@ from houston.action_plans.api.cross_views import (
     CrossActionPlanExecutionFeedView,
     CrossActionPlanExecutionUpcomingView,
 )
-from houston.signals.api.cross_views import CrossSignalDetailView, CrossSignalFeedView
+from houston.signals.api.cross_views import (
+    CrossSignalDetailView,
+    CrossSignalFeedPinsView,
+    CrossSignalFeedView,
+)
 
 urlpatterns = [
     path("signal-feed/", CrossSignalFeedView.as_view(), name="cross-signal-feed"),
+    path(
+        "signal-feed-pins/",
+        CrossSignalFeedPinsView.as_view(),
+        name="cross-signal-feed-pins",
+    ),
     path("signals/<uuid:signal_id>/", CrossSignalDetailView.as_view(), name="cross-signal-detail"),
     path(
         "action-plan-execution-feed/",

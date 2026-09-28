@@ -7,11 +7,10 @@ from typing import Any
 from django.db.models import Q
 
 from houston.establishments.models import ActivitySubject, BusinessUnit
-from houston.signals.constants import ACTIVE_SIGNAL_STATUSES, FEED_SIGNAL_STATUSES
+from houston.signals.constants import ACTIVE_SIGNAL_STATUSES, OPERATIONAL_SIGNAL_FEED_STATUSES
 
-FEED_FILTERABLE_STATUSES = frozenset(FEED_SIGNAL_STATUSES)
+FEED_FILTERABLE_STATUSES = frozenset(OPERATIONAL_SIGNAL_FEED_STATUSES)
 
-MAX_FILTER_STATUSES = 5
 MAX_FILTER_BUSINESS_UNIT_IDS = 20
 MAX_FILTER_ACTIVITY_SUBJECT_IDS = 50
 
@@ -91,6 +90,35 @@ def build_applied_filters_payload(
     return payload
 
 
+def signal_feed_status_selection(filters: SignalFeedFilters | None) -> str:
+    if filters is None or not filters.statuses:
+        return "all"
+    return filters.statuses[0]
+
+
+def apply_signal_feed_context_filters(queryset, *, filters: SignalFeedFilters | None):
+    """Scope filters other than the exclusive status selection."""
+    if filters is None:
+        return queryset
+
+    if filters.business_unit_ids:
+        queryset = queryset.filter(
+            Q(affected_business_unit_id__in=filters.business_unit_ids)
+            | Q(responsible_business_unit_id__in=filters.business_unit_ids)
+        )
+
+    if filters.activity_subject_ids:
+        queryset = queryset.filter(activity_subject_id__in=filters.activity_subject_ids)
+
+    if filters.needs_qualification:
+        queryset = queryset.filter(
+            responsible_business_unit__isnull=True,
+            status__in=ACTIVE_SIGNAL_STATUSES,
+        )
+
+    return queryset
+
+
 def apply_feed_filters(queryset, *, filters: SignalFeedFilters | None):
     if filters is None or not filters.has_any():
         return queryset
@@ -150,15 +178,14 @@ def _parse_statuses(raw: str | None) -> tuple[str, ...]:
         return ()
 
     normalized = _dedupe_sorted(values)
-    if len(normalized) > MAX_FILTER_STATUSES:
-        raise SignalFeedFilterValidationError(
-            f"statuses accepts at most {MAX_FILTER_STATUSES} values.",
-        )
-
     invalid = [value for value in normalized if value not in FEED_FILTERABLE_STATUSES]
     if invalid:
         raise SignalFeedFilterValidationError(
-            "statuses must only contain open, in_progress, interesting, resolved, or canceled.",
+            "statuses must only contain open, in_progress, or interesting.",
+        )
+    if len(normalized) > 1:
+        raise SignalFeedFilterValidationError(
+            "statuses accepts one operational status. Omit it to list every operational status.",
         )
 
     return normalized

@@ -18,7 +18,7 @@ from houston.signals.tests.conftest import (
     login,
     signal_feed_url,
 )
-from houston.testing.signal_feed import flatten_signal_feed_items, signal_feed_section
+from houston.testing.signal_feed import flatten_signal_feed_items
 
 pytestmark = pytest.mark.django_db
 
@@ -79,23 +79,23 @@ def test_feed_without_filters_unchanged(api_client):
 
 def test_feed_filters_by_single_status(api_client):
     membership = build_api_membership()
-    _create_signal(membership, title="Open", status=Signal.Status.OPEN)
-    resolved = _create_signal(membership, title="Resolved", status=Signal.Status.RESOLVED)
+    open_signal = _create_signal(membership, title="Open", status=Signal.Status.OPEN)
+    _create_signal(membership, title="Progress", status=Signal.Status.IN_PROGRESS)
 
-    response = _feed_get(api_client, membership, "?view_mode=general&statuses=resolved")
+    response = _feed_get(api_client, membership, "?view_mode=general&statuses=open")
 
     assert response.status_code == 200
     body = response.json()
     items = flatten_signal_feed_items(body)
     assert len(items) == 1
-    assert items[0]["id"] == str(resolved.id)
-    assert body["applied_filters"]["statuses"] == ["resolved"]
+    assert items[0]["id"] == str(open_signal.id)
+    assert body["applied_filters"]["statuses"] == ["open"]
+    assert body["counts"]["in_progress"] == 1
 
 
-def test_feed_filters_by_multiple_statuses(api_client):
+def test_feed_rejects_multiple_statuses(api_client):
     membership = build_api_membership()
-    open_signal = _create_signal(membership, title="Open", status=Signal.Status.OPEN)
-    _create_signal(membership, title="Resolved", status=Signal.Status.RESOLVED)
+    _create_signal(membership, title="Open", status=Signal.Status.OPEN)
 
     response = _feed_get(
         api_client,
@@ -103,12 +103,8 @@ def test_feed_filters_by_multiple_statuses(api_client):
         "?view_mode=general&statuses=open,in_progress",
     )
 
-    assert response.status_code == 200
-    body = response.json()
-    items = flatten_signal_feed_items(body)
-    assert len(items) == 1
-    assert items[0]["id"] == str(open_signal.id)
-    assert body["applied_filters"]["statuses"] == ["in_progress", "open"]
+    assert response.status_code == 400
+    assert response.json()["code"] == "validation_error"
 
 
 def test_feed_rejects_archived_status_filter(api_client):
@@ -124,19 +120,15 @@ def test_feed_rejects_archived_status_filter(api_client):
     assert response.json()["code"] == "validation_error"
 
 
-def test_feed_filters_by_canceled_status(api_client):
+def test_feed_rejects_terminal_status_filter(api_client):
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     _create_signal(membership, title="Open", status=Signal.Status.OPEN)
-    canceled = _create_signal(membership, title="Canceled", status=Signal.Status.CANCELED)
+    _create_signal(membership, title="Canceled", status=Signal.Status.CANCELED)
 
     response = _feed_get(api_client, membership, "?view_mode=general&statuses=canceled")
 
-    assert response.status_code == 200
-    body = response.json()
-    items = flatten_signal_feed_items(body)
-    assert len(items) == 1
-    assert items[0]["id"] == str(canceled.id)
-    assert body["applied_filters"]["statuses"] == ["canceled"]
+    assert response.status_code == 400
+    assert response.json()["code"] == "validation_error"
 
 
 def test_feed_deduplicates_statuses_in_applied_filters(api_client):
@@ -404,29 +396,30 @@ def test_pagination_with_bu_filter_returns_next_cursor(api_client):
 
     assert response.status_code == 200
     body = response.json()
-    open_section = signal_feed_section(body, Signal.Status.OPEN)
-    assert open_section is not None
-    assert len(open_section["items"]) == 2
-    assert open_section["has_more"] is True
-    assert open_section["next_cursor"] is not None
+    assert len(body["items"]) == 2
+    assert body["has_more"] is True
+    assert body["next_cursor"] is not None
 
     page_two = _feed_get(
         api_client,
         membership,
         (
             f"?view_mode=general&business_unit_ids={taxonomy.maintenance.id}"
-            f"&page_size=2&statuses=open&cursor={open_section['next_cursor']}"
+            f"&page_size=2&cursor={body['next_cursor']}"
         ),
     )
 
     assert page_two.status_code == 200
     page_two_body = page_two.json()
-    page_two_items = flatten_signal_feed_items(page_two_body)
+    page_two_items = page_two_body["items"]
     assert len(page_two_items) == 1
-    assert page_two_body["sections"][0]["has_more"] is False
-    assert page_two_body["sections"][0]["next_cursor"] is None
+    assert page_two_body["has_more"] is False
+    assert page_two_body["next_cursor"] is None
+    assert "pins" not in page_two_body
+    assert "counts" not in page_two_body
+    assert "applied_filters" not in page_two_body
 
-    first_page_ids = {item["id"] for item in open_section["items"]}
+    first_page_ids = {item["id"] for item in body["items"]}
     second_page_ids = {item["id"] for item in page_two_items}
     assert first_page_ids.isdisjoint(second_page_ids)
 
@@ -439,39 +432,35 @@ def test_cursor_round_trip_without_duplicates(api_client):
     first = _feed_get(api_client, membership, "?view_mode=general&page_size=2")
     assert first.status_code == 200
     first_body = first.json()
-    open_section = signal_feed_section(first_body, Signal.Status.OPEN)
-    assert open_section is not None
-    assert len(open_section["items"]) == 2
-    assert open_section["has_more"] is True
-    assert open_section["next_cursor"] is not None
+    assert len(first_body["items"]) == 2
+    assert first_body["has_more"] is True
+    assert first_body["next_cursor"] is not None
 
     second = _feed_get(
         api_client,
         membership,
-        f"?view_mode=general&page_size=2&statuses=open&cursor={open_section['next_cursor']}",
+        f"?view_mode=general&page_size=2&cursor={first_body['next_cursor']}",
     )
     assert second.status_code == 200
     second_body = second.json()
-    second_section = second_body["sections"][0]
-    assert len(second_section["items"]) == 2
-    assert second_section["has_more"] is True
-    assert second_section["next_cursor"] is not None
+    assert len(second_body["items"]) == 2
+    assert second_body["has_more"] is True
+    assert second_body["next_cursor"] is not None
 
     third = _feed_get(
         api_client,
         membership,
-        f"?view_mode=general&page_size=2&statuses=open&cursor={second_section['next_cursor']}",
+        f"?view_mode=general&page_size=2&cursor={second_body['next_cursor']}",
     )
     assert third.status_code == 200
     third_body = third.json()
-    third_section = third_body["sections"][0]
-    assert len(third_section["items"]) == 1
-    assert third_section["has_more"] is False
-    assert third_section["next_cursor"] is None
+    assert len(third_body["items"]) == 1
+    assert third_body["has_more"] is False
+    assert third_body["next_cursor"] is None
 
     all_ids = [
         item["id"]
-        for page in (open_section, second_section, third_section)
+        for page in (first_body, second_body, third_body)
         for item in page["items"]
     ]
     assert len(all_ids) == len(set(all_ids)) == 5

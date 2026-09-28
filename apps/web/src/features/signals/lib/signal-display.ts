@@ -6,6 +6,7 @@ import {
 import { terrainInProgress } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
+import type { SignalFeedStatusSelection } from './signal-feed-filters'
 import type { SignalFeedItem, SignalViewMode } from '../types'
 
 /** Feed card aggregation chip (+N) — mobile and desktop non-pinned rows. */
@@ -37,22 +38,68 @@ export function formatSignalRelativeTime(iso: string): string {
   return `${days} j`
 }
 
-export type SignalFeedStatusGroup = {
-  status: 'open' | 'in_progress' | 'interesting' | 'resolved' | 'canceled'
+const LOADED_STATUS_META: Record<
+  'open' | 'in_progress' | 'interesting',
+  { label: string; dotVariant: TerrainSectionDotVariant }
+> = {
+  open: { label: 'Ouverts', dotVariant: 'warning' },
+  in_progress: { label: 'En cours', dotVariant: 'teal' },
+  interesting: { label: 'Intéressants', dotVariant: 'mint' },
+}
+
+export type SignalFeedLoadedGroup = {
+  status: 'open' | 'in_progress' | 'interesting'
   label: string
   dotVariant: TerrainSectionDotVariant
   items: SignalFeedItem[]
 }
 
-const STATUS_GROUP_META: Record<
-  'open' | 'in_progress' | 'interesting' | 'resolved' | 'canceled',
-  { label: string; dotVariant: TerrainSectionDotVariant }
-> = {
-  open: { label: 'En attente', dotVariant: 'warning' },
-  in_progress: { label: 'En cours', dotVariant: 'teal' },
-  interesting: { label: 'Intéressants', dotVariant: 'mint' },
-  resolved: { label: 'Résolues', dotVariant: 'success' },
-  canceled: { label: 'Annulées', dotVariant: 'muted' },
+/**
+ * Non-collapsible separators for Tout. A group exists only when that status
+ * is actually present in the loaded list page.
+ */
+export function groupLoadedSignalFeedItems(
+  items: SignalFeedItem[],
+  selection: SignalFeedStatusSelection,
+): SignalFeedLoadedGroup[] | null {
+  if (selection !== 'all') {
+    return null
+  }
+  const groups: SignalFeedLoadedGroup[] = []
+  for (const item of items) {
+    if (item.status !== 'open' && item.status !== 'in_progress' && item.status !== 'interesting') {
+      continue
+    }
+    const current = groups[groups.length - 1]
+    if (!current || current.status !== item.status) {
+      groups.push({
+        status: item.status,
+        ...LOADED_STATUS_META[item.status],
+        items: [item],
+      })
+      continue
+    }
+    current.items.push(item)
+  }
+  return groups
+}
+
+export function formatSignalPinnedByLine(item: {
+  pinned_by_display_name?: string | null
+  pinned_at?: string | null
+}): string | null {
+  const name = item.pinned_by_display_name?.trim() ?? ''
+  const when = item.pinned_at ? formatSignalRelativeTime(item.pinned_at) : ''
+  if (name && when) {
+    return `Épinglée par ${name} · ${when}`
+  }
+  if (name) {
+    return `Épinglée par ${name}`
+  }
+  if (when) {
+    return `Épinglée · ${when}`
+  }
+  return null
 }
 
 /** Splits API-ordered feed items into pinned (top zone) and unpinned (status sections). */
@@ -70,73 +117,6 @@ export function partitionFeedPinnedItems(items: SignalFeedItem[]): {
     }
   }
   return { pinnedItems, unpinnedItems }
-}
-
-export type SignalFeedSectionInput = {
-  status: SignalFeedStatusGroup['status'] | string
-  items: SignalFeedItem[]
-  has_more: boolean
-}
-
-export type SignalFeedSectionPresentation = SignalFeedStatusGroup & {
-  hasMore: boolean
-}
-
-export function composeSignalFeedPresentation(sections: SignalFeedSectionInput[]): {
-  pinnedItems: SignalFeedItem[]
-  groups: SignalFeedSectionPresentation[] | null
-  flatUnpinnedItems: SignalFeedItem[]
-  flatHasMore: boolean
-  flatStatus: SignalFeedStatusGroup['status'] | null
-  hasContent: boolean
-} {
-  const pinnedItems: SignalFeedItem[] = []
-  const presented: SignalFeedSectionPresentation[] = []
-
-  for (const section of sections) {
-    const status = section.status as SignalFeedStatusGroup['status']
-    const meta = STATUS_GROUP_META[status]
-    if (!meta) {
-      continue
-    }
-    let items = section.items
-    if (status === 'open') {
-      const partitioned = partitionFeedPinnedItems(items)
-      pinnedItems.push(...partitioned.pinnedItems)
-      items = partitioned.unpinnedItems
-    }
-    presented.push({
-      status,
-      ...meta,
-      items,
-      hasMore: section.has_more,
-    })
-  }
-
-  const hasContent =
-    pinnedItems.length > 0 ||
-    presented.some((section) => section.items.length > 0 || section.hasMore)
-
-  if (presented.length <= 1) {
-    const only = presented[0] ?? null
-    return {
-      pinnedItems,
-      groups: null,
-      flatUnpinnedItems: only?.items ?? [],
-      flatHasMore: only?.hasMore ?? false,
-      flatStatus: only?.status ?? null,
-      hasContent,
-    }
-  }
-
-  return {
-    pinnedItems,
-    groups: presented,
-    flatUnpinnedItems: [],
-    flatHasMore: false,
-    flatStatus: null,
-    hasContent,
-  }
 }
 
 /** Left border accent hex colors for feed cards (inline style; beats global border-color). */

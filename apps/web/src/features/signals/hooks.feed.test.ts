@@ -8,8 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestQueryClient } from '@/test-utils'
 
 import { signalsQueryKeys } from './api'
-import { useSignalFeedQuery } from './hooks'
-import { appendSignalFeedSectionPage } from './lib/signal-feed-cache'
+import { useLoadMoreSignalFeed, useSignalFeedQuery } from './hooks'
 import { EMPTY_SIGNAL_FEED_FILTERS } from './lib/signal-feed-filters'
 import type { SignalFeedItem, SignalFeedResponse } from './types'
 
@@ -60,20 +59,6 @@ function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem 
   }
 }
 
-function buildSection(
-  status: string,
-  itemIds: string[],
-  nextCursor: string | null,
-  hasMore: boolean,
-) {
-  return {
-    status,
-    items: itemIds.map((id) => buildFeedItem({ id, status })),
-    next_cursor: nextCursor,
-    has_more: hasMore,
-  }
-}
-
 const appliedFilters = {
   statuses: [],
   business_unit_ids: [],
@@ -84,15 +69,18 @@ const page1Ids = Array.from({ length: 25 }, (_, index) => `open-${index}`)
 const page2Ids = Array.from({ length: 15 }, (_, index) => `open-extra-${index}`)
 
 const firstPage: SignalFeedResponse = {
-  sections: [
-    buildSection('open', page1Ids, 'cursor-1', true),
-    buildSection('resolved', ['resolved-1'], null, false),
-  ],
+  items: page1Ids.map((id) => buildFeedItem({ id, status: 'open' })),
+  pins: [buildFeedItem({ id: 'pin-1', is_pinned: true, title: 'Épinglée' })],
+  counts: { open: 40, in_progress: 0, interesting: 0, pinned: 1 },
+  next_cursor: 'cursor-1',
+  has_more: true,
   applied_filters: appliedFilters,
 }
 
 const page2: SignalFeedResponse = {
-  sections: [buildSection('open', page2Ids, 'cursor-2', true)],
+  items: page2Ids.map((id) => buildFeedItem({ id, status: 'in_progress' })),
+  next_cursor: 'cursor-2',
+  has_more: false,
   applied_filters: appliedFilters,
 }
 
@@ -114,20 +102,8 @@ describe('useSignalFeedQuery', () => {
     fetchCrossSignalFeed.mockReset()
   })
 
-  it('keeps appended section items after invalidate refetch', async () => {
-    fetchSignalFeed.mockImplementation(
-      async (
-        _establishmentId: string,
-        _viewMode: string,
-        _filters: unknown,
-        options: { cursor?: string; pageSize?: number } = {},
-      ) => {
-        if (options.cursor) {
-          return page2
-        }
-        return firstPage
-      },
-    )
+  it('loads the first page without refilling later pages after invalidate', async () => {
+    fetchSignalFeed.mockResolvedValue(firstPage)
 
     const { result, queryClient } = renderFeedHook()
     const queryKey = signalsQueryKeys.feed(EST, 'personal', EMPTY_SIGNAL_FEED_FILTERS)
@@ -136,29 +112,62 @@ describe('useSignalFeedQuery', () => {
       expect(result.current.isSuccess).toBe(true)
     })
 
-    appendSignalFeedSectionPage(queryClient, {
-      establishmentId: EST,
-      viewMode: 'personal',
-      filters: EMPTY_SIGNAL_FEED_FILTERS,
-      status: 'open',
-      page: page2,
-    })
-
-    expect(queryClient.getQueryData<SignalFeedResponse>(queryKey)?.sections[0]?.items).toHaveLength(
-      40,
-    )
+    expect(queryClient.getQueryData<SignalFeedResponse>(queryKey)?.items).toHaveLength(25)
+    expect(queryClient.getQueryData<SignalFeedResponse>(queryKey)?.pins).toHaveLength(1)
 
     await queryClient.invalidateQueries({ queryKey })
 
     await waitFor(() => {
-      const data = queryClient.getQueryData<SignalFeedResponse>(queryKey)
-      expect(data?.sections[0]?.items.map((item) => item.id)).toEqual([...page1Ids, ...page2Ids])
-      expect(data?.sections[1]?.items.map((item) => item.id)).toEqual(['resolved-1'])
+      expect(fetchSignalFeed).toHaveBeenCalledTimes(2)
     })
 
-    expect(fetchSignalFeed.mock.calls.some((call) => call[3]?.cursor == null)).toBe(true)
-    const continuation = fetchSignalFeed.mock.calls.find((call) => call[3]?.cursor === 'cursor-1')
-    expect(continuation?.[3]).toEqual({ cursor: 'cursor-1', pageSize: 15 })
-    expect(continuation?.[2]).toEqual({ ...EMPTY_SIGNAL_FEED_FILTERS, statuses: ['open'] })
+    const data = queryClient.getQueryData<SignalFeedResponse>(queryKey)
+    expect(data?.items.map((item) => item.id)).toEqual(page1Ids)
+    expect(data?.pins?.map((item) => item.id)).toEqual(['pin-1'])
+    expect(fetchSignalFeed.mock.calls.every((call) => call[3] == null || call[3].cursor == null)).toBe(
+      true,
+    )
+  })
+
+  it('appends the next list page and keeps the first-page pins', async () => {
+    fetchSignalFeed.mockImplementation(
+      async (
+        _establishmentId: string,
+        _viewMode: string,
+        _filters: unknown,
+        options: { cursor?: string } = {},
+      ) => (options.cursor ? page2 : firstPage),
+    )
+
+    const queryClient = createTestQueryClient()
+    const hook = renderHook(
+      () => ({
+        feed: useSignalFeedQuery(EST, 'personal', EMPTY_SIGNAL_FEED_FILTERS),
+        loadMore: useLoadMoreSignalFeed(EST, 'personal', EMPTY_SIGNAL_FEED_FILTERS),
+      }),
+      {
+        wrapper: ({ children }) =>
+          createElement(QueryClientProvider, { client: queryClient }, children),
+      },
+    )
+
+    await waitFor(() => {
+      expect(hook.result.current.feed.isSuccess).toBe(true)
+    })
+
+    hook.result.current.loadMore.mutate()
+
+    await waitFor(() => {
+      expect(hook.result.current.loadMore.isSuccess).toBe(true)
+    })
+
+    const data = queryClient.getQueryData<SignalFeedResponse>(
+      signalsQueryKeys.feed(EST, 'personal', EMPTY_SIGNAL_FEED_FILTERS),
+    )
+    expect(data?.items.map((item) => item.id)).toEqual([...page1Ids, ...page2Ids])
+    expect(data?.pins?.map((item) => item.id)).toEqual(['pin-1'])
+    expect(data?.counts?.pinned).toBe(1)
+    expect(data?.next_cursor).toBe('cursor-2')
+    expect(data?.has_more).toBe(false)
   })
 })

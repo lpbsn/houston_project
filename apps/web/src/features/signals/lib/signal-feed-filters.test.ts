@@ -31,7 +31,7 @@ describe('normalizeSignalFeedFilters', () => {
     })
 
     expect(a).toEqual(b)
-    expect(a.statuses).toEqual(['in_progress', 'open'])
+    expect(a.statuses).toEqual(['open'])
     expect(a.businessUnitIds).toEqual([BU_BAR, BU_RESTAURANT].sort())
     expect(a.activitySubjectIds).toEqual([SAMPLE_SUBJECT_ID])
   })
@@ -45,7 +45,7 @@ describe('normalizeSignalFeedFilters', () => {
         businessUnitIds: ['not-a-uuid'],
       }),
     ).toEqual({
-      statuses: ['canceled', 'open'],
+      statuses: ['open'],
       businessUnitIds: [],
       activitySubjectIds: [],
       needsQualification: false,
@@ -79,20 +79,20 @@ describe('appendSignalFeedFiltersToSearchParams', () => {
     })
 
     expect(params.get('view_mode')).toBe('general')
-    expect(params.get('statuses')).toBe('open,resolved')
+    expect(params.get('statuses')).toBe('open')
     expect(params.get('business_unit_ids')).toBe([BU_BAR, BU_RESTAURANT].sort().join(','))
     expect(params.get('activity_subject_ids')).toBe(SAMPLE_SUBJECT_ID)
     expect(params.get('needs_qualification')).toBe('true')
   })
 
-  it('serializes canceled status filter', () => {
+  it('drops a non-operational status from the query', () => {
     const params = new URLSearchParams()
     appendSignalFeedFiltersToSearchParams(params, {
       ...EMPTY_SIGNAL_FEED_FILTERS,
-      statuses: ['canceled'],
+      statuses: ['canceled' as 'open'],
     })
 
-    expect(params.get('statuses')).toBe('canceled')
+    expect(params.get('statuses')).toBeNull()
   })
 })
 
@@ -144,20 +144,20 @@ describe('formatClassificationFilterSummary', () => {
 })
 
 describe('formatStatusFilterChipLabel', () => {
-  it('uses Statut when empty and concrete labels when selected', () => {
-    expect(formatStatusFilterChipLabel(EMPTY_SIGNAL_FEED_FILTERS)).toBe('Statut')
+  it('uses Tout when empty and the exclusive operational label when selected', () => {
+    expect(formatStatusFilterChipLabel(EMPTY_SIGNAL_FEED_FILTERS)).toBe('Tout')
     expect(
       formatStatusFilterChipLabel({
         ...EMPTY_SIGNAL_FEED_FILTERS,
         statuses: ['open'],
       }),
-    ).toBe('En attente')
+    ).toBe('Ouverts')
     expect(
       formatStatusFilterChipLabel({
         ...EMPTY_SIGNAL_FEED_FILTERS,
-        statuses: ['open', 'resolved'],
+        statuses: ['open', 'interesting'],
       }),
-    ).toBe('Statut · 2')
+    ).toBe('Ouverts')
   })
 })
 

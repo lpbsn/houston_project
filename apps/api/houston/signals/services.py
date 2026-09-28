@@ -1282,16 +1282,75 @@ def _mark_processing_retry_or_failed(*, processing_id: uuid.UUID, error_code: st
 
 
 @transaction.atomic
-def pin_signal(*, signal: Signal, membership: EstablishmentMembership) -> Signal:
-    if signal.is_pinned:
-        return signal
-    if signal.status != Signal.Status.OPEN:
-        raise SignalStateError("Only open signals can be pinned.")
+def pin_signal(
+    *,
+    signal: Signal,
+    membership: EstablishmentMembership,
+    replace_pin_id: uuid.UUID | None = None,
+) -> Signal:
+    from houston.establishments.models import Establishment
+    from houston.signals.constants import PINNABLE_SIGNAL_STATUSES, SIGNAL_FEED_PIN_LIMIT
+    from houston.signals.exceptions import SignalPinLimitError
+    from houston.signals.permissions import can_pin_signal
+
+    Establishment.objects.select_for_update().get(pk=signal.establishment_id)
+    locked = Signal.objects.select_for_update().get(pk=signal.pk)
+    if not can_pin_signal(membership, locked):
+        if (
+            locked.establishment_id == membership.establishment_id
+            and locked.status not in PINNABLE_SIGNAL_STATUSES
+        ):
+            raise SignalStateError("Only open or interesting signals can be pinned.")
+        raise SignalPermissionError("Permission denied.")
+    if locked.is_pinned:
+        signal.is_pinned = locked.is_pinned
+        signal.pinned_at = locked.pinned_at
+        signal.pinned_by_membership = locked.pinned_by_membership
+        return locked
+
+    pinned = list(
+        Signal.objects.select_for_update(of=("self",))
+        .filter(establishment_id=locked.establishment_id, is_pinned=True)
+        .select_related("pinned_by_membership__user")
+        .order_by("id")
+    )
+    if replace_pin_id is not None:
+        replacement = next((row for row in pinned if row.id == replace_pin_id), None)
+        if replacement is None or not can_pin_signal(membership, replacement):
+            raise SignalStateError(
+                "Replacement pin not found.",
+                code="replacement_pin_not_found",
+            )
+        replacement.is_pinned = False
+        replacement.pinned_at = None
+        replacement.pinned_by_membership = None
+        replacement.save(
+            update_fields=[
+                "is_pinned",
+                "pinned_at",
+                "pinned_by_membership",
+                "updated_at",
+            ]
+        )
+        _schedule_signal_invalidation(signal=replacement, reason="signal.updated")
+    elif len(pinned) >= SIGNAL_FEED_PIN_LIMIT:
+        replacement_candidates = [
+            {
+                "signal_id": row.id,
+                "title": row.title,
+                "pinned_at": row.pinned_at,
+                "pinned_by_display_name": _pinned_by_display_name(row),
+            }
+            for row in pinned
+            if can_pin_signal(membership, row)
+        ]
+        raise SignalPinLimitError(replacement_candidates=replacement_candidates)
+
     now = timezone.now()
-    signal.is_pinned = True
-    signal.pinned_at = now
-    signal.pinned_by_membership = membership
-    signal.save(
+    locked.is_pinned = True
+    locked.pinned_at = now
+    locked.pinned_by_membership = membership
+    locked.save(
         update_fields=[
             "is_pinned",
             "pinned_at",
@@ -1299,14 +1358,29 @@ def pin_signal(*, signal: Signal, membership: EstablishmentMembership) -> Signal
             "updated_at",
         ]
     )
-    _schedule_signal_invalidation(signal=signal, reason="signal.updated")
+    signal.is_pinned = True
+    signal.pinned_at = now
+    signal.pinned_by_membership = membership
+    _schedule_signal_invalidation(signal=locked, reason="signal.updated")
     from houston.notifications.scheduling import schedule_signal_pinned_notification
 
     schedule_signal_pinned_notification(
-        signal_id=signal.id,
+        signal_id=locked.id,
         actor_membership_id=membership.id,
     )
-    return signal
+    return locked
+
+
+def _pinned_by_display_name(signal: Signal) -> str | None:
+    from houston.signals.reporter_display import format_reporter_display_name
+
+    membership = signal.pinned_by_membership
+    if membership is None:
+        return None
+    user = getattr(membership, "user", None)
+    if user is None:
+        return None
+    return format_reporter_display_name(user)
 
 
 @transaction.atomic
@@ -1331,18 +1405,12 @@ def mark_signal_interesting(
     )
     now = timezone.now()
     locked_self.status = Signal.Status.INTERESTING
-    locked_self.is_pinned = False
-    locked_self.pinned_at = None
-    locked_self.pinned_by_membership = None
     locked_self.marked_interesting_by_membership = actor_membership
     locked_self.marked_interesting_at = now
     locked_self.last_activity_at = max(locked_self.last_activity_at, now)
     locked_self.save(
         update_fields=[
             "status",
-            "is_pinned",
-            "pinned_at",
-            "pinned_by_membership",
             "marked_interesting_by_membership",
             "marked_interesting_at",
             "last_activity_at",

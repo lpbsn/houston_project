@@ -1,16 +1,15 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
 import { TerrainHubTitleSlot } from '@/components/layout/terrain-hub-title-slot'
 import {
-  TerrainCollapsibleFeedSection,
   TerrainEmptyState,
   TerrainErrorState,
+  TerrainSectionLabel,
 } from '@/components/ui/terrain'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
-import { useCollapsibleFeedSections } from '@/lib/use-collapsible-feed-sections'
 import { useLgViewport } from '@/lib/lg-viewport'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { cn } from '@/lib/utils'
@@ -22,22 +21,28 @@ import {
   SignalFeedFiltersBar,
 } from '../components/signal-feed-filters-bar'
 import { SignalFeedPinnedCarousel } from '../components/signal-feed-pinned-carousel'
+import { SignalFeedStatusChips } from '../components/signal-feed-status-chips'
+import { SignalPinReplacementSheet } from '../components/signal-pin-replacement-sheet'
 import { SignalFeedSkeletonList } from '../components/signal-feed-skeleton'
 import { SignalFeedTabs } from '../components/signal-feed-tabs'
 import { SignalQualifyRoutingSheet } from '../components/signal-qualify-routing-sheet'
-import { useLoadMoreSignalFeedSection, useSignalFeedQuery } from '../hooks'
+import {
+  useLoadMoreCrossSignalFeedPins,
+  useLoadMoreSignalFeed,
+  useSignalFeedQuery,
+} from '../hooks'
 import { useSignalFeedQuickActions } from '../hooks/use-signal-feed-quick-actions'
 import { useSignalQualifySheet } from '../hooks/use-signal-qualify-sheet'
 import { SignalsApiError } from '../api'
-import { composeSignalFeedPresentation } from '../lib/signal-display'
+import { groupLoadedSignalFeedItems } from '../lib/signal-display'
 import {
   type SignalFeedCardActionId,
 } from '../lib/signal-feed-card-actions'
 import {
   hasActiveSignalFeedFilters,
   normalizeSignalFeedFilters,
+  selectedSignalFeedStatus,
   type SignalFeedFilters,
-  type SignalFeedStatusFilter,
 } from '../lib/signal-feed-filters'
 import {
   readSignalFeedReading,
@@ -45,8 +50,6 @@ import {
   writeSignalFeedReading,
 } from '../lib/signal-feed-reading-memory'
 import type { SignalFeedItem, SignalViewMode } from '../types'
-
-const SIGNAL_FEED_DEFAULT_COLLAPSED_SECTIONS = ['interesting', 'resolved', 'canceled'] as const
 
 /** Horizontal inset for mobile feed content — replaces fixed px-3; one pad, no stacking. */
 const MOBILE_FEED_INSET_X =
@@ -111,15 +114,14 @@ function SignalFeedPageContent({
   )
 
   const normalizedFilters = normalizeSignalFeedFilters(filters)
+  const statusSelection = selectedSignalFeedStatus(normalizedFilters)
   const feedQuery = useSignalFeedQuery(establishmentId, viewMode, normalizedFilters, {
     source,
   })
-  const loadMoreSection = useLoadMoreSignalFeedSection(
-    establishmentId,
-    viewMode,
-    normalizedFilters,
-    { source },
-  )
+  const loadMore = useLoadMoreSignalFeed(establishmentId, viewMode, normalizedFilters, {
+    source,
+  })
+  const loadMorePins = useLoadMoreCrossSignalFeedPins(normalizedFilters)
   const filtersActive = hasActiveSignalFeedFilters(normalizedFilters)
   const quickActions = useSignalFeedQuickActions({
     establishmentId,
@@ -131,27 +133,20 @@ function SignalFeedPageContent({
     onNavigate,
   })
 
-  const presentation =
-    (establishmentId || isCross) && feedQuery.isSuccess && feedQuery.data
-      ? composeSignalFeedPresentation(feedQuery.data.sections)
-      : null
-  const pinnedItems = presentation?.pinnedItems ?? []
-  const groups = presentation?.groups ?? null
-  const unpinnedItems = presentation?.flatUnpinnedItems ?? []
-  const sectionKeys = groups?.map((group) => group.status) ?? []
-  const sectionExpansionResetToken = useMemo(
-    () => `${viewMode}:${JSON.stringify(normalizedFilters)}`,
-    [viewMode, normalizedFilters],
-  )
-  const { isExpanded, toggle, expandedByKey } = useCollapsibleFeedSections(sectionKeys, {
-    defaultCollapsedKeys: SIGNAL_FEED_DEFAULT_COLLAPSED_SECTIONS,
-    resetToken: sectionExpansionResetToken,
-    initialExpandedByKey: initialReading?.expandedByKey,
-  })
+  const feed = (establishmentId || isCross) && feedQuery.isSuccess ? feedQuery.data : null
+  const pinnedItems =
+    feed && statusSelection !== 'in_progress' ? (feed.pins ?? []) : []
+  const listItems = feed?.items ?? []
+  const groups = feed ? groupLoadedSignalFeedItems(listItems, statusSelection) : null
+  const listHasMore = feed?.has_more === true
+  const pinsHaveMore = isCross && feed?.pins_has_more === true
+  const hasListContent = listItems.length > 0 || listHasMore
+  const hasContent = pinnedItems.length > 0 || hasListContent
+  const preservedExpandedByKey = initialReading?.expandedByKey
   const canRememberReading = Boolean(establishmentId) || isCross
 
   const savedScrollTop = initialReading?.scrollTop ?? 0
-  const feedHasContent = presentation?.hasContent === true
+  const feedHasContent = hasContent
 
   useLayoutEffect(() => {
     if (restoredScrollRef.current) {
@@ -175,15 +170,15 @@ function SignalFeedPageContent({
     writeSignalFeedReading(readingScopeKey, {
       viewMode,
       filters: normalizedFilters,
-      expandedByKey,
+      ...(preservedExpandedByKey ? { expandedByKey: preservedExpandedByKey } : {}),
       scrollTop: restoredScrollRef.current
         ? (scrollRef.current?.scrollTop ?? 0)
         : savedScrollTop,
     })
   }, [
     canRememberReading,
-    expandedByKey,
     normalizedFilters,
+    preservedExpandedByKey,
     readingScopeKey,
     savedScrollTop,
     viewMode,
@@ -270,20 +265,37 @@ function SignalFeedPageContent({
     setFilters(EMPTY_SIGNAL_FEED_FILTERS)
   }
 
-  function renderLoadMore(status: SignalFeedStatusFilter | null, hasMore: boolean) {
-    if (!status || !hasMore) {
+  function renderListContinuation() {
+    if (loadMore.isError) {
+      const mismatch =
+        loadMore.error instanceof SignalsApiError &&
+        loadMore.error.code === 'cursor_context_mismatch'
+      return (
+        <TerrainErrorState
+          className="mx-3"
+          message="La suite n’a pas pu être chargée."
+          onRetry={() => {
+            if (mismatch) {
+              void feedQuery.refetch().finally(() => loadMore.reset())
+              return
+            }
+            loadMore.mutate()
+          }}
+        />
+      )
+    }
+    if (!listHasMore) {
       return null
     }
-    const isPending = loadMoreSection.isPending && loadMoreSection.variables === status
     return (
       <div className="flex justify-center px-3 py-3">
         <button
           type="button"
           className="min-h-11 rounded-full border border-[#1B4FD8]/25 bg-[#EEF4FF] px-5 text-sm font-semibold text-[#1B4FD8] disabled:opacity-60"
-          onClick={() => loadMoreSection.mutate(status)}
-          disabled={loadMoreSection.isPending}
+          onClick={() => loadMore.mutate()}
+          disabled={loadMore.isPending}
         >
-          {isPending ? 'Chargement…' : 'Afficher plus'}
+          {loadMore.isPending ? 'Chargement…' : 'Afficher plus'}
         </button>
       </div>
     )
@@ -300,8 +312,25 @@ function SignalFeedPageContent({
           size={isDesktopWeb ? 'default' : 'compact'}
         />
       </TerrainHubTitleSlot>
+      {!isCross && quickActions.pinReplacement ? (
+        <SignalPinReplacementSheet
+          open
+          presentation={isDesktopWeb ? 'dialog' : 'sheet'}
+          candidates={quickActions.pinReplacement.candidates}
+          isPending={quickActions.isPending}
+          onClose={quickActions.closePinReplacement}
+          onReplace={quickActions.replacePin}
+        />
+      ) : null}
       <TerrainHubSubheader>
-        {isCross || !establishmentId ? null : (
+        <SignalFeedStatusChips
+          filters={filters}
+          counts={feed?.counts}
+          layout={isDesktopWeb ? 'wrap' : 'scroll'}
+          className={isDesktopWeb ? 'bg-white px-4 py-2' : cn('bg-white py-2', MOBILE_FEED_INSET_X)}
+          onChange={setFilters}
+        />
+        {!isCross && establishmentId ? (
           <>
             <SignalFeedFiltersBar
               establishmentId={establishmentId}
@@ -324,7 +353,7 @@ function SignalFeedPageContent({
               </div>
             ) : null}
           </>
-        )}
+        ) : null}
       </TerrainHubSubheader>
 
       <div
@@ -356,7 +385,7 @@ function SignalFeedPageContent({
           />
         ) : null}
 
-        {feedQuery.isSuccess && presentation && !presentation.hasContent && filtersActive ? (
+        {feedQuery.isSuccess && !hasContent && filtersActive ? (
           <div className="mx-3 mt-3 space-y-2">
             <TerrainEmptyState
               title="Aucun résultat"
@@ -372,7 +401,7 @@ function SignalFeedPageContent({
           </div>
         ) : null}
 
-        {feedQuery.isSuccess && presentation && !presentation.hasContent && !filtersActive ? (
+        {feedQuery.isSuccess && !hasContent && !filtersActive ? (
           <TerrainEmptyState
             className="mx-3 mt-3"
             title="Aucune observation active"
@@ -384,48 +413,84 @@ function SignalFeedPageContent({
           />
         ) : null}
 
-        {feedQuery.isSuccess && presentation?.hasContent ? (
+        {feedQuery.isSuccess && hasContent ? (
           <div className="flex flex-col gap-3 pt-5">
             {pinnedItems.length > 0 ? (
-              isDesktopWeb ? (
-                renderItems(pinnedItems, 'pinned')
-              ) : (
+              <div className="flex flex-col gap-2">
+                <TerrainSectionLabel
+                  className={isDesktopWeb ? 'px-4' : MOBILE_FEED_INSET_X}
+                  dotVariant="warning"
+                >
+                  {feed?.counts
+                    ? `Épinglées · ${feed.counts.pinned}`
+                    : `Épinglées · ${pinnedItems.length}`}
+                </TerrainSectionLabel>
                 <SignalFeedPinnedCarousel
                   items={pinnedItems}
                   onSelect={onOpenSignal}
                   onOpenActions={isCross ? undefined : quickActions.openActions}
                   showEstablishment={isCross}
                   viewMode={viewMode}
-                  className={MOBILE_FEED_INSET_X}
+                  className={isDesktopWeb ? 'px-4' : MOBILE_FEED_INSET_X}
                 />
-              )
+                {pinsHaveMore ? (
+                  <div className="flex justify-center px-3 py-1">
+                    <button
+                      type="button"
+                      className="min-h-11 text-sm font-semibold text-[#1B4FD8] disabled:opacity-60"
+                      onClick={() => loadMorePins.mutate()}
+                      disabled={loadMorePins.isPending}
+                    >
+                      {loadMorePins.isPending ? 'Chargement…' : 'Afficher d’autres épingles'}
+                    </button>
+                  </div>
+                ) : null}
+                {loadMorePins.isError ? (
+                  <TerrainErrorState
+                    className="mx-3"
+                    message="La suite des épingles n’a pas pu être chargée."
+                    onRetry={() => {
+                      if (
+                        loadMorePins.error instanceof SignalsApiError &&
+                        loadMorePins.error.code === 'cursor_context_mismatch'
+                      ) {
+                        void feedQuery.refetch().finally(() => loadMorePins.reset())
+                        return
+                      }
+                      loadMorePins.mutate()
+                    }}
+                  />
+                ) : null}
+              </div>
+            ) : null}
+
+            {listItems.length === 0 && !listHasMore && pinnedItems.length > 0 ? (
+              <TerrainEmptyState
+                className="mx-3"
+                title="Aucune autre observation"
+                description="Les observations épinglées sont affichées au-dessus."
+              />
             ) : null}
 
             {groups ? (
               <div className="flex flex-col gap-2">
                 {groups.map((group) => (
-                  <TerrainCollapsibleFeedSection
-                    key={group.status}
-                    label={group.label}
-                    count={group.hasMore ? undefined : group.items.length}
-                    dotVariant={group.dotVariant}
-                    expanded={isExpanded(group.status)}
-                    onToggle={() => toggle(group.status)}
-                  >
-                    {group.items.length > 0 ? renderItems(group.items) : null}
-                    {renderLoadMore(group.status, group.hasMore)}
-                  </TerrainCollapsibleFeedSection>
+                  <div key={group.status} className="flex flex-col gap-2">
+                    <TerrainSectionLabel
+                      className={isDesktopWeb ? 'px-4' : MOBILE_FEED_INSET_X}
+                      dotVariant={group.dotVariant}
+                    >
+                      {group.label}
+                    </TerrainSectionLabel>
+                    {renderItems(group.items)}
+                  </div>
                 ))}
               </div>
+            ) : listItems.length > 0 ? (
+              <div>{renderItems(listItems)}</div>
             ) : null}
 
-            {!groups && unpinnedItems.length > 0 ? (
-              <div>{renderItems(unpinnedItems)}</div>
-            ) : null}
-
-            {!groups
-              ? renderLoadMore(presentation.flatStatus, presentation.flatHasMore)
-              : null}
+            {renderListContinuation()}
           </div>
         ) : null}
       </div>

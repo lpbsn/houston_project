@@ -9,7 +9,7 @@ import {
   getPinnedSignalCardClassName,
   getSignalCardLeftAccentColor,
   getSignalStatusBadgeVariant,
-  composeSignalFeedPresentation,
+  groupLoadedSignalFeedItems,
   partitionFeedPinnedItems,
   PINNED_SIGNAL_CARD_CLASS,
   SIGNAL_CARD_LEFT_ACCENT_COLOR,
@@ -55,86 +55,35 @@ describe('partitionFeedPinnedItems', () => {
   })
 })
 
-describe('composeSignalFeedPresentation', () => {
-  it('keeps open has_more after extracting every loaded pinned item', () => {
-    const presentation = composeSignalFeedPresentation([
-      {
-        status: 'open',
-        items: [item({ id: 'pinned-open', is_pinned: true, status: 'open' })],
-        has_more: true,
-      },
-      {
-        status: 'resolved',
-        items: [item({ id: 'done', status: 'resolved' })],
-        has_more: false,
-      },
-    ])
+describe('groupLoadedSignalFeedItems', () => {
+  it('builds separators only for statuses present in the loaded Tout page', () => {
+    const groups = groupLoadedSignalFeedItems(
+      [
+        item({ id: '1', status: 'open' }),
+        item({ id: '2', status: 'in_progress' }),
+        item({ id: '3', status: 'interesting' }),
+      ],
+      'all',
+    )
 
-    expect(presentation.pinnedItems.map((entry) => entry.id)).toEqual(['pinned-open'])
-    expect(presentation.groups).toHaveLength(2)
-    expect(presentation.groups?.[0].status).toBe('open')
-    expect(presentation.groups?.[0].items).toEqual([])
-    expect(presentation.groups?.[0].hasMore).toBe(true)
+    expect(groups?.map((group) => group.status)).toEqual(['open', 'in_progress', 'interesting'])
+    expect(groups?.[0]?.label).toBe('Ouverts')
+    expect(groups?.[2]?.label).toBe('Intéressants')
   })
 
-  it('uses a flat list when the API returns a single section', () => {
-    const presentation = composeSignalFeedPresentation([
-      {
-        status: 'open',
-        items: [item({ id: '1', status: 'open' })],
-        has_more: true,
-      },
-    ])
+  it('omits a category that is not in the loaded page', () => {
+    const groups = groupLoadedSignalFeedItems(
+      [item({ id: '2', status: 'interesting' })],
+      'all',
+    )
 
-    expect(presentation.groups).toBeNull()
-    expect(presentation.flatUnpinnedItems.map((entry) => entry.id)).toEqual(['1'])
-    expect(presentation.flatHasMore).toBe(true)
-    expect(presentation.flatStatus).toBe('open')
+    expect(groups?.map((group) => group.status)).toEqual(['interesting'])
   })
 
-  it('keeps API section order and labels when several statuses are present', () => {
-    const presentation = composeSignalFeedPresentation([
-      { status: 'open', items: [item({ id: '1', status: 'open' })], has_more: false },
-      {
-        status: 'interesting',
-        items: [item({ id: '2', status: 'interesting' })],
-        has_more: false,
-      },
-      { status: 'resolved', items: [item({ id: '3', status: 'resolved' })], has_more: false },
-      { status: 'canceled', items: [item({ id: '4', status: 'canceled' })], has_more: false },
-    ])
-
-    expect(presentation.groups?.map((group) => group.status)).toEqual([
-      'open',
-      'interesting',
-      'resolved',
-      'canceled',
-    ])
-    expect(presentation.groups?.[1]?.label).toBe('Intéressants')
-    expect(presentation.groups?.[1]?.dotVariant).toBe('mint')
-    expect(presentation.groups?.[3]?.label).toBe('Annulées')
-  })
-
-  it('excludes pinned open items from the open section', () => {
-    const presentation = composeSignalFeedPresentation([
-      {
-        status: 'open',
-        items: [
-          item({ id: 'pinned-open', is_pinned: true, status: 'open' }),
-          item({ id: 'plain-open', status: 'open' }),
-        ],
-        has_more: false,
-      },
-      {
-        status: 'in_progress',
-        items: [item({ id: 'progress', status: 'in_progress' })],
-        has_more: false,
-      },
-    ])
-
-    expect(presentation.pinnedItems.map((entry) => entry.id)).toEqual(['pinned-open'])
-    expect(presentation.groups?.[0]?.items.map((entry) => entry.id)).toEqual(['plain-open'])
-    expect(presentation.groups?.[1]?.items.map((entry) => entry.id)).toEqual(['progress'])
+  it('returns no separators for an exclusive status', () => {
+    expect(
+      groupLoadedSignalFeedItems([item({ id: '1', status: 'open' })], 'open'),
+    ).toBeNull()
   })
 })
 

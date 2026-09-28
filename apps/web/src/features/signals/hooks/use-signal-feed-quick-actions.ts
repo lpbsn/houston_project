@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 
 import { SignalsApiError } from '../api'
+import type { PinSignalVariables } from '../hooks'
 import {
   useCancelSignalMutation,
   useMarkSignalInterestingMutation,
@@ -16,7 +17,21 @@ import {
   isSignalFeedLifecycleActionId,
   type SignalFeedCardActionId,
 } from '../lib/signal-feed-card-actions'
-import type { SignalFeedFilters, SignalFeedItem, SignalViewMode } from '../types'
+import type {
+  SignalFeedFilters,
+  SignalFeedItem,
+  SignalPinReplacementCandidate,
+  SignalViewMode,
+} from '../types'
+
+const SIGNAL_PIN_LIMIT_CODE = 'signal_pin_limit'
+const SIGNAL_PIN_LIMIT_EMPTY_MESSAGE =
+  'Cinq observations sont déjà épinglées. Aucune ne peut être remplacée avec vos droits.'
+
+export type SignalPinReplacementState = {
+  signalId: string
+  candidates: SignalPinReplacementCandidate[]
+}
 
 export type SignalFeedQuickActionResult = 'close' | 'stay-open' | 'abort'
 
@@ -35,6 +50,7 @@ export function useSignalFeedQuickActions({
   const [activeItem, setActiveItem] = useState<SignalFeedItem | null>(null)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [pinReplacement, setPinReplacement] = useState<SignalPinReplacementState | null>(null)
   const activeItemRef = useRef<SignalFeedItem | null>(null)
   /** Blocks sheet dismiss / second actions until the in-flight mutation settles. */
   const actionLockRef = useRef(false)
@@ -86,13 +102,30 @@ export function useSignalFeedQuickActions({
     resetActionsSheet()
   }
 
-  function createMutationCallbacks() {
+  function createMutationCallbacks(signalId: string) {
     return {
       onSuccess: () => {
         setActionError(null)
+        setPinReplacement(null)
         syncActiveItem(null)
       },
       onError: (error: unknown) => {
+        if (error instanceof SignalsApiError && error.code === SIGNAL_PIN_LIMIT_CODE) {
+          if (error.replacementCandidates.length > 0) {
+            setActionError(null)
+            setActionsOpen(false)
+            setPinReplacement({
+              signalId,
+              candidates: error.replacementCandidates,
+            })
+            return
+          }
+          setPinReplacement(null)
+          setActionError(SIGNAL_PIN_LIMIT_EMPTY_MESSAGE)
+          setActionsOpen(true)
+          return
+        }
+        setPinReplacement(null)
         setActionError(
           resolveApiErrorMessage(error, SignalsApiError, 'Une erreur est survenue.'),
         )
@@ -114,7 +147,7 @@ export function useSignalFeedQuickActions({
     }
     setActionError(null)
     actionLockRef.current = true
-    mutate(signalId, createMutationCallbacks())
+    mutate(signalId, createMutationCallbacks(signalId))
     // Close immediately; optimistic cache update makes the feed feel responsive.
     setActionsOpen(false)
     return 'close'
@@ -179,12 +212,35 @@ export function useSignalFeedQuickActions({
     }
   }
 
+  function closePinReplacement() {
+    if (isActionLocked()) {
+      return
+    }
+    setPinReplacement(null)
+  }
+
+  function replacePin(replacePinId: string) {
+    if (!pinReplacement || isActionLocked()) {
+      return
+    }
+    const variables: PinSignalVariables = {
+      signalId: pinReplacement.signalId,
+      replacePinId,
+    }
+    setActionError(null)
+    actionLockRef.current = true
+    pinMutation.mutate(variables, createMutationCallbacks(pinReplacement.signalId))
+  }
+
   return {
     activeItem,
     actionsOpen,
     actionError,
+    pinReplacement,
     openActions,
     closeActions,
+    closePinReplacement,
+    replacePin,
     runAction,
     isPending,
   }

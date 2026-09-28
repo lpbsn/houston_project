@@ -48,10 +48,20 @@ SIGNAL_IN_PROGRESS_MANUAL_CANCEL_DETAIL = (
     "Signal in progress cannot be canceled manually; cancel via its action plans."
 )
 
-# Default Signal Feed visibility.
+# Default Signal Feed visibility for detail, media, and other non-feed reads.
 FEED_SIGNAL_STATUSES = frozenset(
     {"open", "in_progress", "interesting", "resolved", "canceled"}
 )
+
+# Operational feed only. Distinct from FEED_SIGNAL_STATUSES so detail and media
+# keep resolved and canceled. Same values as ACTIVE_SIGNAL_STATUSES today.
+OPERATIONAL_SIGNAL_FEED_STATUSES = frozenset({"open", "in_progress", "interesting"})
+PINNABLE_SIGNAL_STATUSES = frozenset({"open", "interesting"})
+SIGNAL_FEED_PIN_LIMIT = 5
+SIGNAL_FEED_DEFAULT_PAGE_SIZE = 25
+SIGNAL_FEED_MAX_PAGE_SIZE = 50
+SIGNAL_FEED_CROSS_PIN_DEFAULT_PAGE_SIZE = 10
+SIGNAL_FEED_CROSS_PIN_MAX_PAGE_SIZE = 50
 
 SIGNAL_RESOLUTION_REQUEST_COMMENT_MAX_LENGTH = 2000
 

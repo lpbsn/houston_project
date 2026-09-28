@@ -25,5 +25,18 @@ class SignalBusinessConflictError(SignalServiceError):
     error_code = "business_conflict"
 
 
+class SignalPinLimitError(SignalServiceError):
+    error_code = "signal_pin_limit"
+
+    def __init__(
+        self,
+        message: str = "Signal pin limit reached.",
+        *,
+        replacement_candidates: list[dict] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.replacement_candidates = replacement_candidates or []
+
+
 class SignalPipelineCandidateError(SignalServiceError):
     error_code = "invalid_issue_focus"

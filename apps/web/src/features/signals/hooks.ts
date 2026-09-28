@@ -20,6 +20,7 @@ import {
   fetchCrossSignalDetail,
   fetchSignalFeed,
   fetchCrossSignalFeed,
+  fetchCrossSignalFeedPins,
   markSignalInteresting,
   pinSignal,
   qualifySignalRouting,
@@ -29,18 +30,17 @@ import {
   unpinSignal,
 } from './api'
 import {
-  appendSignalFeedSectionPage,
+  appendSignalFeedPage,
+  appendSignalFeedPinsPage,
   applySignalQuickActionSuccess,
   prepareSignalFeedOptimisticUpdate,
   patchSignalInActiveFeedCache,
-  refillSignalFeedToLoadedDepth,
-  relocateSignalInFeedCache,
   restoreSignalFeedOptimisticUpdate,
+  SignalFeedContinuationStalled,
   signalFeedQueryKey,
   type SignalFeedOptimisticSnapshot,
   type SignalQuickActionCacheContext,
 } from './lib/signal-feed-cache'
-import type { SignalFeedStatusFilter } from './lib/signal-feed-filters'
 import type {
   SignalDetail,
   SignalFeedFilters,
@@ -54,22 +54,20 @@ export type { SignalQuickActionCacheContext } from './lib/signal-feed-cache'
 
 const IDLE_SIGNAL_FEED_QUERY_KEY = ['signals', 'feed', 'none'] as const
 
-function fetchSignalFeedSectionContinuation(
+function fetchSignalFeedPage(
   source: 'establishment' | 'cross',
   establishmentId: string | null,
   viewMode: SignalViewMode,
   filters: SignalFeedFilters,
-  status: SignalFeedStatusFilter,
   options: { cursor?: string; pageSize?: number } = {},
 ) {
-  const sectionFilters = { ...filters, statuses: [status] }
   if (source === 'cross') {
-    return fetchCrossSignalFeed(sectionFilters, options)
+    return fetchCrossSignalFeed(filters, options)
   }
   if (!establishmentId) {
     throw new Error('Établissement non sélectionné.')
   }
-  return fetchSignalFeed(establishmentId, viewMode, sectionFilters, options)
+  return fetchSignalFeed(establishmentId, viewMode, filters, options)
 }
 
 export function useSignalFeedQuery(
@@ -80,37 +78,17 @@ export function useSignalFeedQuery(
 ) {
   const source = options?.source ?? 'establishment'
   const enabled = source === 'cross' || Boolean(establishmentId)
-  const queryClient = useQueryClient()
   const queryKey =
     signalFeedQueryKey({ source, establishmentId, viewMode, filters }) ??
     IDLE_SIGNAL_FEED_QUERY_KEY
   return useQuery({
     queryKey,
-    queryFn: async () => {
-      const previous = queryClient.getQueryData<SignalFeedResponse>(queryKey)
-      if (source !== 'cross' && !establishmentId) {
-        throw new Error('Établissement non sélectionné.')
-      }
-      const firstPage =
-        source === 'cross'
-          ? await fetchCrossSignalFeed(filters)
-          : await fetchSignalFeed(establishmentId as string, viewMode, filters)
-      return refillSignalFeedToLoadedDepth(firstPage, previous, (status, cursor, pageSize) =>
-        fetchSignalFeedSectionContinuation(
-          source,
-          establishmentId,
-          viewMode,
-          filters,
-          status,
-          { cursor, pageSize },
-        ),
-      )
-    },
+    queryFn: () => fetchSignalFeedPage(source, establishmentId, viewMode, filters),
     enabled,
   })
 }
 
-export function useLoadMoreSignalFeedSection(
+export function useLoadMoreSignalFeed(
   establishmentId: string | null,
   viewMode: SignalViewMode,
   filters: SignalFeedFilters,
@@ -119,7 +97,7 @@ export function useLoadMoreSignalFeedSection(
   const source = options?.source ?? 'establishment'
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (status: SignalFeedStatusFilter) => {
+    mutationFn: async () => {
       const queryKey = signalFeedQueryKey({
         source,
         establishmentId,
@@ -130,27 +108,48 @@ export function useLoadMoreSignalFeedSection(
         throw new Error('Établissement non sélectionné.')
       }
       const current = queryClient.getQueryData<SignalFeedResponse>(queryKey)
-      const section = current?.sections.find((entry) => entry.status === status)
-      if (!section?.has_more || !section.next_cursor) {
+      if (!current?.has_more || !current.next_cursor) {
         return current
       }
-      const page = await fetchSignalFeedSectionContinuation(
-        source,
-        establishmentId,
-        viewMode,
-        filters,
-        status,
-        { cursor: section.next_cursor },
-      )
-      appendSignalFeedSectionPage(queryClient, {
-        establishmentId,
-        viewMode,
-        filters,
-        source,
-        status,
-        page,
+      const page = await fetchSignalFeedPage(source, establishmentId, viewMode, filters, {
+        cursor: current.next_cursor,
       })
-      return page
+      const appended = appendSignalFeedPage(current, page)
+      if (appended.stalled) {
+        throw new SignalFeedContinuationStalled()
+      }
+      queryClient.setQueryData(queryKey, appended.feed)
+      return appended.feed
+    },
+  })
+}
+
+export function useLoadMoreCrossSignalFeedPins(filters: SignalFeedFilters) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      const queryKey = signalFeedQueryKey({
+        source: 'cross',
+        establishmentId: null,
+        viewMode: 'general',
+        filters,
+      })
+      if (queryKey == null) {
+        return undefined
+      }
+      const current = queryClient.getQueryData<SignalFeedResponse>(queryKey)
+      if (!current?.pins_has_more || !current.pins_next_cursor) {
+        return current
+      }
+      const page = await fetchCrossSignalFeedPins(filters, {
+        cursor: current.pins_next_cursor,
+      })
+      const appended = appendSignalFeedPinsPage(current, page)
+      if (appended.stalled) {
+        throw new SignalFeedContinuationStalled()
+      }
+      queryClient.setQueryData(queryKey, appended.feed)
+      return appended.feed
     },
   })
 }
@@ -203,22 +202,37 @@ export function useQualifyRoutingOptionsQuery(
   })
 }
 
+export type PinSignalVariables = {
+  signalId: string
+  replacePinId?: string
+}
+
+function asPinVariables(input: string | PinSignalVariables): PinSignalVariables {
+  return typeof input === 'string' ? { signalId: input } : input
+}
+
 export function usePinSignalMutation(
   establishmentId: string | null,
   cacheContext?: SignalQuickActionCacheContext | null,
 ) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (signalId: string) => {
+    mutationFn: async (input: string | PinSignalVariables) => {
       if (!establishmentId) {
         throw new Error('Observation introuvable.')
       }
-      return pinSignal(establishmentId, signalId)
+      const variables = asPinVariables(input)
+      return variables.replacePinId
+        ? pinSignal(establishmentId, variables.signalId, {
+            replacePinId: variables.replacePinId,
+          })
+        : pinSignal(establishmentId, variables.signalId)
     },
-    onMutate: async (signalId): Promise<SignalFeedOptimisticSnapshot | undefined> => {
+    onMutate: async (input): Promise<SignalFeedOptimisticSnapshot | undefined> => {
       if (!establishmentId || !cacheContext) {
         return undefined
       }
+      const variables = asPinVariables(input)
       const snapshot = await prepareSignalFeedOptimisticUpdate(queryClient, {
         establishmentId,
         viewMode: cacheContext.viewMode,
@@ -228,21 +242,30 @@ export function usePinSignalMutation(
         establishmentId,
         viewMode: cacheContext.viewMode,
         filters: cacheContext.filters,
-        signalId,
+        signalId: variables.signalId,
         patch: { is_pinned: true },
       })
+      if (variables.replacePinId) {
+        patchSignalInActiveFeedCache(queryClient, {
+          establishmentId,
+          viewMode: cacheContext.viewMode,
+          filters: cacheContext.filters,
+          signalId: variables.replacePinId,
+          patch: { is_pinned: false },
+        })
+      }
       return snapshot
     },
-    onError: (_error, _signalId, snapshot) => {
+    onError: (_error, _input, snapshot) => {
       restoreSignalFeedOptimisticUpdate(queryClient, snapshot)
     },
-    onSuccess: (detail, signalId) => {
+    onSuccess: (detail, input) => {
       if (!establishmentId || !cacheContext) {
         return
       }
       applySignalQuickActionSuccess(queryClient, {
         establishmentId,
-        signalId,
+        signalId: asPinVariables(input).signalId,
         detail,
         viewMode: cacheContext.viewMode,
         filters: cacheContext.filters,
@@ -320,20 +343,28 @@ export function useCancelSignalMutation(
         viewMode: cacheContext.viewMode,
         filters: cacheContext.filters,
       })
-      relocateSignalInFeedCache(queryClient, {
+      patchSignalInActiveFeedCache(queryClient, {
         establishmentId,
         viewMode: cacheContext.viewMode,
         filters: cacheContext.filters,
         signalId,
-        nextStatus: 'canceled',
+        patch: { status: 'canceled', is_pinned: false },
       })
       return snapshot
     },
     onError: (_error, _signalId, snapshot) => {
       restoreSignalFeedOptimisticUpdate(queryClient, snapshot)
     },
-    onSuccess: (_data, signalId) => {
-      if (establishmentId) {
+    onSuccess: (detail, signalId) => {
+      if (establishmentId && cacheContext) {
+        applySignalQuickActionSuccess(queryClient, {
+          establishmentId,
+          signalId,
+          detail,
+          viewMode: cacheContext.viewMode,
+          filters: cacheContext.filters,
+        })
+      } else if (establishmentId) {
         invalidateEstablishmentSignalQueries(queryClient, establishmentId)
       }
       if (establishmentId) {
@@ -366,12 +397,12 @@ export function useResolveSignalMutation(
         viewMode: cacheContext.viewMode,
         filters: cacheContext.filters,
       })
-      relocateSignalInFeedCache(queryClient, {
+      patchSignalInActiveFeedCache(queryClient, {
         establishmentId,
         viewMode: cacheContext.viewMode,
         filters: cacheContext.filters,
         signalId,
-        nextStatus: 'resolved',
+        patch: { status: 'resolved', is_pinned: false },
       })
       return snapshot
     },
@@ -379,7 +410,15 @@ export function useResolveSignalMutation(
       restoreSignalFeedOptimisticUpdate(queryClient, snapshot)
     },
     onSuccess: (detail: SignalDetail, signalId) => {
-      if (establishmentId) {
+      if (establishmentId && cacheContext) {
+        applySignalQuickActionSuccess(queryClient, {
+          establishmentId,
+          signalId,
+          detail,
+          viewMode: cacheContext.viewMode,
+          filters: cacheContext.filters,
+        })
+      } else if (establishmentId) {
         invalidateEstablishmentSignalQueries(queryClient, establishmentId)
       }
       if (establishmentId) {
@@ -410,12 +449,12 @@ export function useMarkSignalInterestingMutation(
         viewMode: cacheContext.viewMode,
         filters: cacheContext.filters,
       })
-      relocateSignalInFeedCache(queryClient, {
+      patchSignalInActiveFeedCache(queryClient, {
         establishmentId,
         viewMode: cacheContext.viewMode,
         filters: cacheContext.filters,
         signalId,
-        nextStatus: 'interesting',
+        patch: { status: 'interesting' },
       })
       return snapshot
     },
@@ -423,7 +462,15 @@ export function useMarkSignalInterestingMutation(
       restoreSignalFeedOptimisticUpdate(queryClient, snapshot)
     },
     onSuccess: (detail: SignalDetail, signalId) => {
-      if (establishmentId) {
+      if (establishmentId && cacheContext) {
+        applySignalQuickActionSuccess(queryClient, {
+          establishmentId,
+          signalId,
+          detail,
+          viewMode: cacheContext.viewMode,
+          filters: cacheContext.filters,
+        })
+      } else if (establishmentId) {
         invalidateEstablishmentSignalQueries(queryClient, establishmentId)
       }
       if (establishmentId) {
