@@ -10,8 +10,8 @@ import { createTestQueryClient } from '@/test-utils'
 import { signalsQueryKeys } from './api'
 import { useLoadMoreSignalFeed, useRefreshSignalFeed, useSignalFeedQuery } from './hooks'
 import {
+  readSignalFeedCache,
   signalFeedCacheFromFirstPage,
-  SignalFeedContinuationStalled,
   type SignalFeedCacheState,
 } from './lib/signal-feed-cache'
 import { EMPTY_SIGNAL_FEED_FILTERS } from './lib/signal-feed-filters'
@@ -117,8 +117,11 @@ describe('useSignalFeedQuery', () => {
       expect(result.current.isSuccess).toBe(true)
     })
 
-    expect(queryClient.getQueryData<SignalFeedResponse>(queryKey)?.items).toHaveLength(25)
-    expect(queryClient.getQueryData<SignalFeedResponse>(queryKey)?.pins).toHaveLength(1)
+    const initialCache = queryClient.getQueryData<SignalFeedCacheState>(queryKey)
+    expect(initialCache).not.toHaveProperty('items')
+    expect(initialCache).not.toHaveProperty('pins')
+    expect(initialCache?.readingWindow.pageOne?.items).toHaveLength(25)
+    expect(initialCache?.pinWindow.pageOne?.items).toHaveLength(1)
 
     await queryClient.invalidateQueries({ queryKey })
 
@@ -126,7 +129,8 @@ describe('useSignalFeedQuery', () => {
       expect(fetchSignalFeed).toHaveBeenCalledTimes(2)
     })
 
-    const data = queryClient.getQueryData<SignalFeedResponse>(queryKey)
+    const cache = queryClient.getQueryData<SignalFeedCacheState>(queryKey)
+    const data = cache ? readSignalFeedCache(cache) : undefined
     expect(data?.items.map((item) => item.id)).toEqual(page1Ids)
     expect(data?.pins?.map((item) => item.id)).toEqual(['pin-1'])
     expect(fetchSignalFeed.mock.calls.every((call) => call[3] == null || call[3].cursor == null)).toBe(
@@ -166,9 +170,10 @@ describe('useSignalFeedQuery', () => {
       expect(hook.result.current.loadMore.isSuccess).toBe(true)
     })
 
-    const data = queryClient.getQueryData<SignalFeedResponse>(
+    const cache = queryClient.getQueryData<SignalFeedCacheState>(
       signalsQueryKeys.feed(EST, 'personal', EMPTY_SIGNAL_FEED_FILTERS),
     )
+    const data = cache ? readSignalFeedCache(cache) : undefined
     expect(data?.items.map((item) => item.id)).toEqual([...page1Ids, ...page2Ids])
     expect(data?.pins?.map((item) => item.id)).toEqual(['pin-1'])
     expect(data?.counts?.pinned).toBe(1)
@@ -225,11 +230,12 @@ describe('useSignalFeedQuery', () => {
 
     await waitFor(() => expect(hook.result.current.loadMore.isSuccess).toBe(true))
     const data = queryClient.getQueryData<SignalFeedCacheState>(queryKey)
-    expect(data?.items.map((item) => item.id)).toEqual(['refreshed'])
+    expect(readSignalFeedCache(data!).items.map((item) => item.id)).toEqual(['refreshed'])
     expect(data?.readingWindow.generation).toBe(2)
   })
 
-  it('keeps the current window when a continuation stalls', async () => {
+  it('exposes and retries a stalled continuation from the reading window', async () => {
+    let continuationAttempts = 0
     fetchSignalFeed.mockImplementation(
       async (
         _establishmentId: string,
@@ -238,11 +244,13 @@ describe('useSignalFeedQuery', () => {
         options: { cursor?: string } = {},
       ) =>
         options.cursor
-          ? {
-              items: [],
-              next_cursor: 'cursor-1',
-              has_more: true,
-            }
+          ? ++continuationAttempts === 1
+            ? {
+                items: [],
+                next_cursor: 'cursor-1',
+                has_more: true,
+              }
+            : page2
           : firstPage,
     )
 
@@ -261,14 +269,24 @@ describe('useSignalFeedQuery', () => {
 
     act(() => hook.result.current.loadMore.mutate())
 
-    await waitFor(() => expect(hook.result.current.loadMore.isError).toBe(true))
-    expect(hook.result.current.loadMore.error).toBeInstanceOf(SignalFeedContinuationStalled)
-    const data = queryClient.getQueryData<SignalFeedCacheState>(
+    await waitFor(() => expect(hook.result.current.loadMore.isStalled).toBe(true))
+    expect(hook.result.current.loadMore.isError).toBe(false)
+    let data = queryClient.getQueryData<SignalFeedCacheState>(
       signalsQueryKeys.feed(EST, 'personal', EMPTY_SIGNAL_FEED_FILTERS),
     )
-    expect(data?.items.map((item) => item.id)).toEqual(page1Ids)
-    expect(data?.next_cursor).toBe('cursor-1')
-    expect(data?.has_more).toBe(true)
+    expect(readSignalFeedCache(data!).items.map((item) => item.id)).toEqual(page1Ids)
+    expect(data?.readingWindow.stalled).toBe(true)
+
+    act(() => hook.result.current.loadMore.retryStalledContinuation())
+
+    await waitFor(() => expect(hook.result.current.loadMore.isStalled).toBe(false))
+    data = queryClient.getQueryData<SignalFeedCacheState>(
+      signalsQueryKeys.feed(EST, 'personal', EMPTY_SIGNAL_FEED_FILTERS),
+    )
+    expect(readSignalFeedCache(data!).items.map((item) => item.id)).toEqual([
+      ...page1Ids,
+      ...page2Ids,
+    ])
   })
 })
 
@@ -314,9 +332,11 @@ describe('useRefreshSignalFeed', () => {
 
     await waitFor(() => expect(hook.result.current.isSuccess).toBe(true))
     expect(
-      queryClient.getQueryData<SignalFeedResponse>(
-        signalsQueryKeys.feed(EST, 'personal', openFilters),
-      )?.items.map((item) => item.id),
+      readSignalFeedCache(
+        queryClient.getQueryData<SignalFeedCacheState>(
+          signalsQueryKeys.feed(EST, 'personal', openFilters),
+        )!,
+      ).items.map((item) => item.id),
     ).toEqual(['open-refresh'])
     expect(
       queryClient.getQueryData(

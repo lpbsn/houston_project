@@ -16,6 +16,7 @@ import type {
 import { signalsQueryKeys } from '@/features/signals/api'
 import {
   appendSignalFeedPage,
+  readSignalFeedCache,
   signalFeedCacheFromFirstPage,
 } from '@/features/signals/lib/signal-feed-cache'
 import {
@@ -271,6 +272,7 @@ function queryCacheSnapshot(signalCache: unknown, executionCache: unknown) {
 describe('post-Lots 0-7 feed hardening baseline', () => {
   it('captures bounded-window, cache duplication, and invalidation metrics', () => {
     const signalCache = simulateSignalSession()
+    const signalRead = readSignalFeedCache(signalCache)
     const executionCache = simulateExecutionSession()
     const signalHydrated = hydratedItems(signalCache.readingWindow)
     const signalRendered = renderedItems(signalCache.readingWindow, (item) => item.id)
@@ -295,9 +297,9 @@ describe('post-Lots 0-7 feed hardening baseline', () => {
         focus_pages: signalCache.readingWindow.focus.length,
         hydrated_items: signalHydrated.length,
         rendered_items: signalRendered.length,
-        projected_items: signalCache.items.length,
+        projected_items: signalRead.items.length,
         retained_page_one_items: signalCache.readingWindow.pageOne?.items.length ?? 0,
-        duplicate_projected_references: signalCache.items.length,
+        duplicate_projected_references: 0,
         serialized_state_bytes: Buffer.byteLength(JSON.stringify(signalCache)),
       },
       execution_window: {

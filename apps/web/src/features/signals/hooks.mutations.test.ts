@@ -14,7 +14,13 @@ import {
   useResolveSignalMutation,
   useUnpinSignalMutation,
 } from './hooks'
+import {
+  readSignalFeedCache,
+  signalFeedCacheFromFirstPage,
+  type SignalFeedCacheState,
+} from './lib/signal-feed-cache'
 import { EMPTY_SIGNAL_FEED_FILTERS } from './lib/signal-feed-filters'
+import type { SignalFeedResponse } from './types'
 
 const resolveSignal = vi.fn(async () => ({ id: 'signal-1', status: 'resolved' }))
 const cancelSignal = vi.fn(async () => ({ id: 'signal-1', status: 'canceled' }))
@@ -121,21 +127,22 @@ describe('usePinSignalMutation', () => {
       usePinSignalMutation('est-1', cacheContext),
     )
     const feedKey = signalsQueryKeys.feed('est-1', 'personal', EMPTY_SIGNAL_FEED_FILTERS)
-    queryClient.setQueryData(feedKey, {
-      items: [{ id: 'signal-1', is_pinned: false, status: 'open', title: 'A' }],
-      pins: [],
-      next_cursor: null,
-      has_more: false,
-      applied_filters: { statuses: [], business_unit_ids: [], activity_subject_ids: [] },
-    })
+    queryClient.setQueryData(
+      feedKey,
+      signalFeedCacheFromFirstPage({
+        items: [{ id: 'signal-1', is_pinned: false, status: 'open', title: 'A' }],
+        pins: [],
+        next_cursor: null,
+        has_more: false,
+        applied_filters: { statuses: [], business_unit_ids: [], activity_subject_ids: [] },
+      } as SignalFeedResponse),
+    )
 
     result.current.mutate('signal-1')
 
     await waitFor(() => {
-      const data = queryClient.getQueryData<{
-        pins?: Array<{ is_pinned: boolean }>
-        items: Array<{ id: string }>
-      }>(feedKey)
+      const cache = queryClient.getQueryData<SignalFeedCacheState>(feedKey)
+      const data = cache ? readSignalFeedCache(cache) : undefined
       expect(data?.items).toEqual([])
       expect(data?.pins?.[0]?.is_pinned).toBe(true)
     })

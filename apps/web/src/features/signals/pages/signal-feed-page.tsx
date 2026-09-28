@@ -48,11 +48,7 @@ import {
   useResumeSignalFeed,
   useSignalFeedQuery,
 } from '../hooks'
-import {
-  projectSignalFeedCache,
-  removeSignalFromFeedCache,
-  type SignalFeedCacheState,
-} from '../lib/signal-feed-cache'
+import { removeSignalFromFeedCache, type SignalFeedCacheState } from '../lib/signal-feed-cache'
 import { useSignalFeedQuickActions } from '../hooks/use-signal-feed-quick-actions'
 import { useSignalQualifySheet } from '../hooks/use-signal-qualify-sheet'
 import { SignalsApiError } from '../api'
@@ -206,7 +202,6 @@ function SignalFeedPageContent({
   const hasContent = pinnedItems.length > 0 || hasListContent
   const showsPageOne =
     !feed || !('readingWindow' in feed) || focusContinuesPageOne(feed.readingWindow)
-  const preservedExpandedByKey = initialReading?.expandedByKey
   const canRememberReading = Boolean(establishmentId) || isCross
 
   const savedScrollTop = initialReading?.scrollTop ?? 0
@@ -300,7 +295,14 @@ function SignalFeedPageContent({
   useEffect(() => {
     const target = loadMoreRef.current
     const root = scrollRef.current
-    if (!target || !root || !listHasMore || loadMore.isPending || loadMore.isError) {
+    if (
+      !target ||
+      !root ||
+      !listHasMore ||
+      loadMore.isPending ||
+      loadMore.isError ||
+      loadMore.isStalled
+    ) {
       return
     }
     if (typeof IntersectionObserver === 'undefined') {
@@ -342,7 +344,6 @@ function SignalFeedPageContent({
     writeSignalFeedReading(readingScopeKey, {
       viewMode,
       filters: normalizedFilters,
-      ...(preservedExpandedByKey ? { expandedByKey: preservedExpandedByKey } : {}),
       scrollTop: restoredScrollRef.current
         ? (scrollRef.current?.scrollTop ?? 0)
         : savedScrollTop,
@@ -350,7 +351,6 @@ function SignalFeedPageContent({
   }, [
     canRememberReading,
     normalizedFilters,
-    preservedExpandedByKey,
     readingScopeKey,
     savedScrollTop,
     viewMode,
@@ -472,17 +472,21 @@ function SignalFeedPageContent({
     return (
       <div ref={loadMoreRef}>
         <FeedContinuationFooter
-          hasMore={listHasMore && !loadMore.isError}
+          hasMore={listHasMore && !loadMore.isError && !loadMore.isStalled}
           isLoadingMore={loadMore.isPending}
           hasItems={listItems.length > 0}
-          errorMessage={loadMore.isError ? 'La suite n’a pas pu être chargée.' : null}
+          errorMessage={
+            loadMore.isError || loadMore.isStalled
+              ? 'La suite n’a pas pu être chargée.'
+              : null
+          }
           onLoadMore={requestNextPage}
           onRetry={() => {
             if (mismatch) {
               void feedQuery.refetch().finally(() => loadMore.reset())
               return
             }
-            loadMore.mutate()
+            loadMore.retryStalledContinuation()
           }}
         />
       </div>
@@ -616,10 +620,10 @@ function SignalFeedPageContent({
                   { queryKey: feedQueryPrefix },
                   (current) =>
                     current
-                      ? projectSignalFeedCache({
+                      ? {
                           ...current,
                           readingWindow: showRetainedPageOne(current.readingWindow),
-                        })
+                        }
                       : current,
                 )
                 if (scrollRef.current) {
@@ -702,14 +706,18 @@ function SignalFeedPageContent({
                     <button
                       type="button"
                       className="min-h-11 text-sm font-semibold text-[#1B4FD8] disabled:opacity-60"
-                      onClick={() => loadMorePins.mutate()}
+                      onClick={() =>
+                        loadMorePins.isStalled
+                          ? loadMorePins.retryStalledContinuation()
+                          : loadMorePins.mutate()
+                      }
                       disabled={loadMorePins.isPending}
                     >
                       {loadMorePins.isPending ? 'Chargement…' : 'Afficher d’autres épingles'}
                     </button>
                   </div>
                 ) : null}
-                {loadMorePins.isError ? (
+                {loadMorePins.isError || loadMorePins.isStalled ? (
                   <TerrainErrorState
                     className="mx-3"
                     message="La suite des épingles n’a pas pu être chargée."
@@ -721,7 +729,7 @@ function SignalFeedPageContent({
                         void feedQuery.refetch().finally(() => loadMorePins.reset())
                         return
                       }
-                      loadMorePins.mutate()
+                      loadMorePins.retryStalledContinuation()
                     }}
                   />
                 ) : null}
