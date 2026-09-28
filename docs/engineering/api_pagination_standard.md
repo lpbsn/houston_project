@@ -1,7 +1,7 @@
 # API Pagination Standard
 
 Status: authoritative  
-Last reviewed: 2026-09-21
+Last reviewed: 2026-09-28
 
 ## 1. Purpose
 
@@ -10,7 +10,9 @@ Define how Houston list endpoints paginate (or intentionally do not), and how th
 This document applies to:
 
 - new list endpoints
-- pagination fixes on existing endpoints (see open gaps in §11; inspect the code before treating them as a backlog)
+- pagination fixes on existing endpoints
+
+It defines shared engineering rules. Domain documents and [`apps/api/schema.yml`](../../apps/api/schema.yml) own endpoint-specific filtering, ordering, metadata, and visibility.
 
 ## 2. Authority order
 
@@ -50,10 +52,11 @@ Use for operational feeds that change frequently (realtime invalidation, sort bu
 | Default `page_size` | 25 |
 | Max `page_size` | 50 |
 | `has_more` | `limit + 1` pattern — **not** full `queryset.count()` |
-| Cursor encoding | Opaque, server-side, tied to stable feed sort keys |
-| Frontend | Manual « Charger plus » (no implicit infinite scroll). Signal Feed: `useQuery` + per-section continuation. Execution Feed: `useInfiniteQuery`. |
+| Cursor encoding | Opaque, versioned, tied to collection, stable sort keys, filters/view, scope, and effective authorization context |
+| Invalid context | HTTP 400, code `cursor_context_mismatch`; restart from page 1 |
+| Frontend | Automatic bounded continuation near the end; one continuation in flight; explicit retry/fallback |
 
-**Response envelope:**
+The list collection uses this core envelope:
 
 ```json
 {
@@ -63,24 +66,19 @@ Use for operational feeds that change frequently (realtime invalidation, sort bu
 }
 ```
 
-Signal Feed is the sectioned exception to that envelope (see §5): `{ sections: [{ status, items, next_cursor, has_more }], applied_filters }`. Other Tier A feeds keep the flat envelope.
+First-page metadata may add independent collections and summaries such as `pins`, `counts`, `section_counts`, `scheduled`, `pins_next_cursor`, `pins_has_more`, or `applied_filters`. A continuation returns only `items`, `next_cursor`, and `has_more` unless the endpoint explicitly documents otherwise.
 
-**Endpoints today:**
+Pins and the main list are disjoint collections. P contains authorized, filter-eligible pinned items; L contains authorized, filter-eligible non-pinned items. P is excluded from L before LIMIT, including pins not yet loaded in a Cross preview. P may be bounded by its domain cap or expose a dedicated cursor endpoint; its cursor is never interchangeable with an L cursor.
 
-| Endpoint | Status |
-|----------|--------|
-| `GET .../signal-feed/` | **Reference** — per-status cursor pages in one first GET |
-| `GET .../action-plan-execution-feed/` | **Complete** — single-type cursor (`action_plan_execution` items) |
+| Endpoint family | L | P and first-page metadata |
+|---|---|---|
+| Signal Feed, establishment and Cross | Flat global page over the selected status | `pins`, `counts`, `applied_filters`; Cross pin continuation uses `GET /api/v1/cross/signal-feed-pins/` |
+| Action Plan Execution Feed, establishment | Flat global page over the selected category | First page adds `pins`, `section_counts`, and `scheduled` |
+| Action Plan Execution Feed, Cross | Flat global page over the selected category | Main first page adds `section_counts` and `scheduled`; a separate `GET /api/v1/cross/action-plan-execution-feed-pins/` supplies the three-pin preview and its continuations |
 
 The historical `/execution-feed/` path is gone.
 
-Action Plan Execution Feed cursor specifics:
-
-- Opaque server cursor tied to sort keys: `as_of`, pin (`is_feed_pinned`, `feed_pinned_at`), `status_rank`, `deadline_bucket`, effective `feed_sort_end_at` (encoded as `end_at`; empty when terminal), `last_activity_at desc`, `created_at desc`, `id desc`.
-- `deadline_bucket` values: `0` overdue (active only), `1` upcoming, `2` no deadline, `3` terminal (`done` / `canceled`). Terminal items always encode bucket `3` and an empty `end_at` sort key regardless of DB `end_at`.
-- `as_of` is frozen on page 1 and reused for subsequent pages (overdue bucket + `is_overdue` consistency).
-- Terminal executions (`done` / `canceled`) included in feed; within terminal sections sort is by `last_activity_at` only (deadline keys neutralized). Mutations invalidate the feed.
-- **Deploy compatibility:** cursor format (`CURSOR_PART_COUNT = 9`) unchanged; only terminal semantic changes. Active-item cursors remain valid. In-flight cursors anchored on a terminal item with pre-fix bucket `1`/`2` and real `end_at` may duplicate/skip on page 2+ until page 1 is refetched (mutation, realtime invalidation, or navigation).
+Operational Execution Feed contains only `pending_validation` and `in_progress`; terminal executions belong to History. `scheduled` remains outside L and is summarized as `{ count, next }`. The first L cursor freezes `as_of` for the traversal; this value is not a response field.
 
 ### Tier B — Chronological streams
 
@@ -124,41 +122,50 @@ Use for autocomplete and scoped search.
 
 **Endpoints today:** `GET /api/v1/catalog/*/suggest/`, `GET .../users/search/` (no limit yet), `GET .../chat/eligible-memberships/` (hard slice `[:100]`).
 
-## 5. Reference implementation — Signal Feed
+## 5. Feed cursor and continuation contract
 
-Signal Feed is the **existing reference** for Tier A (backend + frontend).
-
-### Backend
+Signal and Execution feeds implement the Tier A contract independently; neither is a universal feed engine.
 
 | File | Role |
 |------|------|
-| [`apps/api/houston/signals/api/views.py`](../../apps/api/houston/signals/api/views.py) | `SignalFeedView` — sectioned `limit+1` per status, `cursor` only with one matching `statuses=` |
-| [`apps/api/houston/signals/feed_cursor.py`](../../apps/api/houston/signals/feed_cursor.py) | Encode/decode opaque cursor from stable sort keys |
-| [`apps/api/houston/signals/signal_feed.py`](../../apps/api/houston/signals/signal_feed.py) | One cursor page (`limit+1`) from an already-authorized queryset (`build_signal_feed_page`) |
-| [`apps/api/houston/signals/selectors.py`](../../apps/api/houston/signals/selectors.py) | `signal_feed_queryset`, `apply_feed_sorting` |
-| [`apps/api/houston/signals/api/serializers.py`](../../apps/api/houston/signals/api/serializers.py) | `SignalFeedResponseSerializer` |
+| [`apps/api/houston/core/opaque_cursor.py`](../../apps/api/houston/core/opaque_cursor.py) | Shared opaque encoding/decoding only |
+| [`apps/api/houston/signals/feed_cursor.py`](../../apps/api/houston/signals/feed_cursor.py) | Signal L/P sort tuples and context validation |
+| [`apps/api/houston/signals/signal_feed.py`](../../apps/api/houston/signals/signal_feed.py) | Signal L/P pages and first-page metadata |
+| [`apps/api/houston/action_plans/feed_cursor.py`](../../apps/api/houston/action_plans/feed_cursor.py) | Execution L/P sort tuples, frozen `as_of`, and context validation |
+| [`apps/api/houston/action_plans/execution_feed.py`](../../apps/api/houston/action_plans/execution_feed.py) | Execution L/P pages and first-page metadata |
 
-### Frontend
+Cursor payloads are implementation details. Clients must not decode or construct them. The server validates collection, view/filter context, establishment or Cross scope, and an authorization fingerprint derived from the live contributing memberships, roles, statuses, and BusinessUnit scopes. A cursor from another collection or scope is invalid.
 
-| File | Role |
-|------|------|
-| [`apps/web/src/features/signals/hooks.ts`](../../apps/web/src/features/signals/hooks.ts) | `useSignalFeedQuery` — one `useQuery` for the first sectioned page (default `page_size`); refetch restores only sections previously loaded past page 1 via per-status continuations (`page_size = min(50, remainingDepth)`). `useLoadMoreSignalFeedSection` appends one status |
-| [`apps/web/src/features/signals/api.ts`](../../apps/web/src/features/signals/api.ts) | `fetchSignalFeed` — passes `cursor` with a single `statuses` value on continuation |
-| [`apps/web/src/features/signals/pages/signal-feed-page.tsx`](../../apps/web/src/features/signals/pages/signal-feed-page.tsx) | Renders `sections[]`; « Charger plus » from `sections[].has_more` |
+Ordering and continuation predicates must match exactly, including null handling and a unique id tie-breaker. `has_more` comes only from fetching `limit + 1`. At the end, `has_more=false` and `next_cursor=null`.
 
-### OpenAPI
+The client stops automatic continuation and exposes a local retry when:
 
-- `GET .../signal-feed/` exposes `cursor` and `page_size` query params.
-- `cursor` requires exactly one `statuses=` value matching the status encoded in the cursor.
-- `SignalFeedResponse`: `sections` (`status`, `items`, `next_cursor`, `has_more`), `applied_filters`.
-- `page_size` applies **per section** (default 25, max 50).
+- a response is empty while `has_more=true`;
+- a response announces `has_more=true` without advancing the cursor;
+- the server rejects the cursor context;
+- authorization or transport fails.
 
-## 6. Response envelope matrix (current state)
+## 6. Frontend consumption and memory
+
+Operational feeds load automatically near the end. The manual continuation control is a fallback for retry, stalled progress, or environments without intersection observation; it is not the nominal journey.
+
+TanStack Query remains the server-state owner, but an operational feed does not retain an unbounded chain of loaded pages. [`apps/web/src/lib/feed-reading-window.ts`](../../apps/web/src/lib/feed-reading-window.ts) keeps:
+
+- page 1 of the current generation;
+- at most two focused continuation slots around the viewport, including preloading;
+- one replaceable cursor for the evicted page behind;
+- deduplication ids only for hydrated slots.
+
+Refresh replaces the generation and first page. A continuation or refresh result from a stale generation is ignored. Return-from-detail memory is O(1): anchor, neighbor, resume cursor, and authorization fingerprint. An evicted zone is fetched again from a retained boundary cursor; the client does not retain a growing sparse index.
+
+This bounded-window rule applies to operational Signal and Execution feeds. History currently uses an infinite query with cursor non-progression protection; it does not share the operational feed reading window.
+
+## 7. Response envelope matrix (current state)
 
 | Envelope | Endpoints |
 |----------|-----------|
-| `{ sections: [{ status, items, next_cursor, has_more }], applied_filters }` | Signal feed (establishment + cross) |
-| `{ items, next_cursor, has_more }` | Action Plan execution feed (complete) |
+| `{ items, next_cursor, has_more, ...first_page_metadata }` | Signal and Action Plan Execution feeds |
+| `{ items, next_cursor, has_more, undated_count? }` | Signal and Execution History |
 | `{ items, has_more }` | Chat messages |
 | `{ items }` | Chat conversations, chat eligible memberships |
 | Raw `Item[]` | Action plan catalog list, users search, memberships, catalog suggest |
@@ -166,19 +173,19 @@ Signal Feed is the **existing reference** for Tier A (backend + frontend).
 
 Target over time: paginated lists use Tier A/B envelope; non-paginated lists use `{ items }` (Tier C).
 
-## 7. PR checklist (implementation tickets)
+## 8. PR checklist
 
 When changing list pagination or response shape:
 
 1. **Backend** — view/selector/serializer; add or fix tests (`pytest` focused on endpoint).
 2. **OpenAPI** — `make schema`; verify `cursor` / `page_size` / response fields in `schema.yml`.
 3. **Frontend types** — `make web-api-generate`.
-4. **Frontend callers** — hooks (Signal Feed: `useQuery` + per-section continuation; other Tier A including Execution Feed: `useInfiniteQuery`), pages, query keys / invalidation.
+4. **Frontend callers** — feature API, hooks/cache, query keys, generation and invalidation behavior, and affected pages.
 5. **Tests** — API tests green (`make backend-test` or focused `pytest`); FE `npm test` + `npm run typecheck`.
 
 One PR = one endpoint (or one coherent group) fully aligned. No dual-format transition period.
 
-## 8. Anti-patterns
+## 9. Anti-patterns
 
 | Anti-pattern | Why |
 |--------------|-----|
@@ -188,16 +195,19 @@ One PR = one endpoint (or one coherent group) fully aligned. No dual-format tran
 | Raw `Item[]` without documented Tier C/D justification | Inconsistent FE consumption; migrate to `{ items }` |
 | Frontend-only pagination (client slice of full list) | Scales poorly; backend must bound or paginate (checklist assignments over-fetch today) |
 | Decorative `next_cursor` in OpenAPI without `cursor` query param | Contract lies; fix schema and implementation together |
+| Cursor context based only on establishment ids | Misses role, membership-state, view, filter, or BusinessUnit-scope changes |
+| Keeping every loaded operational-feed page or every seen id | Session memory grows with traversal depth; use the bounded reading window |
+| Treating a Cross pin preview as the whole P collection | Hidden pins can leak back into L or become unreachable |
 
-## 9. No global DRF pagination
+## 10. No global DRF pagination
 
 Houston does not set `DEFAULT_PAGINATION_CLASS` in DRF settings. Each domain implements explicit helpers in views/selectors.
 
-## 10. Related documents
+## 11. Related documents
 
 - Feed domain: [`docs/product/domains/feed_domain.md`](../product/domains/feed_domain.md)
 
-## 11. Open pagination gaps
+## 12. Open pagination gaps
 
 Inspect current list endpoints before treating this as a roadmap:
 

@@ -1,7 +1,7 @@
 # Houston — Current product state
 
 Status: authoritative  
-Last reviewed: 2026-09-21
+Last reviewed: 2026-09-28
 
 Snapshot of what is live, plus remaining **pilot** exclusions. HTTP: [`apps/api/schema.yml`](../../apps/api/schema.yml). Identity map: [`domains/identity_membership_domain.md`](domains/identity_membership_domain.md).
 
@@ -38,8 +38,9 @@ The execution surface is **Action Plan** only.
 | BusinessUnit / ActivitySubject taxonomy | Live | Identity: `specific_name` + internal `routing_key`; catalog FK required (`PROTECT`); public API omits `routing_key` |
 | Observations + media + transcription | Live | Celery pipeline |
 | AI observation → Signal | Live | Pipeline **v6** (schema `ai_observation_pipeline_v6`, prompt `ai_observation_pipeline_v6_2`); Fake (CI) / OpenAI (opt-in smoke) |
-| Signal feed + lifecycle | Live | Pin, mark interesting, cancel (open and interesting), resolve (open), qualify merge absorb+delete |
-| Action Plan catalog + executions + feed | Live | [`domains/action_plan_domain.md`](domains/action_plan_domain.md) |
+| Signal feed + lifecycle | Live | Global cursor pagination, collective pins (open/interesting), mark interesting, cancel, resolve, qualify merge absorb+delete |
+| Action Plan catalog + executions + feed | Live | Operational P/L feed, personal pins, scheduled summary; [`domains/action_plan_domain.md`](domains/action_plan_domain.md) |
+| History | Live | `/general/history`; terminal Signals/executions, Paris civil periods, explicit establishment/Cross scope; [`domains/feed_domain.md`](domains/feed_domain.md) |
 | Analytics dashboard + pattern detail | Live | `/analytics`, `/analytics/patterns/{id}`, `LazyAnalyticsPage`; API `api/v1/analytics/…` (`houston.analytics`). No domain doc. |
 | Comments (signal + execution threads) | Live | REST + mention picker; execution comments can attach images/PDF (dedicated bucket) |
 | Notifications in-app | Live | List, preferences, mark read |
