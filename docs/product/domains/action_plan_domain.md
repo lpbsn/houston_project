@@ -1,7 +1,7 @@
 # Action Plan Domain
 
 Status: authoritative
-Implementation status: catalog, executions, schedules, planning, lazy materialization, Signal sync; Execution Feed read is in [`feed_domain.md`](feed_domain.md)
+Implementation status: catalog, executions, schedules, planning, lazy materialization, Signal sync; operational Execution Feed and History reads are in [`feed_domain.md`](feed_domain.md)
 
 ## 1. Purpose
 
@@ -28,6 +28,7 @@ HTTP: [`apps/api/schema.yml`](../../../apps/api/schema.yml). Execution list read
 | Schedule + occurrences | `ActionPlanSchedule` — `schedule_services.py`, `materialization.py` |
 | Planning submission | `planning_services.py` |
 | Execution Feed read | selectors / `execution_feed.py` — documented in Feed, not here |
+| Execution pin writes | `ActionPlanExecutionFeedPin` / `feed_pin_services.py` |
 
 `source_signal_id` lives on the **execution**, not the catalog row.
 
@@ -35,7 +36,7 @@ HTTP: [`apps/api/schema.yml`](../../../apps/api/schema.yml). Execution list read
 
 Statuses: `scheduled` → `in_progress` → `pending_validation` → `done`, or `canceled`.
 
-- `scheduled` — materialized or planned ahead of `start_at`. Beat / tick promotes to `in_progress` when due. Preview on the feed via `scheduled_items`; not a cursor item.
+- `scheduled` — materialized or planned ahead of `start_at`. Beat / tick promotes to `in_progress` when due. Outside the operational cursor collection; the feed first page exposes only `{ count, next }`.
 - `in_progress` — operational work. Mark done: if `requires_validation`, go to `pending_validation`; else `done`.
 - `pending_validation` — validator (`can_validate_action` + pilot-pole management or Owner/Director) validates → `done`, or reopens → `in_progress`.
 - `done` — **terminal**. No reopen from `done`.
@@ -44,6 +45,10 @@ Statuses: `scheduled` → `in_progress` → `pending_validation` → `done`, or 
 Tasks: `pending` / `done` / `skipped` / `observation_created`. Task observation handoff is an execution-task command, not a public Observation create extension — [`observation_domain.md`](observation_domain.md).
 
 Write-side `ActionPlanExecutionLifecycleEvent` is insert-only in the transition transaction (`metadata_safe` allowlist). Not a product timeline API.
+
+`done` and `canceled` leave the operational feed immediately and are listed in History. History uses the status-specific terminal field, then a reliable matching lifecycle event when needed; undated current terminals remain explicit rather than falling back to `updated_at`.
+
+Execution pins are personal to membership and establishment, capped at three across categories, views, and devices. A fourth pin requires explicit authorized replacement through `replace_execution_id`; the service locks the membership and relevant executions to enforce the cap under concurrency. Re-pinning is a no-op. Transition to `done` or `canceled` removes all members’ pins for that execution; later schedule reactivation does not restore them.
 
 ## 5. Permissions (structuring)
 

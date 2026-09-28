@@ -20,7 +20,7 @@ Realtime owns Houston's live transport boundary for keeping authorized operation
 - Access/session messages for logout, establishment switch, and membership changes affecting bootstrap or workspace.
 - Comment invalidation implemented ; Notification invalidation implemented (membership-scoped broadcast).
 - Frontend query invalidation and REST refetch through TanStack Query after relevant realtime messages.
-- Safe reconnect behavior: refetch active authorized queries after reconnect or missed delivery.
+- Safe reconnect behavior: force-invalidate active authorized operational queries after reconnect or missed delivery, including establishment/Cross feeds and execution upcoming.
 
 Current code truth:
 
@@ -67,15 +67,15 @@ Implemented `invalidate` reasons (verify in domain `services.py` before extendin
 | `subject_type` | `reason` | `entity_id` | Emitted today | Frontend surfaces |
 |---|---|---|---|---|
 | `signal` | `signal.updated` | signal id | yes — sync lifecycle that keeps the signal eligible (pin, activity, …) | signal feed, signal detail |
-| `signal` | `signal.resolved` | signal id | yes — resolve, including execution auto-resolve | signal feed, signal detail; remove from the hydrated feed immediately |
-| `signal` | `signal.canceled` | signal id | yes — cancel | signal feed, signal detail; remove from the hydrated feed immediately |
+| `signal` | `signal.resolved` | signal id | yes — resolve, including execution auto-resolve | signal feed, signal detail; remove from the hydrated operational feed immediately |
+| `signal` | `signal.canceled` | signal id | yes — cancel | signal feed, signal detail; remove from the hydrated operational feed immediately |
 | `signal` | `signal.created` | signal id | yes — observation async pipeline | signal feed, signal detail |
 | `action_plan` | `action_plan.created` | action plan id | yes — catalog create, one-shot create | action-plans catalog, detail |
 | `action_plan` | `action_plan.updated` | action plan id | yes — catalog patch, activate/deactivate | action-plans catalog, detail |
 | `action_plan_execution` | `action_plan_execution.created` | action plan execution id | yes — create, catalog use, schedule materialization | action-plan-execution-feed, execution-detail, signals |
 | `action_plan_execution` | `action_plan_execution.updated` | action plan execution id | yes — reopen, schedule sync/reactivate, task activity | same as `created` |
-| `action_plan_execution` | `action_plan_execution.canceled` | action plan execution id | yes — manual cancel, schedule sync, signal resolve cascade | same as `created` |
-| `action_plan_execution` | `action_plan_execution.done` | action plan execution id | yes — mark-done (no validation), validate | same as `created` |
+| `action_plan_execution` | `action_plan_execution.canceled` | action plan execution id | yes — manual cancel, schedule sync, signal resolve cascade | same as `created`; remove from hydrated operational feed immediately |
+| `action_plan_execution` | `action_plan_execution.done` | action plan execution id | yes — mark-done (no validation), validate | same as `created`; remove from hydrated operational feed immediately |
 | `action_plan_execution` | `action_plan_execution.pending_validation` | action plan execution id | yes — mark-done when validation required | same as `created` |
 | `action_plan_execution_task` | `action_plan_execution_task.updated` | task execution id | yes — mark-done, skip, observation handoff | action-plan-execution-feed, execution-detail prefix, signals |
 | `action_plan_assignee` | `action_plan_assignee.updated` | **assignee row id** (not execution id) | yes — materialization structure repair only | execution-detail prefix (establishment-scoped sweep; feed unchanged) |
@@ -121,7 +121,7 @@ Action plan invalidation refreshes `action-plan-execution-feed` and execution-de
 - Missed or dropped realtime delivery must not corrupt business state.
 - Reconnect should trigger safe refetch of relevant active queries.
 - Feed remains a backend-authorized projection; realtime only helps refresh it.
-- Terminal action plan executions (`done` / `canceled`) disappear from the active Execution Feed through authorized Feed refetch, not realtime local deletion as authority.
+- Known terminal Signals and executions are removed immediately from hydrated operational-feed windows, then reconciled through authorized queries. This local removal is a presentation safeguard, not lifecycle or authorization authority.
 - Notifications remain persisted attention messages; operational realtime notification refresh invalidates the recipient's notification list and unread badge via membership-scoped `invalidate` events.
 - Generic Realtime invalidation must not transport raw Chat messages.
 - Chat V1 message transport is defined only in [`chat_domain.md`](chat_domain.md) and is not a precedent for generic invalidation payloads.
@@ -223,9 +223,10 @@ HTTP: [`apps/api/schema.yml`](../../../apps/api/schema.yml) (`POST …/realtime/
 - Frontend must not treat realtime payloads as complete resource state.
 - Frontend must not render sensitive business content directly from realtime payloads.
 - Frontend must not infer authorization from channel names or local subscription state.
-- Feed order, insertion, removal, and filtering remain backend-owned through Feed refetch.
+- Feed order, insertion, and filtering remain backend-owned through Feed refetch. The client may remove an entity immediately when a terminal invalidation proves it cannot remain in the operational collection.
 - Open Signal and Action Plan execution detail views refetch when matching operational invalidation messages arrive.
-- On reconnect, refetch active signal, action plan, and notification queries that are still visible and authorized (operational provider). Comment lists are not refetched on reconnect — a known limitation; live comment threads still refresh via `comment.*` invalidation during the session.
+- On reconnect, force-invalidate active signal feeds (establishment and Cross), execution feeds and pin collections, establishment/Cross upcoming, action-plan catalog, and notifications. Comment lists are not refetched on reconnect — a known limitation; live comment threads still refresh via `comment.*` invalidation during the session.
+- During deep operational-feed reading, reorder-only invalidations may be deferred behind “Mises à jour disponibles”; terminal removal is not deferred.
 - Notification Center refetch via realtime is implemented: membership-scoped `notification.created`, `notification.updated`, and `notification.bulk_updated` invalidate `['notifications','list', establishmentId]` (see `apply-operational-invalidation.ts`).
 - Comment surfaces refetch via operational `comment` invalidation (implemented).
 - Action plan execution surfaces refetch via operational `action_plan_execution.*` invalidation (implemented).
