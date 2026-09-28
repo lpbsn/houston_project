@@ -55,6 +55,6 @@ Read the closest applicable `AGENTS.md` before changing an area:
 
 Use specialized documentation only when the task requires it. Documentation is supporting context, not a substitute for inspecting the owning implementation and tests.
 
-Explicit human workflows live under `.agents/skills/` et `.cursor/commands/`
+Explicit human workflows live under `.agents/skills/`. Cursor-specific scoped rules live under `.cursor/rules/`.
 
 Use the workflow requested by the human. Do not silently substitute another workflow.

@@ -16,9 +16,8 @@ SCAN_ROOTS = [
     ROOT / "apps/api/AGENTS.md",
     ROOT / "apps/web/AGENTS.md",
     ROOT / "docs",
+    ROOT / ".agents/skills",
     ROOT / ".cursor/rules",
-    ROOT / ".cursor/commands",
-    ROOT / ".cursor/skills",
     ROOT / "infra/railway/README.md",
 ]
 

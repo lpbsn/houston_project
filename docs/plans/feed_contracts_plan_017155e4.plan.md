@@ -55,7 +55,7 @@ Inchangé. Le cadrage produit est supérieur à l’existant. Trois tensions ave
 
 - `/general` est le profil ; l’Historique est une surface nouvelle branchée depuis cette entrée.
 - `FEED_SIGNAL_STATUSES` et `EXECUTION_FEED_CURSOR_STATUSES` sont partagés : créer des ensembles **opérationnels distincts**, ne pas les réduire globalement.
-- [`docs/engineering/api_pagination_standard.md`](docs/engineering/api_pagination_standard.md) pose encore le Signal Feed sectionné comme référence Tier A : le chantier **remplace** cette référence.
+- [`docs/engineering/api_pagination_standard.md`](../../docs/engineering/api_pagination_standard.md) pose encore le Signal Feed sectionné comme référence Tier A : le chantier **remplace** cette référence.
 
 ---
 
@@ -63,17 +63,17 @@ Inchangé. Le cadrage produit est supérieur à l’existant. Trois tensions ave
 
 ### Signals
 
-- Pagination par statut, première GET jusqu’à 5 × `page_size` ([`feed_pagination.py`](apps/api/houston/signals/feed_pagination.py)) ; refill client plafonné à 10 pages ([`signal-feed-cache.ts`](apps/web/src/features/signals/lib/signal-feed-cache.ts)).
-- `resolved` / `canceled` dans le feed ([`constants.py`](apps/api/houston/signals/constants.py) L52–54). Aucun count métier API.
-- Pins = champs sur `Signal`, OPEN only, sans plafond, sans lock ([`pin_signal`](apps/api/houston/signals/services.py) L1277–1303).
+- Pagination par statut, première GET jusqu’à 5 × `page_size` ([`feed_pagination.py`](../../apps/api/houston/signals/feed_pagination.py)) ; refill client plafonné à 10 pages ([`signal-feed-cache.ts`](../../apps/web/src/features/signals/lib/signal-feed-cache.ts)).
+- `resolved` / `canceled` dans le feed ([`constants.py`](../../apps/api/houston/signals/constants.py) L52–54). Aucun count métier API.
+- Pins = champs sur `Signal`, OPEN only, sans plafond, sans lock ([`pin_signal`](../../apps/api/houston/signals/services.py) L1277–1303).
 - `mark_signal_interesting` retire l’épingle (L1328–1330). Pin/unpin avancent `last_activity_at`.
-- L’UI actuelle dérive la zone épinglée **uniquement des items `open`** ([`signal-display.ts`](apps/web/src/features/signals/lib/signal-display.ts)). Un intéressant encore épinglé ne serait pas représenté comme le cadrage l’exige.
-- Cross matérialise tous les UUID avant LIMIT ([`selectors.py`](apps/api/houston/signals/selectors.py) L325–342).
+- L’UI actuelle dérive la zone épinglée **uniquement des items `open`** ([`signal-display.ts`](../../apps/web/src/features/signals/lib/signal-display.ts)). Un intéressant encore épinglé ne serait pas représenté comme le cadrage l’exige.
+- Cross matérialise tous les UUID avant LIMIT ([`selectors.py`](../../apps/api/houston/signals/selectors.py) L325–342).
 - Détail et médias réutilisent `FEED_SIGNAL_STATUSES` : ne pas y greffer le queryset opérationnel.
 
 ### Exécution
 
-- Une liste curseur (ossature conservable) qui mélange actifs + terminaux ; jusqu’à 50 `scheduled_items` + counts à chaque page ([`execution_feed.py`](apps/api/houston/action_plans/execution_feed.py) L96–122).
+- Une liste curseur (ossature conservable) qui mélange actifs + terminaux ; jusqu’à 50 `scheduled_items` + counts à chaque page ([`execution_feed.py`](../../apps/api/houston/action_plans/execution_feed.py) L96–122).
 - Pins membership : bon modèle, plafond 3 absent ; unpin terminal déjà conforme.
 - P et L partagent le même `ORDER BY` `-is_feed_pinned` : à remplacer par deux lectures.
 - GET exécute matérialisation + promotion : Celery reste le nominal ; le GET est un rattrapage à borner et mesurer.
@@ -234,7 +234,7 @@ Mécanique :
 2. Sinon **dernier lifecycle event fiable** du type terminal correspondant (occurred_at) — utilisé pour filtrer, trier et grouper, et exposé comme date dérivée d’événement, pas comme champ métier inventé
 3. **Orphelins** (ni champ ni event fiable) : Lot 0 les compte. Ils restent **visibles** dans l’Historique, groupe explicite « Date inconnue », ordre `id DESC`, hors 7/30/90 calendaires (inclus dans `all` et, si on filtre une période, **exclus de cette période avec un compteur/état local** « N sans date » — pas un drop invisible). Traitement durable (réparation opérateur vs laisser le groupe) **après inventaire**, pas un `updated_at` de substitution
 
-Entrée UI : lien Historique depuis [`profile-page.tsx`](apps/web/src/features/auth/pages/profile-page.tsx), page `/general/history`, pas de 5e icône bottom nav.
+Entrée UI : lien Historique depuis [`profile-page.tsx`](../../apps/web/src/features/auth/pages/profile-page.tsx), page `/general/history`, pas de 5e icône bottom nav.
 
 ### Activité
 
@@ -295,7 +295,7 @@ Selectors RBAC type détail/liste close. Périodes Paris validées. Scope hérit
 
 ### Lot 7 — Docs
 
-[`api_pagination_standard.md`](docs/engineering/api_pagination_standard.md), [`feed_domain.md`](docs/product/domains/feed_domain.md), domaines liés. Pas de nouveau cadrage.
+[`api_pagination_standard.md`](../../docs/engineering/api_pagination_standard.md), [`feed_domain.md`](../../docs/product/domains/feed_domain.md), domaines liés. Pas de nouveau cadrage.
 
 ---
 
