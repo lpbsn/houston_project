@@ -26,6 +26,10 @@ describe('execution feed reading memory', () => {
       category: 'all',
       expandedByKey: { done: true },
       scrollTop: 80,
+      anchorId: null,
+      neighborId: null,
+      resumeCursor: null,
+      authorizationFingerprint: null,
     })
     expect(readExecutionFeedReading(executionFeedReadingScopeKey('establishment', 'est-2'))).toBeNull()
     expect(readExecutionFeedReading(executionFeedReadingScopeKey('cross', null))).toBeNull()

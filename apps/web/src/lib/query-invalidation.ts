@@ -1,5 +1,7 @@
 import type { Query, QueryClient } from '@tanstack/react-query'
 
+import { deferFeedListInvalidation } from '@/lib/feed-external-updates'
+
 export function isAuthQueryKey(queryKey: readonly unknown[]): boolean {
   return queryKey[0] === 'auth'
 }
@@ -20,11 +22,29 @@ export function clearAuthenticatedQueryCache(queryClient: QueryClient) {
   queryClient.clear()
 }
 
+export type FeedListInvalidationOptions = {
+  /** Authorization, reconnect, and explicit refresh drop cursors instead of deferring. */
+  force?: boolean
+}
+
+function invalidateFeedListQuery(
+  queryClient: QueryClient,
+  queryKey: readonly unknown[],
+  options?: FeedListInvalidationOptions,
+) {
+  if (!options?.force && deferFeedListInvalidation(queryKey)) {
+    return
+  }
+  void queryClient.invalidateQueries({ queryKey })
+}
+
 export function invalidateEstablishmentSignalQueries(
   queryClient: QueryClient,
   establishmentId: string,
+  options?: FeedListInvalidationOptions,
 ) {
-  void queryClient.invalidateQueries({ queryKey: ['signals', 'feed', establishmentId] })
+  invalidateFeedListQuery(queryClient, ['signals', 'feed', establishmentId], options)
+  invalidateFeedListQuery(queryClient, ['signals', 'cross-feed'], options)
   void queryClient.invalidateQueries({ queryKey: ['signals', 'detail', establishmentId] })
 }
 
@@ -120,19 +140,26 @@ export function invalidateEstablishmentActionPlanCatalogQueries(
 export function invalidateActionPlanExecutionFeedQueries(
   queryClient: QueryClient,
   establishmentId: string,
+  options?: FeedListInvalidationOptions,
 ) {
-  void queryClient.invalidateQueries({
-    queryKey: ['action-plans', 'action-plan-execution-feed', establishmentId],
-  })
+  invalidateFeedListQuery(
+    queryClient,
+    ['action-plans', 'action-plan-execution-feed', establishmentId],
+    options,
+  )
   void queryClient.invalidateQueries({
     queryKey: ['action-plans', 'action-plan-execution-calendar', establishmentId],
   })
-  void queryClient.invalidateQueries({
-    queryKey: ['action-plans', 'cross-action-plan-execution-feed'],
-  })
-  void queryClient.invalidateQueries({
-    queryKey: ['action-plans', 'cross-action-plan-execution-feed-pins'],
-  })
+  invalidateFeedListQuery(
+    queryClient,
+    ['action-plans', 'cross-action-plan-execution-feed'],
+    options,
+  )
+  invalidateFeedListQuery(
+    queryClient,
+    ['action-plans', 'cross-action-plan-execution-feed-pins'],
+    options,
+  )
   void queryClient.invalidateQueries({
     queryKey: ['action-plans', 'cross-action-plan-execution-calendar'],
   })

@@ -1,5 +1,17 @@
 import { hashKey, type QueryClient } from '@tanstack/react-query'
 
+import {
+  appendForwardPage,
+  emptyFeedReadingWindow,
+  hydratedItems,
+  mapHydratedItems,
+  removeHydratedItem,
+  renderedItems,
+  replaceWithFirstPage,
+  windowHead,
+  type FeedReadingWindow,
+} from '@/lib/feed-reading-window'
+
 import { signalsQueryKeys } from '../api'
 import {
   selectedSignalFeedStatus,
@@ -18,6 +30,11 @@ import type {
 export type SignalQuickActionCacheContext = {
   viewMode: SignalViewMode
   filters: SignalFeedFilters
+}
+
+export type SignalFeedCacheState = SignalFeedResponse & {
+  readingWindow: FeedReadingWindow<SignalFeedItem>
+  pinWindow: FeedReadingWindow<SignalFeedItem>
 }
 
 export type SignalFeedOptimisticSnapshot = {
@@ -172,6 +189,62 @@ function shiftCounts(
   return updated
 }
 
+function isSignalFeedCacheState(feed: SignalFeedResponse): feed is SignalFeedCacheState {
+  return 'readingWindow' in feed && 'pinWindow' in feed
+}
+
+export function projectSignalFeedCache(state: SignalFeedCacheState): SignalFeedCacheState {
+  const head = windowHead(state.readingWindow)
+  const pinHead = windowHead(state.pinWindow)
+  return {
+    ...state,
+    items: renderedItems(state.readingWindow, (item) => item.id),
+    pins: renderedItems(state.pinWindow, (item) => item.id),
+    next_cursor: head?.nextCursor ?? null,
+    has_more: Boolean(head?.hasMore),
+    pins_next_cursor: pinHead?.nextCursor ?? null,
+    pins_has_more: Boolean(pinHead?.hasMore),
+  }
+}
+
+export function signalFeedCacheFromFirstPage(
+  page: SignalFeedResponse,
+  generation = 1,
+): SignalFeedCacheState {
+  const readingWindow = replaceWithFirstPage(
+    emptyFeedReadingWindow<SignalFeedItem>(),
+    {
+      requestCursor: null,
+      nextCursor: page.next_cursor,
+      hasMore: page.has_more,
+      items: page.items,
+    },
+    generation,
+  )
+  const pinWindow = replaceWithFirstPage(
+    emptyFeedReadingWindow<SignalFeedItem>(),
+    {
+      requestCursor: null,
+      nextCursor: page.pins_next_cursor ?? null,
+      hasMore: page.pins_has_more === true,
+      items: page.pins ?? [],
+    },
+    generation,
+  )
+  return projectSignalFeedCache({
+    ...page,
+    readingWindow,
+    pinWindow,
+  })
+}
+
+export function ensureSignalFeedCache(feed: SignalFeedResponse): SignalFeedCacheState {
+  if (isSignalFeedCacheState(feed)) {
+    return feed
+  }
+  return signalFeedCacheFromFirstPage(feed, 1)
+}
+
 export function continuationPageStalled(
   requestedCursor: string,
   page: { items: readonly unknown[]; next_cursor: string | null; has_more: boolean },
@@ -182,36 +255,62 @@ export function continuationPageStalled(
   return page.has_more && page.next_cursor === requestedCursor
 }
 
+function withPageOneItems<TItem>(
+  window: FeedReadingWindow<TItem>,
+  items: TItem[],
+): FeedReadingWindow<TItem> {
+  if (!window.pageOne) {
+    return {
+      ...window,
+      pageOne: { requestCursor: null, nextCursor: null, hasMore: false, items },
+    }
+  }
+  return { ...window, pageOne: { ...window.pageOne, items } }
+}
+
 export function reconcileSignalFeedItem(
   feed: SignalFeedResponse,
   filters: SignalFeedFilters,
   signalId: string,
   patch: Partial<SignalFeedItem>,
-): SignalFeedResponse {
+): SignalFeedCacheState {
+  const state = ensureSignalFeedCache(feed)
   const selection = selectedSignalFeedStatus(filters)
-  const pins = feed.pins ?? []
+  const pins = hydratedItems(state.pinWindow)
+  const list = hydratedItems(state.readingWindow)
   const pinIndex = pins.findIndex((item) => item.id === signalId)
-  const itemIndex = feed.items.findIndex((item) => item.id === signalId)
-  const found = pinIndex >= 0 ? pins[pinIndex] : itemIndex >= 0 ? feed.items[itemIndex] : undefined
+  const itemIndex = list.findIndex((item) => item.id === signalId)
+  const found = pinIndex >= 0 ? pins[pinIndex] : itemIndex >= 0 ? list[itemIndex] : undefined
   if (!found) {
-    return feed
+    return state
   }
 
   const next: SignalFeedItem = { ...found, ...patch, id: found.id }
-  const structural =
-    next.status !== found.status || next.is_pinned !== found.is_pinned
+  const structural = next.status !== found.status || next.is_pinned !== found.is_pinned
   if (!structural) {
     if (pinIndex >= 0) {
-      const nextPins = pins.map((item) => (item.id === signalId ? next : item))
-      return { ...feed, pins: nextPins }
+      return projectSignalFeedCache({
+        ...state,
+        pinWindow: mapHydratedItems(state.pinWindow, (item) =>
+          item.id === signalId ? next : item,
+        ),
+      })
     }
-    const nextItems = feed.items.map((item) => (item.id === signalId ? next : item))
-    return { ...feed, items: nextItems }
+    return projectSignalFeedCache({
+      ...state,
+      readingWindow: mapHydratedItems(state.readingWindow, (item) =>
+        item.id === signalId ? next : item,
+      ),
+    })
   }
 
-  const pinsWithout = pins.filter((item) => item.id !== signalId)
-  const itemsWithout = feed.items.filter((item) => item.id !== signalId)
-  const counts = shiftCounts(feed.counts, found, next, selection)
+  const counts = shiftCounts(state.counts, found, next, selection)
+  const cleared: SignalFeedCacheState = {
+    ...state,
+    counts,
+    readingWindow: removeHydratedItem(state.readingWindow, signalId, (item) => item.id).window,
+    pinWindow: removeHydratedItem(state.pinWindow, signalId, (item) => item.id).window,
+  }
   const keepPinPosition =
     found.is_pinned &&
     next.is_pinned &&
@@ -219,22 +318,33 @@ export function reconcileSignalFeedItem(
     pinZoneIncludes(next, selection)
 
   if (keepPinPosition && pinIndex >= 0) {
-    const nextPins = [...pinsWithout]
+    const nextPins = [...(cleared.pinWindow.pageOne?.items ?? [])]
     nextPins.splice(Math.min(pinIndex, nextPins.length), 0, next)
-    return { ...feed, pins: nextPins, items: itemsWithout, counts }
+    return projectSignalFeedCache({
+      ...cleared,
+      pinWindow: withPageOneItems(cleared.pinWindow, nextPins),
+    })
   }
   if (pinZoneIncludes(next, selection)) {
-    return { ...feed, pins: [next, ...pinsWithout], items: itemsWithout, counts }
+    return projectSignalFeedCache({
+      ...cleared,
+      pinWindow: withPageOneItems(cleared.pinWindow, [
+        next,
+        ...(cleared.pinWindow.pageOne?.items ?? []),
+      ]),
+    })
   }
   if (listIncludes(next, selection)) {
-    return {
-      ...feed,
-      pins: pinsWithout,
-      items: [next, ...itemsWithout].sort(compareSignalFeedListItems),
-      counts,
-    }
+    const pageOneItems = cleared.readingWindow.pageOne?.items ?? []
+    return projectSignalFeedCache({
+      ...cleared,
+      readingWindow: withPageOneItems(
+        cleared.readingWindow,
+        [next, ...pageOneItems].sort(compareSignalFeedListItems),
+      ),
+    })
   }
-  return { ...feed, pins: pinsWithout, items: itemsWithout, counts }
+  return projectSignalFeedCache(cleared)
 }
 
 export function patchSignalInActiveFeedCache(
@@ -263,49 +373,79 @@ export function patchSignalInActiveFeedCache(
 export function appendSignalFeedPage(
   current: SignalFeedResponse,
   page: SignalFeedResponse,
-): { feed: SignalFeedResponse; stalled: boolean } {
-  const requestedCursor = current.next_cursor
+  requestedCursor = windowHead(ensureSignalFeedCache(current).readingWindow)?.nextCursor,
+): { feed: SignalFeedCacheState; stalled: boolean } {
+  const state = ensureSignalFeedCache(current)
   if (!requestedCursor) {
-    return { feed: current, stalled: false }
+    return { feed: state, stalled: false }
   }
-  if (continuationPageStalled(requestedCursor, page)) {
-    return { feed: current, stalled: true }
-  }
-  const seen = new Set(current.items.map((item) => item.id))
-  const incoming = page.items.filter((item) => !seen.has(item.id))
-  return {
-    stalled: false,
-    feed: {
-      ...current,
-      items: [...current.items, ...incoming],
-      next_cursor: page.next_cursor,
-      has_more: page.has_more,
+  const appended = appendForwardPage(
+    state.readingWindow,
+    requestedCursor,
+    {
+      items: page.items,
+      nextCursor: page.next_cursor,
+      hasMore: page.has_more,
     },
+    (item) => item.id,
+  )
+  if (appended.ignored) {
+    return { feed: state, stalled: false }
+  }
+  return {
+    stalled: appended.stalled,
+    feed: projectSignalFeedCache({
+      ...state,
+      readingWindow: appended.window,
+    }),
   }
 }
 
 export function appendSignalFeedPinsPage(
   current: SignalFeedResponse,
   page: SignalFeedPinsPage,
-): { feed: SignalFeedResponse; stalled: boolean } {
-  const requestedCursor = current.pins_next_cursor
+  requestedCursor = windowHead(ensureSignalFeedCache(current).pinWindow)?.nextCursor,
+): { feed: SignalFeedCacheState; stalled: boolean } {
+  const state = ensureSignalFeedCache(current)
   if (!requestedCursor) {
-    return { feed: current, stalled: false }
+    return { feed: state, stalled: false }
   }
-  if (continuationPageStalled(requestedCursor, page)) {
-    return { feed: current, stalled: true }
-  }
-  const pins = current.pins ?? []
-  const seen = new Set(pins.map((item) => item.id))
-  const incoming = page.items.filter((item) => !seen.has(item.id))
-  return {
-    stalled: false,
-    feed: {
-      ...current,
-      pins: [...pins, ...incoming],
-      pins_next_cursor: page.next_cursor,
-      pins_has_more: page.has_more,
+  const appended = appendForwardPage(
+    state.pinWindow,
+    requestedCursor,
+    {
+      items: page.items,
+      nextCursor: page.next_cursor,
+      hasMore: page.has_more,
     },
+    (item) => item.id,
+  )
+  if (appended.ignored) {
+    return { feed: state, stalled: false }
+  }
+  return {
+    stalled: appended.stalled,
+    feed: projectSignalFeedCache({
+      ...state,
+      pinWindow: appended.window,
+    }),
+  }
+}
+
+export function removeSignalFromFeedCache(
+  feed: SignalFeedResponse,
+  signalId: string,
+): { feed: SignalFeedCacheState; neighborId: string | null } {
+  const state = ensureSignalFeedCache(feed)
+  const list = removeHydratedItem(state.readingWindow, signalId, (item) => item.id)
+  const pins = removeHydratedItem(state.pinWindow, signalId, (item) => item.id)
+  return {
+    neighborId: list.neighborId ?? pins.neighborId,
+    feed: projectSignalFeedCache({
+      ...state,
+      readingWindow: list.window,
+      pinWindow: pins.window,
+    }),
   }
 }
 

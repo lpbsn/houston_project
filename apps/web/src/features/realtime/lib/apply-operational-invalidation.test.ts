@@ -6,6 +6,10 @@ import {
   applyOperationalReconnectInvalidation,
 } from '@/features/realtime/lib/apply-operational-invalidation'
 import type { OperationalRealtimeInvalidateEvent } from '@/features/realtime/types'
+import {
+  queryKeyMatchesPrefix,
+  registerFeedReadingSession,
+} from '@/lib/feed-external-updates'
 import { DASHBOARD_REALTIME_INVALIDATION_MS } from '@/lib/query-invalidation'
 import { queryClient } from '@/lib/query-client'
 import { createTestQueryClient } from '@/test-utils'
@@ -30,6 +34,40 @@ describe('applyOperationalInvalidation', () => {
 
   afterEach(() => {
     invalidateSpy.mockRestore()
+  })
+
+  it('removes a remotely resolved or canceled signal from the hydrated feed', () => {
+    const removed: string[] = []
+    const unregister = registerFeedReadingSession({
+      matches: (queryKey) => queryKeyMatchesPrefix(queryKey, ['signals', 'feed', 'est-1']),
+      atTop: () => false,
+      interacting: () => false,
+      onDefer: () => undefined,
+      onRemove: (entityId) => {
+        removed.push(entityId)
+      },
+    })
+
+    try {
+      applyOperationalInvalidation(signalEvent('signal.resolved'), {
+        queryClient,
+        establishmentId: 'est-1',
+      })
+      applyOperationalInvalidation(signalEvent('signal.canceled'), {
+        queryClient,
+        establishmentId: 'est-1',
+      })
+      applyOperationalInvalidation(signalEvent('signal.updated'), {
+        queryClient,
+        establishmentId: 'est-1',
+      })
+
+      expect(removed).toEqual(['sig-1', 'sig-1'])
+      expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['signals', 'feed', 'est-1'] })
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'detail', 'est-1'] })
+    } finally {
+      unregister()
+    }
   })
 
   it('invalidates signal queries for signal subject_type', () => {
@@ -218,11 +256,18 @@ describe('applyOperationalReconnectInvalidation', () => {
     applyOperationalReconnectInvalidation(queryClient, 'est-1')
 
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'feed', 'est-1'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'cross-feed'] })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'detail', 'est-1'] })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['action-plans', 'catalog', 'est-1'] })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['action-plans', 'detail', 'est-1'] })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ['action-plans', 'action-plan-execution-feed', 'est-1'],
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['action-plans', 'action-plan-execution-upcoming', 'est-1'],
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['action-plans', 'cross-action-plan-execution-upcoming'],
     })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['notifications', 'list', 'est-1'] })
     expect(invalidateSpy).not.toHaveBeenCalledWith({ predicate: expect.any(Function) })

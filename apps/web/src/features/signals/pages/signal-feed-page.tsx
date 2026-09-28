@@ -1,9 +1,17 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { LoaderCircle } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
 import { TerrainHubTitleSlot } from '@/components/layout/terrain-hub-title-slot'
+import {
+  FeedContinuationFooter,
+  FeedPullIndicator,
+  FeedRefreshButton,
+  FeedUpdatesBanner,
+  useFeedPullToRefresh,
+} from '@/components/domain/feed-refresh-controls'
 import {
   TerrainEmptyState,
   TerrainErrorState,
@@ -11,7 +19,14 @@ import {
 } from '@/components/ui/terrain'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { useLgViewport } from '@/lib/lg-viewport'
+import { feedAuthorizationFingerprint } from '@/lib/feed-authorization'
+import {
+  focusContinuesPageOne,
+  showRetainedPageOne,
+  slotRequestCursorForItem,
+} from '@/lib/feed-reading-window'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { useFeedListSession } from '@/lib/use-feed-list-session'
 import { cn } from '@/lib/utils'
 import { SignalCard } from '../components/signal-card'
 import { SignalFeedCardActionsSheet } from '../components/signal-feed-card-actions-sheet'
@@ -29,8 +44,15 @@ import { SignalQualifyRoutingSheet } from '../components/signal-qualify-routing-
 import {
   useLoadMoreCrossSignalFeedPins,
   useLoadMoreSignalFeed,
+  useRefreshSignalFeed,
+  useResumeSignalFeed,
   useSignalFeedQuery,
 } from '../hooks'
+import {
+  projectSignalFeedCache,
+  removeSignalFromFeedCache,
+  type SignalFeedCacheState,
+} from '../lib/signal-feed-cache'
 import { useSignalFeedQuickActions } from '../hooks/use-signal-feed-quick-actions'
 import { useSignalQualifySheet } from '../hooks/use-signal-qualify-sheet'
 import { SignalsApiError } from '../api'
@@ -122,6 +144,46 @@ function SignalFeedPageContent({
     source,
   })
   const loadMorePins = useLoadMoreCrossSignalFeedPins(normalizedFilters)
+  const refreshFeed = useRefreshSignalFeed(establishmentId, viewMode, normalizedFilters, {
+    source,
+  })
+  const resumeFeed = useResumeSignalFeed(establishmentId, viewMode, normalizedFilters, {
+    source,
+  })
+  const queryClient = useQueryClient()
+  const feedQueryPrefix = useMemo(
+    () =>
+      isCross
+        ? (['signals', 'cross-feed'] as const)
+        : establishmentId
+          ? (['signals', 'feed', establishmentId] as const)
+          : null,
+    [establishmentId, isCross],
+  )
+  const removeSignal = useCallback(
+    (signalId: string) => {
+      if (!feedQueryPrefix) {
+        return
+      }
+      queryClient.setQueriesData<SignalFeedCacheState>({ queryKey: feedQueryPrefix }, (current) => {
+        if (!current) {
+          return current
+        }
+        return removeSignalFromFeedCache(current, signalId).feed
+      })
+    },
+    [feedQueryPrefix, queryClient],
+  )
+  const feedSession = useFeedListSession({
+    queryKeyPrefix: feedQueryPrefix,
+    onRemove: removeSignal,
+  })
+  const authorizationFingerprint = feedAuthorizationFingerprint(
+    auth.bootstrap?.memberships ?? auth.bootstrap?.active_membership,
+  )
+  const seenFingerprintRef = useRef(authorizationFingerprint)
+  const approachArmedRef = useRef(true)
+  const loadMoreRef = useRef<HTMLDivElement>(null)
   const filtersActive = hasActiveSignalFeedFilters(normalizedFilters)
   const quickActions = useSignalFeedQuickActions({
     establishmentId,
@@ -162,6 +224,97 @@ function SignalFeedPageContent({
     scroller.scrollTop = savedScrollTop
     restoredScrollRef.current = true
   }, [feedHasContent, savedScrollTop])
+
+  useEffect(() => {
+    if (seenFingerprintRef.current === authorizationFingerprint) {
+      return
+    }
+    seenFingerprintRef.current = authorizationFingerprint
+    refreshFeed.mutate(undefined, {
+      onSuccess: () => {
+        feedSession.clearUpdates()
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = 0
+        }
+      },
+    })
+  }, [authorizationFingerprint, feedSession, refreshFeed])
+
+  const anchorPhaseRef = useRef<'idle' | 'resuming' | 'seek' | 'done'>('idle')
+  const [anchorTick, setAnchorTick] = useState(0)
+  useEffect(() => {
+    if (anchorPhaseRef.current === 'done' || anchorPhaseRef.current === 'resuming') {
+      return
+    }
+    const anchorId = initialReading?.anchorId
+    if (!anchorId || !feed) {
+      return
+    }
+    const scrollTo = (id: string) => {
+      scrollRef.current
+        ?.querySelector(`[data-feed-item="${id}"]`)
+        ?.scrollIntoView({ block: 'center' })
+    }
+    if (feed.items.some((item) => item.id === anchorId)) {
+      anchorPhaseRef.current = 'done'
+      scrollTo(anchorId)
+      return
+    }
+    const resumeCursor = initialReading?.resumeCursor
+    if (resumeCursor && anchorPhaseRef.current === 'idle') {
+      anchorPhaseRef.current = 'resuming'
+      resumeFeed.mutate(resumeCursor, {
+        onSettled: () => {
+          anchorPhaseRef.current = 'seek'
+          setAnchorTick((tick) => tick + 1)
+        },
+      })
+      return
+    }
+    const neighborId = initialReading?.neighborId
+    if (neighborId && feed.items.some((item) => item.id === neighborId)) {
+      scrollTo(neighborId)
+    }
+    anchorPhaseRef.current = 'done'
+  }, [anchorTick, feed, initialReading, resumeFeed])
+
+  useEffect(() => {
+    const target = loadMoreRef.current
+    const root = scrollRef.current
+    if (!target || !root || !listHasMore || loadMore.isPending || loadMore.isError) {
+      return
+    }
+    if (typeof IntersectionObserver === 'undefined') {
+      return
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting) || !approachArmedRef.current) {
+          return
+        }
+        approachArmedRef.current = false
+        loadMore.mutate()
+      },
+      { root, rootMargin: '400px 0px' },
+    )
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [listHasMore, loadMore])
+
+  const pullToRefresh = useFeedPullToRefresh({
+    enabled: !isDesktopWeb,
+    scrollerRef: scrollRef,
+    onRefresh: () => {
+      refreshFeed.mutate(undefined, {
+        onSuccess: () => {
+          feedSession.clearUpdates()
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = 0
+          }
+        },
+      })
+    },
+  })
 
   useEffect(() => {
     if (!canRememberReading) {
@@ -207,15 +360,34 @@ function SignalFeedPageContent({
     return quickActions.runAction(actionId, item)
   }
 
+  function openSignal(signalId: string) {
+    const index = listItems.findIndex((item) => item.id === signalId)
+    const neighbor = listItems[index + 1] ?? listItems[index - 1]
+    const resumeCursor =
+      feed && 'readingWindow' in feed
+        ? slotRequestCursorForItem(feed.readingWindow, signalId, (item) => item.id)
+        : undefined
+    if (canRememberReading) {
+      writeSignalFeedReading(readingScopeKey, {
+        anchorId: signalId,
+        neighborId: neighbor?.id ?? null,
+        resumeCursor: typeof resumeCursor === 'string' ? resumeCursor : null,
+        authorizationFingerprint,
+      })
+    }
+    onOpenSignal(signalId)
+  }
+
   const renderItems = (items: SignalFeedItem[], variant: 'feed' | 'pinned' = 'feed') => (
     <div className={listClassName}>
-      {items.map((item) =>
-        isDesktopWeb ? (
+      {items.map((item) => (
+        <div key={item.id} data-feed-item={item.id}>
+        {isDesktopWeb ? (
           <SignalFeedDesktopRow
             key={item.id}
             item={item}
             pinned={variant === 'pinned'}
-            onSelect={onOpenSignal}
+            onSelect={openSignal}
             showEstablishment={isCross}
             actionsPending={quickActions.isPending || qualifySheet.opening}
             actionsOpen={
@@ -251,13 +423,14 @@ function SignalFeedPageContent({
             key={item.id}
             item={item}
             variant={variant}
-            onSelect={onOpenSignal}
+            onSelect={openSignal}
             onOpenActions={isCross ? undefined : quickActions.openActions}
             showEstablishment={isCross}
             viewMode={viewMode}
           />
-        ),
-      )}
+        )}
+        </div>
+      ))}
     </div>
   )
 
@@ -265,15 +438,24 @@ function SignalFeedPageContent({
     setFilters(EMPTY_SIGNAL_FEED_FILTERS)
   }
 
+  function requestNextPage() {
+    approachArmedRef.current = false
+    loadMore.mutate()
+  }
+
   function renderListContinuation() {
-    if (loadMore.isError) {
-      const mismatch =
-        loadMore.error instanceof SignalsApiError &&
-        loadMore.error.code === 'cursor_context_mismatch'
-      return (
-        <TerrainErrorState
-          className="mx-3"
-          message="La suite n’a pas pu être chargée."
+    const mismatch =
+      loadMore.isError &&
+      loadMore.error instanceof SignalsApiError &&
+      loadMore.error.code === 'cursor_context_mismatch'
+    return (
+      <div ref={loadMoreRef}>
+        <FeedContinuationFooter
+          hasMore={listHasMore && !loadMore.isError}
+          isLoadingMore={loadMore.isPending}
+          hasItems={listItems.length > 0}
+          errorMessage={loadMore.isError ? 'La suite n’a pas pu être chargée.' : null}
+          onLoadMore={requestNextPage}
           onRetry={() => {
             if (mismatch) {
               void feedQuery.refetch().finally(() => loadMore.reset())
@@ -282,21 +464,6 @@ function SignalFeedPageContent({
             loadMore.mutate()
           }}
         />
-      )
-    }
-    if (!listHasMore) {
-      return null
-    }
-    return (
-      <div className="flex justify-center px-3 py-3">
-        <button
-          type="button"
-          className="min-h-11 rounded-full border border-[#1B4FD8]/25 bg-[#EEF4FF] px-5 text-sm font-semibold text-[#1B4FD8] disabled:opacity-60"
-          onClick={() => loadMore.mutate()}
-          disabled={loadMore.isPending}
-        >
-          {loadMore.isPending ? 'Chargement…' : 'Afficher plus'}
-        </button>
       </div>
     )
   }
@@ -341,6 +508,23 @@ function SignalFeedPageContent({
               onReset={handleClearFilters}
               contentClassName={mobileSafePad ? MOBILE_FEED_INSET_X : undefined}
             />
+            {isDesktopWeb ? (
+              <div className="px-4 pb-2">
+                <FeedRefreshButton
+                  onRefresh={() => {
+                    refreshFeed.mutate(undefined, {
+                      onSuccess: () => {
+                        feedSession.clearUpdates()
+                        if (scrollRef.current) {
+                          scrollRef.current.scrollTop = 0
+                        }
+                      },
+                    })
+                  }}
+                  pending={refreshFeed.isPending}
+                />
+              </div>
+            ) : null}
             {isDesktopWeb && filtersActive ? (
               <div className="border-t border-[#E8E6DF] px-4 pb-2 pt-0">
                 <button
@@ -361,12 +545,71 @@ function SignalFeedPageContent({
         data-testid="signal-feed-scroll"
         className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-3"
         onScroll={(event) => {
+          approachArmedRef.current = true
+          feedSession.setReadingEdge({
+            atTop: event.currentTarget.scrollTop <= 0,
+            interacting: loadMore.isPending || refreshFeed.isPending,
+          })
           if (!canRememberReading || !restoredScrollRef.current) {
             return
           }
-          writeSignalFeedReading(readingScopeKey, { scrollTop: event.currentTarget.scrollTop })
+          writeSignalFeedReading(readingScopeKey, {
+            scrollTop: event.currentTarget.scrollTop,
+            authorizationFingerprint,
+          })
         }}
+        {...pullToRefresh.pointerProps}
       >
+        <FeedPullIndicator distance={pullToRefresh.pullDistance} refreshing={refreshFeed.isPending} />
+        {feedSession.updatesAvailable ? (
+          <FeedUpdatesBanner
+            onRefresh={() => {
+              refreshFeed.mutate(undefined, {
+                onSuccess: () => {
+                  feedSession.clearUpdates()
+                  if (scrollRef.current) {
+                    scrollRef.current.scrollTop = 0
+                  }
+                },
+              })
+            }}
+          />
+        ) : null}
+        {refreshFeed.isError ? (
+          <TerrainErrorState
+            className="mx-3 mt-3"
+            message="L’actualisation n’a pas abouti. Les données affichées sont inchangées."
+            onRetry={() => refreshFeed.mutate()}
+          />
+        ) : null}
+        {feed && 'readingWindow' in feed && !focusContinuesPageOne(feed.readingWindow) ? (
+          <div className="flex justify-center px-3 pt-3">
+            <button
+              type="button"
+              className="min-h-11 text-sm font-semibold text-[#1B4FD8]"
+              onClick={() => {
+                if (!feedQueryPrefix) {
+                  return
+                }
+                queryClient.setQueriesData<SignalFeedCacheState>(
+                  { queryKey: feedQueryPrefix },
+                  (current) =>
+                    current
+                      ? projectSignalFeedCache({
+                          ...current,
+                          readingWindow: showRetainedPageOne(current.readingWindow),
+                        })
+                      : current,
+                )
+                if (scrollRef.current) {
+                  scrollRef.current.scrollTop = 0
+                }
+              }}
+            >
+              Haut du feed
+            </button>
+          </div>
+        ) : null}
         {feedQuery.isLoading ? (
           isDesktopWeb ? (
             <div className="flex items-center justify-center py-16 text-[#7D7B75]">

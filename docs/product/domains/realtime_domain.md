@@ -66,7 +66,9 @@ Implemented `invalidate` reasons (verify in domain `services.py` before extendin
 
 | `subject_type` | `reason` | `entity_id` | Emitted today | Frontend surfaces |
 |---|---|---|---|---|
-| `signal` | `signal.updated` | signal id | yes — sync lifecycle (pin, cancel, resolve, …) | signal feed, signal detail |
+| `signal` | `signal.updated` | signal id | yes — sync lifecycle that keeps the signal eligible (pin, activity, …) | signal feed, signal detail |
+| `signal` | `signal.resolved` | signal id | yes — resolve, including execution auto-resolve | signal feed, signal detail; remove from the hydrated feed immediately |
+| `signal` | `signal.canceled` | signal id | yes — cancel | signal feed, signal detail; remove from the hydrated feed immediately |
 | `signal` | `signal.created` | signal id | yes — observation async pipeline | signal feed, signal detail |
 | `action_plan` | `action_plan.created` | action plan id | yes — catalog create, one-shot create | action-plans catalog, detail |
 | `action_plan` | `action_plan.updated` | action plan id | yes — catalog patch, activate/deactivate | action-plans catalog, detail |
@@ -198,14 +200,14 @@ Domain services publish transport messages for view-changing sync writes. Realti
 
 Source domains with invalidation emission today:
 
-- Signal — sync lifecycle → `signal.updated`; observation async pipeline → `signal.created`, `signal.updated`
+- Signal — sync lifecycle → `signal.updated`, `signal.resolved`, or `signal.canceled`; observation async pipeline → `signal.created`, `signal.updated`
 - Action Plan — catalog create/update → `action_plan.created`, `action_plan.updated`; execution lifecycle → `action_plan_execution.*`; task updates → `action_plan_execution_task.updated`; assignee repair → `action_plan_assignee.updated`
 - Comment — sync create / resolve → `comment.signal.*`, `comment.execution.*` (action plan execution comments)
 - Notification — create / read / archive / mark-all-read → membership-scoped `notification.created`, `notification.updated`, `notification.bulk_updated` (emitted from `notifications/services.py`, not domain lifecycle writers)
 
 ### Action Plan lifecycle side-effects on Signal (refetch contract)
 
-When an Action Plan execution lifecycle write also mutates a linked Signal, transport depends on the mutation. Signal-linked plan create schedules `signal.updated` when the Signal becomes `in_progress` (and optional unpin). Canceling all linked executions reopens the Signal to `open` and schedules `signal.updated`. When all linked executions are terminal with at least one `done`, mark-done or validate auto-resolves the active linked Signal via `resolve_signal_from_execution_sync` and schedules `signal.updated`. Manual `resolve_signal` (from `open` only) cancels active linked executions and schedules `signal.updated`. See `action_plans/services.py` and `signals/services.py`.
+When an Action Plan execution lifecycle write also mutates a linked Signal, transport depends on the mutation. Signal-linked plan create schedules `signal.updated` when the Signal becomes `in_progress` (and optional unpin). Canceling all linked executions reopens the Signal to `open` and schedules `signal.updated`. When all linked executions are terminal with at least one `done`, mark-done or validate auto-resolves the active linked Signal via `resolve_signal_from_execution_sync` and schedules `signal.resolved`. Manual `resolve_signal` (from `open` only) cancels active linked executions and schedules `signal.resolved`. `cancel_signal` schedules `signal.canceled`. See `action_plans/services.py` and `signals/services.py`.
 
 See **Operational WebSocket invalidation** under section 2 for the reason matrix. Chat message transport belongs to [`chat_domain.md`](chat_domain.md).
 

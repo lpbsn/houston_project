@@ -100,6 +100,16 @@ vi.mock('@/features/signals/hooks', () => ({
     return feedQueryMock()
   },
   useLoadMoreSignalFeed: () => loadMoreMock(),
+  useRefreshSignalFeed: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+    isError: false,
+    error: null,
+  }),
+  useResumeSignalFeed: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
   useLoadMoreCrossSignalFeedPins: () => ({
     mutate: vi.fn(),
     isPending: false,
@@ -269,7 +279,7 @@ describe('SignalFeedPage collapsible sections', () => {
 
     renderSignalFeedPage()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Afficher plus' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Charger la suite' }))
     expect(feedLoadMoreMutate).toHaveBeenCalledTimes(1)
     expect(feedLoadMoreMutate.mock.calls[0]).toEqual([])
   })

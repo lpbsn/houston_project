@@ -36,6 +36,10 @@ describe('signal feed reading memory', () => {
       },
       expandedByKey: { resolved: true },
       scrollTop: 180,
+      anchorId: null,
+      neighborId: null,
+      resumeCursor: null,
+      authorizationFingerprint: null,
     })
   })
 

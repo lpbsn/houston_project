@@ -17,6 +17,12 @@ import {
   executionFeedReadingScopeKey,
   readExecutionFeedReading,
 } from '../lib/execution-feed-reading-memory'
+import {
+  appendExecutionFeedWindow,
+  executionFeedCacheFromPage,
+  executionPinsCacheFromPage,
+} from '@/features/action-plans/lib/action-plan-execution-feed-cache'
+
 import { ExecutionFeedPage } from './execution-feed-page'
 
 const planFetchNextPage = vi.fn()
@@ -205,9 +211,7 @@ function buildPlanFeedQueryState(overrides: Record<string, unknown> = {}) {
       }
     | undefined
   if (data?.pages) {
-    merged.data = {
-      ...data,
-      pages: data.pages.map((page, index): ActionPlanExecutionFeedResponse => {
+    const pages = data.pages.map((page, index): ActionPlanExecutionFeedResponse => {
         const suppliedPins = page.pins
         const rawItems = page.items ?? []
         const pins =
@@ -232,14 +236,24 @@ function buildPlanFeedQueryState(overrides: Record<string, unknown> = {}) {
           next_cursor: page.next_cursor ?? null,
           has_more: Boolean(page.has_more),
         }
-      }),
+      })
+    const [first, ...rest] = pages
+    if (!first) {
+      merged.data = undefined
+    } else {
+      let cache = executionFeedCacheFromPage(first)
+      for (const nextPage of rest) {
+        const appended = appendExecutionFeedWindow(cache.window, nextPage)
+        cache = { ...cache, window: appended.window }
+      }
+      merged.data = cache
     }
   }
   return merged
 }
 
 function buildCrossPinsQueryState(overrides: Record<string, unknown> = {}) {
-  return {
+  const state = {
     isLoading: false,
     isError: false,
     isSuccess: true,
@@ -249,11 +263,31 @@ function buildCrossPinsQueryState(overrides: Record<string, unknown> = {}) {
     isRetryingStalledContinuation: false,
     retryStalledContinuation: crossPinsRetryStalledContinuation,
     refetch: vi.fn(),
+    continuationError: null,
     data: {
       pages: [{ items: [], next_cursor: null, has_more: false }],
     },
     ...overrides,
   }
+  const pages = (state.data as { pages?: Array<{ items?: ActionPlanExecutionFeedItemWrapper[]; next_cursor?: string | null; has_more?: boolean }> } | undefined)?.pages
+  if (pages) {
+    const [first, ...rest] = pages
+    let cache = executionPinsCacheFromPage({
+      items: first?.items ?? [],
+      next_cursor: first?.next_cursor ?? null,
+      has_more: Boolean(first?.has_more),
+    })
+    for (const nextPage of rest) {
+      const appended = appendExecutionFeedWindow(cache.window, {
+        items: nextPage.items ?? [],
+        next_cursor: nextPage.next_cursor ?? null,
+        has_more: Boolean(nextPage.has_more),
+      })
+      cache = { window: appended.window }
+    }
+    state.data = cache as never
+  }
+  return state
 }
 
 vi.mock('@/app/auth-provider', () => ({
@@ -508,7 +542,7 @@ describe('ExecutionFeedPage plan feed', () => {
 
     renderExecutionFeedPage()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Afficher plus' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Charger la suite' }))
     expect(planFetchNextPage).toHaveBeenCalledTimes(1)
   })
 
@@ -632,7 +666,7 @@ describe('ExecutionFeedPage plan feed', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
     expect(planRetryStalledContinuation).toHaveBeenCalledTimes(1)
     expect(refetch).not.toHaveBeenCalled()
-    expect(screen.queryByRole('button', { name: 'Afficher plus' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Charger la suite' })).toBeNull()
   })
 
   it('keeps empty state when all pages are empty', () => {
@@ -670,7 +704,7 @@ describe('ExecutionFeedPage plan feed', () => {
     expect(screen.queryByText('En retard · 4')).toBeNull()
     expect(screen.getByText('Plan actif')).toBeTruthy()
     expect(screen.queryByText('Aucune exécution')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Afficher plus' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Charger la suite' })).toBeTruthy()
   })
 
   it('renders pinned items before section labels', () => {
@@ -742,7 +776,7 @@ describe('ExecutionFeedPage plan feed', () => {
 
     renderExecutionFeedPage()
 
-    expect(screen.getByRole('button', { name: 'Chargement…' })).toBeTruthy()
+    expect(screen.getByText('Chargement de la suite')).toBeTruthy()
   })
 
   it('renders Planifiés on mobile without À venir nav', () => {

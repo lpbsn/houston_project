@@ -8,6 +8,10 @@ export type ExecutionFeedReadingState = {
   category: ActionPlanExecutionFeedCategory
   expandedByKey: Record<string, boolean>
   scrollTop: number
+  anchorId: string | null
+  neighborId: string | null
+  resumeCursor: string | null
+  authorizationFingerprint: string | null
 }
 
 const memory = new Map<string, ExecutionFeedReadingState>()
@@ -37,6 +41,14 @@ export function writeExecutionFeedReading(
     category: patch.category,
     expandedByKey: patch.expandedByKey ?? current?.expandedByKey ?? {},
     scrollTop: patch.scrollTop ?? current?.scrollTop ?? 0,
+    anchorId: patch.anchorId === undefined ? (current?.anchorId ?? null) : patch.anchorId,
+    neighborId: patch.neighborId === undefined ? (current?.neighborId ?? null) : patch.neighborId,
+    resumeCursor:
+      patch.resumeCursor === undefined ? (current?.resumeCursor ?? null) : patch.resumeCursor,
+    authorizationFingerprint:
+      patch.authorizationFingerprint === undefined
+        ? (current?.authorizationFingerprint ?? null)
+        : patch.authorizationFingerprint,
   })
 }
 
