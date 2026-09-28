@@ -16,6 +16,10 @@ from rest_framework.views import APIView
 from houston.accounts.api.serializers import ApiErrorResponseSerializer
 from houston.accounts.authentication import BearerAccessTokenAuthentication
 from houston.accounts.legal_services import AiConsentRequiredError, TermsAcceptanceRequiredError
+from houston.action_plans.api.feed_params import (
+    parse_execution_feed_category,
+    parse_feed_page_size,
+)
 from houston.action_plans.api.serializers import (
     ActionPlanActiveExecutionConflictSerializer,
     ActionPlanCreateRequestSerializer,
@@ -124,35 +128,6 @@ from houston.uploads.api.views import EstablishmentScopedObservationMixin
 
 class EstablishmentScopedActionPlanMixin(EstablishmentScopedObservationMixin):
     pass
-
-
-DEFAULT_FEED_PAGE_SIZE = 25
-MAX_FEED_PAGE_SIZE = 50
-
-
-def _parse_feed_page_size(raw: str | None) -> int:
-    if raw is None or raw == "":
-        return DEFAULT_FEED_PAGE_SIZE
-    try:
-        value = int(raw)
-    except (TypeError, ValueError):
-        return DEFAULT_FEED_PAGE_SIZE
-    return min(max(value, 1), MAX_FEED_PAGE_SIZE)
-
-
-def _parse_execution_feed_category(raw: str | None):
-    if raw is None or raw.strip() == "":
-        return "all", None
-    category = raw.strip().lower()
-    if category not in {"all", "pending_validation", "overdue", "in_progress"}:
-        return None, Response(
-            {
-                "code": "validation_error",
-                "detail": "category must be all, pending_validation, overdue or in_progress.",
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-    return category, None
 
 
 def _action_plan_error_response(exc: Exception) -> Response:
@@ -1600,8 +1575,8 @@ class ActionPlanExecutionFeedView(EstablishmentScopedActionPlanMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        page_size = _parse_feed_page_size(request.query_params.get("page_size"))
-        category, category_error = _parse_execution_feed_category(
+        page_size = parse_feed_page_size(request.query_params.get("page_size"))
+        category, category_error = parse_execution_feed_category(
             request.query_params.get("category"),
         )
         if category_error is not None:
@@ -1858,7 +1833,7 @@ class ActionPlanExecutionUpcomingView(EstablishmentScopedActionPlanMixin, APIVie
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        page_size = _parse_feed_page_size(request.query_params.get("page_size"))
+        page_size = parse_feed_page_size(request.query_params.get("page_size"))
         try:
             cursor_start_at, cursor_id = _parse_upcoming_cursor(
                 request.query_params.get("cursor"),

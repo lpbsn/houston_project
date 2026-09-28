@@ -10,11 +10,10 @@ from houston.action_plans.lifecycle_promotion import ensure_execution_lifecycle_
 from houston.action_plans.materialization import (
     ensure_visible_action_plan_executions_materialized,
 )
+from houston.action_plans.membership_read import prepare_execution_read_membership
 from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.selectors import scheduled_executions_upcoming_queryset
-from houston.establishments.membership_scope import membership_scope_prefetch
 from houston.establishments.models import EstablishmentMembership
-from houston.establishments.role_constants import ADMIN_ROLES
 
 
 def encode_upcoming_cursor(*, start_at: datetime, execution_id: UUID) -> str:
@@ -40,19 +39,6 @@ def parse_upcoming_cursor(raw: str | None) -> tuple[datetime | None, UUID | None
         raise ValueError("Invalid cursor.") from exc
 
 
-def _membership_for_upcoming_feed(
-    membership: EstablishmentMembership,
-) -> EstablishmentMembership:
-    if membership.role in ADMIN_ROLES:
-        return membership
-    return (
-        EstablishmentMembership.objects.filter(pk=membership.pk)
-        .select_related("establishment")
-        .prefetch_related(membership_scope_prefetch())
-        .get()
-    )
-
-
 def build_action_plan_execution_upcoming_page(
     *,
     membership: EstablishmentMembership,
@@ -61,7 +47,7 @@ def build_action_plan_execution_upcoming_page(
     cursor_start_at: datetime | None = None,
     cursor_id: UUID | None = None,
 ) -> tuple[list[ActionPlanExecution], bool, datetime | None, UUID | None]:
-    membership = _membership_for_upcoming_feed(membership)
+    membership = prepare_execution_read_membership(membership)
     ensure_visible_action_plan_executions_materialized(
         membership=membership,
         view_mode=view_mode,
@@ -101,7 +87,7 @@ def build_cross_action_plan_execution_upcoming_page(
 
     combined = None
     for membership in memberships:
-        prepared = _membership_for_upcoming_feed(membership)
+        prepared = prepare_execution_read_membership(membership)
         ensure_visible_action_plan_executions_materialized(
             membership=prepared,
             view_mode=view_mode,

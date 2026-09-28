@@ -10,14 +10,13 @@ from houston.action_plans.lifecycle_promotion import ensure_execution_lifecycle_
 from houston.action_plans.materialization import (
     materialize_visible_schedule_occurrences_in_window,
 )
+from houston.action_plans.membership_read import prepare_execution_read_membership
 from houston.action_plans.selectors import (
     action_plan_execution_calendar_items_queryset,
     action_plan_execution_calendar_unplanned_queryset,
     annotate_action_plan_execution_feed_pins,
 )
-from houston.establishments.membership_scope import membership_scope_prefetch
 from houston.establishments.models import EstablishmentMembership
-from houston.establishments.role_constants import ADMIN_ROLES
 from houston.establishments.timezone_utils import (
     establishment_local_date,
     establishment_timezone,
@@ -26,19 +25,6 @@ from houston.establishments.timezone_utils import (
 
 class ActionPlanExecutionCalendarWindowError(ActionPlanValidationError):
     pass
-
-
-def _membership_for_calendar(
-    membership: EstablishmentMembership,
-) -> EstablishmentMembership:
-    if membership.role in ADMIN_ROLES:
-        return membership
-    return (
-        EstablishmentMembership.objects.filter(pk=membership.pk)
-        .select_related("establishment")
-        .prefetch_related(membership_scope_prefetch())
-        .get()
-    )
 
 
 def parse_calendar_window_dates(
@@ -71,7 +57,7 @@ def build_action_plan_execution_calendar(
     from_date: date,
     to_date: date,
 ) -> dict:
-    membership = _membership_for_calendar(membership)
+    membership = prepare_execution_read_membership(membership)
     establishment = membership.establishment
     tz = establishment_timezone(establishment)
     local_today = establishment_local_date(establishment=establishment)

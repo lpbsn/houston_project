@@ -9,6 +9,10 @@ from rest_framework.views import APIView
 
 from houston.accounts.api.serializers import ApiErrorResponseSerializer
 from houston.accounts.authentication import BearerAccessTokenAuthentication
+from houston.action_plans.api.feed_params import (
+    parse_execution_feed_category,
+    parse_feed_page_size,
+)
 from houston.action_plans.api.serializers import (
     ActionPlanExecutionDetailSerializer,
     serialize_execution_detail,
@@ -49,20 +53,8 @@ from houston.action_plans.upcoming_feed import (
 from houston.establishments.permissions import HasActiveMembership
 from houston.signals.api.cross_views import CanAccessCrossScope, _resolve_cross_memberships
 
-DEFAULT_FEED_PAGE_SIZE = 25
-MAX_FEED_PAGE_SIZE = 50
 CROSS_EXECUTION_PIN_PREVIEW_SIZE = 3
 CROSS_EXECUTION_DEFAULT_VIEW_MODE: ExecutionFeedViewMode = "general"
-
-
-def _parse_feed_page_size(raw: str | None) -> int:
-    if raw is None or raw == "":
-        return DEFAULT_FEED_PAGE_SIZE
-    try:
-        value = int(raw)
-    except (TypeError, ValueError):
-        return DEFAULT_FEED_PAGE_SIZE
-    return min(max(value, 1), MAX_FEED_PAGE_SIZE)
 
 
 def _parse_cross_execution_view_mode(raw: str | None):
@@ -78,21 +70,6 @@ def _parse_cross_execution_view_mode(raw: str | None):
             status=status.HTTP_400_BAD_REQUEST,
         )
     return view_mode, None
-
-
-def _parse_execution_feed_category(raw: str | None):
-    if raw is None or raw.strip() == "":
-        return "all", None
-    category = raw.strip().lower()
-    if category not in {"all", "pending_validation", "overdue", "in_progress"}:
-        return None, Response(
-            {
-                "code": "validation_error",
-                "detail": "category must be all, pending_validation, overdue or in_progress.",
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-    return category, None
 
 
 def _serialize_cross_calendar_bucket(executions, *, membership_by_execution_id, as_of):
@@ -161,8 +138,8 @@ class CrossActionPlanExecutionFeedView(APIView):
         if view_mode_error is not None:
             return view_mode_error
 
-        page_size = _parse_feed_page_size(request.query_params.get("page_size"))
-        category, category_error = _parse_execution_feed_category(
+        page_size = parse_feed_page_size(request.query_params.get("page_size"))
+        category, category_error = parse_execution_feed_category(
             request.query_params.get("category"),
         )
         if category_error is not None:
@@ -291,7 +268,7 @@ class CrossActionPlanExecutionFeedPinsView(APIView):
         )
         if view_mode_error is not None:
             return view_mode_error
-        category, category_error = _parse_execution_feed_category(
+        category, category_error = parse_execution_feed_category(
             request.query_params.get("category"),
         )
         if category_error is not None:
@@ -300,7 +277,7 @@ class CrossActionPlanExecutionFeedPinsView(APIView):
         page_size = (
             CROSS_EXECUTION_PIN_PREVIEW_SIZE
             if raw_page_size is None or raw_page_size == ""
-            else _parse_feed_page_size(raw_page_size)
+            else parse_feed_page_size(raw_page_size)
         )
         try:
             cursor = parse_action_plan_execution_feed_pin_cursor(
@@ -388,7 +365,7 @@ class CrossActionPlanExecutionUpcomingView(APIView):
         if view_mode_error is not None:
             return view_mode_error
 
-        page_size = _parse_feed_page_size(request.query_params.get("page_size"))
+        page_size = parse_feed_page_size(request.query_params.get("page_size"))
         try:
             cursor_start_at, cursor_id = parse_upcoming_cursor(
                 request.query_params.get("cursor"),

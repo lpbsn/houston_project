@@ -21,10 +21,12 @@ from houston.action_plans.feed_cursor import (
     encode_action_plan_execution_feed_pin_cursor,
     validate_action_plan_execution_feed_cursor_context,
 )
+from houston.action_plans.feed_pin_services import ACTION_PLAN_EXECUTION_FEED_PIN_LIMIT
 from houston.action_plans.lifecycle_promotion import ensure_execution_lifecycle_for_read
 from houston.action_plans.materialization import (
     ensure_visible_action_plan_executions_materialized,
 )
+from houston.action_plans.membership_read import prepare_execution_read_membership
 from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.selectors import (
     action_plan_execution_feed_list_queryset,
@@ -35,13 +37,9 @@ from houston.action_plans.selectors import (
     scheduled_executions_next_queryset,
     scheduled_executions_upcoming_queryset,
 )
-from houston.establishments.membership_scope import membership_scope_prefetch
 from houston.establishments.models import EstablishmentMembership
-from houston.establishments.role_constants import ADMIN_ROLES
 
 logger = logging.getLogger(__name__)
-
-EXECUTION_FEED_ESTABLISHMENT_PIN_LIMIT = 3
 
 EMPTY_SECTION_COUNTS = {
     "pinned": 0,
@@ -76,19 +74,6 @@ class ActionPlanExecutionFeedPinsPage:
     has_more: bool
     next_cursor: str | None
     as_of: datetime
-
-
-def _membership_for_action_plan_execution_feed(
-    membership: EstablishmentMembership,
-) -> EstablishmentMembership:
-    if membership.role in ADMIN_ROLES:
-        return membership
-    return (
-        EstablishmentMembership.objects.filter(pk=membership.pk)
-        .select_related("establishment")
-        .prefetch_related(membership_scope_prefetch())
-        .get()
-    )
 
 
 def _log_read_path_materialization(
@@ -130,7 +115,7 @@ def build_action_plan_execution_feed_page(
     page_size: int,
     cursor: ActionPlanExecutionFeedCursor | None = None,
 ) -> ActionPlanExecutionFeedPage:
-    membership = _membership_for_action_plan_execution_feed(membership)
+    membership = prepare_execution_read_membership(membership)
     materialized_count = ensure_visible_action_plan_executions_materialized(
         membership=membership,
         view_mode=view_mode,
@@ -211,7 +196,7 @@ def build_action_plan_execution_feed_page(
             membership=membership,
             as_of=as_of,
             category=category,
-        )[:EXECUTION_FEED_ESTABLISHMENT_PIN_LIMIT]
+        )[:ACTION_PLAN_EXECUTION_FEED_PIN_LIMIT]
     )
 
     upcoming_qs = scheduled_executions_upcoming_queryset(
@@ -260,7 +245,7 @@ def build_cross_action_plan_execution_feed_page(
     combined = None
     prepared_memberships: list[EstablishmentMembership] = []
     for membership in memberships:
-        prepared = _membership_for_action_plan_execution_feed(membership)
+        prepared = prepare_execution_read_membership(membership)
         prepared_memberships.append(prepared)
         materialized_count = ensure_visible_action_plan_executions_materialized(
             membership=prepared,
@@ -391,7 +376,7 @@ def build_cross_action_plan_execution_feed_pins_page(
     combined = None
     prepared_memberships: list[EstablishmentMembership] = []
     for membership in memberships:
-        prepared = _membership_for_action_plan_execution_feed(membership)
+        prepared = prepare_execution_read_membership(membership)
         prepared_memberships.append(prepared)
         materialized_count = ensure_visible_action_plan_executions_materialized(
             membership=prepared,
