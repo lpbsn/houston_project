@@ -21,6 +21,8 @@ from houston.action_plans.api.serializers import (
     ActionPlanCreateRequestSerializer,
     ActionPlanDetailSerializer,
     ActionPlanExecutionDetailSerializer,
+    ActionPlanExecutionFeedPinLimitConflictSerializer,
+    ActionPlanExecutionPinRequestSerializer,
     ActionPlanExecutionPinStateSerializer,
     ActionPlanExecutionUpdateRequestSerializer,
     ActionPlanExecutionValidateRequestSerializer,
@@ -48,6 +50,7 @@ from houston.action_plans.calendar_feed import (
 )
 from houston.action_plans.exceptions import (
     ActionPlanConflictError,
+    ActionPlanExecutionFeedPinLimitError,
     ActionPlanPermissionError,
     ActionPlanServiceError,
     ActionPlanStaleExecutionError,
@@ -1149,6 +1152,7 @@ def _execution_feed_pin_response(
     establishment_id,
     execution_id,
     pin: bool,
+    replace_execution_id: uuid.UUID | None = None,
 ) -> Response:
     membership = _resolve_membership(request, establishment_id)
     if isinstance(membership, Response):
@@ -1160,6 +1164,7 @@ def _execution_feed_pin_response(
             pin_action_plan_execution_for_membership(
                 membership=membership,
                 execution_id=execution_uuid,
+                replace_execution_id=replace_execution_id,
             )
             payload = {"is_pinned": True}
         else:
@@ -1168,6 +1173,15 @@ def _execution_feed_pin_response(
                 execution_id=execution_uuid,
             )
             payload = {"is_pinned": False}
+    except ActionPlanExecutionFeedPinLimitError as exc:
+        payload = ActionPlanExecutionFeedPinLimitConflictSerializer(
+            {
+                "code": exc.error_code,
+                "detail": str(exc),
+                "replacement_candidates": exc.replacement_candidates,
+            }
+        ).data
+        return Response(payload, status=status.HTTP_409_CONFLICT)
     except ActionPlanValidationError:
         return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1180,19 +1194,26 @@ class ActionPlanExecutionPinView(EstablishmentScopedActionPlanMixin, APIView):
 
     @extend_schema(
         tags=["action-plans"],
-        request=None,
+        request=ActionPlanExecutionPinRequestSerializer,
         responses={
             200: ActionPlanExecutionPinStateSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=ApiErrorResponseSerializer),
+            409: OpenApiResponse(
+                response=ActionPlanExecutionFeedPinLimitConflictSerializer,
+            ),
         },
     )
     def post(self, request, establishment_id, execution_id):
+        serializer = ActionPlanExecutionPinRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         return _execution_feed_pin_response(
             request=request,
             establishment_id=self.establishment_id,
             execution_id=execution_id,
             pin=True,
+            replace_execution_id=serializer.validated_data.get("replace_execution_id"),
         )
 
 

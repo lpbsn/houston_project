@@ -453,6 +453,21 @@ class ActionPlanExecutionPinStateSerializer(serializers.Serializer):
     is_pinned = serializers.BooleanField()
 
 
+class ActionPlanExecutionPinRequestSerializer(serializers.Serializer):
+    replace_execution_id = serializers.UUIDField(required=False)
+
+
+class ActionPlanExecutionFeedPinReplacementCandidateSerializer(serializers.Serializer):
+    execution_id = serializers.UUIDField()
+    title = serializers.CharField()
+
+
+class ActionPlanExecutionFeedPinLimitConflictSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    detail = serializers.CharField()
+    replacement_candidates = ActionPlanExecutionFeedPinReplacementCandidateSerializer(many=True)
+
+
 class ActionPlanTaskExecutionPermissionHintsSerializer(serializers.Serializer):
     can_mark_done = serializers.BooleanField()
     can_unmark_done = serializers.BooleanField()

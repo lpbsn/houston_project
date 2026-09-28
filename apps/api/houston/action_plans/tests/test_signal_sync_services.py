@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from houston.action_plans.constants import SIGNAL_BLOCKING_EXECUTION_STATUSES
 from houston.action_plans.exceptions import ActionPlanStateError
-from houston.action_plans.models import ActionPlanExecution
+from houston.action_plans.models import ActionPlanExecution, ActionPlanExecutionFeedPin
 from houston.action_plans.services import (
     cancel_action_plan_execution,
     create_action_plan_with_execution,
@@ -500,6 +500,18 @@ def test_auto_resolve_cancels_active_executions_and_resolves(
         signal=signal,
         title="Active B",
     )
+    ActionPlanExecutionFeedPin.objects.create(
+        membership=owner_membership,
+        action_plan_execution=execution_a,
+    )
+    ActionPlanExecutionFeedPin.objects.create(
+        membership=staff_membership,
+        action_plan_execution=execution_a,
+    )
+    ActionPlanExecutionFeedPin.objects.create(
+        membership=owner_membership,
+        action_plan_execution=execution_b,
+    )
 
     resolve_signal_from_execution_sync(signal=signal)
 
@@ -509,6 +521,9 @@ def test_auto_resolve_cancels_active_executions_and_resolves(
     assert signal.status == Signal.Status.RESOLVED
     assert execution_a.status == ActionPlanExecution.Status.CANCELED
     assert execution_b.status == ActionPlanExecution.Status.CANCELED
+    assert not ActionPlanExecutionFeedPin.objects.filter(
+        action_plan_execution_id__in=[execution_a.id, execution_b.id],
+    ).exists()
 
     sync_signal_after_execution_change(signal=signal)
     signal.refresh_from_db()

@@ -14,6 +14,7 @@ import type {
   ActionPlanDetail,
   ActionPlanExecutionDetail,
   ActionPlanExecutionFeedItem,
+  ActionPlanExecutionFeedPinReplacementCandidate,
   ActionPlanExecutionFeedItemWrapper,
   ActionPlanExecutionFeedResponse,
   ActionPlanExecutionUpcomingResponse,
@@ -78,6 +79,7 @@ export class ActionPlansApiError extends Error {
   failedStep: 'schedule' | 'use' | null
   /** DRF serializer error tree when present (`ApiErrorResponse.errors`). */
   errors: Record<string, unknown> | null
+  replacementCandidates: ActionPlanExecutionFeedPinReplacementCandidate[]
 
   constructor(options: {
     status: number
@@ -85,6 +87,7 @@ export class ActionPlansApiError extends Error {
     code?: string | null
     failedStep?: 'schedule' | 'use' | null
     errors?: Record<string, unknown> | null
+    replacementCandidates?: ActionPlanExecutionFeedPinReplacementCandidate[]
   }) {
     super(options.detail)
     this.name = 'ActionPlansApiError'
@@ -93,6 +96,7 @@ export class ActionPlansApiError extends Error {
     this.code = options.code ?? null
     this.failedStep = options.failedStep ?? null
     this.errors = options.errors ?? null
+    this.replacementCandidates = options.replacementCandidates ?? []
   }
 }
 
@@ -118,7 +122,26 @@ function parseError(response: Response, payload: unknown): ActionPlansApiError {
     !Array.isArray(body.errors)
       ? (body.errors as Record<string, unknown>)
       : null
-  return new ActionPlansApiError({ status, detail, code, failedStep, errors })
+  const replacementCandidates =
+    'replacement_candidates' in body && Array.isArray(body.replacement_candidates)
+      ? body.replacement_candidates.filter(
+          (candidate): candidate is ActionPlanExecutionFeedPinReplacementCandidate =>
+            typeof candidate === 'object' &&
+            candidate !== null &&
+            'execution_id' in candidate &&
+            typeof candidate.execution_id === 'string' &&
+            'title' in candidate &&
+            typeof candidate.title === 'string',
+        )
+      : []
+  return new ActionPlansApiError({
+    status,
+    detail,
+    code,
+    failedStep,
+    errors,
+    replacementCandidates,
+  })
 }
 
 function assertActionPlanData<T>(result: {
@@ -667,6 +690,7 @@ export async function createObservationFromActionPlanTask(
 export async function pinActionPlanExecution(
   establishmentId: string,
   executionId: string,
+  replaceExecutionId?: string,
 ): Promise<ActionPlanExecutionPinState> {
   const result = await withAuthRetry(
     (accessToken) =>
@@ -674,6 +698,7 @@ export async function pinActionPlanExecution(
         '/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/pin/',
         {
           params: executionPath(establishmentId, executionId),
+          body: replaceExecutionId ? { replace_execution_id: replaceExecutionId } : {},
           headers: getAuthHeaders(accessToken),
         },
       ),

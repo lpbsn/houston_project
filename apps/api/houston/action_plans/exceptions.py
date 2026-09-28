@@ -43,6 +43,14 @@ class ActionPlanStaleExecutionError(ActionPlanConflictError):
         super().__init__(message)
 
 
+class ActionPlanExecutionFeedPinLimitError(ActionPlanConflictError):
+    error_code = "action_plan_execution_feed_pin_limit_reached"
+
+    def __init__(self, *, replacement_candidates: list[dict]) -> None:
+        super().__init__("Three executions are already pinned.")
+        self.replacement_candidates = replacement_candidates
+
+
 class PlanningSubmissionPayloadConflict(ActionPlanConflictError):
     error_code = "planning_submission_conflict"
 

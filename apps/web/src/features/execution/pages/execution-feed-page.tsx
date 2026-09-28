@@ -35,6 +35,7 @@ import type {
   ActionPlanExecutionFeedSectionCounts,
 } from '@/features/action-plans/types'
 import { useActionPlanExecutionFeedQuickActions } from '@/features/action-plans/hooks/use-action-plan-execution-feed-quick-actions'
+import { ActionPlanExecutionPinReplacementSheet } from '@/features/action-plans/components/action-plan-execution-pin-replacement-sheet'
 
 import { ActionPlanExecutionFeedCard } from '../components/action-plan-execution-feed-card'
 import { ActionPlanExecutionFeedDesktopRow } from '../components/action-plan-execution-feed-desktop-row'
@@ -439,6 +440,16 @@ function ExecutionFeedPageContent({
         onSelectActionPlan={() => onNavigate?.('/action-plans/new?from=execution')}
         onSelectCatalog={() => onNavigate?.('/action-plans')}
       />
+      {!isCross && quickActions.pinReplacement ? (
+        <ActionPlanExecutionPinReplacementSheet
+          open
+          presentation={isDesktopWeb ? 'dialog' : 'sheet'}
+          candidates={quickActions.pinReplacement.candidates}
+          isPending={quickActions.isPending}
+          onClose={quickActions.closePinReplacement}
+          onReplace={quickActions.replacePin}
+        />
+      ) : null}
       <TerrainHubTitleSlot>{viewTabs}</TerrainHubTitleSlot>
       <TerrainHubSubheader>
         <div className={cn('flex flex-col', isDesktopWeb ? 'gap-2' : 'gap-0')}>

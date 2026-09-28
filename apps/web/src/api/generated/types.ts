@@ -3104,6 +3104,16 @@ export interface components {
             item_type: string;
             action_plan_execution: components["schemas"]["ActionPlanExecutionFeedItem"];
         };
+        ActionPlanExecutionFeedPinLimitConflict: {
+            code: string;
+            detail: string;
+            replacement_candidates: components["schemas"]["ActionPlanExecutionFeedPinReplacementCandidate"][];
+        };
+        ActionPlanExecutionFeedPinReplacementCandidate: {
+            /** Format: uuid */
+            execution_id: string;
+            title: string;
+        };
         ActionPlanExecutionFeedResponse: {
             items: components["schemas"]["ActionPlanExecutionFeedItemWrapper"][];
             scheduled_items: components["schemas"]["ActionPlanExecutionFeedItemWrapper"][];
@@ -3148,6 +3158,10 @@ export interface components {
             can_update: boolean;
             is_pilot_pole_assignee: boolean;
             can_pin: boolean;
+        };
+        ActionPlanExecutionPinRequest: {
+            /** Format: uuid */
+            replace_execution_id?: string;
         };
         ActionPlanExecutionPinState: {
             is_pinned: boolean;
@@ -8457,7 +8471,13 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ActionPlanExecutionPinRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ActionPlanExecutionPinRequest"];
+                "multipart/form-data": components["schemas"]["ActionPlanExecutionPinRequest"];
+            };
+        };
         responses: {
             200: {
                 headers: {
@@ -8465,6 +8485,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActionPlanExecutionPinState"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             401: {
@@ -8481,6 +8509,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPlanExecutionFeedPinLimitConflict"];
                 };
             };
         };

@@ -57,6 +57,8 @@ export type ActionPlanExecutionUpcomingResponse = ActionPlanExecutionFeedRespons
 export type ActionPlanExecutionCalendarResponse =
   components['schemas']['ActionPlanExecutionCalendarResponse']
 export type ActionPlanExecutionPinState = components['schemas']['ActionPlanExecutionPinState']
+export type ActionPlanExecutionFeedPinReplacementCandidate =
+  components['schemas']['ActionPlanExecutionFeedPinReplacementCandidate']
 export type ActionPlanExecutionFeedAssignee =
   components['schemas']['ActionPlanExecutionFeedAssignee']
 export type ActionPlanExecutionFeedTaskPreview =
