@@ -15,6 +15,7 @@ export type ScopedDesktopNavItemId =
   | 'signals'
   | 'execution'
   | 'chat'
+  | 'history'
   | 'general'
   | 'settings'
 
@@ -96,6 +97,12 @@ function crossItems(): ScopedDesktopNavItem[] {
       label: 'Exécution',
       href: serializeScopedTerrainPath(scope, 'execution'),
       group: 2,
+    },
+    {
+      id: 'history',
+      label: 'Historique',
+      href: '/cross/history',
+      group: 3,
     },
   ]
 }
@@ -230,6 +237,9 @@ function explicitRouteScope(route: AppRoute): TerrainScope | null {
   ) {
     return route.scope
   }
+  if (route.kind === 'history') {
+    return route.scope
+  }
   return null
 }
 
@@ -292,6 +302,9 @@ function resolveDesktopNavFunction(
   ) {
     return 'general'
   }
+  if (route.kind === 'history') {
+    return route.scope?.type === 'cross' ? 'history' : 'general'
+  }
   if (
     route.kind === 'analytics-pattern-detail' ||
     (route.kind === 'static' && route.path === '/analytics')
@@ -347,6 +360,11 @@ export function resolveDesktopScopeSwitchHref(options: {
   bootstrap?: BootstrapResponse | null
   target: TerrainScope
 }): string {
+  if (options.route.kind === 'history') {
+    return options.target.type === 'cross'
+      ? '/cross/history'
+      : `/e/${options.target.establishmentId}/general/history`
+  }
   const items = itemsForDesktopScope(options.target, options.bootstrap)
   const navFunction = resolveDesktopNavFunction(options.route)
   const preserved = navFunction

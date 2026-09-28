@@ -54,6 +54,12 @@ export const LazyChatConversationPage = lazy(() =>
   })),
 )
 
+export const LazyHistoryPage = lazy(() =>
+  import('@/features/history/pages/history-page').then((module) => ({
+    default: module.HistoryPage,
+  })),
+)
+
 export const LazyProfilePage = lazy(() =>
   import('@/features/auth/pages/profile-page').then((module) => ({
     default: module.ProfilePage,

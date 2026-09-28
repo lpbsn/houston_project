@@ -104,6 +104,11 @@ describe('parseAppRoute', () => {
       kind: 'unknown',
       pathname: '/general/switch-establishment',
     })
+    expect(parseAppRoute('/general/history')).toEqual({
+      kind: 'history',
+      scope: null,
+    })
+    expect(serializeAppRoute(parseAppRoute('/general/history'))).toBe('/general/history')
   })
 
   it('parses scoped operational config and treats the legacy app path as unknown', () => {

@@ -48,6 +48,19 @@ describe('scoped terrain routes', () => {
       page: 'operational-config',
     })
     expect(parseAppRoute('/cross/operational-config').kind).toBe('unknown')
+    expect(parseAppRoute('/cross/general').kind).toBe('unknown')
+    expect(parseAppRoute('/cross/history')).toEqual({
+      kind: 'history',
+      scope: { type: 'cross' },
+    })
+    expect(parseAppRoute(`/e/${EST_ID}/general/history`)).toEqual({
+      kind: 'history',
+      scope: { type: 'establishment', establishmentId: EST_ID },
+    })
+    expect(serializeAppRoute(parseAppRoute('/cross/history'))).toBe('/cross/history')
+    expect(serializeAppRoute(parseAppRoute(`/e/${EST_ID}/general/history`))).toBe(
+      `/e/${EST_ID}/general/history`,
+    )
   })
 
   it('parses scoped signal and execution details', () => {

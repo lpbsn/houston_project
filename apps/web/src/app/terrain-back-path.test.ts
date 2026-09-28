@@ -144,4 +144,33 @@ describe('resolveTerrainBackPath', () => {
       }),
     ).toBeNull()
   })
+
+  it('returns to history instead of the operational feed when the detail was opened from history', () => {
+    expect(
+      resolveTerrainBackPath(
+        {
+          kind: 'action-plan-execution-detail',
+          executionId: 'exec-1',
+          scope: { type: 'cross' },
+        },
+        { search: '?entry=history&kind=executions&anchor=exec-1' },
+      ),
+    ).toBe('/cross/history?kind=executions&anchor=exec-1')
+    expect(
+      resolveTerrainBackPath(
+        {
+          kind: 'signal-detail',
+          signalId: 'sig-1',
+          scope: { type: 'establishment', establishmentId: 'est-1' },
+        },
+        { search: '?entry=history&period=custom&from=2026-03-01&to=2026-03-29&anchor=sig-1' },
+      ),
+    ).toBe('/e/est-1/general/history?period=custom&from=2026-03-01&to=2026-03-29&anchor=sig-1')
+    expect(
+      resolveTerrainBackPath(
+        { kind: 'signal-detail', signalId: 'sig-1' },
+        { search: '?entry=history' },
+      ),
+    ).toBe('/general/history')
+  })
 })

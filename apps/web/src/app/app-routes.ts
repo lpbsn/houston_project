@@ -64,6 +64,7 @@ export type AppRoute =
       section: 'onboardings' | 'organizations' | 'establishments' | 'users'
       resourceId?: string
     }
+  | { kind: 'history'; scope: TerrainScope | null }
   | { kind: 'unknown'; pathname: string }
 
 export function normalizeRoutePath(input: string): string {
@@ -106,6 +107,8 @@ export function getAppRouteKey(route: AppRoute): string {
       return 'password-reset'
     case 'platform':
       return `platform:${route.section}:${route.resourceId ?? ''}`
+    case 'history':
+      return `history:${terrainScopeKey(route.scope ?? undefined)}`
     case 'unknown':
       return `unknown:${route.pathname}`
   }
@@ -294,6 +297,10 @@ export function parseAppRoute(input: string): AppRoute {
     return { kind: 'team-member-detail', membershipId: teamMemberId }
   }
 
+  if (pathname === '/general/history') {
+    return { kind: 'history', scope: null }
+  }
+
   if (
     pathname === '/' ||
     pathname === '/login' ||
@@ -363,6 +370,14 @@ export function serializeAppRoute(route: AppRoute): string {
       const base = `/platform/${route.section}`
       return route.resourceId ? `${base}/${route.resourceId}` : base
     }
+    case 'history':
+      if (!route.scope) {
+        return '/general/history'
+      }
+      if (route.scope.type === 'cross') {
+        return '/cross/history'
+      }
+      return `/e/${route.scope.establishmentId}/general/history`
     case 'unknown':
       return route.pathname
   }

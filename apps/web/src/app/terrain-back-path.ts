@@ -11,12 +11,33 @@ import {
   executionFeedHref,
   parseExecutionFeedSearch,
 } from '@/features/execution/lib/execution-feed-url-state'
+import {
+  historySearchWithoutReturnFlag,
+  isHistoryReturnSearch,
+} from '@/features/history/lib/history-url-state'
 
 type ResolveTerrainBackPathOptions = {
   search?: string
   now?: Date
   hasOperationalAccess?: boolean
   authenticatedLandingPath?: string | null
+}
+
+function historyReturnPath(route: AppRoute, search: string): string | null {
+  if (!isHistoryReturnSearch(search)) {
+    return null
+  }
+  if (route.kind !== 'signal-detail' && route.kind !== 'action-plan-execution-detail') {
+    return null
+  }
+  const preserved = historySearchWithoutReturnFlag(search)
+  if (route.scope?.type === 'cross') {
+    return `/cross/history${preserved}`
+  }
+  if (route.scope?.type === 'establishment') {
+    return `/e/${route.scope.establishmentId}/general/history${preserved}`
+  }
+  return `/general/history${preserved}`
 }
 
 export function resolveTerrainBackPath(
@@ -29,6 +50,10 @@ export function resolveTerrainBackPath(
 
   const search = options.search ?? ''
   const now = options.now ?? new Date()
+  const historyReturn = historyReturnPath(route, search)
+  if (historyReturn) {
+    return historyReturn
+  }
 
   if (route.kind === 'signal-detail') {
     const analyticsReturn = parseAnalyticsSignalReturnContext(search, { now })

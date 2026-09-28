@@ -89,10 +89,17 @@ describe('scoped desktop navigation', () => {
 
     expect(navigation.options.map((option) => option.id)).toEqual(['cross', 'est-a', 'est-b'])
     expect(navigation.scope).toEqual({ type: 'cross' })
-    expect(navigation.items.map((item) => item.id)).toEqual(['signals', 'execution'])
+    expect(navigation.items.map((item) => item.id)).toEqual(['signals', 'execution', 'history'])
     expect(navigation.items.every((item) => item.href != null)).toBe(true)
     expect(navigation.items.map((item) => item.id)).not.toContain('chat')
     expect(navigation.activeItemId).toBe('signals')
+    expect(
+      resolveDesktopScopeSwitchHref({
+        route: { kind: 'history', scope: { type: 'establishment', establishmentId: 'est-a' } },
+        bootstrap: data,
+        target: { type: 'cross' },
+      }),
+    ).toBe('/cross/history')
   })
 
   it('hides Cross when only one establishment is management-eligible', () => {
@@ -278,7 +285,7 @@ describe('scoped desktop navigation', () => {
         route: { kind: 'scoped-terrain', scope: { type: 'cross' }, page: 'signals' },
         bootstrap: data,
       }).items.map((item) => item.id),
-    ).toEqual(['signals', 'execution'])
+    ).toEqual(['signals', 'execution', 'history'])
     const staff = membership({
       role: 'staff',
       establishment_id: 'est-1',

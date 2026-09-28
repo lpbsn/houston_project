@@ -321,6 +321,24 @@ describe('ProfilePage', () => {
     expect(isDocumentFollowing(privacyLink as HTMLElement, termsLink as HTMLElement)).toBe(true)
   })
 
+  it('opens history from the account section', () => {
+    onNavigate.mockClear()
+    render(
+      createElement(ProfilePage, {
+        historyPath: '/e/est-1/general/history',
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: (name) => name.startsWith('Historique') && name.includes('Observations'),
+      }),
+    )
+    expect(onNavigate).toHaveBeenCalledWith('/e/est-1/general/history')
+  })
+
   it('places AI consent after native push when the push switch is present', () => {
     vi.stubEnv('VITE_APP_RUNTIME', 'native')
     render(

@@ -13,6 +13,7 @@ const LAZY_EXPORTS = [
   'LazyComingSoonPage',
   'LazyAnalyticsPatternDetailPage',
   'LazyChatConversationPage',
+  'LazyHistoryPage',
   'LazyProfilePage',
   'LazyTeamPage',
   'LazyTeamMemberDetailPage',
@@ -41,6 +42,7 @@ describe('lazy-terrain-pages', () => {
       import('@/features/chat/pages/chat-page'),
       import('@/features/analytics/pages/analytics-page'),
       import('@/features/analytics/pages/analytics-pattern-detail-page'),
+      import('@/features/history/pages/history-page'),
       import('@/features/action-plans/pages/action-plan-hub-page'),
     ])
 

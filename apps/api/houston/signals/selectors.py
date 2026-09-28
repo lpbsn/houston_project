@@ -178,15 +178,16 @@ def apply_feed_sorting(queryset: QuerySet[Signal]) -> QuerySet[Signal]:
     )
 
 
-def signal_feed_visibility_q(
+def signal_read_visibility_q(
     *,
     membership: EstablishmentMembership,
     view_mode: ViewMode,
+    statuses: frozenset[str],
 ) -> Q:
-    """Rows this membership may see in the operational feed. No status selection."""
+    """Role and scope visibility for a status set. No status selection inside the set."""
     visible = Q(
         establishment_id=membership.establishment_id,
-        status__in=OPERATIONAL_SIGNAL_FEED_STATUSES,
+        status__in=statuses,
     )
     if membership.role == EstablishmentMembership.Role.STAFF:
         visible &= ~_TOTAL_UNCLASSIFIED_Q
@@ -209,6 +210,19 @@ def signal_feed_visibility_q(
     if scope_q is None:
         return Q(pk__in=[])
     return visible & scope_q
+
+
+def signal_feed_visibility_q(
+    *,
+    membership: EstablishmentMembership,
+    view_mode: ViewMode,
+) -> Q:
+    """Rows this membership may see in the operational feed. No status selection."""
+    return signal_read_visibility_q(
+        membership=membership,
+        view_mode=view_mode,
+        statuses=OPERATIONAL_SIGNAL_FEED_STATUSES,
+    )
 
 
 def _operational_signal_feed_queryset(*, visibility: Q) -> QuerySet[Signal]:
