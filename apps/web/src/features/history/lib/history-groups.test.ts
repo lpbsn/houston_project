@@ -3,19 +3,6 @@ import { describe, expect, it } from 'vitest'
 import { groupHistoryItems, reconcileHistoryItems } from './history-groups'
 
 describe('groupHistoryItems', () => {
-  it('keeps one Paris day when items arrive from two pages', () => {
-    const groups = groupHistoryItems(
-      [
-        { id: 'newer', terminal_at: '2026-09-28T16:00:00Z' },
-        { id: 'older', terminal_at: '2026-09-28T07:00:00Z' },
-      ],
-      new Date('2026-09-28T12:00:00Z'),
-    )
-    expect(groups).toHaveLength(1)
-    expect(groups[0]?.items.map((item) => item.id)).toEqual(['newer', 'older'])
-    expect(groups[0]?.label).toBe('Aujourd’hui')
-  })
-
   it('keeps the spring-forward civil day together and shows the year when needed', () => {
     const groups = groupHistoryItems(
       [

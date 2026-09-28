@@ -283,3 +283,23 @@ def test_detail_denies_cancel_resolve_hints_for_in_progress(api_client):
     hints = response.json()["permission_hints"]
     assert hints["can_cancel"] is False
     assert hints["can_resolve"] is False
+
+
+def test_detail_resolved_denies_operational_hints(api_client):
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = _signal(membership, status=Signal.Status.RESOLVED)
+    signal.is_pinned = True
+    signal.save(update_fields=["is_pinned", "updated_at"])
+    token = login(api_client, user=membership.user)
+
+    response = api_client.get(
+        signal_detail_url(membership.establishment_id, signal.id),
+        **auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == Signal.Status.RESOLVED
+    hints = response.json()["permission_hints"]
+    assert hints["can_pin"] is False
+    assert hints["can_cancel"] is False
+    assert hints["can_resolve"] is False

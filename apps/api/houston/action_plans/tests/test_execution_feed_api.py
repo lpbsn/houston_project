@@ -672,6 +672,7 @@ def test_feed_pagination_cursor_is_stable(
     )
     assert second.status_code == 200
     second_body = second.json()
+    assert set(second_body) == {"items", "next_cursor", "has_more"}
     assert len(second_body["items"]) == 2
     assert feed_execution_ids(second_body) == [
         str(executions[2].id),

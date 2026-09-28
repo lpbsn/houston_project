@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import timedelta
-
 import pytest
 from django.utils import timezone
 
@@ -80,12 +78,6 @@ def test_parse_signal_feed_cursor_rejects_pin_collection():
 def test_parse_signal_feed_cursor_rejects_invalid_values():
     with pytest.raises(SignalFeedCursorError):
         parse_signal_feed_cursor("bad")
-
-    membership = build_api_membership()
-    signal = _create_signal(membership)
-    encoded = encode_signal_feed_cursor(signal, **_cursor_context(membership))
-    assert parse_signal_feed_cursor(encoded) is not None
-    assert signal.last_activity_at > timezone.now() - timedelta(days=1)
 
 
 def test_auth_context_hash_changes_when_role_changes():

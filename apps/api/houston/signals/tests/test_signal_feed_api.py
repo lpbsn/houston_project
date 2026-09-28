@@ -6,7 +6,7 @@ from houston.ai.observation_pipeline_schema import (
     ObservationPipelineOutput,
     PipelineCandidateOutput,
 )
-from houston.establishments.models import BusinessUnit
+from houston.establishments.models import BusinessUnit, EstablishmentMembership
 from houston.establishments.tests.taxonomy_helpers import (
     create_activity_subject,
     create_business_unit,
@@ -30,6 +30,7 @@ from houston.signals.tests.conftest import (
     create_restaurant_v3_taxonomy,
     golden_two_candidate_pipeline_output,
     login,
+    signal_detail_url,
     signal_feed_url,
 )
 from houston.testing.signal_feed import flatten_signal_feed_items
@@ -77,6 +78,38 @@ def test_general_feed_returns_active_signals(api_client):
     assert "domain_key" not in flatten_signal_feed_items(body)[0]
     assert "subject_key" not in flatten_signal_feed_items(body)[0]
     assert "raw_text" not in response.content.decode()
+
+
+def test_in_progress_permission_hints_are_consistent_in_feed_and_detail(api_client):
+    membership = build_api_membership(role=EstablishmentMembership.Role.DIRECTOR)
+    signal = create_minimal_v3_signal(
+        membership,
+        title="Progress",
+        status=Signal.Status.IN_PROGRESS,
+    )
+    token = login(api_client, user=membership.user)
+
+    feed_response = api_client.get(
+        signal_feed_url(membership.establishment_id) + "?view_mode=general",
+        **auth_headers(token),
+    )
+    assert feed_response.status_code == 200
+    feed_item = next(
+        item
+        for item in flatten_signal_feed_items(feed_response.json())
+        if item["id"] == str(signal.id)
+    )
+    assert feed_item["permission_hints"]["can_pin"] is False
+
+    detail_response = api_client.get(
+        signal_detail_url(membership.establishment_id, signal.id),
+        **auth_headers(token),
+    )
+    assert detail_response.status_code == 200
+    hints = detail_response.json()["permission_hints"]
+    assert hints["can_pin"] is False
+    assert hints["can_cancel"] is False
+    assert hints["can_resolve"] is False
 
 
 def test_personal_feed_empty_without_scope_for_staff(api_client):
