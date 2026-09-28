@@ -6,6 +6,7 @@ from rest_framework.test import APIClient
 from houston.action_plans.services import create_action_plan_with_execution
 from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
 from houston.establishments.models import EstablishmentMembership
+from houston.signals.services import pin_signal
 from houston.testing.auth import auth_headers, build_api_membership, login
 from houston.testing.factories import create_establishment, create_membership, create_user
 from houston.testing.signal_feed import flatten_signal_feed_items
@@ -68,6 +69,64 @@ def test_cross_signal_feed_unions_management_establishments(api_client):
     response = api_client.get("/api/v1/cross/signal-feed/", **auth_headers(token))
     titles = {item["title"] for item in flatten_signal_feed_items(response.json())}
     assert titles == {"From A", "From B"}
+
+
+def test_cross_signal_pins_paginate_and_reject_changed_filter_context(api_client):
+    user = create_user(username="cross-signal-pin-continuation")
+    memberships = [
+        create_membership(
+            establishment=create_establishment(name=establishment_name),
+            user=user,
+            role=EstablishmentMembership.Role.OWNER,
+        )
+        for establishment_name in ("Alpha Signal Pins", "Beta Signal Pins")
+    ]
+    pinned = []
+    for membership in memberships:
+        for index in range(2):
+            signal = create_minimal_v3_signal(
+                membership,
+                title=f"{membership.establishment.name} {index}",
+            )
+            pin_signal(signal=signal, membership=membership)
+            pinned.append(signal)
+
+    token = login(api_client, user=user)
+    first = api_client.get(
+        "/api/v1/cross/signal-feed-pins/?page_size=2",
+        **auth_headers(token),
+    )
+
+    assert first.status_code == 200, first.content
+    first_body = first.json()
+    assert len(first_body["items"]) == 2
+    assert first_body["has_more"] is True
+    assert first_body["next_cursor"]
+    assert all(item["establishment_id"] for item in first_body["items"])
+    assert all(item["permission_hints"]["can_pin"] is False for item in first_body["items"])
+
+    mismatched = api_client.get(
+        "/api/v1/cross/signal-feed-pins/"
+        f"?statuses=interesting&cursor={first_body['next_cursor']}",
+        **auth_headers(token),
+    )
+    assert mismatched.status_code == 400
+    assert mismatched.json()["code"] == "cursor_context_mismatch"
+
+    second = api_client.get(
+        "/api/v1/cross/signal-feed-pins/"
+        f"?page_size=2&cursor={first_body['next_cursor']}",
+        **auth_headers(token),
+    )
+    assert second.status_code == 200, second.content
+    second_body = second.json()
+    assert len(second_body["items"]) == 2
+    assert second_body["has_more"] is False
+    assert second_body["next_cursor"] is None
+
+    seen_ids = [item["id"] for item in first_body["items"] + second_body["items"]]
+    assert len(seen_ids) == len(set(seen_ids)) == 4
+    assert set(seen_ids) == {str(signal.id) for signal in pinned}
 
 
 def test_cross_execution_feed_hints_are_false(api_client):

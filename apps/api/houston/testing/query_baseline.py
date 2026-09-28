@@ -11,7 +11,7 @@ from django.test.utils import CaptureQueriesContext
 # Measured 2026-06-11 (PostgreSQL test DB, pytest). Historical audit doc not archived in this repo.
 
 # GET .../signals/feed/?view_mode=general — owner, 2 feed-visible signals
-# Sectioned first page: one bounded query per requested status (empty sections omitted after fetch).
+# Global first page: bounded list plus pins, counts, and applied filters.
 SIGNAL_FEED_MAX_QUERIES_TWO_ITEMS = 16
 # Observed delta when increasing feed items from 1 to 3 (flat after Phase E prefetch fix)
 SIGNAL_FEED_MAX_QUERY_DELTA_ONE_TO_THREE_ITEMS = 0

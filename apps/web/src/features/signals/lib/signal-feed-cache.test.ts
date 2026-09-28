@@ -10,7 +10,6 @@ import {
   appendSignalFeedPage,
   appendSignalFeedPinsPage,
   applySignalQuickActionSuccess,
-  continuationPageStalled,
   feedItemPatchFromDetail,
   invalidateSignalFeedViewModes,
   patchSignalInActiveFeedCache,
@@ -290,29 +289,6 @@ describe('appendSignalFeedPage', () => {
     expect(appended.feed.pins?.map((item) => item.id)).toEqual(['pin-1'])
     expect(appended.feed.counts).toEqual(current.counts)
     expect(appended.feed.next_cursor).toBe('cursor-2')
-  })
-
-  it('stops when the continuation does not advance', () => {
-    const current = buildFeed({
-      items: [buildFeedItem({ id: 'open-1' })],
-      next_cursor: 'cursor-1',
-      has_more: true,
-    })
-    expect(
-      continuationPageStalled('cursor-1', {
-        items: [],
-        next_cursor: 'cursor-1',
-        has_more: true,
-      }),
-    ).toBe(true)
-    expect(
-      appendSignalFeedPage(current, {
-        ...current,
-        items: [],
-        next_cursor: 'cursor-1',
-        has_more: true,
-      }).stalled,
-    ).toBe(true)
   })
 })
 

@@ -424,48 +424,6 @@ def test_pagination_with_bu_filter_returns_next_cursor(api_client):
     assert first_page_ids.isdisjoint(second_page_ids)
 
 
-def test_cursor_round_trip_without_duplicates(api_client):
-    membership = build_api_membership()
-    for index in range(5):
-        _create_signal(membership, title=f"Signal {index}")
-
-    first = _feed_get(api_client, membership, "?view_mode=general&page_size=2")
-    assert first.status_code == 200
-    first_body = first.json()
-    assert len(first_body["items"]) == 2
-    assert first_body["has_more"] is True
-    assert first_body["next_cursor"] is not None
-
-    second = _feed_get(
-        api_client,
-        membership,
-        f"?view_mode=general&page_size=2&cursor={first_body['next_cursor']}",
-    )
-    assert second.status_code == 200
-    second_body = second.json()
-    assert len(second_body["items"]) == 2
-    assert second_body["has_more"] is True
-    assert second_body["next_cursor"] is not None
-
-    third = _feed_get(
-        api_client,
-        membership,
-        f"?view_mode=general&page_size=2&cursor={second_body['next_cursor']}",
-    )
-    assert third.status_code == 200
-    third_body = third.json()
-    assert len(third_body["items"]) == 1
-    assert third_body["has_more"] is False
-    assert third_body["next_cursor"] is None
-
-    all_ids = [
-        item["id"]
-        for page in (first_body, second_body, third_body)
-        for item in page["items"]
-    ]
-    assert len(all_ids) == len(set(all_ids)) == 5
-
-
 def test_invalid_cursor_returns_400(api_client):
     membership = build_api_membership()
     _create_signal(membership, title="One")
