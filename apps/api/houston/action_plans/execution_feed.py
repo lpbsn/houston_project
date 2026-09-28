@@ -34,6 +34,7 @@ from houston.action_plans.selectors import (
     action_plan_execution_feed_queryset,
     action_plan_execution_feed_section_counts,
     filter_action_plan_execution_feed_category,
+    scheduled_executions_cross_summary,
     scheduled_executions_next_queryset,
     scheduled_executions_upcoming_queryset,
 )
@@ -328,23 +329,18 @@ def build_cross_action_plan_execution_feed_page(
         as_of=as_of,
         category=category,
     )
-    scheduled_count = 0
-    scheduled_next_candidates = []
-    for prepared in prepared_memberships:
-        upcoming_qs = scheduled_executions_upcoming_queryset(
-            membership=prepared,
-            view_mode=view_mode,
+    scheduled_count, scheduled_next_row = scheduled_executions_cross_summary(
+        memberships=prepared_memberships,
+        view_mode=view_mode,
+    )
+    scheduled_next = (
+        ScheduledExecutionSummary(
+            id=scheduled_next_row[0],
+            start_at=scheduled_next_row[1],
+            title=scheduled_next_row[2],
         )
-        scheduled_count += upcoming_qs.count()
-        next_execution = scheduled_executions_next_queryset(
-            membership=prepared,
-            view_mode=view_mode,
-        ).first()
-        if next_execution is not None:
-            scheduled_next_candidates.append(next_execution)
-    scheduled_next_candidates.sort(key=lambda execution: (execution.start_at, execution.id))
-    scheduled_next = _scheduled_summary_from_execution(
-        scheduled_next_candidates[0] if scheduled_next_candidates else None,
+        if scheduled_next_row is not None
+        else None
     )
     return ActionPlanExecutionFeedPage(
         items=served,

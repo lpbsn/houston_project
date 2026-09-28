@@ -541,6 +541,50 @@ def scheduled_executions_next_queryset(
     )[:1]
 
 
+def scheduled_executions_cross_summary(
+    *,
+    memberships: list[EstablishmentMembership],
+    view_mode: ExecutionFeedViewMode,
+) -> tuple[int, tuple[uuid.UUID, datetime, str] | None]:
+    """Distinct scheduled count and earliest `(id, start_at, title)` across memberships.
+
+    Same visibility, status, and `start_at` rules as the upcoming feed. No card
+    hydration. `execution_feed` owns the scheduled summary type.
+    """
+    if not memberships:
+        return 0, None
+
+    visibility = Q()
+    for membership in memberships:
+        visibility |= _execution_feed_visibility_q(
+            membership=membership,
+            view_mode=view_mode,
+        )
+    visible_ids = (
+        ActionPlanExecution.objects.filter(
+            visibility,
+            status=EXECUTION_STATUS_SCHEDULED,
+            start_at__isnull=False,
+        )
+        .order_by()
+        .values("id")
+        .distinct()
+    )
+    count = visible_ids.count()
+    if count == 0:
+        return 0, None
+    row = (
+        ActionPlanExecution.objects.filter(id__in=Subquery(visible_ids))
+        .order_by("start_at", "id")
+        .values_list("id", "start_at", "title")
+        .first()
+    )
+    if row is None:
+        return count, None
+    execution_id, start_at, title = row
+    return count, (execution_id, start_at, title)
+
+
 def action_plan_execution_feed_queryset(
     *,
     membership: EstablishmentMembership,
