@@ -16,7 +16,7 @@ todos:
     State : IMPLEMENTED
   - id: lot4-signals-feed
     content: "Lot 4 : contrat Signals + pins OPEN/INTERESTING/cap 5 + carousel établissement/Cross + UI (même PR)"
-    status: pending
+    State : IMPLEMENTED
   - id: lot5-loading-rt
     content: "Lot 5 : auto-load, refresh, génération, curseurs Cross, fenêtre mémoire sans plafond fonctionnel"
     status: pending
