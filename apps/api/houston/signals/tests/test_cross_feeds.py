@@ -384,6 +384,10 @@ def test_cross_execution_feed_pins_use_per_establishment_membership_and_paginate
         "houston.action_plans.execution_feed.scheduled_executions_next_queryset",
         fail_scheduled_metadata,
     )
+    monkeypatch.setattr(
+        "houston.action_plans.execution_feed.scheduled_executions_cross_summary",
+        fail_scheduled_metadata,
+    )
 
     page2 = api_client.get(
         "/api/v1/cross/action-plan-execution-feed/"
@@ -899,3 +903,218 @@ def test_cross_execution_calendar_matches_establishment_on_same_civil_window(api
     assert str(execution.id) in cross_ids
     assert establishment_response.json()["timezone"] == "Europe/Paris"
     assert cross_response.json()["timezone"] == "Europe/Paris"
+
+
+def _scheduled_summary_statement_counts(sqls: list[str]) -> tuple[int, int]:
+    next_rows = [
+        sql
+        for sql in sqls
+        if "LIMIT 1" in sql
+        and '"action_plans_actionplanexecution"."title"' in sql
+        and '"action_plans_actionplanexecution"."start_at"' in sql
+        and "is_feed_pinned" not in sql
+    ]
+    counts = [
+        sql
+        for sql in sqls
+        if "COUNT" in sql.upper()
+        and '"action_plans_actionplanexecution"."start_at" IS NOT NULL' in sql
+        and "deadline_bucket" not in sql
+    ]
+    return len(next_rows), len(counts)
+
+
+def test_cross_feed_scheduled_summary_tie_breaks_on_id(api_client):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    user = create_user(username="cross-scheduled-tie")
+    first = create_establishment(name="Tie Alpha")
+    second = create_establishment(name="Tie Beta")
+    membership_a = create_membership(
+        establishment=first,
+        user=user,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    membership_b = create_membership(
+        establishment=second,
+        user=user,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    bu_a = create_business_unit(establishment=first, key="salle")
+    bu_b = create_business_unit(establishment=second, key="salle")
+    now = timezone.now()
+    start_at = now + timedelta(hours=5)
+    created = []
+    for membership, business_unit, establishment_id, title in (
+        (membership_a, bu_a, first.id, "Tie A"),
+        (membership_b, bu_b, second.id, "Tie B"),
+    ):
+        _, execution = create_action_plan_with_execution(
+            establishment_id=establishment_id,
+            created_by=membership,
+            pilot_business_unit_id=business_unit.id,
+            title=title,
+            tasks=[build_task_payload(task=title, business_unit=business_unit)],
+            assignees=[
+                build_assignee_payload(membership=membership, business_unit=business_unit)
+            ],
+            start_at=start_at,
+            end_at=start_at + timedelta(hours=1),
+            visible_from=now - timedelta(minutes=1),
+        )
+        created.append(execution)
+    expected = min(created, key=lambda execution: execution.id)
+
+    token = login(api_client, user=user)
+    response = api_client.get(
+        "/api/v1/cross/action-plan-execution-feed/?view_mode=general",
+        **auth_headers(token),
+    )
+    assert response.status_code == 200, response.content
+    scheduled = response.json()["scheduled"]
+    assert scheduled["count"] == 2
+    assert scheduled["next"]["id"] == str(expected.id)
+    assert scheduled["next"]["title"] == expected.title
+
+
+def test_cross_feed_scheduled_summary_respects_manager_scope(api_client):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from houston.action_plans.models import ActionPlanExecutionTeam
+
+    user = create_user(username="cross-scheduled-manager")
+    establishment = create_establishment(name="Scoped scheduled")
+    restaurant = create_business_unit(establishment=establishment, key="salle")
+    bar = create_business_unit(establishment=establishment, key="bar")
+    maintenance = create_business_unit(establishment=establishment, key="maintenance")
+    manager = create_membership(
+        establishment=establishment,
+        user=user,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    create_membership_with_business_unit_scope(membership=manager, business_unit=restaurant)
+    create_membership_with_business_unit_scope(membership=manager, business_unit=bar)
+    owner = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    maintenance_staff = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    create_membership_with_business_unit_scope(
+        membership=maintenance_staff,
+        business_unit=maintenance,
+    )
+    now = timezone.now()
+    earlier = now + timedelta(hours=1)
+    later = now + timedelta(hours=4)
+    _, in_scope = create_action_plan_with_execution(
+        establishment_id=establishment.id,
+        created_by=owner,
+        pilot_business_unit_id=restaurant.id,
+        title="In scope later",
+        tasks=[build_task_payload(task="in", business_unit=restaurant)],
+        assignees=[build_assignee_payload(membership=owner, business_unit=restaurant)],
+        start_at=later,
+        end_at=later + timedelta(hours=1),
+        visible_from=now - timedelta(minutes=1),
+    )
+    ActionPlanExecutionTeam.objects.create(
+        action_plan_execution=in_scope,
+        business_unit=bar,
+        is_pilot=False,
+    )
+    _, out_of_scope = create_action_plan_with_execution(
+        establishment_id=establishment.id,
+        created_by=owner,
+        pilot_business_unit_id=maintenance.id,
+        title="Out of scope earlier",
+        tasks=[build_task_payload(task="out", business_unit=maintenance)],
+        assignees=[
+            build_assignee_payload(membership=maintenance_staff, business_unit=maintenance)
+        ],
+        start_at=earlier,
+        end_at=earlier + timedelta(hours=1),
+        visible_from=now - timedelta(minutes=1),
+    )
+
+    token = login(api_client, user=user)
+    response = api_client.get(
+        "/api/v1/cross/action-plan-execution-feed/?view_mode=general",
+        **auth_headers(token),
+    )
+    assert response.status_code == 200, response.content
+    scheduled = response.json()["scheduled"]
+    assert scheduled["count"] == 1
+    assert scheduled["next"]["id"] == str(in_scope.id)
+    assert str(out_of_scope.id) != scheduled["next"]["id"]
+
+
+def test_cross_execution_feed_scheduled_summary_query_slope_is_preparation_only():
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from houston.action_plans.execution_feed import build_cross_action_plan_execution_feed_page
+    from houston.establishments.membership_scope import membership_business_unit_scope_ids
+    from houston.testing.query_baseline import capture_queries
+
+    def select_sql(captured) -> list[str]:
+        return [
+            query["sql"]
+            for query in captured.captured_queries
+            if query["sql"].lstrip().upper().startswith(("SELECT", "WITH"))
+        ]
+
+    def measure(establishment_count: int) -> list[str]:
+        user = create_user(username=f"cross-scheduled-slope-{establishment_count}")
+        now = timezone.now()
+        start_at = now + timedelta(days=2)
+        memberships = []
+        for index in range(establishment_count):
+            establishment = create_establishment(name=f"Slope {establishment_count}-{index}")
+            membership = create_membership(
+                establishment=establishment,
+                user=user,
+                role=EstablishmentMembership.Role.OWNER,
+            )
+            business_unit = create_business_unit(establishment=establishment, key="salle")
+            create_action_plan_with_execution(
+                establishment_id=establishment.id,
+                created_by=membership,
+                pilot_business_unit_id=business_unit.id,
+                title=f"Scheduled {index}",
+                tasks=[build_task_payload(task="task", business_unit=business_unit)],
+                assignees=[
+                    build_assignee_payload(membership=membership, business_unit=business_unit)
+                ],
+                start_at=start_at + timedelta(hours=index),
+                end_at=start_at + timedelta(hours=index + 1),
+                visible_from=start_at + timedelta(hours=index) - timedelta(hours=1),
+            )
+            membership.establishment
+            membership_business_unit_scope_ids(membership)
+            memberships.append(membership)
+
+        with capture_queries() as captured:
+            page = build_cross_action_plan_execution_feed_page(
+                memberships=memberships,
+                view_mode="general",
+                category="all",
+                page_size=25,
+            )
+        assert page.scheduled_count == establishment_count
+        assert page.scheduled_next is not None
+        assert page.scheduled_next.title == "Scheduled 0"
+        return select_sql(captured)
+
+    two = measure(2)
+    five = measure(5)
+    assert len(five) - len(two) == 9
+    assert _scheduled_summary_statement_counts(two) == (1, 1)
+    assert _scheduled_summary_statement_counts(five) == (1, 1)
