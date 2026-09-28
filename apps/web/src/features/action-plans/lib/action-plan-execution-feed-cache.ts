@@ -112,6 +112,15 @@ export function patchExecutionInFeedCache(
           pins: [...(pinsPage.pins ?? []), patched],
         }
       }
+    } else {
+      const listPageIndex = pages.findIndex((page) => Array.isArray(page.pins))
+      if (listPageIndex >= 0) {
+        const listPage = pages[listPageIndex]!
+        pages[listPageIndex] = {
+          ...listPage,
+          items: [patched, ...listPage.items],
+        }
+      }
     }
 
     if (options.adjustSectionCountsForPin && movesCollection) {

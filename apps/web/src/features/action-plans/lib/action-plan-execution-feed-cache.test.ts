@@ -9,6 +9,7 @@ import type { ActionPlanExecutionFeedItem, ActionPlanExecutionFeedResponse } fro
 import {
   applyActionPlanExecutionPinSuccess,
   patchExecutionInFeedCache,
+  prepareActionPlanExecutionPinOptimisticUpdate,
 } from './action-plan-execution-feed-cache'
 
 function feedItem(
@@ -154,6 +155,48 @@ describe('patchExecutionInFeedCache pin section_counts', () => {
     expect(data?.pages[0]?.section_counts).toEqual(counts)
   })
 
+  it('optimistically moves an unpinned execution from P to L', async () => {
+    const queryClient = new QueryClient()
+    const establishmentId = 'est-1'
+    const counts = {
+      pinned: 1,
+      pending_validation: 0,
+      overdue: 0,
+      in_progress: 2,
+    }
+    queryClient.setQueryData(
+      actionPlansQueryKeys.executionFeed(establishmentId, 'personal'),
+      {
+        pages: [
+          page(
+            [feedItem('existing-list-item')],
+            counts,
+            [feedItem('target', { is_pinned: true })],
+          ),
+        ],
+        pageParams: [undefined],
+      },
+    )
+
+    await prepareActionPlanExecutionPinOptimisticUpdate(queryClient, {
+      establishmentId,
+      executionId: 'target',
+      isPinned: false,
+    })
+
+    const data = queryClient.getQueryData<{
+      pages: ActionPlanExecutionFeedResponse[]
+    }>(actionPlansQueryKeys.executionFeed(establishmentId, 'personal'))
+
+    expect(data?.pages[0]?.pins).toEqual([])
+    expect(data?.pages[0]?.items.map((item) => item.action_plan_execution.id)).toEqual([
+      'target',
+      'existing-list-item',
+    ])
+    expect(data?.pages[0]?.items[0]?.action_plan_execution.is_pinned).toBe(false)
+    expect(data?.pages[0]?.section_counts.pinned).toBe(0)
+  })
+
   it('replaces a pin without changing the pinned count', () => {
     const queryClient = new QueryClient()
     const establishmentId = 'est-1'
@@ -189,7 +232,10 @@ describe('patchExecutionInFeedCache pin section_counts', () => {
         pages: ActionPlanExecutionFeedResponse[]
       }>(actionPlansQueryKeys.executionFeed(establishmentId, viewMode))
       expect(data?.pages[0]?.section_counts.pinned).toBe(3)
-      expect(data?.pages[0]?.items).toEqual([])
+      expect(data?.pages[0]?.items.map((item) => item.action_plan_execution.id)).toEqual([
+        'old-pin',
+      ])
+      expect(data?.pages[0]?.items[0]?.action_plan_execution.is_pinned).toBe(false)
       expect(data?.pages[0]?.pins?.map((item) => item.action_plan_execution.id)).toEqual([
         'new-pin',
       ])
