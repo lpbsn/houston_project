@@ -1049,15 +1049,16 @@ def _run_isolated_pr5d_diagnostics(
     for name, prepare in scenarios:
         operation, cleanup = prepare(dataset=dataset, membership=membership)
         try:
-            diagnostics.append(
-                _run_pr5d_diagnostic(
-                    name=name,
-                    operation=operation,
-                    dataset=dataset,
-                    explain=explain,
-                    explain_limit=explain_limit,
-                )
+            report = _run_pr5d_diagnostic(
+                name=name,
+                operation=operation,
+                dataset=dataset,
+                explain=explain,
+                explain_limit=explain_limit,
             )
+            if name == "materialization_only":
+                _assert_pr5d_materialization_only_effect(report)
+            diagnostics.append(report)
         finally:
             cleanup()
     return diagnostics
@@ -1091,7 +1092,16 @@ def _prepare_pr5d_materialization_fixture(*, dataset, membership):
         membership=membership,
         kind="materialization-schedule",
     )
-    local_today = now.astimezone(ZoneInfo(membership.establishment.timezone)).date()
+    establishment_tz = ZoneInfo(membership.establishment.timezone)
+    local_today = now.astimezone(establishment_tz).date()
+    # Visibility is occurrence start minus one hour. A fixed 08:00–10:00
+    # window is not yet visible when the frozen anchor is before 07:00 local,
+    # so the read path materializes nothing. Keep a same-day two-hour span
+    # whose start is already inside that window.
+    start_at, end_at = _visible_same_day_materialization_window(
+        now,
+        establishment_tz,
+    )
     schedule = ActionPlanSchedule.objects.create(
         id=schedule_id,
         action_plan=plan,
@@ -1100,8 +1110,8 @@ def _prepare_pr5d_materialization_fixture(*, dataset, membership):
         use_shared_chronology=False,
         start_date=local_today,
         end_date=local_today,
-        start_at=datetime_time(hour=8),
-        end_at=datetime_time(hour=10),
+        start_at=start_at,
+        end_at=end_at,
         recurrence_days=[
             "monday",
             "tuesday",
@@ -1145,6 +1155,29 @@ def _prepare_pr5d_materialization_fixture(*, dataset, membership):
         plan_task.delete()
 
     return operation, cleanup
+
+
+def _visible_same_day_materialization_window(
+    now: datetime,
+    tz: ZoneInfo,
+) -> tuple[datetime_time, datetime_time]:
+    local_now = now.astimezone(tz).replace(second=0, microsecond=0)
+    duration = timedelta(hours=2)
+    latest_end = local_now.replace(hour=23, minute=59)
+    start = min(local_now, latest_end - duration)
+    end = min(start + duration, latest_end)
+    return (
+        datetime_time(hour=start.hour, minute=start.minute),
+        datetime_time(hour=end.hour, minute=end.minute),
+    )
+
+
+def _assert_pr5d_materialization_only_effect(report: dict[str, Any]) -> None:
+    delta = report["side_effect_delta"]
+    if delta.get("executions", 0) < 1 or delta.get("materialized_schedules", 0) < 1:
+        raise RuntimeError(
+            "materialization_only completed without materializing a visible occurrence."
+        )
 
 
 def _prepare_pr5d_availability_fixture(*, dataset, membership):

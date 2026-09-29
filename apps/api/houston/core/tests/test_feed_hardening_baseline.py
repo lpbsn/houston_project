@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
 import pytest
 
 from houston.core.feed_hardening_baseline import (
     QueryDiagnostic,
+    _assert_pr5d_materialization_only_effect,
     _delete_feed_baseline_dataset,
     _explain_summary,
     _query_attribution,
     _snapshot_delta,
+    _visible_same_day_materialization_window,
     resolve_feed_baseline_profile,
 )
 from houston.notifications.models import Notification
@@ -91,6 +96,28 @@ def test_snapshot_delta_keeps_exact_non_zero_side_effects():
         "executions": 1,
         "events": {"created": 1},
     }
+
+
+@pytest.mark.parametrize(
+    "local_hour",
+    [0, 6, 8, 22, 23],
+)
+def test_materialization_window_is_visible_on_the_same_local_day(local_hour):
+    tz = ZoneInfo("Europe/Paris")
+    now = datetime(2026, 9, 29, local_hour, 15, tzinfo=tz)
+    start_at, end_at = _visible_same_day_materialization_window(now, tz)
+    start = datetime.combine(now.date(), start_at, tzinfo=tz)
+    end = datetime.combine(now.date(), end_at, tzinfo=tz)
+
+    assert end - start == timedelta(hours=2)
+    assert start - timedelta(hours=1) <= now
+
+
+def test_materialization_only_rejects_a_noop_effect():
+    with pytest.raises(RuntimeError, match="without materializing"):
+        _assert_pr5d_materialization_only_effect(
+            {"side_effect_delta": {"executions": 0, "materialized_schedules": 0}}
+        )
 
 
 def test_explain_summary_exposes_planning_executor_and_buffers():

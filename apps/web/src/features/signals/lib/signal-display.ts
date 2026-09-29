@@ -102,23 +102,6 @@ export function formatSignalPinnedByLine(item: {
   return null
 }
 
-/** Splits API-ordered feed items into pinned (top zone) and unpinned (status sections). */
-export function partitionFeedPinnedItems(items: SignalFeedItem[]): {
-  pinnedItems: SignalFeedItem[]
-  unpinnedItems: SignalFeedItem[]
-} {
-  const pinnedItems: SignalFeedItem[] = []
-  const unpinnedItems: SignalFeedItem[] = []
-  for (const item of items) {
-    if (item.is_pinned) {
-      pinnedItems.push(item)
-    } else {
-      unpinnedItems.push(item)
-    }
-  }
-  return { pinnedItems, unpinnedItems }
-}
-
 /** Left border accent hex colors for feed cards (inline style; beats global border-color). */
 export const SIGNAL_CARD_LEFT_ACCENT_COLOR = {
   open: '#EF9F27',

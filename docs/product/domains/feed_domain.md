@@ -1,8 +1,8 @@
 # Feed Domain
 
 Status: authoritative
-Last reviewed: 2026-09-28
-Implementation status: operational Signal and Action Plan Execution feeds, pins, bounded reading, and History live.
+Last reviewed: 2026-09-29
+Implementation status: operational Signal and Action Plan Execution feeds, pins, bounded reading, and History live. The Feed contracts & pagination chantier (Lots 0–7) and its final hardening (PR1–PR5D) are closed. Measured PR5 query rewrites were not applied.
 
 ## 1. Purpose
 

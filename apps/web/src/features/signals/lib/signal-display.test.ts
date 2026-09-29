@@ -10,7 +10,6 @@ import {
   getSignalCardLeftAccentColor,
   getSignalStatusBadgeVariant,
   groupLoadedSignalFeedItems,
-  partitionFeedPinnedItems,
   PINNED_SIGNAL_CARD_CLASS,
   SIGNAL_CARD_LEFT_ACCENT_COLOR,
 } from './signal-display'
@@ -40,20 +39,6 @@ function item(overrides: Partial<SignalFeedItem> & { id: string }): SignalFeedIt
     ...overrides,
   }
 }
-
-describe('partitionFeedPinnedItems', () => {
-  it('splits pinned and unpinned while preserving API order', () => {
-    const items = [
-      item({ id: 'a', is_pinned: true }),
-      item({ id: 'b', is_pinned: false }),
-      item({ id: 'c', is_pinned: true }),
-      item({ id: 'd', is_pinned: false }),
-    ]
-    const { pinnedItems, unpinnedItems } = partitionFeedPinnedItems(items)
-    expect(pinnedItems.map((entry) => entry.id)).toEqual(['a', 'c'])
-    expect(unpinnedItems.map((entry) => entry.id)).toEqual(['b', 'd'])
-  })
-})
 
 describe('groupLoadedSignalFeedItems', () => {
   it('builds separators only for statuses present in the loaded Tout page', () => {

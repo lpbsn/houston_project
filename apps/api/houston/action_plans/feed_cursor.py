@@ -103,19 +103,6 @@ def category_rank_for_execution(
     return 4
 
 
-def execution_feed_category_for_execution(
-    execution: ActionPlanExecution,
-    as_of: datetime,
-) -> ExecutionFeedCategory | None:
-    if execution.status == EXECUTION_STATUS_PENDING_VALIDATION:
-        return "pending_validation"
-    if execution.status == EXECUTION_STATUS_IN_PROGRESS:
-        if execution.end_at is not None and execution.end_at < as_of:
-            return "overdue"
-        return "in_progress"
-    return None
-
-
 def deadline_bucket_for_execution(
     execution: ActionPlanExecution,
     as_of: datetime,

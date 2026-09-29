@@ -31,6 +31,8 @@ isProject: false
 
 # Feed contracts & pagination — plan V2
 
+Statut : clos le 29 septembre 2026. Les Lots 0–7 sont livrés. Le hardening final PR1–PR5D est clos ; les candidats SQL de PR5 ont été mesurés et non appliqués. Les faits ci-dessous décrivent l’existant au moment du plan, pas le comportement livré. Le comportement courant est dans le code, les tests et [`feed_domain.md`](../product/domains/feed_domain.md).
+
 ## Objectif
 
 Rendre les feeds Signals et Exécution paginables, autorisés et maintenables à la croissance, sans moteur universel, sans double API, et sans casser le détail, l’À venir, le calendrier, les médias ou le RBAC.

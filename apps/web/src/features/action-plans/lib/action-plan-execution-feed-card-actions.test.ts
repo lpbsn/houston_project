@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  canOpenActionPlanExecutionFeedCardActions,
-  getActionPlanExecutionFeedCardActionOptions,
-} from './action-plan-execution-feed-card-actions'
+import { getActionPlanExecutionFeedCardActionOptions } from './action-plan-execution-feed-card-actions'
 
 function hints(overrides: Partial<{ can_pin: boolean }> = {}) {
   return {
@@ -17,16 +14,6 @@ function hints(overrides: Partial<{ can_pin: boolean }> = {}) {
     ...overrides,
   }
 }
-
-describe('canOpenActionPlanExecutionFeedCardActions', () => {
-  it('returns false when can_pin is false', () => {
-    expect(canOpenActionPlanExecutionFeedCardActions(hints())).toBe(false)
-  })
-
-  it('returns true when can_pin is true', () => {
-    expect(canOpenActionPlanExecutionFeedCardActions(hints({ can_pin: true }))).toBe(true)
-  })
-})
 
 describe('getActionPlanExecutionFeedCardActionOptions', () => {
   it('returns empty list when can_pin is false', () => {

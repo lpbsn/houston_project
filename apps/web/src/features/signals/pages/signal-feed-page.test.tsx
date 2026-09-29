@@ -253,7 +253,7 @@ function openSectionsFeed() {
   )
 }
 
-describe('SignalFeedPage collapsible sections', () => {
+describe('SignalFeedPage separators', () => {
   beforeEach(() => {
     feedLoadMoreMutate.mockClear()
     feedQueryCalls.length = 0
