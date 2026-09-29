@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { uploadThenSubmitObservation } from './observation-compose-submit'
+import {
+  clearClientSubmissionId,
+  clientSubmissionIdForFingerprint,
+  uploadThenSubmitObservation,
+} from './observation-compose-submit'
 
 function makeFile(name: string) {
   return new File(['bytes'], name, { type: 'image/jpeg' })
@@ -23,6 +27,7 @@ describe('uploadThenSubmitObservation', () => {
     await uploadThenSubmitObservation({
       text: 'Tache visible sur le mur.',
       files,
+      clientSubmissionId: 'submission-1',
       uploadPhoto,
       submit,
     })
@@ -32,6 +37,7 @@ describe('uploadThenSubmitObservation', () => {
     expect(submit).toHaveBeenCalledWith({
       text: 'Tache visible sur le mur.',
       temporary_upload_ids: ['upload-1', 'upload-2'],
+      client_submission_id: 'submission-1',
     })
   })
 
@@ -43,6 +49,7 @@ describe('uploadThenSubmitObservation', () => {
       uploadThenSubmitObservation({
         text: 'Tache visible sur le mur.',
         files: [makeFile('a.jpg')],
+        clientSubmissionId: 'submission-1',
         uploadPhoto,
         submit,
       }),
@@ -63,6 +70,7 @@ describe('uploadThenSubmitObservation', () => {
     await uploadThenSubmitObservation({
       text: 'Tache visible sur le mur.',
       files: [],
+      clientSubmissionId: 'submission-1',
       uploadPhoto,
       submit,
     })
@@ -71,6 +79,23 @@ describe('uploadThenSubmitObservation', () => {
     expect(submit).toHaveBeenCalledWith({
       text: 'Tache visible sur le mur.',
       temporary_upload_ids: [],
+      client_submission_id: 'submission-1',
     })
+  })
+})
+
+describe('clientSubmissionIdForFingerprint', () => {
+  it('reuses the id for the same draft and clears it after success', () => {
+    const slot: { current: { fingerprint: string; id: string } | null } = { current: null }
+    const first = clientSubmissionIdForFingerprint(slot, 'draft')
+    const replay = clientSubmissionIdForFingerprint(slot, 'draft')
+    expect(replay).toBe(first)
+
+    const nextDraft = clientSubmissionIdForFingerprint(slot, 'other-draft')
+    expect(nextDraft).not.toBe(first)
+
+    clearClientSubmissionId(slot)
+    const afterClear = clientSubmissionIdForFingerprint(slot, 'draft')
+    expect(afterClear).not.toBe(first)
   })
 })

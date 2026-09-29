@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from datetime import date, timedelta
 from io import StringIO
+from uuid import uuid4
 
 import pytest
 from django.core.management import call_command
@@ -446,6 +447,7 @@ def test_resume_skips_processed_and_refuses_orphan(imported_catalog):
         submitted_by_membership=membership,
         raw_text=rows[0]["raw_text"],
         submitted_at=parse_corpus_datetime(rows[0]["occurred_at"]),
+        client_submission_id=uuid4(),
     )
     ObservationProcessing.objects.create(
         observation=orphan,

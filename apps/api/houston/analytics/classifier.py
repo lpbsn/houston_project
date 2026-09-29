@@ -112,7 +112,6 @@ class OpenAIPatternClassifierProvider:
         api_key: str | None = None,
         model: str | None = None,
         timeout_seconds: int | None = None,
-        max_retries: int | None = None,
     ):
         self.api_key = api_key if api_key is not None else settings.OPENAI_API_KEY
         self.model = model or settings.HOUSTON_AI_ANALYTICS_PATTERN_MODEL
@@ -120,11 +119,6 @@ class OpenAIPatternClassifierProvider:
             timeout_seconds
             if timeout_seconds is not None
             else settings.HOUSTON_AI_ANALYTICS_PATTERN_TIMEOUT_SECONDS
-        )
-        self.max_retries = (
-            max_retries
-            if max_retries is not None
-            else settings.HOUSTON_AI_ANALYTICS_PATTERN_MAX_RETRIES
         )
         self.last_provider_request_id = ""
         self.last_response_format_mode = RESPONSE_FORMAT_JSON_SCHEMA_STRICT
@@ -140,7 +134,7 @@ class OpenAIPatternClassifierProvider:
         self._client = OpenAI(
             api_key=self.api_key,
             timeout=self.timeout_seconds,
-            max_retries=self.max_retries,
+            max_retries=0,
         )
         return self._client
 

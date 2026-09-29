@@ -18,6 +18,7 @@ from houston.observations.api.serializers import (
     ObservationSubmitResponseSerializer,
 )
 from houston.observations.exceptions import (
+    ObservationSubmissionConflictError,
     ObservationUploadNotFoundError,
     ObservationValidationError,
 )
@@ -49,6 +50,7 @@ class ObservationSubmitView(EstablishmentScopedObservationMixin, APIView):
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=ApiErrorResponseSerializer),
+            409: OpenApiResponse(response=ApiErrorResponseSerializer),
         },
         description=(
             "Submits a validated Observation with optional linked temporary photo uploads. "
@@ -74,9 +76,15 @@ class ObservationSubmitView(EstablishmentScopedObservationMixin, APIView):
                     "temporary_upload_ids",
                     [],
                 ),
+                client_submission_id=serializer.validated_data["client_submission_id"],
             )
         except (TermsAcceptanceRequiredError, AiConsentRequiredError) as exc:
             return legal_error_response(exc)
+        except ObservationSubmissionConflictError as exc:
+            return Response(
+                {"code": exc.error_code, "detail": "Submission conflict."},
+                status=status.HTTP_409_CONFLICT,
+            )
         except ObservationValidationError as exc:
             return Response(
                 {"code": exc.error_code, "detail": "Invalid observation submission."},

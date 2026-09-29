@@ -48,6 +48,13 @@ _STRUCTURED_EXTRA_KEYS = frozenset(
         "candidate_count",
         "created_count",
         "aggregated_count",
+        "queue",
+        "queue_wait_ms",
+        "provider_call_count",
+        "published_at",
+        "signal_id",
+        "stuck_acted_on",
+        "orphan_enqueued",
     }
 )
 

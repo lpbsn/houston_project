@@ -164,7 +164,9 @@ def test_reclassification_scheduler_noops_when_signature_is_unchanged():
 
     with (
         patch("houston.analytics.scheduling.transaction.on_commit") as on_commit,
-        patch("houston.analytics.tasks.classify_signal_pattern_task.delay") as delay,
+        patch(
+            "houston.analytics.scheduling.publish_signal_pattern_classification"
+        ) as publish,
     ):
         scheduled = schedule_reclassification_if_signature_changed(
             signal=signal,
@@ -173,7 +175,7 @@ def test_reclassification_scheduler_noops_when_signature_is_unchanged():
 
     assert scheduled is False
     on_commit.assert_not_called()
-    delay.assert_not_called()
+    publish.assert_not_called()
 
 
 def test_reclassification_scheduler_enqueues_when_signature_changes():
@@ -188,7 +190,9 @@ def test_reclassification_scheduler_enqueues_when_signature_changes():
             "houston.analytics.scheduling.transaction.on_commit",
             side_effect=lambda callback: callback(),
         ),
-        patch("houston.analytics.tasks.classify_signal_pattern_task.delay") as delay,
+        patch(
+            "houston.analytics.scheduling.publish_signal_pattern_classification"
+        ) as publish,
     ):
         scheduled = schedule_reclassification_if_signature_changed(
             signal=signal,
@@ -196,7 +200,7 @@ def test_reclassification_scheduler_enqueues_when_signature_changes():
         )
 
     assert scheduled is True
-    delay.assert_called_once_with(str(signal.id))
+    publish.assert_called_once_with(signal.id)
 
 
 def test_claim_returns_already_succeeded_before_processing():
@@ -1189,7 +1193,6 @@ def test_openai_pattern_provider_uses_strict_json_response_format():
         api_key="test-key",
         model="test-model",
         timeout_seconds=1,
-        max_retries=0,
     )
     create = MagicMock(
         return_value=SimpleNamespace(
@@ -1243,7 +1246,6 @@ def test_openai_pattern_provider_sampling_kwargs_for_classify(model, expect_temp
         api_key="test-key",
         model=model,
         timeout_seconds=1,
-        max_retries=0,
     )
     create, client = _mock_openai_create_client(
         content='{"canonical_label":"Défaillance climatisation"}'
@@ -1277,7 +1279,6 @@ def test_openai_pattern_provider_sampling_kwargs_for_assess_duplicate(
         api_key="test-key",
         model=model,
         timeout_seconds=1,
-        max_retries=0,
     )
     create, client = _mock_openai_create_client(
         content=(

@@ -641,6 +641,7 @@ class ActionPlanTaskCreateObservationRequestSerializer(serializers.Serializer):
         default=list,
         max_length=MAX_OBSERVATION_PHOTOS,
     )
+    client_submission_id = serializers.UUIDField()
 
 
 class ActionPlanTaskCreateObservationResponseSerializer(serializers.Serializer):

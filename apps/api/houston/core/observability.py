@@ -21,6 +21,10 @@ _OBSERVATION_PROCESSING_LOG_KEYS = frozenset(
         "outcome",
         "event",
         "exception_class",
+        "queue",
+        "queue_wait_ms",
+        "provider_call_count",
+        "published_at",
     }
 )
 _WS_AUTH_LOG_KEYS = frozenset(
@@ -93,6 +97,10 @@ _OBSERVATION_PIPELINE_TIMING_LOG_KEYS = frozenset(
         "created_count",
         "aggregated_count",
         "attempt_count",
+        "queue",
+        "queue_wait_ms",
+        "provider_call_count",
+        "published_at",
     }
 )
 _OBSERVATION_PIPELINE_CANDIDATE_APPLY_LOG_KEYS = frozenset(
@@ -163,6 +171,7 @@ def build_observation_processing_log_context(
     establishment_id: uuid.UUID | None = None,
     event: str = "",
     at: datetime | None = None,
+    queue: str = "",
 ) -> dict[str, Any]:
     from houston.observations.selectors import resolve_ux_status
 
@@ -186,6 +195,15 @@ def build_observation_processing_log_context(
     duration = observation_processing_duration_seconds(processing=processing, at=at)
     if duration is not None:
         context["processing_duration_seconds"] = round(duration, 3)
+    queued_at = getattr(processing, "queued_at", None)
+    started_at = processing.processing_started_at
+    if queued_at is not None and started_at is not None:
+        context["queue_wait_ms"] = max(0, int((started_at - queued_at).total_seconds() * 1000))
+    published_at = getattr(processing, "published_at", None)
+    if published_at is not None:
+        context["published_at"] = published_at.isoformat()
+    if queue.strip():
+        context["queue"] = queue.strip()[:80]
     if event.strip():
         context["event"] = event.strip()[:80]
     return sanitize_log_context(context, allowed_keys=_OBSERVATION_PROCESSING_LOG_KEYS)
@@ -307,6 +325,10 @@ def build_observation_pipeline_timing_log_context(
     created_count: int | None = None,
     aggregated_count: int | None = None,
     attempt_count: int | None = None,
+    provider_call_count: int | None = None,
+    queue: str = "",
+    queue_wait_ms: int | None = None,
+    published_at: str = "",
 ) -> dict[str, Any]:
     context: dict[str, Any] = {
         "observation_id": str(observation_id),
@@ -341,6 +363,14 @@ def build_observation_pipeline_timing_log_context(
         context["aggregated_count"] = aggregated_count
     if attempt_count is not None:
         context["attempt_count"] = attempt_count
+    if provider_call_count is not None:
+        context["provider_call_count"] = provider_call_count
+    if queue_wait_ms is not None:
+        context["queue_wait_ms"] = queue_wait_ms
+    if queue.strip():
+        context["queue"] = queue.strip()[:80]
+    if published_at.strip():
+        context["published_at"] = published_at.strip()[:40]
     return sanitize_log_context(context, allowed_keys=_OBSERVATION_PIPELINE_TIMING_LOG_KEYS)
 
 

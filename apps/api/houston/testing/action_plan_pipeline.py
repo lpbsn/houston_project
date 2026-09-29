@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from uuid import uuid4
+
 from django.utils import timezone
 
 from houston.action_plans.models import (
@@ -68,6 +70,7 @@ def create_action_plan_task_observation(
         action_plan_execution=execution,
         action_plan_execution_task=task_execution,
         submitted_at=now,
+        client_submission_id=uuid4(),
     )
     ObservationProcessing.objects.create(
         observation=observation,

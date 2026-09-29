@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+# Previous Celery gate: retry while request.retries < 3. That is the first
+# execution plus three retries (four provider calls). The delay is the 30s
+# countdown those tasks already used.
+_MAX_RETRIES = 3
+_RETRY_DELAY_SECONDS = 30
+
 
 @dataclass(frozen=True)
 class AnalyticsPatternRetryPolicy:
@@ -10,9 +16,7 @@ class AnalyticsPatternRetryPolicy:
 
 
 def analytics_pattern_task_retry_policy() -> AnalyticsPatternRetryPolicy:
-    from houston.analytics.tasks import classify_signal_pattern_task
-
     return AnalyticsPatternRetryPolicy(
-        max_retries=int(classify_signal_pattern_task.max_retries or 0),
-        retry_delay_seconds=int(classify_signal_pattern_task.default_retry_delay or 0),
+        max_retries=_MAX_RETRIES,
+        retry_delay_seconds=_RETRY_DELAY_SECONDS,
     )

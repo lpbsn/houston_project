@@ -4,6 +4,13 @@ from pathlib import Path
 
 from celery.schedules import crontab
 
+from config.celery_routing import (
+    CELERY_TASK_QUEUES as CELERY_TASK_QUEUES,
+)
+from config.celery_routing import (
+    CELERY_TASK_ROUTES as CELERY_TASK_ROUTES,
+)
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -282,7 +289,6 @@ HOUSTON_AI_OBSERVATION_TIMEOUT_SECONDS = env_int(
     "HOUSTON_AI_OBSERVATION_TIMEOUT_SECONDS",
     30,
 )
-HOUSTON_AI_OBSERVATION_MAX_RETRIES = env_int("HOUSTON_AI_OBSERVATION_MAX_RETRIES", 2)
 HOUSTON_AI_ANALYTICS_PATTERN_PROVIDER = env_str(
     "HOUSTON_AI_ANALYTICS_PATTERN_PROVIDER",
     "openai",
@@ -295,10 +301,6 @@ HOUSTON_AI_ANALYTICS_PATTERN_TIMEOUT_SECONDS = env_int(
     "HOUSTON_AI_ANALYTICS_PATTERN_TIMEOUT_SECONDS",
     20,
 )
-HOUSTON_AI_ANALYTICS_PATTERN_MAX_RETRIES = env_int(
-    "HOUSTON_AI_ANALYTICS_PATTERN_MAX_RETRIES",
-    2,
-)
 HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE = env_float(
     "HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE",
     0.25,
@@ -310,11 +312,18 @@ HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MAX_CANDIDATES = env_int(
 AUTH_USER_MODEL = "accounts.User"
 
 REDIS_URL = env_str("REDIS_URL", "redis://redis:6379/0")
-CELERY_BROKER_URL = env_str("CELERY_BROKER_URL", "redis://redis:6379/1")
-CELERY_RESULT_BACKEND = env_str("CELERY_RESULT_BACKEND", "redis://redis:6379/2")
+CELERY_BROKER_URL = env_str(
+    "CELERY_BROKER_URL",
+    "amqp://houston:houston@rabbitmq:5672//",
+)
+CELERY_TASK_IGNORE_RESULT = True
+CELERY_TASK_ACKS_LATE = False
+CELERY_TASK_DEFAULT_DELIVERY_MODE = "persistent"
+CELERY_BROKER_TRANSPORT_OPTIONS = {"confirm_publish": True}
+CELERY_TASK_DEFAULT_QUEUE = "operational"
 CELERY_TASK_SERIALIZER = "json"
-CELERY_RESULT_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
+HOUSTON_CELERY_PUBLISH_TIMEOUT_SECONDS = env_int("HOUSTON_CELERY_PUBLISH_TIMEOUT_SECONDS", 5)
 
 # Celery Beat (first scheduled job in Houston). Requires a `celery-beat` process;
 # lazy action-plan schedule materialization on execution-feed read remains the primary safety net.
@@ -358,9 +367,11 @@ CELERY_BEAT_SCHEDULE = {
     },
     "recover-stuck-observation-processing": {
         "task": "houston.signals.tasks.recover_stuck_observation_processing_task",
-        "schedule": crontab(
-            minute=env_int("HOUSTON_OBSERVATION_STUCK_RECOVERY_BEAT_MINUTE_UTC", 15),
-        ),
+        "schedule": crontab(minute="*/1"),
+    },
+    "recover-due-signal-pattern-classifications": {
+        "task": "houston.analytics.tasks.recover_due_signal_pattern_classifications_task",
+        "schedule": crontab(minute="*/1"),
     },
     "process-action-plan-planning-outbox": {
         "task": (

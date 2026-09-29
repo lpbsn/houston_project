@@ -9,7 +9,7 @@ Unified smoke validation for local pilot and Railway prod-test.
 
 - [ ] `.env` configured (`DJANGO_SECRET_KEY`)
 - [ ] `make bootstrap-dev` OK (`catalog-check`: 14 BU, 134 subjects)
-- [ ] `docker compose ps`: postgres, redis, api, celery **Up**
+- [ ] `docker compose ps`: postgres, redis, rabbitmq, api, celery-ai-interactive, celery-operational, celery-background **Up**
 - [ ] Health: `curl` → `200` on http://localhost:8000/api/v1/health/
 - [ ] `make web-dev` → http://localhost:5173 (no port conflict with `make up` web container)
 
@@ -35,7 +35,7 @@ Optional. Not CI. Local `make web-cap-sync` already exists. Store AAB procedure:
 
 ## Workers & AI (local)
 
-- [ ] `celery` running (observations stay `queued` otherwise)
+- [ ] the three Celery workers running (observations stay `queued` otherwise)
 - [ ] Optional: `make up-scheduler` for action plan horizon beat
 - [ ] Optional: `OPENAI_API_KEY` + `HOUSTON_AI_OBSERVATION_PROVIDER=openai` for realistic signals
 
@@ -43,7 +43,7 @@ Optional. Not CI. Local `make web-cap-sync` already exists. Store AAB procedure:
 
 - [ ] Variables per [`railway_variables.md`](railway_variables.md) and [`.env.prod-test.example`](../../.env.prod-test.example)
 - [ ] Local operator grant available if testing Platform (`grant_platform_operator`)
-- [ ] `celery-worker` and `celery-beat` running (Railway logs)
+- [ ] the three Celery workers and `celery-beat` running (Railway logs)
 - [ ] Automated: `BASE_URL=https://<domain> ./scripts/smoke/readonly.sh` exits 0
 
 **No `make web-dev`** on Railway — frontend is same-origin HTTPS build.

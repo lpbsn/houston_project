@@ -29,6 +29,14 @@ def _png_upload() -> SimpleUploadedFile:
     return SimpleUploadedFile("photo.png", buffer.read(), content_type="image/png")
 
 
+def _body(text, temporary_upload_ids=None, client_submission_id=None):
+    return {
+        "text": text,
+        "temporary_upload_ids": [] if temporary_upload_ids is None else temporary_upload_ids,
+        "client_submission_id": client_submission_id or str(uuid.uuid4()),
+    }
+
+
 def observations_url(establishment_id) -> str:
     return f"/api/v1/establishments/{establishment_id}/observations/"
 
@@ -54,7 +62,7 @@ def test_submit_observation_persists_raw_text_without_api_exposure(api_client):
     submitted_text = "Fuite d'eau visible au niveau du couloir principal."
     response = api_client.post(
         observations_url(establishment.id),
-        {"text": submitted_text, "temporary_upload_ids": []},
+        _body(submitted_text),
         format="json",
         HTTP_AUTHORIZATION=f"Bearer {token}",
     )
@@ -88,7 +96,7 @@ def test_submit_rejects_short_text(api_client):
 
     response = api_client.post(
         observations_url(establishment.id),
-        {"text": "court", "temporary_upload_ids": []},
+        _body("court"),
         format="json",
         HTTP_AUTHORIZATION=f"Bearer {token}",
     )
@@ -122,10 +130,10 @@ def test_submit_with_temporary_photo_upload(api_client):
 
     submit_response = api_client.post(
         observations_url(establishment.id),
-        {
-            "text": "Tache visible sur le mur près de la réception.",
-            "temporary_upload_ids": [upload_id],
-        },
+        _body(
+            "Tache visible sur le mur près de la réception.",
+            temporary_upload_ids=[upload_id],
+        ),
         format="json",
         HTTP_AUTHORIZATION=f"Bearer {token}",
     )
@@ -154,10 +162,10 @@ def test_submit_rejects_already_linked_upload(api_client):
 
     first_submit = api_client.post(
         observations_url(establishment.id),
-        {
-            "text": "Tache visible sur le mur près de la réception.",
-            "temporary_upload_ids": [upload_id],
-        },
+        _body(
+            "Tache visible sur le mur près de la réception.",
+            temporary_upload_ids=[upload_id],
+        ),
         format="json",
         HTTP_AUTHORIZATION=f"Bearer {token}",
     )
@@ -165,10 +173,10 @@ def test_submit_rejects_already_linked_upload(api_client):
 
     second_submit = api_client.post(
         observations_url(establishment.id),
-        {
-            "text": "Autre observation avec la même photo liée.",
-            "temporary_upload_ids": [upload_id],
-        },
+        _body(
+            "Autre observation avec la même photo liée.",
+            temporary_upload_ids=[upload_id],
+        ),
         format="json",
         HTTP_AUTHORIZATION=f"Bearer {token}",
     )
@@ -176,47 +184,39 @@ def test_submit_rejects_already_linked_upload(api_client):
     assert second_submit.json()["code"] == "observation_upload_not_found"
 
 
-@pytest.mark.django_db(transaction=True)
-@patch("houston.signals.tasks.process_observation_task.delay")
-def test_api_submit_201_when_enqueue_fails_on_commit_observation_stays_queued(
-    mock_delay,
-    api_client,
-):
+def test_reused_submission_key_with_different_text_returns_409(api_client):
     establishment = create_establishment(name="Observation Hotel")
-    staff = create_user(username="obs_enqueue_fail")
+    staff = create_user(username="obs_conflict")
     create_membership(
         establishment=establishment,
         user=staff,
         role=EstablishmentMembership.Role.STAFF,
     )
     token = login(api_client, user=staff)
-    mock_delay.side_effect = RuntimeError("broker unavailable")
-    callbacks = []
+    client_submission_id = str(uuid.uuid4())
+    first = api_client.post(
+        observations_url(establishment.id),
+        _body(
+            "Première observation suffisamment longue.",
+            client_submission_id=client_submission_id,
+        ),
+        format="json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert first.status_code == 201
 
-    with patch(
-        "django.db.transaction.on_commit",
-        side_effect=lambda fn: callbacks.append(fn),
-    ):
-        response = api_client.post(
-            observations_url(establishment.id),
-            {
-                "text": "Observation persistée malgré échec enqueue post-commit.",
-                "temporary_upload_ids": [],
-            },
-            format="json",
-            HTTP_AUTHORIZATION=f"Bearer {token}",
-        )
-
-    assert response.status_code == 201
-    body = response.json()
-    assert body["processing_status"] == ObservationProcessing.Status.QUEUED
-    assert len(callbacks) == 1
-
-    with pytest.raises(RuntimeError, match="broker unavailable"):
-        callbacks[0]()
-
-    observation = Observation.objects.get(id=body["id"])
-    assert observation.processing.status == ObservationProcessing.Status.QUEUED
+    conflict = api_client.post(
+        observations_url(establishment.id),
+        _body(
+            "Deuxième observation différente sur la même clé.",
+            client_submission_id=client_submission_id,
+        ),
+        format="json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert conflict.status_code == 409
+    assert conflict.json()["code"] == "conflict_error"
+    assert Observation.objects.filter(establishment=establishment).count() == 1
 
 
 @patch("houston.uploads.api.transcription_views.transcribe_audio_file")
@@ -269,10 +269,7 @@ def test_submit_returns_403_for_foreign_establishment(api_client):
 
     response = api_client.post(
         observations_url(foreign.id),
-        {
-            "text": "Tentative de soumission hors établissement autorisé.",
-            "temporary_upload_ids": [],
-        },
+        _body("Tentative de soumission hors établissement autorisé."),
         format="json",
         HTTP_AUTHORIZATION=f"Bearer {token}",
     )
@@ -300,10 +297,7 @@ def test_submit_returns_403_for_inactive_membership(api_client, membership_statu
 
     response = api_client.post(
         observations_url(establishment.id),
-        {
-            "text": "Soumission avec membership inactif ou invité.",
-            "temporary_upload_ids": [],
-        },
+        _body("Soumission avec membership inactif ou invité."),
         format="json",
         HTTP_AUTHORIZATION=f"Bearer {token}",
     )

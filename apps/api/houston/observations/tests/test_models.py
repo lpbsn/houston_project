@@ -48,6 +48,7 @@ def test_observation_stores_raw_text_not_exposed_field_name():
         submitted_by_membership=membership,
         raw_text="Chambre 204 nécessite un contrôle de propreté.",
         submitted_at=now,
+        client_submission_id=uuid.uuid4(),
     )
     ObservationProcessing.objects.create(
         observation=observation,

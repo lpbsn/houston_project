@@ -6,10 +6,10 @@ Railway does **not** auto-discover multiple `railway.toml` files under subdirect
 
 Houston builds from the **repository root**. Dockerfiles use selective `COPY` aligned with Watch Paths (e.g. `apps/api/`, `pyproject.toml`, `uv.lock`; `api-web` also copies frontend build inputs).
 
-| Setting | `api-web` | `celery-worker` | `celery-beat` |
+| Setting | `api-web` | three workers | `celery-beat` |
 |---|---|---|---|
 | **Root Directory** | `/` | `/` | `/` |
-| **Config File path** | `/infra/railway/api-web/railway.toml` | `/infra/railway/celery-worker/railway.toml` | `/infra/railway/celery-beat/railway.toml` |
+| **Config File path** | `/infra/railway/api-web/railway.toml` | `/infra/railway/celery-ai-interactive/railway.toml`, `/infra/railway/celery-operational/railway.toml`, `/infra/railway/celery-background/railway.toml` | `/infra/railway/celery-beat/railway.toml` |
 
 Do **not** set Root Directory to `infra/railway/<service>` — that narrows the build context and breaks Docker builds.
 
@@ -22,7 +22,9 @@ Watch Paths express **functional build dependencies** — what should trigger a 
 | Service | `watchPatterns` |
 |---|---|
 | `api-web` | `/apps/web/**`, `/contracts/operational-realtime-invalidation.json`, `/apps/api/**`, `/infra/docker/railway/**`, `/infra/railway/api-web/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore` |
-| `celery-worker` | `/apps/api/**`, `/contracts/operational-realtime-invalidation.json`, `/infra/docker/api/**`, `/infra/railway/celery-worker/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore` |
+| `celery-ai-interactive` | `/apps/api/**`, `/contracts/operational-realtime-invalidation.json`, `/infra/docker/api/**`, `/infra/railway/celery-ai-interactive/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore` |
+| `celery-operational` | `/apps/api/**`, `/contracts/operational-realtime-invalidation.json`, `/infra/docker/api/**`, `/infra/railway/celery-operational/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore` |
+| `celery-background` | `/apps/api/**`, `/contracts/operational-realtime-invalidation.json`, `/infra/docker/api/**`, `/infra/railway/celery-background/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore` |
 | `celery-beat` | `/apps/api/**`, `/contracts/operational-realtime-invalidation.json`, `/infra/docker/api/**`, `/infra/railway/celery-beat/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore` |
 
 > Le dashboard peut afficher une valeur différente, car Railway ne le met pas à jour depuis `railway.toml`. Pour chaque déploiement, la configuration en code prévaut. Vérifier la configuration effective dans les détails du déploiement via l'icône de fichier.
@@ -32,8 +34,8 @@ Full trigger matrix and validation scenarios: [`docs/deploy/railway_deploy_contr
 ## Setup (once per Railway project)
 
 1. Create a Railway project from the Houston GitHub repository.
-2. Add **PostgreSQL** and **Redis** plugins (private).
-3. Add three services from the same repo: `api-web`, `celery-worker`, `celery-beat`.
+2. Add **PostgreSQL**, **Redis**, and a private **RabbitMQ** service (persistent volume).
+3. Add five services from the same repo: `api-web`, `celery-ai-interactive`, `celery-operational`, `celery-background`, `celery-beat`. Do not keep the retired `celery-worker` service.
 4. For each service: **Settings → Source → Root Directory** = `/` (default).
 5. For each service: **Settings → Config File** = absolute path from the table above.
 6. On the deployment details page, confirm the config-file icon points to the expected `railway.toml`.

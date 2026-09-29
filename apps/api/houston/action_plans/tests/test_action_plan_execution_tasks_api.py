@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from unittest.mock import patch
+from uuid import uuid4
 
 import pytest
 
@@ -110,7 +111,10 @@ def test_create_observation_endpoint(
             task.id,
             "create-observation/",
         ),
-        {"text": "Broken equipment in kitchen area today"},
+        {
+            "text": "Broken equipment in kitchen area today",
+            "client_submission_id": str(uuid4()),
+        },
         format="json",
         **auth_headers(token),
     )

@@ -38,7 +38,7 @@ keytool -genkeypair -v -keystore apps/web/android/upload-keystore.jks \
   -alias upload -keyalg RSA -keysize 2048 -validity 10000
 ```
 
-Railway (already required for Native CORS): `HOUSTON_CLIENT_ORIGINS` includes `capacitor://localhost` and `https://localhost`. `DJANGO_ALLOWED_HOSTS` includes `app.spore-os.com`. For Closed Testing push: `HOUSTON_PUSH_ENABLED` plus `HOUSTON_FCM_SERVICE_ACCOUNT_JSON` on `api-web` and `celery-worker`. APNs `.p8` stays in the Firebase console and needs the Apple Developer Program.
+Railway (already required for Native CORS): `HOUSTON_CLIENT_ORIGINS` includes `capacitor://localhost` and `https://localhost`. `DJANGO_ALLOWED_HOSTS` includes `app.spore-os.com`. For Closed Testing push: `HOUSTON_PUSH_ENABLED` plus `HOUSTON_FCM_SERVICE_ACCOUNT_JSON` on `api-web` and `celery-operational`. APNs `.p8` stays in the Firebase console and needs the Apple Developer Program.
 
 ## Android AAB
 

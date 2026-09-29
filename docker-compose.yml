@@ -19,8 +19,8 @@ x-api-environment: &api_environment
   POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-}
 
   REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-  CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
-  CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
+  CELERY_BROKER_URL: ${CELERY_BROKER_URL:-amqp://houston:houston@rabbitmq:5672//}
+  CELERY_WORKER_CONCURRENCY: ${CELERY_WORKER_CONCURRENCY:-4}
 
   HOUSTON_PUSH_ENABLED: ${HOUSTON_PUSH_ENABLED:-false}
   HOUSTON_FCM_SERVICE_ACCOUNT_JSON: ${HOUSTON_FCM_SERVICE_ACCOUNT_JSON:-}
@@ -36,7 +36,6 @@ x-api-environment: &api_environment
   HOUSTON_AI_OBSERVATION_PROVIDER: ${HOUSTON_AI_OBSERVATION_PROVIDER:-openai}
   HOUSTON_AI_OBSERVATION_MODEL: ${HOUSTON_AI_OBSERVATION_MODEL:-gpt-4.1-mini}
   HOUSTON_AI_OBSERVATION_TIMEOUT_SECONDS: ${HOUSTON_AI_OBSERVATION_TIMEOUT_SECONDS:-30}
-  HOUSTON_AI_OBSERVATION_MAX_RETRIES: ${HOUSTON_AI_OBSERVATION_MAX_RETRIES:-2}
 
   HOUSTON_AI_ANALYTICS_PATTERN_PROVIDER: ${HOUSTON_AI_ANALYTICS_PATTERN_PROVIDER:-openai}
   HOUSTON_AI_ANALYTICS_PATTERN_MODEL: ${HOUSTON_AI_ANALYTICS_PATTERN_MODEL:-gpt-5-mini}
@@ -60,28 +59,82 @@ services:
       - .:/app
       - private_media:/app/apps/api/private_media
 
-  celery:
+  rabbitmq:
+    image: rabbitmq:3-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: houston
+      RABBITMQ_DEFAULT_PASS: houston
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  celery-ai-interactive:
     image: *api_image
     build: *api_build
     security_opt:
       - no-new-privileges:true
     command:
       [
-        "uv",
-        "run",
-        "celery",
-        "-A",
-        "config",
-        "worker",
-        "-l",
-        "info",
-        "-n",
-        "houston-worker@%h",
+        "sh",
+        "-c",
+        "exec uv run celery -A config worker -l info -n houston-ai-interactive@%h -Q ai_interactive --prefetch-multiplier=1 --concurrency \"$${CELERY_WORKER_CONCURRENCY:-4}\"",
       ]
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment: *api_environment
+    volumes:
+      - .:/app
+      - private_media:/app/apps/api/private_media
+
+  celery-operational:
+    image: *api_image
+    build: *api_build
+    security_opt:
+      - no-new-privileges:true
+    command:
+      [
+        "sh",
+        "-c",
+        "exec uv run celery -A config worker -l info -n houston-operational@%h -Q operational --concurrency \"$${CELERY_WORKER_CONCURRENCY:-4}\"",
+      ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment: *api_environment
+    volumes:
+      - .:/app
+      - private_media:/app/apps/api/private_media
+
+  celery-background:
+    image: *api_image
+    build: *api_build
+    security_opt:
+      - no-new-privileges:true
+    command:
+      [
+        "sh",
+        "-c",
+        "exec uv run celery -A config worker -l info -n houston-background@%h -Q ai_background,maintenance --concurrency \"$${CELERY_WORKER_CONCURRENCY:-4}\"",
+      ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     environment: *api_environment
     volumes:
@@ -114,6 +167,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     environment: *api_environment
     volumes:
@@ -168,3 +223,4 @@ volumes:
   web_node_modules:
   private_media:
   celerybeat_data:
+  rabbitmq_data:

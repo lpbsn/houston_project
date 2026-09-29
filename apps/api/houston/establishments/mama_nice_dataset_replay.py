@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Iterator
 from unittest.mock import patch
-from uuid import UUID
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from django.test import RequestFactory
 
@@ -846,6 +846,10 @@ def _replay_observations_and_signals(
                     membership=author,
                     text=obs["raw_text"],
                     temporary_upload_ids=[],
+                    client_submission_id=uuid5(
+                        NAMESPACE_URL,
+                        f"mama-nice-observation:{obs['seed_key']}",
+                    ),
                 )
                 run_observation_pipeline(
                     observation.id,

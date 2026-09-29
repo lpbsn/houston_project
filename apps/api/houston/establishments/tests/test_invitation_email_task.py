@@ -437,7 +437,10 @@ def test_no_token_or_full_url_in_logs(invitation_bundle, caplog: pytest.LogCaptu
 
 
 def test_task_declares_ignore_result():
-    assert send_establishment_invitation_email_task.ignore_result is True
+    from django.conf import settings
+
+    assert settings.CELERY_TASK_IGNORE_RESULT is True
+    assert send_establishment_invitation_email_task.ignore_result is not False
 
 
 @override_settings(HOUSTON_INVITATION_EMAIL_ENABLED=True)
@@ -470,4 +473,4 @@ def test_schedule_apply_async_passes_ignore_result():
             )
 
     _, kwargs = apply_async.call_args
-    assert kwargs["ignore_result"] is True
+    assert "ignore_result" not in kwargs

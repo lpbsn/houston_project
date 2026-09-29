@@ -2550,6 +2550,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/action-plan-execution-tasks/{task_execution_id}/mark-done/:
     post:
       operationId: v1_establishments_action_plan_execution_tasks_mark_done_create
@@ -7527,6 +7533,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/observations/{observation_id}/processing-status/:
     get:
       operationId: v1_establishments_observations_processing_status_retrieve
@@ -10925,7 +10937,11 @@ components:
             type: string
             format: uuid
           maxItems: 3
+        client_submission_id:
+          type: string
+          format: uuid
       required:
+      - client_submission_id
       - text
     ActionPlanTaskCreateObservationResponse:
       type: object
@@ -14566,7 +14582,11 @@ components:
             type: string
             format: uuid
           maxItems: 3
+        client_submission_id:
+          type: string
+          format: uuid
       required:
+      - client_submission_id
       - text
     ObservationSubmitResponse:
       type: object

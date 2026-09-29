@@ -2398,6 +2398,7 @@ def create_observation_from_execution_task(
     task_execution: ActionPlanExecutionTask,
     actor: EstablishmentMembership,
     text: str,
+    client_submission_id: uuid.UUID,
     temporary_upload_ids: list[uuid.UUID] | None = None,
 ) -> ActionPlanExecutionTask:
     execution = _lock_execution_for_write(
@@ -2411,6 +2412,28 @@ def create_observation_from_execution_task(
         raise ActionPlanPermissionError("Not allowed to execute this action plan task.")
     if execution.status not in ACTIVE_EXECUTION_STATUSES:
         raise ActionPlanValidationError("Action plan execution is not active.")
+    from houston.observations.exceptions import ObservationSubmissionConflictError
+    from houston.observations.models import Observation
+
+    existing_observation = Observation.objects.filter(
+        establishment_id=actor.establishment_id,
+        submitted_by_membership=actor,
+        client_submission_id=client_submission_id,
+    ).first()
+    if (
+        existing_observation is not None
+        and task_execution.observation_id == existing_observation.id
+    ):
+        submit_observation(
+            membership=actor,
+            text=text,
+            temporary_upload_ids=temporary_upload_ids or [],
+            client_submission_id=client_submission_id,
+            origin=Observation.Origin.ACTION_PLAN_TASK,
+            action_plan_execution=execution,
+            action_plan_execution_task=task_execution,
+        )
+        return task_execution
     if task_execution.status != TASK_STATUS_PENDING:
         raise ActionPlanValidationError("Task cannot create an observation in its current state.")
 
@@ -2419,15 +2442,22 @@ def create_observation_from_execution_task(
             membership=actor,
             text=text,
             temporary_upload_ids=temporary_upload_ids or [],
+            client_submission_id=client_submission_id,
             origin=Observation.Origin.ACTION_PLAN_TASK,
             action_plan_execution=execution,
             action_plan_execution_task=task_execution,
         )
-    except (TermsAcceptanceRequiredError, AiConsentRequiredError):
+    except (
+        TermsAcceptanceRequiredError,
+        AiConsentRequiredError,
+        ObservationSubmissionConflictError,
+    ):
         raise
     except ObservationValidationError as exc:
         raise ActionPlanValidationError(str(exc)) from exc
 
+    if task_execution.observation_id == observation.id:
+        return task_execution
     return _apply_task_observation_created(
         task_execution=task_execution,
         execution=execution,

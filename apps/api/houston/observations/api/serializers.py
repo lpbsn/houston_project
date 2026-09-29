@@ -11,6 +11,7 @@ class ObservationSubmitRequestSerializer(serializers.Serializer):
         default=list,
         max_length=3,
     )
+    client_submission_id = serializers.UUIDField()
 
 
 class ObservationSubmitResponseSerializer(serializers.Serializer):

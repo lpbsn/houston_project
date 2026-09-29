@@ -107,7 +107,10 @@ def test_task_sends_to_new_email_without_logging_secret(caplog):
 
 
 def test_task_declares_ignore_result():
-    assert send_email_change_email_task.ignore_result is True
+    from django.conf import settings
+
+    assert settings.CELERY_TASK_IGNORE_RESULT is True
+    assert send_email_change_email_task.ignore_result is not False
 
 
 @override_settings(RESEND_API_KEY="re_test_key")
@@ -133,7 +136,7 @@ def test_schedule_apply_async_passes_ignore_result_and_redacted_argsrepr():
             )
 
     kwargs = apply_async.call_args.kwargs
-    assert kwargs["ignore_result"] is True
+    assert "ignore_result" not in kwargs
     assert "<redacted>" in kwargs["argsrepr"]
     raw_token = kwargs["args"][1]
     assert raw_token not in kwargs["argsrepr"]

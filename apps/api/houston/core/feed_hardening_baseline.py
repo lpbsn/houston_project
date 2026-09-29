@@ -627,6 +627,12 @@ def _seed_signals(
             raw_text="Synthetic observation used only for feed measurement.",
             submitted_at=now
             - timedelta(minutes=signal_index, seconds=observation_index),
+            client_submission_id=_baseline_uuid(
+                seed,
+                profile.name,
+                "observation-submission",
+                signal_index * 2 + observation_index,
+            ),
         )
         for signal_index, signal in enumerate(signals)
         for observation_index in range(2)

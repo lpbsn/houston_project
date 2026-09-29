@@ -44,7 +44,7 @@ Forbidden placeholders:
 
 ## Required Railway variables (prod-test)
 
-Set secrets and hosts on `api-web`, `celery-worker`, and `celery-beat` unless the matrix says otherwise. **Do not duplicate the table here** — [`railway_variables.md`](railway_variables.md) is the matrix. Template: [`.env.prod-test.example`](../../.env.prod-test.example).
+Set secrets and hosts on `api-web`, the three Celery workers, and `celery-beat` unless the matrix says otherwise. **Do not duplicate the table here** — [`railway_variables.md`](railway_variables.md) is the matrix. Template: [`.env.prod-test.example`](../../.env.prod-test.example).
 
 `HOUSTON_ALLOW_INSECURE_LOCAL_CSRF_ORIGINS` and `HOUSTON_ALLOW_LOCAL_ALLOWED_HOSTS` are **local only — never on Railway**.
 

@@ -53,7 +53,7 @@ Optionnel : `OPENAI_API_KEY` (serveur uniquement), `HOUSTON_AI_*`, `VITE_API_BAS
 - Types API après pull qui change le contrat : `make schema` puis `make web-api-generate`.
 - Après `git pull` : `make build-backend` si Dockerfiles/deps ; sinon `make bootstrap-dev` ; `make web-install` si `package-lock.json` a changé.
 
-Vérifs optionnelles : `make check`, `make web-typecheck`, `make verify`. Quotidien : `make up-backend` + `make web-dev`. Logs : `docker compose logs -f api` / `celery`. Shell API : `make shell`.
+Vérifs optionnelles : `make check`, `make web-typecheck`, `make verify`. Quotidien : `make up-backend` + `make web-dev`. Logs : `docker compose logs -f api` / `celery-ai-interactive`. Shell API : `make shell`.
 
 ## Si ça bloque
 
@@ -65,7 +65,7 @@ Vérifs optionnelles : `make check`, `make web-typecheck`, `make verify`. Quotid
 | `make migrate` / `bootstrap-dev` échoue | `make up-backend` puis réessayer |
 | Catalogue vide | `make import-catalog` puis `make catalog-check` |
 | `/platform` refusé | Compte `ACTIVE` + `grant_platform_operator` + desktop Web |
-| Observations `queued` | `docker compose up -d celery` ; Redis ; optionnel OpenAI |
+| Observations `queued` | `docker compose up -d rabbitmq celery-ai-interactive` ; Redis ; optionnel OpenAI |
 | `uploads.E001` | Volume `private_media` ; hors Docker `mkdir -p apps/api/private_media` |
 | `make web-api-generate` | D’abord `make schema` |
 | Secrets | Ne pas coller `docker compose config` (interpolation) |
@@ -73,7 +73,7 @@ Vérifs optionnelles : `make check`, `make web-typecheck`, `make verify`. Quotid
 ## Checklist
 
 - [ ] Clone + `.env` avec `DJANGO_SECRET_KEY` local
-- [ ] `docker compose ps` : postgres, redis, api, celery **Up**
+- [ ] `docker compose ps` : postgres, redis, rabbitmq, api, celery-ai-interactive, celery-operational, celery-background **Up**
 - [ ] `make bootstrap-dev` + `catalog-check`
 - [ ] Health 200 + http://localhost:5173
 - [ ] Platform si besoin (`grant_platform_operator`)
