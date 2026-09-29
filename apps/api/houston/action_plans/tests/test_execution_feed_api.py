@@ -1141,6 +1141,110 @@ def test_action_plan_executionfeed_query_count_with_one_item(
     )
 
 
+def test_action_plan_execution_feed_pins_are_fully_hydrated_without_n_plus_one(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    from houston.action_plans.feed_pin_services import pin_action_plan_execution_for_membership
+    from houston.signals.models import Signal
+    from houston.testing.query_baseline import capture_queries
+    from houston.testing.taxonomy import create_restaurant_v3_taxonomy, create_v3_signal
+
+    executions = [
+        create_execution(
+            owner_membership,
+            business_unit=business_unit,
+            title=f"Hydrated pin {index}",
+            assignees=[
+                build_assignee_payload(
+                    membership=staff_membership,
+                    business_unit=business_unit,
+                )
+            ],
+        )
+        for index in range(5)
+    ]
+    taxonomy = create_restaurant_v3_taxonomy(owner_membership.establishment)
+    assert taxonomy.maintenance is not None
+    assert taxonomy.lighting_subject is not None
+    source_signals_by_execution_id = {}
+    for index, execution in enumerate(executions):
+        execution.source_signal = create_v3_signal(
+            owner_membership.establishment,
+            affected_business_unit=taxonomy.restaurant,
+            responsible_business_unit=taxonomy.maintenance,
+            activity_subject=taxonomy.lighting_subject,
+            routing_status=Signal.RoutingStatus.RESOLVED,
+            title=f"Hydrated source signal {index}",
+            location_text=f"zone {index}",
+        )
+        execution.save(update_fields=["source_signal", "updated_at"])
+        source_signals_by_execution_id[str(execution.id)] = execution.source_signal
+    pin_action_plan_execution_for_membership(
+        membership=owner_membership,
+        execution_id=executions[0].id,
+    )
+    token = login(api_client, user=owner_membership.user)
+    url = action_plan_execution_feed_url(owner_membership.establishment_id) + feed_query(
+        "general",
+    )
+
+    with capture_queries() as one_pin_context:
+        one_pin_response = api_client.get(url, **auth_headers(token))
+
+    for execution in executions[1:3]:
+        pin_action_plan_execution_for_membership(
+            membership=owner_membership,
+            execution_id=execution.id,
+        )
+
+    with capture_queries() as three_pin_context:
+        three_pin_response = api_client.get(url, **auth_headers(token))
+
+    assert one_pin_response.status_code == 200
+    assert three_pin_response.status_code == 200
+    assert len(one_pin_response.json()["pins"]) == 1
+    three_pin_payloads = [
+        item["action_plan_execution"] for item in three_pin_response.json()["pins"]
+    ]
+    assert len(three_pin_payloads) == 3
+    for payload in three_pin_payloads:
+        assert payload["pilot_business_unit"]["id"] == str(business_unit.id)
+        assert payload["assignees"][0]["membership_id"] == str(staff_membership.id)
+        assert payload["task_count"] == 1
+        assert payload["task_executions"][0]["business_unit"]["id"] == str(business_unit.id)
+        assert payload["created_by_display_name"]
+        assert payload["establishment_name"] == owner_membership.establishment.name
+        assert payload["is_pinned"] is True
+        source_signal = source_signals_by_execution_id[payload["id"]]
+        assert payload["signal_summary"] == {
+            "id": str(source_signal.id),
+            "title": source_signal.title,
+            "status": Signal.Status.OPEN,
+            "affected_business_unit_id": str(taxonomy.restaurant.id),
+            "affected_business_unit_key": taxonomy.restaurant.normalized_specific_name,
+            "affected_business_unit_label": taxonomy.restaurant.specific_name,
+            "responsible_business_unit_id": str(taxonomy.maintenance.id),
+            "responsible_business_unit_key": taxonomy.maintenance.normalized_specific_name,
+            "responsible_business_unit_label": taxonomy.maintenance.specific_name,
+            "activity_subject_id": str(taxonomy.lighting_subject.id),
+            "activity_subject_normalized_name": taxonomy.lighting_subject.normalized_name,
+            "activity_subject_label": taxonomy.lighting_subject.label,
+            "location_text": source_signal.location_text,
+        }
+    assert len(three_pin_context.captured_queries) == len(one_pin_context.captured_queries)
+    for context in (one_pin_context, three_pin_context):
+        assert (
+            sum(
+                'FROM "signals_signal"' in query["sql"]
+                for query in context.captured_queries
+            )
+            == 1
+        )
+
+
 def test_manager_late_scope_sees_pre_existing_execution_in_personal_view(
     api_client,
     owner_membership,

@@ -23,7 +23,8 @@ ACTION_PLAN_EXECUTION_FEED_EMPTY_MAX_QUERIES = 17
 # GET .../action-plan-execution-feed/?view_mode=general — owner, 1 active execution
 # +2 vs prior 15: section_counts + active_review prefetch
 # +3 Lot 3: separate pins collection + scheduled slim next summary + pin subtotal.
-ACTION_PLAN_EXECUTION_FEED_ONE_ITEM_MAX_QUERIES = 20
+# +3 PR5B: hydrate the bounded card through relation-family prefetches after LIMIT.
+ACTION_PLAN_EXECUTION_FEED_ONE_ITEM_MAX_QUERIES = 23
 
 # GET .../chat/conversations/ — 3 DMs with one message each
 # Phase L: 12 queries; Phase S1: 10 (batched latest messages + single participant pass)

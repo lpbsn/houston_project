@@ -34,6 +34,7 @@ from houston.action_plans.selectors import (
     action_plan_execution_feed_queryset,
     action_plan_execution_feed_section_counts,
     filter_action_plan_execution_feed_category,
+    hydrate_action_plan_execution_feed_items,
     scheduled_executions_cross_summary,
     scheduled_executions_next_queryset,
     scheduled_executions_upcoming_queryset,
@@ -178,6 +179,7 @@ def build_action_plan_execution_feed_page(
         )
 
     if cursor is not None:
+        hydrate_action_plan_execution_feed_items(served)
         return ActionPlanExecutionFeedPage(
             items=served,
             has_more=has_more,
@@ -199,6 +201,7 @@ def build_action_plan_execution_feed_page(
             category=category,
         )[:ACTION_PLAN_EXECUTION_FEED_PIN_LIMIT]
     )
+    hydrate_action_plan_execution_feed_items([*served, *pins])
 
     upcoming_qs = scheduled_executions_upcoming_queryset(
         membership=membership,
@@ -305,6 +308,7 @@ def build_cross_action_plan_execution_feed_page(
     candidates = list(sorted_qs[: page_size + 1])
     has_more = len(candidates) > page_size
     served = candidates[:page_size]
+    hydrate_action_plan_execution_feed_items(served)
     next_cursor = None
     if has_more and served:
         next_cursor = encode_action_plan_execution_feed_cursor(
@@ -419,6 +423,7 @@ def build_cross_action_plan_execution_feed_pins_page(
     candidates = list(pins_qs[: page_size + 1])
     has_more = len(candidates) > page_size
     served = candidates[:page_size]
+    hydrate_action_plan_execution_feed_items(served)
     next_cursor = None
     if has_more and served:
         next_cursor = encode_action_plan_execution_feed_pin_cursor(

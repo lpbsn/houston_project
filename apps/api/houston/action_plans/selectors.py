@@ -5,7 +5,16 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 
-from django.db.models import Count, Exists, OuterRef, Prefetch, Q, QuerySet, Subquery
+from django.db.models import (
+    Count,
+    Exists,
+    OuterRef,
+    Prefetch,
+    Q,
+    QuerySet,
+    Subquery,
+    prefetch_related_objects,
+)
 from django.utils import timezone
 
 from houston.action_plans.constants import (
@@ -50,9 +59,10 @@ from houston.action_plans.permissions import (
     can_view_action_plan_schedule,
 )
 from houston.comments.models import CommentMention
-from houston.establishments.models import EstablishmentMembership
+from houston.establishments.models import BusinessUnit, EstablishmentMembership
 from houston.establishments.permissions import is_valid_membership
 from houston.establishments.role_constants import ADMIN_ROLES
+from houston.signals.models import Signal
 
 _PLAN_DETAIL_SELECT_RELATED = (
     "pilot_business_unit",
@@ -385,6 +395,37 @@ _EXECUTION_FEED_PREFETCH = (
     _EXECUTION_FEED_TASK_PREFETCH,
     _EXECUTION_FEED_ACTIVE_REVIEW_PREFETCH,
 )
+_EXECUTION_FEED_CARD_PREFETCH = (
+    Prefetch(
+        "pilot_business_unit",
+        queryset=BusinessUnit.objects.select_related("catalog_business_unit"),
+    ),
+    Prefetch(
+        "source_signal",
+        queryset=Signal.objects.select_related(
+            "affected_business_unit",
+            "affected_business_unit__catalog_business_unit",
+            "responsible_business_unit",
+            "responsible_business_unit__catalog_business_unit",
+            "activity_subject",
+            "activity_subject__catalog_activity_subject",
+        ),
+    ),
+    Prefetch(
+        "created_by",
+        queryset=EstablishmentMembership.objects.select_related("user"),
+    ),
+    Prefetch(
+        "marked_done_by_membership",
+        queryset=EstablishmentMembership.objects.select_related("user"),
+    ),
+    Prefetch(
+        "validated_by_membership",
+        queryset=EstablishmentMembership.objects.select_related("user"),
+    ),
+    "establishment",
+    *_EXECUTION_FEED_PREFETCH,
+)
 
 
 def _assignee_visible_to_membership_now_q(
@@ -597,10 +638,17 @@ def action_plan_execution_feed_queryset(
             status__in=OPERATIONAL_EXECUTION_FEED_STATUSES,
         )
         .filter(Q(visible_from__isnull=True) | Q(visible_from__lte=now))
-        .select_related(*_EXECUTION_FEED_SELECT_RELATED)
-        .prefetch_related(*_EXECUTION_FEED_PREFETCH)
         .distinct()
     )
+
+
+def hydrate_action_plan_execution_feed_items(
+    executions: list[ActionPlanExecution],
+) -> None:
+    """Hydrate already-bounded feed rows without rebuilding the ordering query."""
+    if not executions:
+        return
+    prefetch_related_objects(executions, *_EXECUTION_FEED_CARD_PREFETCH)
 
 
 def action_plan_execution_calendar_items_queryset(

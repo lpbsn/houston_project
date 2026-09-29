@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import time
+
 import pytest
 from django.utils import timezone
 
@@ -204,8 +206,8 @@ def test_delete_mixed_execution_statuses(
         created_by=owner_membership,
         start_date=timezone.now().date(),
         end_date=timezone.now().date(),
-        start_at=timezone.now().time().replace(microsecond=0),
-        end_at=(timezone.now() + timezone.timedelta(hours=1)).time().replace(microsecond=0),
+        start_at=time(9, 0),
+        end_at=time(10, 0),
         use_shared_chronology=True,
     )
     keep_ids = [in_progress.id, pending.id, done.id, canceled.id]
