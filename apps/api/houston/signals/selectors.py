@@ -3,7 +3,17 @@ from __future__ import annotations
 import uuid
 from typing import Literal
 
-from django.db.models import BooleanField, Count, Exists, OuterRef, Prefetch, Q, QuerySet, Value
+from django.db.models import (
+    BooleanField,
+    Count,
+    Exists,
+    OuterRef,
+    Prefetch,
+    Q,
+    QuerySet,
+    Subquery,
+    Value,
+)
 
 from houston.establishments.membership_scope import build_signal_feed_scope_q_v2
 from houston.establishments.models import EstablishmentMembership
@@ -384,10 +394,36 @@ def cross_signal_feed_queryset(
     visibility = Q()
     for membership in memberships:
         visibility |= signal_feed_visibility_q(membership=membership, view_mode="general")
-    queryset = _operational_signal_feed_queryset(visibility=visibility).annotate(
-        has_eligible_resolution_reviewers=Value(False, output_field=BooleanField()),
-    )
+    queryset = Signal.objects.filter(visibility)
     return apply_signal_feed_context_filters(queryset, filters=filters)
+
+
+def hydrate_cross_signal_feed_queryset(
+    queryset: QuerySet[Signal],
+    *,
+    limit: int,
+) -> QuerySet[Signal]:
+    """Hydrate a bounded Cross collection under one statement snapshot.
+
+    The ordered subquery revalidates visibility, filters, cursor and L/P membership
+    when the statement executes. The outer query can therefore hydrate only those
+    selected IDs under the same statement snapshot.
+    """
+    selected_ids = queryset.values("pk")[:limit]
+    hydration_base = Signal.objects.all()
+    if "status_rank" not in queryset.query.annotations:
+        # Keeping the pin predicates on the outer query lets PostgreSQL retain the
+        # selective pinned-row plan while revalidating P membership explicitly.
+        hydration_base = queryset
+    hydrated = (
+        hydration_base.filter(pk__in=Subquery(selected_ids))
+        .annotate(**_SIGNAL_AGGREGATION_COUNT_ANNOTATION)
+        .select_related(*_SIGNAL_LIST_SELECT_RELATED)
+        .prefetch_related(*_SIGNAL_LIST_PREFETCH)
+    )
+    if "status_rank" in queryset.query.annotations:
+        return apply_feed_sorting(hydrated)
+    return hydrated.order_by(*queryset.query.order_by)
 
 
 def get_cross_signal_for_detail(

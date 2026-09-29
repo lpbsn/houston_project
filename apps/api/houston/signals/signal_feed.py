@@ -20,6 +20,7 @@ from houston.signals.feed_filters import SignalFeedFilters, signal_feed_status_s
 from houston.signals.models import Signal
 from houston.signals.selectors import (
     cross_signal_feed_queryset,
+    hydrate_cross_signal_feed_queryset,
     signal_feed_counts,
     signal_feed_list_queryset,
     signal_feed_pins_queryset,
@@ -140,6 +141,74 @@ def _pins_page(
     return SignalFeedPinsPage(items=items, has_more=has_more, next_cursor=next_cursor)
 
 
+def _cross_page_from_list(
+    queryset,
+    *,
+    page_size: int,
+    cursor: SignalFeedCursor | None,
+    scope: str,
+    view_mode: str,
+    status: str,
+    filter_hash: str,
+    auth_context_hash: str,
+) -> tuple[list[Signal], bool, str | None]:
+    if cursor is not None:
+        queryset = apply_signal_feed_cursor(queryset, cursor)
+    candidates = list(
+        hydrate_cross_signal_feed_queryset(
+            queryset,
+            limit=page_size + 1,
+        )
+    )
+    has_more = len(candidates) > page_size
+    items = candidates[:page_size]
+    next_cursor = None
+    if has_more and items:
+        next_cursor = encode_signal_feed_cursor(
+            items[-1],
+            scope=scope,
+            view_mode=view_mode,
+            status=status,
+            filter_hash=filter_hash,
+            auth_context_hash=auth_context_hash,
+        )
+    return items, has_more, next_cursor
+
+
+def _cross_pins_page(
+    queryset,
+    *,
+    page_size: int,
+    cursor: SignalFeedPinCursor | None,
+    scope: str,
+    view_mode: str,
+    status: str,
+    filter_hash: str,
+    auth_context_hash: str,
+) -> SignalFeedPinsPage:
+    if cursor is not None:
+        queryset = apply_signal_feed_pin_cursor(queryset, cursor)
+    candidates = list(
+        hydrate_cross_signal_feed_queryset(
+            queryset,
+            limit=page_size + 1,
+        )
+    )
+    has_more = len(candidates) > page_size
+    items = candidates[:page_size]
+    next_cursor = None
+    if has_more and items:
+        next_cursor = encode_signal_feed_pin_cursor(
+            items[-1],
+            scope=scope,
+            view_mode=view_mode,
+            status=status,
+            filter_hash=filter_hash,
+            auth_context_hash=auth_context_hash,
+        )
+    return SignalFeedPinsPage(items=items, has_more=has_more, next_cursor=next_cursor)
+
+
 def build_signal_feed_page(
     *,
     membership: EstablishmentMembership,
@@ -219,7 +288,7 @@ def build_cross_signal_feed_page(
             auth_context_hash=auth_context_hash,
         )
     base = cross_signal_feed_queryset(memberships=prepared, filters=filters)
-    items, has_more, next_cursor = _page_from_list(
+    items, has_more, next_cursor = _cross_page_from_list(
         signal_feed_list_queryset(base, filters=filters),
         page_size=page_size,
         cursor=cursor,
@@ -231,7 +300,7 @@ def build_cross_signal_feed_page(
     )
     if cursor is not None:
         return SignalFeedPage(items=items, has_more=has_more, next_cursor=next_cursor)
-    pins_page = _pins_page(
+    pins_page = _cross_pins_page(
         signal_feed_pins_queryset(base, filters=filters),
         page_size=pins_page_size,
         cursor=None,
@@ -276,7 +345,7 @@ def build_cross_signal_feed_pins_page(
             auth_context_hash=auth_context_hash,
         )
     base = cross_signal_feed_queryset(memberships=prepared, filters=filters)
-    return _pins_page(
+    return _cross_pins_page(
         signal_feed_pins_queryset(base, filters=filters),
         page_size=page_size,
         cursor=cursor,
