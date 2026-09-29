@@ -168,7 +168,6 @@ def build_action_plan_execution_feed_page(
     candidates = list(sorted_qs[: page_size + 1])
     has_more = len(candidates) > page_size
     served = candidates[:page_size]
-    hydrate_action_plan_execution_feed_items(served)
     next_cursor = None
     if has_more and served:
         next_cursor = encode_action_plan_execution_feed_cursor(
@@ -180,6 +179,7 @@ def build_action_plan_execution_feed_page(
         )
 
     if cursor is not None:
+        hydrate_action_plan_execution_feed_items(served)
         return ActionPlanExecutionFeedPage(
             items=served,
             has_more=has_more,
@@ -201,7 +201,7 @@ def build_action_plan_execution_feed_page(
             category=category,
         )[:ACTION_PLAN_EXECUTION_FEED_PIN_LIMIT]
     )
-    hydrate_action_plan_execution_feed_items(pins)
+    hydrate_action_plan_execution_feed_items([*served, *pins])
 
     upcoming_qs = scheduled_executions_upcoming_queryset(
         membership=membership,
