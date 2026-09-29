@@ -1141,6 +1141,68 @@ def test_action_plan_executionfeed_query_count_with_one_item(
     )
 
 
+def test_action_plan_execution_feed_pins_are_fully_hydrated_without_n_plus_one(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    from houston.action_plans.feed_pin_services import pin_action_plan_execution_for_membership
+    from houston.testing.query_baseline import capture_queries
+
+    executions = [
+        create_execution(
+            owner_membership,
+            business_unit=business_unit,
+            title=f"Hydrated pin {index}",
+            assignees=[
+                build_assignee_payload(
+                    membership=staff_membership,
+                    business_unit=business_unit,
+                )
+            ],
+        )
+        for index in range(5)
+    ]
+    pin_action_plan_execution_for_membership(
+        membership=owner_membership,
+        execution_id=executions[0].id,
+    )
+    token = login(api_client, user=owner_membership.user)
+    url = action_plan_execution_feed_url(owner_membership.establishment_id) + feed_query(
+        "general",
+    )
+
+    with capture_queries() as one_pin_context:
+        one_pin_response = api_client.get(url, **auth_headers(token))
+
+    for execution in executions[1:3]:
+        pin_action_plan_execution_for_membership(
+            membership=owner_membership,
+            execution_id=execution.id,
+        )
+
+    with capture_queries() as three_pin_context:
+        three_pin_response = api_client.get(url, **auth_headers(token))
+
+    assert one_pin_response.status_code == 200
+    assert three_pin_response.status_code == 200
+    assert len(one_pin_response.json()["pins"]) == 1
+    three_pin_payloads = [
+        item["action_plan_execution"] for item in three_pin_response.json()["pins"]
+    ]
+    assert len(three_pin_payloads) == 3
+    for payload in three_pin_payloads:
+        assert payload["pilot_business_unit"]["id"] == str(business_unit.id)
+        assert payload["assignees"][0]["membership_id"] == str(staff_membership.id)
+        assert payload["task_count"] == 1
+        assert payload["task_executions"][0]["business_unit"]["id"] == str(business_unit.id)
+        assert payload["created_by_display_name"]
+        assert payload["establishment_name"] == owner_membership.establishment.name
+        assert payload["is_pinned"] is True
+    assert len(three_pin_context.captured_queries) == len(one_pin_context.captured_queries)
+
+
 def test_manager_late_scope_sees_pre_existing_execution_in_personal_view(
     api_client,
     owner_membership,
