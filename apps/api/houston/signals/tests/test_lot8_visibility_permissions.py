@@ -13,7 +13,6 @@ from django.utils import timezone
 from houston.accounts.models import User
 from houston.action_plans.permissions import can_create_linked_action_plan
 from houston.establishments.models import EstablishmentMembership
-from houston.signals.feed_filters import SignalFeedFilters, apply_feed_filters
 from houston.signals.models import Signal, SignalSourceObservation
 from houston.signals.permissions import (
     can_cancel_signal,
@@ -371,16 +370,6 @@ def test_needs_qualification_excludes_resolved_and_canceled(api_client):
     assert str(active.id) in ids
     assert str(lifecycle_resolved.id) not in ids
     assert str(lifecycle_canceled.id) not in ids
-
-    filtered_ids = set(
-        apply_feed_filters(
-            Signal.objects.filter(establishment_id=owner.establishment_id),
-            filters=SignalFeedFilters(needs_qualification=True),
-        ).values_list("id", flat=True)
-    )
-    assert active.id in filtered_ids
-    assert lifecycle_resolved.id not in filtered_ids
-    assert lifecycle_canceled.id not in filtered_ids
 
 
 def test_needs_qualification_filter_forbidden_for_staff(api_client):

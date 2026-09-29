@@ -119,34 +119,6 @@ def apply_signal_feed_context_filters(queryset, *, filters: SignalFeedFilters | 
     return queryset
 
 
-def apply_feed_filters(queryset, *, filters: SignalFeedFilters | None):
-    if filters is None or not filters.has_any():
-        return queryset
-
-    if filters.statuses:
-        queryset = queryset.filter(status__in=filters.statuses)
-
-    if filters.business_unit_ids:
-        queryset = queryset.filter(
-            Q(affected_business_unit_id__in=filters.business_unit_ids)
-            | Q(responsible_business_unit_id__in=filters.business_unit_ids)
-        )
-
-    if filters.activity_subject_ids:
-        queryset = queryset.filter(activity_subject_id__in=filters.activity_subject_ids)
-
-    if filters.needs_qualification:
-        # "Non classifié": missing responsible among active lifecycle.
-        # Affected and activity_subject are ignored (same predicate as the UI badge).
-        # Distinct from routing_status=unassigned and from visibility "total unclassified".
-        queryset = queryset.filter(
-            responsible_business_unit__isnull=True,
-            status__in=ACTIVE_SIGNAL_STATUSES,
-        )
-
-    return queryset
-
-
 def _parse_needs_qualification(raw: Any) -> bool:
     if raw is None or raw == "":
         return False

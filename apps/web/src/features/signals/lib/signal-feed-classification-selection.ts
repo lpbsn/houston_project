@@ -88,10 +88,6 @@ export function getActivitySubjectSelectionState(
   return selection.activitySubjectIds.includes(activitySubjectId) ? 'checked' : 'unchecked'
 }
 
-export function countClassificationSelections(selection: ClassificationKeySelection): number {
-  return selection.businessUnitIds.length + selection.activitySubjectIds.length
-}
-
 export function buildClassificationLabelsFromTree(
   businessUnits: BusinessUnitNode[],
 ): {

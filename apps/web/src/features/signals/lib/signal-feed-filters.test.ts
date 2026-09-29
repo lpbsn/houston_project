@@ -2,10 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   EMPTY_SIGNAL_FEED_FILTERS,
-  appendSignalFeedFiltersToSearchParams,
   formatClassificationFilterChipLabel,
   formatClassificationFilterSummary,
-  formatStatusFilterChipLabel,
   hasActiveSignalFeedFilters,
   normalizeSignalFeedFilters,
 } from './signal-feed-filters'
@@ -68,34 +66,6 @@ describe('hasActiveSignalFeedFilters', () => {
   })
 })
 
-describe('appendSignalFeedFiltersToSearchParams', () => {
-  it('serializes normalized filters as CSV query params', () => {
-    const params = new URLSearchParams({ view_mode: 'general' })
-    appendSignalFeedFiltersToSearchParams(params, {
-      statuses: ['resolved', 'open'],
-      businessUnitIds: [BU_RESTAURANT, BU_BAR],
-      activitySubjectIds: [SAMPLE_SUBJECT_ID],
-      needsQualification: true,
-    })
-
-    expect(params.get('view_mode')).toBe('general')
-    expect(params.get('statuses')).toBe('open')
-    expect(params.get('business_unit_ids')).toBe([BU_BAR, BU_RESTAURANT].sort().join(','))
-    expect(params.get('activity_subject_ids')).toBe(SAMPLE_SUBJECT_ID)
-    expect(params.get('needs_qualification')).toBe('true')
-  })
-
-  it('drops a non-operational status from the query', () => {
-    const params = new URLSearchParams()
-    appendSignalFeedFiltersToSearchParams(params, {
-      ...EMPTY_SIGNAL_FEED_FILTERS,
-      statuses: ['canceled' as 'open'],
-    })
-
-    expect(params.get('statuses')).toBeNull()
-  })
-})
-
 describe('formatClassificationFilterSummary', () => {
   const businessUnitLabels = new Map([
     [BU_RESTAURANT, 'Restaurant'],
@@ -140,24 +110,6 @@ describe('formatClassificationFilterSummary', () => {
         subjectLabels,
       ),
     ).toBe('Restaurant +3 ▾')
-  })
-})
-
-describe('formatStatusFilterChipLabel', () => {
-  it('uses Tout when empty and the exclusive operational label when selected', () => {
-    expect(formatStatusFilterChipLabel(EMPTY_SIGNAL_FEED_FILTERS)).toBe('Tout')
-    expect(
-      formatStatusFilterChipLabel({
-        ...EMPTY_SIGNAL_FEED_FILTERS,
-        statuses: ['open'],
-      }),
-    ).toBe('Ouverts')
-    expect(
-      formatStatusFilterChipLabel({
-        ...EMPTY_SIGNAL_FEED_FILTERS,
-        statuses: ['open', 'interesting'],
-      }),
-    ).toBe('Ouverts')
   })
 })
 

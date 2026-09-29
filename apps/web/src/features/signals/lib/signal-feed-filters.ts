@@ -58,25 +58,6 @@ export function hasActiveSignalFeedFilters(filters: SignalFeedFilters): boolean 
   )
 }
 
-export function appendSignalFeedFiltersToSearchParams(
-  params: URLSearchParams,
-  filters: SignalFeedFilters,
-): void {
-  const normalized = normalizeSignalFeedFilters(filters)
-  if (normalized.statuses.length > 0) {
-    params.set('statuses', normalized.statuses.join(','))
-  }
-  if (normalized.businessUnitIds.length > 0) {
-    params.set('business_unit_ids', normalized.businessUnitIds.join(','))
-  }
-  if (normalized.activitySubjectIds.length > 0) {
-    params.set('activity_subject_ids', normalized.activitySubjectIds.join(','))
-  }
-  if (normalized.needsQualification) {
-    params.set('needs_qualification', 'true')
-  }
-}
-
 export function selectedSignalFeedStatus(
   filters: SignalFeedFilters,
 ): SignalFeedStatusSelection {
@@ -91,14 +72,6 @@ export function signalFeedFiltersForStatus(
     ...filters,
     statuses: status === 'all' ? [] : [status],
   })
-}
-
-export function formatStatusFilterChipLabel(filters: SignalFeedFilters): string {
-  const status = selectedSignalFeedStatus(filters)
-  if (status === 'all') {
-    return 'Tout'
-  }
-  return SIGNAL_FEED_STATUS_OPTIONS.find((option) => option.value === status)?.label ?? status
 }
 
 export function countClassificationFilterSelections(filters: SignalFeedFilters): number {

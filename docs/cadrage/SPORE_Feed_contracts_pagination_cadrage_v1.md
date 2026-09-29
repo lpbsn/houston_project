@@ -2,7 +2,7 @@
 
 Version 1.2 — 27 septembre 2026 — revue de cohérence, cas limites et séparation des arbitrages résiduels
 
-Statut : consolidation des décisions produit validées ; revue technique Cursor requise avant plan d’implémentation et validation humaine de ce plan. Ce document n’autorise pas à coder.
+Statut : décisions produit validées. Implémentation Lots 0–7 et hardening final PR1–PR5D clos le 29 septembre 2026. Ce document reste la référence produit ; le code et les tests décrivent le comportement livré. Les réécritures SQL mesurées en PR5 n’ont pas été retenues.
 
 ## 1. Objectif et autorité du document
 

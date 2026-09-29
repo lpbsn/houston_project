@@ -1406,18 +1406,9 @@ Railway private network
 
 ## 35. Dépendance avec le chantier `Feed contracts & pagination`
 
-Le chantier en cours `Feed contracts & pagination` n’est pas remis en cause.
+Le chantier `Feed contracts & pagination`, y compris le hardening final PR1–PR5D, est clos. Ses contrats ne sont pas remis en cause.
 
-Il doit être terminé et mergé avant :
-
-- le benchmark final de Lot 0 ;
-- le profiling DB définitif de Lot 4 ;
-- les tests de charge finaux de Lot 6.
-
-Raison :
-
-- les hot paths feeds sont encore en évolution ;
-- une baseline réalisée avant leur stabilisation serait rapidement obsolète.
+Les benchmarks définitifs de ce chantier (Lot 0, profiling DB Lot 4, charge Lot 6) peuvent s’appuyer sur ces contrats stabilisés.
 
 Le nouveau chantier ne doit pas recréer une seconde logique de :
 
@@ -1892,7 +1883,7 @@ Chaque lot doit terminer avec :
 
 ### Feed contracts & pagination
 
-À terminer avant les benchmarks définitifs.
+Clos, hardening final inclus. Les benchmarks définitifs de ce chantier peuvent s’y appuyer.
 
 Le présent chantier ne doit pas modifier leur contrat sans besoin explicite.
 

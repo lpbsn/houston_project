@@ -1,8 +1,8 @@
 ## Changed
 
-- Harness PR5D étendu dans [feed_hardening_baseline.py](apps/api/houston/core/feed_hardening_baseline.py) : attribution SQL, plans/buffers, scénarios isolés, callbacks et effets persistés.
+- Harness PR5D étendu dans [feed_hardening_baseline.py](../../apps/api/houston/core/feed_hardening_baseline.py) : attribution SQL, plans/buffers, scénarios isolés, callbacks et effets persistés.
 - Tests read/read et Beat/read ajoutés.
-- Rapport publié : [diagnostic PR5D](docs/plans/feed_hardening_pr5d_execution_diagnostic_2026-09-29.md).
+- Rapport publié : [diagnostic PR5D](feed_hardening_pr5d_execution_diagnostic_2026-09-29.md).
 
 Diagnostic représentatif :
 
