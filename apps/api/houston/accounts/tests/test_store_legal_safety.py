@@ -333,7 +333,11 @@ def test_openai_pattern_classifier_skips_without_source_author_ai_consent():
 
     provider = RecordingOpenAIProvider()
     skipped = classify_signal_pattern(signal.id, provider=provider)
-    assert skipped is None
+    assert skipped is not None
+    assert skipped.classification_status == (
+        SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED
+    )
+    assert skipped.last_error_code == "ai_consent_required"
     assert provider.classify_calls == []
 
     grant_current_legal_defaults(user=membership.user)

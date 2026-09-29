@@ -1336,20 +1336,14 @@ def _classify_without_consent(signal, provider):
         return classify_signal_pattern(signal.id, provider=provider)
 
 
-def test_consent_redelivery_stays_terminal_after_consent_is_restored():
+def test_consent_skip_stays_terminal_until_consent_allows_classification():
     membership = build_membership()
     signal = create_signal_for_membership(membership)
     provider = FakePatternClassifierProvider(
         payload={"canonical_label": "Défaillance climatisation"},
     )
     _classify_without_consent(signal, provider)
-
-    with patch(
-        "houston.analytics.services._openai_signal_pattern_share_allowed",
-        return_value=True,
-    ):
-        classify_signal_pattern(signal.id, provider=provider)
-        classify_signal_pattern(signal.id, provider=provider, explicit_request=False)
+    _classify_without_consent(signal, provider)
 
     assert provider.calls == []
     assignment = SignalPatternAssignment.objects.get(signal=signal)
@@ -1372,7 +1366,7 @@ def test_explicit_classification_after_restored_consent_keeps_the_signature_and_
         "houston.analytics.services._openai_signal_pattern_share_allowed",
         return_value=False,
     ):
-        classify_signal_pattern(signal.id, provider=provider, explicit_request=True)
+        classify_signal_pattern(signal.id, provider=provider)
     assert provider.calls == []
 
     SignalPatternAssignment.objects.filter(signal=signal).update(attempt_count=2)
@@ -1385,11 +1379,7 @@ def test_explicit_classification_after_restored_consent_keeps_the_signature_and_
         "houston.analytics.services._openai_signal_pattern_share_allowed",
         return_value=True,
     ):
-        assignment = classify_signal_pattern(
-            signal.id,
-            provider=provider,
-            explicit_request=True,
-        )
+        assignment = classify_signal_pattern(signal.id, provider=provider)
 
     assert len(provider.calls) == 1
     assert assignment.attempt_count == 3
@@ -1412,7 +1402,7 @@ def test_explicit_consent_resume_does_not_exceed_or_reset_the_provider_budget():
         "houston.analytics.services._openai_signal_pattern_share_allowed",
         return_value=True,
     ):
-        classify_signal_pattern(signal.id, provider=provider, explicit_request=True)
+        classify_signal_pattern(signal.id, provider=provider)
 
     assert provider.calls == []
     assignment = SignalPatternAssignment.objects.get(signal=signal)

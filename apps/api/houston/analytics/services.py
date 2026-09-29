@@ -2090,7 +2090,6 @@ def claim_signal_pattern_classification(
     signal: Signal,
     signature: str,
     classifier_version: str,
-    explicit_request: bool = False,
 ) -> PatternClassificationClaimResult:
     locked_signal = _locked_signal(signal)
     assignment = _get_or_create_assignment_for_locked_signal(locked_signal)
@@ -2162,11 +2161,11 @@ def claim_signal_pattern_classification(
         and assignment.pending_classifier_version == classifier_version
     )
     provider_call_budget = analytics_pattern_task_retry_policy().max_provider_calls
-    # A consent skip stops automatic redelivery. An explicit request may resume
-    # the same signature once consent allows it, without resetting the budget.
+    # The sweep does not republish this terminal skip. A later classification
+    # resumes the same signature once consent allows it, without resetting
+    # the provider budget.
     consent_resume = (
-        explicit_request
-        and assignment.last_error_code == "ai_consent_required"
+        assignment.last_error_code == "ai_consent_required"
         and assignment.classification_status
         == SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED
         and same_classification
@@ -2312,7 +2311,6 @@ def classify_signal_pattern(
     *,
     provider: PatternClassifierProvider | None = None,
     duplicate_guard_enabled: bool = True,
-    explicit_request: bool = False,
 ) -> SignalPatternAssignment | None:
     signal = _load_signal_for_pattern_classification(signal_id)
     if signal is None:
@@ -2336,7 +2334,6 @@ def classify_signal_pattern(
         signal=signal,
         signature=signature,
         classifier_version=classifier_version,
-        explicit_request=explicit_request,
     )
     if claim.status != "claimed":
         setattr(claim.assignment, "_analytics_claim_status", claim.status)
