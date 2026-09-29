@@ -2161,8 +2161,9 @@ def claim_signal_pattern_classification(
         and assignment.pending_classifier_version == classifier_version
     )
     provider_call_budget = analytics_pattern_task_retry_policy().max_provider_calls
-    # The sweep does not republish this terminal skip. A later classification
-    # resumes the same signature once consent allows it, without resetting
+    # The sweep does not republish this terminal skip, and a broker redelivery
+    # of the same classification does not resume it. A direct classification
+    # may resume the same signature once consent allows it, without resetting
     # the provider budget.
     consent_resume = (
         assignment.last_error_code == "ai_consent_required"

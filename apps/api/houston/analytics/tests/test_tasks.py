@@ -8,6 +8,10 @@ import pytest
 from django.conf import settings
 from django.utils import timezone
 
+from houston.analytics.classifier import (
+    classifier_version_for_provider,
+    get_pattern_classifier_provider,
+)
 from houston.analytics.models import SignalPatternAssignment
 from houston.analytics.scheduling import (
     republish_due_signal_pattern_classifications,
@@ -17,6 +21,7 @@ from houston.analytics.services import (
     PatternClassificationRetryableError,
     mark_assignment_processing,
 )
+from houston.analytics.signature import build_signal_pattern_signature
 from houston.analytics.tasks import classify_signal_pattern_task
 from houston.signals.models import Signal
 from houston.testing.factories import build_membership
@@ -32,6 +37,56 @@ def create_signal_for_membership(membership):
         structured_summary="Structured issue summary",
         last_activity_at=timezone.now(),
     )
+
+
+def test_celery_redelivery_does_not_resume_a_consent_terminal_after_consent_returns(settings):
+    settings.HOUSTON_AI_ANALYTICS_PATTERN_PROVIDER = "fake"
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    provider = get_pattern_classifier_provider()
+    SignalPatternAssignment.objects.create(
+        signal=signal,
+        classification_status=SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED,
+        last_error_code="ai_consent_required",
+        pending_signature=build_signal_pattern_signature(signal),
+        pending_classifier_version=classifier_version_for_provider(provider),
+        attempt_count=2,
+    )
+
+    with (
+        patch(
+            "houston.analytics.services._openai_signal_pattern_share_allowed",
+            return_value=True,
+        ),
+        patch("houston.analytics.tasks.classify_signal_pattern") as classify,
+    ):
+        classify_signal_pattern_task.run(str(signal.id))
+
+    classify.assert_not_called()
+    assignment = SignalPatternAssignment.objects.get(signal=signal)
+    assert assignment.attempt_count == 2
+    assert assignment.classification_status == (
+        SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED
+    )
+    assert assignment.last_error_code == "ai_consent_required"
+
+
+def test_celery_redelivery_after_signature_change_is_not_a_consent_terminal():
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    SignalPatternAssignment.objects.create(
+        signal=signal,
+        classification_status=SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED,
+        last_error_code="ai_consent_required",
+        pending_signature="previous-signature",
+        pending_classifier_version="previous-classifier",
+        attempt_count=2,
+    )
+
+    with patch("houston.analytics.tasks.classify_signal_pattern") as classify:
+        classify_signal_pattern_task.run(str(signal.id))
+
+    classify.assert_called_once_with(signal.id)
 
 
 def test_task_has_no_celery_retry():
