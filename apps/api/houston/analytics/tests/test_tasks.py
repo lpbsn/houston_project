@@ -190,6 +190,54 @@ def test_sweep_skips_assignment_blocked_for_missing_ai_consent():
     publish.assert_not_called()
 
 
+def test_sweep_does_not_republish_a_confirmed_message_until_it_is_stale():
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    SignalPatternAssignment.objects.create(
+        signal=signal,
+        classification_status=SignalPatternAssignment.ClassificationStatus.NOT_STARTED,
+        published_at=timezone.now(),
+    )
+
+    with patch("houston.core.celery_publish.publish_celery_task", return_value=True) as publish:
+        assert republish_due_signal_pattern_classifications() == 0
+    publish.assert_not_called()
+
+
+def test_sweep_republishes_when_the_confirm_is_older_than_the_stale_window():
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    SignalPatternAssignment.objects.create(
+        signal=signal,
+        classification_status=SignalPatternAssignment.ClassificationStatus.TEMPORARY_FAILED,
+        next_retry_at=timezone.now() - timedelta(seconds=1),
+        published_at=timezone.now()
+        - timedelta(seconds=settings.HOUSTON_ANALYTICS_PATTERN_PROCESSING_STALE_SECONDS + 5),
+    )
+
+    with patch("houston.core.celery_publish.publish_celery_task", return_value=True) as publish:
+        assert republish_due_signal_pattern_classifications() == 1
+    publish.assert_called_once()
+    assignment = SignalPatternAssignment.objects.get(signal=signal)
+    assert assignment.published_at is not None
+    assert assignment.published_at > timezone.now() - timedelta(seconds=30)
+
+
+def test_sweep_does_not_restack_a_confirmed_stale_processing():
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    SignalPatternAssignment.objects.create(
+        signal=signal,
+        classification_status=SignalPatternAssignment.ClassificationStatus.PROCESSING,
+        last_attempted_at=timezone.now() - timedelta(days=1),
+        published_at=timezone.now(),
+    )
+
+    with patch("houston.core.celery_publish.publish_celery_task", return_value=True) as publish:
+        assert republish_due_signal_pattern_classifications() == 0
+    publish.assert_not_called()
+
+
 def test_sweep_republishes_stale_processing():
     membership = build_membership()
     signal = create_signal_for_membership(membership)

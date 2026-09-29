@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from collections.abc import Sequence
 
 from django.conf import settings
+from kombu import Connection
 
 logger = logging.getLogger(__name__)
 
@@ -20,19 +22,39 @@ def publish_celery_task(task, *, args: Sequence[object], countdown: int | None =
     """Publish one task and wait for the broker confirm, bounded by a short timeout.
 
     A timeout or broker error is logged and swallowed. Callers keep the durable
-    PostgreSQL state and let the sweep republish.
+    PostgreSQL state and let the sweep republish. The broker wait itself uses
+    the same deadline, so a confirm cannot land after this function has
+    returned a timeout.
     """
     timeout_seconds = settings.HOUSTON_CELERY_PUBLISH_TIMEOUT_SECONDS
     outcome: dict[str, object] = {}
+    deadline = time.monotonic() + timeout_seconds
 
     def _send() -> None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            outcome["exc"] = TimeoutError("PublishTimeout")
+            return
         try:
-            task.apply_async(
-                args=tuple(args),
-                countdown=countdown,
-                retry=False,
-                retry_policy=_PUBLISH_RETRY_POLICY,
-            )
+            with Connection(
+                settings.CELERY_BROKER_URL,
+                connect_timeout=remaining,
+                transport_options={"confirm_publish": True},
+            ) as connection:
+                connection.connect()
+                confirm_timeout = deadline - time.monotonic()
+                if confirm_timeout <= 0:
+                    outcome["exc"] = TimeoutError("PublishTimeout")
+                    return
+                task.apply_async(
+                    args=tuple(args),
+                    countdown=countdown,
+                    retry=False,
+                    retry_policy=_PUBLISH_RETRY_POLICY,
+                    connection=connection,
+                    timeout=confirm_timeout,
+                    confirm_timeout=confirm_timeout,
+                )
         except Exception as exc:
             outcome["exc"] = exc
             return

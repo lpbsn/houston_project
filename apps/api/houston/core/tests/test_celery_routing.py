@@ -13,6 +13,15 @@ from django.conf import settings
 REPO_ROOT = Path(__file__).resolve().parents[5]
 
 
+def test_recovery_thresholds_stay_at_or_above_hard_time_limits():
+    assert settings.HOUSTON_OBSERVATION_PROCESSING_STUCK_WARNING_SECONDS >= (
+        settings.HOUSTON_CELERY_OBSERVATION_PIPELINE_TIME_LIMIT_SECONDS
+    )
+    assert settings.HOUSTON_ANALYTICS_PATTERN_PROCESSING_STALE_SECONDS >= (
+        settings.HOUSTON_CELERY_ANALYTICS_PATTERN_TIME_LIMIT_SECONDS
+    )
+
+
 def test_every_houston_task_is_explicitly_routed():
     app.loader.import_default_modules()
     missing = sorted(

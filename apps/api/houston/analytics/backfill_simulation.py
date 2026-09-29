@@ -450,6 +450,7 @@ def _run_classification_attempt(
             signal.id,
             provider=provider,
             duplicate_guard_enabled=duplicate_guard_enabled,
+            explicit_request=True,
         )
         claim_status = getattr(assignment, "_analytics_claim_status", "no_assignment")
         claim_reason = getattr(assignment, "_analytics_claim_reason", "")

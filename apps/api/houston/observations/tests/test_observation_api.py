@@ -219,6 +219,45 @@ def test_reused_submission_key_with_different_text_returns_409(api_client):
     assert Observation.objects.filter(establishment=establishment).count() == 1
 
 
+def test_replayed_submission_returns_the_current_processing_status(api_client):
+    establishment = create_establishment(name="Observation Hotel")
+    staff = create_user(username="obs_replay_status")
+    create_membership(
+        establishment=establishment,
+        user=staff,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    token = login(api_client, user=staff)
+    client_submission_id = str(uuid.uuid4())
+    body = _body(
+        "Observation déjà enregistrée pour ce brouillon.",
+        client_submission_id=client_submission_id,
+    )
+    first = api_client.post(
+        observations_url(establishment.id),
+        body,
+        format="json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert first.status_code == 201
+    assert first.json()["processing_status"] == ObservationProcessing.Status.QUEUED
+
+    processing = ObservationProcessing.objects.get(observation_id=first.json()["id"])
+    processing.status = ObservationProcessing.Status.FAILED
+    processing.save(update_fields=["status", "updated_at"])
+
+    replay = api_client.post(
+        observations_url(establishment.id),
+        body,
+        format="json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert replay.status_code == 201
+    assert replay.json()["id"] == first.json()["id"]
+    assert replay.json()["processing_status"] == ObservationProcessing.Status.FAILED
+    assert Observation.objects.filter(establishment=establishment).count() == 1
+
+
 @patch("houston.uploads.api.transcription_views.transcribe_audio_file")
 def test_transcription_returns_editable_text_without_persisting_audio(
     mock_transcribe,

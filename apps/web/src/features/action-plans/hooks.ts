@@ -13,6 +13,7 @@ import {
 import {
   clearClientSubmissionId,
   clientSubmissionIdForFingerprint,
+  type ClientSubmissionSlot,
 } from '@/features/observations/lib/observation-compose-submit'
 
 import {
@@ -884,7 +885,7 @@ export function useCreateObservationFromActionPlanTaskMutation(
   executionId: string,
 ) {
   const queryClient = useQueryClient()
-  const submissionSlot = useRef<{ fingerprint: string; id: string } | null>(null)
+  const submissionSlot = useRef<ClientSubmissionSlot | null>(null)
   return useMutation({
     mutationFn: async ({
       taskExecutionId,

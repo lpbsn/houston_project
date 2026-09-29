@@ -8,6 +8,7 @@ import {
   clientSubmissionIdForFingerprint,
   observationDraftFingerprint,
   uploadThenSubmitObservation,
+  type ClientSubmissionSlot,
 } from './lib/observation-compose-submit'
 import { submitObservation, transcribeAudio, uploadTemporaryPhoto } from './api'
 
@@ -26,7 +27,7 @@ export function useTranscribeAudioMutation(establishmentId: string | null) {
 
 export function useSubmitObservationComposeMutation(establishmentId: string | null) {
   useAuth()
-  const submissionSlot = useRef<{ fingerprint: string; id: string } | null>(null)
+  const submissionSlot = useRef<ClientSubmissionSlot | null>(null)
 
   return useMutation({
     mutationFn: async (input: { text: string; files: File[] }) => {
@@ -43,6 +44,17 @@ export function useSubmitObservationComposeMutation(establishmentId: string | nu
         clientSubmissionId,
         uploadPhoto: (file) => uploadTemporaryPhoto(establishmentId, file),
         submit: (body) => submitObservation(establishmentId, body),
+        reuseUploadIds: submissionSlot.current?.uploadIdsByFileKey,
+        onFileUploaded: (fileKey, uploadId) => {
+          const current = submissionSlot.current
+          if (current == null) {
+            return
+          }
+          current.uploadIdsByFileKey = {
+            ...current.uploadIdsByFileKey,
+            [fileKey]: uploadId,
+          }
+        },
       })
       clearClientSubmissionId(submissionSlot)
       return response

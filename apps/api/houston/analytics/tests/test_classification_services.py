@@ -23,6 +23,7 @@ from houston.analytics.classifier import (
     PatternClassifierInvalidOutputError,
     PatternClassifierTimeoutError,
     _duplicate_guard_system_prompt,
+    classifier_version_for_provider,
     openai_duplicate_guard_response_format,
     parse_pattern_classifier_response,
     parse_pattern_duplicate_guard_response,
@@ -354,6 +355,82 @@ def test_claim_stops_recovery_after_the_provider_call_budget(settings):
         SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED
     )
     assert assignment.last_error_code == "retry_exhausted"
+
+
+def test_same_classification_redelivery_does_not_reopen_a_terminal_assignment(settings):
+    settings.HOUSTON_ANALYTICS_PATTERN_PROCESSING_STALE_SECONDS = 60
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    provider = FakePatternClassifierProvider(
+        payload={"canonical_label": "Défaillance climatisation"},
+    )
+    signature = build_signal_pattern_signature(signal)
+    classifier_version = classifier_version_for_provider(provider)
+    processing = mark_assignment_processing(
+        signal=signal,
+        pending_signature=signature,
+        pending_classifier_version=classifier_version,
+    )
+    SignalPatternAssignment.objects.filter(pk=processing.pk).update(
+        attempt_count=4,
+        last_attempted_at=timezone.now() - timedelta(minutes=10),
+    )
+    exhausted = claim_signal_pattern_classification(
+        signal=signal,
+        signature=signature,
+        classifier_version=classifier_version,
+    )
+    assert exhausted.status == "budget_exhausted"
+
+    classify_signal_pattern(signal.id, provider=provider)
+
+    assert provider.calls == []
+    assignment = SignalPatternAssignment.objects.get(signal=signal)
+    assert assignment.attempt_count == 4
+    assert assignment.classification_status == (
+        SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED
+    )
+
+
+def test_signature_change_after_terminal_classification_can_claim_again(settings):
+    settings.HOUSTON_ANALYTICS_PATTERN_PROCESSING_STALE_SECONDS = 60
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    provider = FakePatternClassifierProvider(
+        payload={"canonical_label": "Défaillance climatisation"},
+    )
+    signature = build_signal_pattern_signature(signal)
+    classifier_version = classifier_version_for_provider(provider)
+    processing = mark_assignment_processing(
+        signal=signal,
+        pending_signature=signature,
+        pending_classifier_version=classifier_version,
+    )
+    SignalPatternAssignment.objects.filter(pk=processing.pk).update(
+        attempt_count=4,
+        last_attempted_at=timezone.now() - timedelta(minutes=10),
+    )
+    claim_signal_pattern_classification(
+        signal=signal,
+        signature=signature,
+        classifier_version=classifier_version,
+    )
+
+    signal.title = "Fuite différente"
+    signal.save(update_fields=["title", "updated_at"])
+    pattern = create_pattern_for_signal(signal)
+    provider = FakePatternClassifierProvider(
+        payload={"canonical_label": pattern.semantic_label},
+    )
+    classify_signal_pattern(signal.id, provider=provider)
+
+    assert len(provider.calls) == 1
+    assignment = SignalPatternAssignment.objects.get(signal=signal)
+    assert assignment.attempt_count == 5
+    assert assignment.classification_status == (
+        SignalPatternAssignment.ClassificationStatus.SUCCEEDED
+    )
+    assert assignment.assigned_signature == build_signal_pattern_signature(signal)
 
 
 @pytest.mark.django_db(transaction=True)
@@ -1243,7 +1320,107 @@ def test_missing_ai_consent_is_terminal_and_does_not_call_the_provider():
     )
     assert assignment.last_error_code == "ai_consent_required"
     assert assignment.attempt_count == 0
+    assert assignment.pending_signature == build_signal_pattern_signature(signal)
     assert getattr(assignment, "_analytics_claim_reason") == "ai_consent_required"
+
+    classify_signal_pattern(signal.id, provider=provider)
+    assert provider.calls == []
+
+
+def _classify_without_consent(signal, provider):
+    provider.provider = "openai"
+    with patch(
+        "houston.analytics.services._openai_signal_pattern_share_allowed",
+        return_value=False,
+    ):
+        return classify_signal_pattern(signal.id, provider=provider)
+
+
+def test_consent_redelivery_stays_terminal_after_consent_is_restored():
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    provider = FakePatternClassifierProvider(
+        payload={"canonical_label": "Défaillance climatisation"},
+    )
+    _classify_without_consent(signal, provider)
+
+    with patch(
+        "houston.analytics.services._openai_signal_pattern_share_allowed",
+        return_value=True,
+    ):
+        classify_signal_pattern(signal.id, provider=provider)
+        classify_signal_pattern(signal.id, provider=provider, explicit_request=False)
+
+    assert provider.calls == []
+    assignment = SignalPatternAssignment.objects.get(signal=signal)
+    assert assignment.attempt_count == 0
+    assert assignment.classification_status == (
+        SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED
+    )
+    assert assignment.last_error_code == "ai_consent_required"
+    assert assignment.pending_signature == build_signal_pattern_signature(signal)
+
+
+def test_explicit_classification_after_restored_consent_keeps_the_signature_and_budget():
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    provider = FakePatternClassifierProvider(
+        payload={"canonical_label": "Défaillance climatisation"},
+    )
+    _classify_without_consent(signal, provider)
+    with patch(
+        "houston.analytics.services._openai_signal_pattern_share_allowed",
+        return_value=False,
+    ):
+        classify_signal_pattern(signal.id, provider=provider, explicit_request=True)
+    assert provider.calls == []
+
+    SignalPatternAssignment.objects.filter(signal=signal).update(attempt_count=2)
+    pattern = create_pattern_for_signal(signal)
+    provider = FakePatternClassifierProvider(
+        payload={"canonical_label": pattern.semantic_label},
+    )
+    provider.provider = "openai"
+    with patch(
+        "houston.analytics.services._openai_signal_pattern_share_allowed",
+        return_value=True,
+    ):
+        assignment = classify_signal_pattern(
+            signal.id,
+            provider=provider,
+            explicit_request=True,
+        )
+
+    assert len(provider.calls) == 1
+    assert assignment.attempt_count == 3
+    assert assignment.classification_status == (
+        SignalPatternAssignment.ClassificationStatus.SUCCEEDED
+    )
+    assert assignment.assigned_signature == build_signal_pattern_signature(signal)
+
+
+def test_explicit_consent_resume_does_not_exceed_or_reset_the_provider_budget():
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    provider = FakePatternClassifierProvider(
+        payload={"canonical_label": "Défaillance climatisation"},
+    )
+    _classify_without_consent(signal, provider)
+    SignalPatternAssignment.objects.filter(signal=signal).update(attempt_count=4)
+
+    with patch(
+        "houston.analytics.services._openai_signal_pattern_share_allowed",
+        return_value=True,
+    ):
+        classify_signal_pattern(signal.id, provider=provider, explicit_request=True)
+
+    assert provider.calls == []
+    assignment = SignalPatternAssignment.objects.get(signal=signal)
+    assert assignment.attempt_count == 4
+    assert assignment.classification_status == (
+        SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED
+    )
+    assert assignment.last_error_code == "ai_consent_required"
 
 
 def test_obsolete_success_attempt_is_refused():

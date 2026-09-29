@@ -97,12 +97,16 @@ class ObservationSubmitView(EstablishmentScopedObservationMixin, APIView):
             )
 
         media_count = observation.media_items.count()
+        processing = ObservationProcessing.objects.filter(observation_id=observation.id).first()
+        processing_status = (
+            processing.status if processing is not None else ObservationProcessing.Status.QUEUED
+        )
         response_serializer = ObservationSubmitResponseSerializer(
             {
                 "id": observation.id,
                 "submitted_at": observation.submitted_at,
                 "media_count": media_count,
-                "processing_status": ObservationProcessing.Status.QUEUED,
+                "processing_status": processing_status,
             }
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
