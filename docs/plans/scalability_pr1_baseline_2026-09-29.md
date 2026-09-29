@@ -14,7 +14,7 @@ Live `Celery-worker` deploy `cabc95c1-5d85-4fd9-99c7-1aa74505e704` (2026-09-29T0
 
 One replica. `CELERY_WORKER_CONCURRENCY` is set on that service. The numeric value above comes from the worker banner, not from a variable dump.
 
-Initial concurrency written for each of the three pools (`ai_interactive`, `operational`, `ai_background`+`maintenance`) is this same validated value: **4**. It is not a new split of the single worker. Total prefork children therefore go from 4 to 12. `worker_prefetch_multiplier=1` applies only to `ai_interactive`.
+Initial concurrency for the three pools is the measured envelope of **4** prefork children, allocated as `ai_interactive` 2, `operational` 1, `ai_background`+`maintenance` 1. That keeps worker Postgres connections at 4 and simultaneous provider calls at 3 (interactive 2 + background 1). `worker_prefetch_multiplier=1` applies only to `ai_interactive`. `max_connections` was not read, so the pools do not each inherit 4.
 
 ## Connection arithmetic
 
@@ -28,11 +28,11 @@ Current processes, one replica each:
 | Celery worker | Up to 4 prefork children. |
 | Celery beat | 1 process. The scheduler file is on the beat volume; the process can still open one Django connection. |
 
-Projected after this PR, with `N` API replicas and three pools at concurrency 4:
+Projected after this PR, with `N` API replicas and the allocated pool sizes (2 + 1 + 1):
 
-`N × (concurrent sync DB users on that replica) + 12 worker children + 1 beat`
+`N × (concurrent sync DB users on that replica) + 4 worker children + 1 beat`
 
-The worker side grows by 8 connections versus today. `max_connections` on the live Postgres instance was not read. That comparison, and any PgBouncer decision, belongs to G-conn.
+The worker side stays at 4 connections, the measured envelope. `max_connections` on the live Postgres instance was not read. That comparison, and any PgBouncer decision, belongs to G-conn.
 
 Two runtime `iterator()` calls stay in workers and do not block `CONN_MAX_AGE` as it is today: upload cleanup (`apps/api/houston/uploads/services.py`) and gamification rollover (`apps/api/houston/gamification/tasks.py`). They would block a future transaction-pooling PgBouncer. They are unchanged in this PR.
 

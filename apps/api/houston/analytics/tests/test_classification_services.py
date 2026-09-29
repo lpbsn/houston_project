@@ -302,6 +302,60 @@ def test_claim_stale_processing_recovers_attempt(settings):
     assert claim.assignment.next_retry_at is None
 
 
+def test_claim_keeps_the_fourth_call_while_it_is_still_inside_the_time_limit(settings):
+    settings.HOUSTON_ANALYTICS_PATTERN_PROCESSING_STALE_SECONDS = 60
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    processing = mark_assignment_processing(
+        signal=signal,
+        pending_signature="sig-v1",
+        pending_classifier_version="classifier-v1",
+    )
+    SignalPatternAssignment.objects.filter(pk=processing.pk).update(attempt_count=4)
+
+    claim = claim_signal_pattern_classification(
+        signal=signal,
+        signature="sig-v1",
+        classifier_version="classifier-v1",
+    )
+
+    assert claim.status == "already_processing"
+    assert claim.attempt_count == 4
+    assignment = SignalPatternAssignment.objects.get(signal=signal)
+    assert assignment.classification_status == (
+        SignalPatternAssignment.ClassificationStatus.PROCESSING
+    )
+
+
+def test_claim_stops_recovery_after_the_provider_call_budget(settings):
+    settings.HOUSTON_ANALYTICS_PATTERN_PROCESSING_STALE_SECONDS = 60
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    processing = mark_assignment_processing(
+        signal=signal,
+        pending_signature="sig-v1",
+        pending_classifier_version="classifier-v1",
+    )
+    SignalPatternAssignment.objects.filter(pk=processing.pk).update(
+        attempt_count=4,
+        last_attempted_at=timezone.now() - timedelta(minutes=10),
+    )
+
+    claim = claim_signal_pattern_classification(
+        signal=signal,
+        signature="sig-v1",
+        classifier_version="classifier-v1",
+    )
+
+    assert claim.status == "budget_exhausted"
+    assert claim.attempt_count == 4
+    assignment = SignalPatternAssignment.objects.get(signal=signal)
+    assert assignment.classification_status == (
+        SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED
+    )
+    assert assignment.last_error_code == "retry_exhausted"
+
+
 @pytest.mark.django_db(transaction=True)
 def test_concurrent_claim_allows_one_processing_attempt(settings):
     settings.HOUSTON_ANALYTICS_PATTERN_PROCESSING_STALE_SECONDS = 60
@@ -1148,6 +1202,48 @@ def test_retryable_provider_error_raises_without_finalizing():
         SignalPatternAssignment.ClassificationStatus.PROCESSING
     )
     assert exc_info.value.attempt_count == assignment.attempt_count
+
+
+def test_unexpected_provider_error_stays_inside_the_retry_budget():
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    provider = FakePatternClassifierProvider(exc=RuntimeError("rate limited"))
+
+    with pytest.raises(PatternClassificationRetryableError) as exc_info:
+        classify_signal_pattern(signal.id, provider=provider)
+
+    assert exc_info.value.attempt_count == 1
+    assert exc_info.value.error_code == "pattern_classification_unexpected_error"
+    assert len(provider.calls) == 1
+    assignment = SignalPatternAssignment.objects.get(signal=signal)
+    assert assignment.classification_status == (
+        SignalPatternAssignment.ClassificationStatus.PROCESSING
+    )
+    assert assignment.attempt_count == 1
+
+
+def test_missing_ai_consent_is_terminal_and_does_not_call_the_provider():
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    provider = FakePatternClassifierProvider(
+        payload={"canonical_label": "Défaillance climatisation"},
+    )
+    provider.provider = "openai"
+
+    with patch(
+        "houston.analytics.services._openai_signal_pattern_share_allowed",
+        return_value=False,
+    ):
+        assignment = classify_signal_pattern(signal.id, provider=provider)
+
+    assert provider.calls == []
+    assert assignment is not None
+    assert assignment.classification_status == (
+        SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED
+    )
+    assert assignment.last_error_code == "ai_consent_required"
+    assert assignment.attempt_count == 0
+    assert getattr(assignment, "_analytics_claim_reason") == "ai_consent_required"
 
 
 def test_obsolete_success_attempt_is_refused():

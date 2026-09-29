@@ -14,6 +14,11 @@ class AnalyticsPatternRetryPolicy:
     max_retries: int
     retry_delay_seconds: int
 
+    @property
+    def max_provider_calls(self) -> int:
+        # The first execution plus one call per allowed retry.
+        return self.max_retries + 1
+
 
 def analytics_pattern_task_retry_policy() -> AnalyticsPatternRetryPolicy:
     return AnalyticsPatternRetryPolicy(

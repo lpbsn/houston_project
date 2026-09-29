@@ -5,6 +5,7 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
+from django.conf import settings
 from django.utils import timezone
 
 from houston.analytics.models import SignalPatternAssignment
@@ -31,6 +32,10 @@ def create_signal_for_membership(membership):
         structured_summary="Structured issue summary",
         last_activity_at=timezone.now(),
     )
+
+
+def test_task_has_no_celery_retry():
+    assert classify_signal_pattern_task.max_retries == 0
 
 
 def test_task_reloads_by_id_and_calls_service():
@@ -154,6 +159,35 @@ def test_sweep_does_not_republish_fresh_processing():
         assignment.classification_status
         == SignalPatternAssignment.ClassificationStatus.PROCESSING
     )
+
+
+def test_sweep_keeps_processing_inside_the_provider_time_window():
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    SignalPatternAssignment.objects.create(
+        signal=signal,
+        classification_status=SignalPatternAssignment.ClassificationStatus.PROCESSING,
+        last_attempted_at=timezone.now()
+        - timedelta(seconds=settings.HOUSTON_AI_ANALYTICS_PATTERN_TIMEOUT_SECONDS * 2),
+    )
+
+    with patch("houston.core.celery_publish.publish_celery_task", return_value=True) as publish:
+        assert republish_due_signal_pattern_classifications() == 0
+    publish.assert_not_called()
+
+
+def test_sweep_skips_assignment_blocked_for_missing_ai_consent():
+    membership = build_membership()
+    signal = create_signal_for_membership(membership)
+    SignalPatternAssignment.objects.create(
+        signal=signal,
+        classification_status=SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED,
+        last_error_code="ai_consent_required",
+    )
+
+    with patch("houston.core.celery_publish.publish_celery_task", return_value=True) as publish:
+        assert republish_due_signal_pattern_classifications() == 0
+    publish.assert_not_called()
 
 
 def test_sweep_republishes_stale_processing():

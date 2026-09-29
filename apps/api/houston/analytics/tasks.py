@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(
+    max_retries=0,
     soft_time_limit=settings.HOUSTON_CELERY_ANALYTICS_PATTERN_SOFT_TIME_LIMIT_SECONDS,
     time_limit=settings.HOUSTON_CELERY_ANALYTICS_PATTERN_TIME_LIMIT_SECONDS,
 )

@@ -20,7 +20,6 @@ x-api-environment: &api_environment
 
   REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
   CELERY_BROKER_URL: ${CELERY_BROKER_URL:-amqp://houston:houston@rabbitmq:5672//}
-  CELERY_WORKER_CONCURRENCY: ${CELERY_WORKER_CONCURRENCY:-4}
 
   HOUSTON_PUSH_ENABLED: ${HOUSTON_PUSH_ENABLED:-false}
   HOUSTON_FCM_SERVICE_ACCOUNT_JSON: ${HOUSTON_FCM_SERVICE_ACCOUNT_JSON:-}
@@ -81,7 +80,7 @@ services:
       [
         "sh",
         "-c",
-        "exec uv run celery -A config worker -l info -n houston-ai-interactive@%h -Q ai_interactive --prefetch-multiplier=1 --concurrency \"$${CELERY_WORKER_CONCURRENCY:-4}\"",
+        "exec uv run celery -A config worker -l info -n houston-ai-interactive@%h -Q ai_interactive --prefetch-multiplier=1 --concurrency \"$${CELERY_WORKER_CONCURRENCY:-2}\"",
       ]
     depends_on:
       postgres:
@@ -90,7 +89,9 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    environment: *api_environment
+    environment:
+      <<: *api_environment
+      CELERY_WORKER_CONCURRENCY: ${CELERY_AI_INTERACTIVE_CONCURRENCY:-2}
     volumes:
       - .:/app
       - private_media:/app/apps/api/private_media
@@ -104,7 +105,7 @@ services:
       [
         "sh",
         "-c",
-        "exec uv run celery -A config worker -l info -n houston-operational@%h -Q operational --concurrency \"$${CELERY_WORKER_CONCURRENCY:-4}\"",
+        "exec uv run celery -A config worker -l info -n houston-operational@%h -Q operational --concurrency \"$${CELERY_WORKER_CONCURRENCY:-1}\"",
       ]
     depends_on:
       postgres:
@@ -113,7 +114,9 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    environment: *api_environment
+    environment:
+      <<: *api_environment
+      CELERY_WORKER_CONCURRENCY: ${CELERY_OPERATIONAL_CONCURRENCY:-1}
     volumes:
       - .:/app
       - private_media:/app/apps/api/private_media
@@ -127,7 +130,7 @@ services:
       [
         "sh",
         "-c",
-        "exec uv run celery -A config worker -l info -n houston-background@%h -Q ai_background,maintenance --concurrency \"$${CELERY_WORKER_CONCURRENCY:-4}\"",
+        "exec uv run celery -A config worker -l info -n houston-background@%h -Q ai_background,maintenance --concurrency \"$${CELERY_WORKER_CONCURRENCY:-1}\"",
       ]
     depends_on:
       postgres:
@@ -136,7 +139,9 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    environment: *api_environment
+    environment:
+      <<: *api_environment
+      CELERY_WORKER_CONCURRENCY: ${CELERY_BACKGROUND_CONCURRENCY:-1}
     volumes:
       - .:/app
       - private_media:/app/apps/api/private_media

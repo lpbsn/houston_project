@@ -39,6 +39,10 @@ def test_local_and_railway_run_three_worker_pools_without_redis_broker():
     assert "--prefetch-multiplier=1" in compose
     assert "-Q operational" in compose
     assert "-Q ai_background,maintenance" in compose
+    assert "CELERY_AI_INTERACTIVE_CONCURRENCY:-2" in compose
+    assert "CELERY_OPERATIONAL_CONCURRENCY:-1" in compose
+    assert "CELERY_BACKGROUND_CONCURRENCY:-1" in compose
+    assert "CELERY_WORKER_CONCURRENCY:-4" not in compose
 
     interactive = (
         REPO_ROOT / "infra/railway/celery-ai-interactive/railway.toml"
@@ -54,3 +58,16 @@ def test_local_and_railway_run_three_worker_pools_without_redis_broker():
         REPO_ROOT / "apps/api/config/settings.py"
     ).read_text()
     assert not (REPO_ROOT / "infra/railway/celery-worker/railway.toml").exists()
+    contract = (REPO_ROOT / "docs/deploy/railway_deploy_contract.md").read_text()
+    assert "houston-worker@%h" not in contract
+    for relative in (
+        "infra/railway/celery-ai-interactive/railway.toml",
+        "infra/railway/celery-operational/railway.toml",
+        "infra/railway/celery-background/railway.toml",
+    ):
+        start_command = next(
+            line
+            for line in (REPO_ROOT / relative).read_text().splitlines()
+            if line.startswith("startCommand")
+        )
+        assert start_command in contract

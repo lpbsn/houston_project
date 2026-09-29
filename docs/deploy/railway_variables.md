@@ -228,11 +228,21 @@ Transactional invitation emails for Staff, Manager, and Director roles. Disabled
 
 ## Celery worker concurrency (three worker services)
 
-`CELERY_WORKER_CONCURRENCY` is **required** on `celery-ai-interactive`, `celery-operational`, and `celery-background`. The Railway `startCommand` validates it in shell **before** Celery starts; do not set it on `api-web` or `celery-beat`. The measured starting value is **4 on each pool** (12 children), not a split of the previous single worker.
+`CELERY_WORKER_CONCURRENCY` is **required** on `celery-ai-interactive`, `celery-operational`, and `celery-background`. The Railway `startCommand` validates it in shell **before** Celery starts; do not set it on `api-web` or `celery-beat`.
+
+The only measured worker budget is the previous single worker at **4 prefork children** (4 Postgres connections held up to `CONN_MAX_AGE`, and at most 4 simultaneous provider calls). `max_connections` was not readable. The three pools share that envelope. Initial values:
+
+| Service | `CELERY_WORKER_CONCURRENCY` | Why |
+|---|---|---|
+| `celery-ai-interactive` | 2 | User-visible observation pipeline. Prefetch 1. Two slots stay available when background classification is busy. |
+| `celery-operational` | 1 | Recovery, planning, push, and transactional email stay alive while both AI pools are busy. |
+| `celery-background` | 1 | Pattern classification and maintenance. One provider slot. |
+
+Together: 4 children, 4 worker database connections, and 3 simultaneous provider calls (interactive 2 + background 1).
 
 | Variable | Service | Required | Notes |
 |---|---|---|---|
-| `CELERY_WORKER_CONCURRENCY` | each of the three workers | yes | Positive decimal integer (digits only, no leading zero). Passed to `celery worker --concurrency`. |
+| `CELERY_WORKER_CONCURRENCY` | each of the three workers | yes | Positive decimal integer (digits only, no leading zero). Passed to `celery worker --concurrency`. Initial values: 2, 1, and 1 as above. |
 
 ### Shell validation (start command)
 
@@ -281,7 +291,7 @@ Phase 2 (`CELERY_WORKER_PREFETCH_MULTIPLIER`) is out of scope here.
 6. [ ] Redis URLs mapped to DBs 0–3
 7. [ ] `make backend-deploy-check` passes locally
 8. [ ] `HOUSTON_PRIVATE_MEDIA_BACKEND=s3`, the same `HOUSTON_S3_*` values, and the same `HOUSTON_CHAT_S3_*` refs to bucket `chat-attachement` on `api-web` and `the three workers`
-9. [ ] `CELERY_WORKER_CONCURRENCY` set on `the three workers` (positive integer, chosen from isolated staging sizing)
+9. [ ] `CELERY_WORKER_CONCURRENCY` set per worker: `2` on `celery-ai-interactive`, `1` on `celery-operational`, `1` on `celery-background`
 10. [ ] `the three workers` and `celery-beat` deployed and running; worker logs show `concurrency: <C> (prefork)` matching the variable
 11. [ ] `import_business_unit_catalog` run manually after migrate
 

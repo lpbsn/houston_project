@@ -142,7 +142,7 @@ Redis must remain on the Railway private network. **Do not expose Redis publicly
 
 ## Celery strategy
 
-* The three worker services and `celery-beat` are **mandatory** in prod-test. Beat stays a singleton and does not execute tasks. Initial concurrency is 4 on each worker, not a split of the previous single worker.
+* The three worker services and `celery-beat` are **mandatory** in prod-test. Beat stays a singleton and does not execute tasks. Initial concurrency stays inside the measured 4-process envelope: 2 on `celery-ai-interactive`, 1 on `celery-operational`, 1 on `celery-background`.
 * Beat schedules (from [`settings.py`](../../apps/api/config/settings.py)): action-plan horizon materialization, chat purge, upload TTL cleanup, stuck observation recovery.
 * **Worker down = blocking:** submitted observations stay queued; AI signal generation stops. Treat worker health as a prod-test gate.
 * Beat down = scheduled purges and horizon materialization stop (lazy read-path materialization remains a partial safety net for action plans).

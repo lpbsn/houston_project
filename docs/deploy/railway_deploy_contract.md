@@ -186,11 +186,27 @@ Same multi-stage build as `api-web` Python layer: **uv `0.11.16`** and `build-es
 
 ### Start command
 
+Each service uses the `startCommand` in its config file. The shell validates `CELERY_WORKER_CONCURRENCY` before Celery starts, then consumes only that service's queues.
+
+`celery-ai-interactive`:
+
 ```toml
-startCommand = "/bin/sh -c 'if [ -z \"${CELERY_WORKER_CONCURRENCY:-}\" ]; then echo \"CELERY_WORKER_CONCURRENCY is required\" >&2; exit 1; fi; case \"$CELERY_WORKER_CONCURRENCY\" in *[!0-9]*) echo \"CELERY_WORKER_CONCURRENCY must contain only decimal digits\" >&2; exit 1;; 0|0*) echo \"CELERY_WORKER_CONCURRENCY must be greater than zero\" >&2; exit 1;; esac; exec /opt/venv/bin/celery -A config worker -l info -n houston-worker@%h --concurrency=\"$CELERY_WORKER_CONCURRENCY\"'"
+startCommand = "/bin/sh -c 'if [ -z \"${CELERY_WORKER_CONCURRENCY:-}\" ]; then echo \"CELERY_WORKER_CONCURRENCY is required\" >&2; exit 1; fi; case \"$CELERY_WORKER_CONCURRENCY\" in *[!0-9]*) echo \"CELERY_WORKER_CONCURRENCY must contain only decimal digits\" >&2; exit 1;; 0|0*) echo \"CELERY_WORKER_CONCURRENCY must be greater than zero\" >&2; exit 1;; esac; exec /opt/venv/bin/celery -A config worker -l info -n houston-ai-interactive@%h -Q ai_interactive --prefetch-multiplier=1 --concurrency=\"$CELERY_WORKER_CONCURRENCY\"'"
 ```
 
-* `CELERY_WORKER_CONCURRENCY` is **required** on each worker service (see [`railway_variables.md`](railway_variables.md)). Initial value: 4 on each pool.
+`celery-operational`:
+
+```toml
+startCommand = "/bin/sh -c 'if [ -z \"${CELERY_WORKER_CONCURRENCY:-}\" ]; then echo \"CELERY_WORKER_CONCURRENCY is required\" >&2; exit 1; fi; case \"$CELERY_WORKER_CONCURRENCY\" in *[!0-9]*) echo \"CELERY_WORKER_CONCURRENCY must contain only decimal digits\" >&2; exit 1;; 0|0*) echo \"CELERY_WORKER_CONCURRENCY must be greater than zero\" >&2; exit 1;; esac; exec /opt/venv/bin/celery -A config worker -l info -n houston-operational@%h -Q operational --concurrency=\"$CELERY_WORKER_CONCURRENCY\"'"
+```
+
+`celery-background`:
+
+```toml
+startCommand = "/bin/sh -c 'if [ -z \"${CELERY_WORKER_CONCURRENCY:-}\" ]; then echo \"CELERY_WORKER_CONCURRENCY is required\" >&2; exit 1; fi; case \"$CELERY_WORKER_CONCURRENCY\" in *[!0-9]*) echo \"CELERY_WORKER_CONCURRENCY must contain only decimal digits\" >&2; exit 1;; 0|0*) echo \"CELERY_WORKER_CONCURRENCY must be greater than zero\" >&2; exit 1;; esac; exec /opt/venv/bin/celery -A config worker -l info -n houston-background@%h -Q ai_background,maintenance --concurrency=\"$CELERY_WORKER_CONCURRENCY\"'"
+```
+
+* `CELERY_WORKER_CONCURRENCY` is **required** on each worker service (see [`railway_variables.md`](railway_variables.md)). Initial values, from the measured 4-process envelope: `2` on `celery-ai-interactive`, `1` on `celery-operational`, `1` on `celery-background`.
 * Shell validates presence, decimal digits only, value > 0, no leading zero — **before** `exec` (so Celery never receives `--concurrency=0`, which would fall back to CPU-count default).
 * `exec` replaces the shell so SIGTERM reaches the Celery process for graceful shutdown.
 
