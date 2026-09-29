@@ -384,6 +384,9 @@ class SignalPatternAssignment(BaseModel):
     )
     last_attempted_at = models.DateTimeField(null=True, blank=True)
     next_retry_at = models.DateTimeField(null=True, blank=True)
+    # Confirm time of the current broker message. Null means the durable state
+    # still needs a publish. A fresh confirm is not republished on every sweep.
+    published_at = models.DateTimeField(null=True, blank=True)
     assignment_source = models.CharField(
         max_length=32,
         choices=AssignmentSource.choices,
@@ -400,6 +403,10 @@ class SignalPatternAssignment(BaseModel):
             models.Index(
                 fields=["classification_status", "next_retry_at"],
                 name="sig_pat_assign_retry_idx",
+            ),
+            models.Index(
+                fields=["classification_status", "published_at"],
+                name="sig_pat_assign_published_idx",
             ),
             models.Index(
                 fields=["pattern", "classification_status"],

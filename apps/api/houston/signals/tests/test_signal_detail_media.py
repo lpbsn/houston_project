@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import time as stdlib_time
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock, patch
 from urllib.parse import parse_qs, urlparse
@@ -62,7 +63,11 @@ def _create_observation_with_photo(*, api_client, membership, text: str = "A" * 
 
     submit_response = api_client.post(
         f"/api/v1/establishments/{membership.establishment_id}/observations/",
-        {"text": text, "temporary_upload_ids": [upload_id]},
+        {
+            "text": text,
+            "temporary_upload_ids": [upload_id],
+            "client_submission_id": str(uuid.uuid4()),
+        },
         format="json",
         HTTP_AUTHORIZATION=f"Bearer {token}",
     )

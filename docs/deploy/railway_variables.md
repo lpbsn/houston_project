@@ -26,7 +26,7 @@ For multiple domains (e.g. Railway default + custom): add all to `DJANGO_ALLOWED
 
 ## PostgreSQL (Railway plugin → Houston)
 
-Railway Postgres exposes reference variables (names may vary by plugin version). Map to Houston names on **all** backend services (`api-web`, `celery-worker`, `celery-beat`):
+Railway Postgres exposes reference variables (names may vary by plugin version). Map to Houston names on **all** backend services (`api-web`, `the three workers`, `celery-beat`):
 
 | Houston variable | Source |
 |---|---|
@@ -43,13 +43,12 @@ Use Railway **variable references** (`${{Postgres.PGHOST}}`) where supported to 
 
 ## Redis (Railway plugin → Houston)
 
-Railway provides one Redis URL. Split logical databases (same pattern as local [`docker-compose.yml`](../../docker-compose.yml)):
+Railway provides one Redis URL. Channels and cache stay on Redis. Celery uses RabbitMQ and does not configure a result backend:
 
 | Houston variable | Typical mapping | Purpose |
 |---|---|---|
 | `REDIS_URL` | `redis://<user>:<pass>@<host>:<port>/0` | Django Channels |
-| `CELERY_BROKER_URL` | `redis://…/1` | Celery broker |
-| `CELERY_RESULT_BACKEND` | `redis://…/2` | Celery results |
+| `CELERY_BROKER_URL` | `amqp://<user>:<pass>@<rabbitmq-host>:5672//` | Celery broker on private RabbitMQ |
 | `HOUSTON_CACHE_REDIS_URL` | `redis://…/3` | Throttle / cache (explicit recommended in prod) |
 
 **Do not expose Redis publicly.** Private network only.
@@ -58,7 +57,7 @@ Railway provides one Redis URL. Split logical databases (same pattern as local [
 
 ## Secrets (manual — generate before deploy)
 
-Generate independent random values (`openssl rand -hex 32`). Set on `api-web`, `celery-worker`, and `celery-beat` unless noted.
+Generate independent random values (`openssl rand -hex 32`). Set on `api-web`, `the three workers`, and `celery-beat` unless noted.
 
 | Variable | Required | Notes |
 |---|---|---|
@@ -71,7 +70,7 @@ Generate independent random values (`openssl rand -hex 32`). Set on `api-web`, `
 | `OPENAI_API_KEY` | yes | Required when AI providers are `openai` |
 | `HOUSTON_PUSH_ENABLED` | no | Kill-switch for FCM send; default off |
 | `HOUSTON_ANDROID_MIN_SUPPORTED_VERSION_CODE` | no | Android `versionCode` floor for Play in-app force update; default `0` (never force). Set on `api-web` only when a shipped build is actually unsupported. Force UI still requires a Play-installable update on the device. |
-| `HOUSTON_FCM_SERVICE_ACCOUNT_JSON` | when push on | Firebase service-account JSON string; `api-web` + `celery-worker`. Never log. APNs `.p8` stays in Firebase Console. |
+| `HOUSTON_FCM_SERVICE_ACCOUNT_JSON` | when push on | Firebase service-account JSON string; `api-web` + `the three workers`. Never log. APNs `.p8` stays in Firebase Console. |
 
 Forbidden placeholders: `replace-me-for-local-dev`, empty values.
 
@@ -79,7 +78,7 @@ Forbidden placeholders: `replace-me-for-local-dev`, empty values.
 
 ## Per-service variable matrix
 
-| Variable / group | `api-web` | `celery-worker` | `celery-beat` |
+| Variable / group | `api-web` | `the three workers` | `celery-beat` |
 |---|---|---|---|
 | `DJANGO_SECRET_KEY`, `DJANGO_DEBUG` | yes | yes | yes |
 | `DJANGO_ALLOWED_HOSTS`, `HOUSTON_CLIENT_ORIGINS` | yes | yes | yes |
@@ -116,12 +115,12 @@ Forbidden placeholders: `replace-me-for-local-dev`, empty values.
 
 ## Private media and volumes
 
-Prod-test media truth is S3. Set the same `HOUSTON_PRIVATE_MEDIA_BACKEND=s3` and `HOUSTON_S3_*` values on `api-web` and `celery-worker`. Do not treat an `api-web` volume as media truth.
+Prod-test media truth is S3. Set the same `HOUSTON_PRIVATE_MEDIA_BACKEND=s3` and `HOUSTON_S3_*` values on `api-web` and `the three workers`. Do not treat an `api-web` volume as media truth.
 
 | Service | Media | `HOUSTON_PRIVATE_MEDIA_ROOT` |
 |---|---|---|
 | `api-web` | S3 (same bucket as worker) | Not media truth when backend=s3. Optional leftover path if a volume still exists; `start-api-web.sh` `mkdir`s only when backend=filesystem. |
-| `celery-worker` | S3 (same bucket as api-web) | Not media truth when backend=s3. Historical filesystem deploys used `/tmp/houston-private-media` (ephemeral) for deploy-check only. |
+| `the three workers` | S3 (same bucket as api-web) | Not media truth when backend=s3. Historical filesystem deploys used `/tmp/houston-private-media` (ephemeral) for deploy-check only. |
 | `celery-beat` | N/A | not required |
 
 See [Known limitations V1](railway_deploy_contract.md#known-limitations-v1--private-media) in the deploy contract (historical filesystem volume vs worker `/tmp`, not current S3 prod-test).
@@ -163,7 +162,7 @@ Execution-comment media is a **third** private Railway bucket, distinct from Sig
 | `HOUSTON_ACTION_PLAN_S3_REGION` | `${{action-plan-attachments.REGION}}` |
 | `HOUSTON_ACTION_PLAN_S3_ADDRESSING_STYLE` | `virtual` |
 
-Bucket CORS must allow browser/WebView **presigned** `PUT`, `GET`, `HEAD` (same origins as Chat). Local/CI filesystem uses `HOUSTON_ACTION_PLAN_PRIVATE_MEDIA_ROOT`. Retention after `done` defaults to **30** days (`HOUSTON_ACTION_PLAN_COMMENT_RETENTION_DAYS`). Required on `api-web` and `celery-worker` when `HOUSTON_PRIVATE_MEDIA_BACKEND=s3`.
+Bucket CORS must allow browser/WebView **presigned** `PUT`, `GET`, `HEAD` (same origins as Chat). Local/CI filesystem uses `HOUSTON_ACTION_PLAN_PRIVATE_MEDIA_ROOT`. Retention after `done` defaults to **30** days (`HOUSTON_ACTION_PLAN_COMMENT_RETENTION_DAYS`). Required on `api-web` and `the three workers` when `HOUSTON_PRIVATE_MEDIA_BACKEND=s3`.
 
 ### Live `houston_project` startCommand (ops risk)
 
@@ -207,10 +206,10 @@ Transactional invitation emails for Staff, Manager, and Director roles. Disabled
 
 | Variable | Service | Required | Notes |
 |---|---|---|---|
-| `HOUSTON_INVITATION_EMAIL_ENABLED` | `api-web`, `celery-worker` | no | Default `false`; set `true` in prod when ready |
-| `HOUSTON_PUBLIC_APP_URL` | `api-web`, `celery-worker` | when enabled | Public app origin for accept links, e.g. `https://app.spore-os.com` (no trailing slash) |
-| `HOUSTON_INVITATION_EMAIL_FROM` | `celery-worker` | when enabled | Default `Spore <invitation@notify.spore-os.com>` |
-| `RESEND_API_KEY` | `celery-worker` only | when enabled | **Never** on `api-web` |
+| `HOUSTON_INVITATION_EMAIL_ENABLED` | `api-web`, `the three workers` | no | Default `false`; set `true` in prod when ready |
+| `HOUSTON_PUBLIC_APP_URL` | `api-web`, `the three workers` | when enabled | Public app origin for accept links, e.g. `https://app.spore-os.com` (no trailing slash) |
+| `HOUSTON_INVITATION_EMAIL_FROM` | `the three workers` | when enabled | Default `Spore <invitation@notify.spore-os.com>` |
+| `RESEND_API_KEY` | `celery-operational` and `celery-background` | when enabled | **Never** on `api-web`. Operational sends invitation, password, and email-change mail. Background sends the content-report mail. |
 
 `celery-beat` does not send invitation emails; optional parity for `HOUSTON_INVITATION_EMAIL_ENABLED` / `HOUSTON_PUBLIC_APP_URL` only if ops require uniform env.
 
@@ -227,13 +226,23 @@ Transactional invitation emails for Staff, Manager, and Director roles. Disabled
 
 ---
 
-## Celery worker concurrency (`celery-worker` only)
+## Celery worker concurrency (three worker services)
 
-`CELERY_WORKER_CONCURRENCY` is **required** on `celery-worker` only. The Railway `startCommand` validates it in shell **before** Celery starts; do not set it on `api-web` or `celery-beat`.
+`CELERY_WORKER_CONCURRENCY` is **required** on `celery-ai-interactive`, `celery-operational`, and `celery-background`. The Railway `startCommand` validates it in shell **before** Celery starts; do not set it on `api-web` or `celery-beat`.
+
+The only measured worker budget is the previous single worker at **4 prefork children** (4 Postgres connections held up to `CONN_MAX_AGE`, and at most 4 simultaneous provider calls). `max_connections` was not readable. The three pools share that envelope. Initial values:
+
+| Service | `CELERY_WORKER_CONCURRENCY` | Why |
+|---|---|---|
+| `celery-ai-interactive` | 2 | User-visible observation pipeline. Prefetch 1. Two slots stay available when background classification is busy. |
+| `celery-operational` | 1 | Recovery, planning, push, and transactional email stay alive while both AI pools are busy. |
+| `celery-background` | 1 | Pattern classification and maintenance. One provider slot. |
+
+Together: 4 children, 4 worker database connections, and 3 simultaneous provider calls (interactive 2 + background 1).
 
 | Variable | Service | Required | Notes |
 |---|---|---|---|
-| `CELERY_WORKER_CONCURRENCY` | `celery-worker` | yes | Positive decimal integer (digits only, no leading zero). Passed to `celery worker --concurrency`. |
+| `CELERY_WORKER_CONCURRENCY` | each of the three workers | yes | Positive decimal integer (digits only, no leading zero). Passed to `celery worker --concurrency`. Initial values: 2, 1, and 1 as above. |
 
 ### Shell validation (start command)
 
@@ -255,14 +264,14 @@ Verify after deploy: worker logs must show `concurrency: <C> (prefork)` where `<
 
 ### Sizing procedure (isolated staging — not production)
 
-Choose `C` **before** setting the variable on production `celery-worker`:
+Choose `C` **before** setting the variable on production `the three workers`:
 
-1. Use a **dedicated Railway test project** or temporary cloned `celery-worker` service on a **non-production branch** — fully isolated broker, PostgreSQL, and data from production.
+1. Use a **dedicated Railway test project** or a temporary cloned worker service on a **non-production branch** — fully isolated broker, PostgreSQL, and data from production.
 2. **Do not** connect sizing experiments to the production broker, production Postgres, or production datasets.
 3. **Do not** start a second Celery worker via SSH inside the production container.
 4. Measure memory at representative burst load by **successive redeploys** with `CELERY_WORKER_CONCURRENCY` = 1, 2, 4, 8, … — **one active worker** on the test broker at a time.
 5. Model: `M_total(C) = M_main + C × M_child_idle + C × Δ_task_active + headroom`; Select the lowest `C` that meets the measured throughput and latency objectives while keeping cgroup/container memory below the Railway limit with the required headroom and respecting PostgreSQL and OpenAI constraints.
-6. Set the chosen value on production `celery-worker` **before or when** merging the `startCommand` that requires this variable.
+6. Set the chosen value on production `the three workers` **before or when** merging the `startCommand` that requires this variable.
 
 ### Rollback
 
@@ -281,9 +290,9 @@ Phase 2 (`CELERY_WORKER_PREFETCH_MULTIPLIER`) is out of scope here.
 5. [ ] `POSTGRES_SSLMODE=require`
 6. [ ] Redis URLs mapped to DBs 0–3
 7. [ ] `make backend-deploy-check` passes locally
-8. [ ] `HOUSTON_PRIVATE_MEDIA_BACKEND=s3`, the same `HOUSTON_S3_*` values, and the same `HOUSTON_CHAT_S3_*` refs to bucket `chat-attachement` on `api-web` and `celery-worker`
-9. [ ] `CELERY_WORKER_CONCURRENCY` set on `celery-worker` (positive integer, chosen from isolated staging sizing)
-10. [ ] `celery-worker` and `celery-beat` deployed and running; worker logs show `concurrency: <C> (prefork)` matching the variable
+8. [ ] `HOUSTON_PRIVATE_MEDIA_BACKEND=s3`, the same `HOUSTON_S3_*` values, and the same `HOUSTON_CHAT_S3_*` refs to bucket `chat-attachement` on `api-web` and `the three workers`
+9. [ ] `CELERY_WORKER_CONCURRENCY` set per worker: `2` on `celery-ai-interactive`, `1` on `celery-operational`, `1` on `celery-background`
+10. [ ] `the three workers` and `celery-beat` deployed and running; worker logs show `concurrency: <C> (prefork)` matching the variable
 11. [ ] `import_business_unit_catalog` run manually after migrate
 
 ---

@@ -122,6 +122,22 @@ def mock_openai_client():
         yield client
 
 
+def test_openai_observation_client_disables_sdk_retries():
+    with patch("openai.OpenAI") as openai_cls:
+        provider = OpenAIObservationPipelineProvider(api_key="test-key")
+        provider._get_client()
+    assert openai_cls.call_args.kwargs["max_retries"] == 0
+
+
+def test_openai_pattern_classifier_disables_sdk_retries():
+    from houston.analytics.classifier import OpenAIPatternClassifierProvider
+
+    with patch("openai.OpenAI") as openai_cls:
+        provider = OpenAIPatternClassifierProvider(api_key="test-key")
+        provider._get_client()
+    assert openai_cls.call_args.kwargs["max_retries"] == 0
+
+
 def test_get_observation_pipeline_provider_uses_fake_under_pytest():
     provider = get_observation_pipeline_provider()
     assert isinstance(provider, FakeObservationPipelineProvider)

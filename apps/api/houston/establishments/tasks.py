@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 
 @shared_task(
     bind=True,
-    ignore_result=True,
     max_retries=3,
     default_retry_delay=30,
 )
@@ -64,7 +63,6 @@ def send_establishment_invitation_email_task(
 
 @shared_task(
     bind=True,
-    ignore_result=True,
     max_retries=3,
     default_retry_delay=30,
 )

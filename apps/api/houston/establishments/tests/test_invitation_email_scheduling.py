@@ -168,7 +168,7 @@ def test_apply_async_passes_real_args(api_client):
     )
     _, kwargs = apply_async.call_args
     assert kwargs["args"] == [str(invitation.id), body["invitation_token"]]
-    assert kwargs["ignore_result"] is True
+    assert "ignore_result" not in kwargs
 
 
 @override_settings(HOUSTON_INVITATION_EMAIL_ENABLED=True)
@@ -213,7 +213,7 @@ def test_apply_async_sets_ignore_result(api_client):
 
     assert response.status_code == 201
     _, kwargs = apply_async.call_args
-    assert kwargs["ignore_result"] is True
+    assert "ignore_result" not in kwargs
 
 
 @override_settings(HOUSTON_INVITATION_EMAIL_ENABLED=True)

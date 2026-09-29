@@ -20,6 +20,7 @@
 # -----------------------------------------------------------------------------
 
 COMPOSE := docker compose
+CELERY_SERVICES := celery-ai-interactive celery-operational celery-background
 COMPOSE_PROD_TEST := $(COMPOSE) -f docker-compose.prod-test.yml -p houston-prod-test
 API_EXEC := $(COMPOSE) exec -T api
 API_EXEC_INTERACTIVE := $(COMPOSE) exec api
@@ -43,7 +44,7 @@ endif
 # -----------------------------------------------------------------------------
 
 build-backend:
-	DOCKER_BUILDKIT=1 $(COMPOSE) --profile scheduler build api celery celery-beat
+	DOCKER_BUILDKIT=1 $(COMPOSE) --profile scheduler build api $(CELERY_SERVICES) celery-beat
 
 build-web:
 	$(COMPOSE) build web
@@ -51,25 +52,25 @@ build-web:
 build: build-backend build-web
 
 up: assert-local-dev-db
-	$(COMPOSE) up api celery web
+	$(COMPOSE) up api $(CELERY_SERVICES) web
 
 up-build: assert-local-dev-db
-	$(COMPOSE) up --build api celery web
+	$(COMPOSE) up --build api $(CELERY_SERVICES) web
 
 up-backend: assert-local-dev-db
-	$(COMPOSE) up -d postgres redis api celery
+	$(COMPOSE) up -d postgres redis rabbitmq api $(CELERY_SERVICES)
 	$(COMPOSE) exec -u 0 api chown -R houston:houston /app/apps/api/private_media
 
 # Simple process restart (bind-mounted code). Does not reload .env or image.
 restart-backend:
-	$(COMPOSE) restart api celery
+	$(COMPOSE) restart api $(CELERY_SERVICES)
 	@if $(COMPOSE) --profile scheduler ps --status running --services 2>/dev/null | grep -qx celery-beat; then \
 		$(COMPOSE) --profile scheduler restart celery-beat; \
 	fi
 
 # Recreate api/celery (--no-deps: postgres/redis untouched) to reload .env.
 recreate-backend: assert-local-dev-db
-	$(COMPOSE) up -d --force-recreate --no-deps api celery
+	$(COMPOSE) up -d --force-recreate --no-deps api $(CELERY_SERVICES)
 	@if $(COMPOSE) --profile scheduler ps --status running --services 2>/dev/null | grep -qx celery-beat; then \
 		$(COMPOSE) --profile scheduler up -d --force-recreate --no-deps celery-beat; \
 	fi
@@ -180,7 +181,9 @@ backend-rebuild: down build-backend up-backend
 
 docker-verify-security:
 	$(API_EXEC) id
-	$(COMPOSE) exec -T celery id
+	$(COMPOSE) exec -T celery-ai-interactive id
+	$(COMPOSE) exec -T celery-operational id
+	$(COMPOSE) exec -T celery-background id
 	$(API_CMD) 'cd $(API_DIR) && uv run python manage.py check'
 
 # -----------------------------------------------------------------------------

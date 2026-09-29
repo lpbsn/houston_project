@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Iterator
 from unittest.mock import patch
-from uuid import UUID
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from django.db import transaction
 from django.utils import timezone
@@ -1228,6 +1228,10 @@ def _submit_event(
             membership=membership,
             text=row["raw_text"],
             temporary_upload_ids=[],
+            client_submission_id=uuid5(
+                NAMESPACE_URL,
+                f"konoha-observation:{row['id']}",
+            ),
         )
         run_observation_pipeline(observation.id, provider=provider)
         observation.refresh_from_db()

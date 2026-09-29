@@ -65,6 +65,7 @@ from houston.analytics.permissions import (
     can_govern_operational_patterns,
     empty_signal_scope_q,
 )
+from houston.analytics.retry_policy import analytics_pattern_task_retry_policy
 from houston.analytics.signature import (
     build_signal_pattern_payload,
     build_signal_pattern_signature,
@@ -1975,15 +1976,20 @@ def _mark_assignment_failed(
     if pending_classifier_version:
         assignment.pending_classifier_version = pending_classifier_version.strip()
     assignment.next_retry_at = next_retry_at
+    update_fields = [
+        "classification_status",
+        "pending_signature",
+        "pending_classifier_version",
+        "last_error_code",
+        "next_retry_at",
+    ]
+    if status == SignalPatternAssignment.ClassificationStatus.TEMPORARY_FAILED:
+        # The previous confirm belongs to the attempt that just failed.
+        assignment.published_at = None
+        update_fields.append("published_at")
     return _validate_and_save_assignment(
         assignment,
-        update_fields=[
-            "classification_status",
-            "pending_signature",
-            "pending_classifier_version",
-            "last_error_code",
-            "next_retry_at",
-        ],
+        update_fields=update_fields,
     )
 
 
@@ -2150,6 +2156,65 @@ def claim_signal_pattern_classification(
             reason="retry_not_due",
         )
 
+    same_classification = (
+        assignment.pending_signature == signature
+        and assignment.pending_classifier_version == classifier_version
+    )
+    provider_call_budget = analytics_pattern_task_retry_policy().max_provider_calls
+    # The sweep does not republish this terminal skip, and a broker redelivery
+    # of the same classification does not resume it. A direct classification
+    # may resume the same signature once consent allows it, without resetting
+    # the provider budget.
+    consent_resume = (
+        assignment.last_error_code == "ai_consent_required"
+        and assignment.classification_status
+        == SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED
+        and same_classification
+        and assignment.attempt_count < provider_call_budget
+    )
+    if (
+        assignment.classification_status
+        == SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED
+        and same_classification
+        and not consent_resume
+    ):
+        return PatternClassificationClaimResult(
+            status="already_terminal",
+            attempt_count=assignment.attempt_count,
+            assignment=assignment,
+            reason="same_classification",
+        )
+
+    if (
+        same_classification
+        and assignment.attempt_count >= provider_call_budget
+        and assignment.classification_status
+        in {
+            SignalPatternAssignment.ClassificationStatus.PROCESSING,
+            SignalPatternAssignment.ClassificationStatus.TEMPORARY_FAILED,
+        }
+    ):
+        if not assignment.last_error_code:
+            assignment.last_error_code = "retry_exhausted"
+        assignment.classification_status = (
+            SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED
+        )
+        assignment.next_retry_at = None
+        assignment = _validate_and_save_assignment(
+            assignment,
+            update_fields=[
+                "classification_status",
+                "last_error_code",
+                "next_retry_at",
+            ],
+        )
+        return PatternClassificationClaimResult(
+            status="budget_exhausted",
+            attempt_count=assignment.attempt_count,
+            assignment=assignment,
+            reason="provider_call_budget_exhausted",
+        )
+
     assignment.classification_status = SignalPatternAssignment.ClassificationStatus.PROCESSING
     assignment.pending_signature = signature
     assignment.pending_classifier_version = classifier_version
@@ -2194,6 +2259,54 @@ def _openai_signal_pattern_share_allowed(signal: Signal) -> bool:
     return all(has_current_ai_consent(users_by_id[user_id]) for user_id in author_ids)
 
 
+@transaction.atomic
+def _mark_pattern_classification_not_executable(
+    signal: Signal,
+    *,
+    error_code: str,
+    signature: str,
+    classifier_version: str,
+) -> SignalPatternAssignment:
+    """Record a voluntary skip so the recovery sweep does not republish it."""
+    assignment = _get_or_create_locked_assignment(signal)
+    if assignment.assignment_source == SignalPatternAssignment.AssignmentSource.OWNER_CORRECTION:
+        return assignment
+    if assignment.classification_status == SignalPatternAssignment.ClassificationStatus.SUCCEEDED:
+        return assignment
+    now = timezone.now()
+    if (
+        assignment.classification_status == SignalPatternAssignment.ClassificationStatus.PROCESSING
+        and assignment.last_attempted_at is not None
+        and assignment.last_attempted_at
+        > now - timedelta(seconds=settings.HOUSTON_ANALYTICS_PATTERN_PROCESSING_STALE_SECONDS)
+    ):
+        return assignment
+    if (
+        assignment.classification_status
+        == SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED
+        and assignment.last_error_code == error_code
+    ):
+        return assignment
+
+    assignment.classification_status = (
+        SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED
+    )
+    assignment.last_error_code = error_code
+    assignment.next_retry_at = None
+    assignment.pending_signature = signature
+    assignment.pending_classifier_version = classifier_version
+    return _validate_and_save_assignment(
+        assignment,
+        update_fields=[
+            "classification_status",
+            "last_error_code",
+            "next_retry_at",
+            "pending_signature",
+            "pending_classifier_version",
+        ],
+    )
+
+
 def classify_signal_pattern(
     signal_id: uuid.UUID,
     *,
@@ -2205,15 +2318,19 @@ def classify_signal_pattern(
         return None
 
     provider = provider or get_pattern_classifier_provider()
-    if provider.provider == "openai" and not _openai_signal_pattern_share_allowed(signal):
-        assignment = SignalPatternAssignment.objects.filter(signal=signal).first()
-        if assignment is not None:
-            setattr(assignment, "_analytics_claim_status", "skipped")
-            setattr(assignment, "_analytics_claim_reason", "ai_consent_required")
-        return assignment
-
     signature = build_signal_pattern_signature(signal)
     classifier_version = classifier_version_for_provider(provider)
+    if provider.provider == "openai" and not _openai_signal_pattern_share_allowed(signal):
+        assignment = _mark_pattern_classification_not_executable(
+            signal,
+            error_code="ai_consent_required",
+            signature=signature,
+            classifier_version=classifier_version,
+        )
+        setattr(assignment, "_analytics_claim_status", "skipped")
+        setattr(assignment, "_analytics_claim_reason", "ai_consent_required")
+        return assignment
+
     claim = claim_signal_pattern_classification(
         signal=signal,
         signature=signature,
@@ -2359,6 +2476,15 @@ def classify_signal_pattern(
         setattr(assignment, "_analytics_claim_status", claim.status)
         setattr(assignment, "_analytics_claim_reason", claim.reason)
         return assignment
+    except Exception as exc:
+        raise PatternClassificationRetryableError(
+            "Pattern classification failed.",
+            signal_id=signal.id,
+            attempt_count=claim.attempt_count,
+            pending_signature=signature,
+            pending_classifier_version=classifier_version,
+            error_code="pattern_classification_unexpected_error",
+        ) from exc
 
 
 def _load_signal_for_pattern_classification(signal_id: uuid.UUID) -> Signal | None:

@@ -101,4 +101,7 @@ def test_task_sends_to_live_email_without_logging_secret(caplog):
 
 
 def test_task_declares_ignore_result():
-    assert send_password_reset_email_task.ignore_result is True
+    from django.conf import settings
+
+    assert settings.CELERY_TASK_IGNORE_RESULT is True
+    assert send_password_reset_email_task.ignore_result is not False

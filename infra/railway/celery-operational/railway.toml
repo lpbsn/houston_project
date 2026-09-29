@@ -1,0 +1,18 @@
+# Houston celery-operational — recovery, planning, push, and transactional email.
+# Wiring: Root Directory /, Config File /infra/railway/celery-operational/railway.toml
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "infra/docker/api/Dockerfile"
+watchPatterns = [
+  "/apps/api/**",
+  "/contracts/operational-realtime-invalidation.json",
+  "/infra/docker/api/**",
+  "/infra/railway/celery-operational/**",
+  "/pyproject.toml",
+  "/uv.lock",
+  "/.dockerignore",
+]
+
+[deploy]
+startCommand = "/bin/sh -c 'if [ -z \"${CELERY_WORKER_CONCURRENCY:-}\" ]; then echo \"CELERY_WORKER_CONCURRENCY is required\" >&2; exit 1; fi; case \"$CELERY_WORKER_CONCURRENCY\" in *[!0-9]*) echo \"CELERY_WORKER_CONCURRENCY must contain only decimal digits\" >&2; exit 1;; 0|0*) echo \"CELERY_WORKER_CONCURRENCY must be greater than zero\" >&2; exit 1;; esac; exec /opt/venv/bin/celery -A config worker -l info -n houston-operational@%h -Q operational --concurrency=\"$CELERY_WORKER_CONCURRENCY\"'"

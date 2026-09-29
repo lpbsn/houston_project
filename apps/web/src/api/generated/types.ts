@@ -3437,6 +3437,8 @@ export interface components {
         ActionPlanTaskCreateObservationRequest: {
             text: string;
             temporary_upload_ids?: string[];
+            /** Format: uuid */
+            client_submission_id: string;
         };
         ActionPlanTaskCreateObservationResponse: {
             /** Format: uuid */
@@ -4872,6 +4874,8 @@ export interface components {
         ObservationSubmitRequest: {
             text: string;
             temporary_upload_ids?: string[];
+            /** Format: uuid */
+            client_submission_id: string;
         };
         ObservationSubmitResponse: {
             /** Format: uuid */
@@ -8065,6 +8069,14 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13051,6 +13063,14 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

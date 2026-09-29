@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
-from django.db.models import F, Value
+from django.db.models import F, Q, Value
 from django.db.models.functions import Greatest
 from django.utils import timezone
 
@@ -98,6 +98,7 @@ logger = logging.getLogger(__name__)
 
 _STUCK_PROCESSING_RECOVERY_ERROR_CODE = "stuck_processing_recovered"
 _MAX_OBSERVATION_PIPELINE_ATTEMPTS = 3
+_OBSERVATION_PIPELINE_RETRY_DELAY_SECONDS = 30
 _ACTIVE_AGGREGATION_UNIQUE_CONSTRAINT = "signal_unique_active_aggregation_key"
 
 
@@ -801,29 +802,31 @@ def apply_pipeline_output(
     )
 
 
-def _enqueue_observation_pipeline_task(
+def enqueue_observation_processing(
     observation_id: uuid.UUID,
     *,
-    already_enqueued: set[uuid.UUID],
+    countdown: int | None = None,
 ) -> bool:
-    if observation_id in already_enqueued:
-        return False
-    already_enqueued.add(observation_id)
-    try:
-        from houston.signals.tasks import process_observation_task
+    from houston.core.celery_publish import publish_celery_task
+    from houston.signals.tasks import process_observation_task
 
-        process_observation_task.delay(str(observation_id))
-    except Exception:
+    published = publish_celery_task(
+        process_observation_task,
+        args=(str(observation_id),),
+        countdown=countdown,
+    )
+    if not published:
         logger.error(
             "observation_pipeline_recovery_enqueue_failed",
             extra={
                 "observation_id": str(observation_id),
                 "event": "observation_pipeline_recovery_enqueue_failed",
             },
-            exc_info=True,
         )
-        already_enqueued.discard(observation_id)
         return False
+    ObservationProcessing.objects.filter(observation_id=observation_id).update(
+        published_at=timezone.now(),
+    )
     logger.info(
         "observation_pipeline_recovery_enqueued",
         extra={
@@ -832,6 +835,21 @@ def _enqueue_observation_pipeline_task(
         },
     )
     return True
+
+
+def _enqueue_observation_pipeline_task(
+    observation_id: uuid.UUID,
+    *,
+    already_enqueued: set[uuid.UUID],
+    countdown: int | None = None,
+) -> bool:
+    if observation_id in already_enqueued:
+        return False
+    already_enqueued.add(observation_id)
+    if enqueue_observation_processing(observation_id, countdown=countdown):
+        return True
+    already_enqueued.discard(observation_id)
+    return False
 
 
 def recover_stuck_observation_processing_batch(
@@ -877,11 +895,14 @@ def recover_orphaned_observation_processing_batch(
     cutoff = timezone.now() - timedelta(seconds=stuck_threshold)
     enqueued_count = 0
 
+    publish_due = Q(published_at__isnull=True) | Q(published_at__lt=cutoff)
     queued_observation_ids = list(
         ObservationProcessing.objects.filter(
             status=ObservationProcessing.Status.QUEUED,
-            queued_at__lt=cutoff,
-        ).values_list("observation_id", flat=True)
+            processing_started_at__isnull=True,
+        )
+        .filter(publish_due)
+        .values_list("observation_id", flat=True)
     )
     for observation_id in queued_observation_ids:
         if _enqueue_observation_pipeline_task(
@@ -893,9 +914,10 @@ def recover_orphaned_observation_processing_batch(
     retrying_observation_ids = list(
         ObservationProcessing.objects.filter(
             status=ObservationProcessing.Status.RETRYING,
-            processing_started_at__isnull=True,
-            updated_at__lt=cutoff,
-        ).values_list("observation_id", flat=True)
+            next_retry_at__lte=timezone.now(),
+        )
+        .filter(publish_due)
+        .values_list("observation_id", flat=True)
     )
     for observation_id in retrying_observation_ids:
         if _enqueue_observation_pipeline_task(
@@ -1174,11 +1196,15 @@ def _try_recover_stuck_processing(*, processing: ObservationProcessing) -> bool:
             processing.status = ObservationProcessing.Status.RETRYING
             processing.processing_started_at = None
             processing.last_error_code = _STUCK_PROCESSING_RECOVERY_ERROR_CODE
+            processing.next_retry_at = timezone.now()
+            processing.published_at = None
             processing.save(
                 update_fields=[
                     "status",
                     "processing_started_at",
                     "last_error_code",
+                    "next_retry_at",
+                    "published_at",
                     "updated_at",
                 ]
             )
@@ -1254,6 +1280,7 @@ def _mark_processing_failed(*, processing_id: uuid.UUID, error_code: str) -> Non
 
 
 def _mark_processing_retry_or_failed(*, processing_id: uuid.UUID, error_code: str) -> None:
+    observation_id: uuid.UUID | None = None
     with transaction.atomic():
         processing = (
             ObservationProcessing.objects.select_for_update()
@@ -1263,7 +1290,20 @@ def _mark_processing_retry_or_failed(*, processing_id: uuid.UUID, error_code: st
         if processing.attempt_count < _MAX_OBSERVATION_PIPELINE_ATTEMPTS:
             processing.status = ObservationProcessing.Status.RETRYING
             processing.last_error_code = error_code
-            processing.save(update_fields=["status", "last_error_code", "updated_at"])
+            processing.next_retry_at = timezone.now() + timedelta(
+                seconds=_OBSERVATION_PIPELINE_RETRY_DELAY_SECONDS,
+            )
+            processing.published_at = None
+            processing.save(
+                update_fields=[
+                    "status",
+                    "last_error_code",
+                    "next_retry_at",
+                    "published_at",
+                    "updated_at",
+                ]
+            )
+            observation_id = processing.observation_id
             event = "observation_pipeline_retry_scheduled"
         else:
             processing.status = ObservationProcessing.Status.FAILED
@@ -1279,6 +1319,11 @@ def _mark_processing_retry_or_failed(*, processing_id: uuid.UUID, error_code: st
             )
             event = "observation_pipeline_failed"
     _log_observation_processing_outcome(processing=processing, event=event)
+    if observation_id is not None:
+        enqueue_observation_processing(
+            observation_id,
+            countdown=_OBSERVATION_PIPELINE_RETRY_DELAY_SECONDS,
+        )
 
 
 @transaction.atomic

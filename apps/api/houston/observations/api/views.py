@@ -18,6 +18,7 @@ from houston.observations.api.serializers import (
     ObservationSubmitResponseSerializer,
 )
 from houston.observations.exceptions import (
+    ObservationSubmissionConflictError,
     ObservationUploadNotFoundError,
     ObservationValidationError,
 )
@@ -49,6 +50,7 @@ class ObservationSubmitView(EstablishmentScopedObservationMixin, APIView):
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=ApiErrorResponseSerializer),
+            409: OpenApiResponse(response=ApiErrorResponseSerializer),
         },
         description=(
             "Submits a validated Observation with optional linked temporary photo uploads. "
@@ -74,9 +76,15 @@ class ObservationSubmitView(EstablishmentScopedObservationMixin, APIView):
                     "temporary_upload_ids",
                     [],
                 ),
+                client_submission_id=serializer.validated_data["client_submission_id"],
             )
         except (TermsAcceptanceRequiredError, AiConsentRequiredError) as exc:
             return legal_error_response(exc)
+        except ObservationSubmissionConflictError as exc:
+            return Response(
+                {"code": exc.error_code, "detail": "Submission conflict."},
+                status=status.HTTP_409_CONFLICT,
+            )
         except ObservationValidationError as exc:
             return Response(
                 {"code": exc.error_code, "detail": "Invalid observation submission."},
@@ -89,12 +97,16 @@ class ObservationSubmitView(EstablishmentScopedObservationMixin, APIView):
             )
 
         media_count = observation.media_items.count()
+        processing = ObservationProcessing.objects.filter(observation_id=observation.id).first()
+        processing_status = (
+            processing.status if processing is not None else ObservationProcessing.Status.QUEUED
+        )
         response_serializer = ObservationSubmitResponseSerializer(
             {
                 "id": observation.id,
                 "submitted_at": observation.submitted_at,
                 "media_count": media_count,
-                "processing_status": ObservationProcessing.Status.QUEUED,
+                "processing_status": processing_status,
             }
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)

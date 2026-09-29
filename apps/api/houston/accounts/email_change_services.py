@@ -163,7 +163,6 @@ def _enqueue_email_change_email(change_id, raw_token: str) -> None:
         send_email_change_email_task.apply_async(
             args=[str(change_id), raw_token],
             argsrepr=f"('{change_id}', '<redacted>')",
-            ignore_result=True,
         )
     except Exception:
         logger.exception(

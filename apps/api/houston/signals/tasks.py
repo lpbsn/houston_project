@@ -4,6 +4,7 @@ import logging
 import uuid
 
 from celery import shared_task
+from config.celery_routing import QUEUE_AI_INTERACTIVE
 from django.conf import settings
 
 from houston.ai.observation_pipeline import (
@@ -24,16 +25,17 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(
-    bind=True,
-    max_retries=3,
-    default_retry_delay=30,
     soft_time_limit=settings.HOUSTON_CELERY_OBSERVATION_PIPELINE_SOFT_TIME_LIMIT_SECONDS,
     time_limit=settings.HOUSTON_CELERY_OBSERVATION_PIPELINE_TIME_LIMIT_SECONDS,
 )
-def process_observation_task(self, observation_id: str) -> None:
+def process_observation_task(observation_id: str) -> None:
     logger.info(
         "observation_pipeline_task_started",
-        extra={"observation_id": observation_id, "event": "observation_pipeline_task_started"},
+        extra={
+            "observation_id": observation_id,
+            "event": "observation_pipeline_task_started",
+            "queue": QUEUE_AI_INTERACTIVE,
+        },
     )
     try:
         run_observation_pipeline(uuid.UUID(observation_id))
@@ -47,9 +49,9 @@ def process_observation_task(self, observation_id: str) -> None:
                 extra=build_observation_processing_log_context(
                     processing=processing,
                     event="observation_pipeline_task_retrying",
+                    queue=QUEUE_AI_INTERACTIVE,
                 ),
             )
-            raise self.retry() from None
         return
     except Exception as exc:
         processing = ObservationProcessing.objects.filter(
@@ -83,6 +85,7 @@ def recover_stuck_observation_processing_task() -> int:
             "stuck_acted_on": batch_result["stuck_acted_on"],
             "orphan_enqueued": batch_result["orphan_enqueued"],
             "event": "observation_pipeline_stuck_recovery_sweep_completed",
+            "queue": "operational",
         },
     )
     return recovered_count

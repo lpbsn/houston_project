@@ -10,6 +10,11 @@ import {
   invalidateActionPlanExecutionSurfaces,
   invalidateActionPlanMutationSurfaces,
 } from '@/lib/query-invalidation'
+import {
+  clearClientSubmissionId,
+  clientSubmissionIdForFingerprint,
+  type ClientSubmissionSlot,
+} from '@/features/observations/lib/observation-compose-submit'
 
 import {
   activateActionPlan,
@@ -880,14 +885,26 @@ export function useCreateObservationFromActionPlanTaskMutation(
   executionId: string,
 ) {
   const queryClient = useQueryClient()
+  const submissionSlot = useRef<ClientSubmissionSlot | null>(null)
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       taskExecutionId,
       body,
     }: {
       taskExecutionId: string
-      body: ActionPlanTaskCreateObservationRequest
-    }) => createObservationFromActionPlanTask(establishmentId, taskExecutionId, body),
+      body: Omit<ActionPlanTaskCreateObservationRequest, 'client_submission_id'>
+    }) => {
+      const clientSubmissionId = clientSubmissionIdForFingerprint(
+        submissionSlot,
+        `${taskExecutionId}\n${body.text}`,
+      )
+      const response = await createObservationFromActionPlanTask(establishmentId, taskExecutionId, {
+        ...body,
+        client_submission_id: clientSubmissionId,
+      })
+      clearClientSubmissionId(submissionSlot)
+      return response
+    },
     onSuccess: () => {
       invalidateActionPlanExecutionSurfaces(queryClient, establishmentId, executionId)
     },

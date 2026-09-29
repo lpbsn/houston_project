@@ -102,6 +102,7 @@ vi.mock('@/features/observations/hooks', () => ({
       return uploadThenSubmitObservation({
         text: input.text,
         files: input.files,
+        clientSubmissionId: 'submission-1',
         uploadPhoto: mockUploadTemporaryPhoto,
         submit: mockSubmitObservation,
       })
@@ -428,6 +429,7 @@ describe('ReportPage', () => {
     expect(mockSubmitObservation).toHaveBeenCalledWith({
       text: 'a'.repeat(OBSERVATION_TEXT_MIN_LENGTH),
       temporary_upload_ids: ['upload-1'],
+      client_submission_id: 'submission-1',
     })
     expect(screen.queryByRole('img', { name: 'Aperçu de photo.jpg' })).toBeNull()
     expect((screen.getByLabelText('Décrivez l’observation') as HTMLTextAreaElement).value).toBe('')

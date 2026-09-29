@@ -121,6 +121,7 @@ from houston.action_plans.template_deletion_services import delete_reusable_acti
 from houston.action_plans.upcoming_feed import build_action_plan_execution_upcoming_page
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.permissions import HasActiveMembership
+from houston.observations.exceptions import ObservationSubmissionConflictError
 from houston.observations.models import ObservationProcessing
 from houston.uploads.access import resolve_observation_actor_membership
 from houston.uploads.api.views import EstablishmentScopedObservationMixin
@@ -1350,6 +1351,7 @@ class ActionPlanExecutionTaskCreateObservationView(EstablishmentScopedActionPlan
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=ApiErrorResponseSerializer),
+            409: OpenApiResponse(response=ApiErrorResponseSerializer),
         },
     )
     def post(self, request, establishment_id, task_execution_id):
@@ -1373,19 +1375,32 @@ class ActionPlanExecutionTaskCreateObservationView(EstablishmentScopedActionPlan
                 actor=membership,
                 text=body.validated_data["text"],
                 temporary_upload_ids=body.validated_data.get("temporary_upload_ids", []),
+                client_submission_id=body.validated_data["client_submission_id"],
             )
         except (TermsAcceptanceRequiredError, AiConsentRequiredError) as exc:
             from houston.accounts.api.legal_errors import legal_error_response
 
             return legal_error_response(exc)
+        except ObservationSubmissionConflictError as exc:
+            return Response(
+                {"code": exc.error_code, "detail": "Submission conflict."},
+                status=status.HTTP_409_CONFLICT,
+            )
         except (ActionPlanPermissionError, ActionPlanValidationError) as exc:
             return _action_plan_error_response(exc)
 
+        processing_status = ObservationProcessing.Status.QUEUED
+        if updated.observation_id is not None:
+            processing = ObservationProcessing.objects.filter(
+                observation_id=updated.observation_id,
+            ).first()
+            if processing is not None:
+                processing_status = processing.status
         payload = {
             "task_execution_id": updated.id,
             "observation_id": updated.observation_id,
             "status": updated.status,
-            "processing_status": ObservationProcessing.Status.QUEUED,
+            "processing_status": processing_status,
         }
         return Response(
             ActionPlanTaskCreateObservationResponseSerializer(payload).data,

@@ -263,6 +263,7 @@ def test_linked_upload_cannot_be_deleted(api_client):
         {
             "text": "Tache visible sur le mur près de la réception.",
             "temporary_upload_ids": [upload_id],
+            "client_submission_id": str(uuid.uuid4()),
         },
         format="json",
         HTTP_AUTHORIZATION=f"Bearer {token}",
@@ -288,6 +289,7 @@ def test_upload_transitions_to_linked_on_observation_submit(api_client):
         {
             "text": "Fuite d'eau visible au niveau du couloir principal.",
             "temporary_upload_ids": [upload_id],
+            "client_submission_id": str(uuid.uuid4()),
         },
         format="json",
         HTTP_AUTHORIZATION=f"Bearer {token}",

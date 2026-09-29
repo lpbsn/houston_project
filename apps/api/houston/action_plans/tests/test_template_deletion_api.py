@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import time
+from uuid import uuid4
 
 import pytest
 from django.utils import timezone
@@ -246,6 +247,7 @@ def test_delete_blocked_by_observation_rolls_back(
         establishment_id=scheduled.establishment_id,
         submitted_by_membership=owner_membership,
         raw_text="Blocks delete",
+        client_submission_id=uuid4(),
         origin=Observation.Origin.DIRECT_REPORT,
         action_plan_execution=scheduled,
         submitted_at=timezone.now(),

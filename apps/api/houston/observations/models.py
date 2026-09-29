@@ -41,9 +41,20 @@ class Observation(BaseModel):
         null=True,
         blank=True,
     )
+    client_submission_id = models.UUIDField()
     submitted_at = models.DateTimeField()
 
     class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "establishment",
+                    "submitted_by_membership",
+                    "client_submission_id",
+                ],
+                name="observation_client_submission_uniq",
+            ),
+        ]
         indexes = [
             models.Index(
                 fields=["establishment", "submitted_at"],
@@ -122,10 +133,14 @@ class ObservationProcessing(BaseModel):
         default="",
     )
     last_error_code = models.CharField(max_length=80, blank=True, default="")
+    published_at = models.DateTimeField(null=True, blank=True)
+    next_retry_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         indexes = [
             models.Index(fields=["status", "queued_at"], name="obs_processing_status_idx"),
+            models.Index(fields=["status", "published_at"], name="obs_processing_published_idx"),
+            models.Index(fields=["status", "next_retry_at"], name="obs_processing_retry_at_idx"),
         ]
 
     def __str__(self) -> str:

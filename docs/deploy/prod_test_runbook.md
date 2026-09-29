@@ -40,7 +40,7 @@ Local prod-test has **no** celery-worker/beat — see [`docker-compose.prod-test
 Follow [`infra/railway/README.md`](../../infra/railway/README.md):
 
 - PostgreSQL + Redis plugins (private)
-- Three app services from the same repo: `api-web`, `celery-worker`, `celery-beat`
+- Five app services from the same repo: `api-web`, `celery-ai-interactive`, `celery-operational`, `celery-background`, `celery-beat`
 - Root Directory `/` ; Config File paths per service table
 - Variables per [`railway_variables.md`](railway_variables.md)
 

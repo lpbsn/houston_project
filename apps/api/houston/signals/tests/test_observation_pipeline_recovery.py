@@ -6,7 +6,6 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
-from celery.exceptions import Retry
 from django.test import override_settings
 from django.utils import timezone
 
@@ -33,6 +32,18 @@ from houston.signals.tests.conftest import create_observation
 from houston.testing.factories import build_membership
 
 pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture(autouse=True)
+def published_tasks(monkeypatch):
+    calls: list[tuple] = []
+
+    def _publish(task, *, args, countdown=None):
+        calls.append((task, args, countdown))
+        return True
+
+    monkeypatch.setattr("houston.core.celery_publish.publish_celery_task", _publish)
+    return calls
 
 
 def _setup_hotel_taxonomy(establishment):
@@ -87,7 +98,7 @@ def test_process_observation_task_unknown_observation_is_noop():
     process_observation_task.run(str(uuid.uuid4()))
 
 
-def test_process_observation_task_retries_after_provider_unavailable():
+def test_process_observation_task_schedules_retry_after_provider_unavailable(published_tasks):
     membership = build_membership()
     _setup_hotel_taxonomy(membership.establishment)
     observation = create_observation(membership=membership)
@@ -97,8 +108,10 @@ def test_process_observation_task_retries_after_provider_unavailable():
         "houston.ai.observation_pipeline.get_observation_pipeline_provider",
         return_value=flaky,
     ):
-        with pytest.raises(Retry):
-            process_observation_task.run(str(observation.id))
+        process_observation_task.run(str(observation.id))
+        assert published_tasks
+        assert published_tasks[0][1] == (str(observation.id),)
+        assert published_tasks[0][2] == 30
 
         process_observation_task.run(str(observation.id))
 
@@ -108,6 +121,35 @@ def test_process_observation_task_retries_after_provider_unavailable():
     assert processing.outcome
     assert processing.attempt_count >= 2
     assert Signal.objects.filter(establishment=membership.establishment).count() == 1
+
+
+def test_provider_unavailable_stops_at_business_attempt_ceiling(published_tasks):
+    membership = build_membership()
+    _setup_hotel_taxonomy(membership.establishment)
+    observation = create_observation(membership=membership)
+
+    class _AlwaysUnavailable(FakeObservationPipelineProvider):
+        def __init__(self) -> None:
+            super().__init__()
+            self.call_count = 0
+
+        def propose(self, *, input_payload):
+            self.call_count += 1
+            raise ObservationPipelineUnavailableError("Transient provider failure")
+
+    provider = _AlwaysUnavailable()
+    with patch(
+        "houston.ai.observation_pipeline.get_observation_pipeline_provider",
+        return_value=provider,
+    ):
+        for _ in range(4):
+            process_observation_task.run(str(observation.id))
+
+    processing = observation.processing
+    processing.refresh_from_db()
+    assert provider.call_count == 3
+    assert processing.status == ObservationProcessing.Status.FAILED
+    assert len(published_tasks) == 2
 
 
 @override_settings(HOUSTON_OBSERVATION_PROCESSING_STUCK_WARNING_SECONDS=30)
@@ -243,7 +285,7 @@ def test_recovery_sweep_task_recovers_stuck_rows():
 
 
 @override_settings(HOUSTON_OBSERVATION_PROCESSING_STUCK_WARNING_SECONDS=30)
-def test_recovery_sweep_re_enqueues_pipeline_task():
+def test_recovery_sweep_re_enqueues_pipeline_task(published_tasks):
     membership = build_membership()
     _setup_hotel_taxonomy(membership.establishment)
     observation = create_observation(membership=membership)
@@ -260,56 +302,81 @@ def test_recovery_sweep_re_enqueues_pipeline_task():
         ]
     )
 
-    with patch("houston.signals.tasks.process_observation_task.delay") as delay:
-        acted_on = recover_stuck_observation_processing_batch()
-        assert acted_on == 1
-        delay.assert_called_once_with(str(observation.id))
+    acted_on = recover_stuck_observation_processing_batch()
+    assert acted_on == 1
+    assert published_tasks[-1][1] == (str(observation.id),)
 
 
 @override_settings(HOUSTON_OBSERVATION_PROCESSING_STUCK_WARNING_SECONDS=30)
-def test_orphan_queued_recovery_re_enqueues_task():
+def test_orphan_queued_recovery_re_enqueues_task(published_tasks):
     membership = build_membership()
     observation = create_observation(membership=membership)
     processing = observation.processing
-    processing.queued_at = timezone.now() - timedelta(seconds=90)
-    processing.save(update_fields=["queued_at", "updated_at"])
+    processing.published_at = None
+    processing.processing_started_at = None
+    processing.save(update_fields=["published_at", "processing_started_at", "updated_at"])
 
-    with patch("houston.signals.tasks.process_observation_task.delay") as delay:
-        enqueued = recover_orphaned_observation_processing_batch()
-        assert enqueued == 1
-        delay.assert_called_once_with(str(observation.id))
+    enqueued = recover_orphaned_observation_processing_batch()
+    assert enqueued == 1
+    assert published_tasks[-1][1] == (str(observation.id),)
 
 
 @override_settings(HOUSTON_OBSERVATION_PROCESSING_STUCK_WARNING_SECONDS=30)
-def test_orphan_retrying_recovery_re_enqueues_task():
+def test_orphan_retrying_recovery_re_enqueues_task(published_tasks):
     membership = build_membership()
     observation = create_observation(membership=membership)
     processing = observation.processing
     ObservationProcessing.objects.filter(pk=processing.pk).update(
         status=ObservationProcessing.Status.RETRYING,
-        processing_started_at=None,
+        processing_started_at=timezone.now() - timedelta(seconds=90),
+        next_retry_at=timezone.now() - timedelta(seconds=1),
+        published_at=None,
         updated_at=timezone.now() - timedelta(seconds=90),
     )
 
-    with patch("houston.signals.tasks.process_observation_task.delay") as delay:
-        enqueued = recover_orphaned_observation_processing_batch()
-        assert enqueued == 1
-        delay.assert_called_once_with(str(observation.id))
+    enqueued = recover_orphaned_observation_processing_batch()
+    assert enqueued == 1
+    assert published_tasks[-1][1] == (str(observation.id),)
 
 
 @override_settings(HOUSTON_OBSERVATION_PROCESSING_STUCK_WARNING_SECONDS=30)
-def test_recovery_batch_does_not_duplicate_enqueue_on_overlap():
+def test_recovery_batch_does_not_duplicate_enqueue_on_overlap(published_tasks):
     membership = build_membership()
     observation = create_observation(membership=membership)
     processing = observation.processing
-    processing.queued_at = timezone.now() - timedelta(seconds=90)
-    processing.save(update_fields=["queued_at", "updated_at"])
+    processing.published_at = None
+    processing.save(update_fields=["published_at", "updated_at"])
 
     already_enqueued: set = set()
-    with patch("houston.signals.tasks.process_observation_task.delay") as delay:
-        recover_orphaned_observation_processing_batch(already_enqueued=already_enqueued)
-        recover_orphaned_observation_processing_batch(already_enqueued=already_enqueued)
-        delay.assert_called_once_with(str(observation.id))
+    recover_orphaned_observation_processing_batch(already_enqueued=already_enqueued)
+    recover_orphaned_observation_processing_batch(already_enqueued=already_enqueued)
+    assert len(published_tasks) == 1
+
+
+@override_settings(HOUSTON_OBSERVATION_PROCESSING_STUCK_WARNING_SECONDS=30)
+def test_recent_confirm_is_not_republished_immediately(published_tasks):
+    membership = build_membership()
+    observation = create_observation(membership=membership)
+    processing = observation.processing
+    processing.published_at = timezone.now()
+    processing.processing_started_at = None
+    processing.save(update_fields=["published_at", "processing_started_at", "updated_at"])
+
+    assert recover_orphaned_observation_processing_batch() == 0
+    assert published_tasks == []
+
+
+@override_settings(HOUSTON_OBSERVATION_PROCESSING_STUCK_WARNING_SECONDS=30)
+def test_queued_with_old_confirm_is_republished(published_tasks):
+    membership = build_membership()
+    observation = create_observation(membership=membership)
+    processing = observation.processing
+    processing.published_at = timezone.now() - timedelta(seconds=90)
+    processing.processing_started_at = None
+    processing.save(update_fields=["published_at", "processing_started_at", "updated_at"])
+
+    assert recover_orphaned_observation_processing_batch() == 1
+    assert published_tasks[-1][1] == (str(observation.id),)
 
 
 def test_recovery_sweep_task_wrapper():

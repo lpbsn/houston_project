@@ -444,7 +444,7 @@ def test_invalid_output_backfill_retries_only_after_next_retry_at(settings):
     assert assignment.pattern.label == "Recovered operational issue"
 
 
-def test_fail_on_error_does_not_rollback_successful_signals(settings, monkeypatch):
+def test_retryable_provider_error_does_not_rollback_successful_signals(settings, monkeypatch):
     settings.DEBUG = True
     owner = build_membership(role=EstablishmentMembership.Role.OWNER)
     first = create_signal_for_membership(owner, title="First")
@@ -456,32 +456,30 @@ def test_fail_on_error_does_not_rollback_successful_signals(settings, monkeypatc
     )
     buffer = StringIO()
 
-    with pytest.raises(CommandError):
-        call_command(
-            "backfill_analytics_patterns",
-            provider="fake",
-            json=True,
-            fail_on_error=True,
-            establishment_id=str(owner.establishment_id),
-            limit=10,
-            stdout=buffer,
-        )
+    call_command(
+        "backfill_analytics_patterns",
+        provider="fake",
+        json=True,
+        fail_on_error=True,
+        establishment_id=str(owner.establishment_id),
+        limit=10,
+        stdout=buffer,
+    )
     payload = json.loads(buffer.getvalue())
 
-    assert payload["errors"] == [
-        {
-            "error_code": "RuntimeError",
-            "signal_id": str(second.id),
-            "signal_status": second.status,
-        }
-    ]
+    assert payload["errors"] == []
     assert payload["metrics"]["remaining_signal_ids"] == [str(second.id)]
-    assert payload["metrics"]["remaining_by_reason"] == {"reported": 1}
+    assert payload["metrics"]["remaining_by_reason"] == {"temporary_failed": 1}
     assert payload["next_scan_cursor"] == str(first.id)
     assert SignalPatternAssignment.objects.filter(
         signal=first,
         classification_status=SignalPatternAssignment.ClassificationStatus.SUCCEEDED,
     ).exists()
+    failed = SignalPatternAssignment.objects.get(signal=second)
+    assert failed.classification_status == (
+        SignalPatternAssignment.ClassificationStatus.TEMPORARY_FAILED
+    )
+    assert failed.last_error_code == "pattern_classification_unexpected_error"
 
 
 def test_scan_cursor_stops_before_middle_batch_failure_and_resume_replays(settings):

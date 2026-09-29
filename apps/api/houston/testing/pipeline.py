@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 from django.utils import timezone
 
 from houston.ai.observation_pipeline_schema import (
@@ -106,6 +108,7 @@ def create_observation(*, membership: EstablishmentMembership, text: str = "A" *
         establishment=membership.establishment,
         submitted_by_membership=membership,
         raw_text=text,
+        client_submission_id=uuid.uuid4(),
         submitted_at=now,
     )
     ObservationProcessing.objects.create(

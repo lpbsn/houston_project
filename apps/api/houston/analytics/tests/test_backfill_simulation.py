@@ -27,6 +27,7 @@ from houston.analytics.models import (
     PatternLifecycleEvent,
     SignalPatternAssignment,
 )
+from houston.analytics.retry_policy import analytics_pattern_task_retry_policy
 from houston.analytics.services import (
     PatternClassificationRetryableError,
     classify_signal_pattern,
@@ -37,7 +38,6 @@ from houston.analytics.services import (
     move_signals_between_patterns,
 )
 from houston.analytics.signature import build_signal_pattern_signature
-from houston.analytics.tasks import classify_signal_pattern_task
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.models import Signal
 from houston.testing.factories import build_membership
@@ -333,13 +333,8 @@ def test_backfill_retryable_errors_finalize_without_persisting_processing():
     assert not hasattr(signal, "pattern_assignment")
 
 
-def test_backfill_simulation_and_real_backfill_share_task_retry_policy(
-    settings,
-    monkeypatch,
-):
+def test_backfill_simulation_and_real_backfill_share_task_retry_policy(settings):
     settings.DEBUG = True
-    monkeypatch.setattr(classify_signal_pattern_task, "max_retries", 0)
-    monkeypatch.setattr(classify_signal_pattern_task, "default_retry_delay", 0)
     owner = build_membership(role=EstablishmentMembership.Role.OWNER)
     simulation_signal = create_signal_for_membership(owner, title="Simulation")
     backfill_signal = create_signal_for_membership(owner, title="Backfill")
@@ -364,8 +359,8 @@ def test_backfill_simulation_and_real_backfill_share_task_retry_policy(
     backfill_payload = backfill_report_to_dict(backfill_report)
 
     assert simulation_payload["signals"][0]["signal_id"] == str(simulation_signal.id)
-    assert simulation_payload["metrics"]["outcomes"] == {"retry_exhausted": 1}
-    assert backfill_payload["metrics"]["outcomes"] == {"retry_exhausted": 1}
+    assert simulation_payload["metrics"]["outcomes"] == {"temporary_failed": 1}
+    assert backfill_payload["metrics"]["outcomes"] == {"temporary_failed": 1}
     assert simulation_payload["metrics"]["provider_calls"]["classification_count"] == 1
     assert backfill_payload["metrics"]["provider_calls"]["classification_count"] == 1
 
@@ -415,8 +410,8 @@ def test_invalid_output_attempt_semantics_match_runtime_backfill_and_simulation(
         signal=runtime_signal,
         exc=exc_info.value,
         retries=0,
-        max_retries=classify_signal_pattern_task.max_retries or 0,
-        retry_delay_seconds=classify_signal_pattern_task.default_retry_delay or 0,
+        max_retries=analytics_pattern_task_retry_policy().max_retries,
+        retry_delay_seconds=analytics_pattern_task_retry_policy().retry_delay_seconds,
     )
 
     backfill_report = backfill_analytics_patterns(

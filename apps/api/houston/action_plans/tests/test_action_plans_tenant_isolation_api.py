@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 from django.utils import timezone
 
@@ -156,7 +158,10 @@ def test_task_command_cross_establishment_returns_404(
     ctx = _foreign_context(owner_membership, staff_membership, business_unit)
     token = login(api_client, user=ctx["foreign"].user)
     payload = (
-        {"text": "Broken equipment in kitchen area today"}
+        {
+            "text": "Broken equipment in kitchen area today",
+            "client_submission_id": str(uuid4()),
+        }
         if suffix == "create-observation/"
         else None
     )

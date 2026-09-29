@@ -92,7 +92,6 @@ def schedule_establishment_invitation_email(
             send_establishment_invitation_email_task.apply_async(
                 args=[str(invitation_id), raw_token],
                 argsrepr=f"('{invitation_id}', '<redacted>')",
-                ignore_result=True,
             )
         except Exception:
             logger.exception(

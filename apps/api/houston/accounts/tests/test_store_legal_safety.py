@@ -65,19 +65,34 @@ def test_submit_observation_requires_terms_then_ai_consent():
     membership = build_api_membership(role=EstablishmentMembership.Role.STAFF)
     _clear_legal(membership.user)
     with pytest.raises(Exception) as exc_info:
-        submit_observation(membership=membership, text="A" * 20, temporary_upload_ids=[])
+        submit_observation(
+            membership=membership,
+            text="A" * 20,
+            temporary_upload_ids=[],
+            client_submission_id=uuid.uuid4(),
+        )
     assert exc_info.value.code == "terms_acceptance_required"
 
     membership.user.terms_version = CURRENT_TERMS_VERSION
     membership.user.terms_accepted_at = timezone.now()
     membership.user.save(update_fields=["terms_version", "terms_accepted_at", "updated_at"])
     with pytest.raises(Exception) as exc_info:
-        submit_observation(membership=membership, text="A" * 20, temporary_upload_ids=[])
+        submit_observation(
+            membership=membership,
+            text="A" * 20,
+            temporary_upload_ids=[],
+            client_submission_id=uuid.uuid4(),
+        )
     assert exc_info.value.code == "ai_consent_required"
 
     decline_current_ai_consent(user=membership.user, version=CURRENT_AI_CONSENT_VERSION)
     with pytest.raises(Exception) as exc_info:
-        submit_observation(membership=membership, text="A" * 20, temporary_upload_ids=[])
+        submit_observation(
+            membership=membership,
+            text="A" * 20,
+            temporary_upload_ids=[],
+            client_submission_id=uuid.uuid4(),
+        )
     assert exc_info.value.code == "ai_consent_required"
     assert membership.user.ai_consent_version is None
     assert membership.user.ai_declined_version == CURRENT_AI_CONSENT_VERSION
@@ -318,7 +333,11 @@ def test_openai_pattern_classifier_skips_without_source_author_ai_consent():
 
     provider = RecordingOpenAIProvider()
     skipped = classify_signal_pattern(signal.id, provider=provider)
-    assert skipped is None
+    assert skipped is not None
+    assert skipped.classification_status == (
+        SignalPatternAssignment.ClassificationStatus.PERMANENTLY_FAILED
+    )
+    assert skipped.last_error_code == "ai_consent_required"
     assert provider.classify_calls == []
 
     grant_current_legal_defaults(user=membership.user)

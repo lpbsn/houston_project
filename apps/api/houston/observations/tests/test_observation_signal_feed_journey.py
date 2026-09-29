@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 from houston.establishments.models import EstablishmentMembership
 from houston.observations.models import ObservationProcessing
@@ -45,7 +47,11 @@ def test_submit_observation_fake_pipeline_surfaces_signal_in_general_feed(api_cl
 
     submit_response = api_client.post(
         observations_url(membership.establishment_id),
-        {"text": OBSERVATION_TEXT, "temporary_upload_ids": []},
+        {
+            "text": OBSERVATION_TEXT,
+            "temporary_upload_ids": [],
+            "client_submission_id": str(uuid4()),
+        },
         format="json",
         **auth_headers(token),
     )
@@ -90,7 +96,11 @@ def test_submit_observation_signal_not_visible_in_other_establishment_feed(api_c
 
     submit_response = api_client.post(
         observations_url(establishment_a.id),
-        {"text": OBSERVATION_TEXT, "temporary_upload_ids": []},
+        {
+            "text": OBSERVATION_TEXT,
+            "temporary_upload_ids": [],
+            "client_submission_id": str(uuid4()),
+        },
         format="json",
         **auth_headers(token),
     )

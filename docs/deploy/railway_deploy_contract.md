@@ -2,7 +2,7 @@
 
 Operational playbook for deploying Houston on Railway. Architecture context: [`railway_architecture.md`](railway_architecture.md). Variables: [`railway_variables.md`](railway_variables.md). Config wiring: [`infra/railway/README.md`](../../infra/railway/README.md).
 
-`celery-worker` and `celery-beat` are **mandatory** in prod-test — not optional.
+The three Celery workers and `celery-beat` are **mandatory** in prod-test — not optional. Beat does not execute tasks.
 
 ## Project topology
 
@@ -40,7 +40,7 @@ Railway evaluates patterns from the repository root (`/`). Changes under `/docs/
 
 ### Trigger matrix
 
-| Change | `api-web` | `celery-worker` | `celery-beat` |
+| Change | `api-web` | three workers | `celery-beat` |
 |---|---:|---:|---:|
 | `/apps/web/**` | Yes | No | No |
 | `/contracts/operational-realtime-invalidation.json` | Yes | Yes | Yes |
@@ -48,7 +48,7 @@ Railway evaluates patterns from the repository root (`/`). Changes under `/docs/
 | `/infra/docker/railway/**` | Yes | No | No |
 | `/infra/docker/api/**` | No | Yes | Yes |
 | `/infra/railway/api-web/**` | Yes | No | No |
-| `/infra/railway/celery-worker/**` | No | Yes | No |
+| `/infra/railway/celery-ai-interactive/**`, `/infra/railway/celery-operational/**`, `/infra/railway/celery-background/**` | No | Yes, the matching service | No |
 | `/infra/railway/celery-beat/**` | No | No | Yes |
 | `/pyproject.toml`, `/uv.lock` | Yes | Yes | Yes |
 | `/.dockerignore` | Yes | Yes | Yes |
@@ -158,7 +158,7 @@ Railway queries from hostname `healthcheck.railway.app` — include it in `DJANG
 
 ### Volume (not media truth)
 
-The `api-web` volume at `/app/apps/api/private_media` (`HOUSTON_PRIVATE_MEDIA_ROOT`) is **not** prod-test media truth. Prod-test uses `HOUSTON_PRIVATE_MEDIA_BACKEND=s3` with the same `HOUSTON_S3_*` values on `api-web` and `celery-worker`. `start-api-web.sh` creates the media directory only when backend=filesystem.
+The `api-web` volume at `/app/apps/api/private_media` (`HOUSTON_PRIVATE_MEDIA_ROOT`) is **not** prod-test media truth. Prod-test uses `HOUSTON_PRIVATE_MEDIA_BACKEND=s3` with the same `HOUSTON_S3_*` values on `api-web` and `the three workers`. `start-api-web.sh` creates the media directory only when backend=filesystem.
 
 A leftover volume may still exist from historical filesystem deploys. Railway volumes mount as root; the start script `chown`s that directory when it is used.
 
@@ -172,26 +172,41 @@ Horizontal scale of `api-web` is no longer blocked by a single media volume when
 
 ---
 
-## Service: `celery-worker` (mandatory)
+## Services: three Celery workers (mandatory)
 
-| Field | Value |
-|---|---|
-| Source | Same GitHub repository |
-| Root Directory | `/` |
-| Config File | `/infra/railway/celery-worker/railway.toml` |
-| Dockerfile | `infra/docker/api/Dockerfile` |
-| Visibility | Private (no public port) |
-| Depends on | `postgres`, `redis` |
+Create these three private services before the next deploy and remove the retired single worker. Each uses Root Directory `/`, Dockerfile `infra/docker/api/Dockerfile`, and no public port. They depend on `postgres`, `redis`, and the private RabbitMQ broker.
+
+| Service | Config file | Queues |
+|---|---|---|
+| `celery-ai-interactive` | `/infra/railway/celery-ai-interactive/railway.toml` | `ai_interactive`, prefetch 1 |
+| `celery-operational` | `/infra/railway/celery-operational/railway.toml` | `operational` |
+| `celery-background` | `/infra/railway/celery-background/railway.toml` | `ai_background`, `maintenance` |
 
 Same multi-stage build as `api-web` Python layer: **uv `0.11.16`** and `build-essential` in the builder only; production runtime without `uv`/`curl`/`gcc`/`make`.
 
 ### Start command
 
+Each service uses the `startCommand` in its config file. The shell validates `CELERY_WORKER_CONCURRENCY` before Celery starts, then consumes only that service's queues.
+
+`celery-ai-interactive`:
+
 ```toml
-startCommand = "/bin/sh -c 'if [ -z \"${CELERY_WORKER_CONCURRENCY:-}\" ]; then echo \"CELERY_WORKER_CONCURRENCY is required\" >&2; exit 1; fi; case \"$CELERY_WORKER_CONCURRENCY\" in *[!0-9]*) echo \"CELERY_WORKER_CONCURRENCY must contain only decimal digits\" >&2; exit 1;; 0|0*) echo \"CELERY_WORKER_CONCURRENCY must be greater than zero\" >&2; exit 1;; esac; exec /opt/venv/bin/celery -A config worker -l info -n houston-worker@%h --concurrency=\"$CELERY_WORKER_CONCURRENCY\"'"
+startCommand = "/bin/sh -c 'if [ -z \"${CELERY_WORKER_CONCURRENCY:-}\" ]; then echo \"CELERY_WORKER_CONCURRENCY is required\" >&2; exit 1; fi; case \"$CELERY_WORKER_CONCURRENCY\" in *[!0-9]*) echo \"CELERY_WORKER_CONCURRENCY must contain only decimal digits\" >&2; exit 1;; 0|0*) echo \"CELERY_WORKER_CONCURRENCY must be greater than zero\" >&2; exit 1;; esac; exec /opt/venv/bin/celery -A config worker -l info -n houston-ai-interactive@%h -Q ai_interactive --prefetch-multiplier=1 --concurrency=\"$CELERY_WORKER_CONCURRENCY\"'"
 ```
 
-* `CELERY_WORKER_CONCURRENCY` is **required** on this service (see [`railway_variables.md`](railway_variables.md#celery-worker-concurrency-celery-worker-only)).
+`celery-operational`:
+
+```toml
+startCommand = "/bin/sh -c 'if [ -z \"${CELERY_WORKER_CONCURRENCY:-}\" ]; then echo \"CELERY_WORKER_CONCURRENCY is required\" >&2; exit 1; fi; case \"$CELERY_WORKER_CONCURRENCY\" in *[!0-9]*) echo \"CELERY_WORKER_CONCURRENCY must contain only decimal digits\" >&2; exit 1;; 0|0*) echo \"CELERY_WORKER_CONCURRENCY must be greater than zero\" >&2; exit 1;; esac; exec /opt/venv/bin/celery -A config worker -l info -n houston-operational@%h -Q operational --concurrency=\"$CELERY_WORKER_CONCURRENCY\"'"
+```
+
+`celery-background`:
+
+```toml
+startCommand = "/bin/sh -c 'if [ -z \"${CELERY_WORKER_CONCURRENCY:-}\" ]; then echo \"CELERY_WORKER_CONCURRENCY is required\" >&2; exit 1; fi; case \"$CELERY_WORKER_CONCURRENCY\" in *[!0-9]*) echo \"CELERY_WORKER_CONCURRENCY must contain only decimal digits\" >&2; exit 1;; 0|0*) echo \"CELERY_WORKER_CONCURRENCY must be greater than zero\" >&2; exit 1;; esac; exec /opt/venv/bin/celery -A config worker -l info -n houston-background@%h -Q ai_background,maintenance --concurrency=\"$CELERY_WORKER_CONCURRENCY\"'"
+```
+
+* `CELERY_WORKER_CONCURRENCY` is **required** on each worker service (see [`railway_variables.md`](railway_variables.md)). Initial values, from the measured 4-process envelope: `2` on `celery-ai-interactive`, `1` on `celery-operational`, `1` on `celery-background`.
 * Shell validates presence, decimal digits only, value > 0, no leading zero — **before** `exec` (so Celery never receives `--concurrency=0`, which would fall back to CPU-count default).
 * `exec` replaces the shell so SIGTERM reaches the Celery process for graceful shutdown.
 
@@ -201,7 +216,7 @@ No HTTP healthcheck. Verify in Railway logs:
 
 * Startup banner includes `concurrency: <C> (prefork)` where `<C>` matches `CELERY_WORKER_CONCURRENCY` (not host CPU count, e.g. not `48` unless explicitly set).
 * Missing or invalid `CELERY_WORKER_CONCURRENCY` → shell error on stderr, exit 1, **no** Celery worker process — crash loop until the variable is fixed.
-* `celery@houston-worker` ready message
+* Ready message uses the service node name (`houston-ai-interactive`, `houston-operational`, or `houston-background`)
 * Worker processes tasks when observations are submitted
 
 **Sizing:** choose `<C>` via redeployments on an **isolated** Railway test service (dedicated broker/Postgres, no production data). Do **not** spawn a second worker via SSH on production. See variables doc.
@@ -290,12 +305,12 @@ Map one Railway Redis URL to Houston logical DBs 0–3 (see [`railway_variables.
 
 ## Known limitations V1 — private media
 
-This section describes the **historical filesystem** layout: Railway **cannot attach the same volume to multiple services**. It is **not** the current prod-test mode (`HOUSTON_PRIVATE_MEDIA_BACKEND=s3`, same bucket on `api-web` and `celery-worker`).
+This section describes the **historical filesystem** layout: Railway **cannot attach the same volume to multiple services**. It is **not** the current prod-test mode (`HOUSTON_PRIVATE_MEDIA_BACKEND=s3`, same bucket on `api-web` and `the three workers`).
 
 | Service | Historical filesystem storage |
 |---|---|
 | `api-web` | Persistent volume at `HOUSTON_PRIVATE_MEDIA_ROOT` |
-| `celery-worker` | Ephemeral filesystem only (`/tmp`) |
+| `the three workers` | Ephemeral filesystem only (`/tmp`) |
 
 **What worked on filesystem V1:**
 
@@ -339,7 +354,7 @@ View per service in the Railway dashboard:
 | Service | What to look for |
 |---|---|
 | `api-web` | Daphne/nginx start, `check --deploy`, HTTP errors, pre-deploy migrate output |
-| `celery-worker` | Worker ready, `concurrency: <C> (prefork)` banner, task execution, task failures |
+| `the three workers` | Worker ready, `concurrency: <C> (prefork)` banner, task execution, task failures |
 | `celery-beat` | Scheduler tick, periodic task dispatch |
 
 Never paste secrets, tokens, raw observation text, or private media paths in tickets.
@@ -350,7 +365,7 @@ Never paste secrets, tokens, raw observation text, or private media paths in tic
 
 | Change type | Action |
 |---|---|
-| Env var update | Update Railway variables → redeploy affected services (`api-web`, `celery-worker`, `celery-beat`) |
+| Env var update | Update Railway variables → redeploy affected services (`api-web`, `the three workers`, `celery-beat`) |
 | Code change (push) | Railway rebuilds only services whose `watchPatterns` match changed paths (see [Build triggers](#build-triggers-watch-paths)); otherwise deploy is skipped |
 | Postgres / Redis | Managed plugins; restart via dashboard if needed; app services reconnect |
 | Volume on `api-web` | Brief downtime on redeploy (Railway serializes volume mounts) |
@@ -364,10 +379,10 @@ No bind-mount `.env` in prod-test — all config via Railway variables.
 
 1. Railway dashboard → `api-web` (or affected service) → **Deployments**
 2. Select the last known-good deployment → **Redeploy** / rollback to previous image
-3. Repeat for `celery-worker` and `celery-beat` if they were deployed together
+3. Repeat for `the three workers` and `celery-beat` if they were deployed together
 4. If a bad migration shipped: restore Postgres from backup or run reverse migration manually before rollback
 
-**`celery-worker` concurrency:** if a new `CELERY_WORKER_CONCURRENCY` causes OOM or instability, set the variable back to the **last explicitly validated** value and redeploy — do not remove the variable (startup fails) and do not expect Celery to fall back to a safe default (omitting `--concurrency` or passing `0` uses CPU-count prefork, e.g. 48).
+**`the three workers` concurrency:** if a new `CELERY_WORKER_CONCURRENCY` causes OOM or instability, set the variable back to the **last explicitly validated** value and redeploy — do not remove the variable (startup fails) and do not expect Celery to fall back to a safe default (omitting `--concurrency` or passing `0` uses CPU-count prefork, e.g. 48).
 
 ---
 
@@ -424,7 +439,7 @@ Consequences:
 ### Phase B — production (after Phase A validated)
 
 1. Note the deploy baseline before changing settings.
-2. Check current Wait for CI state on `api-web`, `celery-worker`, and `celery-beat` prod services.
+2. Check current Wait for CI state on `api-web`, `the three workers`, and `celery-beat` prod services.
 3. **Enable** Wait for CI on all three prod services after Phase A validation.
 4. Observe the first real prod push: green CI → deploy; note the additional wait time (GitHub workflow completion, not a Docker build regression).
 

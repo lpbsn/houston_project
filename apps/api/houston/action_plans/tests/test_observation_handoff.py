@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from unittest.mock import patch
 
 import pytest
@@ -51,6 +52,7 @@ def test_observation_handoff_happy_path(
         task_execution=task,
         actor=staff_membership,
         text="Broken equipment in kitchen area today",
+        client_submission_id=uuid.uuid4(),
     )
 
     observation = Observation.objects.get(id=updated.observation_id)
@@ -77,6 +79,7 @@ def test_observation_handoff_bidirectional_fk_invariants(
         task_execution=task,
         actor=staff_membership,
         text="Broken equipment in kitchen area today",
+        client_submission_id=uuid.uuid4(),
     )
     observation = Observation.objects.get(id=updated.observation_id)
 
@@ -100,6 +103,7 @@ def test_observation_handoff_rejects_short_text(
             task_execution=task,
             actor=staff_membership,
             text="short",
+            client_submission_id=uuid.uuid4(),
         )
     mock_enqueue.assert_not_called()
     assert Observation.objects.count() == 0
@@ -118,6 +122,7 @@ def test_observation_handoff_does_not_change_global_execution_status(
         task_execution=tasks[0],
         actor=staff_membership,
         text="Broken equipment in kitchen area today",
+        client_submission_id=uuid.uuid4(),
     )
     skip_execution_task(task_execution=tasks[1], actor=staff_membership)
 

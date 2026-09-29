@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 from django.utils import timezone
 
@@ -254,6 +256,7 @@ def test_hard_delete_fails_when_observation_linked_to_execution(
         establishment_id=execution.establishment_id,
         submitted_by_membership=owner_membership,
         raw_text="Linked to execution",
+        client_submission_id=uuid4(),
         origin=Observation.Origin.DIRECT_REPORT,
         action_plan_execution=execution,
         submitted_at=timezone.now(),
@@ -284,6 +287,7 @@ def test_hard_delete_fails_when_observation_linked_to_execution_task(
         establishment_id=execution.establishment_id,
         submitted_by_membership=owner_membership,
         raw_text="Linked to task",
+        client_submission_id=uuid4(),
         origin=Observation.Origin.ACTION_PLAN_TASK,
         action_plan_execution=execution,
         action_plan_execution_task=task,

@@ -7,7 +7,7 @@ Daily workflow for Houston on macOS / OrbStack. Install from scratch: [`INSTALL_
 
 ## Recommended stack
 
-- **Backend:** Docker (`make up-backend`) — postgres, redis, api, celery
+- **Backend:** Docker (`make up-backend`) — postgres, redis, rabbitmq, api, and the three Celery workers
 - **Frontend:** host npm (`make web-dev`) — http://localhost:5173
 
 Do **not** run `make up` (Docker web on 5173) and `make web-dev` at the same time.
@@ -29,7 +29,7 @@ Catalog CSV and import policy: [`docs/catalogue/README.md`](../catalogue/README.
 
 Optional scheduler (action plan horizon beat): `make up-scheduler`.
 
-After `.env` changes with stack running: `make recreate-backend` (reloads api/celery env). `make restart-backend` does **not** reload `.env`.
+After `.env` changes with stack running: `make recreate-backend` (reloads api and worker env). `make restart-backend` does **not** reload `.env`.
 
 `make web-dev` loads `VITE_*` from the repo-root `.env` (`Vite envDir`). With `VITE_API_BASE_URL=http://localhost:8000`, the browser calls the API on `:8000` directly (CORS via `HOUSTON_CLIENT_ORIGINS`). In Web runtime, when the page and configured API hosts are the local loopbacks `localhost` and `127.0.0.1`, the client aligns the API hostname with the page hostname so `SameSite=Lax` auth cookies remain same-site. The origin allowlist alone does not make cross-site cookies attach. Leave the base URL empty to keep relative `/api` paths and the Vite proxy.
 
@@ -172,7 +172,7 @@ make validate-mama-nice-dataset ARGS='--local'
 2. Invited Owner/Director accept via `/invitations` then wait on `/pending-onboarding` until activation
 3. Establishment is active after Platform complete (blocked until at least one Owner or Director membership is `ACTIVE`)
 4. Submit observation (optional photo)
-5. Signal appears in feed (celery required)
+5. Signal appears in feed (`celery-ai-interactive` required)
 6. Create action plan from signal
 7. Execution visible in execution feed
 
@@ -180,7 +180,7 @@ Smoke checklist: [`../deploy/smoke_checklist.md`](../deploy/smoke_checklist.md).
 
 ## Observation pipeline
 
-Requires `celery` service. For realistic AI in manual testing:
+Requires the `celery-ai-interactive` service. For realistic AI in manual testing:
 
 ```env
 HOUSTON_AI_OBSERVATION_PROVIDER=openai

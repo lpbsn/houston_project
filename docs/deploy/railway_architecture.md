@@ -11,16 +11,19 @@ One Railway Project. One public service. No separate frontend service. Public la
 ```txt
 Railway Project (prod-test V1)
 ├── api-web          [PUBLIC HTTPS]   nginx + SPA + Daphne + Channels
-├── celery-worker    [PRIVATE]       Celery worker (mandatory)
+├── celery-ai-interactive [PRIVATE]  Observation pipeline worker (mandatory)
+├── celery-operational    [PRIVATE]  Recovery, planning, push, email (mandatory)
+├── celery-background     [PRIVATE]  Analytics classification and maintenance (mandatory)
 ├── celery-beat      [PRIVATE]       Celery Beat scheduler (mandatory)
 ├── postgres         [PRIVATE]       Railway PostgreSQL
 ├── redis            [PRIVATE]       Railway Redis
-└── private media    S3 bucket (same vars on api-web + celery-worker; api-web volume is not media truth)
+└── private media    S3 bucket (same vars on api-web and the three workers; api-web volume is not media truth)
+└── rabbitmq         [PRIVATE]       Celery broker, classic durable queues, persistent volume
 ```
 
 Local analogues:
 
-* Dev: [`docker-compose.yml`](../../docker-compose.yml) (`api`, `celery`, `celery-beat`, `postgres`, `redis`, `private_media` volume).
+* Dev: [`docker-compose.yml`](../../docker-compose.yml) (`api`, `celery-ai-interactive`, `celery-operational`, `celery-background`, `celery-beat`, `postgres`, `redis`, `rabbitmq`, `private_media` volume).
 * Prod-test static + gateway (local only): [`docker-compose.prod-test.yml`](../../docker-compose.prod-test.yml) — nginx serves SPA + API same-origin on port 8080 (validates routing before Railway).
 
 ## Public routing (same-origin)
@@ -42,28 +45,33 @@ Web static cache: hashed `/assets/` are immutable; `index.html` is revalidated (
 | Service | Visibility | Image / command | Role |
 |---|---|---|---|
 | `api-web` | Public (Railway Public Networking, HTTPS) | [`infra/docker/railway/Dockerfile.api-web`](../../infra/docker/railway/Dockerfile.api-web); [`start-api-web.sh`](../../infra/docker/railway/start-api-web.sh) → nginx on `$PORT` + Daphne on `127.0.0.1:8000` | HTTP API, WebSocket, SPA static (same-origin) |
-| `celery-worker` | Private | [`infra/docker/api/Dockerfile`](../../infra/docker/api/Dockerfile); `celery -A config worker` (**mandatory**) | Observation → signal pipeline, upload purge, chat purge, action-plan materialization |
-| `celery-beat` | Private | Same backend Dockerfile; `celery -A config beat` (**mandatory**) | Scheduled tasks (horizon materialization, chat purge, upload TTL, stuck observation recovery) |
+| `celery-ai-interactive` | Private | [`infra/docker/api/Dockerfile`](../../infra/docker/api/Dockerfile); `celery -A config worker -Q ai_interactive --prefetch-multiplier=1` (**mandatory**) | Observation pipeline |
+| `celery-operational` | Private | Same image; `-Q operational` (**mandatory**) | Recovery sweeps, planning, push, invitation and account email |
+| `celery-background` | Private | Same image; `-Q ai_background,maintenance` (**mandatory**) | Pattern classification, purges, thumbnails, content-report email |
+| `celery-beat` | Private | Same backend Dockerfile; `celery -A config beat` (**mandatory**, does not execute tasks) | Scheduled dispatch only |
 | `postgres` | Private | Railway PostgreSQL plugin | Business source of truth |
-| `redis` | Private | Railway Redis plugin | Channels, Celery broker/result, cache/throttle |
+| `redis` | Private | Railway Redis plugin | Channels, cache/throttle |
+| `rabbitmq` | Private | Railway RabbitMQ, single node, persistent volume | Celery broker. Classic durable queues, persistent messages, publisher confirms. No result backend. |
 
 `celery-beat` needs persistent schedule state: Railway volume at `/var/lib/celerybeat` (local dev uses `celerybeat_data` in Compose). See [`railway_deploy_contract.md`](railway_deploy_contract.md).
 
 ## Dependencies
 
 ```txt
-api-web        → postgres, redis, S3 private media
-celery-worker  → postgres, redis, S3 private media (same bucket)
-celery-beat    → postgres, redis, beat schedule volume
+api-web                 → postgres, redis, S3 private media
+celery-ai-interactive   → postgres, redis, rabbitmq, S3 private media
+celery-operational      → postgres, redis, rabbitmq, S3 private media
+celery-background       → postgres, redis, rabbitmq, S3 private media
+celery-beat             → postgres, redis, rabbitmq, beat schedule volume
 ```
 
 Startup order: `postgres` and `redis` healthy before app services. `api-web` does not depend on Celery for the health endpoint, but observation processing requires a running worker.
 
 ## Environment variables by service
 
-All backend services (`api-web`, `celery-worker`, `celery-beat`) share the same env contract ([`apps/api/config/settings.py`](../../apps/api/config/settings.py)). Differences:
+All backend services (`api-web`, the three workers, `celery-beat`) share the same env contract ([`apps/api/config/settings.py`](../../apps/api/config/settings.py)). Differences:
 
-| Variable group | `api-web` | `celery-worker` | `celery-beat` |
+| Variable group | `api-web` | three workers | `celery-beat` |
 |---|---|---|---|
 | Django security (`DJANGO_*`, `CSRF_*`) | yes | yes | yes |
 | Postgres (`POSTGRES_*`) | yes | yes | yes |
@@ -93,8 +101,7 @@ Railway typically provides one Redis URL. Map to Houston's logical DB split (sam
 | Houston variable | Purpose | Typical mapping |
 |---|---|---|
 | `REDIS_URL` | Django Channels | `redis://…/0` |
-| `CELERY_BROKER_URL` | Celery broker | `redis://…/1` |
-| `CELERY_RESULT_BACKEND` | Celery results | `redis://…/2` |
+| `CELERY_BROKER_URL` | Celery broker | `amqp://…` on the private RabbitMQ service |
 | `HOUSTON_CACHE_REDIS_URL` | Throttle / cache (prod) | `redis://…/3` (explicit recommended) |
 
 Redis must remain on the Railway private network. **Do not expose Redis publicly.**
@@ -102,9 +109,9 @@ Redis must remain on the Railway private network. **Do not expose Redis publicly
 ## Redis strategy
 
 * Railway Redis plugin, private network only.
-* Used for: Django Channels (`REDIS_URL`), Celery broker (`CELERY_BROKER_URL`), Celery results (`CELERY_RESULT_BACKEND`), cache/throttle (`HOUSTON_CACHE_REDIS_URL`).
+* Used for: Django Channels (`REDIS_URL`) and cache/throttle (`HOUSTON_CACHE_REDIS_URL`). Celery does not use Redis as a broker or result backend.
 * Not the source of business truth. Loss causes transient disruption (queued tasks, WS fan-out, throttle counters) but PostgreSQL remains authoritative.
-* Monitor Redis connectivity from `api-web` and `celery-worker`.
+* Monitor Redis connectivity from `api-web` and the three workers. Celery broker connectivity is RabbitMQ.
 
 ## PostgreSQL strategy
 
@@ -119,7 +126,7 @@ Redis must remain on the Railway private network. **Do not expose Redis publicly
 
 ## Private media strategy
 
-* Prod-test private media is the S3 bucket (`HOUSTON_PRIVATE_MEDIA_BACKEND=s3`). Set the same `HOUSTON_S3_*` values on `api-web` and `celery-worker`. The `api-web` volume is not media truth.
+* Prod-test private media is the S3 bucket (`HOUSTON_PRIVATE_MEDIA_BACKEND=s3`). Set the same `HOUSTON_S3_*` values on `api-web` and the three workers. The `api-web` volume is not media truth.
 * `HOUSTON_PRIVATE_MEDIA_ROOT` remains for local/CI filesystem and historical filesystem deploys; it is not the object key store when backend=s3.
 * Raw audio is never persisted; transcription uses temporary files only.
 * No public `/media` URL — [`PrivateMediaStorage`](../../apps/api/houston/uploads/private_storage.py) raises on `.url()`; access is API-authorized only.
@@ -135,7 +142,7 @@ Redis must remain on the Railway private network. **Do not expose Redis publicly
 
 ## Celery strategy
 
-* `celery-worker` and `celery-beat` are **mandatory** in prod-test.
+* The three worker services and `celery-beat` are **mandatory** in prod-test. Beat stays a singleton and does not execute tasks. Initial concurrency stays inside the measured 4-process envelope: 2 on `celery-ai-interactive`, 1 on `celery-operational`, 1 on `celery-background`.
 * Beat schedules (from [`settings.py`](../../apps/api/config/settings.py)): action-plan horizon materialization, chat purge, upload TTL cleanup, stuck observation recovery.
 * **Worker down = blocking:** submitted observations stay queued; AI signal generation stops. Treat worker health as a prod-test gate.
 * Beat down = scheduled purges and horizon materialization stop (lazy read-path materialization remains a partial safety net for action plans).
@@ -160,12 +167,12 @@ Operational detail, secret generation, Railway-required variables, local HTTP ex
 ## Logs
 
 * Structured stdout via Django logging (`HOUSTON_LOG_LEVEL`, default `INFO`).
-* View logs per Railway service: `api-web`, `celery-worker`, `celery-beat`.
+* View logs per Railway service: `api-web`, `celery-ai-interactive`, `celery-operational`, `celery-background`, `celery-beat`.
 * Never log secrets, tokens, raw observation text, or private media paths in shareable tickets.
 
 ## Restart and redeploy
 
-* **Env change:** update Railway service variables → redeploy/recreate affected services (`api-web`, `celery-worker`, `celery-beat`). No bind-mount `.env` in prod-test.
+* **Env change:** update Railway service variables → redeploy/recreate affected services (`api-web`, the three workers, `celery-beat`). No bind-mount `.env` in prod-test. The live project still has the retired `celery-worker` service until the three new services exist; create them before removing it.
 * **Code change:** rebuild backend image → redeploy all backend services.
 * **Postgres/Redis:** managed plugins; restart via Railway dashboard if needed. App services reconnect.
 * **No bind-mount:** unlike local Docker dev, prod-test does not mount the repo into containers.

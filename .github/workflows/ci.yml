@@ -178,6 +178,18 @@ jobs:
         image: redis:7
         ports:
           - 6379:6379
+      rabbitmq:
+        image: rabbitmq:3-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: houston
+          RABBITMQ_DEFAULT_PASS: houston
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       DJANGO_SECRET_KEY: ci-secret-key
       DJANGO_DEBUG: "0"
@@ -195,8 +207,7 @@ jobs:
       POSTGRES_HOST: localhost
       POSTGRES_PORT: "5432"
       REDIS_URL: redis://localhost:6379/0
-      CELERY_BROKER_URL: redis://localhost:6379/1
-      CELERY_RESULT_BACKEND: redis://localhost:6379/2
+      CELERY_BROKER_URL: amqp://houston:houston@localhost:5672//
       HOUSTON_AI_OBSERVATION_PROVIDER: fake
     steps:
       - uses: actions/checkout@v6

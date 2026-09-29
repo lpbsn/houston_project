@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 @shared_task(
     bind=True,
-    ignore_result=True,
     max_retries=3,
     default_retry_delay=30,
 )
@@ -58,7 +57,6 @@ def send_email_change_email_task(self, change_id: str, raw_token: str) -> None:
 
 @shared_task(
     bind=True,
-    ignore_result=True,
     max_retries=3,
     default_retry_delay=30,
 )

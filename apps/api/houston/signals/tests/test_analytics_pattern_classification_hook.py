@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from unittest.mock import patch
+from uuid import uuid4
 
 import pytest
 from django.utils import timezone
@@ -42,6 +43,7 @@ def setup_signal_context(*, role=EstablishmentMembership.Role.STAFF):
         submitted_by_membership=membership,
         raw_text="Le sirop mojito est vide.",
         submitted_at=timezone.now(),
+        client_submission_id=uuid4(),
     )
     return membership, bar, subject, observation
 
@@ -70,7 +72,9 @@ def test_create_signal_from_candidate_schedules_analytics_classification_after_c
         activity_subject=subject,
     )
 
-    with patch("houston.analytics.tasks.classify_signal_pattern_task.delay") as delay:
+    with patch(
+        "houston.analytics.scheduling.publish_signal_pattern_classification"
+    ) as publish:
         signal = create_signal_from_candidate(
             observation=observation,
             candidate=candidate,
@@ -80,7 +84,7 @@ def test_create_signal_from_candidate_schedules_analytics_classification_after_c
             routing_status=Signal.RoutingStatus.RESOLVED,
         )
 
-    delay.assert_called_once_with(str(signal.id))
+    publish.assert_called_once_with(signal.id)
 
 
 def test_aggregate_candidate_into_signal_does_not_schedule_analytics_classification():
@@ -93,10 +97,12 @@ def test_aggregate_candidate_into_signal_does_not_schedule_analytics_classificat
         last_activity_at=timezone.now(),
     )
 
-    with patch("houston.analytics.tasks.classify_signal_pattern_task.delay") as delay:
+    with patch(
+        "houston.analytics.scheduling.publish_signal_pattern_classification"
+    ) as publish:
         aggregate_candidate_into_signal(signal=signal, observation=observation)
 
-    delay.assert_not_called()
+    publish.assert_not_called()
 
 
 def test_qualify_signal_routing_schedules_reclassification_when_signature_changes():
@@ -105,14 +111,16 @@ def test_qualify_signal_routing_schedules_reclassification_when_signature_change
     )
     signal = create_resolved_signal(membership, bar, subject, issue_focus="stock")
 
-    with patch("houston.analytics.tasks.classify_signal_pattern_task.delay") as delay:
+    with patch(
+        "houston.analytics.scheduling.publish_signal_pattern_classification"
+    ) as publish:
         qualify_signal_routing(
             signal=signal,
             membership=membership,
             patch={"issue_focus": "new stock issue"},
         )
 
-    delay.assert_called_once_with(str(signal.id))
+    publish.assert_called_once_with(signal.id)
 
 
 def test_qualify_signal_routing_expected_action_only_does_not_reclassify():
@@ -121,14 +129,16 @@ def test_qualify_signal_routing_expected_action_only_does_not_reclassify():
     )
     signal = create_resolved_signal(membership, bar, subject)
 
-    with patch("houston.analytics.tasks.classify_signal_pattern_task.delay") as delay:
+    with patch(
+        "houston.analytics.scheduling.publish_signal_pattern_classification"
+    ) as publish:
         qualify_signal_routing(
             signal=signal,
             membership=membership,
             patch={"expected_action": "inspect"},
         )
 
-    delay.assert_not_called()
+    publish.assert_not_called()
 
 
 def test_qualify_signal_routing_business_unit_only_does_not_reclassify():
@@ -149,14 +159,16 @@ def test_qualify_signal_routing_business_unit_only_does_not_reclassify():
         label="Spa",
     )
 
-    with patch("houston.analytics.tasks.classify_signal_pattern_task.delay") as delay:
+    with patch(
+        "houston.analytics.scheduling.publish_signal_pattern_classification"
+    ) as publish:
         qualify_signal_routing(
             signal=signal,
             membership=membership,
             patch={"affected_business_unit_id": other.id},
         )
 
-    delay.assert_not_called()
+    publish.assert_not_called()
 
 
 def test_qualify_signal_routing_merge_does_not_reclassify_source_or_unchanged_survivor():
@@ -180,7 +192,9 @@ def test_qualify_signal_routing_merge_does_not_reclassify_source_or_unchanged_su
         last_activity_at=timezone.now(),
     )
 
-    with patch("houston.analytics.tasks.classify_signal_pattern_task.delay") as delay:
+    with patch(
+        "houston.analytics.scheduling.publish_signal_pattern_classification"
+    ) as publish:
         qualify_signal_routing(
             signal=source,
             membership=membership,
@@ -193,5 +207,5 @@ def test_qualify_signal_routing_merge_does_not_reclassify_source_or_unchanged_su
         )
 
     source_id = source.id
-    delay.assert_not_called()
+    publish.assert_not_called()
     assert not Signal.objects.filter(id=source_id).exists()

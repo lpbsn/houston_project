@@ -205,7 +205,6 @@ def _enqueue_password_reset_email(reset_id, raw_token: str) -> None:
         send_password_reset_email_task.apply_async(
             args=[str(reset_id), raw_token],
             argsrepr=f"('{reset_id}', '<redacted>')",
-            ignore_result=True,
         )
     except Exception:
         logger.exception(

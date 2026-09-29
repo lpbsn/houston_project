@@ -11,3 +11,7 @@ class ObservationValidationError(ObservationServiceError):
 
 class ObservationUploadNotFoundError(ObservationServiceError):
     error_code = "observation_upload_not_found"
+
+
+class ObservationSubmissionConflictError(ObservationServiceError):
+    error_code = "conflict_error"
