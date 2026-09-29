@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from houston.action_plans.services import create_action_plan_with_execution
 from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
 from houston.establishments.models import EstablishmentMembership
+from houston.signals.models import Signal, SignalSourceObservation
 from houston.signals.services import pin_signal
 from houston.testing.auth import auth_headers, build_api_membership, login
 from houston.testing.factories import create_establishment, create_membership, create_user
+from houston.testing.pipeline import create_observation
 from houston.testing.signal_feed import flatten_signal_feed_items
 from houston.testing.taxonomy import (
     create_business_unit,
@@ -26,7 +31,22 @@ def api_client():
 
 def test_cross_signal_feed_is_read_only_and_includes_establishment(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    create_minimal_v3_signal(owner, title="Cross visible")
+    owner.user.first_name = "Marie"
+    owner.user.last_name = "Renaud"
+    owner.user.save(update_fields=["first_name", "last_name"])
+    signal = create_minimal_v3_signal(owner, title="Cross visible")
+    created_from = create_observation(membership=owner)
+    aggregated_from = create_observation(membership=owner)
+    SignalSourceObservation.objects.create(
+        signal=signal,
+        observation=created_from,
+        link_type=SignalSourceObservation.LinkType.CREATED_FROM,
+    )
+    SignalSourceObservation.objects.create(
+        signal=signal,
+        observation=aggregated_from,
+        link_type=SignalSourceObservation.LinkType.AGGREGATED_FROM,
+    )
     token = login(api_client, user=owner.user)
 
     response = api_client.get("/api/v1/cross/signal-feed/", **auth_headers(token))
@@ -36,6 +56,8 @@ def test_cross_signal_feed_is_read_only_and_includes_establishment(api_client):
     item = flatten_signal_feed_items(response.json())[0]
     assert item["establishment_id"] == str(owner.establishment_id)
     assert item["establishment_name"] == owner.establishment.name
+    assert item["aggregation_count"] == 1
+    assert item["reporter_display_name"] == "Marie R."
     assert item["permission_hints"]["can_pin"] is False
     assert item["permission_hints"]["can_resolve"] is False
     assert post.status_code == 405
@@ -69,6 +91,153 @@ def test_cross_signal_feed_unions_management_establishments(api_client):
     response = api_client.get("/api/v1/cross/signal-feed/", **auth_headers(token))
     titles = {item["title"] for item in flatten_signal_feed_items(response.json())}
     assert titles == {"From A", "From B"}
+
+
+def test_cross_signal_list_continuation_preserves_order_and_excludes_pins(api_client):
+    user = create_user(username="cross-signal-list-continuation")
+    memberships = [
+        create_membership(
+            establishment=create_establishment(name=establishment_name),
+            user=user,
+            role=EstablishmentMembership.Role.OWNER,
+        )
+        for establishment_name in ("Alpha Signal List", "Beta Signal List")
+    ]
+    signals = [
+        create_minimal_v3_signal(
+            memberships[index % len(memberships)],
+            title=f"Cross list {index}",
+        )
+        for index in range(5)
+    ]
+    pinned = signals.pop()
+    pin_signal(signal=pinned, membership=memberships[0])
+    shared_activity = timezone.now() - timedelta(hours=1)
+    Signal.objects.filter(id__in=[signal.id for signal in signals]).update(
+        last_activity_at=shared_activity,
+        created_at=shared_activity,
+    )
+    expected_ids = [
+        str(signal.id)
+        for signal in sorted(signals, key=lambda item: item.id, reverse=True)
+    ]
+    token = login(api_client, user=user)
+
+    first = api_client.get(
+        "/api/v1/cross/signal-feed/?page_size=2",
+        **auth_headers(token),
+    )
+
+    assert first.status_code == 200, first.content
+    first_body = first.json()
+    assert [item["id"] for item in first_body["items"]] == expected_ids[:2]
+    assert [item["id"] for item in first_body["pins"]] == [str(pinned.id)]
+    assert first_body["has_more"] is True
+    assert first_body["next_cursor"]
+    assert "counts" in first_body
+
+    second = api_client.get(
+        f"/api/v1/cross/signal-feed/?page_size=2&cursor={first_body['next_cursor']}",
+        **auth_headers(token),
+    )
+
+    assert second.status_code == 200, second.content
+    second_body = second.json()
+    assert [item["id"] for item in second_body["items"]] == expected_ids[2:]
+    assert second_body["has_more"] is False
+    assert second_body["next_cursor"] is None
+    assert "pins" not in second_body
+    assert "counts" not in second_body
+    seen_ids = [item["id"] for item in first_body["items"] + second_body["items"]]
+    assert seen_ids == expected_ids
+    assert str(pinned.id) not in seen_ids
+
+
+def test_cross_hydration_revalidates_list_and_pin_membership():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = create_minimal_v3_signal(owner, title="Revalidated Cross signal")
+
+    from houston.signals.feed_filters import SignalFeedFilters
+    from houston.signals.selectors import (
+        cross_signal_feed_queryset,
+        hydrate_cross_signal_feed_queryset,
+        signal_feed_list_queryset,
+        signal_feed_pins_queryset,
+    )
+
+    base = cross_signal_feed_queryset(memberships=[owner])
+    selected_list = signal_feed_list_queryset(base, filters=None)
+    hydrated_list = hydrate_cross_signal_feed_queryset(selected_list, limit=2)
+    pin_signal(signal=signal, membership=owner)
+
+    assert list(hydrated_list) == []
+
+    base = cross_signal_feed_queryset(memberships=[owner])
+    selected_pins = signal_feed_pins_queryset(base, filters=None)
+    hydrated_pins = hydrate_cross_signal_feed_queryset(selected_pins, limit=2)
+    Signal.objects.filter(pk=signal.pk).update(
+        is_pinned=False,
+        pinned_at=None,
+        pinned_by_membership=None,
+    )
+
+    assert list(hydrated_pins) == []
+
+    base = cross_signal_feed_queryset(memberships=[owner])
+    selected_list = signal_feed_list_queryset(base, filters=None)
+    hydrated_list = hydrate_cross_signal_feed_queryset(selected_list, limit=2)
+    Signal.objects.filter(pk=signal.pk).update(status=Signal.Status.RESOLVED)
+
+    assert list(hydrated_list) == []
+
+    deleted = create_minimal_v3_signal(owner, title="Deleted before Cross hydration")
+    base = cross_signal_feed_queryset(memberships=[owner])
+    selected_list = signal_feed_list_queryset(base, filters=None).filter(pk=deleted.pk)
+    hydrated_list = hydrate_cross_signal_feed_queryset(selected_list, limit=2)
+    deleted.delete()
+
+    assert list(hydrated_list) == []
+
+    filtered = create_minimal_v3_signal(owner, title="Filtered before Cross hydration")
+    original_unit = filtered.affected_business_unit
+    assert original_unit is not None
+    filters = SignalFeedFilters(business_unit_ids=(original_unit.id,))
+    base = cross_signal_feed_queryset(memberships=[owner], filters=filters)
+    selected_list = signal_feed_list_queryset(base, filters=filters)
+    hydrated_list = hydrate_cross_signal_feed_queryset(selected_list, limit=2)
+    other_unit = create_business_unit(
+        establishment=owner.establishment,
+        key="cross-revalidation-other",
+    )
+    Signal.objects.filter(pk=filtered.pk).update(
+        affected_business_unit=other_unit,
+        responsible_business_unit=other_unit,
+    )
+
+    assert list(hydrated_list) == []
+
+
+def test_cross_signal_feed_query_count_stays_flat_as_cards_grow(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    token = login(api_client, user=owner.user)
+    url = "/api/v1/cross/signal-feed/"
+
+    from houston.testing.query_baseline import capture_queries
+
+    create_minimal_v3_signal(owner, title="Cross query count 1")
+    with capture_queries() as one_item_context:
+        one_item_response = api_client.get(url, **auth_headers(token))
+
+    create_minimal_v3_signal(owner, title="Cross query count 2")
+    create_minimal_v3_signal(owner, title="Cross query count 3")
+    with capture_queries() as three_item_context:
+        three_item_response = api_client.get(url, **auth_headers(token))
+
+    assert one_item_response.status_code == 200
+    assert three_item_response.status_code == 200
+    assert len(one_item_response.json()["items"]) == 1
+    assert len(three_item_response.json()["items"]) == 3
+    assert len(three_item_context.captured_queries) == len(one_item_context.captured_queries)
 
 
 def test_cross_signal_pins_paginate_and_reject_changed_filter_context(api_client):
