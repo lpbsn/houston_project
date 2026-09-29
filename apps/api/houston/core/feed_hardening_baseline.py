@@ -6,12 +6,15 @@ import platform
 import statistics
 import time
 import uuid
+from collections import Counter
 from collections.abc import Callable
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
+from datetime import datetime, timedelta
 from datetime import time as datetime_time
-from datetime import timedelta
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
@@ -45,15 +48,24 @@ from houston.action_plans.feed_serializers import (
     ActionPlanExecutionFeedResponseSerializer,
     serialize_action_plan_execution_feed_item,
 )
+from houston.action_plans.lifecycle_promotion import (
+    emit_due_availability_notifications,
+    promote_due_scheduled_executions,
+)
+from houston.action_plans.materialization import (
+    ensure_visible_action_plan_executions_materialized,
+)
 from houston.action_plans.models import (
     ActionPlan,
     ActionPlanAssignee,
     ActionPlanExecution,
     ActionPlanExecutionFeedPin,
+    ActionPlanExecutionLifecycleEvent,
     ActionPlanExecutionTask,
     ActionPlanExecutionTeam,
     ActionPlanSchedule,
     ActionPlanScheduleAssignee,
+    ActionPlanTask,
 )
 from houston.action_plans.selectors import action_plan_execution_overdue
 from houston.core.civil_time import history_civil_window
@@ -65,6 +77,7 @@ from houston.establishments.models import (
     Establishment,
     EstablishmentMembership,
 )
+from houston.gamification.models import PointTransaction
 from houston.notifications.models import Notification
 from houston.observations.models import Observation
 from houston.organizations.models import Organization
@@ -79,7 +92,7 @@ from houston.signals.signal_feed import (
     build_signal_feed_page,
 )
 
-FEED_BASELINE_SCHEMA_VERSION = "feed_hardening_baseline_v2"
+FEED_BASELINE_SCHEMA_VERSION = "feed_hardening_baseline_v3"
 FEED_BASELINE_NAMESPACE = "T36 Feed Hardening Baseline"
 FEED_BASELINE_ARCHIVE_DIR = Path(".artifacts/feed-hardening-baseline")
 DEFAULT_SEED = 36
@@ -345,6 +358,25 @@ def benchmark_feed_baseline(
     explain_limit: int = 2,
 ) -> dict[str, Any]:
     assert_local_dev_environment()
+    temporal_anchor = datetime.fromisoformat(dataset.seeded_at)
+    with patch("django.utils.timezone.now", return_value=temporal_anchor):
+        return _benchmark_feed_baseline_at_anchor(
+            dataset,
+            profile,
+            reference_commit=reference_commit,
+            explain=explain,
+            explain_limit=explain_limit,
+        )
+
+
+def _benchmark_feed_baseline_at_anchor(
+    dataset: FeedBaselineDataset,
+    profile: FeedBaselineProfile,
+    *,
+    reference_commit: str,
+    explain: bool,
+    explain_limit: int,
+) -> dict[str, Any]:
     memberships = list(
         EstablishmentMembership.objects.filter(id__in=dataset.membership_ids)
         .select_related("establishment", "user")
@@ -354,11 +386,43 @@ def benchmark_feed_baseline(
     filters = SignalFeedFilters()
 
     _prepare_execution_read_catch_up_fixture(dataset=dataset, membership=primary)
-    read_catch_up_diagnostic = _run_query_diagnostic(
-        _operation_execution_establishment(primary)
+    read_catch_up_report = _run_pr5d_diagnostic(
+        name="historical_combined_catch_up",
+        operation=_operation_execution_establishment(primary),
+        dataset=dataset,
+        explain=explain,
+        explain_limit=explain_limit,
     )
     pre_warm_execution = _operation_execution_establishment(primary)
-    pre_warm_diagnostic = _run_query_diagnostic(pre_warm_execution)
+    establishment_no_op_report = _run_pr5d_diagnostic(
+        name="establishment_no_op",
+        operation=pre_warm_execution,
+        dataset=dataset,
+        explain=explain,
+        explain_limit=explain_limit,
+    )
+    cross_no_op_scope_sizes = sorted({1, min(5, len(memberships)), len(memberships)})
+    pr5d_diagnostics = [
+        establishment_no_op_report,
+        *[
+            _run_pr5d_diagnostic(
+                name=f"cross_{scope_size}_no_op",
+                operation=_operation_execution_cross(memberships[:scope_size]),
+                dataset=dataset,
+                explain=explain,
+                explain_limit=explain_limit,
+            )
+            for scope_size in cross_no_op_scope_sizes
+        ],
+    ]
+    pr5d_diagnostics.extend(
+        _run_isolated_pr5d_diagnostics(
+            dataset=dataset,
+            membership=primary,
+            explain=explain,
+            explain_limit=explain_limit,
+        )
+    )
     scenarios = _build_scenarios(primary=primary, memberships=memberships, filters=filters)
     scenarios.extend(
         _build_http_scenarios(
@@ -404,8 +468,13 @@ def benchmark_feed_baseline(
         "configuration": {"profile": asdict(profile), "seed": dataset.seed},
         "environment": _environment_payload(),
         "dataset": _inventory(dataset),
-        "execution_read_catch_up": _diagnostic_payload(read_catch_up_diagnostic),
-        "pre_warm_execution_read_path": _diagnostic_payload(pre_warm_diagnostic),
+        # These two compatibility keys preserve the historical PR4/PR5B comparison.
+        "execution_read_catch_up": read_catch_up_report["diagnostic"],
+        "pre_warm_execution_read_path": establishment_no_op_report["diagnostic"],
+        "pr5d_diagnostics": [
+            read_catch_up_report,
+            *pr5d_diagnostics,
+        ],
         "scenarios": scenario_reports,
     }
 
@@ -435,8 +504,19 @@ def format_feed_baseline_report(report: dict[str, Any]) -> str:
             f"{dataset['signals_total']} signals, "
             f"{dataset['executions_total']} executions"
         ),
-        "Scenarios:",
+        "PR5D diagnostics:",
     ]
+    for scenario in report.get("pr5d_diagnostics", []):
+        diagnostic = scenario["diagnostic"]
+        lines.append(
+            f"  {scenario['name']}: queries={diagnostic['query_count']} "
+            f"(select={diagnostic['select_query_count']}, "
+            f"write={diagnostic['write_query_count']}, "
+            f"control={diagnostic['control_query_count']}) "
+            f"sql={diagnostic['sql_total_ms']:.1f}ms "
+            f"wall={diagnostic['wall_ms']:.1f}ms"
+        )
+    lines.append("Scenarios:")
     for scenario in report["scenarios"]:
         lines.append(
             f"  {scenario['name']}: p50={scenario['timing']['p50_ms']:.1f}ms "
@@ -953,6 +1033,216 @@ def _prepare_execution_read_catch_up_fixture(*, dataset, membership):
     )
 
 
+def _run_isolated_pr5d_diagnostics(
+    *,
+    dataset: FeedBaselineDataset,
+    membership: EstablishmentMembership,
+    explain: bool,
+    explain_limit: int,
+) -> list[dict[str, Any]]:
+    diagnostics: list[dict[str, Any]] = []
+    scenarios = (
+        ("materialization_only", _prepare_pr5d_materialization_fixture),
+        ("availability_only", _prepare_pr5d_availability_fixture),
+        ("promotion_only", _prepare_pr5d_promotion_fixture),
+    )
+    for name, prepare in scenarios:
+        operation, cleanup = prepare(dataset=dataset, membership=membership)
+        try:
+            diagnostics.append(
+                _run_pr5d_diagnostic(
+                    name=name,
+                    operation=operation,
+                    dataset=dataset,
+                    explain=explain,
+                    explain_limit=explain_limit,
+                )
+            )
+        finally:
+            cleanup()
+    return diagnostics
+
+
+def _pr5d_fixture_context(
+    *,
+    dataset: FeedBaselineDataset,
+    membership: EstablishmentMembership,
+    kind: str,
+) -> tuple[datetime, ActionPlan, BusinessUnit, uuid.UUID]:
+    now = timezone.now().replace(microsecond=0)
+    plan = ActionPlan.objects.get(establishment_id=membership.establishment_id)
+    business_unit = BusinessUnit.objects.get(
+        establishment_id=membership.establishment_id,
+        routing_key=f"feed-baseline-operations-{membership.establishment_id}",
+    )
+    fixture_id = _baseline_run_uuid(
+        dataset.seed,
+        dataset.profile,
+        f"pr5d-{kind}",
+        0,
+        anchor=now.isoformat(),
+    )
+    return now, plan, business_unit, fixture_id
+
+
+def _prepare_pr5d_materialization_fixture(*, dataset, membership):
+    now, plan, business_unit, schedule_id = _pr5d_fixture_context(
+        dataset=dataset,
+        membership=membership,
+        kind="materialization-schedule",
+    )
+    local_today = now.astimezone(ZoneInfo(membership.establishment.timezone)).date()
+    schedule = ActionPlanSchedule.objects.create(
+        id=schedule_id,
+        action_plan=plan,
+        establishment=membership.establishment,
+        created_by=membership,
+        use_shared_chronology=False,
+        start_date=local_today,
+        end_date=local_today,
+        start_at=datetime_time(hour=8),
+        end_at=datetime_time(hour=10),
+        recurrence_days=[
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+            "sunday",
+        ],
+        last_materialized_at=None,
+    )
+    ActionPlanScheduleAssignee.objects.create(
+        action_plan_schedule=schedule,
+        membership=membership,
+        business_unit=business_unit,
+    )
+    plan_task = ActionPlanTask.objects.create(
+        action_plan=plan,
+        business_unit=business_unit,
+        task="PR5D isolated materialization task",
+        assigned_membership=membership,
+        position=1,
+    )
+
+    def operation():
+        return ensure_visible_action_plan_executions_materialized(
+            membership=membership,
+            view_mode="general",
+        )
+
+    def cleanup():
+        execution_ids = list(
+            ActionPlanExecution.objects.filter(
+                action_plan_schedule_id=schedule_id,
+            ).values_list("id", flat=True)
+        )
+        _cleanup_pr5d_fixture(
+            execution_ids=execution_ids,
+            schedule_ids=[schedule_id],
+        )
+        plan_task.delete()
+
+    return operation, cleanup
+
+
+def _prepare_pr5d_availability_fixture(*, dataset, membership):
+    return _prepare_pr5d_lifecycle_fixture(
+        dataset=dataset,
+        membership=membership,
+        kind="availability",
+        start_delta=timedelta(hours=1),
+        availability_notified=False,
+        operation_factory=lambda execution_id: lambda: emit_due_availability_notifications(
+            establishment_id=membership.establishment_id,
+            execution_id=execution_id,
+        ),
+    )
+
+
+def _prepare_pr5d_promotion_fixture(*, dataset, membership):
+    return _prepare_pr5d_lifecycle_fixture(
+        dataset=dataset,
+        membership=membership,
+        kind="promotion",
+        start_delta=-timedelta(hours=1),
+        availability_notified=True,
+        operation_factory=lambda execution_id: lambda: promote_due_scheduled_executions(
+            establishment_id=membership.establishment_id,
+            execution_id=execution_id,
+        ),
+    )
+
+
+def _prepare_pr5d_lifecycle_fixture(
+    *,
+    dataset,
+    membership,
+    kind,
+    start_delta,
+    availability_notified,
+    operation_factory,
+):
+    now, plan, business_unit, execution_id = _pr5d_fixture_context(
+        dataset=dataset,
+        membership=membership,
+        kind=f"{kind}-execution",
+    )
+    execution = ActionPlanExecution.objects.create(
+        id=execution_id,
+        action_plan=plan,
+        chronology_owner_membership=membership,
+        establishment=membership.establishment,
+        created_by=membership,
+        title=f"{FEED_BASELINE_NAMESPACE} PR5D {kind}",
+        description=f"Isolated PR5D {kind} diagnostic.",
+        pilot_business_unit=business_unit,
+        affected_business_unit=business_unit,
+        responsible_business_unit=business_unit,
+        requires_validation=True,
+        use_shared_chronology=False,
+        status=EXECUTION_STATUS_SCHEDULED,
+        start_at=now + start_delta,
+        visible_from=now - timedelta(minutes=1),
+        end_at=now + start_delta + timedelta(hours=2),
+        availability_notified_at=(now - timedelta(minutes=1) if availability_notified else None),
+        last_activity_at=now - timedelta(hours=2),
+    )
+    team = ActionPlanExecutionTeam.objects.create(
+        action_plan_execution=execution,
+        business_unit=business_unit,
+        is_pilot=True,
+    )
+    ActionPlanAssignee.objects.create(
+        action_plan_execution=execution,
+        execution_team=team,
+        membership=membership,
+        start_at=execution.start_at,
+        visible_from=execution.visible_from,
+        end_at=execution.end_at,
+    )
+
+    def cleanup():
+        _cleanup_pr5d_fixture(execution_ids=[execution_id], schedule_ids=[])
+
+    return operation_factory(execution_id), cleanup
+
+
+def _cleanup_pr5d_fixture(*, execution_ids, schedule_ids):
+    if execution_ids:
+        Notification.objects.filter(
+            subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+            subject_id__in=execution_ids,
+        ).delete()
+        PointTransaction.objects.filter(
+            source_id__in=[str(execution_id) for execution_id in execution_ids],
+        ).delete()
+        ActionPlanExecution.objects.filter(id__in=execution_ids).delete()
+    if schedule_ids:
+        ActionPlanSchedule.objects.filter(id__in=schedule_ids).delete()
+
+
 def _build_http_scenarios(*, user, establishment_id):
     client = APIClient()
     csrf_response = client.get("/api/v1/auth/csrf/", HTTP_HOST="localhost")
@@ -1352,11 +1642,179 @@ def _run_query_diagnostic(operation):
     }
 
 
+def _run_pr5d_diagnostic(
+    *,
+    name: str,
+    operation,
+    dataset: FeedBaselineDataset,
+    explain: bool,
+    explain_limit: int,
+) -> dict[str, Any]:
+    before = _side_effect_snapshot(dataset)
+    with _observe_after_commit_effects() as callbacks:
+        diagnostic = _run_query_diagnostic(operation)
+    after = _side_effect_snapshot(dataset)
+    report = {
+        "name": name,
+        "diagnostic": _diagnostic_payload(diagnostic),
+        "side_effect_delta": _snapshot_delta(before, after),
+        "callbacks": callbacks,
+    }
+    if explain:
+        report["explains"] = _explain_slowest_selects(
+            diagnostic["queries"],
+            limit=explain_limit,
+        )
+    return report
+
+
+def _side_effect_snapshot(dataset: FeedBaselineDataset) -> dict[str, Any]:
+    establishment_ids = dataset.establishment_ids
+    executions = ActionPlanExecution.objects.filter(
+        establishment_id__in=establishment_ids,
+    )
+    execution_ids = executions.values_list("id", flat=True)
+    return {
+        "executions": executions.count(),
+        "execution_statuses": dict(
+            Counter(executions.values_list("status", flat=True))
+        ),
+        "availability_notified": executions.filter(
+            availability_notified_at__isnull=False,
+        ).count(),
+        "started": executions.filter(started_at__isnull=False).count(),
+        "execution_states": {
+            str(row["id"]): {
+                "status": row["status"],
+                "availability_notified_at": (
+                    row["availability_notified_at"].isoformat()
+                    if row["availability_notified_at"]
+                    else None
+                ),
+                "started_at": row["started_at"].isoformat() if row["started_at"] else None,
+                "last_activity_at": row["last_activity_at"].isoformat(),
+            }
+            for row in executions.values(
+                "id",
+                "status",
+                "availability_notified_at",
+                "started_at",
+                "last_activity_at",
+            )
+        },
+        "teams": ActionPlanExecutionTeam.objects.filter(
+            action_plan_execution_id__in=execution_ids,
+        ).count(),
+        "assignees": ActionPlanAssignee.objects.filter(
+            action_plan_execution_id__in=execution_ids,
+        ).count(),
+        "tasks": ActionPlanExecutionTask.objects.filter(
+            action_plan_execution_id__in=execution_ids,
+        ).count(),
+        "materialized_schedules": ActionPlanSchedule.objects.filter(
+            establishment_id__in=establishment_ids,
+            last_materialized_at__isnull=False,
+        ).count(),
+        "schedule_freshness": {
+            str(schedule_id): (
+                last_materialized_at.isoformat() if last_materialized_at else None
+            )
+            for schedule_id, last_materialized_at in ActionPlanSchedule.objects.filter(
+                establishment_id__in=establishment_ids,
+            ).values_list("id", "last_materialized_at")
+        },
+        "lifecycle_events": dict(
+            Counter(
+                ActionPlanExecutionLifecycleEvent.objects.filter(
+                    establishment_id__in=establishment_ids,
+                ).values_list("event_type", flat=True)
+            )
+        ),
+        "notifications": dict(
+            Counter(
+                Notification.objects.filter(
+                    establishment_id__in=establishment_ids,
+                ).values_list("event_key", flat=True)
+            )
+        ),
+        "point_transactions": dict(
+            Counter(
+                PointTransaction.objects.filter(
+                    establishment_id__in=establishment_ids,
+                ).values_list("reason_code", flat=True)
+            )
+        ),
+    }
+
+
+def _snapshot_delta(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
+    delta: dict[str, Any] = {}
+    for key, after_value in after.items():
+        before_value = before[key]
+        if isinstance(after_value, dict):
+            if all(
+                isinstance(value, int)
+                for value in [*before_value.values(), *after_value.values()]
+            ):
+                names = set(before_value) | set(after_value)
+                delta[key] = {
+                    name: after_value.get(name, 0) - before_value.get(name, 0)
+                    for name in sorted(names)
+                    if after_value.get(name, 0) != before_value.get(name, 0)
+                }
+            else:
+                delta[key] = {
+                    name: {
+                        "before": before_value.get(name),
+                        "after": after_value.get(name),
+                    }
+                    for name in sorted(set(before_value) | set(after_value))
+                    if before_value.get(name) != after_value.get(name)
+                }
+        else:
+            delta[key] = after_value - before_value
+    return delta
+
+
+@contextmanager
+def _observe_after_commit_effects():
+    original_on_commit = transaction.on_commit
+    ledger: dict[str, Any] = {
+        "scheduled": 0,
+        "executed": 0,
+        "realtime_invalidations": [],
+    }
+
+    def observed_on_commit(callback, using=None, robust=False):
+        ledger["scheduled"] += 1
+
+        def observed_callback():
+            ledger["executed"] += 1
+            return callback()
+
+        return original_on_commit(observed_callback, using=using, robust=robust)
+
+    def observed_realtime(**kwargs):
+        ledger["realtime_invalidations"].append(
+            {key: str(value) for key, value in kwargs.items()}
+        )
+
+    with (
+        patch.object(transaction, "on_commit", side_effect=observed_on_commit),
+        patch(
+            "houston.realtime.broadcast.notify_establishment_invalidation",
+            side_effect=observed_realtime,
+        ),
+    ):
+        yield ledger
+
+
 def _diagnostic_payload(diagnostic):
     queries = diagnostic["queries"]
     query_kinds = [_query_kind(row.sql) for row in queries]
     select_count = query_kinds.count("select")
     write_count = query_kinds.count("write")
+    query_attribution = _query_attribution(queries)
     payload = {
         "mode": "instrumented_single_run",
         "wall_ms": diagnostic["wall_ms"],
@@ -1365,6 +1823,8 @@ def _diagnostic_payload(diagnostic):
         "write_query_count": write_count,
         "control_query_count": diagnostic["query_count"] - select_count - write_count,
         "sql_total_ms": diagnostic["sql_total_ms"],
+        "query_attribution": query_attribution,
+        "query_role_totals": _query_role_totals(query_attribution),
         "slowest_queries": [
             {
                 "elapsed_ms": round(row.elapsed_ms, 3),
@@ -1375,6 +1835,115 @@ def _diagnostic_payload(diagnostic):
         ],
     }
     return payload
+
+
+def _query_role_totals(attribution: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for item in attribution:
+        key = (item["owner"], item["role"], item["kind"])
+        row = grouped.setdefault(
+            key,
+            {
+                "owner": item["owner"],
+                "role": item["role"],
+                "kind": item["kind"],
+                "count": 0,
+                "sql_total_ms": 0.0,
+            },
+        )
+        row["count"] += item["count"]
+        row["sql_total_ms"] += item["sql_total_ms"]
+    return [
+        {**row, "sql_total_ms": round(row["sql_total_ms"], 3)}
+        for row in sorted(
+            grouped.values(),
+            key=lambda item: (-item["sql_total_ms"], item["owner"], item["role"]),
+        )
+    ]
+
+
+def _query_attribution(queries: list[QueryDiagnostic]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    for query in queries:
+        kind = _query_kind(query.sql)
+        owner, role = _query_owner_and_role(query.sql, kind=kind)
+        shape = _query_shape(query.sql)
+        key = (owner, role, kind, shape)
+        row = grouped.setdefault(
+            key,
+            {
+                "owner": owner,
+                "role": role,
+                "kind": kind,
+                "query_shape": shape,
+                "count": 0,
+                "sql_total_ms": 0.0,
+            },
+        )
+        row["count"] += 1
+        row["sql_total_ms"] += query.elapsed_ms
+    return [
+        {
+            **row,
+            "sql_total_ms": round(row["sql_total_ms"], 3),
+        }
+        for row in sorted(
+            grouped.values(),
+            key=lambda item: (-item["sql_total_ms"], item["owner"], item["role"]),
+        )
+    ]
+
+
+def _query_owner_and_role(sql: str, *, kind: str) -> tuple[str, str]:
+    normalized = " ".join(sql.lower().split())
+    if kind == "control":
+        return "django_transaction", "transaction_control"
+    if "action_plans_actionplanexecutionlifecycleevent" in normalized:
+        return "action_plans.lifecycle_events", "lifecycle_events"
+    if "notifications_notification" in normalized:
+        return "notifications.scheduling", "notifications"
+    if "gamification_" in normalized:
+        return "gamification.services", "gamification"
+    if "action_plans_actionplanschedule" in normalized:
+        if "action_plans_actionplanscheduleassignee" in normalized:
+            return "action_plans.materialization", "schedule_assignees"
+        if kind == "write":
+            return "action_plans.materialization", "freshness_write"
+        return "action_plans.materialization", "candidate_discovery_freshness"
+    if "action_plans_actionplantask" in normalized:
+        return "action_plans.materialization", "action_plan_tasks"
+    if "action_plans_actionplanexecutionteam" in normalized:
+        return "action_plans.materialization", "execution_structure"
+    if "action_plans_actionplanassignee" in normalized:
+        return "action_plans.materialization", "execution_assignees"
+    if "action_plans_actionplanexecutiontask" in normalized:
+        return "action_plans.materialization", "execution_tasks"
+    if "action_plans_actionplanexecution" in normalized:
+        if "for update" in normalized:
+            return "action_plans.lifecycle_promotion", "locks_idempotence"
+        if kind == "write":
+            if normalized.startswith("insert"):
+                return "action_plans.materialization", "execution_write"
+            if 'set "availability_notified_at"' in normalized:
+                return "notifications.scheduling", "availability_write"
+            if 'set "status"' in normalized and '"started_at"' in normalized:
+                return "action_plans.lifecycle_promotion", "promotion_write"
+            return "action_plans.execution", "business_writes"
+        if '"availability_notified_at" is null' in normalized:
+            return "action_plans.lifecycle_promotion", "availability_candidates"
+        if '"start_at" <=' in normalized and '"status" =' in normalized:
+            return "action_plans.lifecycle_promotion", "promotion_candidates"
+        if (
+            '"occurrence_date" =' in normalized
+            and '"action_plan_schedule_id" =' in normalized
+        ):
+            return "action_plans.materialization", "existence_idempotence"
+        return "action_plans.execution_feed", "feed_read"
+    if "action_plans_actionplan" in normalized:
+        return "action_plans.materialization", "action_plan_load"
+    if "establishments_" in normalized:
+        return "establishments", "membership_scope"
+    return "execution_feed_dependencies", "supporting_read"
 
 
 def _explain_slowest_selects(queries, *, limit):
@@ -1398,11 +1967,28 @@ def _explain_slowest_selects(queries, *, limit):
                 "explain_wall_ms": round((time.perf_counter() - started_at) * 1000, 3),
                 "sql": query.sql,
                 "plan": plan,
+                "summary": _explain_summary(plan),
             }
         )
         if len(explanations) >= limit:
             break
     return explanations
+
+
+def _explain_summary(plan) -> dict[str, Any]:
+    payload = plan[0] if isinstance(plan, list) else plan
+    root = payload["Plan"]
+    return {
+        "planning_ms": round(payload.get("Planning Time", 0.0), 3),
+        "executor_ms": round(payload.get("Execution Time", 0.0), 3),
+        "rows": root.get("Actual Rows", 0),
+        "shared_hit_blocks": root.get("Shared Hit Blocks", 0),
+        "shared_read_blocks": root.get("Shared Read Blocks", 0),
+        "shared_dirtied_blocks": root.get("Shared Dirtied Blocks", 0),
+        "shared_written_blocks": root.get("Shared Written Blocks", 0),
+        "temp_read_blocks": root.get("Temp Read Blocks", 0),
+        "temp_written_blocks": root.get("Temp Written Blocks", 0),
+    }
 
 
 def _query_shape(sql: str) -> str:

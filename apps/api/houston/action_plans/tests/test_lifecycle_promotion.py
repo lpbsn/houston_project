@@ -3,10 +3,11 @@ from datetime import datetime, timedelta
 from unittest.mock import patch
 
 import pytest
-from django.db import close_old_connections
+from django.db import close_old_connections, connections
 from django.utils import timezone
 
 from houston.action_plans.constants import (
+    EXECUTION_LIFECYCLE_EVENT_STARTED,
     EXECUTION_STATUS_CANCELED,
     EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
@@ -19,7 +20,10 @@ from houston.action_plans.lifecycle_promotion import (
     promote_due_scheduled_executions,
     run_scheduled_execution_lifecycle_tick,
 )
-from houston.action_plans.models import ActionPlanExecution
+from houston.action_plans.models import (
+    ActionPlanExecution,
+    ActionPlanExecutionLifecycleEvent,
+)
 from houston.action_plans.services import (
     create_action_plan_with_execution,
     initial_execution_status,
@@ -34,6 +38,8 @@ from houston.action_plans.tests.helpers import (
     feed_query,
 )
 from houston.establishments.models import EstablishmentMembership
+from houston.gamification.constants import REASON_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE
+from houston.gamification.models import PointTransaction
 from houston.notifications.models import Notification
 from houston.testing.auth import auth_headers, login
 from houston.testing.auth import build_api_membership as build_foreign_membership
@@ -502,7 +508,7 @@ def test_concurrent_promote_is_idempotent_for_status_and_started_notification(
                 execution_id=execution.id,
             )
         finally:
-            close_old_connections()
+            connections.close_all()
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         results = list(executor.map(lambda _: try_promote(), range(2)))
@@ -517,7 +523,6 @@ def test_concurrent_promote_is_idempotent_for_status_and_started_notification(
         ).count()
         == 1
     )
-
     assert (
         promote_due_scheduled_executions(
             establishment_id=owner_membership.establishment_id,
@@ -532,3 +537,86 @@ def test_concurrent_promote_is_idempotent_for_status_and_started_notification(
         ).count()
         == 1
     )
+
+
+def test_beat_and_read_catch_up_converge_on_single_lifecycle_side_effects(
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    start_at = timezone.now() + timedelta(hours=2)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Beat and read catch-up",
+        requires_validation=False,
+        tasks=[build_task_payload(task="t1", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(
+                membership=staff_membership,
+                business_unit=business_unit,
+            ),
+        ],
+        start_at=start_at,
+        visible_from=timezone.now() - timedelta(minutes=1),
+        end_at=start_at + timedelta(hours=1),
+    )
+    ActionPlanExecution.objects.filter(pk=execution.id).update(
+        start_at=timezone.now() - timedelta(minutes=1),
+    )
+
+    def read_worker():
+        close_old_connections()
+        try:
+            return ensure_execution_lifecycle_for_read(
+                establishment_id=owner_membership.establishment_id,
+                execution_id=execution.id,
+            )
+        finally:
+            connections.close_all()
+
+    def beat_worker():
+        close_old_connections()
+        try:
+            return run_scheduled_execution_lifecycle_tick()
+        finally:
+            connections.close_all()
+
+    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as notify:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(read_worker), executor.submit(beat_worker)]
+            for future in futures:
+                future.result()
+
+    execution.refresh_from_db()
+    assert execution.status == EXECUTION_STATUS_IN_PROGRESS
+    assert (
+        ActionPlanExecutionLifecycleEvent.objects.filter(
+            action_plan_execution=execution,
+            event_type=EXECUTION_LIFECYCLE_EVENT_STARTED,
+        ).count()
+        == 1
+    )
+    assert (
+        Notification.objects.filter(
+            subject_id=execution.id,
+            event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+        ).count()
+        == 1
+    )
+    assert (
+        Notification.objects.filter(
+            subject_id=execution.id,
+            event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_STARTED,
+        ).count()
+        == 1
+    )
+    assert (
+        PointTransaction.objects.filter(
+            source_id=str(execution.id),
+            reason_code=REASON_ACTION_PLAN_EXECUTION_STARTED_ELIGIBLE,
+        ).count()
+        == 1
+    )
+    assert notify.call_count == 1

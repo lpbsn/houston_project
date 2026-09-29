@@ -1,19 +1,29 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import patch
 
 import pytest
 from django.db import close_old_connections, connections
 from django.utils import timezone
 
+from houston.action_plans.constants import (
+    EXECUTION_LIFECYCLE_EVENT_CREATED,
+    EXECUTION_LIFECYCLE_EVENT_STARTED,
+)
 from houston.action_plans.materialization import (
     MATERIALIZATION_HORIZON_DAYS,
     VISIBLE_FROM_OFFSET,
+    ensure_visible_action_plan_executions_materialized,
     materialize_execution_from_schedule,
     materialize_schedule_occurrences_in_horizon,
     materialize_schedules_horizon,
 )
-from houston.action_plans.models import ActionPlanExecution, ActionPlanSchedule
+from houston.action_plans.models import (
+    ActionPlanExecution,
+    ActionPlanExecutionLifecycleEvent,
+    ActionPlanSchedule,
+)
 from houston.action_plans.schedule_services import (
     create_action_plan_schedule,
     normalize_recurring_recurrence_days,
@@ -21,8 +31,10 @@ from houston.action_plans.schedule_services import (
 from houston.action_plans.tests.helpers import (
     build_schedule_assignee_payload,
     schedule_window_from_datetime,
+    visible_schedule_window,
 )
 from houston.establishments.models import EstablishmentMembership
+from houston.notifications.models import Notification
 from houston.testing.factories import create_membership
 from houston.testing.taxonomy import create_membership_with_business_unit_scope
 
@@ -243,6 +255,90 @@ def test_concurrent_materialization_creates_single_execution(
     assert ActionPlanExecution.objects.filter(action_plan_schedule_id=schedule_id).count() == 1
     assert results[0].task_executions.exists()
     assert results[0].assignees.exists()
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("with_beat", [False, True])
+def test_read_catch_up_converges_with_parallel_read_or_beat(
+    owner_membership,
+    catalog_action_plan,
+    staff_membership,
+    business_unit,
+    with_beat,
+):
+    today_name = timezone.now().strftime("%A").lower()
+    schedule = create_action_plan_schedule(
+        action_plan=catalog_action_plan,
+        actor=owner_membership,
+        recurrence_days=[today_name],
+        assignees=[
+            build_schedule_assignee_payload(
+                membership=staff_membership,
+                business_unit=business_unit,
+            )
+        ],
+        use_shared_chronology=True,
+        **visible_schedule_window(period_days=0),
+    )
+    ActionPlanExecution.objects.filter(action_plan_schedule=schedule).delete()
+    ActionPlanSchedule.objects.filter(pk=schedule.pk).update(last_materialized_at=None)
+
+    def read_worker():
+        close_old_connections()
+        try:
+            membership = EstablishmentMembership.objects.select_related(
+                "establishment",
+            ).get(pk=owner_membership.pk)
+            return ensure_visible_action_plan_executions_materialized(
+                membership=membership,
+                view_mode="general",
+            )
+        finally:
+            connections.close_all()
+
+    def beat_worker():
+        close_old_connections()
+        try:
+            return materialize_schedules_horizon(
+                establishment_id=owner_membership.establishment_id,
+                horizon_days=0,
+            )
+        finally:
+            connections.close_all()
+
+    second_worker = beat_worker if with_beat else read_worker
+    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as notify:
+        try:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                futures = [executor.submit(read_worker), executor.submit(second_worker)]
+                for future in futures:
+                    future.result()
+        finally:
+            connections.close_all()
+
+    execution = ActionPlanExecution.objects.get(action_plan_schedule=schedule)
+    assert (
+        ActionPlanExecutionLifecycleEvent.objects.filter(
+            action_plan_execution=execution,
+                event_type=EXECUTION_LIFECYCLE_EVENT_CREATED,
+        ).count()
+        == 1
+    )
+    assert (
+        ActionPlanExecutionLifecycleEvent.objects.filter(
+            action_plan_execution=execution,
+                event_type=EXECUTION_LIFECYCLE_EVENT_STARTED,
+        ).count()
+        == 1
+    )
+    assert (
+        Notification.objects.filter(
+            subject_id=execution.id,
+            event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+        ).count()
+        == 1
+    )
+    assert notify.call_count == 1
 
 
 def test_concurrent_materialization_completes_structure_on_recovery(
