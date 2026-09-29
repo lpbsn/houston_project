@@ -110,6 +110,11 @@
       "subject_type": "action_plan_assignee",
       "reason": "action_plan_assignee.updated",
       "dispatch": "by_subject_type"
+    },
+    {
+      "subject_type": "observation_processing",
+      "reason": "observation_processing.updated",
+      "dispatch": "by_subject_type"
     }
   ]
 }

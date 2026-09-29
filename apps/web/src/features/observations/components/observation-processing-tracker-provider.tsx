@@ -1,5 +1,5 @@
 import { useQueries, useQueryClient } from '@tanstack/react-query'
-import { useEffect, type PropsWithChildren } from 'react'
+import { useEffect, useRef, type PropsWithChildren } from 'react'
 import { useSyncExternalStore } from 'react'
 
 import { useAuth } from '@/app/auth-provider'
@@ -8,6 +8,10 @@ import {
   fetchObservationProcessingStatus,
   observationsQueryKeys,
 } from '@/features/observations/api'
+import {
+  observationProcessingRefetchInterval,
+  shouldRefetchObservationProcessingOnSocketStatus,
+} from '@/features/observations/lib/observation-processing-refetch'
 import {
   applyObservationPipelineStatusUpdate,
   bindObservationProcessingTrackerSession,
@@ -20,10 +24,13 @@ import {
   trackObservation as trackObservationAction,
 } from '@/features/observations/lib/observation-processing-tracker-store'
 import type { TrackObservationInput } from '@/features/observations/lib/observation-processing-tracker-types'
+import {
+  getOperationalRealtimeConnectionStatus,
+  subscribeOperationalRealtimeConnectionStatus,
+} from '@/features/realtime/lib/operational-realtime-connection'
 import { invalidateEstablishmentSignalQueries } from '@/lib/query-invalidation'
 import { useNetworkStatus } from '@/lib/network-status'
 
-const PROCESSING_POLL_INTERVAL_MS = 1000
 const PRESENTATION_TICK_MS = 250
 
 const feedInvalidationKeys = new Set<string>()
@@ -47,6 +54,30 @@ export function useObservationProcessingBannerView() {
 
 function useObservationProcessingPollers(enabled: boolean, isOnline: boolean) {
   const queryClient = useQueryClient()
+  const connectionStatus = useSyncExternalStore(
+    subscribeOperationalRealtimeConnectionStatus,
+    getOperationalRealtimeConnectionStatus,
+    () => 'idle' as const,
+  )
+  const operationalSocketConnected = connectionStatus === 'connected'
+  const previousConnectionStatusRef = useRef(connectionStatus)
+
+  useEffect(() => {
+    const previous = previousConnectionStatusRef.current
+    previousConnectionStatusRef.current = connectionStatus
+    if (!enabled || !isOnline) {
+      return
+    }
+    if (!shouldRefetchObservationProcessingOnSocketStatus(previous, connectionStatus)) {
+      return
+    }
+    for (const { establishmentId, observationId } of listObservationIdsNeedingPoll()) {
+      void queryClient.invalidateQueries({
+        queryKey: observationsQueryKeys.processingStatus(establishmentId, observationId),
+      })
+    }
+  }, [connectionStatus, enabled, isOnline, queryClient])
+
   const entriesVersion = useSyncExternalStore(
     subscribeObservationProcessingTracker,
     () =>
@@ -99,7 +130,10 @@ function useObservationProcessingPollers(enabled: boolean, isOnline: boolean) {
         }
       },
       enabled: enabled && isOnline,
-      refetchInterval: isOnline ? PROCESSING_POLL_INTERVAL_MS : false,
+      refetchInterval: observationProcessingRefetchInterval({
+        isOnline,
+        operationalSocketConnected,
+      }),
       retry: (failureCount, error) => {
         if (
           error instanceof ObservationsApiError &&

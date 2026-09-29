@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import {
+  __resetObservationProcessingTrackerStoreForTests,
+  trackObservation,
+} from '@/features/observations/lib/observation-processing-tracker-store'
 import { applyOperationalInvalidation } from '@/features/realtime/lib/apply-operational-invalidation'
 import {
   notificationInvalidationReasons,
@@ -35,8 +39,8 @@ function buildEvent(
 
 describe('operational invalidation contract', () => {
   it('loads the expected number of operational events', () => {
-    expect(operationalInvalidationEvents).toHaveLength(22)
-    expect(operationalInvalidationEventPairs).toHaveLength(22)
+    expect(operationalInvalidationEvents).toHaveLength(23)
+    expect(operationalInvalidationEventPairs).toHaveLength(23)
   })
 
   it.each(operationalInvalidationEventPairs)(
@@ -46,13 +50,27 @@ describe('operational invalidation contract', () => {
       const entityId =
         subject_type === 'comment' && reason === 'comment.signal.created' ? 'sig-1' : 'entity-1'
 
-      applyOperationalInvalidation(buildEvent(subject_type, reason, entityId), {
-        queryClient,
-        establishmentId: 'est-1',
-      })
+      if (subject_type === 'observation_processing') {
+        trackObservation({
+          observationId: entityId,
+          establishmentId: 'est-1',
+          authorMembershipId: 'mem-1',
+          origin: 'direct_report',
+          submittedAt: '2026-06-19T12:00:00.000Z',
+        })
+      }
 
-      expect(invalidateSpy).toHaveBeenCalled()
-      invalidateSpy.mockRestore()
+      try {
+        applyOperationalInvalidation(buildEvent(subject_type, reason, entityId), {
+          queryClient,
+          establishmentId: 'est-1',
+        })
+
+        expect(invalidateSpy).toHaveBeenCalled()
+      } finally {
+        __resetObservationProcessingTrackerStoreForTests()
+        invalidateSpy.mockRestore()
+      }
     },
   )
 

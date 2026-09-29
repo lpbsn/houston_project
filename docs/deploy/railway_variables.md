@@ -36,6 +36,9 @@ Railway Postgres exposes reference variables (names may vary by plugin version).
 | `POSTGRES_HOST` | Railway `PGHOST` (private hostname) |
 | `POSTGRES_PORT` | Railway `PGPORT` (usually `5432`) |
 | `POSTGRES_SSLMODE` | `require` (prod-test) |
+| `HOUSTON_DB_CONN_MAX_AGE` | `0` on `api-web`, the three workers, and `celery-beat` |
+
+`CONN_MAX_AGE=0` is the ASGI contract. The code default is already `0`, so an unset variable has the same effect. Set it explicitly so API and workers do not drift. PgBouncer is not part of this deployment: `max_connections` was not read, so the gate does not show an exceedance, and worker `iterator()` calls remain incompatible with transaction pooling.
 
 Use Railway **variable references** (`${{Postgres.PGHOST}}`) where supported to avoid manual copy/paste drift.
 
@@ -238,7 +241,7 @@ The only measured worker budget is the previous single worker at **4 prefork chi
 | `celery-operational` | 1 | Recovery, planning, push, and transactional email stay alive while both AI pools are busy. |
 | `celery-background` | 1 | Pattern classification and maintenance. One provider slot. |
 
-Together: 4 children, 4 worker database connections, and 3 simultaneous provider calls (interactive 2 + background 1).
+Together: 4 children, at most 4 in-flight worker database connections while tasks run (`CONN_MAX_AGE=0` does not retain them afterward), and 3 simultaneous provider calls (interactive 2 + background 1).
 
 | Variable | Service | Required | Notes |
 |---|---|---|---|

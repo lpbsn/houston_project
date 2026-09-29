@@ -15,6 +15,7 @@ import {
   applyOperationalReconnectInvalidation,
 } from '../lib/apply-operational-invalidation'
 import { applyRealtimeAccessEvent } from '../lib/apply-realtime-access-events'
+import { setOperationalRealtimeConnectionStatus } from '../lib/operational-realtime-connection'
 import type {
   OperationalRealtimeAccessEvent,
   OperationalRealtimeConnectionStatus,
@@ -92,6 +93,16 @@ export function OperationalRealtimeProvider({
   useEffect(() => {
     intentionalCloseRef.current = requestIntentionalClose
   }, [requestIntentionalClose])
+
+  useEffect(() => {
+    setOperationalRealtimeConnectionStatus(connectionStatus)
+  }, [connectionStatus])
+
+  useEffect(() => {
+    return () => {
+      setOperationalRealtimeConnectionStatus('idle')
+    }
+  }, [])
 
   const value = useMemo(
     () => ({

@@ -87,6 +87,7 @@ Implemented `invalidate` reasons (verify in domain `services.py` before extendin
 | `notification` | `notification.created` | notification id | yes — membership-scoped | notification list + badge |
 | `notification` | `notification.updated` | notification id | yes — mark-read / archive | notification list + badge |
 | `notification` | `notification.bulk_updated` | recipient membership id (bulk) | yes — mark-all-read | notification list + badge |
+| `observation_processing` | `observation_processing.updated` | observation id | yes — each `ObservationProcessing` status transition, submitter membership only | tracked observation processing status; HTTP refetch is the status source |
 
 `notification.bulk_updated` is a membership-level bulk event: `entity_id` is the recipient membership id, not an individual notification id. Delivery uses the membership Channels group (`realtime_est_{establishment_id}_mbr_{membership_id}`), not the establishment-wide invalidation group.
 
@@ -204,6 +205,7 @@ Source domains with invalidation emission today:
 - Action Plan — catalog create/update → `action_plan.created`, `action_plan.updated`; execution lifecycle → `action_plan_execution.*`; task updates → `action_plan_execution_task.updated`; assignee repair → `action_plan_assignee.updated`
 - Comment — sync create / resolve → `comment.signal.*`, `comment.execution.*` (action plan execution comments)
 - Notification — create / read / archive / mark-all-read → membership-scoped `notification.created`, `notification.updated`, `notification.bulk_updated` (emitted from `notifications/services.py`, not domain lifecycle writers)
+- Observation processing — each status transition → membership-scoped `observation_processing.updated` for the submitter only (`observations/services.py`, `signals/services.py`)
 
 ### Action Plan lifecycle side-effects on Signal (refetch contract)
 
@@ -213,7 +215,7 @@ See **Operational WebSocket invalidation** under section 2 for the reason matrix
 
 ## 9. HTTP / Channel
 
-HTTP: [`apps/api/schema.yml`](../../../apps/api/schema.yml) (`POST …/realtime/ws-ticket/`). Operational WS: `/ws/v1/establishments/{establishment_id}/realtime/`. Chat WS: [`chat_domain.md`](chat_domain.md). Ticket auth: [`authentication_charter.md`](../../architecture/authentication_charter.md). ASGI in `apps/api/config/asgi.py` (`OriginValidator` + `URLRouter`, no `AuthMiddlewareStack`). Invalidation is establishment-broadcast; access events may target session or membership groups. Machine contract: [`contracts/operational-realtime-invalidation.json`](../../../contracts/operational-realtime-invalidation.json).
+HTTP: [`apps/api/schema.yml`](../../../apps/api/schema.yml) (`POST …/realtime/ws-ticket/`). Operational WS: `/ws/v1/establishments/{establishment_id}/realtime/`. Chat WS: [`chat_domain.md`](chat_domain.md). Ticket auth: [`authentication_charter.md`](../../architecture/authentication_charter.md). ASGI in `apps/api/config/asgi.py` (`OriginValidator` + `URLRouter`, no `AuthMiddlewareStack`). Most invalidation is establishment-broadcast. Notification and observation-processing invalidation target the submitter or recipient membership group. Access events may target session or membership groups. Machine contract: [`contracts/operational-realtime-invalidation.json`](../../../contracts/operational-realtime-invalidation.json).
 
 ## 10. Frontend Expectations
 

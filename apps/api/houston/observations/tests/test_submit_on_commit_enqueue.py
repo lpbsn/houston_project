@@ -12,6 +12,7 @@ from houston.establishments.tests.conftest import TEST_PASSWORD
 from houston.observations.exceptions import ObservationSubmissionConflictError
 from houston.observations.models import Observation, ObservationProcessing
 from houston.observations.services import submit_observation
+from houston.realtime.groups import establishment_group_name, membership_group_name
 from houston.signals.services import recover_orphaned_observation_processing_batch
 from houston.testing.auth import login
 from houston.testing.factories import (
@@ -157,3 +158,97 @@ def test_api_submit_returns_201_when_publish_hangs():
     observation = Observation.objects.get(id=response.json()["id"])
     assert observation.processing.published_at is None
     assert observation.processing.status == ObservationProcessing.Status.QUEUED
+
+
+def test_submit_invalidates_submitter_membership_only():
+    membership = build_membership()
+    peer = create_membership(
+        establishment=membership.establishment,
+        user=create_user(username=f"peer_{uuid.uuid4().hex[:8]}"),
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    with (
+        patch("houston.core.celery_publish.publish_celery_task", return_value=True),
+        patch("houston.realtime.broadcast._send_to_group") as mock_send,
+    ):
+        observation = _submit(membership)
+
+    assert mock_send.call_count == 1
+    call = mock_send.call_args.kwargs
+    assert call["group_name"] == membership_group_name(
+        establishment_id=membership.establishment_id,
+        membership_id=membership.id,
+    )
+    assert call["group_name"] != establishment_group_name(
+        establishment_id=membership.establishment_id,
+    )
+    assert call["group_name"] != membership_group_name(
+        establishment_id=membership.establishment_id,
+        membership_id=peer.id,
+    )
+    assert call["payload"]["subject_type"] == "observation_processing"
+    assert call["payload"]["reason"] == "observation_processing.updated"
+    assert call["payload"]["entity_id"] == str(observation.id)
+    assert "raw_text" not in call["payload"]
+
+
+def test_replayed_submit_does_not_invalidate_again():
+    membership = build_membership()
+    client_submission_id = uuid.uuid4()
+    with (
+        patch("houston.core.celery_publish.publish_celery_task", return_value=True),
+        patch("houston.realtime.broadcast.notify_membership_invalidation") as mock_notify,
+    ):
+        _submit(membership, client_submission_id=client_submission_id)
+        _submit(membership, client_submission_id=client_submission_id)
+
+    mock_notify.assert_called_once()
+
+
+def test_submit_rollback_does_not_invalidate():
+    membership = build_membership()
+    with (
+        patch("houston.core.celery_publish.publish_celery_task", return_value=True),
+        patch("houston.realtime.broadcast.notify_membership_invalidation") as mock_notify,
+    ):
+        with pytest.raises(RuntimeError, match="force rollback"):
+            with transaction.atomic():
+                _submit(membership)
+                raise RuntimeError("force rollback")
+
+    mock_notify.assert_not_called()
+
+
+def test_api_submit_returns_201_when_channels_send_fails():
+    establishment = create_establishment(name="Observation Hotel")
+    staff = create_user(username="obs_channels_down")
+    create_membership(
+        establishment=establishment,
+        user=staff,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    api_client = APIClient(enforce_csrf_checks=True)
+    token = login(api_client, user=staff)
+
+    with (
+        patch("houston.core.celery_publish.publish_celery_task", return_value=True),
+        patch(
+            "houston.realtime.broadcast.async_to_sync",
+            side_effect=RuntimeError("channels down"),
+        ),
+    ):
+        response = api_client.post(
+            f"/api/v1/establishments/{establishment.id}/observations/",
+            {
+                "text": "Observation persistée malgré un échec Channels.",
+                "temporary_upload_ids": [],
+                "client_submission_id": str(uuid.uuid4()),
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+    assert response.status_code == 201
+    observation = Observation.objects.get(id=response.json()["id"])
+    assert observation.processing.status == ObservationProcessing.Status.QUEUED
+    assert observation.processing.published_at is not None

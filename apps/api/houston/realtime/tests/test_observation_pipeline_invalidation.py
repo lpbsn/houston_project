@@ -11,6 +11,7 @@ from houston.ai.observation_pipeline_schema import (
     ObservationPipelineOutput,
     PipelineCandidateOutput,
 )
+from houston.realtime.groups import establishment_group_name, membership_group_name
 from houston.realtime.ws_payloads import build_invalidate_payload
 from houston.signals.constants import AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
 from houston.signals.models import Signal
@@ -179,6 +180,36 @@ def test_signal_invalidate_payload_allowlist(reason: str):
         establishment_id=establishment_id,
         entity_id=entity_id,
     )
+
+
+def test_processing_transitions_notify_submitter_membership_only():
+    membership = build_membership()
+    _setup_hotel_taxonomy(membership.establishment)
+    observation = create_observation(membership=membership)
+
+    with patch("houston.realtime.broadcast._send_to_group") as mock_send:
+        run_observation_pipeline(observation.id, provider=FakeObservationPipelineProvider())
+
+    processing_calls = [
+        call
+        for call in mock_send.call_args_list
+        if call.kwargs["payload"]["subject_type"] == "observation_processing"
+    ]
+    submitter_group = membership_group_name(
+        establishment_id=membership.establishment_id,
+        membership_id=membership.id,
+    )
+    assert [call.kwargs["payload"]["reason"] for call in processing_calls] == [
+        "observation_processing.updated",
+        "observation_processing.updated",
+    ]
+    assert {call.kwargs["group_name"] for call in processing_calls} == {submitter_group}
+    assert establishment_group_name(establishment_id=membership.establishment_id) not in {
+        call.kwargs["group_name"] for call in processing_calls
+    }
+    assert {call.kwargs["payload"]["entity_id"] for call in processing_calls} == {
+        str(observation.id)
+    }
 
 
 def test_run_observation_pipeline_payload_does_not_leak_observation_text():

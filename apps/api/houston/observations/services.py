@@ -213,12 +213,25 @@ def submit_observation(
             action_plan_execution_task_id=task_id,
         )
 
+    schedule_observation_processing_invalidation(observation=observation)
     observation_id = observation.id
     transaction.on_commit(
         lambda: _enqueue_observation_processing(observation_id),
     )
 
     return observation
+
+
+def schedule_observation_processing_invalidation(*, observation: Observation) -> None:
+    from houston.realtime.broadcast import schedule_membership_invalidation
+
+    schedule_membership_invalidation(
+        establishment_id=observation.establishment_id,
+        membership_id=observation.submitted_by_membership_id,
+        subject_type="observation_processing",
+        reason="observation_processing.updated",
+        entity_id=observation.id,
+    )
 
 
 def _enqueue_observation_processing(observation_id: uuid.UUID) -> None:
