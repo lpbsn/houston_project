@@ -73,9 +73,18 @@ type HistoryEntry = {
 
 type PrimaryTraversal = {
   href: string
-  /** `traverse` waits for the single popstate from `go`. `truncate` ignores the pop from the same-URL back that drops the forward stack. */
-  phase: 'traverse' | 'truncate'
+  /**
+   * `traverse` waits for the popstate from `go`.
+   * `truncate` ignores the same-URL back that drops the forward stack.
+   * `late` catches that go popstate if it arrives after the unmoved fallback.
+   */
+  phase: 'traverse' | 'truncate' | 'late'
+  /** After the same-URL back, keep waiting for a go() popstate that has not arrived yet. */
+  awaitLatePop?: boolean
 }
+
+/** Long enough for a queued history traversal to fire before we treat go() as a no-op. */
+const PRIMARY_TRAVERSAL_WAIT_MS = 300
 
 /**
  * Primary navigation must not leave the abandoned branch reachable by Back or
@@ -83,13 +92,15 @@ type PrimaryTraversal = {
  * replace the current entry or traverse; it cannot delete entries below the
  * current one. Memory history applies that result in one step. Browser history
  * waits for the one popstate from `go(-depth)`, replaces that landed entry,
- * then push/back to drop whatever is now forward. Nothing is rewritten on a
- * timer: a late popstate still finishes the traversal it belongs to.
+ * then push/back to drop whatever is now forward. If that popstate never
+ * comes, the current entry becomes the destination so the click is not lost,
+ * and a later popstate from the same go() is still internal.
  */
 export function createBrowserHistory(): AppHistory {
   const listeners = new Set<() => void>()
   let cause: NavigationCause = 'programmatic'
   let primaryTraversal: PrimaryTraversal | null = null
+  let primaryTimer: ReturnType<typeof setTimeout> | null = null
   let trackedHref = readBrowserHref()
   let trackedLineage = readLineage(window.history.state)
 
@@ -132,20 +143,76 @@ export function createBrowserHistory(): AppHistory {
     remember(href, lineage)
   }
 
+  function clearPrimaryTimer(): void {
+    if (primaryTimer !== null) {
+      clearTimeout(primaryTimer)
+      primaryTimer = null
+    }
+  }
+
+  function armPrimaryTimer(delay: number, run: () => void): void {
+    clearPrimaryTimer()
+    primaryTimer = setTimeout(() => {
+      primaryTimer = null
+      run()
+    }, delay)
+  }
+
   function discardForwardEntries(href: string): void {
-    primaryTraversal = { href, phase: 'truncate' }
+    const awaitLatePop = primaryTraversal?.phase === 'late'
+    primaryTraversal = { href, phase: 'truncate', awaitLatePop }
     window.history.pushState(null, '', href)
     window.history.back()
+    armPrimaryTimer(PRIMARY_TRAVERSAL_WAIT_MS, () => {
+      if (primaryTraversal?.phase !== 'truncate' || primaryTraversal.href !== href) {
+        return
+      }
+      settleTruncate(href, awaitLatePop)
+    })
+  }
+
+  function settleTruncate(href: string, awaitLatePop: boolean): void {
+    primaryTraversal = null
+    remember(readBrowserHref(), readLineage(window.history.state))
+    if (getHref() !== href) {
+      notify('pop')
+      return
+    }
+    if (!awaitLatePop) {
+      return
+    }
+    primaryTraversal = { href, phase: 'late' }
+    armPrimaryTimer(PRIMARY_TRAVERSAL_WAIT_MS, () => {
+      if (primaryTraversal?.phase === 'late' && primaryTraversal.href === href) {
+        primaryTraversal = null
+      }
+    })
   }
 
   function onPopState(): void {
     if (primaryTraversal?.phase === 'truncate') {
+      const href = primaryTraversal.href
+      const awaitLatePop = primaryTraversal.awaitLatePop === true
+      clearPrimaryTimer()
+      settleTruncate(href, awaitLatePop)
+      return
+    }
+    if (primaryTraversal?.phase === 'late') {
+      const href = primaryTraversal.href
+      clearPrimaryTimer()
       primaryTraversal = null
-      remember(readBrowserHref(), readLineage(window.history.state))
+      if (getHref() === href) {
+        remember(readBrowserHref(), readLineage(window.history.state))
+        return
+      }
+      replaceEntry(href, null)
+      discardForwardEntries(href)
+      notify('programmatic')
       return
     }
     if (primaryTraversal?.phase === 'traverse') {
       const href = primaryTraversal.href
+      clearPrimaryTimer()
       primaryTraversal = null
       replaceEntry(href, null)
       discardForwardEntries(href)
@@ -169,6 +236,9 @@ export function createBrowserHistory(): AppHistory {
       return
     }
 
+    clearPrimaryTimer()
+    primaryTraversal = null
+
     if (intent === 'local') {
       replaceEntry(href, getLineage())
       notify('programmatic')
@@ -189,8 +259,21 @@ export function createBrowserHistory(): AppHistory {
         notify('programmatic')
         return
       }
+      const hrefBefore = getHref()
       primaryTraversal = { href, phase: 'traverse' }
       window.history.go(-depth)
+      armPrimaryTimer(PRIMARY_TRAVERSAL_WAIT_MS, () => {
+        if (primaryTraversal?.phase !== 'traverse' || primaryTraversal.href !== href) {
+          return
+        }
+        if (getHref() !== hrefBefore) {
+          return
+        }
+        primaryTraversal = { href, phase: 'late' }
+        replaceEntry(href, null)
+        discardForwardEntries(href)
+        notify('programmatic')
+      })
       return
     }
 

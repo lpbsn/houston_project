@@ -112,6 +112,7 @@ describe('createBrowserHistory', () => {
     }
     unsubscribers.length = 0
     vi.useRealTimers()
+    vi.restoreAllMocks()
     resetNativeOverlayDismissForTests()
     window.history.replaceState(null, '', '/')
   })
@@ -227,23 +228,11 @@ describe('createBrowserHistory', () => {
     history.navigate('/signals/sig-1')
     seen.length = 0
 
-    const originalGo = window.history.go.bind(window.history)
-    let release: (() => void) | null = null
-    const go = vi.spyOn(window.history, 'go').mockImplementation((delta) => {
-      release = () => {
-        go.mockRestore()
-        originalGo(delta)
-      }
-    })
-
     history.navigate('/chat', { intent: 'primary' })
-    flushTraversal()
-
     expect(history.getHref()).toBe('/signals/sig-1')
     expect(seen).toEqual([])
-    expect(release).not.toBeNull()
-    release?.()
-    flushTraversal()
+
+    vi.advanceTimersByTime(10)
 
     expect(history.getHref()).toBe('/chat')
     expect(history.getNavigationCause()).toBe('programmatic')
@@ -255,6 +244,43 @@ describe('createBrowserHistory', () => {
     flushTraversal()
     expect(history.getHref()).toBe('/chat')
     expect(seen.filter((href) => href === '/signals' || href === '/signals/sig-1')).toEqual([])
+  })
+
+  it('settles the primary destination when go() never emits popstate', () => {
+    vi.useFakeTimers()
+    window.history.replaceState(null, '', '/signals')
+    const history = createBrowserHistory()
+    const seen: string[] = []
+    unsubscribers.push(
+      history.subscribe(() => {
+        seen.push(`${history.getNavigationCause()}:${history.getHref()}`)
+      }),
+    )
+    history.navigate('/signals/sig-1')
+    seen.length = 0
+
+    const originalGo = window.history.go.bind(window.history)
+    let skippedTraverse = false
+    vi.spyOn(window.history, 'go').mockImplementation((delta) => {
+      if (!skippedTraverse) {
+        skippedTraverse = true
+        return
+      }
+      originalGo(delta)
+    })
+
+    history.navigate('/chat', { intent: 'primary' })
+    expect(history.getHref()).toBe('/signals/sig-1')
+    flushTraversal()
+
+    expect(history.getHref()).toBe('/chat')
+    expect(history.getNavigationCause()).toBe('programmatic')
+    expect(seen).toEqual(['programmatic:/chat'])
+
+    window.history.pushState(null, '', '/elsewhere')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+    expect(history.getHref()).toBe('/elsewhere')
+    expect(history.getNavigationCause()).toBe('pop')
   })
 
   it('keeps browser back on the current entry while an overlay consumes it', () => {
