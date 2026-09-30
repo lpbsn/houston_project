@@ -54,6 +54,16 @@ export type SignalFeedLoadedGroup = {
   items: SignalFeedItem[]
 }
 
+export function retainedTerminalSignalFeedItems(
+  items: SignalFeedItem[],
+  selection: SignalFeedStatusSelection,
+): SignalFeedItem[] {
+  if (selection !== 'all') {
+    return []
+  }
+  return items.filter((item) => item.status === 'resolved' || item.status === 'canceled')
+}
+
 /**
  * Non-collapsible separators for Tout. A group exists only when that status
  * is actually present in the loaded list page.

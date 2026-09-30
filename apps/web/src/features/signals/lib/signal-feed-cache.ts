@@ -52,6 +52,7 @@ export type SignalFeedOptimisticSnapshot = {
 const SIGNAL_FEED_VIEW_MODES: SignalViewMode[] = ['personal', 'general']
 const PINNABLE_STATUSES = new Set(['open', 'interesting'])
 const LIST_STATUSES = new Set(['open', 'in_progress', 'interesting'])
+const RETAINED_TERMINAL_STATUSES = new Set(['resolved', 'canceled'])
 const STATUS_RANK: Record<string, number> = {
   open: 0,
   in_progress: 1,
@@ -140,11 +141,16 @@ function listIncludes(
   item: Pick<SignalFeedItem, 'status' | 'is_pinned'>,
   selection: SignalFeedStatusSelection,
 ): boolean {
-  if (!isListStatus(item.status)) {
+  const retainedTerminal =
+    selection === 'all' && RETAINED_TERMINAL_STATUSES.has(item.status)
+  if (!isListStatus(item.status) && !retainedTerminal) {
     return false
   }
   if (item.is_pinned && isPinnableStatus(item.status)) {
     return false
+  }
+  if (retainedTerminal) {
+    return true
   }
   return selection === 'all' || item.status === selection
 }

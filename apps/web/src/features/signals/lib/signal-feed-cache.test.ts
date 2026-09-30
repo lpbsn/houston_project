@@ -4,7 +4,7 @@ import { hashKey } from '@tanstack/react-query'
 import { createTestQueryClient } from '@/test-utils'
 
 import { signalsQueryKeys } from '../api'
-import { EMPTY_SIGNAL_FEED_FILTERS } from './signal-feed-filters'
+import { EMPTY_SIGNAL_FEED_FILTERS, signalFeedFiltersForStatus } from './signal-feed-filters'
 import type { SignalDetail, SignalFeedItem, SignalFeedResponse } from '../types'
 import {
   appendSignalFeedPage,
@@ -218,7 +218,7 @@ describe('patchSignalInActiveFeedCache', () => {
     expect(next.counts?.pinned).toBe(2)
   })
 
-  it('removes a resolved signal from both collections', () => {
+  it('keeps a resolved signal in the unfiltered list and clears its pin', () => {
     const queryClient = createTestQueryClient()
     const queryKey = signalsQueryKeys.feed(EST, 'personal', EMPTY_SIGNAL_FEED_FILTERS)
     queryClient.setQueryData(queryKey, signalFeedCacheFromFirstPage(buildFeed()))
@@ -233,9 +233,30 @@ describe('patchSignalInActiveFeedCache', () => {
 
     const cache = queryClient.getQueryData<SignalFeedCacheState>(queryKey)
     const data = cache ? readSignalFeedCache(cache) : undefined
-    expect(data?.items).toEqual([])
+    expect(data?.items.map((item) => item.id)).toEqual([SIGNAL_ID])
+    expect(data?.items[0]?.status).toBe('resolved')
     expect(data?.pins).toEqual([])
     expect(data?.counts?.open).toBe(0)
+  })
+
+  it('drops a resolved signal from a status-filtered list', () => {
+    const queryClient = createTestQueryClient()
+    const filters = signalFeedFiltersForStatus(EMPTY_SIGNAL_FEED_FILTERS, 'open')
+    const queryKey = signalsQueryKeys.feed(EST, 'personal', filters)
+    queryClient.setQueryData(queryKey, signalFeedCacheFromFirstPage(buildFeed()))
+
+    patchSignalInActiveFeedCache(queryClient, {
+      establishmentId: EST,
+      viewMode: 'personal',
+      filters,
+      signalId: SIGNAL_ID,
+      patch: { status: 'resolved', is_pinned: false },
+    })
+
+    const cache = queryClient.getQueryData<SignalFeedCacheState>(queryKey)
+    const data = cache ? readSignalFeedCache(cache) : undefined
+    expect(data?.items).toEqual([])
+    expect(data?.pins).toEqual([])
   })
 
   it('keeps the global category order after an optimistic status transition', () => {

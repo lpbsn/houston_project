@@ -204,7 +204,7 @@ def test_feed_section_counts_partition_pinned_and_overdue(
         for item in body["items"]
     }
     assert by_id[str(pending.id)]["marked_done_by_display_name"]
-    assert str(done.id) not in by_id
+    assert by_id[str(done.id)]["status"] == EXECUTION_STATUS_DONE
     assert body["pins"][0]["action_plan_execution"]["id"] == str(active.id)
     assert overdue.id  # used for overdue count
 

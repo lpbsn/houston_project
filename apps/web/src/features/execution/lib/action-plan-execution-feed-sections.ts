@@ -45,6 +45,16 @@ export const EXECUTION_FEED_CATEGORY_LABELS: Record<ActionPlanExecutionFeedCateg
   in_progress: 'En cours',
 }
 
+export function retainedTerminalExecutionItems(
+  items: ActionPlanExecutionFeedItem[],
+  category: ActionPlanExecutionFeedCategory = 'all',
+): ActionPlanExecutionFeedItem[] {
+  if (category !== 'all') {
+    return []
+  }
+  return items.filter((item) => item.status === 'done' || item.status === 'canceled')
+}
+
 export function getActionPlanExecutionFeedSection(
   item: ActionPlanExecutionFeedItem,
 ): ActionPlanExecutionFeedSectionKey | null {

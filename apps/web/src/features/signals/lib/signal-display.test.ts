@@ -10,6 +10,7 @@ import {
   getSignalCardLeftAccentColor,
   getSignalStatusBadgeVariant,
   groupLoadedSignalFeedItems,
+  retainedTerminalSignalFeedItems,
   PINNED_SIGNAL_CARD_CLASS,
   SIGNAL_CARD_LEFT_ACCENT_COLOR,
 } from './signal-display'
@@ -63,6 +64,17 @@ describe('groupLoadedSignalFeedItems', () => {
     )
 
     expect(groups?.map((group) => group.status)).toEqual(['interesting'])
+  })
+
+  it('keeps resolved and canceled only in the unfiltered list', () => {
+    const resolved = item({ id: 'resolved', status: 'resolved' })
+    const canceled = item({ id: 'canceled', status: 'canceled' })
+    const open = item({ id: 'open', status: 'open' })
+
+    expect(
+      retainedTerminalSignalFeedItems([open, resolved, canceled], 'all').map((entry) => entry.id),
+    ).toEqual(['resolved', 'canceled'])
+    expect(retainedTerminalSignalFeedItems([resolved], 'open')).toEqual([])
   })
 
   it('returns no separators for an exclusive status', () => {

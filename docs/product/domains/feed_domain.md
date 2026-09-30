@@ -1,7 +1,7 @@
 # Feed Domain
 
 Status: authoritative
-Last reviewed: 2026-09-29
+Last reviewed: 2026-09-30
 Implementation status: operational Signal and Action Plan Execution feeds, pins, bounded reading, and History live. The Feed contracts & pagination chantier (Lots 0–7) and its final hardening (PR1–PR5D) are closed. Measured PR5 query rewrites were not applied.
 
 ## 1. Purpose
@@ -28,9 +28,9 @@ L pages default to 25 and accept at most 50. `has_more` uses `limit + 1`, never 
 
 ## 4. Signal Feed
 
-Operational statuses are `open`, `in_progress`, and `interesting`; `resolved` and `canceled` leave the feed immediately and remain accessible through History and authorized detail.
+Operational statuses are `open`, `in_progress`, and `interesting`. A resolved signal also stays in L until `resolved_at + 10 days`, and a canceled signal until `canceled_at + 48 hours`. At that instant, and when the canonical timestamp is null, the row leaves the operational feed. History and authorized detail stay available throughout. Status selections other than `all` still exclude these rows. They are not pinnable.
 
-Status selection is `all`, `open`, `in_progress`, or `interesting`. L is one global cursor collection, not independently paginated sections. Under `all`, ordering is `open` → `in_progress` → `interesting`, then `last_activity_at DESC`, `created_at DESC`, `id DESC`. Counts for the three statuses describe L and ignore the selected status while retaining the other active filters; `pinned` describes filtered P.
+Status selection is `all`, `open`, `in_progress`, or `interesting`. L is one global cursor collection, not independently paginated sections. Under `all`, ordering is `open` → `in_progress` → `interesting`, then retained terminals, then `last_activity_at DESC`, `created_at DESC`, `id DESC`. Counts for the three statuses describe unpinned operational rows and ignore the selected status while retaining the other active filters; `pinned` describes filtered P. Retained terminals are not added to those counts.
 
 Signal P is collective:
 
@@ -52,7 +52,7 @@ Signal Ma vue / générale and command rules: [`signal_domain.md`](signal_domain
 
 Mention grants read + thread participation (`action_plan_execution_readable_to_membership`), not operational commands.
 
-L contains only operational `pending_validation` and `in_progress` executions. Selection is `all`, `pending_validation`, `overdue`, or `in_progress`. `pending_validation` takes priority; overdue means `in_progress` with `end_at < as_of`; the remaining in-progress items are split between dated and undated ordering.
+L contains operational `pending_validation` and `in_progress` executions, plus `done` executions until `validated_at + 10 days` (or `marked_done_at + 10 days` when `done` was reached without validation), and `canceled` executions until `canceled_at + 48 hours`. At that instant, and when the canonical timestamp is null, the row leaves L. `pending_validation` is not terminal. Selections other than `all` still exclude retained terminals. The calendar does not include them. Selection is `all`, `pending_validation`, `overdue`, or `in_progress`. `pending_validation` takes priority; overdue means `in_progress` with `end_at < as_of`; the remaining in-progress items are split between dated and undated ordering. Retained terminals follow those operational ranks.
 
 Ordering is:
 
@@ -72,7 +72,7 @@ Signal, Execution, and History cursors are opaque versioned server tokens. They 
 
 Operational feeds auto-load near the end with one continuation in flight. Empty-plus-`has_more` or a non-advancing cursor stalls locally and exposes retry instead of looping. Mobile web and Capacitor support pull-to-refresh at the top. Desktop Execution feeds and establishment Signal feeds expose an accessible refresh button. Desktop Signal Cross currently has no always-visible refresh button; it can refresh from the updates banner when present or from retry controls after failure. Refresh keeps scope/filter, starts a new generation at the top, and replaces P, L, counts, summaries, and ordering. A failed refresh preserves displayed data.
 
-Realtime carries invalidation hints, not feed state. While the user reads away from the top, reorder-only changes are deferred behind “Mises à jour disponibles”. Items known to have become terminal are removed from the hydrated collection immediately; authorized refetch remains the source of truth. Reconnect force-invalidates establishment and Cross feeds plus upcoming execution queries.
+Realtime carries invalidation hints, not feed state. While the user reads away from the top, reorder-only changes are deferred behind “Mises à jour disponibles”. A terminal transition does not remove the hydrated row; the next authorized refetch applies the retention window. Reconnect force-invalidates establishment and Cross feeds plus upcoming execution queries.
 
 Operational feed memory is bounded by [`feed-reading-window.ts`](../../../apps/web/src/lib/feed-reading-window.ts): retained page 1, at most two focused continuation slots, one replaceable cursor behind, and ids only for hydrated slots. Return-from-detail state is O(1) (anchor, neighbor, resume cursor, authorization fingerprint). Traversal depth is not capped: evicted regions are refetched on demand.
 

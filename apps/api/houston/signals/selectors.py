@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Literal
 
 from django.db.models import (
@@ -14,6 +15,7 @@ from django.db.models import (
     Subquery,
     Value,
 )
+from django.utils import timezone
 
 from houston.establishments.membership_scope import build_signal_feed_scope_q_v2
 from houston.establishments.models import EstablishmentMembership
@@ -23,6 +25,8 @@ from houston.signals.constants import (
     FEED_SIGNAL_STATUSES,
     OPERATIONAL_SIGNAL_FEED_STATUSES,
     PINNABLE_SIGNAL_STATUSES,
+    SIGNAL_CANCELED_FEED_RETENTION,
+    SIGNAL_RESOLVED_FEED_RETENTION,
 )
 from houston.signals.feed_cursor import operational_status_rank_case
 from houston.signals.feed_filters import (
@@ -222,17 +226,39 @@ def signal_read_visibility_q(
     return visible & scope_q
 
 
+def retained_terminal_signal_q(*, now: datetime) -> Q:
+    """Resolved and canceled rows still inside the operational retention window.
+
+    The boundary is exclusive. A null canonical timestamp does not qualify.
+    """
+    return Q(
+        status=Signal.Status.RESOLVED,
+        resolved_at__gt=now - SIGNAL_RESOLVED_FEED_RETENTION,
+    ) | Q(
+        status=Signal.Status.CANCELED,
+        canceled_at__gt=now - SIGNAL_CANCELED_FEED_RETENTION,
+    )
+
+
 def signal_feed_visibility_q(
     *,
     membership: EstablishmentMembership,
     view_mode: ViewMode,
+    now: datetime | None = None,
 ) -> Q:
     """Rows this membership may see in the operational feed. No status selection."""
-    return signal_read_visibility_q(
+    current = timezone.now() if now is None else now
+    operational = signal_read_visibility_q(
         membership=membership,
         view_mode=view_mode,
         statuses=OPERATIONAL_SIGNAL_FEED_STATUSES,
     )
+    retained = signal_read_visibility_q(
+        membership=membership,
+        view_mode=view_mode,
+        statuses=frozenset({Signal.Status.RESOLVED, Signal.Status.CANCELED}),
+    ) & retained_terminal_signal_q(now=current)
+    return operational | retained
 
 
 def _operational_signal_feed_queryset(*, visibility: Q) -> QuerySet[Signal]:
@@ -249,9 +275,14 @@ def signal_feed_queryset(
     membership: EstablishmentMembership,
     view_mode: ViewMode,
     filters: SignalFeedFilters | None = None,
+    now: datetime | None = None,
 ) -> QuerySet[Signal]:
     queryset = _operational_signal_feed_queryset(
-        visibility=signal_feed_visibility_q(membership=membership, view_mode=view_mode),
+        visibility=signal_feed_visibility_q(
+            membership=membership,
+            view_mode=view_mode,
+            now=now,
+        ),
     )
     queryset = annotate_has_eligible_resolution_reviewers(
         queryset,

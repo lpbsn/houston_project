@@ -22,9 +22,13 @@ from houston.action_plans.constants import (
     CONTRIBUTION_STATUS_DONE,
     CONTRIBUTION_STATUS_IN_PROGRESS,
     EXECUTION_CALENDAR_CURSOR_STATUSES,
+    EXECUTION_CANCELED_FEED_RETENTION,
+    EXECUTION_STATUS_CANCELED,
+    EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
     EXECUTION_STATUS_PENDING_VALIDATION,
     EXECUTION_STATUS_SCHEDULED,
+    EXECUTION_VALIDATED_FEED_RETENTION,
     OPERATIONAL_EXECUTION_FEED_STATUSES,
     TERMINAL_TASK_STATUSES,
     ExecutionFeedCategory,
@@ -626,18 +630,43 @@ def scheduled_executions_cross_summary(
     return count, (execution_id, start_at, title)
 
 
+def retained_terminal_execution_q(*, now: datetime) -> Q:
+    """Done and canceled rows still inside the operational retention window.
+
+    Done uses validated_at when validation set it, otherwise marked_done_at for
+    a done execution that did not require validation. The boundary is exclusive.
+    A null canonical timestamp does not qualify. pending_validation is not terminal.
+    """
+    done_after = now - EXECUTION_VALIDATED_FEED_RETENTION
+    return (
+        Q(status=EXECUTION_STATUS_DONE, validated_at__gt=done_after)
+        | Q(
+            status=EXECUTION_STATUS_DONE,
+            validated_at__isnull=True,
+            requires_validation=False,
+            marked_done_at__gt=done_after,
+        )
+        | Q(
+            status=EXECUTION_STATUS_CANCELED,
+            canceled_at__gt=now - EXECUTION_CANCELED_FEED_RETENTION,
+        )
+    )
+
+
 def action_plan_execution_feed_queryset(
     *,
     membership: EstablishmentMembership,
     view_mode: ExecutionFeedViewMode,
+    now: datetime | None = None,
 ) -> QuerySet[ActionPlanExecution]:
-    now = timezone.now()
+    current = timezone.now() if now is None else now
+    visibility = _execution_feed_visibility_q(membership=membership, view_mode=view_mode)
+    operational = Q(status__in=OPERATIONAL_EXECUTION_FEED_STATUSES) & (
+        Q(visible_from__isnull=True) | Q(visible_from__lte=current)
+    )
     return (
-        ActionPlanExecution.objects.filter(
-            _execution_feed_visibility_q(membership=membership, view_mode=view_mode),
-            status__in=OPERATIONAL_EXECUTION_FEED_STATUSES,
-        )
-        .filter(Q(visible_from__isnull=True) | Q(visible_from__lte=now))
+        ActionPlanExecution.objects.filter(visibility)
+        .filter(operational | retained_terminal_execution_q(now=current))
         .distinct()
     )
 

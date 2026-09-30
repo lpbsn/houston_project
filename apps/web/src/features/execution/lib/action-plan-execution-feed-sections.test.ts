@@ -5,6 +5,7 @@ import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 import {
   getActionPlanExecutionFeedSection,
   groupActionPlanExecutionsBySection,
+  retainedTerminalExecutionItems,
 } from './action-plan-execution-feed-sections'
 
 function buildFeedItem(
@@ -85,7 +86,7 @@ describe('getActionPlanExecutionFeedSection', () => {
     ).toBe('pending_validation')
   })
 
-  it('ignores terminal and scheduled statuses in item grouping', () => {
+  it('keeps scheduled out of the operational sections', () => {
     expect(getActionPlanExecutionFeedSection(buildFeedItem({ id: '4', status: 'done' }))).toBeNull()
     expect(
       getActionPlanExecutionFeedSection(buildFeedItem({ id: '5', status: 'canceled' })),
@@ -93,6 +94,18 @@ describe('getActionPlanExecutionFeedSection', () => {
     expect(
       getActionPlanExecutionFeedSection(buildFeedItem({ id: 's', status: 'scheduled' })),
     ).toBeNull()
+  })
+
+  it('keeps done and canceled in the unfiltered list and drops them from a category', () => {
+    const done = buildFeedItem({ id: 'done', status: 'done' })
+    const canceled = buildFeedItem({ id: 'canceled', status: 'canceled' })
+    const active = buildFeedItem({ id: 'active', status: 'in_progress' })
+
+    expect(retainedTerminalExecutionItems([done, active, canceled]).map((item) => item.id)).toEqual([
+      'done',
+      'canceled',
+    ])
+    expect(retainedTerminalExecutionItems([done, canceled], 'in_progress')).toEqual([])
   })
 
   it('returns null for unknown status', () => {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import time as dt_time
+from datetime import timedelta
 from typing import Literal
 
 ExecutionFeedViewMode = Literal["personal", "general"]
@@ -83,13 +84,17 @@ SIGNAL_BLOCKING_EXECUTION_STATUSES = frozenset(
     }
 )
 
-# Cursor-paginated operational feed items exclude scheduled and terminal history.
+# Cursor-paginated operational statuses. Done and canceled stay in the list feed
+# only while their canonical terminal timestamp is inside the retention window.
+# The calendar keeps this set and does not apply that window.
 OPERATIONAL_EXECUTION_FEED_STATUSES = frozenset(
     {
         EXECUTION_STATUS_IN_PROGRESS,
         EXECUTION_STATUS_PENDING_VALIDATION,
     }
 )
+EXECUTION_CANCELED_FEED_RETENTION = timedelta(hours=48)
+EXECUTION_VALIDATED_FEED_RETENTION = timedelta(days=10)
 
 # Calendar grid + unplanned have their own status contract, currently operational statuses.
 EXECUTION_CALENDAR_CURSOR_STATUSES = frozenset(

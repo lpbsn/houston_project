@@ -92,6 +92,7 @@ import {
   EXECUTION_FEED_PINNED_SECTION_KEY,
   getActionPlanExecutionFeedSection,
   groupActionPlanExecutionsBySection,
+  retainedTerminalExecutionItems,
   type ActionPlanExecutionFeedSectionKey,
 } from '../lib/action-plan-execution-feed-sections'
 import { formatPlanifieesProchaineLabel } from '../lib/action-plan-execution-feed-card-display'
@@ -350,11 +351,13 @@ function ExecutionFeedPageContent({
   const isCrossPinsContinuationStalled =
     isCross && (crossPinsQuery.data?.window.stalled === true || crossPinsQuery.continuationError != null)
   const planGroups = groupActionPlanExecutionsBySection(planItems, sectionCounts, category)
+  const retainedTerminalItems = retainedTerminalExecutionItems(planItems, category)
   const hasPinnedSection =
     pinnedItems.length > 0 ||
     sectionCounts.pinned > 0 ||
     (isCross && crossPinsQuery.isError)
-  const hasVisibleSections = hasPinnedSection || planGroups.length > 0
+  const hasVisibleSections =
+    hasPinnedSection || planGroups.length > 0 || retainedTerminalItems.length > 0
 
   const sectionKeys: string[] = []
   if (hasPinnedSection) {
@@ -1062,6 +1065,15 @@ function ExecutionFeedPageContent({
                         </section>
                       ))}
                     </div>
+                    {retainedTerminalItems.length > 0 ? (
+                      <div
+                        className={
+                          isDesktopWeb ? 'flex flex-col gap-1' : 'flex flex-col gap-3'
+                        }
+                      >
+                        {retainedTerminalItems.map((item) => renderFeedItem(item, 'plan'))}
+                      </div>
+                    ) : null}
                   </>
                 ) : null}
 
