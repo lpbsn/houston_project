@@ -242,11 +242,6 @@ def test_start_platform_onboarding_blank_name_is_400():
             409,
         ),
         (
-            DomainConflictError("dup t", code="duplicate_transversal_catalog_instance"),
-            "duplicate_transversal_catalog_instance",
-            409,
-        ),
-        (
             DomainConflictError("id", code="business_unit_identity_conflict"),
             "business_unit_identity_conflict",
             409,

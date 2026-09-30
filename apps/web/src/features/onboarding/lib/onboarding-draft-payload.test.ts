@@ -88,8 +88,76 @@ describe('structure and complete gates', () => {
     expect(canContinueFromStructureStep(emptyOnboardingDraftPayload()).ok).toBe(false)
     const almost = readyStructure()
     almost.activity_subjects = []
-    expect(canContinueFromStructureStep(almost).ok).toBe(false)
+    expect(canContinueFromStructureStep(almost).errors.map((error) => error.code)).toContain(
+      'business_unit_without_subjects',
+    )
     expect(canContinueFromStructureStep(readyStructure()).ok).toBe(true)
+  })
+
+  it('allows two poles on the same catalog key and reports empty catalog or name', () => {
+    const payload = readyStructure()
+    const secondKey = '44444444-4444-4444-8444-444444444444'
+    payload.business_units.push({
+      client_key: secondKey,
+      catalog_key: 'evenements_privatisations',
+      specific_name: 'Séminaire',
+      instance_description: '',
+    })
+    payload.business_units[0] = {
+      ...payload.business_units[0]!,
+      catalog_key: 'evenements_privatisations',
+      specific_name: 'Event',
+    }
+    payload.activity_subjects.push({
+      client_key: '55555555-5555-4555-8555-555555555555',
+      business_unit_client_key: secondKey,
+      catalog_key: 'evenements_privatisations__facturation',
+      label: '',
+      description: '',
+    })
+    expect(canContinueFromStructureStep(payload).ok).toBe(true)
+
+    payload.business_units[1]!.catalog_key = ''
+    payload.business_units[1]!.specific_name = ''
+    payload.establishment.description = 'court'
+    const codes = canContinueFromStructureStep(payload).errors.map((error) => error.code)
+    expect(codes).toContain('missing_catalog_key')
+    expect(codes).toContain('missing_specific_name')
+    expect(codes).toContain('invalid_activity_description_length')
+  })
+
+  it('ignores an empty member row and reports an incomplete started member', () => {
+    const payload = readyStructure()
+    payload.team.director = {
+      email: '',
+      first_name: 'Ada',
+      last_name: 'Lovelace',
+    }
+    payload.team.members = [
+      {
+        email: '',
+        first_name: '',
+        last_name: '',
+        role: 'manager',
+        business_unit_client_keys: [],
+      },
+      {
+        email: 'm@example.com',
+        first_name: 'Bob',
+        last_name: '',
+        role: 'manager',
+        business_unit_client_keys: [],
+      },
+    ]
+    const errors = canCompleteOnboardingDraft(payload).errors
+    expect(errors.some((error) => error.code === 'missing_email' && error.key === 'director')).toBe(
+      true,
+    )
+    expect(errors.some((error) => error.code === 'missing_last_name' && error.key === '1')).toBe(true)
+    expect(errors.some((error) => error.code === 'missing_member_business_units' && error.key === '1')).toBe(
+      true,
+    )
+    expect(errors.some((error) => error.key === '0')).toBe(false)
   })
 
   it('requires director and valid started members to complete', () => {

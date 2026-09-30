@@ -1,6 +1,6 @@
 """Live OpenAI observation pipeline V6 *business* smoke — Lot 10, opt-in, not CI.
 
-Validates prompt v6_2 quality signals: dual context present, no author scope in LLM
+Validates prompt v6_3 quality signals: dual context present, no author scope in LLM
 input, schema/prompt versions, segmentation 0/1/N capability, informational fields,
 nullable routing keys, latency/tokens. Archives results under
 .artifacts/pipeline-v6-smoke/.
@@ -61,7 +61,7 @@ def _skip_if_smoke_not_enabled() -> None:
 def test_live_openai_v6_business_smoke_prompt_context_and_archive():
     _skip_if_smoke_not_enabled()
 
-    assert AI_OBSERVATION_PIPELINE_PROMPT_VERSION == "ai_observation_pipeline_v6_2"
+    assert AI_OBSERVATION_PIPELINE_PROMPT_VERSION == "ai_observation_pipeline_v6_3"
     assert AI_OBSERVATION_PIPELINE_SCHEMA_VERSION == "ai_observation_pipeline_v6"
 
     membership = build_membership()

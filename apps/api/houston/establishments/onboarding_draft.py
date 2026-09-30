@@ -76,6 +76,23 @@ def empty_onboarding_draft_payload() -> dict:
     }
 
 
+def is_blank_onboarding_member(member: dict) -> bool:
+    """Identity and pole assignment are empty. Role is ignored, including the manager default."""
+    email = member.get("email") or ""
+    first_name = member.get("first_name") or ""
+    last_name = member.get("last_name") or ""
+    keys = member.get("business_unit_client_keys") or []
+    if (
+        not isinstance(email, str)
+        or not isinstance(first_name, str)
+        or not isinstance(last_name, str)
+    ):
+        return False
+    if not isinstance(keys, list):
+        return False
+    return not email.strip() and not first_name.strip() and not last_name.strip() and len(keys) == 0
+
+
 def draft_error(
     code: str,
     *,
@@ -552,6 +569,27 @@ def _normalize_team_section(
         seen_emails.add(normalized_director["email"])
 
     for raw in members:
+        if isinstance(raw, dict) and is_blank_onboarding_member(raw):
+            for key in raw:
+                if key not in DRAFT_MEMBER_KEYS:
+                    shape_errors.append(
+                        draft_error("unknown_field", section="team", field=key)
+                    )
+            role = raw.get("role", "")
+            if isinstance(role, str) and role.strip() in DRAFT_MEMBER_ROLES:
+                normalized_role = role.strip()
+            else:
+                normalized_role = EstablishmentMembership.Role.MANAGER
+            normalized_members.append(
+                {
+                    "email": "",
+                    "first_name": "",
+                    "last_name": "",
+                    "role": normalized_role,
+                    "business_unit_client_keys": [],
+                }
+            )
+            continue
         member = _normalize_member(
             raw,
             business_unit_client_keys=business_unit_client_keys,
@@ -775,9 +813,6 @@ def _apply_catalog_and_final_rules(
     catalog_bu_keys = set(
         CatalogBusinessUnit.objects.filter(active=True).values_list("key", flat=True)
     )
-    catalog_unit_types = dict(
-        CatalogBusinessUnit.objects.filter(active=True).values_list("key", "unit_type")
-    )
     catalog_subject_keys = set(
         CatalogActivitySubject.objects.filter(active=True).values_list("key", flat=True)
     )
@@ -788,7 +823,6 @@ def _apply_catalog_and_final_rules(
         )
     )
 
-    transversal_seen: set[str] = set()
     for item in business_units:
         catalog_key = item["catalog_key"]
         if catalog_key and catalog_key not in catalog_bu_keys:
@@ -800,19 +834,6 @@ def _apply_catalog_and_final_rules(
                     key=item["client_key"],
                 )
             )
-            continue
-        unit_type = catalog_unit_types.get(catalog_key)
-        if unit_type == CatalogBusinessUnit.DefaultUnitType.TRANSVERSAL:
-            if catalog_key in transversal_seen:
-                errors.append(
-                    draft_error(
-                        "duplicate_transversal_business_unit",
-                        section="business_units",
-                        field="catalog_key",
-                        key=item["client_key"],
-                    )
-                )
-            transversal_seen.add(catalog_key)
 
     for subject in activity_subjects:
         catalog_key = subject["catalog_key"]

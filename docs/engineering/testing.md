@@ -128,7 +128,7 @@ Dedicated throttle tests (`test_auth_throttling_api.py`, invitation accept over-
 
 - Auth / bootstrap / CSRF / refresh rotation
 - RBAC and cross-establishment isolation
-- Signal lifecycle (pipeline golden G01–G11 apply-side against runtime schema/prompt `ai_observation_pipeline_v6` / `v6_2` + V6 acceptance corpus S15 / truth tables + cancel/resolve)
+- Signal lifecycle (pipeline golden G01–G11 apply-side against runtime schema/prompt `ai_observation_pipeline_v6` / `v6_3` + V6 acceptance corpus S15 / truth tables + cancel/resolve)
 - Action Plan lifecycle (catalog, planning-submit, executions, schedules, service + API transitions + permissions)
 - Chat WS ticket auth and message delivery
 - Upload validators

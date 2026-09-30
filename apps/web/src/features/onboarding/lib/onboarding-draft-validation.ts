@@ -2,14 +2,20 @@ import {
   ACTIVITY_DESCRIPTION_MAX_LENGTH,
   ACTIVITY_DESCRIPTION_MIN_LENGTH,
   isMemberRowEmpty,
-  type OnboardingDraftMember,
   type OnboardingDraftPayload,
   type OnboardingDraftPerson,
 } from './onboarding-draft-payload'
 
+export type LocalDraftError = {
+  code: string
+  section: string
+  field?: string
+  key?: string
+}
+
 export type StructureGateResult = {
   ok: boolean
-  reasons: string[]
+  errors: LocalDraftError[]
 }
 
 export function isEstablishmentNameValid(name: string): boolean {
@@ -37,75 +43,106 @@ export function subjectsForBusinessUnit(
 }
 
 export function canContinueFromStructureStep(payload: OnboardingDraftPayload): StructureGateResult {
-  const reasons: string[] = []
+  const errors: LocalDraftError[] = []
 
   if (!isEstablishmentNameValid(payload.establishment.name)) {
-    reasons.push('missing_establishment_name')
+    errors.push({
+      code: 'missing_establishment_name',
+      section: 'establishment',
+      field: 'name',
+    })
   }
   if (!isEstablishmentDescriptionValid(payload.establishment.description)) {
-    reasons.push('invalid_activity_description_length')
+    errors.push({
+      code: 'invalid_activity_description_length',
+      section: 'establishment',
+      field: 'description',
+    })
   }
   if (payload.business_units.length === 0) {
-    reasons.push('insufficient_business_units')
+    errors.push({
+      code: 'insufficient_business_units',
+      section: 'business_units',
+    })
   }
 
   for (const businessUnit of payload.business_units) {
-    if (!isBusinessUnitValid(businessUnit)) {
-      reasons.push('invalid_business_unit')
-      continue
+    if (businessUnit.catalog_key.trim().length === 0) {
+      errors.push({
+        code: 'missing_catalog_key',
+        section: 'business_units',
+        field: 'catalog_key',
+        key: businessUnit.client_key,
+      })
+    }
+    if (businessUnit.specific_name.trim().length === 0) {
+      errors.push({
+        code: 'missing_specific_name',
+        section: 'business_units',
+        field: 'specific_name',
+        key: businessUnit.client_key,
+      })
     }
     if (subjectsForBusinessUnit(payload, businessUnit.client_key).length === 0) {
-      reasons.push('business_unit_without_subjects')
+      errors.push({
+        code: 'business_unit_without_subjects',
+        section: 'business_units',
+        key: businessUnit.client_key,
+      })
     }
   }
 
-  return { ok: reasons.length === 0, reasons }
-}
-
-function isPersonFilled(person: OnboardingDraftPerson | null): boolean {
-  if (!person) {
-    return false
-  }
-  return (
-    person.email.trim().length > 0 &&
-    person.first_name.trim().length > 0 &&
-    person.last_name.trim().length > 0
-  )
-}
-
-function isStartedMemberValid(member: OnboardingDraftMember): boolean {
-  if (isMemberRowEmpty(member)) {
-    return true
-  }
-  return (
-    member.email.trim().length > 0 &&
-    member.first_name.trim().length > 0 &&
-    member.last_name.trim().length > 0 &&
-    (member.role === 'manager' || member.role === 'staff') &&
-    member.business_unit_client_keys.length > 0
-  )
+  return { ok: errors.length === 0, errors }
 }
 
 export type CompleteGateResult = {
   ok: boolean
-  reasons: string[]
+  errors: LocalDraftError[]
+}
+
+function personFieldErrors(
+  person: OnboardingDraftPerson | null,
+  key: string,
+): LocalDraftError[] {
+  const errors: LocalDraftError[] = []
+  if (!person || person.email.trim().length === 0) {
+    errors.push({ code: 'missing_email', section: 'team', field: 'email', key })
+  }
+  if (!person || person.first_name.trim().length === 0) {
+    errors.push({ code: 'missing_first_name', section: 'team', field: 'first_name', key })
+  }
+  if (!person || person.last_name.trim().length === 0) {
+    errors.push({ code: 'missing_last_name', section: 'team', field: 'last_name', key })
+  }
+  return errors
 }
 
 export function canCompleteOnboardingDraft(payload: OnboardingDraftPayload): CompleteGateResult {
   const structure = canContinueFromStructureStep(payload)
-  const reasons = [...structure.reasons]
+  const errors = [...structure.errors]
 
-  if (!isPersonFilled(payload.team.director)) {
-    reasons.push('missing_director')
-  }
+  errors.push(...personFieldErrors(payload.team.director, 'director'))
 
-  for (const member of payload.team.members) {
-    if (!isStartedMemberValid(member)) {
-      reasons.push('invalid_member')
+  payload.team.members.forEach((member, index) => {
+    if (isMemberRowEmpty(member)) {
+      return
     }
-  }
+    const key = String(index)
+    errors.push(...personFieldErrors(member, key))
+    if (member.role !== 'manager' && member.role !== 'staff') {
+      errors.push({ code: 'invalid_member_role', section: 'team', field: 'role', key })
+    }
+    if (member.business_unit_client_keys.length === 0) {
+      errors.push({
+        code: 'missing_member_business_units',
+        section: 'team',
+        field: 'business_unit_client_keys',
+        key,
+      })
+    }
+  })
 
-  return { ok: reasons.length === 0, reasons }
+  return { ok: errors.length === 0, errors }
 }
 
 export function pruneBusinessUnitFromTeam(

@@ -68,6 +68,7 @@ from houston.establishments.onboarding_draft import (
     DRAFT_VALIDATION_MODE_SOFT,
     OnboardingDraftValidationError,
     empty_onboarding_draft_payload,
+    is_blank_onboarding_member,
     validate_onboarding_draft_payload,
 )
 from houston.establishments.selectors import (
@@ -567,6 +568,8 @@ def complete_onboarding_session_core(
         )
 
     for member in normalized["team"]["members"]:
+        if is_blank_onboarding_member(member):
+            continue
         scopes = [
             MembershipScopeInput(
                 scope_type=MembershipScopeType.BUSINESS_UNIT,

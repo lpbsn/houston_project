@@ -77,29 +77,6 @@ def _validate_catalog_business_unit_active(
         )
 
 
-def _validate_transversal_uniqueness(
-    *,
-    establishment: Establishment,
-    catalog_business_unit: CatalogBusinessUnit,
-    exclude_business_unit_id=None,
-) -> None:
-    if catalog_business_unit.unit_type != CatalogBusinessUnit.DefaultUnitType.TRANSVERSAL:
-        return
-
-    siblings = BusinessUnit.objects.filter(
-        establishment=establishment,
-        catalog_business_unit=catalog_business_unit,
-        active=True,
-    )
-    if exclude_business_unit_id is not None:
-        siblings = siblings.exclude(id=exclude_business_unit_id)
-    if siblings.exists():
-        raise DomainConflictError(
-            "An active transversal business unit already exists.",
-            code="duplicate_transversal_catalog_instance",
-        )
-
-
 def _raise_business_unit_integrity_conflict(
     *,
     establishment: Establishment,
@@ -187,11 +164,6 @@ def _create_business_unit_core(
             "A business unit with this specific name already exists.",
             code="duplicate_specific_name",
         )
-
-    _validate_transversal_uniqueness(
-        establishment=locked_establishment,
-        catalog_business_unit=locked_catalog,
-    )
 
     business_unit_id = uuid.uuid4()
     normalized_description = instance_description.strip()
@@ -329,11 +301,6 @@ def reactivate_business_unit(
         catalog_business_unit_id=business_unit.catalog_business_unit_id
     )
     _validate_catalog_business_unit_active(catalog_business_unit)
-    _validate_transversal_uniqueness(
-        establishment=establishment,
-        catalog_business_unit=catalog_business_unit,
-        exclude_business_unit_id=business_unit.id,
-    )
 
     business_unit.active = True
     business_unit.save(update_fields=["active", "updated_at"])

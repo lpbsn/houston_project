@@ -22,8 +22,8 @@ from houston.signals.tests.conftest import create_observation
 from houston.testing.factories import build_membership
 
 
-def test_prompt_version_is_v6_2_schema_remains_v6():
-    assert AI_OBSERVATION_PIPELINE_PROMPT_VERSION == "ai_observation_pipeline_v6_2"
+def test_prompt_version_is_v6_3_schema_remains_v6():
+    assert AI_OBSERVATION_PIPELINE_PROMPT_VERSION == "ai_observation_pipeline_v6_3"
     assert AI_OBSERVATION_PIPELINE_SCHEMA_VERSION == "ai_observation_pipeline_v6"
     assert AI_OBSERVATION_PIPELINE_PROMPT_VERSION != AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
 
@@ -57,6 +57,7 @@ def test_system_prompt_is_french_and_covers_dual_context():
     assert "active_signals_context" not in prompt
     assert "establishment_taxonomy" not in prompt
     assert "PRIORITÉ TRANSVERSALE" in prompt
+    assert "Plusieurs instances peuvent partager le même catalog_key" in prompt
     assert "issue_focus" in prompt
     assert "affected_business_unit_routing_key" in prompt
     assert "responsible_business_unit_routing_key" in prompt
@@ -92,7 +93,7 @@ def test_build_pipeline_input_includes_prompt_version_not_system_text():
     payload = build_pipeline_input(observation=observation)
 
     assert payload["prompt_version"] == AI_OBSERVATION_PIPELINE_PROMPT_VERSION
-    assert payload["prompt_version"] == "ai_observation_pipeline_v6_2"
+    assert payload["prompt_version"] == "ai_observation_pipeline_v6_3"
     assert payload["schema_version"] == AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
     assert payload["validated_text"] == observation.raw_text
     assert "establishment_context" in payload

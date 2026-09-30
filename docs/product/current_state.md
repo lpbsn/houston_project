@@ -37,7 +37,7 @@ The execution surface is **Action Plan** only.
 | Platform control plane | Live | `houston.platform`, desktop `/platform`. Independent operator grant |
 | BusinessUnit / ActivitySubject taxonomy | Live | Identity: `specific_name` + internal `routing_key`; catalog FK required (`PROTECT`); public API omits `routing_key` |
 | Observations + media + transcription | Live | Celery pipeline |
-| AI observation → Signal | Live | Pipeline **v6** (schema `ai_observation_pipeline_v6`, prompt `ai_observation_pipeline_v6_2`); Fake (CI) / OpenAI (opt-in smoke) |
+| AI observation → Signal | Live | Pipeline **v6** (schema `ai_observation_pipeline_v6`, prompt `ai_observation_pipeline_v6_3`); Fake (CI) / OpenAI (opt-in smoke) |
 | Signal feed + lifecycle | Live | Global cursor pagination, collective pins (open/interesting), mark interesting, cancel, resolve, qualify merge absorb+delete. Feed contracts chantier and final hardening closed 2026-09-29 |
 | Action Plan catalog + executions + feed | Live | Operational P/L feed, personal pins, scheduled summary; [`domains/action_plan_domain.md`](domains/action_plan_domain.md). Same closure |
 | History | Live | `/general/history`; terminal Signals/executions, Paris civil periods, explicit establishment/Cross scope; [`domains/feed_domain.md`](domains/feed_domain.md) |

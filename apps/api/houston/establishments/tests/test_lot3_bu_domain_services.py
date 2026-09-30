@@ -158,23 +158,35 @@ def test_create_rejects_name_reserved_by_inactive_business_unit(imported_catalog
     assert BusinessUnit.objects.filter(establishment=establishment).count() == 1
 
 
-def test_create_rejects_duplicate_transversal_catalog_instance(imported_catalog):
+def test_create_allows_two_active_transversal_catalog_instances(imported_catalog):
     establishment = create_establishment()
     maintenance = _catalog("maintenance")
-    _create_business_unit_core(
+    first = create_runtime_business_unit(
         establishment=establishment,
         catalog_business_unit=maintenance,
         specific_name="Maintenance A",
     )
+    second = create_runtime_business_unit(
+        establishment=establishment,
+        catalog_business_unit=maintenance,
+        specific_name="Maintenance B",
+    )
 
-    with pytest.raises(DomainConflictError) as exc_info:
-        _create_business_unit_core(
-            establishment=establishment,
-            catalog_business_unit=maintenance,
-            specific_name="Maintenance B",
+    assert first.catalog_business_unit_id == second.catalog_business_unit_id == maintenance.id
+    assert first.active is True and second.active is True
+    assert first.routing_key != second.routing_key
+    first_subjects = set(
+        ActivitySubject.objects.filter(business_unit=first).values_list(
+            "routing_key", flat=True
         )
-
-    assert exc_info.value.code == "duplicate_transversal_catalog_instance"
+    )
+    second_subjects = set(
+        ActivitySubject.objects.filter(business_unit=second).values_list(
+            "routing_key", flat=True
+        )
+    )
+    assert first_subjects
+    assert first_subjects == second_subjects
 
 
 def test_create_rejects_inactive_catalog_business_unit(imported_catalog):
@@ -462,6 +474,37 @@ def test_reactivate_preserves_identity_subjects_and_membership_scopes(
         membership=membership,
         business_unit=business_unit,
     ).count() == 1
+
+
+def test_reactivate_allows_second_active_transversal_instance(imported_catalog):
+    establishment = create_establishment()
+    maintenance = _catalog("maintenance")
+    create_runtime_business_unit(
+        establishment=establishment,
+        catalog_business_unit=maintenance,
+        specific_name="Maintenance A",
+    )
+    inactive = create_runtime_business_unit(
+        establishment=establishment,
+        catalog_business_unit=maintenance,
+        specific_name="Maintenance B",
+    )
+    BusinessUnit.objects.filter(id=inactive.id).update(active=False)
+
+    reactivated = reactivate_business_unit(
+        establishment_id=establishment.id,
+        business_unit_id=inactive.id,
+    )
+
+    assert reactivated.active is True
+    assert (
+        BusinessUnit.objects.filter(
+            establishment=establishment,
+            catalog_business_unit=maintenance,
+            active=True,
+        ).count()
+        == 2
+    )
 
 
 def test_reactivate_not_found_wrong_establishment_and_already_active(imported_catalog):
