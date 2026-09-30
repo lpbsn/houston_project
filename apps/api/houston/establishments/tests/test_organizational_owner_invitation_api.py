@@ -579,7 +579,7 @@ def test_owner_invite_resumes_deactivated_anchor(api_client):
 
 @pytest.mark.parametrize(
     "user_status",
-    [User.Status.ACTIVE, User.Status.SUSPENDED, User.Status.ANONYMIZED],
+    [User.Status.SUSPENDED, User.Status.ANONYMIZED],
 )
 def test_owner_invite_rejects_non_pending_user(api_client, user_status):
     establishment = create_establishment(name=f"Reject {user_status}")
@@ -602,6 +602,38 @@ def test_owner_invite_rejects_non_pending_user(api_client, user_status):
 
     assert response.status_code == 409
     assert response.json()["code"] == "membership_invitation_user_exists"
+
+
+def test_owner_invite_attaches_existing_active_user(api_client):
+    establishment = create_establishment(name="Attach active owner")
+    actor = setup_full_coverage_actor(
+        establishments=[establishment],
+        username="attach_active_owner_actor",
+    )
+    existing = create_user(
+        username="existing_active_owner",
+        email="active-owner@example.com",
+        status=User.Status.ACTIVE,
+    )
+    existing.first_name = "Kept"
+    existing.last_name = "Name"
+    existing.save(update_fields=["first_name", "last_name", "updated_at"])
+
+    response = post_owner_invitation(
+        api_client,
+        establishment_id=establishment.id,
+        actor=actor,
+        payload=owner_invite_payload(email="active-owner@example.com"),
+    )
+
+    assert response.status_code == 201
+    existing.refresh_from_db()
+    assert existing.first_name == "Kept"
+    assert existing.last_name == "Name"
+    assert existing.status == User.Status.ACTIVE
+    membership = EstablishmentMembership.objects.get(user=existing, establishment=establishment)
+    assert membership.role == ROLE_OWNER
+    assert membership.status == EstablishmentMembership.Status.INVITED
 
 
 def test_owner_invite_actor_without_full_coverage_returns_invariant(api_client):
@@ -924,7 +956,9 @@ def test_accept_owner_revokes_other_pending_tokens(api_client):
     assert anchor_invitation.revoked_at is None
 
 
-def test_accept_owner_rejects_non_pending_user(api_client):
+def test_accept_active_owner_activates_membership_without_session(api_client):
+    from houston.accounts.models import UserSession
+
     organization = create_organization(name="Non Pending Accept Org")
     active_a = create_establishment(name="NPA A", organization=organization)
     actor = setup_full_coverage_actor(establishments=[active_a], username="npa_actor")
@@ -938,11 +972,19 @@ def test_accept_owner_rejects_non_pending_user(api_client):
     token = response.json()["invitation_token"]
     invitee = User.objects.get(email__iexact="npa-owner@example.com")
     invitee.status = User.Status.ACTIVE
-    invitee.save(update_fields=["status"])
+    invitee.save(update_fields=["status", "updated_at"])
+    password_hash = invitee.password
 
     accept_response = post_accept(APIClient(enforce_csrf_checks=True), token=token)
-    assert accept_response.status_code == 400
-    assert accept_response.json()["code"] == "invitation_invalid"
+    assert accept_response.status_code == 200
+    assert accept_response.json()["requires_login"] is True
+    assert "access_token" not in accept_response.json()
+    assert UserSession.objects.filter(user=invitee).count() == 0
+    invitee.refresh_from_db()
+    assert invitee.password == password_hash
+    assert invitee.status == User.Status.ACTIVE
+    membership = EstablishmentMembership.objects.get(user=invitee, establishment=active_a)
+    assert membership.status == EstablishmentMembership.Status.ACTIVE
 
 
 def test_accept_owner_invalid_when_organization_inactive(api_client):

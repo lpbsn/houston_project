@@ -463,3 +463,87 @@ def test_accept_invitation_common_password_returns_400_and_leaves_membership(api
     invitation_result.membership.refresh_from_db()
     assert invitation_result.membership.status == EstablishmentMembership.Status.INVITED
 
+
+def test_accept_active_user_activates_membership_without_session(api_client):
+    from houston.accounts.models import UserSession
+
+    owner = create_user(username="active_accept_owner")
+    session = create_onboarding_session(actor=owner)
+    invitation_result = invite_director_for_session(session=session, owner=owner)
+    csrf_token = ensure_csrf(api_client)
+    first = post_accept(
+        api_client,
+        csrf_token,
+        invitation_result.invitation_token,
+        {
+            "password": REGISTRATION_PASSWORD,
+            "password_confirmation": REGISTRATION_PASSWORD,
+        },
+    )
+    assert first.status_code == 201
+    user = invitation_result.membership.user
+    user.refresh_from_db()
+    password_hash = user.password
+    session_count = UserSession.objects.filter(user=user).count()
+
+    other_owner = create_user(username="active_accept_other_owner")
+    other_session = create_onboarding_session(actor=other_owner)
+    second = invite_director_during_onboarding_core(
+        session=other_session,
+        email=user.email,
+        first_name="Other",
+        last_name="Name",
+    )
+    preview = api_client.post(
+        "/api/v1/invitations/preview/",
+        {"token": second.invitation_token},
+        format="json",
+    )
+    assert preview.status_code == 200
+    assert preview.json()["requires_password"] is False
+
+    response = api_client.post(
+        "/api/v1/invitations/accept/",
+        {
+            "token": second.invitation_token,
+            "refresh_token_transport": "body",
+            "password": "IgnoredPass123!",
+            "password_confirmation": "IgnoredPass123!",
+        },
+        format="json",
+    )
+    assert response.status_code == 200
+    assert response.data["requires_login"] is True
+    assert "access_token" not in response.data
+    assert settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME not in response.cookies
+    assert UserSession.objects.filter(user=user).count() == session_count
+    user.refresh_from_db()
+    assert user.password == password_hash
+    assert user.first_name != "Other"
+    second.membership.refresh_from_db()
+    assert second.membership.status == EstablishmentMembership.Status.ACTIVE
+
+    third_owner = create_user(username="active_accept_third_owner")
+    third_session = create_onboarding_session(actor=third_owner)
+    third = invite_director_during_onboarding_core(
+        session=third_session,
+        email=user.email,
+        first_name="Third",
+        last_name="Name",
+    )
+    authenticated = api_client.post(
+        "/api/v1/invitations/accept/",
+        {
+            "token": third.invitation_token,
+            "refresh_token_transport": "body",
+        },
+        format="json",
+        HTTP_AUTHORIZATION=f"Bearer {first.data['access_token']}",
+    )
+    assert authenticated.status_code == 200
+    assert authenticated.data["requires_login"] is False
+    assert "access_token" not in authenticated.data
+    assert UserSession.objects.filter(user=user).count() == session_count
+    third.membership.refresh_from_db()
+    assert third.membership.status == EstablishmentMembership.Status.ACTIVE
+

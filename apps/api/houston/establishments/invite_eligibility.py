@@ -13,6 +13,7 @@ from houston.establishments.models import EstablishmentMembership
 
 class InviteTargetDecision(str, Enum):
     CREATE_PENDING_USER = "create_pending_user"
+    ATTACH_EXISTING_USER = "attach_existing_user"
     RESUME_DEACTIVATED = "resume_deactivated"
     DUPLICATE = "duplicate"
     USER_EXISTS = "user_exists"
@@ -24,18 +25,21 @@ def evaluate_invite_target(
     membership: EstablishmentMembership | None,
     invited_role: str,
 ) -> InviteTargetDecision:
-    """Decide whether an invite may create, resume, or must refuse.
+    """Decide whether an invite may create, attach, resume, or must refuse.
 
-    Resume is allowed only for User.pending + deactivated membership of the same role.
+    A pending or active user with no membership on the target establishment is
+    attached. Resume stays limited to a pending user and a deactivated
+    membership of the same role. An active user with a deactivated membership
+    on this establishment is refused.
     """
     if user is None:
         return InviteTargetDecision.CREATE_PENDING_USER
 
-    if user.status != User.Status.PENDING:
+    if user.status not in {User.Status.PENDING, User.Status.ACTIVE}:
         return InviteTargetDecision.USER_EXISTS
 
     if membership is None:
-        return InviteTargetDecision.USER_EXISTS
+        return InviteTargetDecision.ATTACH_EXISTING_USER
 
     if membership.status in {
         EstablishmentMembership.Status.INVITED,
@@ -44,8 +48,10 @@ def evaluate_invite_target(
         return InviteTargetDecision.DUPLICATE
 
     if membership.status == EstablishmentMembership.Status.DEACTIVATED:
-        if membership.role == invited_role:
+        if user.status == User.Status.PENDING and membership.role == invited_role:
             return InviteTargetDecision.RESUME_DEACTIVATED
-        return InviteTargetDecision.DUPLICATE
+        if user.status == User.Status.PENDING:
+            return InviteTargetDecision.DUPLICATE
+        return InviteTargetDecision.USER_EXISTS
 
     return InviteTargetDecision.DUPLICATE

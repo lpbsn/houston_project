@@ -8,6 +8,7 @@ import { AppRouteProvider } from '@/app/app-routes'
 import { createMemoryHistory } from '@/app/app-history'
 
 const acceptDirectorInvitation = vi.hoisted(() => vi.fn())
+const previewDirectorInvitation = vi.hoisted(() => vi.fn())
 
 vi.mock('@/features/invitations/api', () => ({
   InvitationAcceptApiError: class InvitationAcceptApiError extends Error {
@@ -22,6 +23,7 @@ vi.mock('@/features/invitations/api', () => ({
     }
   },
   acceptDirectorInvitation,
+  previewDirectorInvitation,
 }))
 
 import { InvitationAcceptPage } from './invitation-accept-page'
@@ -41,7 +43,9 @@ afterEach(() => {
 
 beforeEach(() => {
   acceptDirectorInvitation.mockReset()
-  acceptDirectorInvitation.mockResolvedValue(undefined)
+  acceptDirectorInvitation.mockResolvedValue({ kind: 'session' })
+  previewDirectorInvitation.mockReset()
+  previewDirectorInvitation.mockResolvedValue({ requiresPassword: true })
 })
 
 describe('InvitationAcceptPage', () => {
@@ -85,7 +89,9 @@ describe('InvitationAcceptPage', () => {
   it('submits the remembered fragment token in the accept call', async () => {
     renderPage('/invitations#invite-token')
 
-    fireEvent.change(screen.getByLabelText(/^mot de passe$/i), { target: { value: 'SecurePass123!' } })
+    fireEvent.change(await screen.findByLabelText(/^mot de passe$/i), {
+      target: { value: 'SecurePass123!' },
+    })
     fireEvent.change(screen.getByLabelText(/confirmer le mot de passe/i), {
       target: { value: 'SecurePass123!' },
     })
@@ -99,13 +105,48 @@ describe('InvitationAcceptPage', () => {
     })
   })
 
-  it('does not submit when confirmation does not match', () => {
+  it('does not submit when confirmation does not match', async () => {
     renderPage('/invitations#invite-token')
-    fireEvent.change(screen.getByLabelText(/^mot de passe$/i), { target: { value: 'SecurePass123!' } })
+    fireEvent.change(await screen.findByLabelText(/^mot de passe$/i), {
+      target: { value: 'SecurePass123!' },
+    })
     fireEvent.change(screen.getByLabelText(/confirmer le mot de passe/i), {
       target: { value: 'DifferentPass12' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Accept invitation' }))
     expect(acceptDirectorInvitation).not.toHaveBeenCalled()
+  })
+
+  it('accepts an existing account without a password and sends them to login', async () => {
+    previewDirectorInvitation.mockResolvedValue({ requiresPassword: false })
+    acceptDirectorInvitation.mockResolvedValue({
+      kind: 'membership_only',
+      requiresLogin: true,
+    })
+    const { history, onAccepted } = renderPage('/invitations#invite-token')
+
+    expect(screen.queryByLabelText(/^mot de passe$/i)).toBeNull()
+    fireEvent.click(await screen.findByRole('button', { name: 'Accept invitation' }))
+
+    await vi.waitFor(() => {
+      expect(acceptDirectorInvitation).toHaveBeenCalledWith('invite-token', {})
+      expect(history.getHref()).toBe('/login')
+    })
+    expect(onAccepted).not.toHaveBeenCalled()
+  })
+
+  it('keeps the current session when the invited account is already signed in', async () => {
+    previewDirectorInvitation.mockResolvedValue({ requiresPassword: false })
+    acceptDirectorInvitation.mockResolvedValue({
+      kind: 'membership_only',
+      requiresLogin: false,
+    })
+    const { onAccepted } = renderPage('/invitations#invite-token')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Accept invitation' }))
+
+    await vi.waitFor(() => {
+      expect(onAccepted).toHaveBeenCalledOnce()
+    })
   })
 })

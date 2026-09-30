@@ -598,10 +598,26 @@ export async function login(input: LoginRequest) {
   })
 }
 
+export type InvitationAcceptOutcome =
+  | { kind: 'session' }
+  | { kind: 'membership_only'; requiresLogin: boolean }
+
+export async function previewInvitation(token: string) {
+  const { data, error, response } = await apiClient.POST('/api/v1/invitations/preview/', {
+    body: { token },
+  })
+
+  if (error || !data) {
+    throw buildAuthError(response, error, 'Invitation could not be accepted.')
+  }
+
+  return data
+}
+
 export async function acceptInvitationSession(
   token: string,
   input: DirectorInvitationAcceptInput,
-) {
+): Promise<InvitationAcceptOutcome> {
   return runSessionReplacement(async (prepared, generation) => {
     const { data, error, response } = await apiClient.POST(
       '/api/v1/invitations/accept/',
@@ -620,10 +636,18 @@ export async function acceptInvitationSession(
       throw buildAuthError(response, error, 'Invitation could not be accepted.')
     }
 
+    if ('requires_login' in data) {
+      return {
+        kind: 'membership_only',
+        requiresLogin: data.requires_login,
+      }
+    }
+
     await commitAuthEnvelope(data, prepared, {
       expectedGeneration: generation,
       purgeNonAuth: true,
     })
+    return { kind: 'session' }
   })
 }
 

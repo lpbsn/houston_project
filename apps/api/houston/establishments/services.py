@@ -68,7 +68,8 @@ from houston.establishments.onboarding_draft import (
     DRAFT_VALIDATION_MODE_SOFT,
     OnboardingDraftValidationError,
     empty_onboarding_draft_payload,
-    is_blank_onboarding_member,
+    is_complete_onboarding_member,
+    is_complete_onboarding_person,
     validate_onboarding_draft_payload,
 )
 from houston.establishments.selectors import (
@@ -263,8 +264,9 @@ class DirectorInvitationResult:
 
 @dataclass(frozen=True)
 class DirectorInvitationAcceptResult:
-    auth: object
+    auth: object | None
     payload: dict
+    requires_login: bool = False
 
 
 class MembershipReinviteConflictError(Exception):
@@ -402,17 +404,21 @@ def serialize_onboarding_draft(
     *,
     draft: OnboardingDraft,
     validation_errors: list[dict] | None = None,
+    validation_warnings: list[dict] | None = None,
     mode: str = DRAFT_VALIDATION_MODE_SOFT,
 ) -> dict:
     payload = draft.payload if isinstance(draft.payload, dict) else empty_onboarding_draft_payload()
     if validation_errors is None:
         try:
-            _normalized, validation_errors = validate_onboarding_draft_payload(
+            _normalized, validation_errors, validation_warnings = validate_onboarding_draft_payload(
                 payload,
                 mode=DRAFT_VALIDATION_MODE_SOFT,
             )
         except OnboardingDraftValidationError as exc:
             validation_errors = exc.errors
+            validation_warnings = []
+    if validation_warnings is None:
+        validation_warnings = []
     return {
         "id": draft.id,
         "onboarding_session_id": draft.onboarding_session_id,
@@ -422,6 +428,7 @@ def serialize_onboarding_draft(
             "mode": mode,
             "is_ready_for_complete": len(validation_errors) == 0,
             "errors": validation_errors,
+            "warnings": validation_warnings,
         },
     }
 
@@ -446,7 +453,7 @@ def upsert_onboarding_draft_core(
     except OnboardingDraft.DoesNotExist as exc:
         raise OnboardingDraftNotFoundError from exc
 
-    normalized, soft_errors = validate_onboarding_draft_payload(
+    normalized, soft_errors, soft_warnings = validate_onboarding_draft_payload(
         payload,
         mode=DRAFT_VALIDATION_MODE_SOFT,
     )
@@ -461,6 +468,7 @@ def upsert_onboarding_draft_core(
     return serialize_onboarding_draft(
         draft=draft,
         validation_errors=[*soft_errors, *sync_errors],
+        validation_warnings=soft_warnings,
         mode=DRAFT_VALIDATION_MODE_SOFT,
     )
 
@@ -491,6 +499,7 @@ def complete_onboarding_session_core(
             "readiness": readiness,
             "activated": False,
             "idempotent": True,
+            "warnings": [],
         }
 
     if establishment.status == Establishment.Status.ACTIVE:
@@ -516,15 +525,9 @@ def complete_onboarding_session_core(
     except OnboardingDraft.DoesNotExist as exc:
         raise OnboardingDraftNotFoundError from exc
 
-    normalized, _errors = validate_onboarding_draft_payload(
+    normalized, _errors, warnings = validate_onboarding_draft_payload(
         draft.payload,
         mode=DRAFT_VALIDATION_MODE_FINAL,
-    )
-
-    director = normalized["team"]["director"]
-    needs_director_invite = _needs_director_invite_from_draft(
-        establishment=establishment,
-        director_email=director["email"],
     )
 
     _sync_establishment_name_from_draft_payload(
@@ -559,7 +562,14 @@ def complete_onboarding_session_core(
         payload=normalized,
     )
 
-    if needs_director_invite:
+    for director in normalized["team"]["directors"]:
+        if not is_complete_onboarding_person(director):
+            continue
+        if _director_invite_already_satisfied(
+            establishment=establishment,
+            director_email=director["email"],
+        ):
+            continue
         invite_director_during_onboarding_core(
             session=session,
             email=director["email"],
@@ -568,7 +578,7 @@ def complete_onboarding_session_core(
         )
 
     for member in normalized["team"]["members"]:
-        if is_blank_onboarding_member(member):
+        if not is_complete_onboarding_member(member):
             continue
         scopes = [
             MembershipScopeInput(
@@ -616,6 +626,7 @@ def complete_onboarding_session_core(
         "readiness": readiness,
         "activated": True,
         "idempotent": False,
+        "warnings": warnings,
     }
 
 
@@ -634,51 +645,27 @@ def _establishment_name_taken_excluding(
     )
 
 
-def _get_non_owner_director_membership(
-    *,
-    establishment_id,
-) -> EstablishmentMembership | None:
-    owner_user_ids = _active_owner_user_ids(establishment_id=establishment_id)
-    return (
-        EstablishmentMembership.objects.filter(
-            establishment_id=establishment_id,
-            role=EstablishmentMembership.Role.DIRECTOR,
-            status__in=[
-                EstablishmentMembership.Status.INVITED,
-                EstablishmentMembership.Status.ACTIVE,
-            ],
-        )
-        .exclude(user_id__in=owner_user_ids)
-        .select_related("user")
-        .first()
-    )
-
-
-def _needs_director_invite_from_draft(
+def _director_invite_already_satisfied(
     *,
     establishment: Establishment,
     director_email: str,
 ) -> bool:
-    """
-    Return True if complete must invite a director.
-
-    Same normalized email as an existing INVITED/ACTIVE non-owner director → skip
-    (do not overwrite first/last name). Different email occupying the slot → raise.
-    """
-    existing = _get_non_owner_director_membership(establishment_id=establishment.id)
-    if existing is None:
-        return True
-
+    """True when this email already has an invited or active director membership."""
     draft_email = User.normalize_email_value(director_email)
-    existing_email = User.normalize_email_value(existing.user.email)
-    if (
-        draft_email is not None
-        and existing_email is not None
-        and draft_email == existing_email
-    ):
+    if draft_email is None:
         return False
-
-    raise DirectorInvitationAlreadyExistsError
+    existing_user = User.objects.filter(email__iexact=draft_email).first()
+    if existing_user is None:
+        return False
+    return EstablishmentMembership.objects.filter(
+        user=existing_user,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        status__in=[
+            EstablishmentMembership.Status.INVITED,
+            EstablishmentMembership.Status.ACTIVE,
+        ],
+    ).exists()
 
 
 def _materialize_draft_business_units(
@@ -771,9 +758,12 @@ def compute_activation_readiness(*, session: OnboardingSession) -> dict:
             "is_skippable": False,
         },
         "director": {
-            "is_ready": counts["active_or_invited_director_count"] >= 1,
-            "required": True,
-            "is_skippable": False,
+            "is_ready": (
+                counts["active_owner_count"] >= 1
+                or counts["active_or_invited_director_count"] >= 1
+            ),
+            "required": False,
+            "is_skippable": True,
         },
     }
     blockers = _activation_blockers(
@@ -850,16 +840,6 @@ def invite_director_during_onboarding_core(
     if existing_user is not None and existing_user.id in owner_user_ids:
         raise DirectorInvitationOwnerNotAllowedError
 
-    # 2) Soft director slot occupied next (before User/Membership matrix).
-    if (
-        _count_non_owner_directors(
-            establishment_id=establishment.id,
-            owner_user_ids=owner_user_ids,
-        )
-        >= 1
-    ):
-        raise DirectorInvitationAlreadyExistsError
-
     existing_membership = None
     if existing_user is not None:
         existing_membership = EstablishmentMembership.objects.filter(
@@ -867,7 +847,7 @@ def invite_director_during_onboarding_core(
             establishment=establishment,
         ).first()
 
-    # 3) User/Membership matrix after owner + slot guards.
+    # 2) User/Membership matrix after the owner guard.
     from houston.establishments.invite_eligibility import (
         InviteTargetDecision,
         evaluate_invite_target,
@@ -893,6 +873,15 @@ def invite_director_during_onboarding_core(
         existing_user.save(update_fields=["first_name", "last_name", "updated_at"])
         return _issue_director_invitation_for_membership(existing_membership)
 
+    if decision == InviteTargetDecision.ATTACH_EXISTING_USER:
+        assert existing_user is not None
+        membership = _create_invited_membership(
+            user=existing_user,
+            establishment=establishment,
+            role=EstablishmentMembership.Role.DIRECTOR,
+        )
+        return _issue_director_invitation_for_membership(membership)
+
     from houston.accounts.services import (
         PendingInviteUserAlreadyExistsError,
         create_pending_user_for_invite,
@@ -914,7 +903,6 @@ def invite_director_during_onboarding_core(
         user=user,
         establishment=establishment,
         role=EstablishmentMembership.Role.DIRECTOR,
-        owner_user_ids=owner_user_ids,
     )
     return _issue_director_invitation_for_membership(membership)
 
@@ -928,12 +916,34 @@ _INVITATION_ACCEPT_ROLES = frozenset(
 )
 
 
+def preview_establishment_invitation(*, raw_token: str) -> dict:
+    token_digest = auth_tokens.digest_token(raw_token.strip())
+    invitation = (
+        EstablishmentInvitation.objects.select_related("membership__user")
+        .filter(token_digest=token_digest)
+        .first()
+    )
+    if invitation is None:
+        raise InvalidEstablishmentInvitationError
+    now = timezone.now()
+    if invitation.accepted_at is not None:
+        raise EstablishmentInvitationAlreadyAcceptedError
+    if invitation.revoked_at is not None:
+        raise InvalidEstablishmentInvitationError
+    if invitation.expires_at <= now:
+        raise EstablishmentInvitationExpiredError
+    return {
+        "requires_password": invitation.membership.user.status != User.Status.ACTIVE,
+    }
+
+
 @transaction.atomic
 def accept_establishment_invitation(
     *,
     request: HttpRequest,
     raw_token: str,
     password: str,
+    authenticated_user=None,
 ) -> DirectorInvitationAcceptResult:
     token_digest = auth_tokens.digest_token(raw_token.strip())
 
@@ -956,6 +966,7 @@ def accept_establishment_invitation(
             request=request,
             raw_token=raw_token,
             password=password,
+            authenticated_user=authenticated_user,
         )
 
     invitation = (
@@ -993,6 +1004,14 @@ def accept_establishment_invitation(
     if membership.status != EstablishmentMembership.Status.INVITED:
         raise InvalidEstablishmentInvitationError
 
+    if user.status == User.Status.ACTIVE:
+        return _finalize_active_membership_accept(
+            invitation=invitation,
+            membership=membership,
+            user=user,
+            authenticated_user=authenticated_user,
+        )
+
     if user.status != User.Status.PENDING:
         raise InvalidEstablishmentInvitationError
 
@@ -1011,6 +1030,7 @@ def _accept_organizational_owner_invitation(
     request: HttpRequest,
     raw_token: str,
     password: str,
+    authenticated_user=None,
 ) -> DirectorInvitationAcceptResult:
     token_digest = auth_tokens.digest_token(raw_token.strip())
 
@@ -1120,8 +1140,9 @@ def _accept_organizational_owner_invitation(
         or membership.status != EstablishmentMembership.Status.INVITED
     ):
         raise InvalidEstablishmentInvitationError
-    if user.status != User.Status.PENDING:
+    if user.status not in {User.Status.PENDING, User.Status.ACTIVE}:
         raise InvalidEstablishmentInvitationError
+    activating_existing_user = user.status == User.Status.ACTIVE
 
     # Create-in-org fan-out is the primary coverage guarantee when
     # ``create_establishment_for_organization`` is used; heal here remains the
@@ -1164,9 +1185,10 @@ def _accept_organizational_owner_invitation(
             raise OrganizationalOwnerInvariantConflictError
         memberships_to_activate.append(target)
 
-    user.set_password(password)
-    user.status = User.Status.ACTIVE
-    user.save(update_fields=["password", "status", "updated_at"])
+    if not activating_existing_user:
+        user.set_password(password)
+        user.status = User.Status.ACTIVE
+        user.save(update_fields=["password", "status", "updated_at"])
 
     from houston.realtime.broadcast import schedule_access_event
 
@@ -1187,6 +1209,13 @@ def _accept_organizational_owner_invitation(
         accepted_at__isnull=True,
         revoked_at__isnull=True,
     ).exclude(id=invitation.id).update(revoked_at=now, updated_at=now)
+
+    if activating_existing_user:
+        return _membership_activated_without_session(
+            user=user,
+            establishment_id=membership.establishment_id,
+            authenticated_user=authenticated_user,
+        )
 
     from houston.accounts.services import (
         build_auth_response_payload,
@@ -1224,6 +1253,56 @@ def _accept_organizational_owner_invitation(
     return DirectorInvitationAcceptResult(
         auth=auth_bundle,
         payload=payload,
+    )
+
+
+def _membership_activated_without_session(
+    *,
+    user: User,
+    establishment_id,
+    authenticated_user,
+) -> DirectorInvitationAcceptResult:
+    same_user = (
+        authenticated_user is not None
+        and getattr(authenticated_user, "is_authenticated", False)
+        and authenticated_user.id == user.id
+    )
+    requires_login = not same_user
+    return DirectorInvitationAcceptResult(
+        auth=None,
+        payload={
+            "requires_login": requires_login,
+            "establishment_id": establishment_id,
+        },
+        requires_login=requires_login,
+    )
+
+
+def _finalize_active_membership_accept(
+    *,
+    invitation: EstablishmentInvitation,
+    membership: EstablishmentMembership,
+    user: User,
+    authenticated_user,
+) -> DirectorInvitationAcceptResult:
+    now = timezone.now()
+    membership.status = EstablishmentMembership.Status.ACTIVE
+    membership.save(update_fields=["status", "updated_at"])
+
+    from houston.realtime.broadcast import schedule_access_event
+
+    schedule_access_event(
+        reason="membership.updated",
+        establishment_id=membership.establishment_id,
+        membership_id=membership.id,
+    )
+
+    invitation.accepted_at = now
+    invitation.save(update_fields=["accepted_at", "updated_at"])
+    return _membership_activated_without_session(
+        user=user,
+        establishment_id=membership.establishment_id,
+        authenticated_user=authenticated_user,
     )
 
 
@@ -1389,6 +1468,17 @@ def _create_or_resume_invited_membership(
             )
         return _issue_establishment_invitation_for_membership(existing_membership)
 
+    if decision == InviteTargetDecision.ATTACH_EXISTING_USER:
+        assert existing_user is not None
+        membership = _create_invited_membership(
+            user=existing_user,
+            establishment=establishment,
+            role=role,
+        )
+        if scope_inputs:
+            assign_membership_scopes(membership=membership, scope_inputs=scope_inputs)
+        return _issue_establishment_invitation_for_membership(membership)
+
     from houston.accounts.services import (
         PendingInviteUserAlreadyExistsError,
         create_pending_user_for_invite,
@@ -1553,7 +1643,10 @@ def actor_can_reinvite_target_membership(
         return ReinviteTargetDecision.NOT_ELIGIBLE
     if target_membership.status != EstablishmentMembership.Status.INVITED:
         return ReinviteTargetDecision.NOT_ELIGIBLE
-    if target_membership.user.status != User.Status.PENDING:
+    if target_membership.user.status not in {
+        User.Status.PENDING,
+        User.Status.ACTIVE,
+    }:
         return ReinviteTargetDecision.NOT_ELIGIBLE
 
     if not _can_actor_invite_memberships(current_membership=actor_membership):
@@ -1930,9 +2023,10 @@ def _invite_organizational_owner(
     else:
         assert existing_user is not None
         user = existing_user
-        user.first_name = first_name
-        user.last_name = last_name
-        user.save(update_fields=["first_name", "last_name", "updated_at"])
+        if decision != InviteTargetDecision.ATTACH_EXISTING_USER:
+            user.first_name = first_name
+            user.last_name = last_name
+            user.save(update_fields=["first_name", "last_name", "updated_at"])
 
     anchor_membership = None
     for establishment_row in establishments:
@@ -3124,6 +3218,11 @@ def _activation_counts(session: OnboardingSession) -> dict:
                 EstablishmentMembership.Role.DIRECTOR,
             ],
         ).count(),
+        "active_owner_count": EstablishmentMembership.objects.filter(
+            establishment_id=establishment_id,
+            status=EstablishmentMembership.Status.ACTIVE,
+            role=EstablishmentMembership.Role.OWNER,
+        ).count(),
         "active_or_invited_director_count": EstablishmentMembership.objects.filter(
             establishment_id=establishment_id,
             role=EstablishmentMembership.Role.DIRECTOR,
@@ -3174,9 +3273,6 @@ def _activation_blockers(
 
     if counts["active_owner_or_director_count"] < 1:
         blockers.append(_blocker("missing_active_owner_or_director"))
-
-    if counts["active_or_invited_director_count"] < 1:
-        blockers.append(_blocker("missing_active_or_invited_director"))
 
     return blockers
 
@@ -3259,34 +3355,11 @@ def _active_owner_user_ids(*, establishment_id) -> set:
     )
 
 
-def _count_non_owner_directors(
-    *,
-    establishment_id,
-    owner_user_ids: set | None = None,
-) -> int:
-    if owner_user_ids is None:
-        owner_user_ids = _active_owner_user_ids(establishment_id=establishment_id)
-
-    return (
-        EstablishmentMembership.objects.filter(
-            establishment_id=establishment_id,
-            role=EstablishmentMembership.Role.DIRECTOR,
-            status__in=[
-                EstablishmentMembership.Status.INVITED,
-                EstablishmentMembership.Status.ACTIVE,
-            ],
-        )
-        .exclude(user_id__in=owner_user_ids)
-        .count()
-    )
-
-
 def _create_invited_membership(
     *,
     user: User,
     establishment: Establishment,
     role: str,
-    owner_user_ids: set | None = None,
 ) -> EstablishmentMembership:
     try:
         with transaction.atomic():
@@ -3304,16 +3377,6 @@ def _create_invited_membership(
         if existing_membership is not None:
             # Stable duplicate regardless of role after race on (user, establishment).
             raise DirectorInvitationDuplicateError from exc
-
-        if role == EstablishmentMembership.Role.DIRECTOR:
-            if (
-                _count_non_owner_directors(
-                    establishment_id=establishment.id,
-                    owner_user_ids=owner_user_ids,
-                )
-                >= 1
-            ):
-                raise DirectorInvitationAlreadyExistsError from exc
 
         raise
 

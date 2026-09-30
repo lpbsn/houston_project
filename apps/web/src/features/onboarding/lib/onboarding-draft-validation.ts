@@ -2,6 +2,7 @@ import {
   ACTIVITY_DESCRIPTION_MAX_LENGTH,
   ACTIVITY_DESCRIPTION_MIN_LENGTH,
   isMemberRowEmpty,
+  isPersonRowEmpty,
   type OnboardingDraftPayload,
   type OnboardingDraftPerson,
 } from './onboarding-draft-payload'
@@ -98,42 +99,81 @@ export function canContinueFromStructureStep(payload: OnboardingDraftPayload): S
 export type CompleteGateResult = {
   ok: boolean
   errors: LocalDraftError[]
+  warnings: LocalDraftError[]
 }
 
-function personFieldErrors(
-  person: OnboardingDraftPerson | null,
+function personFieldWarnings(
+  person: OnboardingDraftPerson,
   key: string,
 ): LocalDraftError[] {
-  const errors: LocalDraftError[] = []
-  if (!person || person.email.trim().length === 0) {
-    errors.push({ code: 'missing_email', section: 'team', field: 'email', key })
+  const warnings: LocalDraftError[] = []
+  if (person.email.trim().length === 0) {
+    warnings.push({ code: 'missing_email', section: 'team', field: 'email', key })
   }
-  if (!person || person.first_name.trim().length === 0) {
-    errors.push({ code: 'missing_first_name', section: 'team', field: 'first_name', key })
+  if (person.first_name.trim().length === 0) {
+    warnings.push({ code: 'missing_first_name', section: 'team', field: 'first_name', key })
   }
-  if (!person || person.last_name.trim().length === 0) {
-    errors.push({ code: 'missing_last_name', section: 'team', field: 'last_name', key })
+  if (person.last_name.trim().length === 0) {
+    warnings.push({ code: 'missing_last_name', section: 'team', field: 'last_name', key })
   }
-  return errors
+  return warnings
 }
 
 export function canCompleteOnboardingDraft(payload: OnboardingDraftPayload): CompleteGateResult {
   const structure = canContinueFromStructureStep(payload)
   const errors = [...structure.errors]
+  const warnings: LocalDraftError[] = []
+  const completeEmails = new Set<string>()
 
-  errors.push(...personFieldErrors(payload.team.director, 'director'))
+  payload.team.directors.forEach((director, index) => {
+    if (isPersonRowEmpty(director)) {
+      return
+    }
+    const key = `directors:${index}`
+    if (
+      director.email.trim() &&
+      director.first_name.trim() &&
+      director.last_name.trim()
+    ) {
+      const email = director.email.trim().toLowerCase()
+      if (completeEmails.has(email)) {
+        errors.push({ code: 'duplicate_team_email', section: 'team', field: 'email', key: email })
+      } else {
+        completeEmails.add(email)
+      }
+      return
+    }
+    warnings.push(...personFieldWarnings(director, key))
+  })
 
   payload.team.members.forEach((member, index) => {
     if (isMemberRowEmpty(member)) {
       return
     }
-    const key = String(index)
-    errors.push(...personFieldErrors(member, key))
-    if (member.role !== 'manager' && member.role !== 'staff') {
-      errors.push({ code: 'invalid_member_role', section: 'team', field: 'role', key })
+    const key = `members:${index}`
+    const identityComplete =
+      member.email.trim().length > 0 &&
+      member.first_name.trim().length > 0 &&
+      member.last_name.trim().length > 0
+    const roleValid = member.role === 'manager' || member.role === 'staff'
+    const hasPoles = member.business_unit_client_keys.length > 0
+    if (identityComplete && roleValid && hasPoles) {
+      const email = member.email.trim().toLowerCase()
+      if (completeEmails.has(email)) {
+        errors.push({ code: 'duplicate_team_email', section: 'team', field: 'email', key: email })
+      } else {
+        completeEmails.add(email)
+      }
+      return
     }
-    if (member.business_unit_client_keys.length === 0) {
-      errors.push({
+    if (!identityComplete) {
+      warnings.push(...personFieldWarnings(member, key))
+    }
+    if (!roleValid) {
+      warnings.push({ code: 'invalid_member_role', section: 'team', field: 'role', key })
+    }
+    if (!hasPoles) {
+      warnings.push({
         code: 'missing_member_business_units',
         section: 'team',
         field: 'business_unit_client_keys',
@@ -142,7 +182,7 @@ export function canCompleteOnboardingDraft(payload: OnboardingDraftPayload): Com
     }
   })
 
-  return { ok: errors.length === 0, errors }
+  return { ok: errors.length === 0, errors, warnings }
 }
 
 export function pruneBusinessUnitFromTeam(

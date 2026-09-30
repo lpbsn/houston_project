@@ -441,6 +441,13 @@ def test_http_complete_director_slot_occupied_is_409(api_client):
         role=EstablishmentMembership.Role.DIRECTOR,
         status=EstablishmentMembership.Status.INVITED,
     )
+    owner = create_user(username=f"own_occ_{uuid.uuid4().hex[:8]}")
+    create_membership(
+        user=owner,
+        establishment=session.establishment,
+        role=EstablishmentMembership.Role.OWNER,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
     upsert_onboarding_draft_core(
         session=session,
         actor=operator,
@@ -453,12 +460,14 @@ def test_http_complete_director_slot_occupied_is_409(api_client):
         f"/api/v1/platform/onboardings/{session_id}/complete/",
         **auth_headers(token),
     )
-    assert response.status_code == 409
-    assert response.json()["code"] == "director_invitation_already_exists"
-    _assert_denied_event(
-        action="complete_onboarding",
-        resource_id=session_id,
-        code="director_invitation_already_exists",
+    assert response.status_code == 200
+    assert response.json()["activated"] is True
+    assert (
+        EstablishmentMembership.objects.filter(
+            establishment=session.establishment,
+            role=EstablishmentMembership.Role.DIRECTOR,
+        ).count()
+        == 2
     )
 
 
@@ -654,12 +663,14 @@ def test_http_director_invite_slot_taken_is_409(api_client):
         format="json",
         **auth_headers(token),
     )
-    assert response.status_code == 409
-    assert response.json()["code"] == "director_invitation_already_exists"
-    _assert_denied_event(
-        action="invite_director",
-        resource_id=session_id,
-        code="director_invitation_already_exists",
+    assert response.status_code == 201
+    assert (
+        EstablishmentMembership.objects.filter(
+            establishment=establishment,
+            role=EstablishmentMembership.Role.DIRECTOR,
+            status=EstablishmentMembership.Status.INVITED,
+        ).count()
+        == 2
     )
 
 
@@ -693,24 +704,31 @@ def test_http_director_invite_duplicate_membership_is_409(api_client):
     )
 
 
-def test_http_director_invite_user_exists_is_409(api_client):
+def test_http_director_invite_attaches_existing_active_user(api_client):
     _operator, token = _operator_client(api_client, "plat_map_dir_exists")
     body = _start_onboarding(api_client, token)
     session_id = body["id"]
     existing = create_user(username=f"exists_{uuid.uuid4().hex[:8]}")
+    existing.first_name = "Kept"
+    existing.last_name = "Name"
+    existing.save(update_fields=["first_name", "last_name", "updated_at"])
     response = api_client.post(
         f"/api/v1/platform/onboardings/{session_id}/director-invitations/",
         {"email": existing.email, "first_name": "Dir", "last_name": "Ector"},
         format="json",
         **auth_headers(token),
     )
-    assert response.status_code == 409
-    assert response.json()["code"] == "membership_invitation_user_exists"
-    _assert_denied_event(
-        action="invite_director",
-        resource_id=session_id,
-        code="membership_invitation_user_exists",
+    assert response.status_code == 201
+    existing.refresh_from_db()
+    assert existing.first_name == "Kept"
+    assert existing.last_name == "Name"
+    assert existing.status == User.Status.ACTIVE
+    membership = EstablishmentMembership.objects.get(
+        user=existing,
+        establishment_id=body["establishment_id"],
     )
+    assert membership.role == EstablishmentMembership.Role.DIRECTOR
+    assert membership.status == EstablishmentMembership.Status.INVITED
 
 
 def test_invite_platform_director_invalid_input_maps_without_http(api_client):
@@ -828,24 +846,31 @@ def test_http_owner_invite_duplicate_active_owner_is_409(api_client):
     )
 
 
-def test_http_owner_invite_user_exists_is_409(api_client):
+def test_http_owner_invite_attaches_existing_active_user(api_client):
     _operator, token = _operator_client(api_client, "plat_map_own_exists")
     body = _start_onboarding(api_client, token)
     session_id = body["id"]
     existing = create_user(username=f"own_exists_{uuid.uuid4().hex[:8]}")
+    existing.first_name = "Kept"
+    existing.last_name = "Name"
+    existing.save(update_fields=["first_name", "last_name", "updated_at"])
     response = api_client.post(
         f"/api/v1/platform/onboardings/{session_id}/owner-invitations/",
         {"email": existing.email, "first_name": "Own", "last_name": "Er"},
         format="json",
         **auth_headers(token),
     )
-    assert response.status_code == 409
-    assert response.json()["code"] == "membership_invitation_user_exists"
-    _assert_denied_event(
-        action="invite_owner",
-        resource_id=session_id,
-        code="membership_invitation_user_exists",
+    assert response.status_code == 201
+    existing.refresh_from_db()
+    assert existing.first_name == "Kept"
+    assert existing.last_name == "Name"
+    assert existing.status == User.Status.ACTIVE
+    membership = EstablishmentMembership.objects.get(
+        user=existing,
+        establishment_id=body["establishment_id"],
     )
+    assert membership.role == EstablishmentMembership.Role.OWNER
+    assert membership.status == EstablishmentMembership.Status.INVITED
 
 
 def test_invite_platform_owner_invalid_input_maps_without_http(api_client):

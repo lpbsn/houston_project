@@ -43,8 +43,23 @@ export function applyCatalogBusinessUnitSelection(
     }
   })
 
+  const previous = payload.business_units.find(
+    (unit) => unit.client_key === businessUnitClientKey,
+  )
+  const catalogChanged = previous?.catalog_key !== catalogUnit.key
+  const allowedCatalogKeys = new Set(catalogSubjects.map((subject) => subject.key))
+  const activity_subjects = payload.activity_subjects.filter((subject) => {
+    if (!catalogChanged || subject.business_unit_client_key !== businessUnitClientKey) {
+      return true
+    }
+    if (subject.catalog_key === null) {
+      return true
+    }
+    return allowedCatalogKeys.has(subject.catalog_key)
+  })
+
   const existingCatalogKeys = new Set(
-    payload.activity_subjects
+    activity_subjects
       .filter(
         (subject) =>
           subject.business_unit_client_key === businessUnitClientKey &&
@@ -74,7 +89,7 @@ export function applyCatalogBusinessUnitSelection(
   return {
     ...payload,
     business_units,
-    activity_subjects: [...payload.activity_subjects, ...seeded],
+    activity_subjects: [...activity_subjects, ...seeded],
   }
 }
 

@@ -33,7 +33,7 @@ The execution surface is **Action Plan** only.
 | Privacy Policy / CGU | Live | `https://spore-os.com/politique-de-confidentialite/` · `https://spore-os.com/conditions-d-utilisation/`; UGC gate + OpenAI consent in-app |
 | Public support | Live | `https://spore-os.com/support/` |
 | Store listing / review pack | Prepared | [`store_listing.md`](store_listing.md) · [`store_review.md`](store_review.md) · [`store_assets/`](store_assets/). Console paste, screenshots of the app in use, Play/App Store identities, and Closed Testing remain operator work |
-| Runtime config / onboarding | Live | Wizard **Platform** only (`/api/v1/platform/onboardings/`, desktop Web). Invited Owner/Director: accept invitation then waiting |
+| Runtime config / onboarding | Live | Wizard **Platform** only (`/api/v1/platform/onboardings/`, desktop Web). An active Owner satisfies initial direction. Invited people accept, then wait; an already active user joins without a new session |
 | Platform control plane | Live | `houston.platform`, desktop `/platform`. Independent operator grant |
 | BusinessUnit / ActivitySubject taxonomy | Live | Identity: `specific_name` + internal `routing_key`; catalog FK required (`PROTECT`); public API omits `routing_key` |
 | Observations + media + transcription | Live | Celery pipeline |

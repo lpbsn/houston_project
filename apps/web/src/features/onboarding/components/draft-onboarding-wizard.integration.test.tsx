@@ -146,7 +146,8 @@ async function fillAndFinishWizard() {
   fireEvent.click(continueButton)
 
   await screen.findByRole('heading', { name: /Invitez votre équipe/i })
-  const directorSection = screen.getByText(/Directeur \(obligatoire\)/i).parentElement!
+  fireEvent.click(screen.getByRole('button', { name: /Ajouter un directeur/i }))
+  const directorSection = screen.getByPlaceholderText('nom@etablissement.fr').closest('div.grid')!
   const inputs = directorSection.querySelectorAll('input')
   fireEvent.change(inputs[0]!, { target: { value: 'Ada' } })
   fireEvent.change(inputs[1]!, { target: { value: 'Lovelace' } })
@@ -276,7 +277,8 @@ describe('draft onboarding integration', () => {
     })
 
     await screen.findByRole('heading', { name: /Invitez votre équipe/i })
-    const directorSection = screen.getByText(/Directeur \(obligatoire\)/i).parentElement!
+    fireEvent.click(screen.getByRole('button', { name: /Ajouter un directeur/i }))
+    const directorSection = screen.getByPlaceholderText('nom@etablissement.fr').closest('div.grid')!
     const inputs = directorSection.querySelectorAll('input')
     fireEvent.change(inputs[0]!, { target: { value: 'Ada' } })
     fireEvent.change(inputs[1]!, { target: { value: 'Lovelace' } })
@@ -329,11 +331,13 @@ describe('draft onboarding integration', () => {
       { key: 'restaurant', label: 'Restaurant', unit_type: 'dedicated' },
       [{ key: 'restaurant__stock', label: 'Stock', business_unit_key: 'restaurant' }],
     )
-    payload.team.director = {
-      email: 'dir@example.com',
-      first_name: 'Ada',
-      last_name: 'Lovelace',
-    }
+    payload.team.directors = [
+      {
+        email: 'dir@example.com',
+        first_name: 'Ada',
+        last_name: 'Lovelace',
+      },
+    ]
     payload.team.members = [
       {
         email: 'm@example.com',

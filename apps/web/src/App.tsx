@@ -49,7 +49,7 @@ import { TerrainShell } from '@/components/layout/terrain-shell'
 import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import { Button } from '@/components/ui/button'
 import { terrainBackButtonClassName } from '@/lib/terrain-styles'
-import { bootstrapQueryKey, clearAuthState, switchEstablishment } from '@/features/auth/api'
+import { bootstrapQueryKey, clearAuthState, fetchBootstrap, switchEstablishment } from '@/features/auth/api'
 import { AuthRoutingLoading } from '@/features/auth/components/auth-routing-loading'
 import { LegalEntryGates } from '@/features/auth/components/legal-entry-gates'
 import { PendingOnboardingPage } from '@/features/auth/pages/pending-onboarding-page'
@@ -668,13 +668,18 @@ function App() {
       return (
         <InvitationAcceptPage
           onAccepted={() => {
-            const bootstrap =
-              queryClient.getQueryData<BootstrapResponse>(bootstrapQueryKey) ?? auth.bootstrap
-            navigate(
-              getAuthenticatedLandingPath(bootstrap, { isDesktop: isDesktopWeb }) ??
-                '/pending-onboarding',
-              { replace: true },
-            )
+            void queryClient
+              .fetchQuery({
+                queryKey: bootstrapQueryKey,
+                queryFn: fetchBootstrap,
+              })
+              .then((bootstrap) => {
+                navigate(
+                  getAuthenticatedLandingPath(bootstrap, { isDesktop: isDesktopWeb }) ??
+                    '/pending-onboarding',
+                  { replace: true },
+                )
+              })
           }}
         />
       )

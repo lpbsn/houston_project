@@ -14,6 +14,7 @@ import {
 import {
   InvitationAcceptApiError,
   acceptDirectorInvitation,
+  previewDirectorInvitation,
 } from '@/features/invitations/api'
 import { CURRENT_TERMS_VERSION } from '@/lib/legal'
 
@@ -43,6 +44,7 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [acceptTerms, setAcceptTerms] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [requiresPassword, setRequiresPassword] = useState<boolean | null>(null)
 
   useLayoutEffect(() => {
     if (!fragmentToken) {
@@ -51,17 +53,42 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
     navigate('/invitations', { replace: true })
   }, [fragmentToken, navigate])
 
+  useLayoutEffect(() => {
+    const invitationToken = token.trim()
+    if (!invitationToken) {
+      return
+    }
+
+    let cancelled = false
+    void previewDirectorInvitation(invitationToken)
+      .then((preview) => {
+        if (!cancelled) {
+          setRequiresPassword(preview.requiresPassword)
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setSubmitError(getAcceptErrorMessage(error))
+          setRequiresPassword(null)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [token])
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setFieldError(null)
     setSubmitError(null)
 
     const invitationToken = token.trim()
-    if (!invitationToken) {
+    if (!invitationToken || requiresPassword === null) {
       return
     }
 
-    if (!canSubmitPasswordCreation(password, passwordConfirmation)) {
+    if (requiresPassword && !canSubmitPasswordCreation(password, passwordConfirmation)) {
       setFieldError(
         passwordCreationBlockerMessage(
           evaluatePasswordCreation(password, passwordConfirmation),
@@ -73,11 +100,20 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
     setIsSubmitting(true)
 
     try {
-      await acceptDirectorInvitation(invitationToken, {
-        password,
-        password_confirmation: passwordConfirmation,
+      const outcome = await acceptDirectorInvitation(invitationToken, {
+        ...(requiresPassword
+          ? {
+              password,
+              password_confirmation: passwordConfirmation,
+            }
+          : {}),
         ...(acceptTerms ? { terms_version: CURRENT_TERMS_VERSION } : {}),
       })
+
+      if (outcome.kind === 'membership_only' && outcome.requiresLogin) {
+        navigate('/login', { replace: true })
+        return
+      }
 
       onAccepted()
     } catch (error) {
@@ -111,6 +147,13 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
     )
   }
 
+  const description =
+    requiresPassword === false
+      ? 'Your account already exists. Accepting joins this establishment with your current password.'
+      : requiresPassword
+        ? 'Set a password to activate your account and join this establishment.'
+        : 'This invitation could not be checked.'
+
   return (
     <Card className="mx-auto w-full max-w-lg rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_22px_48px_-38px_rgba(59,90,184,0.28)]">
       <CardHeader className="gap-2">
@@ -118,49 +161,58 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
           Accept invitation
         </CardTitle>
         <CardDescription className="text-sm leading-6">
-          Set a password to activate your account and join this establishment.
+          {requiresPassword === null && !submitError
+            ? 'Checking this invitation…'
+            : description}
         </CardDescription>
       </CardHeader>
 
       <CardContent>
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <PasswordCreationFields
-            password={password}
-            confirmation={passwordConfirmation}
-            onPasswordChange={(value) => {
-              setPassword(value)
-              setFieldError(null)
-              setSubmitError(null)
-            }}
-            onConfirmationChange={(value) => {
-              setPasswordConfirmation(value)
-              setFieldError(null)
-              setSubmitError(null)
-            }}
-            passwordId="invitation-password"
-            confirmationId="invitation-password-confirmation"
-          />
-
-          <TermsAcceptCheckbox checked={acceptTerms} onCheckedChange={setAcceptTerms} />
-
-          {fieldError ? <p className="text-sm text-destructive">{fieldError}</p> : null}
-          {submitError ? <p className="text-sm text-destructive">{submitError}</p> : null}
-
-          <Button
-            type="submit"
-            disabled={isSubmitting}
-            className="h-11 w-full rounded-[1rem] sm:w-auto"
-          >
-            {isSubmitting ? (
+        {requiresPassword === null && !submitError ? (
+          <LoaderCircle className="size-4 animate-spin" />
+        ) : (
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            {requiresPassword ? (
               <>
-                <LoaderCircle className="size-4 animate-spin" />
-                Activating account...
+                <PasswordCreationFields
+                  password={password}
+                  confirmation={passwordConfirmation}
+                  onPasswordChange={(value) => {
+                    setPassword(value)
+                    setFieldError(null)
+                    setSubmitError(null)
+                  }}
+                  onConfirmationChange={(value) => {
+                    setPasswordConfirmation(value)
+                    setFieldError(null)
+                    setSubmitError(null)
+                  }}
+                  passwordId="invitation-password"
+                  confirmationId="invitation-password-confirmation"
+                />
+                <TermsAcceptCheckbox checked={acceptTerms} onCheckedChange={setAcceptTerms} />
               </>
-            ) : (
-              'Accept invitation'
-            )}
-          </Button>
-        </form>
+            ) : null}
+
+            {fieldError ? <p className="text-sm text-destructive">{fieldError}</p> : null}
+            {submitError ? <p className="text-sm text-destructive">{submitError}</p> : null}
+
+            <Button
+              type="submit"
+              disabled={isSubmitting || requiresPassword === null}
+              className="h-11 w-full rounded-[1rem] sm:w-auto"
+            >
+              {isSubmitting ? (
+                <>
+                  <LoaderCircle className="size-4 animate-spin" />
+                  Activating account...
+                </>
+              ) : (
+                'Accept invitation'
+              )}
+            </Button>
+          </form>
+        )}
       </CardContent>
     </Card>
   )

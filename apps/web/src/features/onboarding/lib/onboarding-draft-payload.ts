@@ -43,7 +43,7 @@ export type OnboardingDraftPayload = {
   business_units: OnboardingDraftBusinessUnit[]
   activity_subjects: OnboardingDraftActivitySubject[]
   team: {
-    director: OnboardingDraftPerson | null
+    directors: OnboardingDraftPerson[]
     members: OnboardingDraftMember[]
   }
 }
@@ -65,7 +65,7 @@ export function emptyOnboardingDraftPayload(): OnboardingDraftPayload {
     establishment: { name: '', description: '' },
     business_units: [],
     activity_subjects: [],
-    team: { director: null, members: [] },
+    team: { directors: [], members: [] },
   }
 }
 
@@ -211,7 +211,7 @@ export function parseOnboardingDraftPayload(value: unknown): OnboardingDraftPayl
   const teamRaw = value.team
   let team: OnboardingDraftPayload['team']
   if (teamRaw === undefined) {
-    team = { director: null, members: [] }
+    team = { directors: [], members: [] }
   } else if (!isRecord(teamRaw)) {
     throw new OnboardingDraftPayloadParseError('Invalid team section.')
   } else {
@@ -224,8 +224,14 @@ export function parseOnboardingDraftPayload(value: unknown): OnboardingDraftPayl
           : (() => {
               throw new OnboardingDraftPayloadParseError('Invalid team.members section.')
             })()
+    const directorsRaw = teamRaw.directors ?? (teamRaw.director != null ? [teamRaw.director] : [])
+    const directors = Array.isArray(directorsRaw)
+      ? directorsRaw.map((item) => parsePerson(item) ?? { email: '', first_name: '', last_name: '' })
+      : (() => {
+          throw new OnboardingDraftPayloadParseError('Invalid team.directors section.')
+        })()
     team = {
-      director: parsePerson(teamRaw.director),
+      directors,
       members,
     }
   }
@@ -237,6 +243,14 @@ export function parseOnboardingDraftPayload(value: unknown): OnboardingDraftPayl
     activity_subjects,
     team,
   }
+}
+
+export function isPersonRowEmpty(person: OnboardingDraftPerson): boolean {
+  return (
+    person.email.trim() === '' &&
+    person.first_name.trim() === '' &&
+    person.last_name.trim() === ''
+  )
 }
 
 export function isMemberRowEmpty(member: OnboardingDraftMember): boolean {

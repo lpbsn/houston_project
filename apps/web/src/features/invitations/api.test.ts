@@ -29,14 +29,14 @@ describe('invitation auth boundary', () => {
   })
 
   it('delegates session transport and persistence entirely to Auth', async () => {
-    acceptInvitationSession.mockResolvedValueOnce(undefined)
+    acceptInvitationSession.mockResolvedValueOnce({ kind: 'session' })
 
     await expect(
       acceptDirectorInvitation('invite-token', {
         password: 'secret',
         password_confirmation: 'secret',
       }),
-    ).resolves.toBeUndefined()
+    ).resolves.toEqual({ kind: 'session' })
 
     expect(acceptInvitationSession).toHaveBeenCalledWith('invite-token', {
       password: 'secret',

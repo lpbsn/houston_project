@@ -47,7 +47,7 @@ DRAFT_ACTIVITY_SUBJECT_KEYS = frozenset(
         "description",
     }
 )
-DRAFT_TEAM_KEYS = frozenset({"director", "members"})
+DRAFT_TEAM_KEYS = frozenset({"director", "directors", "members"})
 DRAFT_PERSON_KEYS = frozenset({"email", "first_name", "last_name"})
 DRAFT_MEMBER_KEYS = frozenset(
     {"email", "first_name", "last_name", "role", "business_unit_client_keys"}
@@ -72,8 +72,44 @@ def empty_onboarding_draft_payload() -> dict:
         "establishment": {"name": "", "description": ""},
         "business_units": [],
         "activity_subjects": [],
-        "team": {"director": None, "members": []},
+        "team": {"directors": [], "members": []},
     }
+
+
+def is_blank_onboarding_person(person: dict) -> bool:
+    email = person.get("email") or ""
+    first_name = person.get("first_name") or ""
+    last_name = person.get("last_name") or ""
+    if (
+        not isinstance(email, str)
+        or not isinstance(first_name, str)
+        or not isinstance(last_name, str)
+    ):
+        return False
+    return not email.strip() and not first_name.strip() and not last_name.strip()
+
+
+def is_complete_onboarding_person(person: dict) -> bool:
+    email = person.get("email") or ""
+    first_name = person.get("first_name") or ""
+    last_name = person.get("last_name") or ""
+    if (
+        not isinstance(email, str)
+        or not isinstance(first_name, str)
+        or not isinstance(last_name, str)
+    ):
+        return False
+    return bool(email.strip() and first_name.strip() and last_name.strip())
+
+
+def is_complete_onboarding_member(member: dict) -> bool:
+    keys = member.get("business_unit_client_keys") or []
+    return (
+        is_complete_onboarding_person(member)
+        and member.get("role") in DRAFT_MEMBER_ROLES
+        and isinstance(keys, list)
+        and len(keys) > 0
+    )
 
 
 def is_blank_onboarding_member(member: dict) -> bool:
@@ -114,14 +150,15 @@ def validate_onboarding_draft_payload(
     payload: Any,
     *,
     mode: str = DRAFT_VALIDATION_MODE_SOFT,
-) -> tuple[dict, list[dict]]:
+) -> tuple[dict, list[dict], list[dict]]:
     """Validate draft payload.
 
-    Returns ``(normalized_payload, soft_errors)``.
+    Returns ``(normalized_payload, errors, warnings)``.
 
     Shape/type errors always raise ``OnboardingDraftValidationError`` (do not
-    persist). Business-rule soft errors are returned for soft mode; final mode
-    raises when any soft/final errors remain.
+    persist). Blocking business-rule errors are returned in soft mode and
+    raise in final mode. Team-row incompleteness is returned only as warnings
+    and never blocks final validation.
     """
     if mode not in {DRAFT_VALIDATION_MODE_SOFT, DRAFT_VALIDATION_MODE_FINAL}:
         raise OnboardingDraftValidationError([draft_error("invalid_validation_mode")])
@@ -140,6 +177,7 @@ def validate_onboarding_draft_payload(
         raise OnboardingDraftValidationError(shape_errors)
 
     errors: list[dict] = []
+    warnings: list[dict] = []
     current_step = payload.get("current_step")
     if current_step not in DRAFT_STEPS:
         raise OnboardingDraftValidationError(
@@ -173,6 +211,7 @@ def validate_onboarding_draft_payload(
         payload.get("team"),
         business_unit_client_keys={item["client_key"] for item in business_units},
         errors=errors,
+        warnings=warnings,
         shape_errors=shape_errors,
     )
     if shape_errors:
@@ -198,7 +237,7 @@ def validate_onboarding_draft_payload(
     if mode == DRAFT_VALIDATION_MODE_FINAL and errors:
         raise OnboardingDraftValidationError(errors)
 
-    return normalized, errors
+    return normalized, errors, warnings
 
 
 def _normalize_establishment_section(
@@ -534,41 +573,75 @@ def _normalize_team_section(
     *,
     business_unit_client_keys: set[str],
     errors: list[dict],
+    warnings: list[dict],
     shape_errors: list[dict],
 ) -> dict:
     if not isinstance(value, dict):
         shape_errors.append(draft_error("invalid_section_type", section="team"))
-        return {"director": None, "members": []}
+        return {"directors": [], "members": []}
 
     for key in value:
         if key not in DRAFT_TEAM_KEYS:
             shape_errors.append(draft_error("unknown_field", section="team", field=key))
 
-    director = value.get("director", None)
-    members = value.get("members", [])
-    normalized_director = None
-    if director is not None:
-        normalized_director = _normalize_person(
-            director,
-            section="team",
-            field="director",
-            errors=errors,
-            shape_errors=shape_errors,
-            required_identity=False,
+    raw_directors = value.get("directors", None)
+    if raw_directors is None and "director" in value:
+        legacy_director = value.get("director")
+        raw_directors = [] if legacy_director is None else [legacy_director]
+    if raw_directors is None:
+        raw_directors = []
+    if not isinstance(raw_directors, list):
+        shape_errors.append(
+            draft_error("invalid_field_type", section="team", field="directors")
         )
+        raw_directors = []
 
+    members = value.get("members", [])
     if not isinstance(members, list):
         shape_errors.append(
             draft_error("invalid_field_type", section="team", field="members")
         )
         members = []
 
+    normalized_directors: list[dict] = []
     normalized_members: list[dict] = []
     seen_emails: set[str] = set()
-    if normalized_director is not None and normalized_director.get("email"):
-        seen_emails.add(normalized_director["email"])
 
-    for raw in members:
+    for index, raw in enumerate(raw_directors):
+        director = _normalize_person(
+            raw,
+            section="team",
+            field="directors",
+            shape_errors=shape_errors,
+        )
+        if director is None:
+            continue
+        row_key = f"directors:{index}"
+        if is_blank_onboarding_person(director):
+            normalized_directors.append(director)
+            continue
+        if is_complete_onboarding_person(director):
+            email = director["email"]
+            if email in seen_emails:
+                errors.append(
+                    draft_error(
+                        "duplicate_team_email",
+                        section="team",
+                        field="email",
+                        key=email,
+                    )
+                )
+            else:
+                seen_emails.add(email)
+        else:
+            _append_person_incompleteness(
+                director,
+                warnings=warnings,
+                row_key=row_key,
+            )
+        normalized_directors.append(director)
+
+    for index, raw in enumerate(members):
         if isinstance(raw, dict) and is_blank_onboarding_member(raw):
             for key in raw:
                 if key not in DRAFT_MEMBER_KEYS:
@@ -594,28 +667,46 @@ def _normalize_team_section(
             raw,
             business_unit_client_keys=business_unit_client_keys,
             errors=errors,
+            warnings=warnings,
             shape_errors=shape_errors,
+            row_key=f"members:{index}",
+            seen_emails=seen_emails,
         )
         if member is None:
             continue
-        email = member["email"]
-        if email and email in seen_emails:
-            errors.append(
-                draft_error(
-                    "duplicate_team_email",
-                    section="team",
-                    field="email",
-                    key=email,
-                )
-            )
-        elif email:
-            seen_emails.add(email)
         normalized_members.append(member)
 
-    if normalized_director is None or not normalized_director.get("email"):
-        errors.append(draft_error("missing_director", section="team", field="director"))
+    return {"directors": normalized_directors, "members": normalized_members}
 
-    return {"director": normalized_director, "members": normalized_members}
+
+def _append_person_incompleteness(
+    person: dict,
+    *,
+    warnings: list[dict],
+    row_key: str,
+) -> None:
+    if not person.get("email"):
+        warnings.append(
+            draft_error("missing_email", section="team", field="email", key=row_key)
+        )
+    if not person.get("first_name"):
+        warnings.append(
+            draft_error(
+                "missing_first_name",
+                section="team",
+                field="first_name",
+                key=row_key,
+            )
+        )
+    if not person.get("last_name"):
+        warnings.append(
+            draft_error(
+                "missing_last_name",
+                section="team",
+                field="last_name",
+                key=row_key,
+            )
+        )
 
 
 def _normalize_person(
@@ -623,9 +714,7 @@ def _normalize_person(
     *,
     section: str,
     field: str,
-    errors: list[dict],
     shape_errors: list[dict],
-    required_identity: bool,
 ) -> dict | None:
     if not isinstance(value, dict):
         shape_errors.append(
@@ -658,28 +747,10 @@ def _normalize_person(
         )
         last_name = ""
 
-    email = (User.normalize_email_value(email) or "").strip()
-    first_name = first_name.strip()
-    last_name = last_name.strip()
-
-    if required_identity or email or first_name or last_name:
-        if not email:
-            errors.append(
-                draft_error("missing_email", section=section, field="email")
-            )
-        if not first_name:
-            errors.append(
-                draft_error("missing_first_name", section=section, field="first_name")
-            )
-        if not last_name:
-            errors.append(
-                draft_error("missing_last_name", section=section, field="last_name")
-            )
-
     return {
-        "email": email,
-        "first_name": first_name,
-        "last_name": last_name,
+        "email": (User.normalize_email_value(email) or "").strip(),
+        "first_name": first_name.strip(),
+        "last_name": last_name.strip(),
     }
 
 
@@ -688,7 +759,10 @@ def _normalize_member(
     *,
     business_unit_client_keys: set[str],
     errors: list[dict],
+    warnings: list[dict],
     shape_errors: list[dict],
+    row_key: str,
+    seen_emails: set[str],
 ) -> dict | None:
     if not isinstance(value, dict):
         shape_errors.append(
@@ -710,9 +784,7 @@ def _normalize_member(
         },
         section="team",
         field="members",
-        errors=errors,
         shape_errors=shape_errors,
-        required_identity=True,
     )
     if person is None:
         return None
@@ -724,8 +796,6 @@ def _normalize_member(
         )
         role = ""
     role = role.strip()
-    if role not in DRAFT_MEMBER_ROLES:
-        errors.append(draft_error("invalid_member_role", section="team", field="role"))
 
     raw_keys = value.get("business_unit_client_keys", [])
     if not isinstance(raw_keys, list):
@@ -739,6 +809,7 @@ def _normalize_member(
         raw_keys = []
 
     bu_keys: list[str] = []
+    unknown_keys: list[str] = []
     seen: set[str] = set()
     for raw_key in raw_keys:
         parsed = _parse_client_key(
@@ -753,31 +824,63 @@ def _normalize_member(
             continue
         seen.add(parsed)
         if parsed not in business_unit_client_keys:
-            errors.append(
-                draft_error(
-                    "unknown_business_unit_client_key",
-                    section="team",
-                    field="business_unit_client_keys",
-                    key=parsed,
-                )
-            )
+            unknown_keys.append(parsed)
         else:
             bu_keys.append(parsed)
 
+    member = {
+        **person,
+        "role": role if role in DRAFT_MEMBER_ROLES else role,
+        "business_unit_client_keys": bu_keys,
+    }
+    identity_complete = is_complete_onboarding_person(person)
+    role_valid = role in DRAFT_MEMBER_ROLES
+    if identity_complete and role_valid and bu_keys and not unknown_keys:
+        email = person["email"]
+        if email in seen_emails:
+            errors.append(
+                draft_error(
+                    "duplicate_team_email",
+                    section="team",
+                    field="email",
+                    key=email,
+                )
+            )
+        else:
+            seen_emails.add(email)
+        return member
+
+    if not identity_complete:
+        _append_person_incompleteness(person, warnings=warnings, row_key=row_key)
+    if not role_valid:
+        warnings.append(
+            draft_error(
+                "invalid_member_role",
+                section="team",
+                field="role",
+                key=row_key,
+            )
+        )
     if not bu_keys:
-        errors.append(
+        warnings.append(
             draft_error(
                 "missing_member_business_units",
                 section="team",
                 field="business_unit_client_keys",
+                key=row_key,
             )
         )
-
-    return {
-        **person,
-        "role": role,
-        "business_unit_client_keys": bu_keys,
-    }
+    target = errors if identity_complete and role_valid and bu_keys else warnings
+    for unknown_key in unknown_keys:
+        target.append(
+            draft_error(
+                "unknown_business_unit_client_key",
+                section="team",
+                field="business_unit_client_keys",
+                key=unknown_key,
+            )
+        )
+    return member
 
 
 def _parse_client_key(

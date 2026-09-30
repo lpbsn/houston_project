@@ -16,12 +16,12 @@ pytestmark = pytest.mark.django_db
 @pytest.mark.parametrize(
     ("user_status", "expected"),
     [
-        (User.Status.ACTIVE, InviteTargetDecision.USER_EXISTS),
+        (User.Status.ACTIVE, InviteTargetDecision.ATTACH_EXISTING_USER),
         (User.Status.SUSPENDED, InviteTargetDecision.USER_EXISTS),
         (User.Status.ANONYMIZED, InviteTargetDecision.USER_EXISTS),
     ],
 )
-def test_evaluate_invite_target_non_pending_user_exists(user_status, expected):
+def test_evaluate_invite_target_non_pending_without_membership(user_status, expected):
     user = create_user(username=f"invite_elig_{user_status}", status=user_status)
     assert (
         evaluate_invite_target(
@@ -44,7 +44,7 @@ def test_evaluate_invite_target_no_user_creates_pending():
     )
 
 
-def test_evaluate_invite_target_pending_without_membership_user_exists():
+def test_evaluate_invite_target_pending_without_membership_attaches():
     user = create_user(username="pending_no_membership", status=User.Status.PENDING)
     assert (
         evaluate_invite_target(
@@ -52,7 +52,7 @@ def test_evaluate_invite_target_pending_without_membership_user_exists():
             membership=None,
             invited_role=EstablishmentMembership.Role.STAFF,
         )
-        == InviteTargetDecision.USER_EXISTS
+        == InviteTargetDecision.ATTACH_EXISTING_USER
     )
 
 

@@ -180,7 +180,7 @@ def _events_payload(*, establishment_name: str) -> dict:
 def test_final_draft_allows_two_transversal_instances_and_rejects_duplicate_names():
     sync_catalog_from_normalized_rows()
     payload = _events_payload(establishment_name="Site Events")
-    normalized, errors = validate_onboarding_draft_payload(
+    normalized, errors, _warnings = validate_onboarding_draft_payload(
         payload,
         mode=DRAFT_VALIDATION_MODE_FINAL,
     )
@@ -217,24 +217,27 @@ def test_blank_member_row_is_kept_and_email_only_member_stays_invalid():
         },
     ]
 
-    normalized, errors = validate_onboarding_draft_payload(
+    normalized, errors, warnings = validate_onboarding_draft_payload(
         payload,
         mode=DRAFT_VALIDATION_MODE_SOFT,
     )
     assert normalized["team"]["members"][0]["role"] == "manager"
     assert normalized["team"]["members"][0]["email"] == ""
     assert len(normalized["team"]["members"]) == 2
-    codes = [error["code"] for error in errors]
-    assert "missing_email" not in codes
-    assert "missing_first_name" in codes
-    assert codes.count("missing_member_business_units") == 1
+    error_codes = [error["code"] for error in errors]
+    warning_codes = [warning["code"] for warning in warnings]
+    assert "missing_email" not in error_codes
+    assert "missing_first_name" not in error_codes
+    assert "missing_first_name" in warning_codes
+    assert warning_codes.count("missing_member_business_units") == 1
 
     payload["team"]["members"] = [payload["team"]["members"][0]]
-    normalized, errors = validate_onboarding_draft_payload(
+    normalized, errors, warnings = validate_onboarding_draft_payload(
         payload,
         mode=DRAFT_VALIDATION_MODE_FINAL,
     )
     assert errors == []
+    assert warnings == []
     assert len(normalized["team"]["members"]) == 1
 
     payload["team"]["members"] = [
@@ -253,9 +256,12 @@ def test_blank_member_row_is_kept_and_email_only_member_stays_invalid():
             "business_unit_client_keys": [],
         },
     ]
-    with pytest.raises(OnboardingDraftValidationError) as exc_info:
-        validate_onboarding_draft_payload(payload, mode=DRAFT_VALIDATION_MODE_FINAL)
-    assert any(error["code"] == "missing_first_name" for error in exc_info.value.errors)
+    normalized, errors, warnings = validate_onboarding_draft_payload(
+        payload,
+        mode=DRAFT_VALIDATION_MODE_FINAL,
+    )
+    assert errors == []
+    assert any(warning["code"] == "missing_first_name" for warning in warnings)
 
 
 def test_complete_does_not_invite_blank_member_rows():

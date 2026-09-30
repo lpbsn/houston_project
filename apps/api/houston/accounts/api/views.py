@@ -15,6 +15,7 @@ from houston.accounts.api.serializers import (
     REFRESH_TOKEN_TRANSPORT_COOKIE,
     AccountDeletionPreviewResponseSerializer,
     AccountDeletionRequestSerializer,
+    ActiveInvitationAcceptResponseSerializer,
     ApiErrorResponseSerializer,
     AuthResponseSerializer,
     BootstrapResponseSerializer,
@@ -27,6 +28,8 @@ from houston.accounts.api.serializers import (
     EmailChangeConfirmResponseSerializer,
     EmailChangeRequestResponseSerializer,
     EmailChangeRequestSerializer,
+    InvitationPreviewRequestSerializer,
+    InvitationPreviewResponseSerializer,
     LegalVersionRequestSerializer,
     LoginRequestSerializer,
     LogoutRequestSerializer,
@@ -196,7 +199,7 @@ class LoginView(AuthRateLimitedMixin, APIView):
 
 
 class DirectorInvitationAcceptView(AuthRateLimitedMixin, APIView):
-    authentication_classes = []
+    authentication_classes = [OptionalBearerAccessTokenAuthentication]
     permission_classes = [permissions.AllowAny]
     throttle_scope = settings.AUTH_THROTTLE_SCOPE_INVITATION_ACCEPT
 
@@ -204,6 +207,7 @@ class DirectorInvitationAcceptView(AuthRateLimitedMixin, APIView):
         tags=["auth"],
         request=DirectorInvitationAcceptRequestSerializer,
         responses={
+            200: ActiveInvitationAcceptResponseSerializer,
             201: DirectorInvitationAcceptResponseSerializer,
             400: OpenApiResponse(response=DirectorInvitationAcceptErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
@@ -211,8 +215,9 @@ class DirectorInvitationAcceptView(AuthRateLimitedMixin, APIView):
             429: _THROTTLED_OPENAPI_RESPONSE,
         },
         description=(
-            "Accepts an establishment invitation, sets the account password, "
-            "activates the user and membership, and creates an auth session. "
+            "Accepts an establishment invitation. A pending user sets a password, "
+            "becomes active, and receives a session. An already active user has the "
+            "membership activated without a password change and without a new session. "
             "The invitation bearer is sent in the JSON body, not in the URI. "
             "Owner invitations activate all compatible owner/invited memberships in the "
             "same organization. Cookie transport requires Django CSRF; body transport "
@@ -233,11 +238,13 @@ class DirectorInvitationAcceptView(AuthRateLimitedMixin, APIView):
         if csrf_failure is not None:
             return csrf_failure
 
+        authenticated_user = request.user if request.user.is_authenticated else None
         try:
             result = accept_establishment_invitation(
                 request=request,
                 raw_token=raw_token,
-                password=serializer.validated_data["password"],
+                password=serializer.validated_data.get("password") or "",
+                authenticated_user=authenticated_user,
             )
         except EstablishmentInvitationExpiredError:
             return Response(
@@ -272,6 +279,9 @@ class DirectorInvitationAcceptView(AuthRateLimitedMixin, APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
+        if result.auth is None:
+            return Response(result.payload, status=status.HTTP_200_OK)
+
         terms_error = _apply_optional_terms(
             user=result.auth.session.user,
             payload=result.payload,
@@ -287,6 +297,60 @@ class DirectorInvitationAcceptView(AuthRateLimitedMixin, APIView):
             transport=transport,
             response_status=status.HTTP_201_CREATED,
         )
+
+
+class InvitationPreviewView(AuthRateLimitedMixin, APIView):
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = settings.AUTH_THROTTLE_SCOPE_INVITATION_ACCEPT
+
+    @extend_schema(
+        tags=["auth"],
+        request=InvitationPreviewRequestSerializer,
+        responses={
+            200: InvitationPreviewResponseSerializer,
+            400: OpenApiResponse(response=DirectorInvitationAcceptErrorResponseSerializer),
+            429: _THROTTLED_OPENAPI_RESPONSE,
+        },
+        description=(
+            "Reports whether accepting this invitation requires setting a password. "
+            "The invitation bearer is sent in the JSON body, not in the URI."
+        ),
+    )
+    def post(self, request):
+        serializer = InvitationPreviewRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        from houston.establishments.services import preview_establishment_invitation
+
+        try:
+            payload = preview_establishment_invitation(
+                raw_token=serializer.validated_data["token"],
+            )
+        except EstablishmentInvitationExpiredError:
+            return Response(
+                {
+                    "code": "invitation_expired",
+                    "detail": "This invitation has expired.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except EstablishmentInvitationAlreadyAcceptedError:
+            return Response(
+                {
+                    "code": "invitation_already_accepted",
+                    "detail": "This invitation has already been accepted.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except InvalidEstablishmentInvitationError:
+            return Response(
+                {
+                    "code": "invitation_invalid",
+                    "detail": "This invitation is not valid.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(payload)
 
 
 class RefreshView(AuthRateLimitedMixin, APIView):

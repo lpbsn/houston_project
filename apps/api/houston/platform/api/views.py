@@ -585,6 +585,7 @@ class PlatformOnboardingCompleteView(APIView):
                 "activated": result["activated"],
                 "idempotent": result["idempotent"],
                 "readiness": result["readiness"],
+                "warnings": result.get("warnings", []),
             }
         )
 
