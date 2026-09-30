@@ -132,7 +132,7 @@ export function SignalDetailClassificationSection({
           {qualifyErrorMessage}
         </p>
       ) : null}
-      <div className={cn('mt-2 space-y-1.5', !context && 'mt-1 space-y-1')}>
+      <div className={cn('mt-2 space-y-1.5', !context && 'mt-1 space-y-1 pl-4')}>
         <ClassificationField label="Pôle responsable" value={responsibleValue} />
         <ClassificationField label="Pôle concerné" value={affectedValue} />
         <ClassificationField label="Sujet" value={subjectValue} />

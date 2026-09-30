@@ -219,6 +219,7 @@ export function SignalDetailPage({
   const linkedPlans = (
     <SignalLinkedActionPlansSection
       executions={signal.linked_action_plan_executions}
+      alignWithCardText={!isDesktopWeb}
       onSelect={(executionId) =>
         onNavigate(
           source === 'cross'

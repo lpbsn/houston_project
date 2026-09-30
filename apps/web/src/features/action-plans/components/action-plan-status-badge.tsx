@@ -8,6 +8,7 @@ type ActionPlanStatusBadgeProps = {
   status: string
   validatedAt?: string | null
   variant?: 'default' | 'detail' | 'executionHeader'
+  className?: string
 }
 
 const DETAIL_BADGE_CLASS = 'rounded-full px-2.5 py-1 text-[10px]'
@@ -37,6 +38,7 @@ export function ActionPlanStatusBadge({
   status,
   validatedAt = null,
   variant = 'default',
+  className,
 }: ActionPlanStatusBadgeProps) {
   const badgeVariant = getActionPlanStatusBadgeVariant(status)
   const isExecutionHeaderInProgress = variant === 'executionHeader' && status === 'in_progress'
@@ -49,6 +51,7 @@ export function ActionPlanStatusBadge({
         variant === 'executionHeader' && EXECUTION_HEADER_BADGE_CLASS,
         isExecutionHeaderInProgress && actionPlanExecutionDetailNavyBgClassName,
         isExecutionHeaderInProgress && 'text-white',
+        className,
       )}
     >
       {formatActionPlanExecutionStatusLabel(status, { validatedAt })}

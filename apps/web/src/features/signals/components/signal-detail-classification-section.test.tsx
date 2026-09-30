@@ -151,6 +151,10 @@ describe('SignalDetailClassificationSection qualify CTA', () => {
     expect(qualify.className).not.toContain('bg-[#114660]')
     expect(qualify.className).not.toContain('absolute')
     expect(title.parentElement?.parentElement?.contains(qualify)).toBe(true)
+    expect(screen.getByText('Pôle responsable').parentElement?.parentElement?.className).toContain(
+      'pl-4',
+    )
+    expect(title.parentElement?.parentElement?.className ?? '').not.toContain('pl-4')
     expect(screen.getByText('Pôle responsable')).toBeTruthy()
     expect(screen.getByText('Pôle concerné')).toBeTruthy()
     expect(screen.getByText('Sujet')).toBeTruthy()
@@ -176,5 +180,8 @@ describe('SignalDetailClassificationSection qualify CTA', () => {
     expect(container.firstElementChild?.className).not.toContain('border-transparent')
     expect(container.firstElementChild?.className).toContain('bg-white')
     expect(screen.getByText('Statut')).toBeTruthy()
+    expect(screen.getByText('Pôle responsable').parentElement?.parentElement?.className ?? '').not.toContain(
+      'pl-4',
+    )
   })
 })

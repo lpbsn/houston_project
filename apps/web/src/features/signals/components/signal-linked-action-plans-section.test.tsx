@@ -56,6 +56,23 @@ describe('SignalLinkedActionPlansSection', () => {
     expect(screen.queryByText('Maintenance')).toBeNull()
     expect(row.className).toContain('rounded-lg')
     expect(row.className).toContain('bg-[#FAFAF8]')
+    expect(row.className).toContain('pl-2.5')
+  })
+
+  it('insets the plan title to the main card text axis without moving the section label', () => {
+    render(
+      createElement(SignalLinkedActionPlansSection, {
+        executions: [buildLinkedExecution()],
+        onSelect: vi.fn(),
+        alignWithCardText: true,
+      }),
+    )
+
+    const row = screen.getByRole('button', { name: /Contrôle chaîne du froid/i })
+    expect(row.className).toContain('pl-4')
+    expect(row.className).toContain('pr-2.5')
+    expect(row.className).toContain('w-full')
+    expect(screen.getByText("Plans d'action").className).not.toContain('pl-4')
   })
 
   it('uses the existing detail status badge language under the title', () => {
@@ -67,7 +84,9 @@ describe('SignalLinkedActionPlansSection', () => {
     )
 
     const status = screen.getByText('En cours')
-    expect(status.className).toContain('text-[10px]')
+    expect(status.className).toContain('text-[9px]')
+    expect(status.className).toContain('px-1.5')
+    expect(status.className).toContain('py-0')
     expect(container.querySelector('.bg-\\[\\#3A7A96\\]')).toBeTruthy()
   })
 
