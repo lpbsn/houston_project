@@ -2,10 +2,12 @@ import { useMemo, useState } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { Popover } from 'radix-ui'
 
+import { TerrainFilterChip } from '@/components/ui/terrain'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
 import { buildBusinessUnitScopeTree } from '@/features/auth/lib/business-unit-scope'
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 import { useLgViewport } from '@/lib/lg-viewport'
+import { terrainFilterChipClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 import {
@@ -32,15 +34,6 @@ type SignalFeedFiltersBarProps = {
   onReset?: () => void
   /** Horizontal inset for mobile chips (safe-area aware). */
   contentClassName?: string
-}
-
-function filterChipClassName(active: boolean): string {
-  return cn(
-    'inline-flex h-8 shrink-0 items-center rounded-full border px-3 text-xs font-semibold whitespace-nowrap focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30 focus-visible:outline-none',
-    active
-      ? 'border-[#1B4FD8] bg-[#EEF4FF] text-[#1B4FD8]'
-      : 'border-[#E8E6DF] bg-white text-[#5c564e]',
-  )
 }
 
 export function SignalFeedFiltersBar({
@@ -73,34 +66,36 @@ export function SignalFeedFiltersBar({
 
   const showNeedsQualification = canUseNeedsQualificationFeedFilter(membershipRole)
 
+  const classificationActive =
+    normalizedFilters.businessUnitIds.length > 0 ||
+    normalizedFilters.activitySubjectIds.length > 0
+
   if (isDesktopWeb) {
     return (
       <div
-        className="flex shrink-0 flex-wrap items-center gap-2 bg-white px-4 py-2"
+        className="flex shrink-0 flex-wrap items-center gap-2 bg-white"
         aria-label="Filtres des observations"
       >
         {showNeedsQualification ? (
-          <label className="flex items-center gap-2 text-xs text-[#1a1a1a]">
-            <input
-              type="checkbox"
-              className="h-3.5 w-3.5 rounded border-[#E8E6DF]"
-              checked={normalizedFilters.needsQualification}
-              onChange={(event) =>
-                onFiltersChange(
-                  normalizeSignalFeedFilters({
-                    ...normalizedFilters,
-                    needsQualification: event.target.checked,
-                  }),
-                )
-              }
-            />
+          <TerrainFilterChip
+            pressed={normalizedFilters.needsQualification}
+            onClick={() =>
+              onFiltersChange(
+                normalizeSignalFeedFilters({
+                  ...normalizedFilters,
+                  needsQualification: !normalizedFilters.needsQualification,
+                }),
+              )
+            }
+          >
             Non classifié
-          </label>
+          </TerrainFilterChip>
         ) : null}
         <Popover.Root open={classificationPanelOpen} onOpenChange={setClassificationPanelOpen}>
           <Popover.Trigger
             type="button"
-            className="rounded-full border border-[#E8E6DF] bg-white px-2.5 py-1 text-xs font-semibold text-[#1a1a1a] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30 focus-visible:outline-none"
+            aria-pressed={classificationActive}
+            className={terrainFilterChipClassName(classificationActive)}
           >
             Pôle / Sujet
             <span className="ml-1 font-medium text-[#7D7B75]">
@@ -135,29 +130,18 @@ export function SignalFeedFiltersBar({
     )
   }
 
-  const classificationActive =
-    normalizedFilters.businessUnitIds.length > 0 ||
-    normalizedFilters.activitySubjectIds.length > 0
   const showResetControl = showReset && filtersActive && Boolean(onReset)
 
   return (
     <>
       <div
-        className="flex shrink-0 bg-white py-2"
+        className="flex shrink-0 items-center gap-2 bg-white"
         aria-label="Filtres des observations"
       >
-        <div
-          className={cn(
-            'flex min-w-0 flex-1 items-center gap-2',
-            contentClassName ?? 'px-3',
-          )}
-        >
-          <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <button
-              type="button"
-              data-filter-kind="classification"
-              aria-pressed={classificationActive}
-              className={filterChipClassName(classificationActive)}
+        <div className={cn('flex items-center gap-2', contentClassName)}>
+          <div className="flex flex-nowrap items-center gap-2">
+            <TerrainFilterChip
+              pressed={classificationActive}
               onClick={() => setClassificationSheetOpen(true)}
             >
               {formatClassificationFilterChipLabel(
@@ -165,13 +149,10 @@ export function SignalFeedFiltersBar({
                 classificationLabels.labelByBusinessUnitId,
                 classificationLabels.labelByActivitySubjectId,
               )}
-            </button>
+            </TerrainFilterChip>
             {showNeedsQualification ? (
-              <button
-                type="button"
-                data-filter-kind="needs-qualification"
-                aria-pressed={normalizedFilters.needsQualification}
-                className={filterChipClassName(normalizedFilters.needsQualification)}
+              <TerrainFilterChip
+                pressed={normalizedFilters.needsQualification}
                 onClick={() =>
                   onFiltersChange(
                     normalizeSignalFeedFilters({
@@ -182,7 +163,7 @@ export function SignalFeedFiltersBar({
                 }
               >
                 Non classifié
-              </button>
+              </TerrainFilterChip>
             ) : null}
           </div>
           {showResetControl ? (

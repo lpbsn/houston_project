@@ -174,7 +174,7 @@ export function formatSignalFeedPinnedPoleLabel(
 }
 
 function getSignalCardLeftAccentColorKey(
-  item: SignalFeedItem,
+  item: { status: string },
 ): keyof typeof SIGNAL_CARD_LEFT_ACCENT_COLOR {
   if (item.status === 'open') {
     return 'open'
@@ -192,7 +192,7 @@ function getSignalCardLeftAccentColorKey(
 }
 
 /** Hex color for feed card left border (use with inline style.borderLeftColor). */
-export function getSignalCardLeftAccentColor(item: SignalFeedItem): string {
+export function getSignalCardLeftAccentColor(item: { status: string }): string {
   return SIGNAL_CARD_LEFT_ACCENT_COLOR[getSignalCardLeftAccentColorKey(item)]
 }
 
@@ -212,7 +212,7 @@ export function getSignalStatusBadgeVariant(status: string): HoustonBadgeVariant
   return 'gray'
 }
 
-export function getSignalCardSurfaceClass(item: SignalFeedItem): string {
+export function getSignalCardSurfaceClass(item: { status: string }): string {
   const classes: string[] = []
   if (item.status === 'in_progress') {
     classes.push('bg-[#F9F8F5] opacity-[0.92]')

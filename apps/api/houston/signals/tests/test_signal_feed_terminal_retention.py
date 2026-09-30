@@ -10,6 +10,7 @@ from houston.signals.feed_filters import SignalFeedFilters
 from houston.signals.models import Signal
 from houston.signals.selectors import (
     cross_signal_feed_queryset,
+    signal_feed_counts,
     signal_feed_list_queryset,
     signal_feed_queryset,
 )
@@ -91,6 +92,15 @@ def test_status_filter_excludes_retained_terminals():
 
     assert resolved.id in _ids(membership, view_mode="general", now=now)
     assert resolved.id not in _ids(membership, view_mode="general", now=now, statuses="open")
+    assert resolved.id in _ids(membership, view_mode="general", now=now, statuses="resolved")
+
+    counts = signal_feed_counts(
+        signal_feed_queryset(membership=membership, view_mode="general", now=now),
+        filters=None,
+    )
+    assert counts["resolved"] == 1
+    assert counts["canceled"] == 0
+    assert counts["retained"] == 1
 
 
 def test_cross_feed_uses_the_same_retention_window():

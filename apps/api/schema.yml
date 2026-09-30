@@ -1823,6 +1823,8 @@ paths:
           type: string
           enum:
           - all
+          - canceled
+          - done
           - in_progress
           - overdue
           - pending_validation
@@ -1886,6 +1888,8 @@ paths:
           type: string
           enum:
           - all
+          - canceled
+          - done
           - in_progress
           - overdue
           - pending_validation
@@ -2230,8 +2234,9 @@ paths:
         name: statuses
         schema:
           type: string
-        description: One of open, in_progress, interesting. Omit for the full operational
-          order.
+        description: One of open, in_progress, interesting, resolved, or canceled.
+          Resolved and canceled stay inside the operational retention window. Omit
+          for the full operational order.
       tags:
       - signals
       security:
@@ -2431,6 +2436,8 @@ paths:
           type: string
           enum:
           - all
+          - canceled
+          - done
           - in_progress
           - overdue
           - pending_validation
@@ -7668,7 +7675,8 @@ paths:
         name: statuses
         schema:
           type: string
-        description: 'One operational status: open, in_progress, or interesting. Omit
+        description: 'One status: open, in_progress, interesting, resolved, or canceled.
+          Resolved and canceled stay inside the operational retention window. Omit
           it to page open, then in progress, then interesting.'
       - in: query
         name: view_mode
@@ -10453,7 +10461,13 @@ components:
           type: integer
         in_progress:
           type: integer
+        done:
+          type: integer
+        canceled:
+          type: integer
       required:
+      - canceled
+      - done
       - in_progress
       - overdue
       - pending_validation
@@ -13889,6 +13903,17 @@ components:
       - execution_thread
       type: string
       description: '* `execution_thread` - execution_thread'
+    ExecutionHistoryAssignee:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+      required:
+      - display_name
+      - membership_id
     ExecutionHistoryItem:
       type: object
       properties:
@@ -13915,16 +13940,74 @@ components:
           format: uuid
         establishment_name:
           type: string
+        pilot_business_unit:
+          $ref: '#/components/schemas/ActionPlanBusinessUnit'
+        involved_poles:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        assignees:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExecutionHistoryAssignee'
+        start_at:
+          type: string
+          format: date-time
+          nullable: true
+        end_at:
+          type: string
+          format: date-time
+          nullable: true
+        all_day:
+          type: boolean
+        validated_at:
+          type: string
+          format: date-time
+          nullable: true
+        validated_by_display_name:
+          type: string
+          nullable: true
+        marked_done_at:
+          type: string
+          format: date-time
+          nullable: true
+        canceled_at:
+          type: string
+          format: date-time
+          nullable: true
+        active_review:
+          allOf:
+          - $ref: '#/components/schemas/ActionPlanExecutionActiveReview'
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        created_by_display_name:
+          type: string
       required:
+      - active_review
+      - all_day
+      - assignees
+      - canceled_at
+      - created_at
+      - created_by_display_name
+      - end_at
       - establishment_id
       - establishment_name
       - id
+      - involved_poles
+      - marked_done_at
+      - pilot_business_unit
+      - start_at
       - status
       - terminal_at
       - terminal_date_source
       - termination_actor_display_name
       - termination_origin
       - title
+      - validated_at
+      - validated_by_display_name
     ExecutionHistoryItemTerminationOriginEnum:
       enum:
       - manual
@@ -16002,13 +16085,19 @@ components:
           type: integer
         pinned:
           type: integer
+        resolved:
+          type: integer
+        canceled:
+          type: integer
         retained:
           type: integer
       required:
+      - canceled
       - in_progress
       - interesting
       - open
       - pinned
+      - resolved
       - retained
     SignalFeedItem:
       type: object
@@ -16179,10 +16268,50 @@ components:
           format: uuid
         establishment_name:
           type: string
+        last_activity_at:
+          type: string
+          format: date-time
+        location_text:
+          type: string
+        reporter_display_name:
+          type: string
+          nullable: true
+        affected_business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
+        affected_business_unit_label:
+          type: string
+          nullable: true
+        responsible_business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
+        responsible_business_unit_label:
+          type: string
+          nullable: true
+        activity_subject_label:
+          type: string
+          nullable: true
+        activity_subject_normalized_name:
+          type: string
+          nullable: true
+        aggregation_count:
+          type: integer
       required:
+      - activity_subject_label
+      - activity_subject_normalized_name
+      - affected_business_unit_id
+      - affected_business_unit_label
+      - aggregation_count
       - establishment_id
       - establishment_name
       - id
+      - last_activity_at
+      - location_text
+      - reporter_display_name
+      - responsible_business_unit_id
+      - responsible_business_unit_label
       - status
       - terminal_at
       - terminal_date_source

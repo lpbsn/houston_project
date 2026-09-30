@@ -67,6 +67,8 @@ class ActionPlanExecutionFeedSectionCountsSerializer(serializers.Serializer):
     pending_validation = serializers.IntegerField()
     overdue = serializers.IntegerField()
     in_progress = serializers.IntegerField()
+    done = serializers.IntegerField()
+    canceled = serializers.IntegerField()
 
 
 class ActionPlanExecutionFeedScheduledNextSerializer(serializers.Serializer):

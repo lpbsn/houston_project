@@ -238,3 +238,52 @@ def test_category_filter_and_calendar_do_not_keep_retained_terminals(
     )
     assert done.id not in calendar_ids
     assert done.id in _visible_ids(owner_membership, now=now)
+
+
+def test_terminal_category_counts_cover_the_retention_window_only(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    now = timezone.now()
+    done = create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Done retained",
+        status=EXECUTION_STATUS_DONE,
+    )
+    expired = create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Done expired",
+        status=EXECUTION_STATUS_DONE,
+    )
+    canceled = create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Canceled retained",
+        status=EXECUTION_STATUS_CANCELED,
+    )
+    ActionPlanExecution.objects.filter(pk=done.pk).update(
+        validated_at=now - timedelta(days=1),
+    )
+    ActionPlanExecution.objects.filter(pk=expired.pk).update(
+        validated_at=now - timedelta(days=11),
+    )
+    ActionPlanExecution.objects.filter(pk=canceled.pk).update(
+        canceled_at=now - timedelta(hours=1),
+    )
+    from houston.testing.auth import auth_headers, login
+
+    token = login(api_client, user=owner_membership.user)
+    filtered = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id)
+        + "?view_mode=general&category=done",
+        **auth_headers(token),
+    )
+    assert filtered.status_code == 200
+    body = filtered.json()
+    assert feed_execution_ids(body) == [str(done.id)]
+    assert body["section_counts"]["done"] == 1
+    assert body["section_counts"]["canceled"] == 1
+    assert body["section_counts"]["in_progress"] == 0

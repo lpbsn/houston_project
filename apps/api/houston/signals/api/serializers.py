@@ -131,6 +131,8 @@ class SignalFeedCountsSerializer(serializers.Serializer):
     in_progress = serializers.IntegerField()
     interesting = serializers.IntegerField()
     pinned = serializers.IntegerField()
+    resolved = serializers.IntegerField()
+    canceled = serializers.IntegerField()
     retained = serializers.IntegerField()
 
 
@@ -517,6 +519,16 @@ class SignalHistoryItemSerializer(serializers.Serializer):
     termination_actor_display_name = serializers.CharField(allow_null=True)
     establishment_id = serializers.UUIDField()
     establishment_name = serializers.CharField()
+    last_activity_at = serializers.DateTimeField()
+    location_text = serializers.CharField(allow_blank=True)
+    reporter_display_name = serializers.CharField(allow_null=True, allow_blank=True)
+    affected_business_unit_id = serializers.UUIDField(allow_null=True)
+    affected_business_unit_label = serializers.CharField(allow_null=True, allow_blank=True)
+    responsible_business_unit_id = serializers.UUIDField(allow_null=True)
+    responsible_business_unit_label = serializers.CharField(allow_null=True, allow_blank=True)
+    activity_subject_label = serializers.CharField(allow_null=True, allow_blank=True)
+    activity_subject_normalized_name = serializers.CharField(allow_null=True, allow_blank=True)
+    aggregation_count = serializers.IntegerField()
 
 
 class SignalHistoryResponseSerializer(serializers.Serializer):
@@ -530,6 +542,9 @@ def serialize_signal_history_item(signal) -> dict:
     from houston.signals.history import signal_terminal_date_source, signal_termination
 
     origin, actor = signal_termination(signal)
+    affected = signal.affected_business_unit if signal.affected_business_unit_id else None
+    responsible = signal.responsible_business_unit if signal.responsible_business_unit_id else None
+    subject = signal.activity_subject if signal.activity_subject_id else None
     return {
         "id": signal.id,
         "title": signal.title,
@@ -540,6 +555,24 @@ def serialize_signal_history_item(signal) -> dict:
         "termination_actor_display_name": actor,
         "establishment_id": signal.establishment_id,
         "establishment_name": signal.establishment.name,
+        "last_activity_at": signal.last_activity_at,
+        "location_text": signal.location_text,
+        "reporter_display_name": reporter_display_name_for_signal(signal),
+        "affected_business_unit_id": signal.affected_business_unit_id,
+        "affected_business_unit_label": (
+            business_unit_public_label(business_unit=affected) if affected is not None else None
+        ),
+        "responsible_business_unit_id": signal.responsible_business_unit_id,
+        "responsible_business_unit_label": (
+            business_unit_public_label(business_unit=responsible)
+            if responsible is not None
+            else None
+        ),
+        "activity_subject_label": resolve_activity_subject_public_label(activity_subject=subject),
+        "activity_subject_normalized_name": (
+            subject.normalized_name if subject is not None else None
+        ),
+        "aggregation_count": getattr(signal, "aggregation_count", 0) or 0,
     }
 
 

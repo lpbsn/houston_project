@@ -166,6 +166,8 @@ describe('ActionPlanExecutionFeedCard', () => {
     )
     expect(screen.getByText('À valider')).toBeTruthy()
     expect(screen.queryByRole('progressbar')).toBeNull()
+    expect(screen.queryByText(/Fin prévue/)).toBeNull()
+    expect(screen.queryByText(/^Avec /)).toBeNull()
   })
 
   it('keeps À valider soft tone and restores status badge colors', () => {
@@ -176,6 +178,7 @@ describe('ActionPlanExecutionFeedCard', () => {
       />,
     )
     expect(screen.getByText('En cours').className).toContain('bg-[#3A7A96]')
+    expect(screen.queryByText(/^Avec /)).toBeNull()
 
     rerender(
       <ActionPlanExecutionFeedCard

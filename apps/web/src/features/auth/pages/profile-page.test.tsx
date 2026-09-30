@@ -321,7 +321,7 @@ describe('ProfilePage', () => {
     expect(isDocumentFollowing(privacyLink as HTMLElement, termsLink as HTMLElement)).toBe(true)
   })
 
-  it('opens history from the account section', () => {
+  it('opens history from operations', () => {
     onNavigate.mockClear()
     render(
       createElement(ProfilePage, {
@@ -337,6 +337,23 @@ describe('ProfilePage', () => {
       }),
     )
     expect(onNavigate).toHaveBeenCalledWith('/e/est-1/general/history')
+  })
+
+  it('hides history on the desktop general profile', () => {
+    lgViewportState.current = true
+    render(
+      createElement(ProfilePage, {
+        historyPath: '/e/est-1/general/history',
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    expect(
+      screen.queryByRole('button', {
+        name: (name) => name.startsWith('Historique') && name.includes('Observations'),
+      }),
+    ).toBeNull()
   })
 
   it('places AI consent after native push when the push switch is present', () => {

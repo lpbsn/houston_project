@@ -172,6 +172,17 @@ export function terrainStatusBannerClassName(className?: string) {
   )
 }
 
+/** Signal feed chips — the shared language for real filters. */
+export function terrainFilterChipClassName(active: boolean, className?: string) {
+  return cn(
+    'inline-flex h-8 shrink-0 items-center rounded-full border px-3 text-xs font-semibold whitespace-nowrap focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30 focus-visible:outline-none',
+    active
+      ? 'border-[#1B4FD8] bg-[#EEF4FF] text-[#1B4FD8]'
+      : 'border-[#E8E6DF] bg-white text-[#5c564e]',
+    className,
+  )
+}
+
 export function terrainFilterPillClassName(active: boolean, className?: string) {
   return cn(
     'shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium transition',

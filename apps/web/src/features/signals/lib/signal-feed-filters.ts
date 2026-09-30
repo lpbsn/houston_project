@@ -1,4 +1,9 @@
-export type SignalFeedStatusFilter = 'open' | 'in_progress' | 'interesting'
+export type SignalFeedStatusFilter =
+  | 'open'
+  | 'in_progress'
+  | 'interesting'
+  | 'resolved'
+  | 'canceled'
 
 export type SignalFeedStatusSelection = 'all' | SignalFeedStatusFilter
 
@@ -25,7 +30,13 @@ export const SIGNAL_FEED_STATUS_OPTIONS: ReadonlyArray<{
   { value: 'interesting', label: 'Intéressants' },
 ]
 
-const OPERATIONAL_STATUS_ORDER: SignalFeedStatusFilter[] = ['open', 'in_progress', 'interesting']
+const FILTERABLE_STATUS_ORDER: SignalFeedStatusFilter[] = [
+  'open',
+  'in_progress',
+  'interesting',
+  'resolved',
+  'canceled',
+]
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -35,9 +46,9 @@ function dedupeSorted(values: string[]): string[] {
 }
 
 export function normalizeSignalFeedFilters(filters: SignalFeedFilters): SignalFeedFilters {
-  const operational = OPERATIONAL_STATUS_ORDER.filter((status) => filters.statuses.includes(status))
+  const allowed = FILTERABLE_STATUS_ORDER.filter((status) => filters.statuses.includes(status))
   return {
-    statuses: operational.slice(0, 1),
+    statuses: allowed.slice(0, 1),
     businessUnitIds: dedupeSorted(filters.businessUnitIds).filter((value) =>
       UUID_PATTERN.test(value),
     ),

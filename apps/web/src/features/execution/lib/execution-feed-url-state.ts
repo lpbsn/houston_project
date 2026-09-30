@@ -25,6 +25,8 @@ const CATEGORIES = new Set<ActionPlanExecutionFeedCategory>([
   'pending_validation',
   'overdue',
   'in_progress',
+  'done',
+  'canceled',
 ])
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 

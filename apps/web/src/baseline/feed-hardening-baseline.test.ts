@@ -92,7 +92,7 @@ function signalPage(page: number): SignalFeedResponse {
     pins: page === 0 ? [signalItem('signal-pin-1'), signalItem('signal-pin-2')] : undefined,
     counts:
       page === 0
-        ? { open: SESSION_PAGES * PAGE_SIZE, in_progress: 0, interesting: 0, pinned: 2, retained: 0 }
+        ? { open: SESSION_PAGES * PAGE_SIZE, in_progress: 0, interesting: 0, pinned: 2, retained: 0, resolved: 0, canceled: 0 }
         : undefined,
     applied_filters:
       page === 0
@@ -175,7 +175,14 @@ function executionPage(page: number): ActionPlanExecutionFeedResponse {
     pins: page === 0 ? [executionItem('execution-pin-1')] : undefined,
     section_counts:
       page === 0
-        ? { pinned: 1, pending_validation: 100, overdue: 100, in_progress: 300 }
+        ? {
+            pinned: 1,
+            pending_validation: 100,
+            overdue: 100,
+            in_progress: 300,
+            done: 0,
+            canceled: 0,
+          }
         : undefined,
     scheduled: page === 0 ? { count: 20, next: null } : undefined,
     next_cursor: hasMore ? `execution-cursor-${page + 1}` : null,

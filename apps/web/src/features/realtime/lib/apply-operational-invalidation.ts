@@ -14,6 +14,7 @@ import {
   scheduleEstablishmentDashboardInvalidation,
 } from '@/lib/query-invalidation'
 
+import { retainTerminalExecutionInFeedCaches } from '@/features/action-plans/lib/action-plan-execution-feed-cache'
 import { observationsQueryKeys } from '@/features/observations/api'
 import { isObservationProcessingTracked } from '@/features/observations/lib/observation-processing-tracker-store'
 
@@ -46,6 +47,17 @@ export function applyOperationalInvalidation(
     return
   }
   if (event.subject_type === 'action_plan_execution') {
+    if (
+      event.reason === 'action_plan_execution.done' ||
+      event.reason === 'action_plan_execution.canceled'
+    ) {
+      retainTerminalExecutionInFeedCaches(queryClient, {
+        establishmentId,
+        executionId: event.entity_id,
+        status: event.reason === 'action_plan_execution.done' ? 'done' : 'canceled',
+        occurredAt: event.occurred_at,
+      })
+    }
     invalidateActionPlanExecutionSurfaces(queryClient, establishmentId, event.entity_id)
     return
   }

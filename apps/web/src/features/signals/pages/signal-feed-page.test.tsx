@@ -78,7 +78,7 @@ function buildFeedQueryState(overrides: Record<string, unknown> = {}) {
     data: {
       items: [] as SignalFeedItem[],
       pins: [] as SignalFeedItem[],
-      counts: { open: 0, in_progress: 0, interesting: 0, pinned: 0, retained: 0 },
+      counts: { open: 0, in_progress: 0, interesting: 0, pinned: 0, retained: 0, resolved: 0, canceled: 0 },
       next_cursor: null,
       has_more: false,
       applied_filters: {},
@@ -244,7 +244,7 @@ function openSectionsFeed() {
           }),
         ],
         pins: [],
-        counts: { open: 1, in_progress: 1, interesting: 0, pinned: 0, retained: 0 },
+        counts: { open: 1, in_progress: 1, interesting: 0, pinned: 0, retained: 0, resolved: 0, canceled: 0 },
         next_cursor: null,
         has_more: false,
         applied_filters: {},
@@ -293,7 +293,7 @@ describe('SignalFeedPage separators', () => {
         data: {
           items: [buildFeedItem({ id: 'signal-open', title: 'Signal ouvert', status: 'open' })],
           pins: [],
-          counts: { open: 2, in_progress: 0, interesting: 0, pinned: 0, retained: 0 },
+          counts: { open: 2, in_progress: 0, interesting: 0, pinned: 0, retained: 0, resolved: 0, canceled: 0 },
           next_cursor: 'cursor-2',
           has_more: true,
           applied_filters: {},
@@ -333,7 +333,15 @@ describe('SignalFeedPage separators', () => {
             buildFeedItem({ id: 'signal-resolved', title: 'Signal résolu', status: 'resolved' }),
           ],
           pins: [],
-          counts: { open: 1, in_progress: 0, interesting: 0, pinned: 0, retained: 1 },
+          counts: {
+            open: 1,
+            in_progress: 0,
+            interesting: 0,
+            pinned: 0,
+            resolved: 1,
+            canceled: 0,
+            retained: 1,
+          },
           next_cursor: null,
           has_more: false,
           applied_filters: {},
@@ -346,6 +354,8 @@ describe('SignalFeedPage separators', () => {
     expect(screen.getByRole('heading', { level: 3, name: 'Signal ouvert' })).toBeTruthy()
     expect(screen.getByRole('heading', { level: 3, name: 'Signal résolu' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Ouverts · 1' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Résolus · 1' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Annulés/ })).toBeNull()
     expect(screen.getByRole('button', { name: 'Tout · 2' })).toBeTruthy()
   })
 
@@ -362,7 +372,7 @@ describe('SignalFeedPage separators', () => {
               is_pinned: true,
             }),
           ],
-          counts: { open: 0, in_progress: 0, interesting: 0, pinned: 1, retained: 0 },
+          counts: { open: 0, in_progress: 0, interesting: 0, pinned: 1, retained: 0, resolved: 0, canceled: 0 },
           next_cursor: null,
           has_more: false,
           applied_filters: {},
@@ -376,6 +386,37 @@ describe('SignalFeedPage separators', () => {
     expect(screen.getByTestId('signal-feed-pinned-carousel')).toBeTruthy()
     expect(screen.getByText('Aucune autre observation')).toBeTruthy()
     expect(screen.queryByText('Aucune observation active')).toBeNull()
+  })
+
+  it('remembers a collapsed pinned section for the establishment scope', () => {
+    feedQueryMock.mockReturnValue(
+      buildFeedQueryState({
+        data: {
+          items: [],
+          pins: [
+            buildFeedItem({
+              id: 'pinned-open',
+              title: 'Épinglée ouverte',
+              status: 'open',
+              is_pinned: true,
+            }),
+          ],
+          counts: { open: 0, in_progress: 0, interesting: 0, pinned: 1, retained: 0, resolved: 0, canceled: 0 },
+          next_cursor: null,
+          has_more: false,
+          applied_filters: {},
+        },
+      }),
+    )
+
+    renderSignalFeedPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Replier la section Épinglées' }))
+
+    expect(screen.queryByRole('heading', { level: 3, name: 'Épinglée ouverte' })).toBeNull()
+    expect(
+      readSignalFeedReading(signalFeedReadingScopeKey('establishment', 'est-1'))?.pinnedExpanded,
+    ).toBe(false)
+    expect(screen.getByRole('button', { name: 'Déplier la section Épinglées' })).toBeTruthy()
   })
 })
 
@@ -510,7 +551,7 @@ describe('SignalFeedPage reading restoration', () => {
         data: {
           items: [focusedItem],
           pins: [],
-          counts: { open: 2, in_progress: 0, interesting: 0, pinned: 0, retained: 0 },
+          counts: { open: 2, in_progress: 0, interesting: 0, pinned: 0, retained: 0, resolved: 0, canceled: 0 },
           next_cursor: null,
           has_more: false,
           applied_filters: {},
@@ -596,7 +637,7 @@ describe('SignalFeedPage reading restoration', () => {
         data: {
           items: [],
           pins: [pinned],
-          counts: { open: 0, in_progress: 0, interesting: 0, pinned: 1, retained: 0 },
+          counts: { open: 0, in_progress: 0, interesting: 0, pinned: 1, retained: 0, resolved: 0, canceled: 0 },
           next_cursor: null,
           has_more: false,
           applied_filters: {},

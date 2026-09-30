@@ -139,7 +139,8 @@ class CrossSignalFeedView(APIView):
                 required=False,
                 type=str,
                 description=(
-                    "One of open, in_progress, interesting. "
+                    "One of open, in_progress, interesting, resolved, or canceled. "
+                    "Resolved and canceled stay inside the operational retention window. "
                     "Omit for the full operational order."
                 ),
             ),

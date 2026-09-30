@@ -29,10 +29,37 @@ import {
   ExecutionFeedReviewStars,
 } from './execution-feed-status-bits'
 
+export type ExecutionFeedCardItem = Pick<
+  ActionPlanExecutionFeedItem,
+  | 'id'
+  | 'title'
+  | 'status'
+  | 'pilot_business_unit'
+  | 'involved_poles'
+  | 'assignees'
+  | 'start_at'
+  | 'end_at'
+  | 'all_day'
+  | 'validated_at'
+  | 'validated_by_display_name'
+  | 'marked_done_at'
+  | 'marked_done_by_display_name'
+  | 'canceled_at'
+  | 'active_review'
+  | 'created_at'
+  | 'created_by_display_name'
+  | 'is_overdue'
+  | 'visible_from'
+> & {
+  is_pinned?: boolean
+  permission_hints?: ActionPlanExecutionFeedItem['permission_hints']
+  canceled_by_display_name?: string | null
+}
+
 type ActionPlanExecutionFeedCardProps = {
-  item: ActionPlanExecutionFeedItem
+  item: ExecutionFeedCardItem
   onSelect: (executionId: string) => void
-  onTogglePin?: (item: ActionPlanExecutionFeedItem) => void
+  onTogglePin?: (item: ExecutionFeedCardItem) => void
   className?: string
 }
 
@@ -44,10 +71,10 @@ function FeedPinButton({
   item,
   onTogglePin,
 }: {
-  item: ActionPlanExecutionFeedItem
-  onTogglePin: (item: ActionPlanExecutionFeedItem) => void
+  item: ExecutionFeedCardItem
+  onTogglePin: (item: ExecutionFeedCardItem) => void
 }) {
-  if (!item.permission_hints.can_pin) {
+  if (!item.permission_hints?.can_pin) {
     return null
   }
   return (
@@ -55,7 +82,7 @@ function FeedPinButton({
       type="button"
       className="-my-2.5 -mr-1 inline-flex min-h-12 min-w-12 shrink-0 items-center justify-center rounded-lg text-[#7D7B75] transition active:opacity-80"
       aria-label={item.is_pinned ? 'Désépingler' : 'Épingler'}
-      aria-pressed={item.is_pinned}
+      aria-pressed={Boolean(item.is_pinned)}
       onClick={(event) => {
         stopCardNavigation(event)
         onTogglePin(item)
@@ -95,7 +122,7 @@ function TemporalProgressBar({ percent }: { percent: number }) {
   )
 }
 
-function AssigneesRow({ item }: { item: ActionPlanExecutionFeedItem }) {
+function AssigneesRow({ item }: { item: ExecutionFeedCardItem }) {
   const { visible, overflow, empty } = formatActionPlanFeedCardAssigneeDisplay(item.assignees)
   if (empty) {
     return <p className="text-xs text-[#7D7B75]">Non assigné</p>
@@ -138,10 +165,10 @@ function PoleHeader({
   showBell,
   onTogglePin,
 }: {
-  item: ActionPlanExecutionFeedItem
+  item: ExecutionFeedCardItem
   statusTone?: string
   showBell?: boolean
-  onTogglePin?: (item: ActionPlanExecutionFeedItem) => void
+  onTogglePin?: (item: ExecutionFeedCardItem) => void
 }) {
   const other = getActionPlanFeedOtherPoles(item)
   return (
@@ -169,21 +196,6 @@ function PoleHeader({
   )
 }
 
-function OtherPolesLine({ item }: { item: ActionPlanExecutionFeedItem }) {
-  const other = getActionPlanFeedOtherPoles(item)
-  if (other.otherCount === 0) {
-    return null
-  }
-  const named = other.names.join(' · ')
-  const suffix = other.overflow > 0 ? ` +${other.overflow}` : ''
-  return (
-    <p className="text-xs text-[#7D7B75]">
-      Avec {named}
-      {suffix}
-    </p>
-  )
-}
-
 function CardShell({
   item,
   onSelect,
@@ -191,7 +203,7 @@ function CardShell({
   surfaceClassName,
   children,
 }: {
-  item: ActionPlanExecutionFeedItem
+  item: ExecutionFeedCardItem
   onSelect: (executionId: string) => void
   className?: string
   surfaceClassName?: string
@@ -242,7 +254,6 @@ function InProgressCard({
     <CardShell item={item} onSelect={onSelect} className={className}>
       <PoleHeader item={item} onTogglePin={onTogglePin} />
       <CardTitle title={item.title} />
-      <OtherPolesLine item={item} />
       {(startLabel || endLabel || progress != null || item.all_day) && (
         <div className="mt-2">
           {(startLabel || endLabel) && (
@@ -290,7 +301,6 @@ function PendingValidationCard({
   onTogglePin,
   className,
 }: ActionPlanExecutionFeedCardProps) {
-  const endLabel = formatActionPlanFeedCardDateTimeLabel(item.end_at, item.all_day)
   const markedDoneLine = formatActionPlanFeedMarkedDoneLine(item)
   return (
     <CardShell
@@ -306,12 +316,6 @@ function PendingValidationCard({
         onTogglePin={onTogglePin}
       />
       <CardTitle title={item.title} />
-      <OtherPolesLine item={item} />
-      {endLabel ? (
-        <p className="mt-2 text-xs text-[#3d3d3d]">
-          <span className="text-[#7D7B75]">Fin prévue</span> {endLabel}
-        </p>
-      ) : null}
       {markedDoneLine ? <p className="mt-1.5 text-xs text-[#7D7B75]">{markedDoneLine}</p> : null}
       <div className="mt-3 space-y-1">
         <AssigneesRow item={item} />
@@ -340,7 +344,6 @@ function ScheduledCard({
     <CardShell item={item} onSelect={onSelect} className={className}>
       <PoleHeader item={item} onTogglePin={onTogglePin} />
       <CardTitle title={item.title} />
-      <OtherPolesLine item={item} />
       <div className="mt-2 space-y-0.5 text-xs text-[#3d3d3d]">
         {(startLabel || endLabel) && (
           <div className="flex items-baseline justify-between gap-2">

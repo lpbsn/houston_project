@@ -39,6 +39,8 @@ export type ActionPlanExecutionFeedCategory =
   | 'pending_validation'
   | 'overdue'
   | 'in_progress'
+  | 'done'
+  | 'canceled'
 
 export const actionPlansQueryKeys = {
   all: ['action-plans'] as const,

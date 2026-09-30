@@ -58,6 +58,10 @@ FEED_SIGNAL_STATUSES = frozenset(
 # Operational feed statuses. Resolved and canceled stay in the list only while
 # their canonical timestamp is still inside the retention window below.
 OPERATIONAL_SIGNAL_FEED_STATUSES = frozenset({"open", "in_progress", "interesting"})
+RETAINED_SIGNAL_FEED_STATUSES = frozenset({"resolved", "canceled"})
+FEED_FILTERABLE_SIGNAL_STATUSES = (
+    OPERATIONAL_SIGNAL_FEED_STATUSES | RETAINED_SIGNAL_FEED_STATUSES
+)
 SIGNAL_CANCELED_FEED_RETENTION = timedelta(hours=48)
 SIGNAL_RESOLVED_FEED_RETENTION = timedelta(days=10)
 PINNABLE_SIGNAL_STATUSES = frozenset({"open", "interesting"})

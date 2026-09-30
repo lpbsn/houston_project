@@ -143,7 +143,7 @@ const EMPTY_APPLIED_FILTERS = {
   activity_subject_ids: [],
 }
 
-const EMPTY_COUNTS = { open: 1, in_progress: 0, interesting: 0, pinned: 0, retained: 0 }
+const EMPTY_COUNTS = { open: 1, in_progress: 0, interesting: 0, pinned: 0, retained: 0, resolved: 0, canceled: 0 }
 
 function buildFeed(overrides: Partial<SignalFeedResponse> = {}): SignalFeedResponse {
   return {
@@ -168,7 +168,7 @@ describe('patchSignalInActiveFeedCache', () => {
       signalFeedCacheFromFirstPage(
         buildFeed({
           items: [buildFeedItem(), otherItem],
-          counts: { open: 2, in_progress: 0, interesting: 0, pinned: 0, retained: 0 },
+          counts: { open: 2, in_progress: 0, interesting: 0, pinned: 0, retained: 0, resolved: 0, canceled: 0 },
         }),
       ),
     )
@@ -186,7 +186,7 @@ describe('patchSignalInActiveFeedCache', () => {
     expect(data?.items.map((item) => item.id)).toEqual(['signal-2'])
     expect(data?.pins?.map((item) => item.id)).toEqual([SIGNAL_ID])
     expect(data?.pins?.[0]?.is_pinned).toBe(true)
-    expect(data?.counts).toEqual({ open: 1, in_progress: 0, interesting: 0, pinned: 1, retained: 0 })
+    expect(data?.counts).toEqual({ open: 1, in_progress: 0, interesting: 0, pinned: 1, retained: 0, resolved: 0, canceled: 0 })
   })
 
   it('keeps an existing pin in place when the signal becomes interesting', () => {
@@ -201,7 +201,7 @@ describe('patchSignalInActiveFeedCache', () => {
         buildFeed({
           items: [],
           pins: [pinned, otherPin],
-          counts: { open: 0, in_progress: 0, interesting: 0, pinned: 2, retained: 0 },
+          counts: { open: 0, in_progress: 0, interesting: 0, pinned: 2, retained: 0, resolved: 0, canceled: 0 },
         }),
       ),
     )
@@ -237,6 +237,7 @@ describe('patchSignalInActiveFeedCache', () => {
     expect(data?.items[0]?.status).toBe('resolved')
     expect(data?.pins).toEqual([])
     expect(data?.counts?.open).toBe(0)
+    expect(data?.counts?.resolved).toBe(1)
     expect(data?.counts?.retained).toBe(1)
   })
 
@@ -259,7 +260,8 @@ describe('patchSignalInActiveFeedCache', () => {
     expect(data?.items).toEqual([])
     expect(data?.pins).toEqual([])
     expect(data?.counts?.open).toBe(0)
-    expect(data?.counts?.retained).toBe(0)
+    expect(data?.counts?.resolved).toBe(1)
+    expect(data?.counts?.retained).toBe(1)
   })
 
   it('keeps the global category order after an optimistic status transition', () => {
@@ -307,7 +309,7 @@ describe('appendSignalFeedPage', () => {
       buildFeed({
         items: [buildFeedItem({ id: 'open-1' })],
         pins: [buildFeedItem({ id: 'pin-1', is_pinned: true })],
-        counts: { open: 2, in_progress: 0, interesting: 0, pinned: 1, retained: 0 },
+        counts: { open: 2, in_progress: 0, interesting: 0, pinned: 1, retained: 0, resolved: 0, canceled: 0 },
         next_cursor: 'cursor-1',
         has_more: true,
       }),
@@ -363,7 +365,7 @@ describe('removeSignalFromFeedCache', () => {
             buildFeedItem({ id: 'signal-1', status: 'open' }),
             buildFeedItem({ id: 'signal-2', status: 'open' }),
           ],
-          counts: { open: 2, in_progress: 0, interesting: 0, pinned: 0, retained: 0 },
+          counts: { open: 2, in_progress: 0, interesting: 0, pinned: 0, retained: 0, resolved: 0, canceled: 0 },
         }),
       ),
       'signal-1',
@@ -375,7 +377,7 @@ describe('removeSignalFromFeedCache', () => {
       in_progress: 0,
       interesting: 0,
       pinned: 0,
-      retained: 0,
+      retained: 0, resolved: 0, canceled: 0,
     })
   })
 
@@ -385,7 +387,7 @@ describe('removeSignalFromFeedCache', () => {
         buildFeed({
           items: [],
           pins: [buildFeedItem({ is_pinned: true })],
-          counts: { open: 4, in_progress: 2, interesting: 1, pinned: 1, retained: 0 },
+          counts: { open: 4, in_progress: 2, interesting: 1, pinned: 1, retained: 0, resolved: 0, canceled: 0 },
         }),
       ),
       SIGNAL_ID,
@@ -397,7 +399,7 @@ describe('removeSignalFromFeedCache', () => {
       in_progress: 2,
       interesting: 1,
       pinned: 0,
-      retained: 0,
+      retained: 0, resolved: 0, canceled: 0,
     })
   })
 })

@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   ActionPlanExecutionFeedItemWrapper,
   ActionPlanExecutionFeedResponse,
+  ActionPlanExecutionFeedSectionCounts,
 } from '@/features/action-plans/types'
 import { useTerrainHubTitleSlotValue } from '@/components/layout/terrain-hub-title-slot'
 import { ActionPlansApiError } from '@/features/action-plans/api'
@@ -121,17 +122,14 @@ function buildPlanFeedWrapper(
 
 function deriveSectionCountsFromWrappers(
   items: ActionPlanExecutionFeedItemWrapper[],
-): {
-  pinned: number
-  pending_validation: number
-  overdue: number
-  in_progress: number
-} {
+): ActionPlanExecutionFeedSectionCounts {
   const counts = {
     pinned: 0,
     pending_validation: 0,
     overdue: 0,
     in_progress: 0,
+    done: 0,
+    canceled: 0,
   }
   for (const wrapper of items) {
     const item = wrapper.action_plan_execution
@@ -146,6 +144,10 @@ function deriveSectionCountsFromWrappers(
       } else {
         counts.in_progress += 1
       }
+    } else if (item.status === 'done') {
+      counts.done += 1
+    } else if (item.status === 'canceled') {
+      counts.canceled += 1
     }
   }
   return counts
@@ -192,6 +194,8 @@ function buildPlanFeedQueryState(overrides: Record<string, unknown> = {}) {
             pending_validation: 0,
             overdue: 0,
             in_progress: 0,
+            done: 0,
+            canceled: 0,
           },
           next_cursor: null,
           has_more: false,
@@ -691,6 +695,8 @@ describe('ExecutionFeedPage plan feed', () => {
                 pending_validation: 0,
                 overdue: 4,
                 in_progress: 1,
+                done: 0,
+                canceled: 0,
               },
               next_cursor: 'cursor-1',
               has_more: true,
@@ -702,8 +708,14 @@ describe('ExecutionFeedPage plan feed', () => {
 
     renderExecutionFeedPage()
 
-    expect(screen.getByText('En cours · 1')).toBeTruthy()
-    expect(screen.queryByText('En retard · 4')).toBeNull()
+    expect(screen.getByRole('button', { name: 'En cours · 1' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'En retard · 4' })).toBeTruthy()
+    expect(screen.getAllByText('En cours · 1').some((element) => element.tagName === 'SPAN')).toBe(
+      true,
+    )
+    expect(
+      screen.getAllByText('En retard · 4').every((element) => element.tagName === 'BUTTON'),
+    ).toBe(true)
     expect(screen.getByText('Plan actif')).toBeTruthy()
     expect(screen.queryByText('Aucune exécution')).toBeNull()
     expect(screen.getByRole('button', { name: 'Charger la suite' })).toBeTruthy()
@@ -730,7 +742,12 @@ describe('ExecutionFeedPage plan feed', () => {
     renderExecutionFeedPage()
 
     const pinned = screen.getByText('Plan épinglé')
-    const sectionLabel = screen.getByText('En cours · 2')
+    const sectionLabel = screen
+      .getAllByText('En cours · 2')
+      .find((element) => element.tagName === 'SPAN')
+    if (!sectionLabel) {
+      throw new Error('missing section label')
+    }
     const regular = screen.getByText('Plan normal')
 
     expect(pinned.compareDocumentPosition(sectionLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -845,7 +862,10 @@ describe('ExecutionFeedPage plan feed', () => {
     renderExecutionFeedPage()
 
     expect(screen.getByText('Plan actif')).toBeTruthy()
-    expect(screen.getByText('En cours · 1')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'En cours · 1' })).toBeTruthy()
+    expect(
+      screen.getAllByText('En cours · 1').some((element) => element.tagName === 'SPAN'),
+    ).toBe(true)
     expect(screen.queryByRole('button', { name: 'Replier la section En cours' })).toBeNull()
   })
 
@@ -956,6 +976,8 @@ describe('ExecutionFeedPage plan feed', () => {
                 pending_validation: 0,
                 overdue: 0,
                 in_progress: 5,
+                done: 0,
+                canceled: 0,
               },
               next_cursor: null,
               has_more: false,
@@ -1535,7 +1557,7 @@ describe('ExecutionFeedPage desktop list', () => {
     const onNavigate = vi.fn()
     renderExecutionFeedPage({ onNavigate })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Créer' }))
+    fireEvent.click(screen.getByRole('button', { name: '+ Nouveau plan' }))
     expect(onNavigate).not.toHaveBeenCalled()
     expect(screen.getByTestId('execution-create-menu-dialog')).toBeTruthy()
     expect(screen.queryByTestId('execution-create-menu-sheet')).toBeNull()
@@ -1553,11 +1575,11 @@ describe('ExecutionFeedPage desktop list', () => {
     renderExecutionFeedPage()
 
     const createButton = screen.getByRole('button', { name: 'Créer' })
-    expect(createButton.className).toContain('size-11')
-    expect(createButton.className).toContain('-m-2')
+    expect(createButton.className).toContain('size-8')
+    expect(createButton.className).not.toContain('-m-2')
     expect(createButton.className).toContain('bg-transparent')
     const visualDisc = createButton.querySelector('span')
-    expect(visualDisc?.className).toContain('size-7')
+    expect(visualDisc?.className).toContain('size-8')
     expect(visualDisc?.className).toContain('bg-[#114660]')
     expect(createButton.querySelector('svg')?.classList.toString()).toContain('size-3.5')
 
@@ -1593,6 +1615,8 @@ describe('ExecutionFeedPage desktop list', () => {
                 pending_validation: 0,
                 overdue: 0,
                 in_progress: 1,
+                done: 0,
+                canceled: 0,
               },
               next_cursor: null,
               has_more: false,
@@ -1627,6 +1651,26 @@ describe('ExecutionFeedPage desktop list', () => {
     expect(screen.getByText('Plan actif')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Déplier la section Épinglés' })).toBeTruthy()
     expect(screen.getByTestId('execution-feed-scroll').scrollTop).toBe(120)
+  })
+
+  it('keeps the pinned section collapsed when the category filter changes', () => {
+    showOperationalFeed()
+    const scopeKey = executionFeedReadingScopeKey('establishment', 'est-1')
+    const view = renderExecutionFeedPage({ establishmentId: 'est-1' })
+    fireEvent.click(screen.getByRole('button', { name: 'Replier la section Épinglés' }))
+    expect(screen.queryByText('Plan épinglé')).toBeNull()
+
+    executionRouteState.search = '?category=overdue'
+    view.rerenderPage()
+
+    expect(screen.queryByText('Plan épinglé')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Déplier la section Épinglés' })).toBeTruthy()
+    expect(readExecutionFeedReading(scopeKey)?.expandedByKey.pinned).toBe(false)
+
+    cleanup()
+    renderExecutionFeedPage({ establishmentId: 'est-1' })
+    expect(screen.queryByText('Plan épinglé')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Déplier la section Épinglés' })).toBeTruthy()
   })
 
   it('starts another scope from its own reading state', () => {

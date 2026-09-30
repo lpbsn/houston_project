@@ -141,12 +141,15 @@ function listIncludes(
   item: Pick<SignalFeedItem, 'status' | 'is_pinned'>,
   selection: SignalFeedStatusSelection,
 ): boolean {
+  if (item.is_pinned && isPinnableStatus(item.status)) {
+    return false
+  }
+  if (selection === 'resolved' || selection === 'canceled') {
+    return item.status === selection
+  }
   const retainedTerminal =
     selection === 'all' && RETAINED_TERMINAL_STATUSES.has(item.status)
   if (!isListStatus(item.status) && !retainedTerminal) {
-    return false
-  }
-  if (item.is_pinned && isPinnableStatus(item.status)) {
     return false
   }
   if (retainedTerminal) {
@@ -171,8 +174,8 @@ function countBucket(
   if (item.status === 'open' || item.status === 'in_progress' || item.status === 'interesting') {
     return item.status
   }
-  if (selection === 'all' && RETAINED_TERMINAL_STATUSES.has(item.status)) {
-    return 'retained'
+  if (item.status === 'resolved' || item.status === 'canceled') {
+    return item.status
   }
   return null
 }
@@ -189,11 +192,16 @@ function shiftCounts(
   const updated = { ...counts }
   const from = countBucket(previous, selection)
   const to = next ? countBucket(next, selection) : null
-  if (from) {
+  if (from && from !== 'retained') {
     updated[from] = Math.max(0, updated[from] - 1)
   }
-  if (to) {
+  if (to && to !== 'retained') {
     updated[to] = (updated[to] ?? 0) + 1
+  }
+  const previousRetained = RETAINED_TERMINAL_STATUSES.has(previous.status)
+  const nextRetained = next != null && RETAINED_TERMINAL_STATUSES.has(next.status)
+  if (previousRetained !== nextRetained) {
+    updated.retained = Math.max(0, updated.retained + (nextRetained ? 1 : -1))
   }
   return updated
 }

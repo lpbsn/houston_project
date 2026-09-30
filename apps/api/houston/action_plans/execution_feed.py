@@ -48,6 +48,8 @@ EMPTY_SECTION_COUNTS = {
     "pending_validation": 0,
     "overdue": 0,
     "in_progress": 0,
+    "done": 0,
+    "canceled": 0,
 }
 
 

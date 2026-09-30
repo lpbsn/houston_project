@@ -3239,6 +3239,8 @@ export interface components {
             pending_validation: number;
             overdue: number;
             in_progress: number;
+            done: number;
+            canceled: number;
         };
         ActionPlanExecutionFeedTaskPreview: {
             position: number;
@@ -4602,6 +4604,11 @@ export interface components {
          * @enum {string}
          */
         ExecutionCommentThreadItemItemTypeEnum: "execution_thread";
+        ExecutionHistoryAssignee: {
+            /** Format: uuid */
+            membership_id: string;
+            display_name: string;
+        };
         ExecutionHistoryItem: {
             /** Format: uuid */
             id: string;
@@ -4615,6 +4622,27 @@ export interface components {
             /** Format: uuid */
             establishment_id: string;
             establishment_name: string;
+            pilot_business_unit: components["schemas"]["ActionPlanBusinessUnit"];
+            involved_poles: {
+                [key: string]: unknown;
+            }[];
+            assignees: components["schemas"]["ExecutionHistoryAssignee"][];
+            /** Format: date-time */
+            start_at: string | null;
+            /** Format: date-time */
+            end_at: string | null;
+            all_day: boolean;
+            /** Format: date-time */
+            validated_at: string | null;
+            validated_by_display_name: string | null;
+            /** Format: date-time */
+            marked_done_at: string | null;
+            /** Format: date-time */
+            canceled_at: string | null;
+            active_review: components["schemas"]["ActionPlanExecutionActiveReview"] | null;
+            /** Format: date-time */
+            created_at: string;
+            created_by_display_name: string;
         };
         /**
          * @description * `manual` - manual
@@ -5466,6 +5494,8 @@ export interface components {
             in_progress: number;
             interesting: number;
             pinned: number;
+            resolved: number;
+            canceled: number;
             retained: number;
         };
         SignalFeedItem: {
@@ -5536,6 +5566,19 @@ export interface components {
             /** Format: uuid */
             establishment_id: string;
             establishment_name: string;
+            /** Format: date-time */
+            last_activity_at: string;
+            location_text: string;
+            reporter_display_name: string | null;
+            /** Format: uuid */
+            affected_business_unit_id: string | null;
+            affected_business_unit_label: string | null;
+            /** Format: uuid */
+            responsible_business_unit_id: string | null;
+            responsible_business_unit_label: string | null;
+            activity_subject_label: string | null;
+            activity_subject_normalized_name: string | null;
+            aggregation_count: number;
         };
         /**
          * @description * `manual` - manual
@@ -7460,7 +7503,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Defaults to all. */
-                category?: "all" | "in_progress" | "overdue" | "pending_validation";
+                category?: "all" | "canceled" | "done" | "in_progress" | "overdue" | "pending_validation";
                 cursor?: string;
                 establishment_id?: string;
                 page_size?: number;
@@ -7511,7 +7554,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Defaults to all. */
-                category?: "all" | "in_progress" | "overdue" | "pending_validation";
+                category?: "all" | "canceled" | "done" | "in_progress" | "overdue" | "pending_validation";
                 cursor?: string;
                 establishment_id?: string;
                 page_size?: number;
@@ -7777,7 +7820,7 @@ export interface operations {
                 page_size?: number;
                 /** @description First page of cross pins. Default 10, maximum 50. */
                 pins_page_size?: number;
-                /** @description One of open, in_progress, interesting. Omit for the full operational order. */
+                /** @description One of open, in_progress, interesting, resolved, or canceled. Resolved and canceled stay inside the operational retention window. Omit for the full operational order. */
                 statuses?: string;
             };
             header?: never;
@@ -7971,7 +8014,7 @@ export interface operations {
         parameters: {
             query: {
                 /** @description Defaults to all. */
-                category?: "all" | "in_progress" | "overdue" | "pending_validation";
+                category?: "all" | "canceled" | "done" | "in_progress" | "overdue" | "pending_validation";
                 /** @description Opaque pagination cursor from a previous response next_cursor. */
                 cursor?: string;
                 page_size?: number;
@@ -13184,7 +13227,7 @@ export interface operations {
                 /** @description When true, restrict to signals with no responsible business unit (affected and activity_subject ignored) among active lifecycle statuses. Owner/Director/Manager only; Staff receives 403. */
                 needs_qualification?: boolean;
                 page_size?: number;
-                /** @description One operational status: open, in_progress, or interesting. Omit it to page open, then in progress, then interesting. */
+                /** @description One status: open, in_progress, interesting, resolved, or canceled. Resolved and canceled stay inside the operational retention window. Omit it to page open, then in progress, then interesting. */
                 statuses?: string;
                 view_mode: "general" | "personal";
             };

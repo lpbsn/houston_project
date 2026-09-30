@@ -2,7 +2,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from django.db.models import Case, DateTimeField, F, OuterRef, Q, QuerySet, Subquery, Value, When
+from django.db.models import (
+    Case,
+    Count,
+    DateTimeField,
+    F,
+    OuterRef,
+    Prefetch,
+    Q,
+    QuerySet,
+    Subquery,
+    Value,
+    When,
+)
 from django.db.models.functions import Coalesce
 
 from houston.accounts.display import membership_display_name
@@ -23,15 +35,30 @@ from houston.signals.history_cursor import (
     encode_signal_history_cursor,
     signal_history_context_hash,
 )
-from houston.signals.models import Signal, SignalLifecycleEvent
+from houston.signals.models import Signal, SignalLifecycleEvent, SignalSourceObservation
 from houston.signals.selectors import signal_read_visibility_q
 
 HISTORY_SIGNAL_STATUSES = frozenset({Signal.Status.RESOLVED, Signal.Status.CANCELED})
 
 _SIGNAL_HISTORY_SELECT_RELATED = (
     "establishment",
+    "affected_business_unit",
+    "responsible_business_unit",
+    "activity_subject",
+    "activity_subject__catalog_activity_subject",
     "resolved_by_membership__user",
     "canceled_by_membership__user",
+)
+_SIGNAL_HISTORY_REPORTER_PREFETCH = Prefetch(
+    "source_observation_links",
+    queryset=(
+        SignalSourceObservation.objects.filter(
+            link_type=SignalSourceObservation.LinkType.CREATED_FROM,
+        )
+        .select_related("observation__submitted_by_membership__user")
+        .order_by("observation__created_at", "observation__id")
+    ),
+    to_attr="created_from_source_links",
 )
 
 
@@ -122,8 +149,21 @@ def _hydrate_signal_history_items(rows: list[dict]) -> list[Signal]:
         return []
     signals_by_id = {
         signal.id: signal
-        for signal in Signal.objects.filter(id__in=[row["id"] for row in rows]).select_related(
-            *_SIGNAL_HISTORY_SELECT_RELATED
+        for signal in (
+            Signal.objects.filter(id__in=[row["id"] for row in rows])
+            .select_related(*_SIGNAL_HISTORY_SELECT_RELATED)
+            .annotate(
+                aggregation_count=Count(
+                    "source_observation_links",
+                    filter=Q(
+                        source_observation_links__link_type=(
+                            SignalSourceObservation.LinkType.AGGREGATED_FROM
+                        ),
+                    ),
+                    distinct=True,
+                )
+            )
+            .prefetch_related(_SIGNAL_HISTORY_REPORTER_PREFETCH)
         )
     }
     items = []

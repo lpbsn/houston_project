@@ -5,7 +5,18 @@ from datetime import timedelta
 from typing import Literal
 
 ExecutionFeedViewMode = Literal["personal", "general"]
-ExecutionFeedCategory = Literal["all", "pending_validation", "overdue", "in_progress"]
+ExecutionFeedCategory = Literal[
+    "all", "pending_validation", "overdue", "in_progress", "done", "canceled"
+]
+EXECUTION_FEED_CATEGORY_VALUES = (
+    "all",
+    "pending_validation",
+    "overdue",
+    "in_progress",
+    "done",
+    "canceled",
+)
+EXECUTION_FEED_CATEGORIES = frozenset(EXECUTION_FEED_CATEGORY_VALUES)
 ExecutionFeedScope = Literal["establishment", "cross"]
 
 ACTION_PLAN_TITLE_MAX_LENGTH = 200
