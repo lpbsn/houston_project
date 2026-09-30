@@ -12,6 +12,13 @@ import { queryClient } from '@/lib/query-client'
 
 const navigate = vi.fn()
 const switchEstablishment = vi.hoisted(() => vi.fn())
+const navigationCauseState = vi.hoisted(() => ({
+  current: 'programmatic' as 'pop' | 'programmatic',
+}))
+const appNavigate = vi.hoisted(() => (...args: unknown[]) => {
+  navigationCauseState.current = 'programmatic'
+  navigate(...args)
+})
 const routeState = vi.hoisted(() => ({
   route: { kind: 'static', path: '/analytics' } as AppRoute,
 }))
@@ -35,14 +42,14 @@ vi.mock('@/app/app-routes', async (importOriginal) => {
     ...actual,
     useAppRoute: () => ({
       route: routeState.route,
-      navigate,
+      navigate: appNavigate,
       search: window.location.search,
       history: {
         getHref: () => `${window.location.pathname}${window.location.search}`,
         getLineage: () => null,
-        getNavigationCause: () => 'programmatic' as const,
+        getNavigationCause: () => navigationCauseState.current,
         subscribe: () => () => undefined,
-        navigate,
+        navigate: appNavigate,
         back: () => false,
       },
     }),
@@ -255,6 +262,7 @@ afterEach(() => {
     cleanup()
   } finally {
     navigate.mockReset()
+    navigationCauseState.current = 'programmatic'
     routeState.route = { kind: 'static', path: '/analytics' }
     authState.bootstrap = null
     authState.hasOperationalAccess = false
@@ -960,5 +968,63 @@ describe('App terrain active membership routing', () => {
 
     expect(await screen.findByTestId('platform-shell')).toBeTruthy()
     expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it('stays on the current establishment when browser back opens another one', async () => {
+    stubLgViewport(true)
+    const bootstrap = bootstrapWithSelectedEstablishment('est-1')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: 'est-1' },
+      page: 'signals',
+    }
+    const rendered = render(wrapApp())
+    navigate.mockClear()
+
+    navigationCauseState.current = 'pop'
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: 'est-2' },
+      page: 'signals',
+    }
+    window.history.replaceState(null, '', '/e/est-2/signals')
+    rendered.rerender(wrapApp())
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith('/e/est-1/signals', { intent: 'system' })
+    })
+    expect(switchEstablishment).not.toHaveBeenCalled()
+  })
+
+  it('stays on Cross when browser back opens an establishment', async () => {
+    stubLgViewport(true)
+    const bootstrap = bootstrapWithSelectedEstablishment('est-1')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'cross' },
+      page: 'signals',
+    }
+    const rendered = render(wrapApp())
+    navigate.mockClear()
+
+    navigationCauseState.current = 'pop'
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: 'est-2' },
+      page: 'execution',
+    }
+    window.history.replaceState(null, '', '/e/est-2/execution')
+    rendered.rerender(wrapApp())
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith('/cross/execution', { intent: 'system' })
+    })
+    expect(switchEstablishment).not.toHaveBeenCalled()
   })
 })

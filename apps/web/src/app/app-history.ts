@@ -1,3 +1,5 @@
+import { dismissTopNativeOverlay } from '@/lib/native-overlay-dismiss'
+
 export type NavigationLineage = {
   parentHref: string
   depth: number
@@ -75,13 +77,17 @@ type HistoryEntry = {
  * the current entry or traverse; it cannot delete entries below the current
  * one. Memory history applies that result in one step. Browser history
  * traverses once with `go(-depth)`, ignores that popstate, then replaces the
- * landed entry so the UI hears a single destination.
+ * landed entry. A same-URL push/back then drops the abandoned forward entries
+ * so they cannot become active again. The UI hears a single destination.
  */
 export function createBrowserHistory(): AppHistory {
   const listeners = new Set<() => void>()
   let cause: NavigationCause = 'programmatic'
   let pendingPrimaryHref: string | null = null
   let pendingPrimaryTimer: ReturnType<typeof setTimeout> | null = null
+  let settlingPrimary = false
+  let trackedHref = readBrowserHref()
+  let trackedLineage = readLineage(window.history.state)
 
   function notify(nextCause: NavigationCause): void {
     cause = nextCause
@@ -112,8 +118,14 @@ export function createBrowserHistory(): AppHistory {
     }
   }
 
+  function remember(href: string, lineage: NavigationLineage | null): void {
+    trackedHref = href
+    trackedLineage = lineage
+  }
+
   function replaceEntry(href: string, lineage: NavigationLineage | null): void {
     window.history.replaceState(lineage, '', href)
+    remember(href, lineage)
   }
 
   function clearPendingPrimary(): void {
@@ -125,13 +137,31 @@ export function createBrowserHistory(): AppHistory {
   }
 
   function onPopState(): void {
+    if (settlingPrimary) {
+      settlingPrimary = false
+      remember(readBrowserHref(), readLineage(window.history.state))
+      return
+    }
     if (pendingPrimaryHref) {
       const href = pendingPrimaryHref
       clearPendingPrimary()
       replaceEntry(href, null)
+      // pushState removes entries after the current one (the abandoned branch).
+      // back() returns to the entry just replaced, which is already the target.
+      settlingPrimary = true
+      window.history.pushState(null, '', href)
+      window.history.back()
       notify('programmatic')
       return
     }
+    // Browser chrome back does not pass through performTerrainBack. Consume the
+    // same overlay stack, then put the current entry back so the page under the
+    // sheet never becomes active.
+    if (dismissTopNativeOverlay()) {
+      window.history.pushState(trackedLineage, '', trackedHref)
+      return
+    }
+    remember(readBrowserHref(), readLineage(window.history.state))
     notify('pop')
   }
 
@@ -179,6 +209,7 @@ export function createBrowserHistory(): AppHistory {
       depth: (getLineage()?.depth ?? 0) + 1,
     }
     window.history.pushState(lineage, '', href)
+    remember(href, lineage)
     notify('programmatic')
   }
 

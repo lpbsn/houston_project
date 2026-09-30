@@ -145,6 +145,9 @@ function App() {
   const { route, navigate, search: locationSearch, history } = useAppRoute()
   const isLgViewport = useLgViewport()
   const isDesktopWeb = isDesktopWebLanding(isLgViewport)
+  // Captured for this render. A layout correction navigates before passive
+  // effects and would otherwise make a pop look programmatic.
+  const navigationCause = history.getNavigationCause()
   const applyingOpenRef = useRef(false)
   const authRoutingSession = resolveAuthRoutingSession(
     queryClient.getQueryData<BootstrapResponse>(bootstrapQueryKey),
@@ -286,7 +289,7 @@ function App() {
       sessionEstablishmentId !== routeEstablishmentId &&
       hasActiveMembershipForEstablishment(authRoutingSession.memberships, routeEstablishmentId)
     ) {
-      if (history.getNavigationCause() === 'pop') {
+      if (navigationCause === 'pop') {
         return
       }
       const target = {
@@ -375,7 +378,7 @@ function App() {
           membership.status === 'active' && membership.establishment_id === switchEstablishmentId,
       )
     ) {
-      if (history.getNavigationCause() === 'pop') {
+      if (navigationCause === 'pop') {
         return
       }
       if (applyingOpenRef.current) {
@@ -420,6 +423,7 @@ function App() {
     locationSearch,
     history,
     navigate,
+    navigationCause,
     route,
   ])
 
@@ -457,7 +461,7 @@ function App() {
     const nextScope = explicitTerrainScope(route)
     const previousScope = previousScopeRef.current
     if (
-      history.getNavigationCause() === 'pop' &&
+      navigationCause === 'pop' &&
       previousScope &&
       nextScope &&
       (previousScope.type !== nextScope.type ||
