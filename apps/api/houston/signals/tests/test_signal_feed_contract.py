@@ -66,6 +66,15 @@ def test_si01_resolve_clears_pin_and_keeps_signal_until_retention_ends(api_clien
     assert body["pins"] == []
     assert body["counts"]["open"] == 0
     assert body["counts"]["pinned"] == 0
+    assert body["counts"]["retained"] == 1
+    assert (
+        body["counts"]["open"]
+        + body["counts"]["in_progress"]
+        + body["counts"]["interesting"]
+        + body["counts"]["pinned"]
+        + body["counts"]["retained"]
+        == len(body["items"]) + len(body["pins"])
+    )
 
     detail = api_client.get(
         signal_detail_url(membership.establishment_id, signal.id),

@@ -171,6 +171,9 @@ function countBucket(
   if (item.status === 'open' || item.status === 'in_progress' || item.status === 'interesting') {
     return item.status
   }
+  if (selection === 'all' && RETAINED_TERMINAL_STATUSES.has(item.status)) {
+    return 'retained'
+  }
   return null
 }
 
@@ -190,7 +193,7 @@ function shiftCounts(
     updated[from] = Math.max(0, updated[from] - 1)
   }
   if (to) {
-    updated[to] += 1
+    updated[to] = (updated[to] ?? 0) + 1
   }
   return updated
 }

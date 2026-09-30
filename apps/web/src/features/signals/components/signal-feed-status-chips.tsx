@@ -22,7 +22,11 @@ function statusCount(
     // `pinned` is filtered by the active status. It represents every pin only
     // while Tout itself is selected.
     return selected === 'all'
-      ? counts.open + counts.in_progress + counts.interesting + counts.pinned
+      ? counts.open +
+          counts.in_progress +
+          counts.interesting +
+          counts.pinned +
+          counts.retained
       : undefined
   }
   return counts[status]

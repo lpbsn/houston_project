@@ -30,7 +30,7 @@ L pages default to 25 and accept at most 50. `has_more` uses `limit + 1`, never 
 
 Operational statuses are `open`, `in_progress`, and `interesting`. A resolved signal also stays in L until `resolved_at + 10 days`, and a canceled signal until `canceled_at + 48 hours`. At that instant, and when the canonical timestamp is null, the row leaves the operational feed. History and authorized detail stay available throughout. Status selections other than `all` still exclude these rows. They are not pinnable.
 
-Status selection is `all`, `open`, `in_progress`, or `interesting`. L is one global cursor collection, not independently paginated sections. Under `all`, ordering is `open` → `in_progress` → `interesting`, then retained terminals, then `last_activity_at DESC`, `created_at DESC`, `id DESC`. Counts for the three statuses describe unpinned operational rows and ignore the selected status while retaining the other active filters; `pinned` describes filtered P. Retained terminals are not added to those counts.
+Status selection is `all`, `open`, `in_progress`, or `interesting`. L is one global cursor collection, not independently paginated sections. Under `all`, ordering is `open` → `in_progress` → `interesting`, then retained terminals, then `last_activity_at DESC`, `created_at DESC`, `id DESC`. Counts for the three statuses describe unpinned operational rows and ignore the selected status while retaining the other active filters; `pinned` describes filtered P. `retained` counts terminal rows still inside the operational window. The overview total is those five counts. Status and pin counts do not include retained terminals.
 
 Signal P is collective:
 

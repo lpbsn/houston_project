@@ -16002,11 +16002,14 @@ components:
           type: integer
         pinned:
           type: integer
+        retained:
+          type: integer
       required:
       - in_progress
       - interesting
       - open
       - pinned
+      - retained
     SignalFeedItem:
       type: object
       properties:

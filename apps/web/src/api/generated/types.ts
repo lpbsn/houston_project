@@ -5466,6 +5466,7 @@ export interface components {
             in_progress: number;
             interesting: number;
             pinned: number;
+            retained: number;
         };
         SignalFeedItem: {
             /** Format: uuid */

@@ -328,7 +328,11 @@ def signal_feed_counts(
     *,
     filters: SignalFeedFilters | None,
 ) -> dict[str, int]:
-    """Status totals are unpinned only and ignore the selected status."""
+    """Status totals are unpinned only and ignore the selected status.
+
+    ``retained`` counts terminal rows still inside the operational window.
+    Those rows stay out of the three status totals and out of ``pinned``.
+    """
     selection = signal_feed_status_selection(filters)
     pin_filter = Q(is_pinned=True, status__in=PINNABLE_SIGNAL_STATUSES)
     if selection not in {"all", Signal.Status.IN_PROGRESS}:
@@ -338,8 +342,15 @@ def signal_feed_counts(
         in_progress=Count("id", filter=Q(status=Signal.Status.IN_PROGRESS, is_pinned=False)),
         interesting=Count("id", filter=Q(status=Signal.Status.INTERESTING, is_pinned=False)),
         pinned=Count("id", filter=pin_filter),
+        retained=Count(
+            "id",
+            filter=Q(status__in=(Signal.Status.RESOLVED, Signal.Status.CANCELED)),
+        ),
     )
-    counts = {key: aggregated[key] or 0 for key in ("open", "in_progress", "interesting", "pinned")}
+    counts = {
+        key: aggregated[key] or 0
+        for key in ("open", "in_progress", "interesting", "pinned", "retained")
+    }
     if selection == Signal.Status.IN_PROGRESS:
         counts["pinned"] = 0
     return counts
