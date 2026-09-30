@@ -5,6 +5,7 @@ import pytest
 from houston.analytics.analytics_capacity_eval import (
     ANALYTICS_CAPACITY_SCHEMA_VERSION,
     CapacityProfile,
+    _rows_scanned,
     benchmark_analytics_capacity,
     resolve_capacity_profile,
     seed_analytics_capacity_dataset,
@@ -72,11 +73,42 @@ def test_small_capacity_dataset_and_benchmark_do_not_call_openai(monkeypatch, se
     ).count() == dataset.assignment_count
     assert report["schema_version"] == ANALYTICS_CAPACITY_SCHEMA_VERSION
     assert report["configuration"]["timing_isolated_from_diagnostics"] is True
+    assert report["configuration"]["planner_stats"] == "ANALYZE before timing"
     assert {row["name"] for row in report["read_scenarios"]} >= {
         "dashboard_7d",
+        "dashboard_15d",
         "dashboard_30d",
         "dashboard_90d",
+        "rankings_15d_recurring",
+        "rankings_30d_recurring",
+        "rankings_90d_recurring",
+        "rankings_90d_new",
+        "rankings_90d_locations",
         "patterns_30d_filtered",
         "pattern_detail_30d",
         "pattern_drilldown_30d_page1",
     }
+    assert all("rows_scanned" in row for row in report["read_scenarios"])
+
+
+def test_rows_scanned_multiplies_actual_rows_by_loops():
+    explanation = {
+        "plan": [
+            {
+                "Plan": {
+                    "Node Type": "Nested Loop",
+                    "Actual Rows": 1,
+                    "Actual Loops": 1,
+                    "Plans": [
+                        {
+                            "Node Type": "Seq Scan",
+                            "Actual Rows": 10,
+                            "Actual Loops": 3,
+                        }
+                    ],
+                }
+            }
+        ]
+    }
+
+    assert _rows_scanned([explanation]) == 30

@@ -345,6 +345,26 @@ def test_password_reset_over_limit_returns_429(api_client):
     assert_throttled_response(response)
 
 
+def test_login_stays_closed_when_throttle_cache_is_down(api_client, active_user, monkeypatch):
+    create_membership(user=active_user)
+    csrf_token = ensure_csrf(api_client)
+
+    def broken_get(*args, **kwargs):
+        raise ConnectionError("redis throttle down")
+
+    monkeypatch.setattr(drf_throttling.SimpleRateThrottle.cache, "get", broken_get)
+    response = login(
+        api_client,
+        csrf_token,
+        identifier=active_user.email,
+        password="secret",
+        **_client_ip_headers("203.0.113.80"),
+    )
+    assert response.status_code == 500
+    assert response.json()["code"] == "internal_error"
+    assert response.json().get("authenticated") is not True
+
+
 def test_password_reset_confirm_over_limit_returns_429_for_invalid_token(api_client):
     ip_headers = _client_ip_headers("203.0.113.52")
     payload = {

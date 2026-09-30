@@ -1,7 +1,8 @@
-"""Pattern-list / detail recurrence on a rolling 30-day window.
+"""pattern_recurrence_30d: rolling 30-day pattern recurrence.
 
-This is not Dashboard widget 8.1 (canonical motif with at least two surviving
-Signals in the selected dashboard period). Do not unify the two definitions.
+This is not repeated_patterns_in_period (dashboard widget: canonical motif
+with at least two signals in the selected dashboard period). Do not unify
+the two definitions.
 """
 
 from __future__ import annotations
@@ -23,6 +24,46 @@ RECURRENCE_WINDOW_DAYS = 30
 RECURRENCE_MIN_OCCURRENCES = 3
 RECURRENCE_MIN_DISTINCT_DAYS = 2
 RECURRENCE_STATUS_COMPUTED = "computed"
+PATTERN_RECURRENCE_30D = "pattern_recurrence_30d"
+
+
+@dataclass(frozen=True)
+class PatternRecurrence30dDefinition:
+    """Read-time definition. This object does not calculate the metric."""
+
+    name: str
+    grain: str
+    timezone: str
+    window: str
+    numerator: str
+    denominator: str
+    exclusions: str
+    authorization_scope: str
+    freshness: str
+    provenance: str
+
+
+PATTERN_RECURRENCE_30D_DEFINITION = PatternRecurrence30dDefinition(
+    name=PATTERN_RECURRENCE_30D,
+    grain="one operational pattern inside the caller's analytics read scope",
+    timezone="civil day in establishment.timezone",
+    window="rolling 30 days ending at as_of; start inclusive, end exclusive",
+    numerator=(
+        "distinct signals assigned to the pattern whose status is open, "
+        "in_progress, interesting, or resolved"
+    ),
+    denominator=(
+        "none; is_recurrent when occurrences are at least 3 and distinct "
+        "civil days are at least 2"
+    ),
+    exclusions=(
+        "canceled signals, signals outside the window, signals outside "
+        "resolve_analytics_read_scope"
+    ),
+    authorization_scope="resolve_analytics_read_scope",
+    freshness="computed at read from PostgreSQL; freshness is OLTP freshness",
+    provenance="houston.analytics.recurrence",
+)
 
 
 @dataclass(frozen=True)

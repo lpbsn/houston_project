@@ -22,6 +22,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from houston.accounts.authentication import AccessTokenAuthContext
 from houston.accounts.models import AccessToken, User, UserSession
 from houston.analytics.api.views import (
+    AnalyticsDashboardRankingsView,
     AnalyticsDashboardView,
     AnalyticsPatternDetailView,
     AnalyticsPatternFilterOptionsView,
@@ -367,6 +368,10 @@ def benchmark_analytics_capacity(
     explain_min_ms: float = DEFAULT_EXPLAIN_MIN_MS,
     explain_limit: int = DEFAULT_EXPLAIN_LIMIT,
 ) -> dict[str, Any]:
+    # COPY seeding does not refresh planner stats. Production autovacuum does.
+    # Analyze before timing so the plan matches a vacuumed database.
+    with connection.cursor() as cursor:
+        cursor.execute("ANALYZE")
     user = User.objects.get(pk=dataset.user_id)
     scenarios = _build_read_scenarios(dataset=dataset, user=user)
     scenario_reports = []
@@ -397,6 +402,7 @@ def benchmark_analytics_capacity(
                     if key != "queries"
                 },
                 "memory": memory,
+                "rows_scanned": _rows_scanned(explanations),
                 "explains": explanations,
             }
         )
@@ -412,6 +418,7 @@ def benchmark_analytics_capacity(
             "profile": asdict(profile),
             "seed": dataset.seed,
             "timing_isolated_from_diagnostics": True,
+            "planner_stats": "ANALYZE before timing",
             "shortlist_strategy": DUPLICATE_GUARD_SHORTLIST_STRATEGY,
             "shortlist_min_score": (
                 settings.HOUSTON_ANALYTICS_PATTERN_DUPLICATE_GUARD_MIN_SCORE
@@ -464,10 +471,12 @@ def format_analytics_capacity_report(report: dict[str, Any]) -> str:
     for scenario in report["read_scenarios"]:
         timing = scenario["timing"]
         diagnostic = scenario["diagnostic"]
+        rows = scenario.get("rows_scanned")
+        rows_text = "n/a" if rows is None else str(rows)
         lines.append(
             f"  {scenario['name']}: p50={timing['p50_ms']:.1f}ms "
             f"p95={timing['p95_ms']:.1f}ms queries={diagnostic['query_count']} "
-            f"sql={diagnostic['sql_total_ms']:.1f}ms"
+            f"sql={diagnostic['sql_total_ms']:.1f}ms rows_scanned={rows_text}"
         )
     lines.append("token_overlap_v1:")
     for row in report["token_overlap_v1"]:
@@ -761,7 +770,7 @@ def _build_read_scenarios(
         return invoke
 
     scenarios: list[tuple[str, Callable[[], Any]]] = []
-    for days in (7, 30, 90):
+    for days in (7, 15, 30, 90):
         query = {
             **_period_query(now=now, days=days, organization_id=dataset.organization_id),
             "establishment_id": str(dataset.establishment_ids[0]),
@@ -783,6 +792,28 @@ def _build_read_scenarios(
                     AnalyticsPatternListView,
                     "/api/v1/analytics/patterns/",
                     patterns_query,
+                ),
+            )
+        )
+
+    for days, kind in (
+        (15, "recurring"),
+        (30, "recurring"),
+        (90, "recurring"),
+        (90, "new"),
+        (90, "locations"),
+    ):
+        scenarios.append(
+            (
+                f"rankings_{days}d_{kind}",
+                view_request(
+                    AnalyticsDashboardRankingsView,
+                    "/api/v1/analytics/dashboard/rankings/",
+                    {
+                        "establishment_id": str(dataset.establishment_ids[0]),
+                        "period_days": str(days),
+                        "kind": kind,
+                    },
                 ),
             )
         )
@@ -955,6 +986,34 @@ def _run_memory_diagnostic(operation: Callable[[], Any]) -> dict[str, Any]:
         "process_max_rss_after": rss_after,
         "process_max_rss_unit": "bytes" if platform.system() == "Darwin" else "kilobytes",
     }
+
+
+def _rows_scanned(explanations: list[dict[str, Any]]) -> int | None:
+    if not explanations:
+        return None
+    total = 0
+    for explanation in explanations:
+        plan = explanation.get("plan")
+        nodes = plan if isinstance(plan, list) else [plan]
+        for node in nodes:
+            if isinstance(node, dict):
+                total += _scan_actual_rows(node.get("Plan", node))
+    return total
+
+
+def _scan_actual_rows(node: Any) -> int:
+    if not isinstance(node, dict):
+        return 0
+    total = 0
+    node_type = str(node.get("Node Type") or "")
+    if "Scan" in node_type:
+        # EXPLAIN ANALYZE reports Actual Rows as the per-loop average.
+        rows = int(node.get("Actual Rows") or 0)
+        loops = node.get("Actual Loops")
+        total += rows if loops is None else rows * int(loops)
+    for child in node.get("Plans") or []:
+        total += _scan_actual_rows(child)
+    return total
 
 
 def _explain_slowest_selects(
