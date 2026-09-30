@@ -84,6 +84,7 @@ type ActionPlanCreatePageProps = {
   backPath?: string
   signalId?: string
   actionPlanId?: string
+  onBack?: () => void
 }
 
 export function ActionPlanCreatePage({
@@ -91,8 +92,16 @@ export function ActionPlanCreatePage({
   backPath = '/action-plans',
   signalId,
   actionPlanId,
+  onBack,
 }: ActionPlanCreatePageProps) {
   const { navigate } = useAppRoute()
+  function leave(fallback: string) {
+    if (onBack) {
+      onBack()
+      return
+    }
+    navigate(fallback)
+  }
   const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   const placeFormColumns = useXlViewport()
   const auth = useAuth()
@@ -479,7 +488,7 @@ export function ActionPlanCreatePage({
       <TerrainErrorState
         className="mx-3 mt-3"
         message="Observation introuvable."
-        onRetry={() => navigate('/signals')}
+        onRetry={() => leave('/signals')}
       />
     )
   }
@@ -490,7 +499,7 @@ export function ActionPlanCreatePage({
         <TerrainErrorState
           className="mx-3 mt-3"
           message="Plan introuvable."
-          onRetry={() => navigate('/action-plans')}
+          onRetry={() => leave('/action-plans')}
         />
       )
     }
@@ -518,7 +527,7 @@ export function ActionPlanCreatePage({
         <TerrainErrorState
           className="mx-3 mt-3"
           message="Vous n’avez pas la permission de modifier ce plan."
-          onRetry={() => navigate(templateEditBackPath)}
+          onRetry={() => leave(templateEditBackPath)}
         />
       )
     }
@@ -533,7 +542,7 @@ export function ActionPlanCreatePage({
             ? SIGNAL_LINKED_PERMISSION_MESSAGE
             : 'Vous n’avez pas accès à la création de plans d’action.'
         }
-        onRetry={() => navigate(backPath)}
+        onRetry={() => leave(backPath)}
       />
     )
   }
@@ -566,7 +575,7 @@ export function ActionPlanCreatePage({
         <TerrainErrorState
           className="mx-3 mt-3"
           message={SIGNAL_LINKED_PERMISSION_MESSAGE}
-          onRetry={() => navigate(backPath)}
+          onRetry={() => leave(backPath)}
         />
       )
     }
@@ -731,7 +740,7 @@ export function ActionPlanCreatePage({
       >
         <ActionPlanFormDesktopFrame
           title={resolveActionPlanDesktopJourneyTitle(mode)}
-          onBack={() => navigate(isTemplateEdit ? templateEditBackPath : backPath)}
+          onBack={() => leave(isTemplateEdit ? templateEditBackPath : backPath)}
           primaryLabel={desktopPrimaryLabel}
           primaryDisabled={resolvedIsSubmitting}
           notice={executionNotice}
@@ -1068,7 +1077,7 @@ export function ActionPlanCreatePage({
                 variant="outline"
                 className="h-11 flex-1 rounded-xl"
                 disabled={resolvedIsSubmitting}
-                onClick={() => navigate(templateEditBackPath)}
+                onClick={() => leave(templateEditBackPath)}
               >
                 Retour
               </Button>

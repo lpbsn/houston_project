@@ -27,6 +27,15 @@ describe('native overlay dismiss stack', () => {
     expect(older).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps a callback that refuses to close', () => {
+    const dismiss = vi.fn(() => false)
+    registerNativeOverlayDismiss(dismiss)
+
+    expect(dismissTopNativeOverlay()).toBe(true)
+    expect(dismissTopNativeOverlay()).toBe(true)
+    expect(dismiss).toHaveBeenCalledTimes(2)
+  })
+
   it('returns false when the stack is empty', () => {
     expect(dismissTopNativeOverlay()).toBe(false)
   })

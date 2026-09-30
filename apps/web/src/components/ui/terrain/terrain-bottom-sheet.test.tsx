@@ -28,7 +28,7 @@ describe('TerrainBottomSheet native overlay dismiss', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('closes a non-dismissible sheet on Android back without enabling the scrim', () => {
+  it('does not close a non-dismissible sheet on Android back', () => {
     const onClose = vi.fn()
     const { container } = render(
       <TerrainBottomSheet title="Actions" open onClose={onClose} dismissible={false}>
@@ -42,7 +42,9 @@ describe('TerrainBottomSheet native overlay dismiss', () => {
     expect(onClose).not.toHaveBeenCalled()
 
     expect(dismissTopNativeOverlay()).toBe(true)
-    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onClose).not.toHaveBeenCalled()
+    expect(dismissTopNativeOverlay()).toBe(true)
+    expect(onClose).not.toHaveBeenCalled()
   })
 })
 

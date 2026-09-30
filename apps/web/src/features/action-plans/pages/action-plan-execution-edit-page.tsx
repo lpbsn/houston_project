@@ -51,9 +51,13 @@ import { resolveVisibleBusinessUnits } from '../lib/resolve-visible-business-uni
 
 type ActionPlanExecutionEditPageProps = {
   executionId: string
+  onBack?: () => void
 }
 
-export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecutionEditPageProps) {
+export function ActionPlanExecutionEditPage({
+  executionId,
+  onBack,
+}: ActionPlanExecutionEditPageProps) {
   const { navigate, search } = useAppRoute()
   const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   const placeFormColumns = useXlViewport()
@@ -67,6 +71,13 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
     `/action-plans/executions/${executionId}`,
     search,
   )
+  function leaveDetail() {
+    if (onBack) {
+      onBack()
+      return
+    }
+    navigate(detailBackPath)
+  }
 
   const detailQuery = useActionPlanExecutionDetailQuery(establishmentId, executionId)
   const [form, setForm] = useState<ActionPlanExecutionEditFormValues | null>(null)
@@ -193,7 +204,7 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
       <TerrainErrorState
         className="mx-3 mt-3"
         message="Vous n’avez pas la permission de modifier ce plan."
-        onRetry={() => navigate(detailBackPath)}
+        onRetry={() => leaveDetail()}
       />
     )
   }
@@ -203,7 +214,7 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
       <TerrainErrorState
         className="mx-3 mt-3"
         message="Ce plan ne peut plus être modifié dans son état actuel."
-        onRetry={() => navigate(detailBackPath)}
+        onRetry={() => leaveDetail()}
       />
     )
   }
@@ -257,7 +268,7 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
       >
         <ActionPlanFormDesktopFrame
           title={resolveActionPlanDesktopJourneyTitle('execution-edit')}
-          onBack={() => navigate(detailBackPath)}
+          onBack={() => leaveDetail()}
           primaryLabel={ACTION_PLAN_DESKTOP_SAVE_LABEL}
           primaryDisabled={isSubmitting}
         >
@@ -528,7 +539,7 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
             variant="outline"
             className="h-11 flex-1 rounded-xl"
             disabled={isSubmitting}
-            onClick={() => navigate(detailBackPath)}
+            onClick={() => leaveDetail()}
           >
             Retour
           </Button>

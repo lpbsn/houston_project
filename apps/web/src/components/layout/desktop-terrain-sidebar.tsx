@@ -17,6 +17,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react'
 
+import type { NavigateOptions } from '@/app/app-history'
 import type { AppRoute } from '@/app/app-routes'
 import { Button } from '@/components/ui/button'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
@@ -40,7 +41,7 @@ type DesktopTerrainSidebarProps = {
   collapsed: boolean
   onCollapsedChange: (collapsed: boolean) => void
   isLoggingOut?: boolean
-  navigate: (pathname: string, options?: { replace?: boolean }) => void
+  navigate: (pathname: string, options?: NavigateOptions) => void
   onSignOut?: () => void
 }
 
@@ -375,7 +376,7 @@ export function DesktopTerrainSidebar({
         item={item}
         active={isScopedNavItemActive(item.id, navigation.activeItemId)}
         collapsed={collapsed}
-        onNavigate={navigate}
+        onNavigate={(href) => navigate(href, { intent: 'primary' })}
       />
     )
   }
@@ -390,6 +391,7 @@ export function DesktopTerrainSidebar({
         bootstrap,
         target,
       }),
+      { intent: 'primary' },
     )
   }
 

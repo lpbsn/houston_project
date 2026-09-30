@@ -1,0 +1,481 @@
+# SPORE — Refonte du détail Signal mobile
+
+## 1. Objectif
+
+Refondre et consolider le détail Signal sur mobile afin d’en faire un écran opérationnel :
+
+- rapide à comprendre sur le terrain ;
+- moderne et peu chargé visuellement ;
+- cohérent avec le feed Signal déjà validé ;
+- partagé entre mobile web et Capacitor iOS/Android ;
+- maintenable et scalable ;
+- compatible avec le desktop existant sans le dégrader.
+
+La refonte porte prioritairement sur la hiérarchie UX et la composition mobile.
+
+Elle ne doit pas rouvrir :
+
+- l’architecture Feed/Pagination ;
+- les contrats backend existants ;
+- les contrats realtime existants ;
+- le chantier Navigation/Transitions en cours.
+
+---
+
+## 2. État actuel
+
+Le détail Signal repose principalement sur :
+
+- `signal-detail-page.tsx`
+- `signal-detail-main-block.tsx`
+- `signal-detail-classification-section.tsx`
+- `signal-detail-photo-section.tsx`
+- `signal-resolution-request-section.tsx`
+- `signal-linked-action-plans-section.tsx`
+- `signal-detail-tabs.tsx`
+- `signal-detail-sticky-footer.tsx`
+
+L’architecture actuelle partage correctement la donnée et une partie importante des composants entre mobile et desktop.
+
+La refonte ne doit donc pas introduire une deuxième implémentation complète du détail Signal.
+
+La priorité est de corriger la hiérarchie et la densité de l’interface mobile.
+
+---
+
+## 3. Principes UX
+
+Le détail Signal ne doit pas être une version agrandie d’une carte du feed.
+
+Le feed répond principalement à :
+
+> Quel Signal dois-je ouvrir ?
+
+Le détail doit répondre rapidement à :
+
+> Que se passe-t-il ?
+>
+> Où ?
+>
+> Quel est son état ?
+>
+> Est-il déjà pris en charge ?
+>
+> Quelle est l’action pertinente maintenant ?
+
+Le premier écran visible doit privilégier la compréhension opérationnelle avant les informations administratives.
+
+---
+
+## 4. Structure cible mobile
+
+Ordre cible :
+
+1. selector Détails / Commentaires ;
+2. statut + titre ;
+3. contexte terrain compact ;
+4. description ;
+5. photos éventuelles ;
+6. prise en charge / plans d’action liés lorsqu’ils existent ;
+7. classification ;
+8. workflow de résolution lorsqu’il est pertinent ;
+9. CTA persistant de création de plan lorsqu’il reste pertinent.
+
+La topbar et le retour restent gérés par le shell actuel.
+
+La refonte conserve la frontière responsive existante utilisée par l’application. Elle ne crée pas de nouveau breakpoint métier ni de détection spécifique Capacitor parallèle.
+
+---
+
+## 5. Selector Détails / Commentaires
+
+Conserver les deux vues :
+
+- Détails ;
+- Commentaires.
+
+Le selector actuel doit être allégé.
+
+### Cible
+
+Utiliser des tabs minimalistes :
+
+- pas de gros fond de segmented control ;
+- pas d’effet de deux boutons massifs ;
+- typographie claire ;
+- état actif identifiable principalement par le texte et un indicateur inférieur fin ;
+- état inactif volontairement discret ;
+- animation éventuelle légère uniquement si elle reste compatible avec le futur chantier Navigation/Transitions.
+
+La cible tactile doit rester confortable sur iOS et Android, même si la représentation visuelle est compacte.
+
+Le selector ne doit pas dominer visuellement le contenu.
+
+---
+
+## 6. Bloc principal
+
+Le haut du détail doit permettre de comprendre immédiatement le Signal.
+
+### Ordre
+
+**Statut**
+
+Puis :
+
+**Titre**
+
+Puis une zone de contexte terrain compacte.
+
+Puis :
+
+**Description**
+
+Puis éventuellement :
+
+**Photos**
+
+### Forme générale
+
+Conserver un bloc principal unique et cohérent.
+
+Il doit rester visuellement léger et ne pas donner l’impression d’un formulaire administratif ou d’une succession de cartes indépendantes.
+
+Les sections secondaires ne doivent être isolées visuellement que lorsqu’elles représentent réellement un workflow ou une information métier distincte.
+
+### Contexte terrain
+
+Regrouper les informations aujourd’hui dispersées :
+
+- lieu ;
+- auteur ;
+- ancienneté / dernière activité ;
+- nombre d’observations similaires.
+
+Ces informations ne doivent plus apparaître comme quatre éléments ayant le même poids visuel.
+
+Le lieu conserve une visibilité importante car il est directement utile sur le terrain.
+
+L’auteur et l’ancienneté sont secondaires.
+
+L’agrégation doit rester visible lorsqu’elle existe, sans attirer davantage l’attention que le problème lui-même.
+
+---
+
+## 7. Statut
+
+Le statut reste visible immédiatement.
+
+Il ne doit cependant pas concurrencer le titre.
+
+Le badge doit être cohérent avec le feed Signal afin que l’utilisateur conserve les mêmes repères entre liste et détail.
+
+Les libellés métier existants sont conservés.
+
+---
+
+## 8. Description
+
+La description devient le contenu principal après le titre et le contexte.
+
+Elle doit être facilement lisible sans être enfermée dans une succession excessive de cartes.
+
+Les longues descriptions doivent rester naturellement scrollables dans le flux principal.
+
+---
+
+## 9. Photos
+
+Les photos restent directement associées au Signal.
+
+Sur mobile :
+
+- aperçu compact ;
+- scroll horizontal ou disposition adaptée lorsque plusieurs médias existent ;
+- ouverture plein écran conservée ;
+- lazy loading conservé.
+
+La galerie ne doit pas repousser inutilement le reste du contenu lorsqu’il existe de nombreux médias.
+
+Ne pas reconstruire une galerie générique si le composant existant répond au besoin.
+
+---
+
+## 10. Plans d’action liés
+
+Lorsqu’un ou plusieurs plans sont déjà liés au Signal, cette information devient prioritaire.
+
+Elle indique que le Signal est déjà pris en charge opérationnellement.
+
+La section doit donc apparaître avant les informations de classification secondaires.
+
+Chaque plan doit permettre de comprendre rapidement :
+
+- son titre ;
+- son statut ;
+- qu’il est ouvrable.
+
+La navigation vers l’exécution existante reste inchangée.
+
+Le contexte Cross reste en lecture seule selon les règles existantes.
+
+### Plusieurs plans liés
+
+Ne pas supposer qu’un Signal ne peut avoir qu’un seul plan.
+
+La présence d’un plan lié ne masque pas automatiquement la possibilité d’en créer un autre si le backend l’autorise.
+
+Si le nombre de plans liés devient important, la section doit rester compacte :
+
+- afficher un nombre raisonnable d’éléments initialement ;
+- permettre une expansion locale si nécessaire ;
+- ne pas introduire de pagination ni de nouveau contrat backend pour ce besoin.
+
+---
+
+## 11. Classification
+
+La classification doit devenir adaptative.
+
+### Classification complète
+
+Lorsqu’elle est correctement renseignée :
+
+- affichage compact ;
+- faible poids visuel ;
+- informations immédiatement scannables.
+
+Conserver explicitement les trois lignes métier :
+
+- pôle responsable ;
+- pôle concerné ;
+- sujet.
+
+Ne pas transformer ces valeurs en ensemble de chips génériques.
+
+Le but est de réduire le poids visuel sans perdre la lisibilité de libellés métier potentiellement longs.
+
+### Qualification nécessaire
+
+Lorsqu’une information nécessaire manque :
+
+- rendre clairement visible que le Signal reste à qualifier ;
+- mettre l’action `Qualifier` davantage en avant dans cette section ;
+- utiliser les `permission_hints` et règles métier existants ;
+- ne pas reconstruire localement les règles de permission.
+
+Le cas nécessitant une action doit être plus visible que le cas nominal.
+
+`Qualifier` reste une action contextuelle de la section Classification et ne devient pas automatiquement un CTA sticky global.
+
+---
+
+## 12. Résolution
+
+Le workflow de résolution doit rester disponible sans concurrencer en permanence les autres actions.
+
+Peuvent exister selon permissions et état :
+
+- demander la résolution ;
+- annuler une demande ;
+- approuver ;
+- refuser.
+
+Une demande de résolution en attente doit rendre son état et ses actions immédiatement compréhensibles.
+
+Les actions comme `Approuver` et `Refuser` restent regroupées dans leur contexte métier. Elles ne doivent pas être sorties artificiellement de la section pour devenir des CTA sticky globaux.
+
+Éviter qu’une section possède sa propre logique de footer sticky en concurrence avec le CTA global de la page.
+
+Les événements historiques peuvent rester accessibles dans le bloc de résolution, mais leur présentation doit rester secondaire par rapport à l’état courant et aux actions disponibles.
+
+---
+
+## 13. Hiérarchie des actions
+
+Le détail mobile ne doit pas présenter plusieurs CTA de même importance.
+
+La hiérarchie suivante doit guider le rendu :
+
+1. un état ou workflow bloquant doit être rendu immédiatement compréhensible ;
+2. une demande de résolution en attente expose clairement ses actions dans sa section ;
+3. une qualification manquante met `Qualifier` en évidence dans la section Classification ;
+4. la création d’un plan d’action reste l’action persistante principale lorsqu’elle est autorisée et qu’aucun contexte plus immédiat ne justifie de réduire sa proéminence.
+
+Cette hiérarchie est une règle UX, pas une invitation à créer un moteur générique de résolution d’action principale.
+
+Ne pas introduire de système générique du type orchestrateur global d’actions sauf nécessité réellement constatée dans le code.
+
+Les `permission_hints` backend restent la source de vérité pour savoir quelles actions sont disponibles.
+
+Les actions secondaires restent dans leur contexte fonctionnel.
+
+---
+
+## 14. CTA persistant
+
+Le CTA persistant mobile reste destiné principalement à la création de plan d’action.
+
+Il ne doit pas devenir un conteneur générique capable de changer pour toutes les actions possibles du Signal.
+
+`Créer un plan d’action` reste affiché lorsqu’il est autorisé et pertinent.
+
+Il peut être rendu moins dominant ou retiré temporairement uniquement lorsqu’un workflow plus immédiat rendrait sa présence confuse ou concurrente.
+
+La présence d’un plan lié n’interdit pas automatiquement l’affichage du CTA de création si les permissions autorisent plusieurs prises en charge.
+
+Il ne doit jamais exister deux zones sticky concurrentes sur le même écran.
+
+Respecter les safe areas Capacitor/iOS.
+
+---
+
+## 15. Commentaires
+
+La vue Commentaires reste séparée de Détails.
+
+Elle conserve le composant de commentaires existant et son comportement actuel :
+
+- liste ;
+- composer ;
+- deep link éventuel vers un commentaire ;
+- lecture seule dans Cross.
+
+Éviter de charger ou rendre inutilement la vue commentaires avant qu’elle soit ouverte lorsque le comportement actuel permet déjà ce lazy mounting.
+
+---
+
+## 16. Desktop
+
+Le desktop ne fait pas partie de la refonte visuelle de ce chantier.
+
+Les adaptations mobile ne doivent pas dégrader :
+
+- la disposition deux colonnes ;
+- le panneau de contexte ;
+- les commentaires intégrés ;
+- le CTA desktop ;
+- la navigation desktop ;
+- les comportements Cross.
+
+Les composants réellement partagés peuvent évoluer lorsqu’il existe un bénéfice commun.
+
+Ne pas imposer au desktop la composition mobile.
+
+---
+
+## 17. Responsive et plateformes
+
+Une seule UI mobile doit être maintenue pour :
+
+- web mobile ;
+- Capacitor iOS ;
+- Capacitor Android.
+
+La séparation mobile / desktop doit continuer à s’appuyer sur la logique responsive déjà présente dans le projet.
+
+Ne pas créer :
+
+- de breakpoint spécifique uniquement pour le détail Signal ;
+- de rendu métier différent selon `Capacitor.isNativePlatform()` ou équivalent ;
+- de variante iOS / Android de la composition fonctionnelle.
+
+Les différences natives éventuelles doivent rester limitées aux comportements réellement nécessaires :
+
+- safe areas ;
+- gestion overlays ;
+- système de retour ;
+- comportements déjà abstraits par l’application.
+
+---
+
+## 18. Performance
+
+La refonte ne doit pas ajouter :
+
+- de requête backend supplémentaire sans nécessité ;
+- de duplication du détail Signal dans plusieurs stores ;
+- de calcul métier frontend redondant ;
+- de montage inutile de sections lourdes ;
+- d’abstraction générique anticipée.
+
+Conserver le modèle actuel basé sur la requête détail et les mutations dédiées.
+
+Les photos restent lazy-loaded.
+
+Les commentaires ne doivent pas être rendus inutilement avant leur ouverture si le comportement actuel le permet.
+
+---
+
+## 19. Accessibilité
+
+Conserver des zones tactiles suffisamment larges même lorsque le rendu visuel est compact.
+
+Les tabs doivent conserver :
+
+- `role="tablist"` ;
+- `role="tab"` ;
+- `aria-selected` ;
+- `aria-controls`.
+
+Les boutons iconographiques doivent avoir un nom accessible.
+
+Les états de chargement et erreurs doivent rester compréhensibles.
+
+Le contraste des éléments secondaires ne doit pas être sacrifié au nom d’un rendu plus minimaliste.
+
+---
+
+## 20. Maintenabilité
+
+Conserver l’approche actuelle :
+
+- page d’orchestration ;
+- composants métier ciblés ;
+- helpers métier existants ;
+- permissions fournies par le backend.
+
+Factoriser uniquement les duplications constatées pendant l’implémentation.
+
+Ne pas créer :
+
+- de nouveau design system ;
+- de système universel de cartes détail ;
+- de moteur générique d’actions contextuelles ;
+- d’abstraction responsive supplémentaire sans besoin réel.
+
+Une petite duplication explicite mobile/desktop est préférable à une abstraction complexe lorsque leurs compositions divergent réellement.
+
+---
+
+## 21. Hors scope
+
+Ce chantier ne couvre pas :
+
+- refonte Feed Signal ;
+- pagination ;
+- mémoire de feed ;
+- realtime feed ;
+- navigation globale ;
+- transitions de pages ;
+- URLs ;
+- refonte desktop ;
+- nouveaux contrats backend ;
+- refonte du modèle Signal ;
+- refonte globale des commentaires ;
+- nouveau design system ;
+- moteur générique d’actions contextuelles.
+
+---
+
+## 22. Résultat attendu
+
+Le détail Signal mobile doit paraître plus simple alors qu’il conserve les mêmes capacités métier.
+
+La priorité de lecture doit devenir :
+
+**comprendre → situer → voir la prise en charge → agir**
+
+et non :
+
+**parcourir une succession de cartes et de métadonnées**.

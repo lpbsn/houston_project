@@ -149,7 +149,7 @@ describe('DesktopTerrainSidebar', () => {
     )
 
     fireEvent.click(screen.getByRole('link', { name: 'Observations' }))
-    expect(navigate).toHaveBeenCalledWith('/e/est-1/signals')
+    expect(navigate).toHaveBeenCalledWith('/e/est-1/signals', { intent: 'primary' })
   })
 
   it('navigates to the Cross observations feed when Cross scope is real', () => {
@@ -178,7 +178,7 @@ describe('DesktopTerrainSidebar', () => {
     const sidebar = screen.getByLabelText('Navigation principale')
     expect(within(sidebar).getAllByText('Cross-établissement').length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('link', { name: 'Observations' }))
-    expect(navigate).toHaveBeenCalledWith('/cross/signals')
+    expect(navigate).toHaveBeenCalledWith('/cross/signals', { intent: 'primary' })
   })
 
   it('keeps one destination list and an inert Spore Brain for an establishment owner', () => {
@@ -358,7 +358,7 @@ describe('DesktopTerrainSidebar', () => {
     fireEvent.keyDown(screen.getByRole('textbox', { name: 'Rechercher un scope' }), {
       key: 'Enter',
     })
-    expect(navigate).toHaveBeenCalledWith('/e/est-2/signals')
+    expect(navigate).toHaveBeenCalledWith('/e/est-2/signals', { intent: 'primary' })
     expect(navigate.mock.calls[0]?.[0]).not.toContain('?')
   })
 

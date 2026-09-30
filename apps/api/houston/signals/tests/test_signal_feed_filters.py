@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
+from django.utils import timezone
 
 from houston.establishments.models import (
     ActivitySubject,
@@ -120,15 +123,29 @@ def test_feed_rejects_archived_status_filter(api_client):
     assert response.json()["code"] == "validation_error"
 
 
-def test_feed_rejects_terminal_status_filter(api_client):
+def test_feed_accepts_retained_terminal_status_filters(api_client):
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    _create_signal(membership, title="Open", status=Signal.Status.OPEN)
-    _create_signal(membership, title="Canceled", status=Signal.Status.CANCELED)
+    open_signal = _create_signal(membership, title="Open", status=Signal.Status.OPEN)
+    canceled = _create_signal(membership, title="Canceled", status=Signal.Status.CANCELED)
+    resolved = _create_signal(membership, title="Resolved", status=Signal.Status.RESOLVED)
+    now = timezone.now()
+    Signal.objects.filter(pk=canceled.pk).update(canceled_at=now - timedelta(hours=1))
+    Signal.objects.filter(pk=resolved.pk).update(resolved_at=now - timedelta(hours=1))
 
-    response = _feed_get(api_client, membership, "?view_mode=general&statuses=canceled")
+    canceled_response = _feed_get(api_client, membership, "?view_mode=general&statuses=canceled")
+    assert canceled_response.status_code == 200
+    canceled_body = canceled_response.json()
+    canceled_items = flatten_signal_feed_items(canceled_body)
+    assert [item["id"] for item in canceled_items] == [str(canceled.id)]
+    assert str(open_signal.id) not in {item["id"] for item in canceled_items}
+    assert canceled_body["applied_filters"]["statuses"] == ["canceled"]
 
-    assert response.status_code == 400
-    assert response.json()["code"] == "validation_error"
+    resolved_response = _feed_get(api_client, membership, "?view_mode=general&statuses=resolved")
+    assert resolved_response.status_code == 200
+    resolved_body = resolved_response.json()
+    resolved_items = flatten_signal_feed_items(resolved_body)
+    assert [item["id"] for item in resolved_items] == [str(resolved.id)]
+    assert resolved_body["applied_filters"]["statuses"] == ["resolved"]
 
 
 def test_feed_deduplicates_statuses_in_applied_filters(api_client):

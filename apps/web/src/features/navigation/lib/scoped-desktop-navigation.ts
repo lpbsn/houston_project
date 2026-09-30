@@ -235,7 +235,7 @@ function itemsForDesktopScope(
   })
 }
 
-function explicitRouteScope(route: AppRoute): TerrainScope | null {
+export function explicitTerrainScope(route: AppRoute): TerrainScope | null {
   if (route.kind === 'scoped-terrain') {
     return route.scope
   }
@@ -265,7 +265,7 @@ function resolveVisibleDesktopScope(
   route: AppRoute,
   bootstrap: BootstrapResponse | null | undefined,
 ): TerrainScope | null {
-  return explicitRouteScope(route) ?? activeMembershipScope(bootstrap)
+  return explicitTerrainScope(route) ?? activeMembershipScope(bootstrap)
 }
 
 function resolveDesktopNavFunction(
