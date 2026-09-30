@@ -628,7 +628,7 @@ export async function acceptInvitationSession(
           refresh_token_transport: prepared.transport,
         },
         credentials: prepared.credentials,
-        headers: buildTransportHeaders(prepared),
+        headers: buildTransportHeaders(prepared, getAccessToken()),
       },
     )
 

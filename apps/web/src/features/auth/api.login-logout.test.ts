@@ -783,6 +783,32 @@ describe('auth api login logout', () => {
     },
   ] as const
 
+  it('sends the current access token when accepting an invitation', async () => {
+    getAccessTokenMock.mockReturnValue('current-access')
+    apiClientPostMock.mockResolvedValueOnce({
+      response: { status: 200 },
+      data: {
+        requires_login: true,
+        establishment_id: 'est-1',
+      },
+      error: undefined,
+    })
+
+    await expect(
+      acceptInvitationSession('invite-token', {}),
+    ).resolves.toEqual({ kind: 'membership_only', requiresLogin: true })
+
+    expect(apiClientPostMock).toHaveBeenCalledWith(
+      '/api/v1/invitations/accept/',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer current-access',
+        }),
+      }),
+    )
+    expect(setAccessTokenMock).not.toHaveBeenCalled()
+  })
+
   function configureBodyRefreshStore(initialToken: string | null = 'old-refresh') {
     let persistedRefresh: string | null = initialToken
     configureBodyRefreshTokenStore({

@@ -9,6 +9,18 @@ import { createMemoryHistory } from '@/app/app-history'
 
 const acceptDirectorInvitation = vi.hoisted(() => vi.fn())
 const previewDirectorInvitation = vi.hoisted(() => vi.fn())
+const getAccessToken = vi.hoisted(() => vi.fn(() => null as string | null))
+const logout = vi.hoisted(() => vi.fn(async () => undefined))
+const clearAuthState = vi.hoisted(() => vi.fn())
+
+vi.mock('@/features/auth/api', () => ({
+  logout,
+  clearAuthState,
+}))
+
+vi.mock('@/features/auth/session', () => ({
+  getAccessToken,
+}))
 
 vi.mock('@/features/invitations/api', () => ({
   InvitationAcceptApiError: class InvitationAcceptApiError extends Error {
@@ -46,6 +58,11 @@ beforeEach(() => {
   acceptDirectorInvitation.mockResolvedValue({ kind: 'session' })
   previewDirectorInvitation.mockReset()
   previewDirectorInvitation.mockResolvedValue({ requiresPassword: true })
+  getAccessToken.mockReset()
+  getAccessToken.mockReturnValue(null)
+  logout.mockReset()
+  logout.mockResolvedValue(undefined)
+  clearAuthState.mockReset()
 })
 
 describe('InvitationAcceptPage', () => {
@@ -117,7 +134,7 @@ describe('InvitationAcceptPage', () => {
     expect(acceptDirectorInvitation).not.toHaveBeenCalled()
   })
 
-  it('accepts an existing account without a password and sends them to login', async () => {
+  it('accepts an existing account without a password and sends an anonymous visitor to login', async () => {
     previewDirectorInvitation.mockResolvedValue({ requiresPassword: false })
     acceptDirectorInvitation.mockResolvedValue({
       kind: 'membership_only',
@@ -133,6 +150,33 @@ describe('InvitationAcceptPage', () => {
       expect(history.getHref()).toBe('/login')
     })
     expect(onAccepted).not.toHaveBeenCalled()
+    expect(logout).not.toHaveBeenCalled()
+  })
+
+  it('keeps another signed-in account in place until that person signs out', async () => {
+    getAccessToken.mockReturnValue('other-account-access')
+    previewDirectorInvitation.mockResolvedValue({ requiresPassword: false })
+    acceptDirectorInvitation.mockResolvedValue({
+      kind: 'membership_only',
+      requiresLogin: true,
+    })
+    const { history, onAccepted } = renderPage('/invitations#invite-token')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Accept invitation' }))
+
+    await vi.waitFor(() => {
+      expect(screen.getByText(/accepted for another account/i)).toBeTruthy()
+    })
+    expect(history.getHref()).toBe('/invitations')
+    expect(onAccepted).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out and continue' }))
+
+    await vi.waitFor(() => {
+      expect(logout).toHaveBeenCalledOnce()
+      expect(clearAuthState).toHaveBeenCalledOnce()
+      expect(history.getHref()).toBe('/login')
+    })
   })
 
   it('keeps the current session when the invited account is already signed in', async () => {

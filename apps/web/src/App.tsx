@@ -668,18 +668,23 @@ function App() {
       return (
         <InvitationAcceptPage
           onAccepted={() => {
-            void queryClient
-              .fetchQuery({
-                queryKey: bootstrapQueryKey,
-                queryFn: fetchBootstrap,
-              })
-              .then((bootstrap) => {
-                navigate(
-                  getAuthenticatedLandingPath(bootstrap, { isDesktop: isDesktopWeb }) ??
-                    '/pending-onboarding',
-                  { replace: true },
-                )
-              })
+            void (async () => {
+              let bootstrap =
+                queryClient.getQueryData<BootstrapResponse>(bootstrapQueryKey) ?? auth.bootstrap
+              try {
+                bootstrap = await queryClient.fetchQuery({
+                  queryKey: bootstrapQueryKey,
+                  queryFn: fetchBootstrap,
+                })
+              } catch {
+                // The membership is already active. Keep the session bootstrap in hand.
+              }
+              navigate(
+                getAuthenticatedLandingPath(bootstrap, { isDesktop: isDesktopWeb }) ??
+                  '/pending-onboarding',
+                { replace: true },
+              )
+            })()
           }}
         />
       )
@@ -1132,7 +1137,7 @@ function App() {
           headingBadge: 'Invitation',
           title: 'Accept invitation',
           description: 'Create your password to join this establishment in Houston.',
-          actions: signInAction,
+          actions: auth.isAuthenticated ? signOutAction : signInAction,
         }
       : route.kind === 'email-change'
         ? {

@@ -11,6 +11,8 @@ import {
   evaluatePasswordCreation,
   passwordCreationBlockerMessage,
 } from '@/features/auth/lib/password-creation'
+import { clearAuthState, logout } from '@/features/auth/api'
+import { getAccessToken } from '@/features/auth/session'
 import {
   InvitationAcceptApiError,
   acceptDirectorInvitation,
@@ -45,6 +47,7 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
   const [acceptTerms, setAcceptTerms] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [requiresPassword, setRequiresPassword] = useState<boolean | null>(null)
+  const [needsAccountSwitch, setNeedsAccountSwitch] = useState(false)
 
   useLayoutEffect(() => {
     if (!fragmentToken) {
@@ -111,6 +114,10 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
       })
 
       if (outcome.kind === 'membership_only' && outcome.requiresLogin) {
+        if (getAccessToken()) {
+          setNeedsAccountSwitch(true)
+          return
+        }
         navigate('/login', { replace: true })
         return
       }
@@ -121,6 +128,54 @@ export function InvitationAcceptPage({ onAccepted }: InvitationAcceptPageProps) 
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  async function switchToInvitedAccount() {
+    setSubmitError(null)
+    setIsSubmitting(true)
+    try {
+      await logout()
+    } catch (error) {
+      setSubmitError(getAcceptErrorMessage(error))
+    } finally {
+      clearAuthState()
+      setIsSubmitting(false)
+    }
+    navigate('/login', { replace: true })
+  }
+
+  if (needsAccountSwitch) {
+    return (
+      <Card className="mx-auto w-full max-w-lg rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_22px_48px_-38px_rgba(59,90,184,0.28)]">
+        <CardHeader className="gap-2">
+          <CardTitle className="text-[1.55rem] font-black tracking-[-0.05em]">
+            Accept invitation
+          </CardTitle>
+          <CardDescription className="text-sm leading-6">
+            This invitation was accepted for another account. Sign out of the current session to
+            sign in as that person.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {submitError ? <p className="text-sm text-destructive">{submitError}</p> : null}
+          <Button
+            type="button"
+            className="h-11 w-full rounded-[1rem] sm:w-auto"
+            disabled={isSubmitting}
+            onClick={() => void switchToInvitedAccount()}
+          >
+            {isSubmitting ? (
+              <>
+                <LoaderCircle className="size-4 animate-spin" />
+                Signing out...
+              </>
+            ) : (
+              'Sign out and continue'
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+    )
   }
 
   if (!token) {
