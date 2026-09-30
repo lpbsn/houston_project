@@ -289,7 +289,7 @@ function App() {
       sessionEstablishmentId !== routeEstablishmentId &&
       hasActiveMembershipForEstablishment(authRoutingSession.memberships, routeEstablishmentId)
     ) {
-      if (navigationCause === 'pop') {
+      if (isDesktopWeb && navigationCause === 'pop') {
         return
       }
       const target = {
@@ -378,7 +378,7 @@ function App() {
           membership.status === 'active' && membership.establishment_id === switchEstablishmentId,
       )
     ) {
-      if (navigationCause === 'pop') {
+      if (isDesktopWeb && navigationCause === 'pop') {
         return
       }
       if (applyingOpenRef.current) {
@@ -461,6 +461,7 @@ function App() {
     const nextScope = explicitTerrainScope(route)
     const previousScope = previousScopeRef.current
     if (
+      isDesktopWeb &&
       history.getNavigationCause() === 'pop' &&
       previousScope &&
       nextScope &&
@@ -480,7 +481,7 @@ function App() {
       }
     }
     previousScopeRef.current = nextScope
-  }, [auth.bootstrap, history, navigate, route])
+  }, [auth.bootstrap, history, isDesktopWeb, navigate, route])
   const routeEstablishmentId = establishmentIdRequiringSwitch(route)
   const establishmentRouteSessionMismatch = Boolean(
     routeEstablishmentId &&

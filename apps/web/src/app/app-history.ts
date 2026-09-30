@@ -71,21 +71,25 @@ type HistoryEntry = {
   lineage: NavigationLineage | null
 }
 
+type PrimaryTraversal = {
+  href: string
+  /** `traverse` waits for the single popstate from `go`. `truncate` ignores the pop from the same-URL back that drops the forward stack. */
+  phase: 'traverse' | 'truncate'
+}
+
 /**
- * Primary navigation must not leave the abandoned branch reachable by Back
- * and must not render an intermediate hub. The History API can only replace
- * the current entry or traverse; it cannot delete entries below the current
- * one. Memory history applies that result in one step. Browser history
- * traverses once with `go(-depth)`, ignores that popstate, then replaces the
- * landed entry. A same-URL push/back then drops the abandoned forward entries
- * so they cannot become active again. The UI hears a single destination.
+ * Primary navigation must not leave the abandoned branch reachable by Back or
+ * Forward, and must not render an intermediate hub. The History API can only
+ * replace the current entry or traverse; it cannot delete entries below the
+ * current one. Memory history applies that result in one step. Browser history
+ * waits for the one popstate from `go(-depth)`, replaces that landed entry,
+ * then push/back to drop whatever is now forward. Nothing is rewritten on a
+ * timer: a late popstate still finishes the traversal it belongs to.
  */
 export function createBrowserHistory(): AppHistory {
   const listeners = new Set<() => void>()
   let cause: NavigationCause = 'programmatic'
-  let pendingPrimaryHref: string | null = null
-  let pendingPrimaryTimer: ReturnType<typeof setTimeout> | null = null
-  let settlingPrimary = false
+  let primaryTraversal: PrimaryTraversal | null = null
   let trackedHref = readBrowserHref()
   let trackedLineage = readLineage(window.history.state)
 
@@ -128,29 +132,23 @@ export function createBrowserHistory(): AppHistory {
     remember(href, lineage)
   }
 
-  function clearPendingPrimary(): void {
-    pendingPrimaryHref = null
-    if (pendingPrimaryTimer) {
-      clearTimeout(pendingPrimaryTimer)
-      pendingPrimaryTimer = null
-    }
+  function discardForwardEntries(href: string): void {
+    primaryTraversal = { href, phase: 'truncate' }
+    window.history.pushState(null, '', href)
+    window.history.back()
   }
 
   function onPopState(): void {
-    if (settlingPrimary) {
-      settlingPrimary = false
+    if (primaryTraversal?.phase === 'truncate') {
+      primaryTraversal = null
       remember(readBrowserHref(), readLineage(window.history.state))
       return
     }
-    if (pendingPrimaryHref) {
-      const href = pendingPrimaryHref
-      clearPendingPrimary()
+    if (primaryTraversal?.phase === 'traverse') {
+      const href = primaryTraversal.href
+      primaryTraversal = null
       replaceEntry(href, null)
-      // pushState removes entries after the current one (the abandoned branch).
-      // back() returns to the entry just replaced, which is already the target.
-      settlingPrimary = true
-      window.history.pushState(null, '', href)
-      window.history.back()
+      discardForwardEntries(href)
       notify('programmatic')
       return
     }
@@ -187,19 +185,11 @@ export function createBrowserHistory(): AppHistory {
       const depth = getLineage()?.depth ?? 0
       if (depth <= 0) {
         replaceEntry(href, null)
+        discardForwardEntries(href)
         notify('programmatic')
         return
       }
-      clearPendingPrimary()
-      pendingPrimaryHref = href
-      pendingPrimaryTimer = setTimeout(() => {
-        if (pendingPrimaryHref !== href) {
-          return
-        }
-        clearPendingPrimary()
-        replaceEntry(href, null)
-        notify('programmatic')
-      }, 300)
+      primaryTraversal = { href, phase: 'traverse' }
       window.history.go(-depth)
       return
     }

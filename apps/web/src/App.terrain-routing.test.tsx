@@ -1027,4 +1027,76 @@ describe('App terrain active membership routing', () => {
     })
     expect(switchEstablishment).not.toHaveBeenCalled()
   })
+
+  it('sends mobile browser back between establishments through the selector', async () => {
+    stubLgViewport(false)
+    const bootstrap = bootstrapWithSelectedEstablishment('est-1')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: 'est-1' },
+      page: 'signals',
+    }
+    const rendered = render(wrapApp())
+    navigate.mockClear()
+
+    navigationCauseState.current = 'pop'
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: 'est-2' },
+      page: 'signals',
+    }
+    window.history.replaceState(null, '', '/e/est-2/signals')
+    rendered.rerender(wrapApp())
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith(
+        buildSelectEstablishmentRedirectHref({
+          href: '/e/est-2/signals',
+          establishmentId: 'est-2',
+        }),
+        { replace: true },
+      )
+    })
+    expect(navigate).not.toHaveBeenCalledWith('/e/est-1/signals', expect.anything())
+    expect(switchEstablishment).not.toHaveBeenCalled()
+  })
+
+  it('sends mobile browser back from Cross to an establishment through the selector', async () => {
+    stubLgViewport(false)
+    const bootstrap = bootstrapWithSelectedEstablishment('est-1')
+    authState.bootstrap = bootstrap
+    authState.memberships = bootstrap.memberships
+    authState.hasOperationalAccess = true
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'cross' },
+      page: 'signals',
+    }
+    const rendered = render(wrapApp())
+    navigate.mockClear()
+
+    navigationCauseState.current = 'pop'
+    routeState.route = {
+      kind: 'scoped-terrain',
+      scope: { type: 'establishment', establishmentId: 'est-2' },
+      page: 'execution',
+    }
+    window.history.replaceState(null, '', '/e/est-2/execution')
+    rendered.rerender(wrapApp())
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith(
+        buildSelectEstablishmentRedirectHref({
+          href: '/e/est-2/execution',
+          establishmentId: 'est-2',
+        }),
+        { replace: true },
+      )
+    })
+    expect(navigate).not.toHaveBeenCalledWith('/cross/execution', expect.anything())
+    expect(switchEstablishment).not.toHaveBeenCalled()
+  })
 })

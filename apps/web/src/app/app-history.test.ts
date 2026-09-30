@@ -155,6 +155,10 @@ describe('createBrowserHistory', () => {
     expect(listener).not.toHaveBeenCalled()
   })
 
+  function flushTraversal(): void {
+    vi.runAllTimers()
+  }
+
   it('replaces the hierarchical root in one notification when leaving for a primary destination', () => {
     vi.useFakeTimers()
     window.history.replaceState(null, '', '/signals')
@@ -167,27 +171,90 @@ describe('createBrowserHistory', () => {
     )
 
     history.navigate('/signals/sig-1')
+    history.navigate('/signals/sig-1/plan')
+    seen.length = 0
     history.navigate('/chat', { intent: 'primary' })
-    vi.runAllTimers()
+    flushTraversal()
 
     expect(history.getHref()).toBe('/chat')
     expect(history.getLineage()).toBeNull()
-    expect(seen.filter((href) => href === '/signals')).toEqual([])
-    expect(seen.at(-1)).toBe('/chat')
+    expect(history.getNavigationCause()).toBe('programmatic')
+    expect(seen).toEqual(['/chat'])
 
-    const afterCollapse = seen.length
     window.history.forward()
-    vi.runAllTimers()
+    flushTraversal()
     expect(history.getHref()).toBe('/chat')
-
     history.back()
-    vi.runAllTimers()
-    expect(history.getHref()).not.toBe('/signals')
-    expect(history.getHref()).not.toBe('/signals/sig-1')
-    expect(
-      seen.slice(afterCollapse).filter((href) => href === '/signals' || href === '/signals/sig-1'),
-    ).toEqual([])
-    vi.useRealTimers()
+    flushTraversal()
+    expect(history.getHref()).toBe('/chat')
+    expect(seen.filter((href) => href === '/signals' || href === '/signals/sig-1')).toEqual([])
+  })
+
+  it('drops an existing forward stack when a primary destination replaces the current hub', () => {
+    vi.useFakeTimers()
+    window.history.replaceState(null, '', '/signals')
+    const history = createBrowserHistory()
+    unsubscribers.push(history.subscribe(() => undefined))
+
+    history.navigate('/signals/sig-1')
+    window.history.back()
+    flushTraversal()
+    expect(history.getHref()).toBe('/signals')
+
+    history.navigate('/execution', { intent: 'primary' })
+    flushTraversal()
+    expect(history.getHref()).toBe('/execution')
+    expect(history.getLineage()).toBeNull()
+
+    window.history.forward()
+    flushTraversal()
+    expect(history.getHref()).toBe('/execution')
+    history.back()
+    flushTraversal()
+    expect(history.getHref()).toBe('/execution')
+  })
+
+  it('finishes a primary traversal when its popstate arrives late', () => {
+    vi.useFakeTimers()
+    window.history.replaceState(null, '', '/signals')
+    const history = createBrowserHistory()
+    const seen: string[] = []
+    unsubscribers.push(
+      history.subscribe(() => {
+        seen.push(history.getHref())
+      }),
+    )
+    history.navigate('/signals/sig-1')
+    seen.length = 0
+
+    const originalGo = window.history.go.bind(window.history)
+    let release: (() => void) | null = null
+    const go = vi.spyOn(window.history, 'go').mockImplementation((delta) => {
+      release = () => {
+        go.mockRestore()
+        originalGo(delta)
+      }
+    })
+
+    history.navigate('/chat', { intent: 'primary' })
+    flushTraversal()
+
+    expect(history.getHref()).toBe('/signals/sig-1')
+    expect(seen).toEqual([])
+    expect(release).not.toBeNull()
+    release?.()
+    flushTraversal()
+
+    expect(history.getHref()).toBe('/chat')
+    expect(history.getNavigationCause()).toBe('programmatic')
+    expect(seen).toEqual(['/chat'])
+
+    window.history.forward()
+    flushTraversal()
+    history.back()
+    flushTraversal()
+    expect(history.getHref()).toBe('/chat')
+    expect(seen.filter((href) => href === '/signals' || href === '/signals/sig-1')).toEqual([])
   })
 
   it('keeps browser back on the current entry while an overlay consumes it', () => {
