@@ -42,7 +42,7 @@ export function SignalDetailStickyFooter({
         )}
         onClick={onCreateActionPlan}
       >
-        + Créer un plan d&apos;action
+        + Créer un plan
       </Button>
     </TerrainStickyFooter>
   )

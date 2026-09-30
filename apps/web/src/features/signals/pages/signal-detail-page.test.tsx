@@ -307,7 +307,7 @@ describe('SignalDetailPage tabs', () => {
     const frame = screen.getByTestId('signal-detail-frame')
     expect(frame.contains(screen.getByTestId('signal-detail-tab-bar'))).toBe(true)
     expect(frame.contains(detailsPanel)).toBe(true)
-    expect(screen.getAllByRole('button', { name: "+ Créer un plan d'action" })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: "+ Créer un plan" })).toHaveLength(1)
     expect(detailQueryMock).toHaveBeenCalledTimes(1)
     expect(CommentSectionMock).not.toHaveBeenCalled()
   })
@@ -371,15 +371,15 @@ describe('SignalDetailPage tabs', () => {
 
     renderPage()
 
-    expect(screen.getAllByRole('button', { name: "+ Créer un plan d'action" })).toHaveLength(1)
-    fireEvent.click(screen.getByRole('button', { name: "+ Créer un plan d'action" }))
+    expect(screen.getAllByRole('button', { name: "+ Créer un plan" })).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: "+ Créer un plan" }))
     expect(navigate).toHaveBeenCalledWith('/signals/signal-1/plan')
 
     fireEvent.click(getCommentsTab())
 
-    expect(screen.queryByRole('button', { name: "+ Créer un plan d'action" })).toBeNull()
+    expect(screen.queryByRole('button', { name: "+ Créer un plan" })).toBeNull()
     fireEvent.click(getDetailsTab())
-    expect(screen.getAllByRole('button', { name: "+ Créer un plan d'action" })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: "+ Créer un plan" })).toHaveLength(1)
   })
 
   it('does not write tab query params when clicking tabs', () => {
@@ -440,7 +440,7 @@ describe('SignalDetailPage tabs', () => {
       },
     })
 
-    fireEvent.click(screen.getByRole('button', { name: "+ Créer un plan d'action" }))
+    fireEvent.click(screen.getByRole('button', { name: "+ Créer un plan" }))
 
     expect(navigate).toHaveBeenCalledWith(
       '/signals/signal-1/plan?period_start=2026-07-01T00%3A00%3A00.000Z&period_end=2026-08-01T00%3A00%3A00.000Z&q=retard&recurrence=recurrent&analytics_pattern_id=44444444-4444-4444-8444-444444444444',
@@ -993,7 +993,7 @@ describe('SignalDetailPage linked action plans', () => {
     expect(screen.getByRole('button', { name: /Plan fuite/i }).className).toContain('pl-4')
     const classification = screen.getByText('Classification')
     const resolution = screen.getByText('Demande de résolution')
-    const createPlan = screen.getByRole('button', { name: "+ Créer un plan d'action" })
+    const createPlan = screen.getByRole('button', { name: "+ Créer un plan" })
     const content = screen.getByTestId('signal-detail-details-content')
     const footer = screen.getByTestId('signal-detail-create-plan-footer')
     const panel = screen.getByTestId('signal-detail-details-panel')
@@ -1048,7 +1048,7 @@ describe('SignalDetailPage linked action plans', () => {
     expect(content.className).toContain('overflow-y-auto')
     expect(footer.className).toContain('relative')
     expect(footer.className).not.toContain('sticky')
-    expect(screen.getByRole('button', { name: "+ Créer un plan d'action" }).className).toContain(
+    expect(screen.getByRole('button', { name: "+ Créer un plan" }).className).toContain(
       'h-12',
     )
   })
@@ -1090,7 +1090,7 @@ describe('SignalDetailPage linked action plans', () => {
 
     renderPage()
 
-    const createPlan = screen.getByRole('button', { name: "+ Créer un plan d'action" })
+    const createPlan = screen.getByRole('button', { name: "+ Créer un plan" })
     const footer = screen.getByTestId('signal-detail-create-plan-footer')
     const content = screen.getByTestId('signal-detail-details-content')
     expect(footer.contains(createPlan)).toBe(true)
@@ -1172,7 +1172,7 @@ describe('SignalDetailPage linked action plans', () => {
       ),
     )
 
-    expect(screen.queryByRole('button', { name: "+ Créer un plan d'action" })).toBeNull()
+    expect(screen.queryByRole('button', { name: "+ Créer un plan" })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Qualifier' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Demander la résolution' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Approuver' })).toBeNull()
@@ -1280,7 +1280,7 @@ describe('SignalDetailPage desktop actions', () => {
     ).toBeTruthy()
 
     expect(screen.getByRole('button', { name: 'Créer un plan' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: "+ Créer un plan d'action" })).toBeNull()
+    expect(screen.queryByRole('button', { name: "+ Créer un plan" })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Retour' }))
     expect(onBack).toHaveBeenCalledOnce()
     fireEvent.click(screen.getByRole('button', { name: 'Créer un plan' }))
@@ -1393,7 +1393,7 @@ describe('SignalDetailPage desktop actions', () => {
     renderPage({ onBack: vi.fn() })
 
     expect(screen.getByRole('tablist', { name: "Sections de l'observation" })).toBeTruthy()
-    expect(screen.getByRole('button', { name: "+ Créer un plan d'action" })).toBeTruthy()
+    expect(screen.getByRole('button', { name: "+ Créer un plan" })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Créer un plan' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Retour' })).toBeNull()
     expect(screen.queryByTestId('signal-detail-comments-section')).toBeNull()
