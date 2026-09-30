@@ -82,8 +82,8 @@ export function SignalDetailClassificationSection({
   const affectedValue = classification.affectedLabel || UNDEFINED_LABEL
   const subjectValue = classification.subjectLabel || UNDEFINED_LABEL
 
-  return (
-    <TerrainCard className="px-3 py-2.5">
+  const section = (
+    <>
       {context ? (
         <div className="mb-2.5 border-b border-[#E8E6DF] pb-2.5">
           <SignalDetailLabel className="text-[#7D7B75]">Statut</SignalDetailLabel>
@@ -96,18 +96,29 @@ export function SignalDetailClassificationSection({
           </div>
         </div>
       ) : null}
-      <div className="relative flex min-h-8 items-center gap-2 pr-[5.75rem]">
-        <SignalDetailLabel className="text-[#7D7B75]">Classification</SignalDetailLabel>
-        <SignalUnclassifiedBadge signal={signal} variant="detail" />
+      <div
+        className={cn(
+          'relative flex items-center gap-2',
+          context ? 'min-h-8 pr-[5.75rem]' : 'min-h-0 justify-between',
+        )}
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <SignalDetailLabel className="text-[#7D7B75]">Classification</SignalDetailLabel>
+          <SignalUnclassifiedBadge signal={signal} variant="detail" />
+        </div>
         {canQualify ? (
           <Button
             type="button"
-            variant={emphasizeQualify ? 'default' : 'outline'}
+            variant={context && emphasizeQualify ? 'default' : 'outline'}
             className={cn(
-              'absolute top-1/2 right-0 h-8 min-h-8 -translate-y-1/2 rounded-lg px-2.5 text-[12px] font-semibold whitespace-nowrap',
-              emphasizeQualify
-                ? cn('text-white', terrainBrandAction.bg, terrainBrandAction.hover)
-                : 'border-[#E8E6DF] bg-white text-[#1B4FD8] hover:bg-[#F5F4F0] hover:text-[#1B4FD8] focus-visible:ring-[#1B4FD8]/30',
+              context
+                ? cn(
+                    'absolute top-1/2 right-0 h-8 min-h-8 -translate-y-1/2 rounded-lg px-2.5 text-[12px] font-semibold whitespace-nowrap',
+                    emphasizeQualify
+                      ? cn('text-white', terrainBrandAction.bg, terrainBrandAction.hover)
+                      : 'border-[#E8E6DF] bg-white text-[#1B4FD8] hover:bg-[#F5F4F0] hover:text-[#1B4FD8] focus-visible:ring-[#1B4FD8]/30',
+                  )
+                : 'h-7 shrink-0 rounded-md border-[#E8E6DF] bg-transparent px-2 text-[12px] font-medium text-[#4A5560] shadow-none hover:bg-[#F5F4F0] hover:text-[#4A5560]',
             )}
             disabled={isQualifyOpening}
             onClick={onQualify}
@@ -121,7 +132,7 @@ export function SignalDetailClassificationSection({
           {qualifyErrorMessage}
         </p>
       ) : null}
-      <div className="mt-2 space-y-1.5">
+      <div className={cn('mt-2 space-y-1.5', !context && 'mt-1 space-y-1')}>
         <ClassificationField label="Pôle responsable" value={responsibleValue} />
         <ClassificationField label="Pôle concerné" value={affectedValue} />
         <ClassificationField label="Sujet" value={subjectValue} />
@@ -150,6 +161,12 @@ export function SignalDetailClassificationSection({
           ) : null}
         </div>
       ) : null}
-    </TerrainCard>
+    </>
   )
+
+  if (!context) {
+    return <div className="-mt-1.5 min-w-0">{section}</div>
+  }
+
+  return <TerrainCard className="px-3 py-2.5">{section}</TerrainCard>
 }

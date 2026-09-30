@@ -228,6 +228,12 @@ export function SignalDetailPage({
       }
     />
   )
+  const subdueCreateActionPlan = Boolean(
+    resolutionRequest &&
+      (signal.permission_hints.can_approve_resolution_request ||
+        signal.permission_hints.can_reject_resolution_request ||
+        signal.permission_hints.can_cancel_resolution_request),
+  )
   const resolutionSection = (
     <SignalResolutionRequestSection
       events={resolutionRequestEvents}
@@ -242,6 +248,7 @@ export function SignalDetailPage({
       onCancel={() => void handleCancelResolutionRequest()}
       onApprove={() => void handleApproveResolutionRequest()}
       onReject={() => void handleRejectResolutionRequest()}
+      actionsPlacement={isDesktopWeb ? 'pinned' : 'flow'}
     />
   )
   const showPageCreateAction = (isDesktopWeb || activeTab === 'details') && showCreateActionPlan
@@ -376,13 +383,14 @@ export function SignalDetailPage({
                     reporterName={reporterName}
                     description={description}
                   />
+                  {linkedPlans}
                   {classificationSection}
                   {resolutionSection}
-                  {linkedPlans}
                 </div>
               </div>
               {showPageCreateAction ? (
                 <SignalDetailStickyFooter
+                  subdued={subdueCreateActionPlan}
                   onCreateActionPlan={() => onNavigate(createActionPlanPath)}
                 />
               ) : null}
