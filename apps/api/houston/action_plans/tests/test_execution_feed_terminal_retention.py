@@ -126,6 +126,80 @@ def test_done_and_canceled_executions_follow_the_canonical_terminal_clock(
     assert canceled_edge.id not in visible
 
 
+def test_retained_terminals_must_have_been_operational_before_the_transition(
+    owner_membership,
+    business_unit,
+):
+    now = timezone.now()
+    canceled_before_start = create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Canceled before start",
+    )
+    canceled_before_visibility = create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Canceled before visibility",
+    )
+    started_but_not_visible = create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Started but not visible",
+        visible_from=now + timedelta(hours=1),
+    )
+    operational_then_canceled = create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Operational then canceled",
+        visible_from=now - timedelta(hours=48),
+    )
+    operational_then_done = create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Operational then done",
+        requires_validation=False,
+        visible_from=now - timedelta(days=10),
+    )
+
+    ActionPlanExecution.objects.filter(pk=canceled_before_start.pk).update(
+        status=EXECUTION_STATUS_CANCELED,
+        start_at=now + timedelta(hours=2),
+        started_at=None,
+        visible_from=now - timedelta(hours=1),
+        canceled_at=now,
+    )
+    ActionPlanExecution.objects.filter(pk=canceled_before_visibility.pk).update(
+        status=EXECUTION_STATUS_CANCELED,
+        start_at=now + timedelta(hours=2),
+        started_at=None,
+        visible_from=now + timedelta(hours=1),
+        canceled_at=now,
+    )
+    ActionPlanExecution.objects.filter(pk=started_but_not_visible.pk).update(
+        status=EXECUTION_STATUS_CANCELED,
+        started_at=now - timedelta(hours=1),
+        canceled_at=now,
+    )
+    ActionPlanExecution.objects.filter(pk=operational_then_canceled.pk).update(
+        status=EXECUTION_STATUS_CANCELED,
+        started_at=now - timedelta(hours=48),
+        canceled_at=now - timedelta(hours=47),
+    )
+    ActionPlanExecution.objects.filter(pk=operational_then_done.pk).update(
+        status=EXECUTION_STATUS_DONE,
+        started_at=now - timedelta(days=10),
+        marked_done_at=now - timedelta(days=9),
+    )
+
+    visible = _visible_ids(owner_membership, now=now)
+
+    assert canceled_before_start.id not in visible
+    assert canceled_before_visibility.id not in visible
+    assert started_but_not_visible.id not in visible
+    assert operational_then_canceled.id in visible
+    assert operational_then_done.id in visible
+
+
 def test_category_filter_and_calendar_do_not_keep_retained_terminals(
     api_client,
     owner_membership,

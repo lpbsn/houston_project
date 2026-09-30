@@ -8,6 +8,7 @@ from datetime import datetime
 from django.db.models import (
     Count,
     Exists,
+    F,
     OuterRef,
     Prefetch,
     Q,
@@ -635,20 +636,37 @@ def retained_terminal_execution_q(*, now: datetime) -> Q:
 
     Done uses validated_at when validation set it, otherwise marked_done_at for
     a done execution that did not require validation. The boundary is exclusive.
-    A null canonical timestamp does not qualify. pending_validation is not terminal.
+    The execution must have started and become visible no later than its canonical
+    terminal timestamp. A null canonical timestamp does not qualify.
+    pending_validation is not terminal.
     """
     done_after = now - EXECUTION_VALIDATED_FEED_RETENTION
     return (
-        Q(status=EXECUTION_STATUS_DONE, validated_at__gt=done_after)
-        | Q(
-            status=EXECUTION_STATUS_DONE,
-            validated_at__isnull=True,
-            requires_validation=False,
-            marked_done_at__gt=done_after,
+        (
+            Q(
+                status=EXECUTION_STATUS_DONE,
+                started_at__isnull=False,
+                validated_at__gt=done_after,
+            )
+            & (Q(visible_from__isnull=True) | Q(visible_from__lte=F("validated_at")))
         )
-        | Q(
-            status=EXECUTION_STATUS_CANCELED,
-            canceled_at__gt=now - EXECUTION_CANCELED_FEED_RETENTION,
+        | (
+            Q(
+                status=EXECUTION_STATUS_DONE,
+                started_at__isnull=False,
+                validated_at__isnull=True,
+                requires_validation=False,
+                marked_done_at__gt=done_after,
+            )
+            & (Q(visible_from__isnull=True) | Q(visible_from__lte=F("marked_done_at")))
+        )
+        | (
+            Q(
+                status=EXECUTION_STATUS_CANCELED,
+                started_at__isnull=False,
+                canceled_at__gt=now - EXECUTION_CANCELED_FEED_RETENTION,
+            )
+            & (Q(visible_from__isnull=True) | Q(visible_from__lte=F("canceled_at")))
         )
     )
 
