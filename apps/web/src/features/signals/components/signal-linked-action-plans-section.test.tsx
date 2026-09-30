@@ -85,4 +85,27 @@ describe('SignalLinkedActionPlansSection', () => {
 
     expect(onSelect).toHaveBeenCalledWith('exec-1')
   })
+
+  it('shows three linked plans then expands the rest locally', () => {
+    render(
+      createElement(SignalLinkedActionPlansSection, {
+        executions: [
+          buildLinkedExecution({ id: 'exec-1', title: 'Plan A' }),
+          buildLinkedExecution({ id: 'exec-2', title: 'Plan B' }),
+          buildLinkedExecution({ id: 'exec-3', title: 'Plan C' }),
+          buildLinkedExecution({ id: 'exec-4', title: 'Plan D' }),
+        ],
+        onSelect: vi.fn(),
+      }),
+    )
+
+    expect(screen.getByRole('button', { name: /Plan A/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Plan C/i })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Plan D/i })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: "Voir l'autre plan" }))
+
+    expect(screen.getByRole('button', { name: /Plan D/i })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: "Voir l'autre plan" })).toBeNull()
+  })
 })

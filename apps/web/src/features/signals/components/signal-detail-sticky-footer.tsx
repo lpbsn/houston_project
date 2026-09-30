@@ -5,6 +5,8 @@ import { cn } from '@/lib/utils'
 
 type SignalDetailStickyFooterProps = {
   onCreateActionPlan: () => void
+  /** Slightly quieter when a pending resolution request already exposes its own actions. */
+  subdued?: boolean
   className?: string
   'data-testid'?: string
 }
@@ -13,6 +15,7 @@ type SignalDetailStickyFooterProps = {
 export function SignalDetailStickyFooter({
   className,
   onCreateActionPlan,
+  subdued = false,
   'data-testid': dataTestId = 'signal-detail-create-plan-footer',
 }: SignalDetailStickyFooterProps) {
   return (
@@ -26,10 +29,16 @@ export function SignalDetailStickyFooter({
     >
       <Button
         type="button"
+        variant={subdued ? 'outline' : 'default'}
         className={cn(
-          'h-12 w-full rounded-xl text-[15px] font-semibold text-white',
-          terrainBrandAction.bg,
-          terrainBrandAction.hover,
+          'w-full rounded-xl',
+          subdued
+            ? 'h-10 border-[#E8E6DF] bg-white text-[13px] font-medium text-[#114660] hover:bg-[#F5F4F0] hover:text-[#114660]'
+            : cn(
+                'h-12 text-[15px] font-semibold text-white',
+                terrainBrandAction.bg,
+                terrainBrandAction.hover,
+              ),
         )}
         onClick={onCreateActionPlan}
       >

@@ -118,4 +118,63 @@ describe('SignalDetailClassificationSection qualify CTA', () => {
     expect(screen.getByText(/Rapporté par Marie R\./)).toBeTruthy()
     expect(screen.getByText('MR')).toBeTruthy()
   })
+
+  it('stays quiet on mobile when qualification is not required', () => {
+    const { container } = render(
+      <SignalDetailClassificationSection
+        signal={buildSignal()}
+        canQualify
+        isQualifyOpening={false}
+        qualifyErrorMessage={null}
+        onQualify={vi.fn()}
+      />,
+    )
+
+    expect(container.firstElementChild?.className ?? '').not.toContain('bg-white')
+    expect(container.firstElementChild?.className ?? '').not.toContain('rounded-[14px]')
+  })
+
+  it('keeps Qualifier compact and on the classification line when qualification is still needed', () => {
+    render(
+      <SignalDetailClassificationSection
+        signal={buildSignal({ routing_status: 'unassigned', status: 'open' })}
+        canQualify
+        isQualifyOpening={false}
+        qualifyErrorMessage={null}
+        onQualify={vi.fn()}
+      />,
+    )
+
+    const qualify = screen.getByRole('button', { name: 'Qualifier' })
+    const title = screen.getByText('Classification')
+    expect(qualify.className).toContain('h-7')
+    expect(qualify.className).not.toContain('bg-[#114660]')
+    expect(qualify.className).not.toContain('absolute')
+    expect(title.parentElement?.parentElement?.contains(qualify)).toBe(true)
+    expect(screen.getByText('Pôle responsable')).toBeTruthy()
+    expect(screen.getByText('Pôle concerné')).toBeTruthy()
+    expect(screen.getByText('Sujet')).toBeTruthy()
+  })
+
+  it('keeps the desktop context card when context is provided', () => {
+    const { container } = render(
+      <SignalDetailClassificationSection
+        signal={buildSignal()}
+        canQualify
+        isQualifyOpening={false}
+        qualifyErrorMessage={null}
+        onQualify={vi.fn()}
+        context={{
+          status: 'open',
+          relativeTimeLabel: 'il y a 3 min',
+          reporterName: 'Marie R.',
+          aggregationLabel: null,
+        }}
+      />,
+    )
+
+    expect(container.firstElementChild?.className).not.toContain('border-transparent')
+    expect(container.firstElementChild?.className).toContain('bg-white')
+    expect(screen.getByText('Statut')).toBeTruthy()
+  })
 })

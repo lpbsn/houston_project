@@ -260,7 +260,7 @@ describe('SignalDetailPage aggregation count', () => {
 
     renderPage()
 
-    expect(screen.getByText('+1 observation similaire')).toBeTruthy()
+    expect(screen.getByText(/\+1 observation similaire/)).toBeTruthy()
     expect(screen.getByText(/Rapporté par Marie R\./)).toBeTruthy()
   })
 
@@ -274,7 +274,7 @@ describe('SignalDetailPage aggregation count', () => {
 
     renderPage()
 
-    expect(screen.getByText('+3 observations similaires')).toBeTruthy()
+    expect(screen.getByText(/\+3 observations similaires/)).toBeTruthy()
     expect(screen.getByText(/Rapporté par Marie R\./)).toBeTruthy()
   })
 })
@@ -951,7 +951,7 @@ describe('SignalDetailPage linked action plans', () => {
     ).toBeNull()
   })
 
-  it('orders main block, resolution, linked plans, then create-plan action', () => {
+  it('orders main block, linked plans, classification, resolution, then create-plan action', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -989,8 +989,9 @@ describe('SignalDetailPage linked action plans', () => {
 
     const description = screen.getByText('Description du signal.')
     const photo = screen.getByRole('button', { name: 'Agrandir la photo' })
-    const resolution = screen.getByText('Demande de résolution')
     const plans = screen.getByText("Plans d'action")
+    const classification = screen.getByText('Classification')
+    const resolution = screen.getByText('Demande de résolution')
     const createPlan = screen.getByRole('button', { name: "+ Créer un plan d'action" })
     const content = screen.getByTestId('signal-detail-details-content')
     const footer = screen.getByTestId('signal-detail-create-plan-footer')
@@ -1000,14 +1001,18 @@ describe('SignalDetailPage linked action plans', () => {
       description.compareDocumentPosition(photo) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
     expect(
-      photo.compareDocumentPosition(resolution) & Node.DOCUMENT_POSITION_FOLLOWING,
+      photo.compareDocumentPosition(plans) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
     expect(
-      resolution.compareDocumentPosition(plans) & Node.DOCUMENT_POSITION_FOLLOWING,
+      plans.compareDocumentPosition(classification) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
     expect(
-      plans.compareDocumentPosition(createPlan) & Node.DOCUMENT_POSITION_FOLLOWING,
+      classification.compareDocumentPosition(resolution) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
+    expect(
+      resolution.compareDocumentPosition(createPlan) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(createPlan.className).toContain('h-12')
     expect(content.contains(plans)).toBe(true)
     expect(content.contains(createPlan)).toBe(false)
     expect(footer.contains(createPlan)).toBe(true)
@@ -1042,7 +1047,58 @@ describe('SignalDetailPage linked action plans', () => {
     expect(content.className).toContain('overflow-y-auto')
     expect(footer.className).toContain('relative')
     expect(footer.className).not.toContain('sticky')
-    expect(screen.getByRole('button', { name: "+ Créer un plan d'action" })).toBeTruthy()
+    expect(screen.getByRole('button', { name: "+ Créer un plan d'action" }).className).toContain(
+      'h-12',
+    )
+  })
+
+  it('keeps the create-plan footer in place and quiets it when a pending resolution exposes review actions', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({
+        resolution_request: {
+          id: 'req-1',
+          status: 'pending',
+          review_route: 'staff_to_manager',
+          requested_at: '2026-06-30T08:00:00Z',
+          request_comment: '',
+          reviewed_at: null,
+          review_comment: '',
+          canceled_at: null,
+          canceled_reason: '',
+          cancel_comment: '',
+          requested_by_membership_id: 'membership-1',
+          reviewed_by_membership_id: null,
+        },
+        permission_hints: {
+          can_pin: false,
+          can_mark_interesting: false,
+          can_cancel: false,
+          can_resolve: false,
+          can_create_linked_action_plan: true,
+          can_qualify_routing: false,
+          can_request_resolution: false,
+          can_approve_resolution_request: true,
+          can_reject_resolution_request: true,
+          can_cancel_resolution_request: false,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    const createPlan = screen.getByRole('button', { name: "+ Créer un plan d'action" })
+    const footer = screen.getByTestId('signal-detail-create-plan-footer')
+    const content = screen.getByTestId('signal-detail-details-content')
+    expect(footer.contains(createPlan)).toBe(true)
+    expect(content.contains(createPlan)).toBe(false)
+    expect(createPlan.className).toContain('h-10')
+    expect(createPlan.className).toContain('font-medium')
+    expect(createPlan.className).not.toContain('h-12')
+    expect(screen.getByRole('button', { name: 'Approuver' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Refuser la demande' })).toBeTruthy()
   })
 
   it('shows linked execution card and navigates on click', () => {
