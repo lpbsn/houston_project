@@ -87,10 +87,21 @@ describe('HistoryPage scope selection', () => {
             {
               id: 'newer',
               title: 'Résolution du soir',
+              status: 'resolved',
               terminal_at: '2026-09-28T16:00:00Z',
               establishment_name: 'Spore Paris',
               termination_origin: 'manual',
               termination_actor_display_name: 'Ada',
+              last_activity_at: '2026-09-28T16:00:00Z',
+              location_text: '',
+              aggregation_count: 0,
+              reporter_display_name: null,
+              affected_business_unit_id: null,
+              affected_business_unit_label: null,
+              responsible_business_unit_id: null,
+              responsible_business_unit_label: null,
+              activity_subject_label: null,
+              activity_subject_normalized_name: null,
             },
           ],
           next_cursor: 'history-page-2',
@@ -102,10 +113,21 @@ describe('HistoryPage scope selection', () => {
             {
               id: 'older',
               title: 'Résolution du matin',
+              status: 'resolved',
               terminal_at: '2026-09-28T07:00:00Z',
               establishment_name: 'Spore Paris',
               termination_origin: 'manual',
               termination_actor_display_name: 'Ada',
+              last_activity_at: '2026-09-28T07:00:00Z',
+              location_text: '',
+              aggregation_count: 0,
+              reporter_display_name: null,
+              affected_business_unit_id: null,
+              affected_business_unit_label: null,
+              responsible_business_unit_id: null,
+              responsible_business_unit_label: null,
+              activity_subject_label: null,
+              activity_subject_normalized_name: null,
             },
           ],
           next_cursor: null,
@@ -124,5 +146,7 @@ describe('HistoryPage scope selection', () => {
     const newer = screen.getByText('Résolution du soir')
     const older = screen.getByText('Résolution du matin')
     expect(newer.closest('section')).toBe(older.closest('section'))
+    expect(screen.getAllByText('Résolue').length).toBeGreaterThan(0)
+    expect(screen.queryByText(/Manuelle/)).toBeNull()
   })
 })

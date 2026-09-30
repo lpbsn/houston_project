@@ -38,6 +38,7 @@ describe('signal feed reading memory', () => {
       neighborId: null,
       resumeCursor: null,
       authorizationFingerprint: null,
+      pinnedExpanded: true,
     })
   })
 

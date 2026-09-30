@@ -90,6 +90,7 @@ describe('scoped desktop navigation', () => {
     expect(navigation.options.map((option) => option.id)).toEqual(['cross', 'est-a', 'est-b'])
     expect(navigation.scope).toEqual({ type: 'cross' })
     expect(navigation.items.map((item) => item.id)).toEqual(['signals', 'execution', 'history'])
+    expect(navigation.items.every((item) => item.group === 2)).toBe(true)
     expect(navigation.items.every((item) => item.href != null)).toBe(true)
     expect(navigation.items.map((item) => item.id)).not.toContain('chat')
     expect(navigation.activeItemId).toBe('signals')
@@ -100,6 +101,12 @@ describe('scoped desktop navigation', () => {
         target: { type: 'cross' },
       }),
     ).toBe('/cross/history')
+    expect(
+      resolveDesktopScopeNavigation({
+        route: { kind: 'history', scope: { type: 'establishment', establishmentId: 'est-a' } },
+        bootstrap: data,
+      }).activeItemId,
+    ).toBe('history')
   })
 
   it('hides Cross when only one establishment is management-eligible', () => {
@@ -144,6 +151,7 @@ describe('scoped desktop navigation', () => {
       'reporting',
       'signals',
       'execution',
+      'history',
       'general',
     ])
     expect(navigation.activeItemId).toBe('execution')
@@ -166,6 +174,7 @@ describe('scoped desktop navigation', () => {
       'reporting',
       'signals',
       'execution',
+      'history',
       'chat',
       'general',
     ])
@@ -189,11 +198,12 @@ describe('scoped desktop navigation', () => {
       'reporting',
       'signals',
       'execution',
+      'history',
       'chat',
       'general',
       'settings',
     ])
-    expect(ownerNav.items.map((item) => item.group)).toEqual([1, 1, 2, 2, 2, 2, 3, 3])
+    expect(ownerNav.items.map((item) => item.group)).toEqual([1, 1, 2, 2, 2, 2, 2, 3, 3])
     expect(ownerNav.items.find((item) => item.id === 'brain')).toMatchObject({
       label: 'Spore Brain',
       href: null,
@@ -262,6 +272,7 @@ describe('scoped desktop navigation', () => {
       'reporting',
       'signals',
       'execution',
+      'history',
       'chat',
       'general',
       'settings',
@@ -276,6 +287,7 @@ describe('scoped desktop navigation', () => {
       'reporting',
       'signals',
       'execution',
+      'history',
       'chat',
       'general',
       'settings',
@@ -296,7 +308,7 @@ describe('scoped desktop navigation', () => {
         route: establishmentRoute('est-1', 'signals'),
         bootstrap: bootstrap([staff, inactiveOwner]),
       }).items.map((item) => item.id),
-    ).toEqual(['reporting', 'signals', 'execution', 'chat', 'general'])
+    ).toEqual(['reporting', 'signals', 'execution', 'history', 'chat', 'general'])
   })
 
   it('shows establishment Chat from membership chat_available', () => {

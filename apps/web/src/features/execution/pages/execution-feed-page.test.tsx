@@ -1535,7 +1535,7 @@ describe('ExecutionFeedPage desktop list', () => {
     const onNavigate = vi.fn()
     renderExecutionFeedPage({ onNavigate })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Créer' }))
+    fireEvent.click(screen.getByRole('button', { name: '+ Nouveau plan' }))
     expect(onNavigate).not.toHaveBeenCalled()
     expect(screen.getByTestId('execution-create-menu-dialog')).toBeTruthy()
     expect(screen.queryByTestId('execution-create-menu-sheet')).toBeNull()
@@ -1627,6 +1627,26 @@ describe('ExecutionFeedPage desktop list', () => {
     expect(screen.getByText('Plan actif')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Déplier la section Épinglés' })).toBeTruthy()
     expect(screen.getByTestId('execution-feed-scroll').scrollTop).toBe(120)
+  })
+
+  it('keeps the pinned section collapsed when the category filter changes', () => {
+    showOperationalFeed()
+    const scopeKey = executionFeedReadingScopeKey('establishment', 'est-1')
+    const view = renderExecutionFeedPage({ establishmentId: 'est-1' })
+    fireEvent.click(screen.getByRole('button', { name: 'Replier la section Épinglés' }))
+    expect(screen.queryByText('Plan épinglé')).toBeNull()
+
+    executionRouteState.search = '?category=overdue'
+    view.rerenderPage()
+
+    expect(screen.queryByText('Plan épinglé')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Déplier la section Épinglés' })).toBeTruthy()
+    expect(readExecutionFeedReading(scopeKey)?.expandedByKey.pinned).toBe(false)
+
+    cleanup()
+    renderExecutionFeedPage({ establishmentId: 'est-1' })
+    expect(screen.queryByText('Plan épinglé')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Déplier la section Épinglés' })).toBeTruthy()
   })
 
   it('starts another scope from its own reading state', () => {

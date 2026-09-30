@@ -13,6 +13,7 @@ import {
   useFeedPullToRefresh,
 } from '@/components/domain/feed-refresh-controls'
 import {
+  TerrainCollapsibleFeedSection,
   TerrainEmptyState,
   TerrainErrorState,
   TerrainSectionLabel,
@@ -132,6 +133,9 @@ function SignalFeedPageContent({
   )
   const [filters, setFilters] = useState<SignalFeedFilters>(
     initialReading?.filters ?? EMPTY_SIGNAL_FEED_FILTERS,
+  )
+  const [pinnedExpanded, setPinnedExpanded] = useState(
+    () => initialReading?.pinnedExpanded ?? true,
   )
 
   const normalizedFilters = normalizeSignalFeedFilters(filters)
@@ -440,7 +444,8 @@ function SignalFeedPageContent({
             onRunAction={
               isCross
                 ? undefined
-                : (feedItem, actionId) => handleFeedAction(feedItem, actionId)
+                : (feedItem, actionId) =>
+                    handleFeedAction(feedItem as SignalFeedItem, actionId)
             }
           />
         ) : (
@@ -449,7 +454,11 @@ function SignalFeedPageContent({
             item={item}
             variant={variant}
             onSelect={openSignal}
-            onOpenActions={isCross ? undefined : quickActions.openActions}
+            onOpenActions={
+              isCross
+                ? undefined
+                : (item) => quickActions.openActions(item as SignalFeedItem)
+            }
             showEstablishment={isCross}
             viewMode={viewMode}
           />
@@ -497,15 +506,13 @@ function SignalFeedPageContent({
     )
   }
 
-  const mobileSafePad = !isDesktopWeb
-
   return (
     <div className="flex h-full min-h-0 flex-col">
       <TerrainHubTitleSlot enabled={!isCross}>
         <SignalFeedTabs
           viewMode={viewMode}
           onChange={setViewMode}
-          size={isDesktopWeb ? 'default' : 'compact'}
+          size="compact"
         />
       </TerrainHubTitleSlot>
       {!isCross && quickActions.pinReplacement ? (
@@ -519,15 +526,24 @@ function SignalFeedPageContent({
         />
       ) : null}
       <TerrainHubSubheader>
-        <SignalFeedStatusChips
-          filters={filters}
-          counts={feed?.counts}
-          layout={isDesktopWeb ? 'wrap' : 'scroll'}
-          className={isDesktopWeb ? 'bg-white px-4 py-2' : cn('bg-white py-2', MOBILE_FEED_INSET_X)}
-          onChange={setFilters}
-        />
-        {!isCross && establishmentId ? (
-          <>
+        <div
+          className={cn(
+            'flex min-w-0 items-center gap-2 bg-white',
+            isDesktopWeb
+              ? 'flex-wrap px-4 py-1.5'
+              : cn(
+                  'flex-nowrap overflow-x-auto py-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+                  MOBILE_FEED_INSET_X,
+                ),
+          )}
+        >
+          <SignalFeedStatusChips
+            filters={filters}
+            counts={feed?.counts}
+            layout={isDesktopWeb ? 'wrap' : 'inline'}
+            onChange={setFilters}
+          />
+          {!isCross && establishmentId ? (
             <SignalFeedFiltersBar
               establishmentId={establishmentId}
               filters={filters}
@@ -535,37 +551,35 @@ function SignalFeedPageContent({
               membershipRole={membershipRole}
               showReset={!isDesktopWeb}
               onReset={handleClearFilters}
-              contentClassName={mobileSafePad ? MOBILE_FEED_INSET_X : undefined}
             />
-            {isDesktopWeb ? (
-              <div className="px-4 pb-2">
-                <FeedRefreshButton
-                  onRefresh={() => {
-                    refreshFeed.mutate(undefined, {
-                      onSuccess: () => {
-                        feedSession.clearUpdates()
-                        if (scrollRef.current) {
-                          scrollRef.current.scrollTop = 0
-                        }
-                      },
-                    })
-                  }}
-                  pending={refreshFeed.isPending}
-                />
-              </div>
-            ) : null}
-            {isDesktopWeb && filtersActive ? (
-              <div className="border-t border-[#E8E6DF] px-4 pb-2 pt-0">
-                <button
-                  type="button"
-                  onClick={handleClearFilters}
-                  className="text-[11px] font-semibold text-[#1B4FD8]"
-                >
-                  Effacer les filtres
-                </button>
-              </div>
-            ) : null}
-          </>
+          ) : null}
+          {isDesktopWeb && !isCross && establishmentId ? (
+            <FeedRefreshButton
+              className="ml-auto"
+              onRefresh={() => {
+                refreshFeed.mutate(undefined, {
+                  onSuccess: () => {
+                    feedSession.clearUpdates()
+                    if (scrollRef.current) {
+                      scrollRef.current.scrollTop = 0
+                    }
+                  },
+                })
+              }}
+              pending={refreshFeed.isPending}
+            />
+          ) : null}
+        </div>
+        {isDesktopWeb && !isCross && establishmentId && filtersActive ? (
+          <div className="px-4 pb-1.5">
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="text-[11px] font-semibold text-[#1B4FD8]"
+            >
+              Effacer les filtres
+            </button>
+          </div>
         ) : null}
       </TerrainHubSubheader>
 
@@ -688,19 +702,29 @@ function SignalFeedPageContent({
         {feedQuery.isSuccess && hasContent ? (
           <div className="flex flex-col gap-3 pt-5">
             {pinnedItems.length > 0 ? (
-              <div className="flex flex-col gap-2">
-                <TerrainSectionLabel
-                  className={isDesktopWeb ? 'px-4' : MOBILE_FEED_INSET_X}
-                  dotVariant="warning"
-                >
-                  {feed?.counts
-                    ? `Épinglées · ${feed.counts.pinned}`
-                    : `Épinglées · ${pinnedItems.length}`}
-                </TerrainSectionLabel>
+              <TerrainCollapsibleFeedSection
+                label="Épinglées"
+                count={
+                  feed?.counts ? feed.counts.pinned : pinnedItems.length
+                }
+                expanded={pinnedExpanded}
+                headerClassName={isDesktopWeb ? 'px-4' : MOBILE_FEED_INSET_X}
+                onToggle={() => {
+                  setPinnedExpanded((current) => {
+                    const next = !current
+                    writeSignalFeedReading(readingScopeKey, { pinnedExpanded: next })
+                    return next
+                  })
+                }}
+              >
                 <SignalFeedPinnedCarousel
                   items={pinnedItems}
                   onSelect={openSignal}
-                  onOpenActions={isCross ? undefined : quickActions.openActions}
+                  onOpenActions={
+                    isCross
+                      ? undefined
+                      : (item) => quickActions.openActions(item as SignalFeedItem)
+                  }
                   showEstablishment={isCross}
                   viewMode={viewMode}
                   className={isDesktopWeb ? 'px-4' : MOBILE_FEED_INSET_X}
@@ -737,7 +761,7 @@ function SignalFeedPageContent({
                     }}
                   />
                 ) : null}
-              </div>
+              </TerrainCollapsibleFeedSection>
             ) : null}
 
             {listItems.length === 0 && !listHasMore && pinnedItems.length > 0 ? (

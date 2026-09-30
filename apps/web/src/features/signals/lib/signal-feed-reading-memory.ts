@@ -13,6 +13,8 @@ export type SignalFeedReadingState = {
   neighborId: string | null
   resumeCursor: string | null
   authorizationFingerprint: string | null
+  /** Open when absent. Isolated by the feed reading scope. */
+  pinnedExpanded: boolean
 }
 
 const memory = new Map<string, SignalFeedReadingState>()
@@ -36,6 +38,7 @@ function emptyReadingState(): SignalFeedReadingState {
     neighborId: null,
     resumeCursor: null,
     authorizationFingerprint: null,
+    pinnedExpanded: true,
   }
 }
 
@@ -59,6 +62,7 @@ export function writeSignalFeedReading(
       patch.authorizationFingerprint === undefined
         ? current.authorizationFingerprint
         : patch.authorizationFingerprint,
+    pinnedExpanded: patch.pinnedExpanded ?? current.pinnedExpanded,
   })
 }
 

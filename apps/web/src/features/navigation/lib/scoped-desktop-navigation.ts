@@ -102,7 +102,7 @@ function crossItems(): ScopedDesktopNavItem[] {
       id: 'history',
       label: 'Historique',
       href: '/cross/history',
-      group: 3,
+      group: 2,
     },
   ]
 }
@@ -150,6 +150,12 @@ function establishmentItems(
       id: 'execution',
       label: 'Exécution',
       href: serializeScopedTerrainPath(scope, 'execution'),
+      group: 2,
+    },
+    {
+      id: 'history',
+      label: 'Historique',
+      href: `/e/${establishmentId}/general/history`,
       group: 2,
     },
   )
@@ -303,7 +309,7 @@ function resolveDesktopNavFunction(
     return 'general'
   }
   if (route.kind === 'history') {
-    return route.scope?.type === 'cross' ? 'history' : 'general'
+    return 'history'
   }
   if (
     route.kind === 'analytics-pattern-detail' ||

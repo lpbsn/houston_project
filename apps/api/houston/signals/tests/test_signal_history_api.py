@@ -103,6 +103,10 @@ def test_history_lists_terminal_signals_and_keeps_detail_access(api_client):
     assert item["terminal_date_source"] == "field"
     assert item["termination_origin"] == "manual"
     assert item["termination_actor_display_name"] == "Ada Lovelace"
+    assert item["title"] == "Résolu"
+    assert item["aggregation_count"] == 0
+    assert "location_text" in item
+    assert item["last_activity_at"]
     assert body["undated_count"] is None
 
     detail = api_client.get(

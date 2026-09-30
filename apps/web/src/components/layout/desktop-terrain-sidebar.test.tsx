@@ -205,6 +205,7 @@ describe('DesktopTerrainSidebar', () => {
       'Nouvelle observation',
       'Observations',
       'Exécution',
+      'Historique',
       'Chat',
       'Général',
       'Paramètres Analytics',

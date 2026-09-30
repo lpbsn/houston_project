@@ -1,7 +1,6 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import { LoaderCircle, RefreshCw } from 'lucide-react'
 
-import { Button } from '@/components/ui/button'
 import { TerrainErrorState } from '@/components/ui/terrain'
 import { cn } from '@/lib/utils'
 
@@ -25,26 +24,32 @@ export function FeedRefreshButton({
   onRefresh,
   disabled = false,
   pending = false,
+  className,
 }: {
   onRefresh: () => void
   disabled?: boolean
   pending?: boolean
+  className?: string
 }) {
   return (
-    <Button
+    <button
       type="button"
-      variant="outline"
-      className="h-9 shrink-0 gap-1.5 rounded-lg px-3 text-sm font-semibold"
+      aria-label="Actualiser"
+      className={cn(
+        'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#5c564e]',
+        'hover:bg-[#F5F4F0] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30 focus-visible:outline-none',
+        'disabled:pointer-events-none disabled:opacity-50',
+        className,
+      )}
       onClick={onRefresh}
       disabled={disabled || pending}
     >
       {pending ? (
-        <LoaderCircle className="size-3.5 animate-spin" aria-hidden />
+        <LoaderCircle className="size-4 animate-spin" aria-hidden />
       ) : (
-        <RefreshCw className="size-3.5" aria-hidden />
+        <RefreshCw className="size-4" aria-hidden />
       )}
-      Actualiser le feed
-    </Button>
+    </button>
   )
 }
 

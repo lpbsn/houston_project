@@ -321,7 +321,7 @@ describe('ProfilePage', () => {
     expect(isDocumentFollowing(privacyLink as HTMLElement, termsLink as HTMLElement)).toBe(true)
   })
 
-  it('opens history from the account section', () => {
+  it('opens history from operations', () => {
     onNavigate.mockClear()
     render(
       createElement(ProfilePage, {

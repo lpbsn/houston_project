@@ -23,6 +23,7 @@ import {
   type SignalFeedCardActionId,
 } from '../lib/signal-feed-card-actions'
 import { isSignalMissingResponsibleClassification } from '../lib/signal-unclassified'
+import type { SignalFeedCardDisplay } from './signal-card'
 import type { SignalFeedItem } from '../types'
 import type { SignalFeedQuickActionResult } from '../hooks/use-signal-feed-quick-actions'
 import { SignalClassificationBadges } from './signal-classification-badges'
@@ -30,9 +31,12 @@ import { SignalStatusBadge } from './signal-status-badge'
 import { SignalUnclassifiedBadge } from './signal-unclassified-badge'
 
 type SignalFeedDesktopRowProps = {
-  item: SignalFeedItem
+  item: SignalFeedCardDisplay
   onSelect: (signalId: string) => void
-  onRunAction?: (item: SignalFeedItem, actionId: SignalFeedCardActionId) => SignalFeedQuickActionResult
+  onRunAction?: (
+    item: SignalFeedCardDisplay,
+    actionId: SignalFeedCardActionId,
+  ) => SignalFeedQuickActionResult
   actionsOpen?: boolean
   onActionsOpenChange?: (open: boolean) => void
   showEstablishment?: boolean
@@ -57,14 +61,17 @@ function DesktopActionsMenu({
   actionsPending,
   actionError,
 }: {
-  item: SignalFeedItem
+  item: SignalFeedCardDisplay
   actionsOpen: boolean
   onActionsOpenChange?: (open: boolean) => void
-  onRunAction?: (item: SignalFeedItem, actionId: SignalFeedCardActionId) => SignalFeedQuickActionResult
+  onRunAction?: (
+    item: SignalFeedCardDisplay,
+    actionId: SignalFeedCardActionId,
+  ) => SignalFeedQuickActionResult
   actionsPending: boolean
   actionError: string | null
 }) {
-  const actionOptions = getSignalFeedCardActionOptions(item)
+  const actionOptions = getSignalFeedCardActionOptions(item as SignalFeedItem)
 
   return (
     <Popover.Root open={actionsOpen} onOpenChange={onActionsOpenChange}>
@@ -129,7 +136,9 @@ function PinnedDesktopRow({
   actionError,
 }: Omit<SignalFeedDesktopRowProps, 'pinned'> & { actionsOpen: boolean }) {
   const showActions = Boolean(
-    onRunAction && canOpenSignalFeedCardActions(item.permission_hints),
+    onRunAction &&
+      item.permission_hints &&
+      canOpenSignalFeedCardActions(item.permission_hints),
   )
   const poleLabel = formatSignalFeedPinnedPoleLabel(item)
   const showUnclassified = isSignalMissingResponsibleClassification(item)
@@ -240,7 +249,9 @@ export function SignalFeedDesktopRow({
   const reporterName = item.reporter_display_name?.trim() ?? ''
   const reporterInitials = reporterName ? getDisplayNameInitials(reporterName) : null
   const showActions = Boolean(
-    onRunAction && canOpenSignalFeedCardActions(item.permission_hints),
+    onRunAction &&
+      item.permission_hints &&
+      canOpenSignalFeedCardActions(item.permission_hints),
   )
   const classification = formatSignalClassification(item)
   const affectedLabel = classification.affectedLine ? classification.affectedLabel : null

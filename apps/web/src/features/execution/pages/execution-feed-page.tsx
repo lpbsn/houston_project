@@ -65,6 +65,7 @@ import {
   useCrossActionPlanExecutionFeedPinsQuery,
 } from '@/features/action-plans/hooks'
 import type {
+  ActionPlanExecutionFeedItem,
   ActionPlanExecutionFeedResponse,
   ActionPlanExecutionFeedSectionCounts,
 } from '@/features/action-plans/types'
@@ -76,6 +77,10 @@ import { ActionPlanExecutionFeedDesktopRow } from '../components/action-plan-exe
 import { ExecutionCalendarView } from '../components/execution-calendar-view'
 import { ExecutionCreateMenuSheet } from '../components/execution-create-menu-sheet'
 import { ExecutionFeedTabs } from '../components/execution-feed-tabs'
+import {
+  ExecutionFeedCategoryChips,
+  ExecutionFeedLayoutToggle,
+} from '../components/execution-feed-view-controls'
 import { ExecutionFeedSkeletonList } from '../components/execution-feed-skeleton'
 import { ExecutionPlanifieesNavRow } from '../components/execution-planifiees-nav-row'
 import {
@@ -88,7 +93,6 @@ import {
 } from '../lib/execution-feed-url-state'
 import {
   EXECUTION_FEED_DEFAULT_COLLAPSED_SECTIONS,
-  EXECUTION_FEED_CATEGORY_LABELS,
   EXECUTION_FEED_PINNED_SECTION_KEY,
   getActionPlanExecutionFeedSection,
   groupActionPlanExecutionsBySection,
@@ -366,10 +370,13 @@ function ExecutionFeedPageContent({
 
   const savedMatchesView =
     initialReading?.viewMode === viewMode && initialReading.category === category
+  const rememberedPinned = initialReading?.expandedByKey.pinned
   const { isExpanded, toggle, expandedByKey } = useCollapsibleFeedSections(sectionKeys, {
     defaultCollapsedKeys: EXECUTION_FEED_DEFAULT_COLLAPSED_SECTIONS,
-    resetToken: `${viewMode}:${category}`,
-    initialExpandedByKey: savedMatchesView ? initialReading?.expandedByKey : undefined,
+    initialExpandedByKey:
+      rememberedPinned === undefined
+        ? undefined
+        : { [EXECUTION_FEED_PINNED_SECTION_KEY]: rememberedPinned },
   })
 
   const permissionHints = auth.bootstrap
@@ -656,7 +663,7 @@ function ExecutionFeedPageContent({
         )}
         onClick={() => setIsCreateMenuOpen(true)}
       >
-        Créer
+        + Nouveau plan
       </Button>
     ) : (
       <Button
@@ -730,7 +737,7 @@ function ExecutionFeedPageContent({
               ? undefined
               : (feedItem) => {
                   quickActions.clearActionError()
-                  quickActions.runAction('pin', feedItem)
+                  quickActions.runAction('pin', feedItem as ActionPlanExecutionFeedItem)
                 }
           }
         />
@@ -743,7 +750,7 @@ function ExecutionFeedPageContent({
             ? undefined
             : (feedItem) => {
                 quickActions.clearActionError()
-                quickActions.runAction('pin', feedItem)
+                quickActions.runAction('pin', feedItem as ActionPlanExecutionFeedItem)
               }
         }
       />
@@ -765,27 +772,13 @@ function ExecutionFeedPageContent({
     <ExecutionFeedTabs
       viewMode={viewMode}
       onChange={(next) => replaceFeedUrl({ viewMode: next })}
-      size={isDesktopWeb ? 'default' : 'compact'}
+      size="compact"
     />
   )
   const categoryTabs = (
-    <TerrainSegmentedControl
-      ariaLabel="Catégorie du feed"
-      className="w-fit"
-      size={isDesktopWeb ? 'default' : 'compact'}
+    <ExecutionFeedCategoryChips
       value={category}
-      onChange={(next) =>
-        replaceFeedUrl({ category: next as ActionPlanExecutionFeedCategory })
-      }
-      options={[
-        { value: 'all', label: EXECUTION_FEED_CATEGORY_LABELS.all },
-        {
-          value: 'pending_validation',
-          label: EXECUTION_FEED_CATEGORY_LABELS.pending_validation,
-        },
-        { value: 'overdue', label: EXECUTION_FEED_CATEGORY_LABELS.overdue },
-        { value: 'in_progress', label: EXECUTION_FEED_CATEGORY_LABELS.in_progress },
-      ]}
+      onChange={(next) => replaceFeedUrl({ category: next })}
     />
   )
 
@@ -816,23 +809,21 @@ function ExecutionFeedPageContent({
             className={isDesktopWeb ? 'pb-3 pt-3' : 'pb-0.5 pt-0'}
             trailing={createAction}
           >
-            <div className="flex flex-wrap items-center gap-2">
+            <div
+              className={cn(
+                'flex items-center gap-2',
+                isDesktopWeb ? 'flex-wrap' : 'flex-nowrap overflow-x-auto',
+              )}
+            >
               {isDesktopWeb && layout === 'list' ? (
                 <FeedRefreshButton
                   onRefresh={refreshFeed}
                   pending={planFeedQuery.isRefreshing}
                 />
               ) : null}
-              <TerrainSegmentedControl
-                ariaLabel="Disposition du feed"
-                className="w-fit"
-                size={isDesktopWeb ? 'default' : 'compact'}
+              <ExecutionFeedLayoutToggle
                 value={layout}
                 onChange={(next) => replaceFeedUrl({ layout: next })}
-                options={[
-                  { value: 'list', label: 'Liste' },
-                  { value: 'calendar', label: 'Calendrier' },
-                ]}
               />
               {layout === 'list' ? categoryTabs : null}
             </div>

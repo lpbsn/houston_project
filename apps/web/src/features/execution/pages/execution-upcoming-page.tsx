@@ -14,6 +14,7 @@ import { useActionPlanExecutionUpcomingQuery } from '@/features/action-plans/hoo
 import { ActionPlanExecutionFeedCardActionsSheet } from '@/features/action-plans/components/action-plan-execution-feed-card-actions-sheet'
 import { ActionPlanExecutionPinReplacementSheet } from '@/features/action-plans/components/action-plan-execution-pin-replacement-sheet'
 import { useActionPlanExecutionFeedQuickActions } from '@/features/action-plans/hooks/use-action-plan-execution-feed-quick-actions'
+import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 import type { ExecutionViewMode } from '@/features/execution/lib/types'
 
 import { ActionPlanExecutionFeedCard } from '../components/action-plan-execution-feed-card'
@@ -137,7 +138,10 @@ export function ExecutionUpcomingPage({
                             ? undefined
                             : (feedItem) => {
                                 quickActions.clearActionError()
-                                quickActions.runAction('pin', feedItem)
+                                quickActions.runAction(
+                                  'pin',
+                                  feedItem as ActionPlanExecutionFeedItem,
+                                )
                               }
                         }
                       />
@@ -151,7 +155,10 @@ export function ExecutionUpcomingPage({
                             ? undefined
                             : (feedItem) => {
                                 quickActions.clearActionError()
-                                quickActions.runAction('pin', feedItem)
+                                quickActions.runAction(
+                                  'pin',
+                                  feedItem as ActionPlanExecutionFeedItem,
+                                )
                               }
                         }
                       />

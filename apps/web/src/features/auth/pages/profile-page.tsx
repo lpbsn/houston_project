@@ -289,17 +289,6 @@ export function ProfilePage({
 
       <div className="space-y-2">
         <TerrainSectionLabel>Mon compte</TerrainSectionLabel>
-        <ProfileManagementNavCard
-          icon={History}
-          iconClassName="bg-[#F4F1EA] text-[#6b5f52]"
-          title="Historique"
-          subtitle={
-            historyPath.startsWith('/cross/')
-              ? 'Cross-établissement'
-              : 'Observations et exécutions terminées'
-          }
-          onClick={() => onNavigate?.(historyPath)}
-        />
         {showSwitchEstablishment ? (
           <ProfileManagementNavCard
             icon={ArrowLeftRight}
@@ -453,48 +442,61 @@ export function ProfilePage({
         />
       ) : null}
 
-      {canAccessManagement ? (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2 px-0.5">
-            <TerrainSectionLabel dotVariant="primary" className="py-0">
-              Opérations
-            </TerrainSectionLabel>
-            {role ? (
-              <HoustonBadge variant="blue">{formatRoleDisplay(role).toUpperCase()}</HoustonBadge>
-            ) : null}
-          </div>
-
-          <div className="space-y-2">
-            {canShowActionPlansNav ? (
-              <ProfileManagementNavCard
-                icon={Library}
-                iconClassName="bg-[#EEF2FF] text-[#1B4FD8]"
-                title="Bibliothèque"
-                subtitle="Plans d’action réutilisables"
-                onClick={() => onNavigate?.('/action-plans')}
-              />
-            ) : null}
-
-            <ProfileManagementNavCard
-              icon={Users}
-              iconClassName="bg-[#E8F7F0] text-[#1D9E75]"
-              title="Équipe"
-              subtitle="Gérer les membres et autorisations"
-              onClick={() => onNavigate?.('/team')}
-            />
-
-            {showOperationalConfig && establishmentId ? (
-              <ProfileManagementNavCard
-                icon={SlidersHorizontal}
-                iconClassName="bg-[#F3F0FF] text-[#6B4FD8]"
-                title="Configuration opérationnelle"
-                subtitle="Paramétrer l’organisation opérationnelle"
-                onClick={() => onNavigate?.(buildOperationalConfigPath(establishmentId))}
-              />
-            ) : null}
-          </div>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2 px-0.5">
+          <TerrainSectionLabel dotVariant="primary" className="py-0">
+            Opérations
+          </TerrainSectionLabel>
+          {canAccessManagement && role ? (
+            <HoustonBadge variant="blue">{formatRoleDisplay(role).toUpperCase()}</HoustonBadge>
+          ) : null}
         </div>
-      ) : null}
+
+        <div className="space-y-2">
+          <ProfileManagementNavCard
+            icon={History}
+            iconClassName="bg-[#F4F1EA] text-[#6b5f52]"
+            title="Historique"
+            subtitle={
+              historyPath.startsWith('/cross/')
+                ? 'Cross-établissement'
+                : 'Observations et exécutions terminées'
+            }
+            onClick={() => onNavigate?.(historyPath)}
+          />
+          {canAccessManagement ? (
+            <>
+              {canShowActionPlansNav ? (
+                <ProfileManagementNavCard
+                  icon={Library}
+                  iconClassName="bg-[#EEF2FF] text-[#1B4FD8]"
+                  title="Bibliothèque"
+                  subtitle="Plans d’action réutilisables"
+                  onClick={() => onNavigate?.('/action-plans')}
+                />
+              ) : null}
+
+              <ProfileManagementNavCard
+                icon={Users}
+                iconClassName="bg-[#E8F7F0] text-[#1D9E75]"
+                title="Équipe"
+                subtitle="Gérer les membres et autorisations"
+                onClick={() => onNavigate?.('/team')}
+              />
+
+              {showOperationalConfig && establishmentId ? (
+                <ProfileManagementNavCard
+                  icon={SlidersHorizontal}
+                  iconClassName="bg-[#F3F0FF] text-[#6B4FD8]"
+                  title="Configuration opérationnelle"
+                  subtitle="Paramétrer l’organisation opérationnelle"
+                  onClick={() => onNavigate?.(buildOperationalConfigPath(establishmentId))}
+                />
+              ) : null}
+            </>
+          ) : null}
+        </div>
+      </div>
 
       <div className="space-y-2">
         <TerrainSectionLabel>Compte et sécurité</TerrainSectionLabel>

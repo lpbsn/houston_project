@@ -28,10 +28,35 @@ import type { SignalFeedItem, SignalViewMode } from '../types'
 import { SignalStatusBadge } from './signal-status-badge'
 import { SignalUnclassifiedBadge } from './signal-unclassified-badge'
 
+export type SignalFeedCardDisplay = Pick<
+  SignalFeedItem,
+  | 'id'
+  | 'title'
+  | 'status'
+  | 'location_text'
+  | 'last_activity_at'
+  | 'aggregation_count'
+  | 'resolution_request'
+  | 'affected_business_unit_id'
+  | 'affected_business_unit_key'
+  | 'affected_business_unit_label'
+  | 'responsible_business_unit_id'
+  | 'responsible_business_unit_key'
+  | 'responsible_business_unit_label'
+  | 'activity_subject_label'
+  | 'activity_subject_normalized_name'
+> & {
+  establishment_name?: string | null
+  reporter_display_name?: string | null
+  permission_hints?: SignalFeedItem['permission_hints']
+  pinned_by_display_name?: string | null
+  pinned_at?: string | null
+}
+
 type SignalCardProps = {
-  item: SignalFeedItem
+  item: SignalFeedCardDisplay
   onSelect: (signalId: string) => void
-  onOpenActions?: (item: SignalFeedItem) => void
+  onOpenActions?: (item: SignalFeedCardDisplay) => void
   variant?: 'feed' | 'pinned'
   showEstablishment?: boolean
   viewMode?: SignalViewMode
@@ -46,8 +71,8 @@ function SignalCardActionsButton({
   item,
   onOpenActions,
 }: {
-  item: SignalFeedItem
-  onOpenActions: (item: SignalFeedItem) => void
+  item: SignalFeedCardDisplay
+  onOpenActions: (item: SignalFeedCardDisplay) => void
 }) {
   return (
     <FeedCardActionsButton
@@ -86,8 +111,11 @@ function FeedSignalCard({
 }: SignalCardProps) {
   const leftAccentColor = getSignalCardLeftAccentColor(item)
   const surfaceClass = getSignalCardSurfaceClass(item)
-  const showActions =
-    onOpenActions && canOpenSignalFeedCardActions(item.permission_hints)
+  const showActions = Boolean(
+    onOpenActions &&
+      item.permission_hints &&
+      canOpenSignalFeedCardActions(item.permission_hints),
+  )
   const classificationBadgeLabel = formatSignalFeedCardClassificationLine(item, viewMode)
   const showUnclassified = isSignalMissingResponsibleClassification(item)
   const location = item.location_text?.trim() ?? ''
@@ -189,8 +217,11 @@ function PinnedSignalCard({
   showEstablishment = false,
   className,
 }: SignalCardProps) {
-  const showActions =
-    onOpenActions && canOpenSignalFeedCardActions(item.permission_hints)
+  const showActions = Boolean(
+    onOpenActions &&
+      item.permission_hints &&
+      canOpenSignalFeedCardActions(item.permission_hints),
+  )
   const poleLabel = formatSignalFeedPinnedPoleLabel(item)
   const showUnclassified = isSignalMissingResponsibleClassification(item)
   const location = item.location_text?.trim() ?? ''

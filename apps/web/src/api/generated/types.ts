@@ -4602,6 +4602,11 @@ export interface components {
          * @enum {string}
          */
         ExecutionCommentThreadItemItemTypeEnum: "execution_thread";
+        ExecutionHistoryAssignee: {
+            /** Format: uuid */
+            membership_id: string;
+            display_name: string;
+        };
         ExecutionHistoryItem: {
             /** Format: uuid */
             id: string;
@@ -4615,6 +4620,27 @@ export interface components {
             /** Format: uuid */
             establishment_id: string;
             establishment_name: string;
+            pilot_business_unit: components["schemas"]["ActionPlanBusinessUnit"];
+            involved_poles: {
+                [key: string]: unknown;
+            }[];
+            assignees: components["schemas"]["ExecutionHistoryAssignee"][];
+            /** Format: date-time */
+            start_at: string | null;
+            /** Format: date-time */
+            end_at: string | null;
+            all_day: boolean;
+            /** Format: date-time */
+            validated_at: string | null;
+            validated_by_display_name: string | null;
+            /** Format: date-time */
+            marked_done_at: string | null;
+            /** Format: date-time */
+            canceled_at: string | null;
+            active_review: components["schemas"]["ActionPlanExecutionActiveReview"] | null;
+            /** Format: date-time */
+            created_at: string;
+            created_by_display_name: string;
         };
         /**
          * @description * `manual` - manual
@@ -5536,6 +5562,19 @@ export interface components {
             /** Format: uuid */
             establishment_id: string;
             establishment_name: string;
+            /** Format: date-time */
+            last_activity_at: string;
+            location_text: string;
+            reporter_display_name: string | null;
+            /** Format: uuid */
+            affected_business_unit_id: string | null;
+            affected_business_unit_label: string | null;
+            /** Format: uuid */
+            responsible_business_unit_id: string | null;
+            responsible_business_unit_label: string | null;
+            activity_subject_label: string | null;
+            activity_subject_normalized_name: string | null;
+            aggregation_count: number;
         };
         /**
          * @description * `manual` - manual

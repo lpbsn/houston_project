@@ -19,6 +19,7 @@ type TerrainCollapsibleFeedSectionProps = {
   onToggle: () => void
   children: ReactNode
   className?: string
+  headerClassName?: string
 }
 
 export function TerrainCollapsibleFeedSection({
@@ -30,6 +31,7 @@ export function TerrainCollapsibleFeedSection({
   onToggle,
   children,
   className,
+  headerClassName,
 }: TerrainCollapsibleFeedSectionProps) {
   const toggleLabel = expanded
     ? `Replier la section ${label}`
@@ -41,7 +43,7 @@ export function TerrainCollapsibleFeedSection({
     <section className={className}>
       <button
         type="button"
-        className={cn(terrainSectionLabelClassName('w-full px-3 py-1.5'))}
+        className={cn(terrainSectionLabelClassName('w-full py-1.5'), headerClassName ?? 'px-3')}
         onClick={onToggle}
         aria-expanded={expanded}
         aria-label={toggleLabel}

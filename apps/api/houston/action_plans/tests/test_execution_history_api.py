@@ -81,6 +81,9 @@ def test_validated_execution_uses_validated_at_and_detail_stays_open(
     assert item["terminal_date_source"] == "field"
     assert item["termination_origin"] == "manual"
     assert item["termination_actor_display_name"] == "Grace Hopper"
+    assert item["title"] == "Validée"
+    assert item["pilot_business_unit"]["id"] == str(business_unit.id)
+    assert item["validated_at"] is not None
     parsed = datetime.fromisoformat(item["terminal_at"].replace("Z", "+00:00"))
     assert abs((parsed - validated.astimezone(datetime_timezone.utc)).total_seconds()) < 1
 

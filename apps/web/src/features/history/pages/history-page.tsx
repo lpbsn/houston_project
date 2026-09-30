@@ -6,15 +6,29 @@ import { useAuth } from '@/app/auth-provider'
 import type { TerrainScope } from '@/app/scoped-terrain'
 import {
   FeedPullIndicator,
+  FeedRefreshButton,
   useFeedPullToRefresh,
 } from '@/components/domain/feed-refresh-controls'
 import {
   TerrainEmptyState,
   TerrainErrorState,
+  TerrainFilterChip,
   TerrainSegmentedControl,
 } from '@/components/ui/terrain'
 import { isDesktopWebLanding } from '@/features/auth/lib/authenticated-landing'
-import { HistoryApiError } from '@/features/history/api'
+import { ActionPlanExecutionFeedCard } from '@/features/execution/components/action-plan-execution-feed-card'
+import { ActionPlanExecutionFeedDesktopRow } from '@/features/execution/components/action-plan-execution-feed-desktop-row'
+import {
+  HistoryApiError,
+  type ExecutionHistoryItem,
+  type SignalHistoryItem,
+} from '@/features/history/api'
+import {
+  executionHistoryCardItem,
+  signalHistoryCardItem,
+} from '@/features/history/lib/history-feed-cards'
+import { SignalCard } from '@/features/signals/components/signal-card'
+import { SignalFeedDesktopRow } from '@/features/signals/components/signal-feed-desktop-row'
 import { useHistoryList } from '@/features/history/hooks'
 import {
   groupHistoryItems,
@@ -37,19 +51,50 @@ type HistoryPageProps = {
   scope: TerrainScope | null
 }
 
-type HistoryRow = {
-  id: string
-  title: string
-  terminal_at: string | null
-  establishment_name: string
-  termination_origin: string
-  termination_actor_display_name: string | null
-}
+type HistoryListItem = SignalHistoryItem | ExecutionHistoryItem
 
 function historyRows(
-  pages: { items: HistoryRow[] }[] | undefined,
-): HistoryRow[] {
+  pages: { items: HistoryListItem[] }[] | undefined,
+): HistoryListItem[] {
   return reconcileHistoryItems(pages?.flatMap((page) => page.items) ?? [])
+}
+
+const HISTORY_KINDS: { value: HistoryKind; label: string }[] = [
+  { value: 'signals', label: 'Observations' },
+  { value: 'executions', label: 'Exécutions' },
+]
+
+function HistoryKindTabs({
+  value,
+  onChange,
+}: {
+  value: HistoryKind
+  onChange: (kind: HistoryKind) => void
+}) {
+  return (
+    <div role="tablist" aria-label="Type d’historique" className="flex shrink-0 gap-4">
+      {HISTORY_KINDS.map((option) => {
+        const selected = value === option.value
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            className={cn(
+              'border-b-2 pb-1 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30 focus-visible:outline-none',
+              selected
+                ? 'border-[#1a1a1a] text-[#1a1a1a]'
+                : 'border-transparent text-[#7D7B75]',
+            )}
+            onClick={() => onChange(option.value)}
+          >
+            {option.label}
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 const PERIODS: { value: HistoryPeriod; label: string }[] = [
@@ -59,23 +104,6 @@ const PERIODS: { value: HistoryPeriod; label: string }[] = [
   { value: 'custom', label: 'Dates' },
   { value: 'all', label: 'Toutes' },
 ]
-
-function originLabel(origin: string, actor: string | null): string {
-  const path =
-    origin === 'manual'
-      ? 'Manuelle'
-      : origin === 'resolution_request'
-        ? 'Demande de résolution'
-        : origin === 'action_plan'
-          ? 'Plan d’action'
-          : origin === 'schedule_sync'
-            ? 'Synchronisation de planning'
-            : 'Origine inconnue'
-  if (origin === 'unknown' || !actor) {
-    return path
-  }
-  return `${path} · ${actor}`
-}
 
 function statusOptions(kind: HistoryKind): { value: string; label: string }[] {
   if (kind === 'signals') {
@@ -238,52 +266,73 @@ export function HistoryPage({ scope }: HistoryPageProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex flex-col gap-3 border-b border-[#E8E6DF] px-3 py-3">
+      <div
+        className={cn(
+          'flex flex-col gap-2 border-b border-[#E8E6DF]',
+          isDesktopWeb ? 'px-4 py-1.5' : 'px-3 py-2',
+        )}
+      >
         <p className="text-xs font-semibold uppercase tracking-wide text-[#7D7B75]">{scopeLabel}</p>
-        <TerrainSegmentedControl
-          ariaLabel="Type d’historique"
-          value={url.kind}
-          onChange={(kind) =>
-            replaceState({
-              ...url,
-              kind: kind as HistoryKind,
-              status: 'all',
-              anchorId: null,
-            })
-          }
-          options={[
-            { value: 'signals', label: 'Observations' },
-            { value: 'executions', label: 'Exécutions' },
-          ]}
-        />
-        <TerrainSegmentedControl
-          ariaLabel="Mode de vue"
-          size="compact"
-          value={url.viewMode}
-          onChange={(viewMode) =>
-            replaceState({ ...url, viewMode: viewMode as HistoryViewMode, anchorId: null })
-          }
-          options={[
-            { value: 'personal', label: 'Ma vue' },
-            { value: 'general', label: 'Vue globale' },
-          ]}
-        />
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <HistoryKindTabs
+            value={url.kind}
+            onChange={(kind) =>
+              replaceState({
+                ...url,
+                kind,
+                status: 'all',
+                anchorId: null,
+              })
+            }
+          />
+          <TerrainSegmentedControl
+            ariaLabel="Mode de vue"
+            className="w-fit"
+            size="compact"
+            value={url.viewMode}
+            onChange={(viewMode) =>
+              replaceState({ ...url, viewMode: viewMode as HistoryViewMode, anchorId: null })
+            }
+            options={[
+              { value: 'personal', label: 'Ma vue' },
+              { value: 'general', label: 'Vue globale' },
+            ]}
+          />
+        </div>
+        <div
+          className={cn(
+            'flex items-center gap-1.5',
+            isDesktopWeb ? 'flex-wrap' : 'flex-nowrap overflow-x-auto',
+          )}
+        >
           {PERIODS.map((period) => (
-            <button
+            <TerrainFilterChip
               key={period.value}
-              type="button"
-              className={cn(
-                'min-h-9 rounded-full px-3 text-xs font-semibold',
-                url.period === period.value
-                  ? 'bg-[#1B4FD8] text-white'
-                  : 'bg-[#F4F1EA] text-[#1a1a1a]',
-              )}
+              pressed={url.period === period.value}
+              className="shrink-0"
               onClick={() => replaceState({ ...url, period: period.value, anchorId: null })}
             >
               {period.label}
-            </button>
+            </TerrainFilterChip>
           ))}
+          {statusOptions(url.kind).map((option) => (
+            <TerrainFilterChip
+              key={option.value}
+              pressed={url.status === option.value}
+              className="shrink-0"
+              onClick={() => replaceState({ ...url, status: option.value, anchorId: null })}
+            >
+              {option.label}
+            </TerrainFilterChip>
+          ))}
+          {isDesktopWeb ? (
+            <FeedRefreshButton
+              className="ml-auto"
+              onRefresh={() => void refreshHistory()}
+              disabled={customIncomplete}
+              pending={list.isRefreshing}
+            />
+          ) : null}
         </div>
         {url.period === 'custom' ? (
           <div className="flex gap-2">
@@ -303,33 +352,6 @@ export function HistoryPage({ scope }: HistoryPageProps) {
             />
           </div>
         ) : null}
-        <div className="flex flex-wrap items-center gap-2">
-          {statusOptions(url.kind).map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              className={cn(
-                'min-h-9 rounded-full px-3 text-xs font-semibold',
-                url.status === option.value
-                  ? 'bg-[#1a1a1a] text-white'
-                  : 'bg-[#F4F1EA] text-[#1a1a1a]',
-              )}
-              onClick={() => replaceState({ ...url, status: option.value, anchorId: null })}
-            >
-              {option.label}
-            </button>
-          ))}
-          {isDesktopWeb ? (
-            <button
-              type="button"
-              className="ml-auto min-h-9 rounded-lg border border-[#E8E6DF] px-3 text-sm font-semibold"
-              onClick={() => void refreshHistory()}
-              disabled={list.isRefreshing || customIncomplete}
-            >
-              Actualiser
-            </button>
-          ) : null}
-        </div>
       </div>
       <div
         ref={scrollRef}
@@ -375,23 +397,43 @@ export function HistoryPage({ scope }: HistoryPageProps) {
               {group.label}
             </p>
             <div className="flex flex-col gap-2">
-              {group.items.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  data-history-id={item.id}
-                  className="rounded-xl border border-[#E8E6DF] bg-white px-4 py-3 text-left"
-                  onClick={() => openItem(item.id)}
-                >
-                  <span className="block text-sm font-semibold text-[#1a1a1a]">{item.title}</span>
-                  {source === 'cross' ? (
-                    <span className="mt-0.5 block text-xs text-[#6b5f52]">{item.establishment_name}</span>
-                  ) : null}
-                  <span className="mt-1 block text-xs text-[#7D7B75]">
-                    {originLabel(item.termination_origin, item.termination_actor_display_name)}
-                  </span>
-                </button>
-              ))}
+              {url.kind === 'signals'
+                ? group.items.map((item) => {
+                    const signal = signalHistoryCardItem(item as SignalHistoryItem)
+                    return (
+                      <div key={signal.id} data-history-id={signal.id}>
+                        {isDesktopWeb ? (
+                          <SignalFeedDesktopRow
+                            item={signal}
+                            onSelect={openItem}
+                            showEstablishment={source === 'cross'}
+                          />
+                        ) : (
+                          <SignalCard
+                            item={signal}
+                            onSelect={openItem}
+                            viewMode={url.viewMode}
+                            showEstablishment={source === 'cross'}
+                          />
+                        )}
+                      </div>
+                    )
+                  })
+                : group.items.map((item) => {
+                    const execution = executionHistoryCardItem(item as ExecutionHistoryItem)
+                    return (
+                      <div key={execution.id} data-history-id={execution.id}>
+                        {isDesktopWeb ? (
+                          <ActionPlanExecutionFeedDesktopRow
+                            item={execution}
+                            onSelect={openItem}
+                          />
+                        ) : (
+                          <ActionPlanExecutionFeedCard item={execution} onSelect={openItem} />
+                        )}
+                      </div>
+                    )
+                  })}
             </div>
           </section>
         ))}

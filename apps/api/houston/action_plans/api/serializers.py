@@ -950,6 +950,11 @@ def serialize_schedule_detail(
     }
 
 
+class ExecutionHistoryAssigneeSerializer(serializers.Serializer):
+    membership_id = serializers.UUIDField()
+    display_name = serializers.CharField(allow_blank=True)
+
+
 class ExecutionHistoryItemSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     title = serializers.CharField()
@@ -962,6 +967,19 @@ class ExecutionHistoryItemSerializer(serializers.Serializer):
     termination_actor_display_name = serializers.CharField(allow_null=True)
     establishment_id = serializers.UUIDField()
     establishment_name = serializers.CharField()
+    pilot_business_unit = ActionPlanBusinessUnitSerializer()
+    involved_poles = serializers.ListField(child=serializers.DictField())
+    assignees = ExecutionHistoryAssigneeSerializer(many=True)
+    start_at = serializers.DateTimeField(allow_null=True)
+    end_at = serializers.DateTimeField(allow_null=True)
+    all_day = serializers.BooleanField()
+    validated_at = serializers.DateTimeField(allow_null=True)
+    validated_by_display_name = serializers.CharField(allow_null=True, allow_blank=True)
+    marked_done_at = serializers.DateTimeField(allow_null=True)
+    canceled_at = serializers.DateTimeField(allow_null=True)
+    active_review = ActionPlanExecutionActiveReviewSerializer(allow_null=True)
+    created_at = serializers.DateTimeField()
+    created_by_display_name = serializers.CharField(allow_blank=True)
 
 
 class ExecutionHistoryResponseSerializer(serializers.Serializer):
@@ -978,6 +996,13 @@ def serialize_execution_history_item(execution) -> dict:
     )
 
     origin, actor = execution_termination(execution)
+
+    def _optional_display_name(membership) -> str | None:
+        if membership is None:
+            return None
+        name = _membership_display_name(membership)
+        return name or None
+
     return {
         "id": execution.id,
         "title": execution.title,
@@ -988,6 +1013,25 @@ def serialize_execution_history_item(execution) -> dict:
         "termination_actor_display_name": actor,
         "establishment_id": execution.establishment_id,
         "establishment_name": execution.establishment.name,
+        "pilot_business_unit": _serialize_business_unit(execution.pilot_business_unit),
+        "involved_poles": _serialize_involved_poles(execution),
+        "assignees": [
+            {
+                "membership_id": assignee.membership_id,
+                "display_name": _membership_display_name(assignee.membership),
+            }
+            for assignee in execution.assignees.all()
+        ],
+        "start_at": execution.start_at,
+        "end_at": execution.end_at,
+        "all_day": execution.all_day,
+        "validated_at": execution.validated_at,
+        "validated_by_display_name": _optional_display_name(execution.validated_by_membership),
+        "marked_done_at": execution.marked_done_at,
+        "canceled_at": execution.canceled_at,
+        "active_review": _serialize_active_review(execution),
+        "created_at": execution.created_at,
+        "created_by_display_name": _membership_display_name(execution.created_by),
     }
 
 

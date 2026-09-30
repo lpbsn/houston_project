@@ -7,6 +7,8 @@ import { ActionPlanPinnedBadge } from '@/features/action-plans/components/action
 import { getActionPlanStatusBadgeVariant } from '@/features/action-plans/components/action-plan-status-badge'
 import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 
+import type { ExecutionFeedCardItem } from './action-plan-execution-feed-card'
+
 import {
   formatActionPlanFeedCardDateTimeLabel,
   formatActionPlanFeedCardDelayLabel,
@@ -25,9 +27,9 @@ import {
 } from './execution-feed-status-bits'
 
 type ActionPlanExecutionFeedDesktopRowProps = {
-  item: ActionPlanExecutionFeedItem
+  item: ExecutionFeedCardItem
   onSelect: (executionId: string) => void
-  onTogglePin?: (item: ActionPlanExecutionFeedItem) => void
+  onTogglePin?: (item: ExecutionFeedCardItem) => void
 }
 
 function stopRowActivation(event: { stopPropagation: () => void }) {
@@ -38,10 +40,10 @@ function DesktopPinButton({
   item,
   onTogglePin,
 }: {
-  item: ActionPlanExecutionFeedItem
-  onTogglePin: (item: ActionPlanExecutionFeedItem) => void
+  item: ExecutionFeedCardItem
+  onTogglePin: (item: ExecutionFeedCardItem) => void
 }) {
-  if (!item.permission_hints.can_pin) {
+  if (!item.permission_hints?.can_pin) {
     return null
   }
   return (
@@ -52,7 +54,7 @@ function DesktopPinButton({
         'hover:bg-[#F5F4F0] focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30 focus-visible:outline-none',
       )}
       aria-label={item.is_pinned ? 'Désépingler' : 'Épingler'}
-      aria-pressed={item.is_pinned}
+      aria-pressed={Boolean(item.is_pinned)}
       onClick={(event) => {
         stopRowActivation(event)
         onTogglePin(item)
@@ -127,7 +129,7 @@ export function ActionPlanExecutionFeedDesktopRow({
   const creatorName = item.created_by_display_name.trim()
   const poleLabel = item.pilot_business_unit.specific_name.trim()
   const assignees = item.assignees.filter((assignee) => assignee.display_name.trim().length > 0)
-  const showReadOnlyPinnedBadge = !onTogglePin && item.is_pinned
+  const showReadOnlyPinnedBadge = !onTogglePin && Boolean(item.is_pinned)
   const showCreatedOrDelay = Boolean(createdLabel || delayLabel)
 
   return (

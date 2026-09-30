@@ -2,7 +2,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from django.db.models import Case, DateTimeField, F, OuterRef, Q, QuerySet, Subquery, Value, When
+from django.db.models import (
+    Case,
+    DateTimeField,
+    F,
+    OuterRef,
+    Prefetch,
+    Q,
+    QuerySet,
+    Subquery,
+    Value,
+    When,
+)
 from django.db.models.functions import Coalesce
 
 from houston.accounts.display import membership_display_name
@@ -23,7 +34,13 @@ from houston.action_plans.history_cursor import (
     encode_execution_history_cursor,
     execution_history_context_hash,
 )
-from houston.action_plans.models import ActionPlanExecution, ActionPlanExecutionLifecycleEvent
+from houston.action_plans.models import (
+    ActionPlanAssignee,
+    ActionPlanExecution,
+    ActionPlanExecutionLifecycleEvent,
+    ActionPlanExecutionReview,
+    ActionPlanExecutionTask,
+)
 from houston.action_plans.selectors import (
     action_plan_execution_general_feed_visibility_q,
     action_plan_execution_personal_feed_q,
@@ -33,9 +50,34 @@ from houston.establishments.models import EstablishmentMembership
 
 _EXECUTION_HISTORY_SELECT_RELATED = (
     "establishment",
+    "pilot_business_unit",
+    "pilot_business_unit__catalog_business_unit",
+    "created_by__user",
     "validated_by_membership__user",
     "marked_done_by_membership__user",
     "canceled_by_membership__user",
+)
+_EXECUTION_HISTORY_CARD_PREFETCH = (
+    Prefetch(
+        "assignees",
+        queryset=ActionPlanAssignee.objects.select_related(
+            "membership__user",
+            "execution_team__business_unit",
+            "execution_team__business_unit__catalog_business_unit",
+        ),
+    ),
+    Prefetch(
+        "task_executions",
+        queryset=ActionPlanExecutionTask.objects.select_related(
+            "execution_team__business_unit",
+            "execution_team__business_unit__catalog_business_unit",
+        ),
+    ),
+    Prefetch(
+        "reviews",
+        queryset=ActionPlanExecutionReview.objects.filter(is_active=True),
+        to_attr="_prefetched_active_reviews",
+    ),
 )
 
 
@@ -136,9 +178,11 @@ def _hydrate_execution_history_items(rows: list[dict]) -> list[ActionPlanExecuti
         return []
     executions_by_id = {
         execution.id: execution
-        for execution in ActionPlanExecution.objects.filter(
-            id__in=[row["id"] for row in rows]
-        ).select_related(*_EXECUTION_HISTORY_SELECT_RELATED)
+        for execution in (
+            ActionPlanExecution.objects.filter(id__in=[row["id"] for row in rows])
+            .select_related(*_EXECUTION_HISTORY_SELECT_RELATED)
+            .prefetch_related(*_EXECUTION_HISTORY_CARD_PREFETCH)
+        )
     }
     items = []
     for row in rows:
