@@ -103,6 +103,8 @@ def test_action_plan_execution_feed_item_contract(
         "pending_validation": 0,
         "overdue": 0,
         "in_progress": 1,
+        "done": 0,
+        "canceled": 0,
     }
     item = body["items"][0]
     assert item["item_type"] == "action_plan_execution"
@@ -198,6 +200,8 @@ def test_feed_section_counts_partition_pinned_and_overdue(
         "pending_validation": 1,
         "overdue": 1,
         "in_progress": 1,
+        "done": 1,
+        "canceled": 0,
     }
     by_id = {
         item["action_plan_execution"]["id"]: item["action_plan_execution"]
@@ -604,6 +608,8 @@ def test_manager_section_counts_do_not_double_count_multi_team_execution(
         "pending_validation": 0,
         "overdue": 0,
         "in_progress": 1,
+        "done": 0,
+        "canceled": 0,
     }
 
 

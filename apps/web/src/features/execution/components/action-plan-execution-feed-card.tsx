@@ -53,6 +53,7 @@ export type ExecutionFeedCardItem = Pick<
 > & {
   is_pinned?: boolean
   permission_hints?: ActionPlanExecutionFeedItem['permission_hints']
+  canceled_by_display_name?: string | null
 }
 
 type ActionPlanExecutionFeedCardProps = {

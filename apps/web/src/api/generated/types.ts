@@ -3239,6 +3239,8 @@ export interface components {
             pending_validation: number;
             overdue: number;
             in_progress: number;
+            done: number;
+            canceled: number;
         };
         ActionPlanExecutionFeedTaskPreview: {
             position: number;
@@ -5492,6 +5494,8 @@ export interface components {
             in_progress: number;
             interesting: number;
             pinned: number;
+            resolved: number;
+            canceled: number;
             retained: number;
         };
         SignalFeedItem: {
@@ -7499,7 +7503,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Defaults to all. */
-                category?: "all" | "in_progress" | "overdue" | "pending_validation";
+                category?: "all" | "canceled" | "done" | "in_progress" | "overdue" | "pending_validation";
                 cursor?: string;
                 establishment_id?: string;
                 page_size?: number;
@@ -7550,7 +7554,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Defaults to all. */
-                category?: "all" | "in_progress" | "overdue" | "pending_validation";
+                category?: "all" | "canceled" | "done" | "in_progress" | "overdue" | "pending_validation";
                 cursor?: string;
                 establishment_id?: string;
                 page_size?: number;
@@ -7816,7 +7820,7 @@ export interface operations {
                 page_size?: number;
                 /** @description First page of cross pins. Default 10, maximum 50. */
                 pins_page_size?: number;
-                /** @description One of open, in_progress, interesting. Omit for the full operational order. */
+                /** @description One of open, in_progress, interesting, resolved, or canceled. Resolved and canceled stay inside the operational retention window. Omit for the full operational order. */
                 statuses?: string;
             };
             header?: never;
@@ -8010,7 +8014,7 @@ export interface operations {
         parameters: {
             query: {
                 /** @description Defaults to all. */
-                category?: "all" | "in_progress" | "overdue" | "pending_validation";
+                category?: "all" | "canceled" | "done" | "in_progress" | "overdue" | "pending_validation";
                 /** @description Opaque pagination cursor from a previous response next_cursor. */
                 cursor?: string;
                 page_size?: number;
@@ -13223,7 +13227,7 @@ export interface operations {
                 /** @description When true, restrict to signals with no responsible business unit (affected and activity_subject ignored) among active lifecycle statuses. Owner/Director/Manager only; Staff receives 403. */
                 needs_qualification?: boolean;
                 page_size?: number;
-                /** @description One operational status: open, in_progress, or interesting. Omit it to page open, then in progress, then interesting. */
+                /** @description One status: open, in_progress, interesting, resolved, or canceled. Resolved and canceled stay inside the operational retention window. Omit it to page open, then in progress, then interesting. */
                 statuses?: string;
                 view_mode: "general" | "personal";
             };

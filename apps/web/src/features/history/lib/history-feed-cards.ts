@@ -41,6 +41,8 @@ export function executionHistoryCardItem(item: ExecutionHistoryItem): ExecutionF
     marked_done_at: item.marked_done_at,
     marked_done_by_display_name: null,
     canceled_at: item.canceled_at,
+    canceled_by_display_name:
+      item.status === 'canceled' ? item.termination_actor_display_name : null,
     active_review: item.active_review,
     created_at: item.created_at,
     created_by_display_name: item.created_by_display_name,

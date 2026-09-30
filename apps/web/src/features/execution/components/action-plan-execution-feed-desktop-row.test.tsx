@@ -143,7 +143,22 @@ describe('ActionPlanExecutionFeedDesktopRow', () => {
       />,
     )
     expect(screen.getByText(/Annulé le /)).toBeTruthy()
+    expect(screen.queryByText(/ par /)).toBeNull()
     expect(screen.queryByText(/Créé le/)).toBeNull()
+
+    rerender(
+      <ActionPlanExecutionFeedDesktopRow
+        item={{
+          ...buildFeedItem({
+            status: 'canceled',
+            canceled_at: '2026-07-08T10:00:00Z',
+          }),
+          canceled_by_display_name: 'Camille Bernard',
+        }}
+        onSelect={vi.fn()}
+      />,
+    )
+    expect(screen.getByText(/Annulé le .+ par Camille Bernard/)).toBeTruthy()
 
     rerender(
       <ActionPlanExecutionFeedDesktopRow

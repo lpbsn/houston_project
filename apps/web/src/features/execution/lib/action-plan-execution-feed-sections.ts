@@ -43,12 +43,20 @@ export const EXECUTION_FEED_CATEGORY_LABELS: Record<ActionPlanExecutionFeedCateg
   pending_validation: 'À valider',
   overdue: 'En retard',
   in_progress: 'En cours',
+  done: 'Terminés',
+  canceled: 'Annulés',
 }
 
 export function retainedTerminalExecutionItems(
   items: ActionPlanExecutionFeedItem[],
   category: ActionPlanExecutionFeedCategory = 'all',
 ): ActionPlanExecutionFeedItem[] {
+  if (category === 'done') {
+    return items.filter((item) => item.status === 'done')
+  }
+  if (category === 'canceled') {
+    return items.filter((item) => item.status === 'canceled')
+  }
   if (category !== 'all') {
     return []
   }

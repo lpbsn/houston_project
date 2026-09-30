@@ -152,12 +152,6 @@ function establishmentItems(
       href: serializeScopedTerrainPath(scope, 'execution'),
       group: 2,
     },
-    {
-      id: 'history',
-      label: 'Historique',
-      href: `/e/${establishmentId}/general/history`,
-      group: 2,
-    },
   )
   if (options.showChat) {
     items.push({
@@ -167,12 +161,20 @@ function establishmentItems(
       group: 2,
     })
   }
-  items.push({
-    id: 'general',
-    label: 'Général',
-    href: serializeScopedTerrainPath(scope, 'general'),
-    group: 3,
-  })
+  items.push(
+    {
+      id: 'history',
+      label: 'Historique',
+      href: `/e/${establishmentId}/general/history`,
+      group: 3,
+    },
+    {
+      id: 'general',
+      label: 'Général',
+      href: serializeScopedTerrainPath(scope, 'general'),
+      group: 3,
+    },
+  )
   if (options.showDashboard) {
     items.push({
       id: 'settings',

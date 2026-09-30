@@ -12,7 +12,10 @@ import {
 } from '@/lib/feed-reading-window'
 import { invalidateFeedListQuery } from '@/lib/query-invalidation'
 
-import type { ActionPlanExecutionFeedViewMode } from '../api'
+import type {
+  ActionPlanExecutionFeedCategory,
+  ActionPlanExecutionFeedViewMode,
+} from '../api'
 import type {
   ActionPlanExecutionFeedItem,
   ActionPlanExecutionFeedItemWrapper,
@@ -20,12 +23,24 @@ import type {
 } from '../types'
 
 const EXECUTION_FEED_VIEW_MODES: ActionPlanExecutionFeedViewMode[] = ['personal', 'general']
+const EXECUTION_FEED_CATEGORIES = new Set<ActionPlanExecutionFeedCategory>([
+  'all',
+  'pending_validation',
+  'overdue',
+  'in_progress',
+  'done',
+  'canceled',
+])
+
+export type ExecutionFeedTerminalStatus = 'done' | 'canceled'
 
 export type ActionPlanExecutionFeedSectionCountKey =
   | 'pinned'
   | 'pending_validation'
   | 'overdue'
   | 'in_progress'
+  | 'done'
+  | 'canceled'
 
 export type ExecutionFeedCacheState = {
   window: FeedReadingWindow<ActionPlanExecutionFeedItemWrapper>
@@ -141,7 +156,277 @@ function executionSectionCountKey(
   if (item.status === 'in_progress') {
     return item.is_overdue ? 'overdue' : 'in_progress'
   }
+  if (item.status === 'done') {
+    return 'done'
+  }
+  if (item.status === 'canceled') {
+    return 'canceled'
+  }
   return null
+}
+
+function executionFeedCategoryFromQueryKey(
+  queryKey: readonly unknown[],
+): ActionPlanExecutionFeedCategory {
+  const kind = queryKey[1]
+  const raw =
+    kind === 'cross-action-plan-execution-feed' ||
+    kind === 'cross-action-plan-execution-feed-pins'
+      ? queryKey[3]
+      : queryKey[4]
+  if (
+    typeof raw === 'string' &&
+    EXECUTION_FEED_CATEGORIES.has(raw as ActionPlanExecutionFeedCategory)
+  ) {
+    return raw as ActionPlanExecutionFeedCategory
+  }
+  return 'all'
+}
+
+function executionFeedViewModeFromQueryKey(
+  queryKey: readonly unknown[],
+): ActionPlanExecutionFeedViewMode | null {
+  const kind = queryKey[1]
+  const raw =
+    kind === 'cross-action-plan-execution-feed' ||
+    kind === 'cross-action-plan-execution-feed-pins'
+      ? queryKey[2]
+      : queryKey[3]
+  return raw === 'personal' || raw === 'general' ? raw : null
+}
+
+function categoryKeepsTerminalStatus(
+  category: ActionPlanExecutionFeedCategory,
+  status: ExecutionFeedTerminalStatus,
+): boolean {
+  return category === 'all' || category === status
+}
+
+function categoryCountedPin(
+  category: ActionPlanExecutionFeedCategory,
+  item: ActionPlanExecutionFeedItem,
+): boolean {
+  if (category === 'all') {
+    return true
+  }
+  if (category === 'pending_validation') {
+    return item.status === 'pending_validation'
+  }
+  if (category === 'overdue') {
+    return item.status === 'in_progress' && item.is_overdue
+  }
+  if (category === 'in_progress') {
+    return item.status === 'in_progress' && !item.is_overdue
+  }
+  return item.status === category
+}
+
+function terminalExecutionPatch(
+  item: ActionPlanExecutionFeedItem,
+  status: ExecutionFeedTerminalStatus,
+  occurredAt: string,
+): Partial<ActionPlanExecutionFeedItem> {
+  const patch: Partial<ActionPlanExecutionFeedItem> = {
+    status,
+    is_pinned: false,
+    is_overdue: false,
+  }
+  if (status === 'canceled') {
+    patch.canceled_at = item.canceled_at ?? occurredAt
+    return patch
+  }
+  if (item.status === 'pending_validation' || item.validated_at != null) {
+    patch.validated_at = item.validated_at ?? occurredAt
+    return patch
+  }
+  patch.marked_done_at = item.marked_done_at ?? occurredAt
+  return patch
+}
+
+function shiftTerminalSectionCounts(
+  counts: ActionPlanExecutionFeedResponse['section_counts'],
+  previous: ActionPlanExecutionFeedItem,
+  status: ExecutionFeedTerminalStatus,
+  wasPinned: boolean,
+): ActionPlanExecutionFeedResponse['section_counts'] {
+  const next = { ...counts }
+  if (wasPinned) {
+    next.pinned = Math.max(0, next.pinned - 1)
+  }
+  const from = executionSectionCountKey(previous)
+  if (from === status) {
+    return next
+  }
+  if (from) {
+    next[from] = Math.max(0, next[from] - 1)
+    next[status] += 1
+  }
+  return next
+}
+
+function appendUnpinnedToPageOne(
+  window: FeedReadingWindow<ActionPlanExecutionFeedItemWrapper>,
+  wrapper: ActionPlanExecutionFeedItemWrapper,
+): FeedReadingWindow<ActionPlanExecutionFeedItemWrapper> {
+  const without = removeHydratedItem(window, wrapperId(wrapper), wrapperId).window
+  if (without.pageOne) {
+    return {
+      ...without,
+      pageOne: {
+        ...without.pageOne,
+        items: [...without.pageOne.items, wrapper],
+      },
+    }
+  }
+  return {
+    ...without,
+    pageOne: {
+      requestCursor: null,
+      nextCursor: null,
+      hasMore: false,
+      items: [wrapper],
+    },
+  }
+}
+
+export function retainTerminalExecutionInFeedCache(
+  current: ExecutionFeedCacheState,
+  options: {
+    executionId: string
+    status: ExecutionFeedTerminalStatus
+    occurredAt: string
+    category: ActionPlanExecutionFeedCategory
+  },
+): ExecutionFeedCacheState {
+  const list = hydratedItems(current.window)
+  const listItem = list.find((wrapper) => wrapperId(wrapper) === options.executionId)
+  const pinItem = current.pins.find((wrapper) => wrapperId(wrapper) === options.executionId)
+  const found = pinItem ?? listItem
+  if (!found) {
+    return current
+  }
+
+  const previous = found.action_plan_execution
+  const patched = patchWrapper(
+    found,
+    terminalExecutionPatch(previous, options.status, options.occurredAt),
+  )
+  const keep = categoryKeepsTerminalStatus(options.category, options.status)
+  const sectionCounts = current.sectionCounts
+    ? shiftTerminalSectionCounts(
+        current.sectionCounts,
+        previous,
+        options.status,
+        Boolean(pinItem),
+      )
+    : current.sectionCounts
+  const pins = current.pins.filter((wrapper) => wrapperId(wrapper) !== options.executionId)
+
+  if (!keep) {
+    return {
+      ...current,
+      window: removeHydratedItem(current.window, options.executionId, wrapperId).window,
+      pins,
+      sectionCounts,
+    }
+  }
+
+  return {
+    ...current,
+    window: listItem
+      ? mapHydratedItems(current.window, (wrapper) =>
+          wrapperId(wrapper) === options.executionId ? patched : wrapper,
+        )
+      : appendUnpinnedToPageOne(current.window, patched),
+    pins,
+    sectionCounts,
+  }
+}
+
+export function retainTerminalExecutionInFeedCaches(
+  queryClient: QueryClient,
+  options: {
+    establishmentId: string
+    executionId: string
+    status: ExecutionFeedTerminalStatus
+    occurredAt: string
+  },
+): void {
+  const feedEntries = [
+    ...queryClient.getQueriesData<ExecutionFeedCacheState>({
+      queryKey: ['action-plans', 'action-plan-execution-feed', options.establishmentId],
+    }),
+    ...queryClient.getQueriesData<ExecutionFeedCacheState>({
+      queryKey: ['action-plans', 'cross-action-plan-execution-feed'],
+    }),
+  ]
+  for (const [queryKey, current] of feedEntries) {
+    if (!current?.window) {
+      continue
+    }
+    const next = retainTerminalExecutionInFeedCache(current, {
+      ...options,
+      category: executionFeedCategoryFromQueryKey(queryKey),
+    })
+    if (next !== current) {
+      queryClient.setQueryData(queryKey, next)
+    }
+  }
+
+  const pinEntries = queryClient.getQueriesData<ExecutionPinsCacheState>({
+    queryKey: ['action-plans', 'cross-action-plan-execution-feed-pins'],
+  })
+  for (const [queryKey, current] of pinEntries) {
+    if (!current?.window) {
+      continue
+    }
+    const pinItem = hydratedItems(current.window).find(
+      (wrapper) => wrapperId(wrapper) === options.executionId,
+    )
+    if (!pinItem) {
+      continue
+    }
+    const viewMode = executionFeedViewModeFromQueryKey(queryKey)
+    queryClient.setQueryData<ExecutionPinsCacheState>(queryKey, {
+      ...current,
+      window: removeHydratedItem(current.window, options.executionId, wrapperId).window,
+    })
+    if (!viewMode) {
+      continue
+    }
+    const patched = patchWrapper(
+      pinItem,
+      terminalExecutionPatch(pinItem.action_plan_execution, options.status, options.occurredAt),
+    )
+    const feedEntriesForMode = queryClient.getQueriesData<ExecutionFeedCacheState>({
+      queryKey: ['action-plans', 'cross-action-plan-execution-feed', viewMode],
+    })
+    for (const [feedKey, feed] of feedEntriesForMode) {
+      if (!feed?.window) {
+        continue
+      }
+      const feedCategory = executionFeedCategoryFromQueryKey(feedKey)
+      if (
+        retainTerminalExecutionInFeedCache(feed, { ...options, category: feedCategory }) !== feed
+      ) {
+        continue
+      }
+      const keep = categoryKeepsTerminalStatus(feedCategory, options.status)
+      const sectionCounts = feed.sectionCounts
+        ? shiftTerminalSectionCounts(
+            feed.sectionCounts,
+            pinItem.action_plan_execution,
+            options.status,
+            categoryCountedPin(feedCategory, pinItem.action_plan_execution),
+          )
+        : feed.sectionCounts
+      queryClient.setQueryData<ExecutionFeedCacheState>(feedKey, {
+        ...feed,
+        window: keep ? appendUnpinnedToPageOne(feed.window, patched) : feed.window,
+        sectionCounts,
+      })
+    }
+  }
 }
 
 export function removeExecutionFromFeedCache(

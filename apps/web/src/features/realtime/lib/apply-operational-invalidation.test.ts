@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { actionPlansQueryKeys } from '@/features/action-plans/api'
+import {
+  executionFeedCacheFromPage,
+  type ExecutionFeedCacheState,
+} from '@/features/action-plans/lib/action-plan-execution-feed-cache'
+import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 import { analyticsQueryKeys } from '@/features/analytics/api'
 import { observationsQueryKeys } from '@/features/observations/api'
 import {
@@ -112,6 +118,90 @@ describe('applyOperationalInvalidation', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ['action-plans', 'detail', 'est-1', 'plan-1'],
     })
+  })
+
+  it('keeps a retained execution in the deferred feed cache and still invalidates the other surfaces', () => {
+    const localClient = createTestQueryClient()
+    const localInvalidateSpy = vi.spyOn(localClient, 'invalidateQueries')
+    const removed: string[] = []
+    localClient.setQueryData(
+      actionPlansQueryKeys.executionFeed('est-1', 'general', 'all'),
+      executionFeedCacheFromPage({
+        items: [
+          {
+            item_type: 'action_plan_execution',
+            action_plan_execution: {
+              id: 'target',
+              status: 'in_progress',
+              is_overdue: false,
+              is_pinned: false,
+              canceled_at: null,
+              validated_at: null,
+              marked_done_at: null,
+            } as ActionPlanExecutionFeedItem,
+          },
+        ],
+        pins: [],
+        scheduled: { count: 0, next: null },
+        section_counts: {
+          pinned: 0,
+          pending_validation: 0,
+          overdue: 0,
+          in_progress: 1,
+          done: 0,
+          canceled: 0,
+        },
+        next_cursor: 'cursor-1',
+        has_more: true,
+      }),
+    )
+    const unregister = registerFeedReadingSession({
+      matches: (queryKey) =>
+        queryKeyMatchesPrefix(queryKey, ['action-plans', 'action-plan-execution-feed', 'est-1']),
+      atTop: () => false,
+      interacting: () => false,
+      onDefer: () => undefined,
+      onRemove: (entityId) => {
+        removed.push(entityId)
+      },
+    })
+
+    try {
+      applyOperationalInvalidation(
+        {
+          type: 'invalidate',
+          subject_type: 'action_plan_execution',
+          reason: 'action_plan_execution.done',
+          establishment_id: 'est-1',
+          entity_id: 'target',
+          occurred_at: '2026-07-04T09:00:00Z',
+        },
+        { queryClient: localClient, establishmentId: 'est-1' },
+      )
+
+      const feed = localClient.getQueryData<ExecutionFeedCacheState>(
+        actionPlansQueryKeys.executionFeed('est-1', 'general', 'all'),
+      )
+      expect(removed).toEqual([])
+      expect(feed?.window.pageOne?.items[0]?.action_plan_execution).toMatchObject({
+        status: 'done',
+        marked_done_at: '2026-07-04T09:00:00Z',
+      })
+      expect(feed?.window.pageOne?.nextCursor).toBe('cursor-1')
+      expect(feed?.sectionCounts).toMatchObject({ in_progress: 0, done: 1, canceled: 0 })
+      expect(localInvalidateSpy).not.toHaveBeenCalledWith({
+        queryKey: ['action-plans', 'action-plan-execution-feed', 'est-1'],
+      })
+      expect(localInvalidateSpy).toHaveBeenCalledWith({
+        queryKey: ['action-plans', 'execution-detail', 'est-1', 'target'],
+      })
+      expect(localInvalidateSpy).toHaveBeenCalledWith({
+        queryKey: ['action-plans', 'cross-action-plan-execution-feed'],
+      })
+    } finally {
+      unregister()
+      localInvalidateSpy.mockRestore()
+    }
   })
 
   it.each([

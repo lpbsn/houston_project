@@ -442,6 +442,7 @@ export function ProfilePage({
         />
       ) : null}
 
+      {!isDesktopWeb || canAccessManagement ? (
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2 px-0.5">
           <TerrainSectionLabel dotVariant="primary" className="py-0">
@@ -453,6 +454,7 @@ export function ProfilePage({
         </div>
 
         <div className="space-y-2">
+          {!isDesktopWeb ? (
           <ProfileManagementNavCard
             icon={History}
             iconClassName="bg-[#F4F1EA] text-[#6b5f52]"
@@ -464,6 +466,7 @@ export function ProfilePage({
             }
             onClick={() => onNavigate?.(historyPath)}
           />
+          ) : null}
           {canAccessManagement ? (
             <>
               {canShowActionPlansNav ? (
@@ -497,6 +500,7 @@ export function ProfilePage({
           ) : null}
         </div>
       </div>
+      ) : null}
 
       <div className="space-y-2">
         <TerrainSectionLabel>Compte et sécurité</TerrainSectionLabel>

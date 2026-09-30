@@ -14,9 +14,12 @@ import {
   appendExecutionFeedWindow,
   applyActionPlanExecutionPinSuccess,
   executionFeedCacheFromPage,
+  executionPinsCacheFromPage,
   patchExecutionInFeedCache,
   prepareActionPlanExecutionPinOptimisticUpdate,
   removeExecutionFromFeedCache,
+  retainTerminalExecutionInFeedCache,
+  retainTerminalExecutionInFeedCaches,
   type ExecutionFeedCacheState,
 } from './action-plan-execution-feed-cache'
 
@@ -124,6 +127,8 @@ describe('patchExecutionInFeedCache pin section_counts', () => {
       pending_validation: 0,
       overdue: 0,
       in_progress: 2,
+      done: 0,
+      canceled: 0,
     }
     queryClient.setQueryData(
       actionPlansQueryKeys.executionFeed(establishmentId, viewMode),
@@ -147,6 +152,8 @@ describe('patchExecutionInFeedCache pin section_counts', () => {
       pending_validation: 0,
       overdue: 0,
       in_progress: 2,
+      done: 0,
+      canceled: 0,
     })
     expect(data?.window.focus[0]?.items).toEqual([])
     expect(data?.pins.map((item) => item.action_plan_execution.id)).toEqual(['target'])
@@ -162,6 +169,8 @@ describe('patchExecutionInFeedCache pin section_counts', () => {
       pending_validation: 0,
       overdue: 0,
       in_progress: 0,
+      done: 0,
+      canceled: 0,
     }
     queryClient.setQueryData(
       actionPlansQueryKeys.executionFeed(establishmentId, viewMode),
@@ -191,6 +200,8 @@ describe('patchExecutionInFeedCache pin section_counts', () => {
       pending_validation: 0,
       overdue: 0,
       in_progress: 2,
+      done: 0,
+      canceled: 0,
     }
     queryClient.setQueryData(
       actionPlansQueryKeys.executionFeed(establishmentId, 'personal'),
@@ -230,6 +241,8 @@ describe('patchExecutionInFeedCache pin section_counts', () => {
       pending_validation: 0,
       overdue: 0,
       in_progress: 1,
+      done: 0,
+      canceled: 0,
     }
     for (const viewMode of ['personal', 'general'] as const) {
       queryClient.setQueryData(
@@ -270,6 +283,8 @@ describe('appendExecutionFeedWindow', () => {
       pending_validation: 0,
       overdue: 0,
       in_progress: 1,
+      done: 0,
+      canceled: 0,
     }
     const state = cacheWithFocus([feedItem('page-1')], counts, [feedItem('page-2')])
     const stale = appendExecutionFeedWindow(
@@ -294,6 +309,223 @@ describe('appendExecutionFeedWindow', () => {
   })
 })
 
+function sectionTotal(counts: ActionPlanExecutionFeedResponse['section_counts']): number {
+  return (
+    counts.pending_validation +
+    counts.overdue +
+    counts.in_progress +
+    counts.done +
+    counts.canceled
+  )
+}
+
+describe('retainTerminalExecutionInFeedCache', () => {
+  const counts = {
+    pinned: 1,
+    pending_validation: 1,
+    overdue: 1,
+    in_progress: 2,
+    done: 0,
+    canceled: 0,
+  }
+
+  it('keeps a retained done execution in the all feed and moves its counters', () => {
+    const current = executionFeedCacheFromPage(
+      page(
+        [feedItem('active')],
+        counts,
+        [feedItem('target', { is_pinned: true, is_overdue: true, end_at: '2026-01-01T00:00:00Z' })],
+      ),
+    )
+    current.window.pageOne!.nextCursor = 'cursor-1'
+    current.window.pageOne!.hasMore = true
+
+    const retained = retainTerminalExecutionInFeedCache(current, {
+      executionId: 'target',
+      status: 'done',
+      occurredAt: '2026-07-01T10:00:00Z',
+      category: 'all',
+    })
+
+    expect(retained.pins).toEqual([])
+    expect(retained.window.pageOne?.items.map((item) => item.action_plan_execution.id)).toEqual([
+      'active',
+      'target',
+    ])
+    expect(retained.window.pageOne?.items[1]?.action_plan_execution).toMatchObject({
+      status: 'done',
+      is_pinned: false,
+      marked_done_at: '2026-07-01T10:00:00Z',
+    })
+    expect(retained.window.pageOne?.nextCursor).toBe('cursor-1')
+    expect(retained.window.pageOne?.hasMore).toBe(true)
+    expect(retained.sectionCounts).toEqual({
+      pinned: 0,
+      pending_validation: 1,
+      overdue: 0,
+      in_progress: 2,
+      done: 1,
+      canceled: 0,
+    })
+    expect(sectionTotal(retained.sectionCounts!)).toBe(sectionTotal(counts))
+  })
+
+  it('keeps a canceled execution on a later page without inventing an actor timestamp twice', () => {
+    const first = page([feedItem('page-1')], counts)
+    first.next_cursor = 'cursor-1'
+    first.has_more = true
+    const state = executionFeedCacheFromPage(first)
+    const appended = appendExecutionFeedWindow(state.window, {
+      items: [
+        {
+          item_type: 'action_plan_execution',
+          action_plan_execution: feedItem('target', { status: 'pending_validation' }),
+        },
+      ],
+      next_cursor: 'cursor-2',
+      has_more: true,
+    })
+    const current = { ...state, window: appended.window }
+
+    const retained = retainTerminalExecutionInFeedCache(current, {
+      executionId: 'target',
+      status: 'canceled',
+      occurredAt: '2026-07-02T08:00:00Z',
+      category: 'all',
+    })
+
+    const pages = [retained.window.pageOne, ...retained.window.focus]
+    const target = pages
+      .flatMap((slot) => slot?.items ?? [])
+      .find((item) => item.action_plan_execution.id === 'target')
+    expect(target?.action_plan_execution).toMatchObject({
+      status: 'canceled',
+      canceled_at: '2026-07-02T08:00:00Z',
+    })
+    expect(retained.window.focus[0]?.nextCursor).toBe('cursor-2')
+    expect(retained.sectionCounts).toMatchObject({
+      pending_validation: 0,
+      canceled: 1,
+      pinned: 1,
+    })
+    expect(sectionTotal(retained.sectionCounts!)).toBe(sectionTotal(counts))
+  })
+
+  it('drops the row from an operational category while keeping the global counters coherent', () => {
+    const current = executionFeedCacheFromPage(
+      page([feedItem('target', { status: 'in_progress' })], counts),
+    )
+
+    const retained = retainTerminalExecutionInFeedCache(current, {
+      executionId: 'target',
+      status: 'canceled',
+      occurredAt: '2026-07-02T08:00:00Z',
+      category: 'in_progress',
+    })
+
+    expect(retained.window.pageOne?.items).toEqual([])
+    expect(retained.sectionCounts).toMatchObject({
+      in_progress: 1,
+      canceled: 1,
+    })
+    expect(sectionTotal(retained.sectionCounts!)).toBe(sectionTotal(counts))
+  })
+
+  it('does not move counters again when the execution is already terminal', () => {
+    const doneCounts = { ...counts, in_progress: 1, done: 1 }
+    const current = executionFeedCacheFromPage(
+      page([feedItem('target', { status: 'done', marked_done_at: '2026-07-01T10:00:00Z' })], doneCounts),
+    )
+
+    const retained = retainTerminalExecutionInFeedCache(current, {
+      executionId: 'target',
+      status: 'done',
+      occurredAt: '2026-07-03T10:00:00Z',
+      category: 'all',
+    })
+
+    expect(retained.sectionCounts).toEqual(doneCounts)
+    expect(retained.window.pageOne?.items[0]?.action_plan_execution.marked_done_at).toBe(
+      '2026-07-01T10:00:00Z',
+    )
+  })
+})
+
+describe('retainTerminalExecutionInFeedCaches', () => {
+  it('updates establishment and cross caches without touching another establishment', () => {
+    const queryClient = new QueryClient()
+    const counts = {
+      pinned: 0,
+      pending_validation: 0,
+      overdue: 0,
+      in_progress: 1,
+      done: 0,
+      canceled: 0,
+    }
+    queryClient.setQueryData(
+      actionPlansQueryKeys.executionFeed('est-1', 'general', 'all'),
+      executionFeedCacheFromPage(page([feedItem('target')], counts)),
+    )
+    queryClient.setQueryData(
+      actionPlansQueryKeys.executionFeed('est-2', 'general', 'all'),
+      executionFeedCacheFromPage(page([feedItem('target')], counts)),
+    )
+    queryClient.setQueryData(
+      actionPlansQueryKeys.crossExecutionFeed('general', 'all'),
+      executionFeedCacheFromPage(
+        page([feedItem('other')], { ...counts, pinned: 1 }),
+      ),
+    )
+    queryClient.setQueryData(
+      actionPlansQueryKeys.crossExecutionFeedPins('general', 'in_progress'),
+      executionPinsCacheFromPage({
+        items: [
+          {
+            item_type: 'action_plan_execution',
+            action_plan_execution: feedItem('target', { is_pinned: true }),
+          },
+        ],
+        next_cursor: null,
+        has_more: false,
+      }),
+    )
+
+    retainTerminalExecutionInFeedCaches(queryClient, {
+      establishmentId: 'est-1',
+      executionId: 'target',
+      status: 'done',
+      occurredAt: '2026-07-04T09:00:00Z',
+    })
+
+    const establishment = queryClient.getQueryData<ExecutionFeedCacheState>(
+      actionPlansQueryKeys.executionFeed('est-1', 'general', 'all'),
+    )
+    const otherEstablishment = queryClient.getQueryData<ExecutionFeedCacheState>(
+      actionPlansQueryKeys.executionFeed('est-2', 'general', 'all'),
+    )
+    const cross = queryClient.getQueryData<ExecutionFeedCacheState>(
+      actionPlansQueryKeys.crossExecutionFeed('general', 'all'),
+    )
+    const crossPins = queryClient.getQueryData<{ window: ExecutionFeedCacheState['window'] }>(
+      actionPlansQueryKeys.crossExecutionFeedPins('general', 'in_progress'),
+    )
+
+    expect(establishment?.window.pageOne?.items[0]?.action_plan_execution.status).toBe('done')
+    expect(establishment?.sectionCounts?.done).toBe(1)
+    expect(establishment?.sectionCounts?.in_progress).toBe(0)
+    expect(otherEstablishment?.window.pageOne?.items[0]?.action_plan_execution.status).toBe(
+      'in_progress',
+    )
+    expect(cross?.window.pageOne?.items.map((item) => item.action_plan_execution.id)).toEqual([
+      'other',
+      'target',
+    ])
+    expect(cross?.window.pageOne?.items[1]?.action_plan_execution.status).toBe('done')
+    expect(cross?.sectionCounts).toMatchObject({ pinned: 0, in_progress: 0, done: 1 })
+    expect(crossPins?.window.pageOne?.items).toEqual([])
+  })
+})
+
 describe('removeExecutionFromFeedCache', () => {
   it('reconciles pinned and business section counts after a realtime terminal removal', () => {
     const counts = {
@@ -301,6 +533,8 @@ describe('removeExecutionFromFeedCache', () => {
       pending_validation: 0,
       overdue: 1,
       in_progress: 2,
+      done: 0,
+      canceled: 0,
     }
     const current = executionFeedCacheFromPage(
       page(
@@ -318,6 +552,8 @@ describe('removeExecutionFromFeedCache', () => {
       pending_validation: 0,
       overdue: 0,
       in_progress: 2,
+      done: 0,
+      canceled: 0,
     })
   })
 })

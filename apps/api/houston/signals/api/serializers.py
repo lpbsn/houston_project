@@ -131,6 +131,8 @@ class SignalFeedCountsSerializer(serializers.Serializer):
     in_progress = serializers.IntegerField()
     interesting = serializers.IntegerField()
     pinned = serializers.IntegerField()
+    resolved = serializers.IntegerField()
+    canceled = serializers.IntegerField()
     retained = serializers.IntegerField()
 
 

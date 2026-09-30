@@ -23,6 +23,7 @@ from django.utils.dateparse import parse_datetime
 
 from houston.action_plans.constants import (
     ACTIVE_EXECUTION_STATUSES,
+    EXECUTION_FEED_CATEGORIES,
     EXECUTION_STATUS_IN_PROGRESS,
     EXECUTION_STATUS_PENDING_VALIDATION,
     ExecutionFeedCategory,
@@ -316,7 +317,7 @@ def parse_action_plan_execution_feed_cursor(
         as_of is None
         or collection != FEED_CURSOR_COLLECTION_LIST
         or view_mode not in {"personal", "general"}
-        or category not in {"all", "pending_validation", "overdue", "in_progress"}
+        or category not in EXECUTION_FEED_CATEGORIES
         or last_activity_at is None
         or created_at is None
     ):
@@ -388,7 +389,7 @@ def parse_action_plan_execution_feed_pin_cursor(
         as_of is None
         or collection != FEED_CURSOR_COLLECTION_PINS
         or view_mode not in {"personal", "general"}
-        or category not in {"all", "pending_validation", "overdue", "in_progress"}
+        or category not in EXECUTION_FEED_CATEGORIES
         or pinned_at is None
     ):
         raise ActionPlanExecutionFeedCursorError()

@@ -129,6 +129,8 @@ const EMPTY_SECTION_COUNTS: ActionPlanExecutionFeedSectionCounts = {
   pending_validation: 0,
   overdue: 0,
   in_progress: 0,
+  done: 0,
+  canceled: 0,
 }
 
 function executionWrapperId(
@@ -671,8 +673,7 @@ function ExecutionFeedPageContent({
         size="icon"
         variant="ghost"
         className={cn(
-          // Visual disc is size-7; -m-2 keeps a ~44px tap target without growing the toolbar row.
-          '-m-2 size-11 min-h-11 min-w-11 shrink-0 rounded-none border-0 bg-transparent p-0',
+          'size-8 shrink-0 rounded-none border-0 bg-transparent p-0',
           'text-white shadow-none hover:bg-transparent',
         )}
         aria-label="Créer"
@@ -680,7 +681,7 @@ function ExecutionFeedPageContent({
       >
         <span
           className={cn(
-            'inline-flex size-7 items-center justify-center rounded-xl',
+            'inline-flex size-8 items-center justify-center rounded-xl',
             terrainBrandAction.bg,
             'group-hover/button:bg-[#0f3d52]',
           )}
@@ -778,6 +779,7 @@ function ExecutionFeedPageContent({
   const categoryTabs = (
     <ExecutionFeedCategoryChips
       value={category}
+      counts={sectionCounts}
       onChange={(next) => replaceFeedUrl({ category: next })}
     />
   )

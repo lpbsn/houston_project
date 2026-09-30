@@ -1555,7 +1555,7 @@ class ActionPlanExecutionFeedView(EstablishmentScopedActionPlanMixin, APIView):
                 name="category",
                 required=False,
                 type=str,
-                enum=["all", "pending_validation", "overdue", "in_progress"],
+                enum=["all", "pending_validation", "overdue", "in_progress", "done", "canceled"],
                 description="Defaults to all.",
             ),
             OpenApiParameter(

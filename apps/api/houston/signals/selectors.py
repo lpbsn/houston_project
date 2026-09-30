@@ -330,8 +330,9 @@ def signal_feed_counts(
 ) -> dict[str, int]:
     """Status totals are unpinned only and ignore the selected status.
 
-    ``retained`` counts terminal rows still inside the operational window.
-    Those rows stay out of the three status totals and out of ``pinned``.
+    ``resolved`` and ``canceled`` count terminal rows still inside the
+    operational window. ``retained`` is their sum. Those rows stay out of the
+    three operational totals and out of ``pinned``.
     """
     selection = signal_feed_status_selection(filters)
     pin_filter = Q(is_pinned=True, status__in=PINNABLE_SIGNAL_STATUSES)
@@ -342,14 +343,19 @@ def signal_feed_counts(
         in_progress=Count("id", filter=Q(status=Signal.Status.IN_PROGRESS, is_pinned=False)),
         interesting=Count("id", filter=Q(status=Signal.Status.INTERESTING, is_pinned=False)),
         pinned=Count("id", filter=pin_filter),
-        retained=Count(
-            "id",
-            filter=Q(status__in=(Signal.Status.RESOLVED, Signal.Status.CANCELED)),
-        ),
+        resolved=Count("id", filter=Q(status=Signal.Status.RESOLVED)),
+        canceled=Count("id", filter=Q(status=Signal.Status.CANCELED)),
     )
+    resolved = aggregated["resolved"] or 0
+    canceled = aggregated["canceled"] or 0
     counts = {
-        key: aggregated[key] or 0
-        for key in ("open", "in_progress", "interesting", "pinned", "retained")
+        "open": aggregated["open"] or 0,
+        "in_progress": aggregated["in_progress"] or 0,
+        "interesting": aggregated["interesting"] or 0,
+        "pinned": aggregated["pinned"] or 0,
+        "resolved": resolved,
+        "canceled": canceled,
+        "retained": resolved + canceled,
     }
     if selection == Signal.Status.IN_PROGRESS:
         counts["pinned"] = 0

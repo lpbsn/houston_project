@@ -2,17 +2,19 @@ import { Calendar, List } from 'lucide-react'
 
 import { TerrainFilterChip } from '@/components/ui/terrain'
 import type { ActionPlanExecutionFeedCategory } from '@/features/action-plans/api'
+import type { ActionPlanExecutionFeedSectionCounts } from '@/features/action-plans/types'
 import { cn } from '@/lib/utils'
 
 import { EXECUTION_FEED_CATEGORY_LABELS } from '../lib/action-plan-execution-feed-sections'
 import type { ExecutionFeedLayout } from '../lib/execution-feed-url-state'
 
-const CATEGORIES: ActionPlanExecutionFeedCategory[] = [
+const OPERATIONAL_CATEGORIES: ActionPlanExecutionFeedCategory[] = [
   'all',
   'pending_validation',
   'overdue',
   'in_progress',
 ]
+const TERMINAL_CATEGORIES: ActionPlanExecutionFeedCategory[] = ['done', 'canceled']
 
 export function ExecutionFeedLayoutToggle({
   value,
@@ -51,25 +53,54 @@ export function ExecutionFeedLayoutToggle({
   )
 }
 
+function executionCategoryCount(
+  category: ActionPlanExecutionFeedCategory,
+  counts: ActionPlanExecutionFeedSectionCounts | null | undefined,
+): number | undefined {
+  if (!counts) {
+    return undefined
+  }
+  if (category === 'all') {
+    return (
+      counts.pending_validation +
+      counts.overdue +
+      counts.in_progress +
+      counts.done +
+      counts.canceled
+    )
+  }
+  return counts[category]
+}
+
 export function ExecutionFeedCategoryChips({
   value,
   onChange,
+  counts = null,
 }: {
   value: ActionPlanExecutionFeedCategory
   onChange: (value: ActionPlanExecutionFeedCategory) => void
+  counts?: ActionPlanExecutionFeedSectionCounts | null
 }) {
+  const categories = [
+    ...OPERATIONAL_CATEGORIES,
+    ...TERMINAL_CATEGORIES.filter((category) => (counts?.[category] ?? 0) > 0),
+  ]
   return (
     <div role="group" aria-label="Catégorie du feed" className="flex flex-nowrap items-center gap-2">
-      {CATEGORIES.map((category) => (
-        <TerrainFilterChip
-          key={category}
-          pressed={value === category}
-          className="shrink-0"
-          onClick={() => onChange(category)}
-        >
-          {EXECUTION_FEED_CATEGORY_LABELS[category]}
-        </TerrainFilterChip>
-      ))}
+      {categories.map((category) => {
+        const count = executionCategoryCount(category, counts)
+        const label = EXECUTION_FEED_CATEGORY_LABELS[category]
+        return (
+          <TerrainFilterChip
+            key={category}
+            pressed={value === category}
+            className="shrink-0"
+            onClick={() => onChange(category)}
+          >
+            {count == null ? label : `${label} · ${count}`}
+          </TerrainFilterChip>
+        )
+      })}
     </div>
   )
 }

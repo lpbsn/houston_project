@@ -271,7 +271,9 @@ export function formatActionPlanFeedCardDateTimeLabel(
 }
 
 export function formatActionPlanFeedTerminalDateLabel(
-  item: Pick<ActionPlanExecutionFeedItem, 'status' | 'marked_done_at' | 'canceled_at'>,
+  item: Pick<ActionPlanExecutionFeedItem, 'status' | 'marked_done_at' | 'canceled_at'> & {
+    canceled_by_display_name?: string | null
+  },
 ): string | null {
   if (item.status === 'done' && item.marked_done_at) {
     const label = formatActionPlanFeedCardDateTimeLabel(item.marked_done_at)
@@ -282,7 +284,12 @@ export function formatActionPlanFeedTerminalDateLabel(
     if (Number.isNaN(date.getTime())) {
       return null
     }
-    return `Annulé le ${date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`
+    const dateLabel = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+    const actor = item.canceled_by_display_name?.trim()
+    if (actor) {
+      return `Annulé le ${dateLabel} par ${actor}`
+    }
+    return `Annulé le ${dateLabel}`
   }
   return null
 }

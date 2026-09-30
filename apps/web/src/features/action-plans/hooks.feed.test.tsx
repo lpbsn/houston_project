@@ -58,6 +58,8 @@ function page(
       pending_validation: 0,
       overdue: 0,
       in_progress: 4,
+      done: 0,
+      canceled: 0,
     },
     next_cursor: nextCursor,
     has_more: hasMore,

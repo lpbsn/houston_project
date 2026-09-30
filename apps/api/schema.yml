@@ -1823,6 +1823,8 @@ paths:
           type: string
           enum:
           - all
+          - canceled
+          - done
           - in_progress
           - overdue
           - pending_validation
@@ -1886,6 +1888,8 @@ paths:
           type: string
           enum:
           - all
+          - canceled
+          - done
           - in_progress
           - overdue
           - pending_validation
@@ -2230,8 +2234,9 @@ paths:
         name: statuses
         schema:
           type: string
-        description: One of open, in_progress, interesting. Omit for the full operational
-          order.
+        description: One of open, in_progress, interesting, resolved, or canceled.
+          Resolved and canceled stay inside the operational retention window. Omit
+          for the full operational order.
       tags:
       - signals
       security:
@@ -2431,6 +2436,8 @@ paths:
           type: string
           enum:
           - all
+          - canceled
+          - done
           - in_progress
           - overdue
           - pending_validation
@@ -7668,7 +7675,8 @@ paths:
         name: statuses
         schema:
           type: string
-        description: 'One operational status: open, in_progress, or interesting. Omit
+        description: 'One status: open, in_progress, interesting, resolved, or canceled.
+          Resolved and canceled stay inside the operational retention window. Omit
           it to page open, then in progress, then interesting.'
       - in: query
         name: view_mode
@@ -10453,7 +10461,13 @@ components:
           type: integer
         in_progress:
           type: integer
+        done:
+          type: integer
+        canceled:
+          type: integer
       required:
+      - canceled
+      - done
       - in_progress
       - overdue
       - pending_validation
@@ -16071,13 +16085,19 @@ components:
           type: integer
         pinned:
           type: integer
+        resolved:
+          type: integer
+        canceled:
+          type: integer
         retained:
           type: integer
       required:
+      - canceled
       - in_progress
       - interesting
       - open
       - pinned
+      - resolved
       - retained
     SignalFeedItem:
       type: object

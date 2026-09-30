@@ -174,8 +174,8 @@ describe('scoped desktop navigation', () => {
       'reporting',
       'signals',
       'execution',
-      'history',
       'chat',
+      'history',
       'general',
     ])
   })
@@ -198,12 +198,12 @@ describe('scoped desktop navigation', () => {
       'reporting',
       'signals',
       'execution',
-      'history',
       'chat',
+      'history',
       'general',
       'settings',
     ])
-    expect(ownerNav.items.map((item) => item.group)).toEqual([1, 1, 2, 2, 2, 2, 2, 3, 3])
+    expect(ownerNav.items.map((item) => item.group)).toEqual([1, 1, 2, 2, 2, 2, 3, 3, 3])
     expect(ownerNav.items.find((item) => item.id === 'brain')).toMatchObject({
       label: 'Spore Brain',
       href: null,
@@ -272,8 +272,8 @@ describe('scoped desktop navigation', () => {
       'reporting',
       'signals',
       'execution',
-      'history',
       'chat',
+      'history',
       'general',
       'settings',
     ])
@@ -287,8 +287,8 @@ describe('scoped desktop navigation', () => {
       'reporting',
       'signals',
       'execution',
-      'history',
       'chat',
+      'history',
       'general',
       'settings',
     ])
@@ -308,7 +308,7 @@ describe('scoped desktop navigation', () => {
         route: establishmentRoute('est-1', 'signals'),
         bootstrap: bootstrap([staff, inactiveOwner]),
       }).items.map((item) => item.id),
-    ).toEqual(['reporting', 'signals', 'execution', 'history', 'chat', 'general'])
+    ).toEqual(['reporting', 'signals', 'execution', 'chat', 'history', 'general'])
   })
 
   it('shows establishment Chat from membership chat_available', () => {

@@ -133,7 +133,8 @@ class SignalFeedView(EstablishmentScopedSignalMixin, APIView):
                 required=False,
                 type=str,
                 description=(
-                    "One operational status: open, in_progress, or interesting. "
+                    "One status: open, in_progress, interesting, resolved, or canceled. "
+                    "Resolved and canceled stay inside the operational retention window. "
                     "Omit it to page open, then in progress, then interesting."
                 ),
             ),

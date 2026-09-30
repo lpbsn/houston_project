@@ -853,6 +853,10 @@ def filter_action_plan_execution_feed_category(
         return queryset.filter(status=EXECUTION_STATUS_IN_PROGRESS).exclude(
             deadline_bucket=DEADLINE_BUCKET_OVERDUE,
         )
+    if category == "done":
+        return queryset.filter(status=EXECUTION_STATUS_DONE)
+    if category == "canceled":
+        return queryset.filter(status=EXECUTION_STATUS_CANCELED)
     raise ValueError(f"Unknown execution feed category: {category}")
 
 
@@ -930,12 +934,16 @@ def action_plan_execution_feed_section_counts(
             filter=Q(status=EXECUTION_STATUS_IN_PROGRESS)
             & ~Q(deadline_bucket=DEADLINE_BUCKET_OVERDUE),
         ),
+        done=Count("pk", filter=Q(status=EXECUTION_STATUS_DONE)),
+        canceled=Count("pk", filter=Q(status=EXECUTION_STATUS_CANCELED)),
     )
     return {
         "pinned": pinned_count,
         "pending_validation": int(aggregates["pending_validation"] or 0),
         "overdue": int(aggregates["overdue"] or 0),
         "in_progress": int(aggregates["in_progress"] or 0),
+        "done": int(aggregates["done"] or 0),
+        "canceled": int(aggregates["canceled"] or 0),
     }
 
 

@@ -52,9 +52,16 @@ export function SignalFeedStatusChips({
 }) {
   const normalizedFilters = normalizeSignalFeedFilters(filters)
   const selected = selectedSignalFeedStatus(normalizedFilters)
+  const terminalOptions = (
+    [
+      { value: 'resolved' as const, label: 'Résolus' },
+      { value: 'canceled' as const, label: 'Annulés' },
+    ] as const
+  ).filter((option) => (counts?.[option.value] ?? 0) > 0)
   const options: Array<{ value: SignalFeedStatusSelection; label: string }> = [
     { value: 'all', label: 'Tout' },
     ...SIGNAL_FEED_STATUS_OPTIONS,
+    ...terminalOptions,
   ]
 
   return (

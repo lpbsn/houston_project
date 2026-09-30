@@ -339,6 +339,23 @@ describe('ProfilePage', () => {
     expect(onNavigate).toHaveBeenCalledWith('/e/est-1/general/history')
   })
 
+  it('hides history on the desktop general profile', () => {
+    lgViewportState.current = true
+    render(
+      createElement(ProfilePage, {
+        historyPath: '/e/est-1/general/history',
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    expect(
+      screen.queryByRole('button', {
+        name: (name) => name.startsWith('Historique') && name.includes('Observations'),
+      }),
+    ).toBeNull()
+  })
+
   it('places AI consent after native push when the push switch is present', () => {
     vi.stubEnv('VITE_APP_RUNTIME', 'native')
     render(

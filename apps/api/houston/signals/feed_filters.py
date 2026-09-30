@@ -7,9 +7,9 @@ from typing import Any
 from django.db.models import Q
 
 from houston.establishments.models import ActivitySubject, BusinessUnit
-from houston.signals.constants import ACTIVE_SIGNAL_STATUSES, OPERATIONAL_SIGNAL_FEED_STATUSES
+from houston.signals.constants import ACTIVE_SIGNAL_STATUSES, FEED_FILTERABLE_SIGNAL_STATUSES
 
-FEED_FILTERABLE_STATUSES = frozenset(OPERATIONAL_SIGNAL_FEED_STATUSES)
+FEED_FILTERABLE_STATUSES = frozenset(FEED_FILTERABLE_SIGNAL_STATUSES)
 
 MAX_FILTER_BUSINESS_UNIT_IDS = 20
 MAX_FILTER_ACTIVITY_SUBJECT_IDS = 50
@@ -153,11 +153,11 @@ def _parse_statuses(raw: str | None) -> tuple[str, ...]:
     invalid = [value for value in normalized if value not in FEED_FILTERABLE_STATUSES]
     if invalid:
         raise SignalFeedFilterValidationError(
-            "statuses must only contain open, in_progress, or interesting.",
+            "statuses must only contain open, in_progress, interesting, resolved, or canceled.",
         )
     if len(normalized) > 1:
         raise SignalFeedFilterValidationError(
-            "statuses accepts one operational status. Omit it to list every operational status.",
+            "statuses accepts one status. Omit it to list the operational feed.",
         )
 
     return normalized
