@@ -64,6 +64,7 @@ const OWNER_DEACTIVATE_CONFIRM_MESSAGE =
 
 type TeamMemberDetailPageProps = {
   membershipId: string
+  onBack?: () => void
 }
 
 type EditorDraft = {
@@ -102,7 +103,7 @@ function hasEditableFields(membership: EstablishmentMembershipDetailResponse | u
   )
 }
 
-export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps) {
+export function TeamMemberDetailPage({ membershipId, onBack }: TeamMemberDetailPageProps) {
   const { navigate } = useAppRoute()
   const { activeMembership } = useAuth()
   const detailQuery = useTeamMemberDetailQuery(membershipId)
@@ -207,7 +208,7 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
         className="mx-3 mt-3"
         message="Ce membre est introuvable."
         retryLabel="Retour à l'équipe"
-        onRetry={() => navigate('/team')}
+        onRetry={() => (onBack ? onBack() : navigate('/team'))}
       />
     )
   }
@@ -340,7 +341,7 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
               type="button"
               variant="ghost"
               className={terrainBackButtonClassName()}
-              onClick={() => navigate('/team')}
+              onClick={() => (onBack ? onBack() : navigate('/team'))}
             >
               <ArrowLeft className="mr-1 h-4 w-4" />
               Retour

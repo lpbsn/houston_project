@@ -1,7 +1,8 @@
-import { useState, type PropsWithChildren, type ReactNode } from 'react'
+import { useRef, useState, type PropsWithChildren, type ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
 import type { AppRoute } from '@/app/app-routes'
+import { classifyTerrainTransition, type TerrainTransitionKind } from '@/app/terrain-back-path'
 import { BottomMobileNav } from '@/components/layout/bottom-mobile-nav'
 import { DesktopTerrainSidebar } from '@/components/layout/desktop-terrain-sidebar'
 import { TerrainErrorBoundary } from '@/components/layout/terrain-error-boundary'
@@ -27,6 +28,7 @@ type TerrainShellProps = PropsWithChildren<{
   activeNavPath?: TerrainNavPath
   bootstrap?: BootstrapResponse | null
   route: AppRoute
+  search?: string
   mainScroll?: TerrainMainScroll
   navigate: (pathname: string, options?: { replace?: boolean }) => void
   chatHasUnread?: boolean
@@ -41,6 +43,7 @@ export function TerrainShell({
   activeNavPath,
   bootstrap,
   route,
+  search = '',
   mainScroll = 'auto',
   navigate,
   chatHasUnread = false,
@@ -49,12 +52,30 @@ export function TerrainShell({
   children,
 }: TerrainShellProps) {
   const shouldReduceMotion = useReducedMotion()
-  const pageMotion = terrainPageMotionProps(shouldReduceMotion)
+  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
+  const surfaceRef = useRef({
+    route,
+    search,
+    contentKey,
+    kind: 'fade' as TerrainTransitionKind,
+  })
+  if (surfaceRef.current.contentKey !== contentKey) {
+    const kind = classifyTerrainTransition(
+      surfaceRef.current.route,
+      route,
+      surfaceRef.current.search,
+      search,
+    )
+    surfaceRef.current = { route, search, contentKey, kind }
+  } else if (surfaceRef.current.search !== search || surfaceRef.current.route !== route) {
+    surfaceRef.current = { ...surfaceRef.current, route, search }
+  }
+  const transitionKind = surfaceRef.current.kind
+  const pageMotion = terrainPageMotionProps(shouldReduceMotion, transitionKind, isDesktopWeb)
   const { isOnline } = useNetworkStatus()
   const isNativeKeyboardOpen = useNativeKeyboardOpen()
   const operationalRealtime = useOptionalOperationalRealtime()
   const operationalConnectionStatus = operationalRealtime?.connectionStatus ?? 'idle'
-  const isDesktopWeb = isDesktopWebLanding(useLgViewport())
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   return (
@@ -89,7 +110,7 @@ export function TerrainShell({
           ) : null}
           <main
             className={cn(
-              'min-h-0 min-w-0 flex-1',
+              'relative min-h-0 min-w-0 flex-1',
               !topbar && 'pt-[var(--app-safe-top)]',
               !topbar && isDesktopWeb && 'pt-0',
               mainScroll === 'hidden'
@@ -104,8 +125,17 @@ export function TerrainShell({
                 </TerrainErrorBoundary>
               </div>
             ) : (
-              <AnimatePresence initial={false}>
-                <motion.div key={contentKey} className="h-full min-h-0 min-w-0" {...pageMotion}>
+              <AnimatePresence initial={false} custom={transitionKind}>
+                <motion.div
+                  key={contentKey}
+                  className={cn(
+                    'absolute inset-0 min-h-0 min-w-0',
+                    mainScroll === 'hidden'
+                      ? 'overflow-hidden'
+                      : 'overflow-y-auto overscroll-y-contain',
+                  )}
+                  {...pageMotion}
+                >
                   <TerrainErrorBoundary resetKey={contentKey} navigate={navigate}>
                     {children}
                   </TerrainErrorBoundary>

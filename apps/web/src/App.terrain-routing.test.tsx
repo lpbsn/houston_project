@@ -37,6 +37,14 @@ vi.mock('@/app/app-routes', async (importOriginal) => {
       route: routeState.route,
       navigate,
       search: window.location.search,
+      history: {
+        getHref: () => `${window.location.pathname}${window.location.search}`,
+        getLineage: () => null,
+        getNavigationCause: () => 'programmatic' as const,
+        subscribe: () => () => undefined,
+        navigate,
+        back: () => false,
+      },
     }),
   }
 })

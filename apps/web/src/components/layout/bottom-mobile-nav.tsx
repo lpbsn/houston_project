@@ -1,5 +1,6 @@
 import { motion, useReducedMotion } from 'framer-motion'
 
+import type { NavigateOptions } from '@/app/app-history'
 import type { TerrainNavPath } from '@/app/terrain-routes'
 import { resolveBottomMobileNavigationItems } from '@/features/navigation/lib/shared-navigation'
 import { terrainTapProps } from '@/lib/terrain-motion'
@@ -8,7 +9,7 @@ import { cn } from '@/lib/utils'
 
 type BottomMobileNavProps = {
   activePath?: TerrainNavPath
-  navigate: (pathname: string, options?: { replace?: boolean }) => void
+  navigate: (pathname: string, options?: NavigateOptions) => void
   className?: string
   chatHasUnread?: boolean
 }
@@ -54,7 +55,7 @@ export function BottomMobileNav({
                   aria-current={isActive ? 'page' : undefined}
                   onClick={(event) => {
                     event.preventDefault()
-                    navigate('/reporting')
+                    navigate('/reporting', { intent: 'primary' })
                   }}
                   className={cn(
                     'absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-[calc(50%+0.5rem)] items-center justify-center rounded-full border-4 border-[#F5F4F0] text-white',
@@ -77,7 +78,7 @@ export function BottomMobileNav({
                 aria-current={isActive ? 'page' : undefined}
                 onClick={(event) => {
                   event.preventDefault()
-                  navigate(item.path)
+                  navigate(item.path, { intent: 'primary' })
                 }}
                 className={cn(
                   'relative flex min-h-12 min-w-12 w-full flex-col items-center justify-center gap-1 rounded-lg px-1 text-[#7D7B75]',

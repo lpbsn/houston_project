@@ -1,13 +1,12 @@
 import type { AppHistory } from '@/app/app-history'
 import { getHrefSearch } from '@/app/app-history'
-import { parseAppRoute } from '@/app/app-routes'
-import { resolveTerrainBackPath } from '@/app/terrain-back-path'
-import { dismissTopNativeOverlay } from '@/lib/native-overlay-dismiss'
+import { performTerrainBack } from '@/app/terrain-back-path'
 import { getAppRuntime } from '@/lib/runtime'
 
 export type NativeSystemBackAuth = {
   hasOperationalAccess?: boolean
   authenticatedLandingPath?: string | null
+  activeEstablishmentId?: string | null
 }
 
 let history: AppHistory | null = null
@@ -21,30 +20,18 @@ async function loadNativeDeps() {
   return { Capacitor, App }
 }
 
-function resolveBackHref(): string | null {
+function handleAndroidBack() {
   if (!history) {
-    return null
+    return
   }
-  const href = history.getHref()
   const auth = getBackAuth?.() ?? {}
-  return resolveTerrainBackPath(parseAppRoute(href), {
-    search: getHrefSearch(href),
+  const result = performTerrainBack(history, {
+    search: getHrefSearch(history.getHref()),
     ...auth,
   })
-}
-
-function handleAndroidBack() {
-  if (dismissTopNativeOverlay()) {
-    return
+  if (result === 'root') {
+    void minimizeApp?.()
   }
-
-  const backHref = resolveBackHref()
-  if (backHref && history && backHref !== history.getHref()) {
-    history.navigate(backHref)
-    return
-  }
-
-  void minimizeApp?.()
 }
 
 export async function configureNativeSystemBack(options: { history: AppHistory }) {

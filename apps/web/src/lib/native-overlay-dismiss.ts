@@ -1,6 +1,6 @@
-const overlayDismissStack: Array<() => void> = []
+const overlayDismissStack: Array<() => void | boolean> = []
 
-export function registerNativeOverlayDismiss(dismiss: () => void): () => void {
+export function registerNativeOverlayDismiss(dismiss: () => void | boolean): () => void {
   overlayDismissStack.push(dismiss)
   return () => {
     const index = overlayDismissStack.lastIndexOf(dismiss)
@@ -11,11 +11,15 @@ export function registerNativeOverlayDismiss(dismiss: () => void): () => void {
 }
 
 export function dismissTopNativeOverlay(): boolean {
-  const dismiss = overlayDismissStack.pop()
+  const dismiss = overlayDismissStack.at(-1)
   if (!dismiss) {
     return false
   }
-  dismiss()
+  const closed = dismiss()
+  if (closed === false) {
+    return true
+  }
+  overlayDismissStack.pop()
   return true
 }
 

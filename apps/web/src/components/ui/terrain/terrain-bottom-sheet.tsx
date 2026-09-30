@@ -1,4 +1,4 @@
-import { useEffect, useId, type ReactNode } from 'react'
+import { useEffect, useId, useRef, type ReactNode } from 'react'
 
 import { registerNativeOverlayDismiss } from '@/lib/native-overlay-dismiss'
 import { terrain } from '@/lib/terrain-styles'
@@ -27,8 +27,28 @@ export function TerrainBottomSheet({
     if (!open) {
       return
     }
-    return registerNativeOverlayDismiss(onClose)
-  }, [onClose, open])
+    if (!dismissible) {
+      return registerNativeOverlayDismiss(() => false)
+    }
+    return registerNativeOverlayDismiss(() => {
+      onClose()
+    })
+  }, [dismissible, onClose, open])
+
+  const previouslyFocused = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    previouslyFocused.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
+    return () => {
+      const node = previouslyFocused.current
+      if (node && document.contains(node)) {
+        node.focus()
+      }
+    }
+  }, [open])
 
   if (!open) {
     return null

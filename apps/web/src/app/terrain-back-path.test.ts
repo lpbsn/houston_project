@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveTerrainBackPath } from '@/app/terrain-back-path'
+import { createMemoryHistory } from '@/app/app-history'
+import {
+  classifyTerrainTransition,
+  performTerrainBack,
+  resolveTerrainBackPath,
+} from '@/app/terrain-back-path'
 import { buildAnalyticsPatternDetailPath } from '@/features/analytics/lib/analytics-url-state'
 
 const NOW = new Date('2026-08-12T10:30:00.000Z')
@@ -172,5 +177,79 @@ describe('resolveTerrainBackPath', () => {
         { search: '?entry=history' },
       ),
     ).toBe('/general/history')
+  })
+
+  it('returns the signal detail, including analytics context, from plan creation', () => {
+    expect(
+      resolveTerrainBackPath(
+        { kind: 'signal-action-create', signalId: 'sig-1' },
+        { search: `?analytics_pattern_id=${PATTERN_ID}`, now: NOW },
+      ),
+    ).toContain('/signals/sig-1?')
+    expect(
+      resolveTerrainBackPath({ kind: 'signal-action-create', signalId: 'sig-1' }),
+    ).toBe('/signals/sig-1')
+  })
+})
+
+describe('performTerrainBack', () => {
+  it('pops to the real parent when it is still the resolved destination', () => {
+    const history = createMemoryHistory('/signals')
+    history.navigate('/signals/sig-1')
+
+    expect(performTerrainBack(history)).toBe('navigated')
+    expect(history.getHref()).toBe('/signals')
+    expect(history.getNavigationCause()).toBe('pop')
+  })
+
+  it('replaces with the fallback when the detail was opened directly', () => {
+    const history = createMemoryHistory('/signals/sig-1')
+
+    expect(performTerrainBack(history)).toBe('navigated')
+    expect(history.getHref()).toBe('/signals')
+    expect(history.getNavigationCause()).toBe('programmatic')
+    expect(history.getLineage()).toBeNull()
+  })
+
+  it('does not pop a parent from another establishment', () => {
+    const other = '22222222-2222-4222-8222-222222222222'
+    const current = '33333333-3333-4333-8333-333333333333'
+    const signalId = '44444444-4444-4444-8444-444444444444'
+    const history = createMemoryHistory(`/e/${other}/signals`)
+    history.navigate(`/e/${current}/signals/${signalId}`)
+
+    expect(
+      performTerrainBack(history, { activeEstablishmentId: current }),
+    ).toBe('navigated')
+    expect(history.getHref()).toBe(`/e/${current}/signals`)
+    expect(history.getNavigationCause()).toBe('programmatic')
+  })
+
+  it('keeps the filtered parent when a local replace happened before opening the detail', () => {
+    const history = createMemoryHistory('/execution')
+    history.navigate('/execution?layout=calendar', { replace: true })
+    history.navigate('/action-plans/executions/exec-1?layout=calendar')
+
+    expect(performTerrainBack(history, { search: '?layout=calendar' })).toBe('navigated')
+    expect(history.getHref()).toBe('/execution?layout=calendar')
+    expect(history.getNavigationCause()).toBe('pop')
+  })
+})
+
+describe('classifyTerrainTransition', () => {
+  it('treats hub to detail as forward and the return as back', () => {
+    const hub = { kind: 'static' as const, path: '/signals' as const }
+    const detail = { kind: 'signal-detail' as const, signalId: 'sig-1' }
+    expect(classifyTerrainTransition(hub, detail)).toBe('forward')
+    expect(classifyTerrainTransition(detail, hub)).toBe('back')
+  })
+
+  it('does not treat a primary change as hierarchical', () => {
+    expect(
+      classifyTerrainTransition(
+        { kind: 'static', path: '/signals' },
+        { kind: 'static', path: '/execution' },
+      ),
+    ).toBe('fade')
   })
 })

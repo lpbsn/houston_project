@@ -57,10 +57,51 @@ describe('createMemoryHistory', () => {
     history.navigate('/login')
     expect(listener).not.toHaveBeenCalled()
   })
+
+  it('keeps provenance on a local replace and clears it on a system replace', () => {
+    const history = createMemoryHistory('/signals')
+    history.navigate('/signals/sig-1')
+    history.navigate('/signals/sig-1?tab=comments', { replace: true })
+
+    expect(history.getHref()).toBe('/signals/sig-1?tab=comments')
+    expect(history.getLineage()).toEqual({ parentHref: '/signals', depth: 1 })
+
+    history.navigate('/login', { replace: true })
+    expect(history.getHref()).toBe('/login')
+    expect(history.getLineage()).toBeNull()
+  })
+
+  it('collapses a hierarchical branch on primary navigation without exposing the parent', () => {
+    const history = createMemoryHistory('/signals')
+    const seen: string[] = []
+    history.subscribe(() => {
+      seen.push(history.getHref())
+    })
+
+    history.navigate('/signals/sig-1')
+    history.navigate('/signals/sig-1/plan')
+    history.navigate('/execution', { intent: 'primary' })
+
+    expect(seen).toEqual(['/signals/sig-1', '/signals/sig-1/plan', '/execution'])
+    expect(history.getLineage()).toBeNull()
+    expect(history.back()).toBe(false)
+    expect(history.getHref()).toBe('/execution')
+  })
+
+  it('does not stack successive primary destinations', () => {
+    const history = createMemoryHistory('/signals')
+    history.navigate('/execution', { intent: 'primary' })
+    history.navigate('/chat', { intent: 'primary' })
+
+    expect(history.getHref()).toBe('/chat')
+    expect(history.back()).toBe(false)
+    expect(history.getHref()).toBe('/chat')
+  })
 })
 
 describe('createBrowserHistory', () => {
   afterEach(() => {
+    vi.useRealTimers()
     window.history.replaceState(null, '', '/')
   })
 
@@ -101,5 +142,29 @@ describe('createBrowserHistory', () => {
 
     history.navigate('/reporting')
     expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('replaces the hierarchical root in one notification when leaving for a primary destination', () => {
+    vi.useFakeTimers()
+    window.history.replaceState(null, '', '/signals')
+    const history = createBrowserHistory()
+    const seen: string[] = []
+    history.subscribe(() => {
+      seen.push(history.getHref())
+    })
+
+    history.navigate('/signals/sig-1')
+    history.navigate('/chat', { intent: 'primary' })
+    vi.runAllTimers()
+
+    expect(history.getHref()).toBe('/chat')
+    expect(history.getLineage()).toBeNull()
+    expect(seen.filter((href) => href === '/signals')).toEqual([])
+    expect(seen.at(-1)).toBe('/chat')
+
+    history.back()
+    vi.runAllTimers()
+    expect(history.getHref()).not.toBe('/signals/sig-1')
+    vi.useRealTimers()
   })
 })

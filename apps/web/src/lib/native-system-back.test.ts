@@ -102,12 +102,35 @@ describe('native system back', () => {
     expect(minimizeApp).not.toHaveBeenCalled()
   })
 
-  it('navigates to the semantic back path instead of history.back', async () => {
+  it('navigates to the semantic back path when there is no provenance', async () => {
     const { history, pressBack } = await configureAndroid(createMemoryHistory('/signals/sig-1'))
 
     pressBack()
 
     expect(history.getHref()).toBe('/signals')
+    expect(history.getNavigationCause()).toBe('programmatic')
+    expect(minimizeApp).not.toHaveBeenCalled()
+  })
+
+  it('pops to the provenance when the detail was opened from that parent', async () => {
+    const history = createMemoryHistory('/signals')
+    history.navigate('/signals/sig-1')
+    const { pressBack } = await configureAndroid(history)
+
+    pressBack()
+
+    expect(history.getHref()).toBe('/signals')
+    expect(history.getNavigationCause()).toBe('pop')
+  })
+
+  it('consumes Android back while a non-dismissible overlay stays open', async () => {
+    const { history, pressBack } = await configureAndroid(createMemoryHistory('/signals/sig-1'))
+    registerNativeOverlayDismiss(() => false)
+
+    pressBack()
+    pressBack()
+
+    expect(history.getHref()).toBe('/signals/sig-1')
     expect(minimizeApp).not.toHaveBeenCalled()
   })
 

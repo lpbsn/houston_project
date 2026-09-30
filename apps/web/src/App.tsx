@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { ArrowLeft } from 'lucide-react'
 
@@ -34,7 +34,7 @@ import {
 import { NotFoundPage } from '@/app/not-found-page'
 import { RoutePageLoading } from '@/app/route-page-loading'
 import { useAuth } from '@/app/auth-provider'
-import { resolveTerrainBackPath } from '@/app/terrain-back-path'
+import { performTerrainBack, resolveTerrainBackPath } from '@/app/terrain-back-path'
 import {
   getTerrainContentKey,
   getTerrainRouteConfig,
@@ -95,7 +95,6 @@ import { NotificationCenter } from '@/features/notifications/components/notifica
 import { ActionPlanExecutionDetailTopbarTrailing } from '@/features/action-plans/components/action-plan-execution-detail-topbar-trailing'
 import { ActionPlanTemplateDetailTopbarTrailing } from '@/features/action-plans/components/action-plan-template-detail-topbar-trailing'
 import {
-  buildAnalyticsSignalDetailPath,
   parseAnalyticsSignalReturnContext,
   parseAnalyticsUrlState,
 } from '@/features/analytics/lib/analytics-url-state'
@@ -111,7 +110,9 @@ import {
   applyPendingNativeDeepLink,
   peekPendingNativeDeepLink,
 } from '@/lib/native-deep-link-session'
+import { TERRAIN_PAGE_TRANSITION } from '@/lib/terrain-motion'
 import { setNativeSystemBackAuthGetter } from '@/lib/native-system-back'
+import { explicitTerrainScope, resolveDesktopScopeSwitchHref } from '@/features/navigation/lib/scoped-desktop-navigation'
 
 function establishmentIdRequiringSwitch(route: AppRoute): string | null {
   if (route.kind === 'scoped-terrain' && route.scope.type === 'establishment') {
@@ -141,7 +142,7 @@ function hasActiveMembershipForEstablishment(
 function App() {
   const shouldReduceMotion = useReducedMotion()
   const auth = useAuth()
-  const { route, navigate, search: locationSearch } = useAppRoute()
+  const { route, navigate, search: locationSearch, history } = useAppRoute()
   const isLgViewport = useLgViewport()
   const isDesktopWeb = isDesktopWebLanding(isLgViewport)
   const applyingOpenRef = useRef(false)
@@ -153,9 +154,9 @@ function App() {
   const motionProps = shouldReduceMotion
     ? {}
     : {
-        initial: { opacity: 0, y: 18 },
-        animate: { opacity: 1, y: 0 },
-        transition: { duration: 0.45, ease: 'easeOut' as const },
+        initial: { opacity: 0 },
+        animate: { opacity: 1 },
+        transition: TERRAIN_PAGE_TRANSITION,
       }
 
   useEffect(() => {
@@ -285,6 +286,9 @@ function App() {
       sessionEstablishmentId !== routeEstablishmentId &&
       hasActiveMembershipForEstablishment(authRoutingSession.memberships, routeEstablishmentId)
     ) {
+      if (history.getNavigationCause() === 'pop') {
+        return
+      }
       const target = {
         href: `${serializeAppRoute(route)}${locationSearch}`,
         establishmentId: routeEstablishmentId,
@@ -371,6 +375,9 @@ function App() {
           membership.status === 'active' && membership.establishment_id === switchEstablishmentId,
       )
     ) {
+      if (history.getNavigationCause() === 'pop') {
+        return
+      }
       if (applyingOpenRef.current) {
         return
       }
@@ -411,6 +418,7 @@ function App() {
     isDesktopWeb,
     isLgViewport,
     locationSearch,
+    history,
     navigate,
     route,
   ])
@@ -444,6 +452,31 @@ function App() {
   }, [auth, navigate])
 
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
+  const previousScopeRef = useRef(explicitTerrainScope(route))
+  useLayoutEffect(() => {
+    const nextScope = explicitTerrainScope(route)
+    const previousScope = previousScopeRef.current
+    if (
+      history.getNavigationCause() === 'pop' &&
+      previousScope &&
+      nextScope &&
+      (previousScope.type !== nextScope.type ||
+        (previousScope.type === 'establishment' &&
+          nextScope.type === 'establishment' &&
+          previousScope.establishmentId !== nextScope.establishmentId))
+    ) {
+      const fallback = resolveDesktopScopeSwitchHref({
+        route,
+        bootstrap: auth.bootstrap,
+        target: previousScope,
+      })
+      if (fallback !== history.getHref().split('?')[0]) {
+        navigate(fallback, { intent: 'system' })
+        return
+      }
+    }
+    previousScopeRef.current = nextScope
+  }, [auth.bootstrap, history, navigate, route])
   const routeEstablishmentId = establishmentIdRequiringSwitch(route)
   const establishmentRouteSessionMismatch = Boolean(
     routeEstablishmentId &&
@@ -510,12 +543,33 @@ function App() {
     [analyticsNow, auth.bootstrap, auth.hasOperationalAccess, isDesktopWeb, locationSearch, route],
   )
 
+  const performBack = useCallback(() => {
+    performTerrainBack(history, {
+      search: locationSearch,
+      now: analyticsNow,
+      activeEstablishmentId: establishmentId,
+      hasOperationalAccess: auth.hasOperationalAccess,
+      authenticatedLandingPath: getAuthenticatedLandingPath(auth.bootstrap, {
+        isDesktop: isDesktopWeb,
+      }),
+    })
+  }, [
+    analyticsNow,
+    auth.bootstrap,
+    auth.hasOperationalAccess,
+    establishmentId,
+    history,
+    isDesktopWeb,
+    locationSearch,
+  ])
+
   useEffect(() => {
     const hasOperationalAccess = auth.hasOperationalAccess
     const authenticatedLandingPath = getAuthenticatedLandingPath(auth.bootstrap)
     setNativeSystemBackAuthGetter(() => ({
       hasOperationalAccess,
       authenticatedLandingPath,
+      activeEstablishmentId: auth.bootstrap?.active_membership?.establishment_id ?? null,
     }))
     return () => setNativeSystemBackAuthGetter(null)
   }, [auth.bootstrap, auth.hasOperationalAccess])
@@ -665,7 +719,7 @@ function App() {
         <LazySignalDetailPage
           signalId={route.signalId}
           onNavigate={navigate}
-          onBack={terrainBackPath ? () => navigate(terrainBackPath) : undefined}
+          onBack={terrainBackPath ? performBack : undefined}
           analyticsSignalReturnContext={analyticsSignalReturnContext}
           establishmentId={
             scope?.type === 'establishment' ? scope.establishmentId : undefined
@@ -676,25 +730,25 @@ function App() {
     }
 
     if (route.kind === 'signal-action-create') {
-      const backPath = analyticsSignalReturnContext
-        ? buildAnalyticsSignalDetailPath(route.signalId, {
-            patternId: analyticsSignalReturnContext.patternId,
-            state: analyticsSignalReturnContext.state,
-          })
-        : `/signals/${route.signalId}`
       return (
         <LazyActionPlanCreatePage
           mode="signal-linked"
           signalId={route.signalId}
-          backPath={backPath}
+          backPath={terrainBackPath ?? `/signals/${route.signalId}`}
+          onBack={performBack}
         />
       )
     }
 
     if (route.kind === 'action-plan-create') {
       const mode = route.origin === 'execution' ? 'execution' : 'catalog'
-      const backPath = route.origin === 'execution' ? '/execution' : '/action-plans'
-      return <LazyActionPlanCreatePage mode={mode} backPath={backPath} />
+      return (
+        <LazyActionPlanCreatePage
+          mode={mode}
+          backPath={terrainBackPath ?? (route.origin === 'execution' ? '/execution' : '/action-plans')}
+          onBack={performBack}
+        />
+      )
     }
 
     if (route.kind === 'action-plan-template-detail') {
@@ -706,7 +760,8 @@ function App() {
         <LazyActionPlanCreatePage
           mode="template-edit"
           actionPlanId={route.actionPlanId}
-          backPath={`/action-plans/${route.actionPlanId}`}
+          backPath={terrainBackPath ?? `/action-plans/${route.actionPlanId}`}
+          onBack={performBack}
         />
       )
     }
@@ -725,11 +780,15 @@ function App() {
     }
 
     if (route.kind === 'action-plan-execution-edit') {
-      return <LazyActionPlanExecutionEditPage executionId={route.executionId} />
+      return (
+        <LazyActionPlanExecutionEditPage executionId={route.executionId} onBack={performBack} />
+      )
     }
 
     if (route.kind === 'team-member-detail') {
-      return <LazyTeamMemberDetailPage membershipId={route.membershipId} />
+      return (
+        <LazyTeamMemberDetailPage membershipId={route.membershipId} onBack={performBack} />
+      )
     }
 
     if (route.kind === 'chat-conversation-detail') {
@@ -962,6 +1021,7 @@ function App() {
     analyticsSignalReturnContext,
     isDesktopWeb,
     navigate,
+    performBack,
     route,
     terrainBackPath,
   ])
@@ -1274,7 +1334,7 @@ function App() {
           onBack={
             desktopChatShell || !terrainBackPath
               ? undefined
-              : () => navigate(terrainBackPath)
+              : performBack
           }
           trailing={terrainTopbarTrailing}
         />
@@ -1288,6 +1348,7 @@ function App() {
             activeNavPath={shellConfig.activeNavPath}
             bootstrap={auth.bootstrap}
             route={route}
+            search={locationSearch}
             mainScroll={shellConfig.mainScroll}
             navigate={navigate}
             chatHasUnread={chatHasUnread}

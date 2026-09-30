@@ -94,7 +94,7 @@ export function LegalConsentSheet({
       title={isTerms ? 'Conditions d’utilisation' : 'Traitement OpenAI'}
       open
       dismissible={allowDismiss}
-      onClose={allowDismiss ? onClose : () => undefined}
+      onClose={onClose}
     >
       <div className="space-y-3 text-sm text-[#5c5a54]">
         {isTerms ? (

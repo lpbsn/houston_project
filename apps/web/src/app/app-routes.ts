@@ -7,13 +7,14 @@ import {
   useSyncExternalStore,
 } from 'react'
 
-import { type AppHistory, getHrefHash, getHrefSearch } from '@/app/app-history'
+import { type AppHistory, getHrefHash, getHrefSearch, pathnameOfHref, type NavigateOptions } from '@/app/app-history'
 import {
   parseScopedTerrainRoute,
   serializeScopedExecutionDetailPath,
   serializeScopedSignalDetailPath,
   serializeScopedTerrainPath,
   terrainScopeKey,
+  type ScopedTerrainPage,
   type ScopedTerrainRoute,
   type TerrainScope,
 } from '@/app/scoped-terrain'
@@ -383,11 +384,57 @@ export function serializeAppRoute(route: AppRoute): string {
   }
 }
 
+const PRIMARY_STATIC_PATHS = new Set<AppPath>([
+  '/reporting',
+  '/signals',
+  '/execution',
+  '/chat',
+  '/general',
+  '/analytics',
+])
+
+const PRIMARY_SCOPED_PAGES = new Set<ScopedTerrainPage>([
+  'dashboard',
+  'reporting',
+  'signals',
+  'execution',
+  'chat',
+  'general',
+])
+
+export function isPrimaryTerrainDestination(route: AppRoute): boolean {
+  if (route.kind === 'static') {
+    return PRIMARY_STATIC_PATHS.has(route.path)
+  }
+  if (route.kind === 'scoped-terrain') {
+    return PRIMARY_SCOPED_PAGES.has(route.page)
+  }
+  return false
+}
+
+export function inferNavigationIntent(
+  currentHref: string,
+  href: string,
+  options?: NavigateOptions,
+): NonNullable<NavigateOptions['intent']> {
+  if (options?.intent) {
+    return options.intent
+  }
+  if (options?.replace) {
+    return pathnameOfHref(currentHref) === pathnameOfHref(href) ? 'local' : 'system'
+  }
+  if (isPrimaryTerrainDestination(parseAppRoute(href))) {
+    return 'primary'
+  }
+  return 'forward'
+}
+
 type AppRouteContextValue = {
   route: AppRoute
   search: string
   hash: string
-  navigate: (href: string, options?: { replace?: boolean }) => void
+  history: AppHistory
+  navigate: (href: string, options?: NavigateOptions) => void
 }
 
 type AppRouteProviderProps = PropsWithChildren<{
@@ -402,14 +449,24 @@ export function AppRouteProvider({ history, children }: AppRouteProviderProps) {
   // Search-only href changes must keep the same AppRoute object (screen identity).
   // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by routeKey, not href
   const route = useMemo(() => parseAppRoute(href), [routeKey])
+  const navigate = useMemo<AppRouteContextValue['navigate']>(
+    () => (nextHref, options) => {
+      history.navigate(nextHref, {
+        ...options,
+        intent: inferNavigationIntent(history.getHref(), nextHref, options),
+      })
+    },
+    [history],
+  )
   const value = useMemo<AppRouteContextValue>(
     () => ({
       route,
       search: getHrefSearch(href),
       hash: getHrefHash(href),
-      navigate: history.navigate,
+      history,
+      navigate,
     }),
-    [history, href, route],
+    [history, href, navigate, route],
   )
 
   return createElement(AppRouteContext.Provider, { value }, children)
