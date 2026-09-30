@@ -14,6 +14,7 @@ export type OperationalRealtimeInvalidateEvent = {
     | 'action_plan_assignee'
     | 'comment'
     | 'notification'
+    | 'observation_processing'
   reason: string
   establishment_id: string
   entity_id: string

@@ -260,6 +260,16 @@ export function listObservationIdsNeedingPoll(): Array<{
   }))
 }
 
+export function isObservationProcessingTracked(
+  observationId: string,
+  establishmentId: string,
+): boolean {
+  return state.entries.some(
+    (entry) =>
+      entry.observationId === observationId && entry.establishmentId === establishmentId,
+  )
+}
+
 /** Test helper */
 export function __resetObservationProcessingTrackerStoreForTests(): void {
   state = {

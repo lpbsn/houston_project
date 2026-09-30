@@ -16,6 +16,9 @@ import {
 
 import { removeHydratedFeedEntity } from '@/lib/feed-external-updates'
 
+import { observationsQueryKeys } from '@/features/observations/api'
+import { isObservationProcessingTracked } from '@/features/observations/lib/observation-processing-tracker-store'
+
 import type { OperationalRealtimeInvalidateEvent } from '../types'
 
 const TERMINAL_EXECUTION_REASONS = new Set([
@@ -105,6 +108,18 @@ export function applyOperationalInvalidation(
       return
     }
     invalidateEstablishmentNotificationQueries(queryClient, establishmentId)
+    return
+  }
+  if (event.subject_type === 'observation_processing') {
+    if (event.reason !== 'observation_processing.updated') {
+      return
+    }
+    if (!isObservationProcessingTracked(event.entity_id, establishmentId)) {
+      return
+    }
+    void queryClient.invalidateQueries({
+      queryKey: observationsQueryKeys.processingStatus(establishmentId, event.entity_id),
+    })
   }
 }
 

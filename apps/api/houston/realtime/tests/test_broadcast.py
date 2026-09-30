@@ -145,6 +145,42 @@ def test_switch_establishment_emits_establishment_switched(api_client):
         assert mock_notify.call_args.kwargs["session_id"] == session.id
 
 
+def test_direct_notify_failure_propagates():
+    from houston.realtime.broadcast import notify_establishment_invalidation
+
+    with patch(
+        "houston.realtime.broadcast.async_to_sync",
+        side_effect=RuntimeError("channels down"),
+    ):
+        with pytest.raises(RuntimeError, match="channels down"):
+            notify_establishment_invalidation(
+                establishment_id=uuid.uuid4(),
+                subject_type="signal",
+                reason="signal.updated",
+                entity_id=uuid.uuid4(),
+            )
+
+
+def test_on_commit_send_failure_is_logged_and_does_not_raise(caplog):
+    import logging
+
+    from houston.realtime.broadcast import schedule_establishment_invalidation
+
+    with patch(
+        "houston.realtime.broadcast.async_to_sync",
+        side_effect=RuntimeError("channels down"),
+    ):
+        with caplog.at_level(logging.ERROR):
+            schedule_establishment_invalidation(
+                establishment_id=uuid.uuid4(),
+                subject_type="signal",
+                reason="signal.updated",
+                entity_id=uuid.uuid4(),
+            )
+
+    assert "realtime_group_send_failed" in caplog.text
+
+
 def test_invalidate_payload_has_no_sensitive_fields():
     from houston.realtime.ws_payloads import build_invalidate_payload
 

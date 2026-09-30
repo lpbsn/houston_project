@@ -21,6 +21,7 @@ EMITTER_SCAN_FILES: tuple[Path, ...] = (
     API_ROOT / "houston/action_plans/realtime.py",
     API_ROOT / "houston/comments/services.py",
     API_ROOT / "houston/notifications/services.py",
+    API_ROOT / "houston/observations/services.py",
 )
 
 SCHEDULE_INVALIDATION_FUNCTIONS = frozenset(

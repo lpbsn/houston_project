@@ -986,6 +986,7 @@ def run_observation_pipeline(
                 "updated_at",
             ]
         )
+        _schedule_observation_processing_invalidation(observation=observation)
         logger.info(
             "observation_pipeline_processing_started",
             extra=build_observation_processing_log_context(
@@ -1047,6 +1048,7 @@ def run_observation_pipeline(
                     "updated_at",
                 ]
             )
+            _schedule_observation_processing_invalidation(observation=observation)
     except SignalPipelineCandidateError:
         _mark_processing_failed(processing_id=processing.id, error_code="invalid_issue_focus")
         return
@@ -1208,6 +1210,7 @@ def _try_recover_stuck_processing(*, processing: ObservationProcessing) -> bool:
                     "updated_at",
                 ]
             )
+            _schedule_observation_processing_invalidation(observation=processing.observation)
             _log_observation_processing_outcome(
                 processing=processing,
                 event="observation_pipeline_stuck_recovered",
@@ -1226,6 +1229,7 @@ def _try_recover_stuck_processing(*, processing: ObservationProcessing) -> bool:
                 "updated_at",
             ]
         )
+        _schedule_observation_processing_invalidation(observation=processing.observation)
         _log_observation_processing_outcome(
             processing=processing,
             event="observation_pipeline_failed",
@@ -1273,6 +1277,7 @@ def _mark_processing_failed(*, processing_id: uuid.UUID, error_code: str) -> Non
         processing.last_error_code = error_code
         processing.processed_at = timezone.now()
         processing.save(update_fields=["status", "last_error_code", "processed_at", "updated_at"])
+        _schedule_observation_processing_invalidation(observation=processing.observation)
     _log_observation_processing_outcome(
         processing=processing,
         event="observation_pipeline_failed",
@@ -1303,6 +1308,7 @@ def _mark_processing_retry_or_failed(*, processing_id: uuid.UUID, error_code: st
                     "updated_at",
                 ]
             )
+            _schedule_observation_processing_invalidation(observation=processing.observation)
             observation_id = processing.observation_id
             event = "observation_pipeline_retry_scheduled"
         else:
@@ -1317,6 +1323,7 @@ def _mark_processing_retry_or_failed(*, processing_id: uuid.UUID, error_code: st
                     "updated_at",
                 ]
             )
+            _schedule_observation_processing_invalidation(observation=processing.observation)
             event = "observation_pipeline_failed"
     _log_observation_processing_outcome(processing=processing, event=event)
     if observation_id is not None:
@@ -1766,6 +1773,12 @@ def _transition_active_signal_to_terminal(
     signal.last_activity_at = locked_self.last_activity_at
     signal.updated_at = locked_self.updated_at
     return locked_self
+
+
+def _schedule_observation_processing_invalidation(*, observation: Observation) -> None:
+    from houston.observations.services import schedule_observation_processing_invalidation
+
+    schedule_observation_processing_invalidation(observation=observation)
 
 
 def _schedule_signal_invalidation(*, signal: Signal, reason: str) -> None:

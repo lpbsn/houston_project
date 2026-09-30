@@ -112,6 +112,7 @@ The processing pipeline may use AI, but Observation does not own AI contracts or
 - No anonymous Observation submission is allowed.
 - Action plan task-origin Observation requires authorized access to the originating task execution.
 - `GET .../observations/{id}/processing-status/` is visible to the submitter and establishment admins (owner/director) only; other submit-capable peers receive 404.
+- Processing status changes invalidate only the submitter membership. The client refetches that HTTP status when it is tracking the observation. Admin visibility stays on the GET; no admin fan-out is emitted.
 
 Direct report: `POST .../observations/` (`CanSubmitObservation` → `can_create_observation`). Task-origin: `POST .../action-plan-execution-tasks/{task_execution_id}/create-observation/` (assignee with task access). Paths: `schema.yml`.
 

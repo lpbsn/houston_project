@@ -128,9 +128,10 @@ _postgres_db_options: dict[str, str] = {}
 if _postgres_sslmode:
     _postgres_db_options["sslmode"] = _postgres_sslmode
 
-# Persistent DB connections reduce TCP/TLS handshake overhead (Railway Postgres).
-# Set HOUSTON_DB_CONN_MAX_AGE=0 to restore per-request connections (e.g. local debug).
-HOUSTON_DB_CONN_MAX_AGE = env_int("HOUSTON_DB_CONN_MAX_AGE", 60)
+# ASGI must not keep Django connections open across requests. Workers use the
+# same default until a measured PgBouncer exists, so API and workers do not
+# follow two implicit strategies.
+HOUSTON_DB_CONN_MAX_AGE = env_int("HOUSTON_DB_CONN_MAX_AGE", 0)
 HOUSTON_DB_CONN_HEALTH_CHECKS = env_bool("HOUSTON_DB_CONN_HEALTH_CHECKS", default=True)
 
 DATABASES = {

@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { analyticsQueryKeys } from '@/features/analytics/api'
+import { observationsQueryKeys } from '@/features/observations/api'
+import {
+  __resetObservationProcessingTrackerStoreForTests,
+  trackObservation,
+} from '@/features/observations/lib/observation-processing-tracker-store'
 import {
   applyOperationalInvalidation,
   applyOperationalReconnectInvalidation,
@@ -244,6 +249,55 @@ describe('applyOperationalInvalidation', () => {
     }
 
     applyOperationalInvalidation(event, { queryClient, establishmentId: 'est-1' })
+
+    expect(invalidateSpy).not.toHaveBeenCalled()
+  })
+
+  it('refetches processing status only for a tracked observation', () => {
+    trackObservation({
+      observationId: 'obs-1',
+      establishmentId: 'est-1',
+      authorMembershipId: 'mem-1',
+      origin: 'direct_report',
+      submittedAt: '2026-06-19T12:00:00.000Z',
+    })
+
+    try {
+      applyOperationalInvalidation(
+        {
+          type: 'invalidate',
+          subject_type: 'observation_processing',
+          reason: 'observation_processing.updated',
+          establishment_id: 'est-1',
+          entity_id: 'obs-1',
+          occurred_at: '2026-06-19T12:00:00Z',
+        },
+        { queryClient, establishmentId: 'est-1' },
+      )
+
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: observationsQueryKeys.processingStatus('est-1', 'obs-1'),
+      })
+      expect(invalidateSpy).not.toHaveBeenCalledWith({
+        queryKey: ['signals', 'feed', 'est-1'],
+      })
+    } finally {
+      __resetObservationProcessingTrackerStoreForTests()
+    }
+  })
+
+  it('does not refetch processing status for an observation that is not tracked', () => {
+    applyOperationalInvalidation(
+      {
+        type: 'invalidate',
+        subject_type: 'observation_processing',
+        reason: 'observation_processing.updated',
+        establishment_id: 'est-1',
+        entity_id: 'obs-untracked',
+        occurred_at: '2026-06-19T12:00:00Z',
+      },
+      { queryClient, establishmentId: 'est-1' },
+    )
 
     expect(invalidateSpy).not.toHaveBeenCalled()
   })

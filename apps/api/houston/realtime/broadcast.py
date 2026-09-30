@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import uuid
+from collections.abc import Callable
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -12,6 +14,8 @@ from houston.realtime.groups import (
     session_group_name,
 )
 from houston.realtime.ws_payloads import build_access_payload, build_invalidate_payload
+
+logger = logging.getLogger(__name__)
 
 SESSION_ACCESS_REASONS = frozenset({"session.revoked", "establishment.switched"})
 MEMBERSHIP_ACCESS_REASONS = frozenset({"membership.deactivated", "membership.updated"})
@@ -29,6 +33,25 @@ def _send_to_group(*, group_name: str, handler_type: str, payload: dict) -> None
             "payload": payload,
         },
     )
+
+
+def _schedule_best_effort_send(callback: Callable[[], None], *, extra: dict[str, str]) -> None:
+    """Keep a Channels failure inside on_commit.
+
+    Direct ``notify_*`` callers, including the planning outbox, still see the
+    exception so a failed broadcast can be retried.
+    """
+
+    def _run() -> None:
+        try:
+            callback()
+        except Exception:
+            logger.exception(
+                "realtime_group_send_failed",
+                extra={"event": "realtime_group_send_failed", **extra},
+            )
+
+    transaction.on_commit(_run)
 
 
 def notify_establishment_invalidation(
@@ -58,13 +81,14 @@ def schedule_establishment_invalidation(
     reason: str,
     entity_id: uuid.UUID,
 ) -> None:
-    transaction.on_commit(
+    _schedule_best_effort_send(
         lambda: notify_establishment_invalidation(
             establishment_id=establishment_id,
             subject_type=subject_type,
             reason=reason,
             entity_id=entity_id,
-        )
+        ),
+        extra={"subject_type": subject_type, "reason": reason},
     )
 
 
@@ -100,14 +124,15 @@ def schedule_membership_invalidation(
     reason: str,
     entity_id: uuid.UUID,
 ) -> None:
-    transaction.on_commit(
+    _schedule_best_effort_send(
         lambda: notify_membership_invalidation(
             establishment_id=establishment_id,
             membership_id=membership_id,
             subject_type=subject_type,
             reason=reason,
             entity_id=entity_id,
-        )
+        ),
+        extra={"subject_type": subject_type, "reason": reason},
     )
 
 
@@ -153,11 +178,12 @@ def schedule_access_event(
     session_id: uuid.UUID | None = None,
     membership_id: uuid.UUID | None = None,
 ) -> None:
-    transaction.on_commit(
+    _schedule_best_effort_send(
         lambda: notify_access_event(
             reason=reason,
             establishment_id=establishment_id,
             session_id=session_id,
             membership_id=membership_id,
-        )
+        ),
+        extra={"reason": reason},
     )

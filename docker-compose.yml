@@ -17,6 +17,7 @@ x-api-environment: &api_environment
   POSTGRES_PORT: ${POSTGRES_PORT:-5432}
   POSTGRES_USER: ${POSTGRES_USER:-houston}
   POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-}
+  HOUSTON_DB_CONN_MAX_AGE: ${HOUSTON_DB_CONN_MAX_AGE:-0}
 
   REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
   CELERY_BROKER_URL: ${CELERY_BROKER_URL:-amqp://houston:houston@rabbitmq:5672//}
