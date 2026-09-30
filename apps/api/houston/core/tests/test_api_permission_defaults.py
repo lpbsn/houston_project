@@ -11,8 +11,8 @@ from rest_framework.views import APIView
 from houston.accounts.api.views import (
     CsrfCookieView,
     DirectorInvitationAcceptView,
-    InvitationPreviewView,
     EmailChangeConfirmView,
+    InvitationPreviewView,
     LoginView,
     LogoutView,
     PasswordResetConfirmView,
