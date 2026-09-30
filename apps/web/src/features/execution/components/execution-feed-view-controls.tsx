@@ -83,7 +83,9 @@ export function ExecutionFeedCategoryChips({
 }) {
   const categories = [
     ...OPERATIONAL_CATEGORIES,
-    ...TERMINAL_CATEGORIES.filter((category) => (counts?.[category] ?? 0) > 0),
+    ...TERMINAL_CATEGORIES.filter(
+      (category) => category === value || (counts?.[category] ?? 0) > 0,
+    ),
   ]
   return (
     <div role="group" aria-label="Catégorie du feed" className="flex flex-nowrap items-center gap-2">
