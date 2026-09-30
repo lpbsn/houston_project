@@ -1,4 +1,4 @@
-import { useRef, useState, type PropsWithChildren, type ReactNode } from 'react'
+import { useState, type PropsWithChildren, type ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
 import type { AppRoute } from '@/app/app-routes'
@@ -53,24 +53,23 @@ export function TerrainShell({
 }: TerrainShellProps) {
   const shouldReduceMotion = useReducedMotion()
   const isDesktopWeb = isDesktopWebLanding(useLgViewport())
-  const surfaceRef = useRef({
+  const [surface, setSurface] = useState({
     route,
     search,
     contentKey,
     kind: 'fade' as TerrainTransitionKind,
   })
-  if (surfaceRef.current.contentKey !== contentKey) {
-    const kind = classifyTerrainTransition(
-      surfaceRef.current.route,
+  if (surface.contentKey !== contentKey) {
+    setSurface({
       route,
-      surfaceRef.current.search,
       search,
-    )
-    surfaceRef.current = { route, search, contentKey, kind }
-  } else if (surfaceRef.current.search !== search || surfaceRef.current.route !== route) {
-    surfaceRef.current = { ...surfaceRef.current, route, search }
+      contentKey,
+      kind: classifyTerrainTransition(surface.route, route, surface.search, search),
+    })
+  } else if (surface.search !== search || surface.route !== route) {
+    setSurface({ ...surface, route, search })
   }
-  const transitionKind = surfaceRef.current.kind
+  const transitionKind = surface.kind
   const pageMotion = terrainPageMotionProps(shouldReduceMotion, transitionKind, isDesktopWeb)
   const { isOnline } = useNetworkStatus()
   const isNativeKeyboardOpen = useNativeKeyboardOpen()

@@ -461,7 +461,7 @@ function App() {
     const nextScope = explicitTerrainScope(route)
     const previousScope = previousScopeRef.current
     if (
-      navigationCause === 'pop' &&
+      history.getNavigationCause() === 'pop' &&
       previousScope &&
       nextScope &&
       (previousScope.type !== nextScope.type ||
