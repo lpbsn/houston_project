@@ -93,6 +93,51 @@ MAX_RANKING_PAGE_SIZE = 100
 RANKING_KIND_RECURRING = "recurring"
 RANKING_KIND_NEW = "new"
 RANKING_KIND_LOCATIONS = "locations"
+REPEATED_PATTERNS_IN_PERIOD = "repeated_patterns_in_period"
+REPEATED_PATTERNS_MIN_SIGNALS = 2
+
+
+@dataclass(frozen=True)
+class RepeatedPatternsInPeriodDefinition:
+    """Read-time definition. This object does not calculate the metric."""
+
+    name: str
+    grain: str
+    timezone: str
+    window: str
+    numerator: str
+    denominator: str
+    exclusions: str
+    authorization_scope: str
+    freshness: str
+    provenance: str
+
+
+REPEATED_PATTERNS_IN_PERIOD_DEFINITION = RepeatedPatternsInPeriodDefinition(
+    name=REPEATED_PATTERNS_IN_PERIOD,
+    grain=(
+        "canonical operational pattern for one establishment dashboard, "
+        "following a single merged_into hop"
+    ),
+    timezone=(
+        "the selected dashboard period is an absolute datetime window; "
+        "signals are not regrouped into establishment civil days"
+    ),
+    window="the selected dashboard period (3, 7, 15, 30, or 90 days)",
+    numerator=(
+        "signals in that period whose assignment resolves to the canonical pattern"
+    ),
+    denominator="none; included when the current-period signal count is at least 2",
+    exclusions=(
+        "signals outside the selected period and assignments with no canonical "
+        "pattern; canceled signals are counted; this is not pattern_recurrence_30d"
+    ),
+    authorization_scope=(
+        "management establishments for the user, then resolve_analytics_read_scope"
+    ),
+    freshness="computed at read from PostgreSQL; freshness is OLTP freshness",
+    provenance="houston.analytics.dashboard._recurring_patterns",
+)
 RANKING_KINDS = frozenset(
     {RANKING_KIND_RECURRING, RANKING_KIND_NEW, RANKING_KIND_LOCATIONS}
 )
@@ -1264,6 +1309,7 @@ def _recurring_patterns(
     current_period: AnalyticsComparisonPeriod,
     previous_period: AnalyticsComparisonPeriod,
 ) -> tuple[RecurringPatternItem, ...]:
+    """repeated_patterns_in_period. Not pattern_recurrence_30d."""
     def counts_for(period: AnalyticsComparisonPeriod) -> dict[UUID, dict]:
         grouped: dict[UUID, dict] = {}
         for signal in signals:
@@ -1289,7 +1335,7 @@ def _recurring_patterns(
     recurrent = [
         (pattern_id, payload)
         for pattern_id, payload in current.items()
-        if payload["count"] >= 2
+        if payload["count"] >= REPEATED_PATTERNS_MIN_SIGNALS
     ]
     recurrent.sort(
         key=lambda item: (-item[1]["count"], -item[1]["last_seen"].timestamp(), item[1]["name"])

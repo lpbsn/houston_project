@@ -185,13 +185,17 @@ def list_analytics_patterns(
         period=current_period,
     )
     current_signals = _apply_signal_filters(current_signals, filters)
-    recurrent_ids = recurrent_pattern_ids_queryset(
+    recurrent_ids = _pattern_recurrence_membership(
         user,
         as_of=current_period.period_end,
         organization_id=organization_id,
         establishment_id=establishment_id,
         establishment_ids=filters["establishment_ids"],
-        _read_scope=read_scope,
+        read_scope=read_scope,
+        repeats_membership=(
+            parsed_cursor is not None
+            or filters["recurrence"] != PATTERN_LIST_RECURRENCE_ALL
+        ),
     )
     current_rows = _current_pattern_rows(
         current_signals,
@@ -389,6 +393,36 @@ def _analytics_filter_option_memberships(
     return list(queryset)
 
 
+def _pattern_recurrence_membership(
+    user,
+    *,
+    as_of,
+    organization_id,
+    establishment_id,
+    establishment_ids,
+    read_scope,
+    repeats_membership: bool,
+):
+    """Membership for pattern_recurrence_30d.
+
+    A cursor's keyset branches and a recurrence filter each repeat this
+    queryset. Those requests evaluate the ids once. The default first page
+    references membership once, so the queryset stays inside that statement.
+    """
+
+    source = recurrent_pattern_ids_queryset(
+        user,
+        as_of=as_of,
+        organization_id=organization_id,
+        establishment_id=establishment_id,
+        establishment_ids=establishment_ids,
+        _read_scope=read_scope,
+    )
+    if not repeats_membership:
+        return source
+    return list(source.values_list("pattern_id", flat=True))
+
+
 def _current_pattern_rows(
     queryset: QuerySet[Signal],
     *,
@@ -397,14 +431,18 @@ def _current_pattern_rows(
     recurrence: str,
 ):
     assignments = _pattern_assignments_for_signals(queryset, q=q)
+    if isinstance(recurrent_ids, list) and not recurrent_ids:
+        is_recurrent = Value(False, output_field=BooleanField())
+    else:
+        is_recurrent = Case(
+            When(pattern_id__in=recurrent_ids, then=Value(True)),
+            default=Value(False),
+            output_field=BooleanField(),
+        )
     rows = (
         assignments
         .annotate(
-            is_recurrent=Case(
-                When(pattern_id__in=recurrent_ids, then=Value(True)),
-                default=Value(False),
-                output_field=BooleanField(),
-            )
+            is_recurrent=is_recurrent,
         )
         .values(
             "pattern_id",
@@ -439,9 +477,12 @@ def _pattern_total_count(
     recurrence: str,
 ) -> int:
     assignments = _pattern_assignments_for_signals(queryset, q=q)
+    materialized_empty = isinstance(recurrent_ids, list) and not recurrent_ids
     if recurrence == PATTERN_LIST_RECURRENCE_RECURRENT:
+        if materialized_empty:
+            return 0
         assignments = assignments.filter(pattern_id__in=recurrent_ids)
-    elif recurrence == PATTERN_LIST_RECURRENCE_NON_RECURRENT:
+    elif recurrence == PATTERN_LIST_RECURRENCE_NON_RECURRENT and not materialized_empty:
         assignments = assignments.exclude(pattern_id__in=recurrent_ids)
     return int(
         assignments.aggregate(total_count=Count("pattern_id", distinct=True))[

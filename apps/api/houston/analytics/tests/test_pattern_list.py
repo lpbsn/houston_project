@@ -613,6 +613,18 @@ def test_pattern_list_sorts_recurrent_patterns_first_before_pagination():
     assert result.items[0].occurrence_count_30d == 3
     assert result.has_more
 
+    second = list_analytics_patterns(
+        owner.user,
+        period_start=start,
+        period_end=end,
+        page_size=1,
+        cursor=result.next_cursor,
+    )
+
+    assert [item.pattern_id for item in second.items] == [frequent.id]
+    assert second.items[0].is_recurrent is False
+    assert not second.has_more
+
 
 def test_pattern_list_zero_fills_visible_pattern_without_recent_recurrence_occurrences():
     owner = build_membership(role=EstablishmentMembership.Role.OWNER)
