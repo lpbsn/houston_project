@@ -2485,7 +2485,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Accepts an establishment invitation. A pending user sets a password, becomes active, and receives a session. An already active user has the membership activated without a password change and without a new session. The invitation bearer is sent in the JSON body, not in the URI. Owner invitations activate all compatible owner/invited memberships in the same organization. Cookie transport requires Django CSRF; body transport does not use cookies. */
+        /** @description Accepts an establishment invitation. A pending user sets a password, becomes active, and receives a session. An already active user has the membership activated without a password change and without a new session. The invitation bearer is sent in the JSON body, not in the URI. No access-token bearer is anonymous. A bearer that is present but invalid or expired is rejected before any invitation change. Owner invitations activate all compatible owner/invited memberships in the same organization. Cookie transport requires Django CSRF; body transport does not use cookies. */
         post: operations["v1_invitations_accept_create"];
         delete?: never;
         options?: never;
@@ -14283,6 +14283,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DirectorInvitationAcceptErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {

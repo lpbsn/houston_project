@@ -809,6 +809,162 @@ describe('auth api login logout', () => {
     expect(setAccessTokenMock).not.toHaveBeenCalled()
   })
 
+  it('refreshes an expired access token and accepts as the same user', async () => {
+    getAccessTokenMock.mockReturnValue('expired-access')
+    apiClientPostMock
+      .mockResolvedValueOnce({
+        response: { status: 401 },
+        data: undefined,
+        error: { detail: 'Invalid access token.', code: 'authentication_failed' },
+      })
+      .mockResolvedValueOnce({
+        response: { status: 200 },
+        data: {
+          ...bootstrapPayload,
+          access_token: 'refreshed-access',
+          user: { ...bootstrapPayload.user, id: 'invitee' },
+        },
+        error: undefined,
+      })
+      .mockResolvedValueOnce({
+        response: { status: 200 },
+        data: {
+          requires_login: false,
+          establishment_id: 'est-1',
+        },
+        error: undefined,
+      })
+
+    await expect(acceptInvitationSession('invite-token', {})).resolves.toEqual({
+      kind: 'membership_only',
+      requiresLogin: false,
+    })
+
+    expect(apiClientPostMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/invitations/accept/',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer expired-access',
+        }),
+      }),
+    )
+    expect(apiClientPostMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/auth/refresh/',
+      expect.anything(),
+    )
+    expect(apiClientPostMock).toHaveBeenNthCalledWith(
+      3,
+      '/api/v1/invitations/accept/',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer refreshed-access',
+        }),
+      }),
+    )
+    expect(apiClientPostMock).toHaveBeenCalledTimes(3)
+    expect(apiClientPostMock).not.toHaveBeenCalledWith(
+      '/api/v1/auth/logout/',
+      expect.anything(),
+    )
+  })
+
+  it('does not accept anonymously when an expired access token cannot be refreshed', async () => {
+    getAccessTokenMock.mockReturnValue('expired-access')
+    apiClientPostMock
+      .mockResolvedValueOnce({
+        response: { status: 401 },
+        data: undefined,
+        error: { detail: 'Invalid access token.', code: 'authentication_failed' },
+      })
+      .mockResolvedValueOnce({
+        response: { status: 401 },
+        data: undefined,
+        error: { detail: 'Your session could not be refreshed.' },
+      })
+
+    await expect(acceptInvitationSession('invite-token', {})).rejects.toThrow(
+      /Invalid access token/,
+    )
+
+    expect(apiClientPostMock).toHaveBeenCalledTimes(2)
+    expect(apiClientPostMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/invitations/accept/',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer expired-access',
+        }),
+      }),
+    )
+    expect(apiClientPostMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/auth/refresh/',
+      expect.anything(),
+    )
+  })
+
+  it('refreshes an expired bearer before a cookie session accept without accepting anonymously', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    getAccessTokenMock.mockReturnValue('expired-access')
+    apiClientPostMock
+      .mockResolvedValueOnce({
+        response: { status: 401 },
+        data: undefined,
+        error: { detail: 'Invalid access token.', code: 'authentication_failed' },
+      })
+      .mockResolvedValueOnce({
+        response: { status: 200 },
+        data: {
+          ...bootstrapPayload,
+          access_token: 'refreshed-access',
+        },
+        error: undefined,
+      })
+      .mockResolvedValueOnce({
+        response: { status: 201 },
+        data: {
+          ...bootstrapPayload,
+          access_token: 'invitation-access',
+          user: { ...bootstrapPayload.user, id: 'invitee' },
+        },
+        error: undefined,
+      })
+
+    await expect(
+      acceptInvitationSession('invite-token', {
+        password: 'secret',
+        password_confirmation: 'secret',
+      }),
+    ).resolves.toEqual({ kind: 'session' })
+
+    expect(apiClientPostMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/invitations/accept/',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer expired-access',
+        }),
+      }),
+    )
+    expect(apiClientPostMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/auth/refresh/',
+      expect.anything(),
+    )
+    expect(apiClientPostMock).toHaveBeenNthCalledWith(
+      3,
+      '/api/v1/invitations/accept/',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer refreshed-access',
+        }),
+      }),
+    )
+    expect(apiClientPostMock).toHaveBeenCalledTimes(3)
+  })
+
   function configureBodyRefreshStore(initialToken: string | null = 'old-refresh') {
     let persistedRefresh: string | null = initialToken
     configureBodyRefreshTokenStore({
@@ -936,6 +1092,291 @@ describe('auth api login logout', () => {
       expect(setAccessTokenMock).not.toHaveBeenCalled()
     })
   }
+
+  it('does not stale an in-flight body refresh when acceptance only activates membership', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    const store = configureBodyRefreshStore()
+    const acceptResponse = deferred<{
+      response: { status: number }
+      data: { requires_login: boolean; establishment_id: string }
+      error: undefined
+    }>()
+    const refreshResponse = deferred<{
+      response: { status: number }
+      data: typeof bootstrapPayload & {
+        refresh_token: string
+        refresh_token_expires_at: string
+      }
+      error: undefined
+    }>()
+    apiClientPostMock
+      .mockImplementationOnce(() => acceptResponse.promise)
+      .mockImplementationOnce(() => refreshResponse.promise)
+
+    const acceptPromise = acceptInvitationSession('invite-token', {})
+    await vi.waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledTimes(1)
+    })
+    const refreshPromise = refreshAccessToken()
+    await vi.waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledTimes(2)
+    })
+    expect(apiClientPostMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/auth/refresh/',
+      expect.anything(),
+    )
+
+    acceptResponse.resolve({
+      response: { status: 200 },
+      data: { requires_login: false, establishment_id: 'est-1' },
+      error: undefined,
+    })
+    await expect(acceptPromise).resolves.toEqual({
+      kind: 'membership_only',
+      requiresLogin: false,
+    })
+
+    refreshResponse.resolve({
+      response: { status: 200 },
+      data: {
+        ...bootstrapPayload,
+        access_token: 'rotated-old-access',
+        user: { ...bootstrapPayload.user, id: 'invitee' },
+        refresh_token: 'rotated-old-refresh',
+        refresh_token_expires_at: '2026-09-15T00:00:00Z',
+      },
+      error: undefined,
+    })
+
+    await expect(refreshPromise).resolves.toBe('rotated-old-access')
+    expect(store.persistedRefresh).toBe('rotated-old-refresh')
+    expect(clearAccessTokenMock).not.toHaveBeenCalled()
+    expect(setAccessTokenMock).toHaveBeenCalledTimes(1)
+    expect(setAccessTokenMock).toHaveBeenCalledWith('rotated-old-access')
+    expect(apiClientPostMock).not.toHaveBeenCalledWith(
+      '/api/v1/auth/logout/',
+      expect.anything(),
+    )
+  })
+
+  it('does not stale an in-flight cookie refresh when acceptance only activates membership', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    const refreshResponse = deferred<{
+      response: { status: number }
+      data: typeof bootstrapPayload
+      error: undefined
+    }>()
+    const acceptResponse = deferred<{
+      response: { status: number }
+      data: { requires_login: boolean; establishment_id: string }
+      error: undefined
+    }>()
+    apiClientPostMock
+      .mockImplementationOnce(() => refreshResponse.promise)
+      .mockImplementationOnce(() => acceptResponse.promise)
+
+    const refreshPromise = refreshAccessToken()
+    await vi.waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledTimes(1)
+    })
+    const acceptPromise = acceptInvitationSession('invite-token', {})
+    await vi.waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledTimes(2)
+    })
+    expect(apiClientPostMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/invitations/accept/',
+      expect.anything(),
+    )
+
+    acceptResponse.resolve({
+      response: { status: 200 },
+      data: { requires_login: true, establishment_id: 'est-1' },
+      error: undefined,
+    })
+    await expect(acceptPromise).resolves.toEqual({
+      kind: 'membership_only',
+      requiresLogin: true,
+    })
+
+    refreshResponse.resolve({
+      response: { status: 200 },
+      data: {
+        ...bootstrapPayload,
+        access_token: 'rotated-old-access',
+        user: { ...bootstrapPayload.user, id: 'other-user' },
+      },
+      error: undefined,
+    })
+
+    await expect(refreshPromise).resolves.toBe('rotated-old-access')
+    expect(clearAccessTokenMock).not.toHaveBeenCalled()
+    expect(setAccessTokenMock).toHaveBeenCalledTimes(1)
+    expect(setAccessTokenMock).toHaveBeenCalledWith('rotated-old-access')
+    expect(apiClientPostMock).not.toHaveBeenCalledWith(
+      '/api/v1/auth/logout/',
+      expect.anything(),
+    )
+  })
+
+  it('keeps an invitation session when an older body refresh arrives late', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'native')
+    const store = configureBodyRefreshStore()
+    const refreshResponse = deferred<{
+      response: { status: number }
+      data: typeof bootstrapPayload & {
+        refresh_token: string
+        refresh_token_expires_at: string
+      }
+      error: undefined
+    }>()
+    const acceptResponse = deferred<{
+      response: { status: number }
+      data: typeof bootstrapPayload & {
+        refresh_token: string
+        refresh_token_expires_at: string
+      }
+      error: undefined
+    }>()
+    apiClientPostMock
+      .mockImplementationOnce(() => refreshResponse.promise)
+      .mockImplementationOnce(() => acceptResponse.promise)
+      .mockResolvedValueOnce({
+        response: { status: 204 },
+        data: undefined,
+        error: undefined,
+      })
+
+    const refreshPromise = refreshAccessToken()
+    await vi.waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledTimes(1)
+    })
+    const acceptPromise = acceptInvitationSession('invite-token', {
+      password: 'secret',
+      password_confirmation: 'secret',
+    })
+    await vi.waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledTimes(2)
+    })
+
+    acceptResponse.resolve({
+      response: { status: 201 },
+      data: {
+        ...bootstrapPayload,
+        access_token: 'invitation-access',
+        user: { ...bootstrapPayload.user, id: 'invitee' },
+        refresh_token: 'invitation-refresh',
+        refresh_token_expires_at: '2026-09-15T00:00:00Z',
+      },
+      error: undefined,
+    })
+    await expect(acceptPromise).resolves.toEqual({ kind: 'session' })
+
+    refreshResponse.resolve({
+      response: { status: 200 },
+      data: {
+        ...bootstrapPayload,
+        access_token: 'rotated-old-access',
+        user: { ...bootstrapPayload.user, id: 'old-user' },
+        refresh_token: 'rotated-old-refresh',
+        refresh_token_expires_at: '2026-09-15T00:00:00Z',
+      },
+      error: undefined,
+    })
+
+    await expect(refreshPromise).resolves.toBeNull()
+    expect(store.persistedRefresh).toBe('invitation-refresh')
+    expect(clearAccessTokenMock).not.toHaveBeenCalled()
+    expect(setAccessTokenMock).toHaveBeenCalledTimes(1)
+    expect(setAccessTokenMock).toHaveBeenCalledWith('invitation-access')
+    expect(queryClient.getQueryData(bootstrapQueryKey)).toMatchObject({
+      user: { id: 'invitee' },
+    })
+    expect(apiClientPostMock).toHaveBeenNthCalledWith(
+      3,
+      '/api/v1/auth/logout/',
+      expect.objectContaining({
+        body: {
+          refresh_token_transport: 'body',
+          refresh_token: 'rotated-old-refresh',
+        },
+      }),
+    )
+  })
+
+  it('does not let a cookie refresh overlap a session-creating invitation accept', async () => {
+    vi.stubEnv('VITE_APP_RUNTIME', 'web')
+    const refreshResponse = deferred<{
+      response: { status: number }
+      data: typeof bootstrapPayload
+      error: undefined
+    }>()
+    const acceptResponse = deferred<{
+      response: { status: number }
+      data: typeof bootstrapPayload
+      error: undefined
+    }>()
+    apiClientPostMock
+      .mockImplementationOnce(() => refreshResponse.promise)
+      .mockImplementationOnce(() => acceptResponse.promise)
+
+    const refreshPromise = refreshAccessToken()
+    await vi.waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledTimes(1)
+    })
+    const acceptPromise = acceptInvitationSession('invite-token', {
+      password: 'secret',
+      password_confirmation: 'secret',
+    })
+    await Promise.resolve()
+    expect(apiClientPostMock).toHaveBeenCalledTimes(1)
+
+    refreshResponse.resolve({
+      response: { status: 200 },
+      data: {
+        ...bootstrapPayload,
+        access_token: 'rotated-old-access',
+        user: { ...bootstrapPayload.user, id: 'old-user' },
+      },
+      error: undefined,
+    })
+    await expect(refreshPromise).resolves.toBe('rotated-old-access')
+    await vi.waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledTimes(2)
+    })
+    expect(apiClientPostMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/invitations/accept/',
+      expect.objectContaining({
+        body: expect.objectContaining({
+          password: 'secret',
+          refresh_token_transport: 'cookie',
+        }),
+      }),
+    )
+
+    acceptResponse.resolve({
+      response: { status: 201 },
+      data: {
+        ...bootstrapPayload,
+        access_token: 'invitation-access',
+        user: { ...bootstrapPayload.user, id: 'invitee' },
+      },
+      error: undefined,
+    })
+    await expect(acceptPromise).resolves.toEqual({ kind: 'session' })
+
+    expect(setAccessTokenMock).toHaveBeenCalledWith('rotated-old-access')
+    expect(setAccessTokenMock).toHaveBeenLastCalledWith('invitation-access')
+    expect(queryClient.getQueryData(bootstrapQueryKey)).toMatchObject({
+      user: { id: 'invitee' },
+    })
+    expect(apiClientPostMock).not.toHaveBeenCalledWith(
+      '/api/v1/auth/logout/',
+      expect.anything(),
+    )
+  })
 
   it('waits for an in-flight cookie login before refreshing the new session', async () => {
     vi.stubEnv('VITE_APP_RUNTIME', 'web')

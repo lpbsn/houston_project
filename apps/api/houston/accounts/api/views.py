@@ -199,7 +199,10 @@ class LoginView(AuthRateLimitedMixin, APIView):
 
 
 class DirectorInvitationAcceptView(AuthRateLimitedMixin, APIView):
-    authentication_classes = [OptionalBearerAccessTokenAuthentication]
+    # Missing bearer stays anonymous. A present bearer must authenticate; an invalid
+    # or expired one fails before the invitation is mutated. Logout keeps the
+    # swallow-invalid optional authenticator so it can fall back to the refresh token.
+    authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [permissions.AllowAny]
     throttle_scope = settings.AUTH_THROTTLE_SCOPE_INVITATION_ACCEPT
 
@@ -210,6 +213,7 @@ class DirectorInvitationAcceptView(AuthRateLimitedMixin, APIView):
             200: ActiveInvitationAcceptResponseSerializer,
             201: DirectorInvitationAcceptResponseSerializer,
             400: OpenApiResponse(response=DirectorInvitationAcceptErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
             409: OpenApiResponse(response=DirectorInvitationAcceptErrorResponseSerializer),
             429: _THROTTLED_OPENAPI_RESPONSE,
@@ -219,6 +223,8 @@ class DirectorInvitationAcceptView(AuthRateLimitedMixin, APIView):
             "becomes active, and receives a session. An already active user has the "
             "membership activated without a password change and without a new session. "
             "The invitation bearer is sent in the JSON body, not in the URI. "
+            "No access-token bearer is anonymous. A bearer that is present but invalid "
+            "or expired is rejected before any invitation change. "
             "Owner invitations activate all compatible owner/invited memberships in the "
             "same organization. Cookie transport requires Django CSRF; body transport "
             "does not use cookies."

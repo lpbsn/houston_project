@@ -8685,9 +8685,11 @@ paths:
       description: Accepts an establishment invitation. A pending user sets a password,
         becomes active, and receives a session. An already active user has the membership
         activated without a password change and without a new session. The invitation
-        bearer is sent in the JSON body, not in the URI. Owner invitations activate
-        all compatible owner/invited memberships in the same organization. Cookie
-        transport requires Django CSRF; body transport does not use cookies.
+        bearer is sent in the JSON body, not in the URI. No access-token bearer is
+        anonymous. A bearer that is present but invalid or expired is rejected before
+        any invitation change. Owner invitations activate all compatible owner/invited
+        memberships in the same organization. Cookie transport requires Django CSRF;
+        body transport does not use cookies.
       tags:
       - auth
       requestBody:
@@ -8703,7 +8705,7 @@ paths:
               $ref: '#/components/schemas/DirectorInvitationAcceptRequest'
         required: true
       security:
-      - OptionalBearerAccessToken: []
+      - BearerAccessToken: []
       - {}
       responses:
         '200':
@@ -8723,6 +8725,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DirectorInvitationAcceptErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
@@ -16934,10 +16942,6 @@ components:
       - errors
   securitySchemes:
     BearerAccessToken:
-      type: http
-      scheme: bearer
-      bearerFormat: opaque
-    OptionalBearerAccessToken:
       type: http
       scheme: bearer
       bearerFormat: opaque

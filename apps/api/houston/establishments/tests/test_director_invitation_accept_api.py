@@ -547,3 +547,117 @@ def test_accept_active_user_activates_membership_without_session(api_client):
     third.membership.refresh_from_db()
     assert third.membership.status == EstablishmentMembership.Status.ACTIVE
 
+
+def _invitation_record(invitation_token: str) -> EstablishmentInvitation:
+    return EstablishmentInvitation.objects.get(
+        token_digest=auth_tokens.digest_token(invitation_token)
+    )
+
+
+def _issue_access_token_for_user(*, username: str):
+    from django.test import RequestFactory
+
+    from houston.accounts.services import create_user_session, issue_access_token
+
+    user = create_user(username=username)
+    session = create_user_session(
+        request=RequestFactory().post("/api/v1/invitations/accept/"),
+        user=user,
+    )
+    return user, issue_access_token(session=session)
+
+
+def test_accept_without_bearer_stays_anonymous(api_client):
+    owner = create_user(username="anonymous_accept_owner")
+    session = create_onboarding_session(actor=owner)
+    invitation_result = invite_director_for_session(session=session, owner=owner)
+    user = invitation_result.membership.user
+    user.status = User.Status.ACTIVE
+    user.save(update_fields=["status", "updated_at"])
+    csrf_token = ensure_csrf(api_client)
+
+    response = post_accept(api_client, csrf_token, invitation_result.invitation_token, {})
+
+    assert response.status_code == 200
+    assert response.data["requires_login"] is True
+    assert "access_token" not in response.data
+    invitation_result.membership.refresh_from_db()
+    assert invitation_result.membership.status == EstablishmentMembership.Status.ACTIVE
+    assert _invitation_record(invitation_result.invitation_token).accepted_at is not None
+
+
+def test_accept_with_invalid_bearer_does_not_consume_invitation(api_client):
+    owner = create_user(username="invalid_bearer_accept_owner")
+    session = create_onboarding_session(actor=owner)
+    invitation_result = invite_director_for_session(session=session, owner=owner)
+    csrf_token = ensure_csrf(api_client)
+
+    response = post_accept(
+        api_client,
+        csrf_token,
+        invitation_result.invitation_token,
+        {},
+        HTTP_AUTHORIZATION="Bearer not-a-real-token",
+    )
+
+    assert response.status_code == 401
+    assert response.data["code"] == "authentication_failed"
+    invitation_result.membership.refresh_from_db()
+    assert invitation_result.membership.status == EstablishmentMembership.Status.INVITED
+    invitation_result.membership.user.refresh_from_db()
+    assert invitation_result.membership.user.status == User.Status.PENDING
+    assert _invitation_record(invitation_result.invitation_token).accepted_at is None
+
+
+def test_accept_with_expired_bearer_does_not_consume_invitation(api_client):
+    from houston.accounts.models import AccessToken
+
+    owner = create_user(username="expired_bearer_accept_owner")
+    session = create_onboarding_session(actor=owner)
+    invitation_result = invite_director_for_session(session=session, owner=owner)
+    _user, issued = _issue_access_token_for_user(username="expired_bearer_user")
+    AccessToken.objects.filter(id=issued.record.id).update(
+        expires_at=timezone.now() - timedelta(seconds=1)
+    )
+    csrf_token = ensure_csrf(api_client)
+
+    response = post_accept(
+        api_client,
+        csrf_token,
+        invitation_result.invitation_token,
+        {},
+        HTTP_AUTHORIZATION=f"Bearer {issued.raw_token}",
+    )
+
+    assert response.status_code == 401
+    assert response.data["code"] == "authentication_failed"
+    invitation_result.membership.refresh_from_db()
+    assert invitation_result.membership.status == EstablishmentMembership.Status.INVITED
+    assert _invitation_record(invitation_result.invitation_token).accepted_at is None
+
+
+def test_accept_with_another_authenticated_user_requires_login(api_client):
+    owner = create_user(username="other_user_accept_owner")
+    session = create_onboarding_session(actor=owner)
+    invitation_result = invite_director_for_session(session=session, owner=owner)
+    invitee = invitation_result.membership.user
+    invitee.status = User.Status.ACTIVE
+    invitee.save(update_fields=["status", "updated_at"])
+    _other, issued = _issue_access_token_for_user(username="other_signed_in_user")
+    csrf_token = ensure_csrf(api_client)
+
+    response = post_accept(
+        api_client,
+        csrf_token,
+        invitation_result.invitation_token,
+        {},
+        HTTP_AUTHORIZATION=f"Bearer {issued.raw_token}",
+    )
+
+    assert response.status_code == 200
+    assert response.data["requires_login"] is True
+    assert "access_token" not in response.data
+    invitation_result.membership.refresh_from_db()
+    assert invitation_result.membership.status == EstablishmentMembership.Status.ACTIVE
+    assert _invitation_record(invitation_result.invitation_token).accepted_at is not None
+
